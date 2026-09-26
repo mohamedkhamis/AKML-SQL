@@ -47,5 +47,19 @@ namespace AkmlSql.Core.Update
         /// only for a manual check (FR-041). <c>null</c> otherwise.
         /// </summary>
         public string? FailureReason { get; set; }
+
+        /// <summary>
+        /// When the scheduled updater told the user, with a Windows notification, that this
+        /// version was downloaded and ready. Set once per version so a daily run never repeats
+        /// the notification; <c>null</c> until then.
+        /// </summary>
+        public DateTimeOffset? NotifiedAt { get; set; }
+
+        /// <summary>
+        /// When SSMS last offered to install this downloaded version at startup.
+        /// The IDE prompts once per version; after "Later" the offer stays reachable from
+        /// Check for Updates. <c>null</c> until then.
+        /// </summary>
+        public DateTimeOffset? ShellPromptedAt { get; set; }
     }
 }

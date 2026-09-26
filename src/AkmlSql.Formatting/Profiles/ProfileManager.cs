@@ -56,8 +56,13 @@ public class ProfileManager
     /// </summary>
     public static ProfileManager CreateDefault()
     {
+        // AKML_APP_DATA_ROOT redirects the styles folder with the rest of AKML's app data
+        // (AkmlSql.Core Constants.AppDataPath), so a test engine never writes the user's styles.
+        var overrideRoot = Environment.GetEnvironmentVariable("AKML_APP_DATA_ROOT");
         var appData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            string.IsNullOrEmpty(overrideRoot)
+                ? Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+                : overrideRoot,
             "AKML SQL");
 
         var customPath = Path.Combine(appData, "profiles");
@@ -250,7 +255,7 @@ public class ProfileManager
         {
             System.Threading.Interlocked.Increment(ref _metadataScanFileReads);
             if (!TryPeekMetadataName(file, out var candidate)) continue;
-            if (!string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.Equals(candidate?.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
 
             try
             {
@@ -292,9 +297,19 @@ public class ProfileManager
     }
 
     /// <summary>
-    /// Saves a profile to the custom profiles directory.
-    /// Uses atomic write (temp file + rename) to prevent corruption.
-    /// Built-in profiles cannot be overwritten.
+    /// Saves a profile to the custom profiles directory. Uses atomic write (temp file + rename)
+    /// to prevent corruption.
+    /// <para>
+    /// Saving under a BUILT-IN's name is allowed and writes a custom override that shadows it —
+    /// see <see cref="TryReadRaw"/>, where the custom directory is probed first. The shipped file
+    /// is never written to, which is what makes <see cref="ResetToBuiltIn"/> able to restore it
+    /// exactly and what keeps a bad edit from being unrecoverable.
+    /// </para>
+    /// <para>
+    /// This used to throw for built-ins, and the only way to change one was to duplicate it under
+    /// a new name. That left people with "Khamis Style copy" as their real style while the style
+    /// they actually wanted to adjust sat untouched beside it.
+    /// </para>
     /// </summary>
     public void Save(FormattingProfile profile)
     {
@@ -303,23 +318,128 @@ public class ProfileManager
         var name = profile.Metadata.Name;
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Profile metadata must have a non-empty Name.", nameof(profile));
-
-        // Reject saving over a built-in profile unless a custom override already exists
-        if (profile.Metadata.IsBuiltIn)
-            throw new InvalidOperationException($"Cannot overwrite built-in profile '{name}'. Duplicate it first.");
-
-        var builtInFile = GetBuiltInFilePath(name);
-        if (File.Exists(builtInFile) && !File.Exists(GetCustomFilePath(name)))
-            throw new InvalidOperationException(
-                $"Cannot overwrite built-in profile '{name}'. Use Duplicate to create a custom copy first.");
+        // The file name is trimmed (SanitizeFileName); keep the stored name the same, or
+        // "Khamis Style " would be a second name for the file "Khamis Style.akmlstyle".
+        profile.Metadata.Name = name = name.Trim();
 
         Directory.CreateDirectory(_customProfilesPath);
 
         var filePath = GetCustomFilePath(name);
         ValidatePathWithinBase(filePath, _customProfilesPath);
+
+        // The file about to be written lives in the CUSTOM directory, so it is by definition not
+        // a built-in. The incoming JSON is usually derived from a built-in's text and carries
+        // `"isBuiltIn": true` with it; persisting that would put a false statement in the file.
+        // Readers derive the flag from the directory anyway, so this is about the file not lying.
+        profile.Metadata.IsBuiltIn = false;
+
         var json = ProfileSerializer.Serialize(profile);
 
         WriteAtomic(filePath, json);
+    }
+
+    /// <summary>
+    /// Saves a NEW style. Unlike <see cref="Save"/>, which overwrites (that is how a style — or a
+    /// built-in — is edited), it refuses a built-in's name and a name already taken, whether the
+    /// taken name is a file name or only a style's stored name. Every create path (Duplicate, the
+    /// editors' New / Save as through ProfileSave's CreateOnly) goes through here, so none has to
+    /// remember its own check.
+    /// </summary>
+    public void SaveNew(FormattingProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var name = profile.Metadata.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Profile metadata must have a non-empty Name.", nameof(profile));
+        if (HasBuiltIn(name))
+            throw new InvalidOperationException($"'{name}' is a built-in style name. Choose a different name.");
+        if (File.Exists(GetCustomFilePath(name)) || TryReadByMetadataName(_customProfilesPath, name, out _, out _))
+            throw new InvalidOperationException($"A style named '{name}' already exists.");
+        profile.Metadata.Name = name;
+        Save(profile);
+    }
+
+    /// <summary>
+    /// True when a shipped built-in style with this name exists, whether or not the user has
+    /// overridden it. Surrounding spaces do not count: "Khamis Style " saves to the file
+    /// "Khamis Style.akmlstyle", which shadows the built-in exactly as "Khamis Style" does.
+    /// </summary>
+    /// <remarks>
+    /// Checks the filename AND the metadata name, because the shipped built-ins use kebab-case
+    /// filenames with Title-Case metadata names ("khamis-style.akmlstyle" → "Khamis Style"). A
+    /// filename-only check answers "no" for every multi-word built-in.
+    /// </remarks>
+    public bool HasBuiltIn(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        name = name.Trim();
+        if (name.Length == 0) return false;
+        return File.Exists(GetBuiltInFilePath(name))
+            || TryReadByMetadataName(_builtInProfilesPath, name, out _, out _);
+    }
+
+    /// <summary>
+    /// True when this name is a built-in that the user has edited — a custom file shadows a
+    /// shipped one. This is the only state in which <see cref="ResetToBuiltIn"/> does anything.
+    /// </summary>
+    public bool IsCustomizedBuiltIn(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (!HasBuiltIn(name)) return false;
+        return File.Exists(GetCustomFilePath(name))
+            || TryReadByMetadataName(_customProfilesPath, name, out _, out _);
+    }
+
+    /// <summary>
+    /// Discards the user's edits to a built-in style by deleting the custom file that shadows it,
+    /// so the shipped style resolves again. The built-in file itself is never touched by anything
+    /// in this class, so what comes back is exactly what shipped.
+    /// </summary>
+    /// <returns>
+    /// True when an override was removed; false when the style was already the shipped one — that
+    /// is a no-op worth reporting rather than an error, because the end state is what was asked
+    /// for either way.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// There is no built-in of this name, so there is nothing to reset TO. A purely custom style
+    /// has no shipped state to return to; deleting it is a different action with a different
+    /// consequence, and silently doing that here would destroy work.
+    /// </exception>
+    public bool ResetToBuiltIn(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (!HasBuiltIn(name))
+            throw new InvalidOperationException(
+                $"'{name}' is not a built-in style, so there is no original to reset to. Delete it instead.");
+
+        var removed = false;
+
+        // Both resolution tiers, because either can be the file that shadows the built-in: an
+        // override saved through Save() takes the sanitized filename, but a style the user
+        // dropped into the folder themselves may carry the name only in its metadata.
+        var exact = GetCustomFilePath(name);
+        ValidatePathWithinBase(exact, _customProfilesPath);
+        if (File.Exists(exact))
+        {
+            File.Delete(exact);
+            removed = true;
+        }
+
+        if (TryReadByMetadataName(_customProfilesPath, name, out _, out var byMetadataName))
+        {
+            ValidatePathWithinBase(byMetadataName, _customProfilesPath);
+            if (File.Exists(byMetadataName))
+            {
+                File.Delete(byMetadataName);
+                removed = true;
+            }
+        }
+
+        if (removed)
+            _nameResolutionCache.Clear();   // same reason as WriteAtomic — do not trust the clock alone
+
+        return removed;
     }
 
     /// <summary>
@@ -330,6 +450,11 @@ public class ProfileManager
     {
         var profiles = new Dictionary<string, ProfileMetadata>(StringComparer.OrdinalIgnoreCase);
 
+        // Which names shipped with the product. Needed to tell an overridden built-in apart from
+        // a style the user created outright: both are custom files, and only the first has an
+        // original to reset to.
+        var shipped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         // Built-in first (will be overridden by custom if same name)
         if (Directory.Exists(_builtInProfilesPath))
         {
@@ -339,6 +464,7 @@ public class ProfileManager
                 if (profile != null)
                 {
                     profiles[profile.Name] = profile;
+                    shipped.Add(profile.Name);
                 }
             }
         }
@@ -351,6 +477,7 @@ public class ProfileManager
                 var profile = TryLoadMetadata(file, isBuiltIn: false);
                 if (profile != null)
                 {
+                    profile.IsCustomizedBuiltIn = shipped.Contains(profile.Name);
                     profiles[profile.Name] = profile;
                 }
             }
@@ -361,7 +488,7 @@ public class ProfileManager
 
     /// <summary>
     /// Deletes a custom profile by name.
-    /// Built-in profiles cannot be deleted.
+    /// Built-in profiles cannot be deleted, overridden or not.
     /// </summary>
     /// <returns>True if the file was deleted; false if it did not exist.</returns>
     /// <exception cref="InvalidOperationException">Thrown when attempting to delete a built-in profile.</exception>
@@ -369,15 +496,21 @@ public class ProfileManager
     {
         ArgumentNullException.ThrowIfNull(name);
 
+        // Checked BEFORE looking for a custom file, and by name rather than by filename. Once
+        // built-ins became editable, an overridden built-in IS a custom file, so the old
+        // "no custom file? then check built-in" order would have deleted the override and
+        // reported a successful delete -- after which the built-in reappears, looking like the
+        // delete silently failed. Removing an override is ResetToBuiltIn, which says so.
+        if (HasBuiltIn(name))
+            throw new InvalidOperationException(
+                IsCustomizedBuiltIn(name)
+                    ? $"'{name}' is a built-in style. Reset it to discard your changes; it cannot be deleted."
+                    : $"Cannot delete built-in profile '{name}'.");
+
         var customFile = GetCustomFilePath(name);
         ValidatePathWithinBase(customFile, _customProfilesPath);
         if (!File.Exists(customFile))
         {
-            // Check if it's built-in
-            var builtInFile = GetBuiltInFilePath(name);
-            if (File.Exists(builtInFile))
-                throw new InvalidOperationException($"Cannot delete built-in profile '{name}'.");
-
             return false;
         }
 
@@ -513,7 +646,8 @@ public class ProfileManager
         copy.Metadata.Created = DateTime.UtcNow;
         copy.Metadata.Modified = DateTime.UtcNow;
 
-        Save(copy);
+        // A duplicate is a NEW style: never a silent edit of a built-in, never an overwrite.
+        SaveNew(copy);
         return copy;
     }
 
@@ -633,6 +767,7 @@ public class ProfileManager
             var json = File.ReadAllText(filePath);
             var profile = ProfileSerializer.Deserialize(json);
             profile.Metadata.IsBuiltIn = isBuiltIn;
+            profile.Metadata.IsSqlPromptStyle = profile.SqlPrompt is not null;
             return profile.Metadata;
         }
         catch

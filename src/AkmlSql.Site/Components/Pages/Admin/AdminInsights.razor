@@ -1,0 +1,283 @@
+@page "/admin/insights"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@inject AnalyticsStore Store
+
+@* Insights: the three questions the raw tables do not answer on their own.
+
+   1. Is the site working?  Conversion -- the share of visitors who download -- by where they came
+      from, where they landed and where they are.
+   2. When is the audience here?  Visits by weekday and hour, and downloads by hour, on the
+      owner's clock.
+   3. Do people come back?  New versus returning visitors, and which group downloads.
+
+   Every figure states its unit and its limits beside it. The anonymous data can only follow a
+   visitor within one day, and only people who accepted the cookie across days; numbers that
+   quietly overstate what the data can see are worse than no numbers, because they get acted on. *@
+
+<PageTitle>Insights — AKML SQL Admin</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Insights</h1>
+    <p class="page-intro">
+        What the traffic means for @_range.Phrase: which visitors download, when your audience is
+        here, and whether people come back.
+    </p>
+</header>
+
+@* ------------------------------------------------------------------ conversion *@
+<section class="admin-panel insights-conversion" aria-labelledby="conversion-heading">
+    <h2 id="conversion-heading">Conversion</h2>
+
+    <div class="insights-kpi">
+        <p class="insights-kpi-value">@_report.Headline.ConversionPercent.ToString("0.#", CultureInfo.InvariantCulture)%</p>
+        <p class="insights-kpi-text">
+            of visitors downloaded AKML SQL —
+            <strong>@_report.Headline.Downloaders.ToString("N0", CultureInfo.InvariantCulture)</strong>
+            of @_report.Headline.Visitors.ToString("N0", CultureInfo.InvariantCulture)
+            @(_range.IsSingleDay ? "visitors" : "visitor-days").
+        </p>
+    </div>
+
+    <p class="admin-choice-hint">
+        A visitor counts as converted when the same visitor downloads on the same day. Each visitor is
+        credited to the country, source and page of their <em>first</em> visit that day.
+        @if (!_range.IsSingleDay)
+        {
+            <span>
+                Over several days a person is counted once per day they visit — the anonymous identifier
+                cannot link one day to the next.
+            </span>
+        }
+        @if (_report.Headline.DownloadsWithoutVisit > 0)
+        {
+            <span>
+                @_report.Headline.DownloadsWithoutVisit.ToString("N0", CultureInfo.InvariantCulture)
+                @(_report.Headline.DownloadsWithoutVisit == 1 ? "download" : "downloads") had no visit behind
+                @(_report.Headline.DownloadsWithoutVisit == 1 ? "it" : "them") — a direct link from elsewhere —
+                and @(_report.Headline.DownloadsWithoutVisit == 1 ? "is" : "are") not in these rates.
+            </span>
+        }
+    </p>
+
+    <div class="insights-tables">
+        <ConversionTable Id="by-source" Heading="By traffic source" KeyHeader="Source" Rows="_report.ConversionBySource" />
+        <ConversionTable Id="by-page" Heading="By landing page" KeyHeader="Page" Rows="_report.ConversionByLandingPage" />
+        <ConversionTable Id="by-country" Heading="By country" KeyHeader="Country" Rows="_report.ConversionByCountry" />
+    </div>
+</section>
+
+@* ------------------------------------------------------------------ when people visit *@
+<section class="admin-panel" aria-labelledby="timing-heading">
+    <h2 id="timing-heading">When people visit</h2>
+
+    @if (!_report.HasTimingData)
+    {
+        <p class="admin-empty">No visits for @_range.Phrase.</p>
+    }
+    else
+    {
+        <p class="insights-summary">
+            Busiest: <strong>@_busiest</strong>.
+            Downloads peak at <strong>@_peakDownloadHour</strong>.
+            All times are @_zoneName time.
+        </p>
+
+        @if (!_range.IsSingleDay)
+        {
+            @* A single day has one weekday, so the grid would be one row; the hourly chart below
+               already says everything it could. *@
+            <div class="insights-heatmap-wrap table-scroll">
+                <div class="insights-heatmap" aria-hidden="true">
+                    <span class="insights-heatmap-corner"></span>
+                    @for (var hour = 0; hour < 24; hour++)
+                    {
+                        <span class="insights-heatmap-hour">@(hour % 3 == 0 ? hour.ToString("00", CultureInfo.InvariantCulture) : "")</span>
+                    }
+                    @foreach (var day in WeekOrder)
+                    {
+                        <span class="insights-heatmap-day">@DayName(day)</span>
+                        @for (var hour = 0; hour < 24; hour++)
+                        {
+                            var count = _report.VisitHeatmap[(int)day, hour];
+                            <span class="insights-heat heat-@HeatLevel(count)" title="@DayName(day) @hour.ToString("00", CultureInfo.InvariantCulture):00 — @count visits"></span>
+                        }
+                    }
+                </div>
+            </div>
+            <p class="insights-legend" aria-hidden="true">
+                Fewer <span class="insights-heat heat-1"></span><span class="insights-heat heat-2"></span><span class="insights-heat heat-3"></span><span class="insights-heat heat-4"></span><span class="insights-heat heat-5"></span> more visits
+            </p>
+
+            <details class="admin-chart-data">
+                <summary>View visits by weekday and hour as a table</summary>
+                <div class="table-scroll">
+                    <table class="admin-table insights-heat-table">
+                        <caption class="visually-hidden">Visits by weekday and hour, @_zoneName time</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Day</th>
+                                @for (var hour = 0; hour < 24; hour++)
+                                {
+                                    <th scope="col" class="admin-num">@hour.ToString("00", CultureInfo.InvariantCulture)</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var day in WeekOrder)
+                            {
+                                <tr>
+                                    <th scope="row">@DayName(day)</th>
+                                    @for (var hour = 0; hour < 24; hour++)
+                                    {
+                                        <td class="admin-num">@_report.VisitHeatmap[(int)day, hour]</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        }
+    }
+</section>
+
+@if (_report.HasTimingData)
+{
+    <HourlyChart Title="Visits" Caption="@HourlyCaption" Values="_report.VisitsByHour" IdPrefix="visits-hourly" />
+    <HourlyChart Title="Downloads" Caption="@HourlyCaption" Values="_report.DownloadsByHour" IdPrefix="downloads-hourly" />
+}
+
+@* ------------------------------------------------------------------ new vs returning *@
+<section class="admin-panel" aria-labelledby="loyalty-heading">
+    <h2 id="loyalty-heading">New and returning visitors</h2>
+
+    @if (_report.Loyalty.Visitors == 0)
+    {
+        <p class="admin-empty">
+            No visitors who accepted the cookie for @_range.Phrase. This split can only follow people who
+            did — see the note below.
+        </p>
+    }
+    else
+    {
+        <div class="insights-loyalty">
+            <div class="insights-loyalty-card">
+                <p class="insights-loyalty-label">New</p>
+                <p class="insights-loyalty-value">@_report.Loyalty.NewVisitors.ToString("N0", CultureInfo.InvariantCulture)</p>
+                <p class="insights-loyalty-detail">
+                    @_report.Loyalty.NewDownloaders.ToString("N0", CultureInfo.InvariantCulture) downloaded
+                    (@_report.Loyalty.NewConversionPercent.ToString("0.#", CultureInfo.InvariantCulture)%)
+                </p>
+            </div>
+            <div class="insights-loyalty-card">
+                <p class="insights-loyalty-label">Returning</p>
+                <p class="insights-loyalty-value">@_report.Loyalty.ReturningVisitors.ToString("N0", CultureInfo.InvariantCulture)</p>
+                <p class="insights-loyalty-detail">
+                    @_report.Loyalty.ReturningDownloaders.ToString("N0", CultureInfo.InvariantCulture) downloaded
+                    (@_report.Loyalty.ReturningConversionPercent.ToString("0.#", CultureInfo.InvariantCulture)%)
+                </p>
+            </div>
+        </div>
+    }
+
+    @* The sample size, stated where the figures are rather than in a footnote. On the live site it
+       is small, because most visitors decline or ignore the cookie -- which is their right. *@
+    <p class="admin-choice-hint insights-coverage">
+        Based on the @_report.Loyalty.Visitors.ToString("N0", CultureInfo.InvariantCulture)
+        @(_report.Loyalty.Visitors == 1 ? "person" : "people") who accepted the cookie
+        (@_report.Loyalty.CoveragePercent.ToString("0.#", CultureInfo.InvariantCulture)% of visits).
+        Only they can be recognised on a later day; everyone else is anonymous and cannot be followed
+        from one day to the next. "Returning" means they had visited before @_range.Phrase.
+    </p>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "days")]
+    private string? DaysQuery { get; set; }
+
+    private ReportRange _range = ReportRange.Default;
+    private InsightsReport _report = default!;
+    private string _busiest = "";
+    private string _peakDownloadHour = "";
+    private string _zoneName = "";
+
+    /// <summary>Sunday first: the working week in Egypt runs Sunday to Thursday.</summary>
+    private static readonly DayOfWeek[] WeekOrder =
+    [
+        DayOfWeek.Sunday, DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+        DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday,
+    ];
+
+    private string HourlyCaption => _range.IsSingleDay
+        ? $"{_range.Phrase}, hour by hour ({_zoneName} time)"
+        : $"hour of day, all days combined ({_zoneName} time)";
+
+    protected override void OnInitialized()
+    {
+        _range = AdminDashboardOptions.ResolveRange(DaysQuery);
+        _report = Store.GetInsights(Store.ResolveWindow(_range));
+        _zoneName = _report.Window.ZoneName;
+
+        _busiest = DescribeBusiest();
+        _peakDownloadHour = _report.DownloadsByHour.Sum() == 0
+            ? "no hour in particular (no downloads)"
+            : HourRange(Array.IndexOf(_report.DownloadsByHour, _report.DownloadsByHour.Max()));
+    }
+
+    /// <summary>
+    /// "Tuesdays 14:00–14:59" for a multi-day range, "14:00–14:59" for a single day. Ties go to
+    /// the earliest slot, so the sentence does not flicker between equal answers across reloads.
+    /// </summary>
+    private string DescribeBusiest()
+    {
+        if (_range.IsSingleDay)
+        {
+            var hour = Array.IndexOf(_report.VisitsByHour, _report.VisitsByHour.Max());
+            return HourRange(hour);
+        }
+
+        var (bestDay, bestHour, best) = (DayOfWeek.Sunday, 0, -1L);
+        foreach (var day in WeekOrder)
+        {
+            for (var hour = 0; hour < 24; hour++)
+            {
+                if (_report.VisitHeatmap[(int)day, hour] > best)
+                {
+                    (bestDay, bestHour, best) = (day, hour, _report.VisitHeatmap[(int)day, hour]);
+                }
+            }
+        }
+
+        return $"{CultureInfo.InvariantCulture.DateTimeFormat.GetDayName(bestDay)}s {HourRange(bestHour)}";
+    }
+
+    private static string DayName(DayOfWeek day) =>
+        CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedDayName(day);
+
+    private static string HourRange(int hour) =>
+        $"{hour.ToString("00", CultureInfo.InvariantCulture)}:00–{hour.ToString("00", CultureInfo.InvariantCulture)}:59";
+
+    /// <summary>Five intensity levels over the busiest cell; 0 is reserved for "no visits".</summary>
+    private int HeatLevel(long count)
+    {
+        if (count <= 0)
+        {
+            return 0;
+        }
+
+        var max = 0L;
+        foreach (var value in _report.VisitHeatmap)
+        {
+            max = Math.Max(max, value);
+        }
+
+        return max == 0 ? 0 : Math.Clamp((int)Math.Ceiling(count * 5.0 / max), 1, 5);
+    }
+}

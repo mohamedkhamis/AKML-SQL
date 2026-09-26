@@ -3,7 +3,6 @@
     <Project Path="src/AkmlSql.Core/AkmlSql.Core.csproj" />
     <Project Path="src/AkmlSql.Updater/AkmlSql.Updater.csproj" />
     <Project Path="src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" />
-    <Project Path="src/AkmlSql.VS2026/AkmlSql.VS2026.csproj" />
     <Project Path="src/AkmlSql.Engine/AkmlSql.Engine.csproj" />
     <Project Path="src/AkmlSql.Formatting/AkmlSql.Formatting.csproj" />
     <Project Path="src/AkmlSql.Formatter/AkmlSql.Formatter.csproj" />

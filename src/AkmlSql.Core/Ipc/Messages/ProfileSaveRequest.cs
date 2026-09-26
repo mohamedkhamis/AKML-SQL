@@ -16,5 +16,13 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(3)]
         public string? BasedOn { get; set; }
+
+        /// <summary>
+        /// The save creates a NEW style: the engine refuses a built-in's name and a name already
+        /// taken, instead of overwriting (spec 039 FR-008). An edit leaves it false. Engines
+        /// without this key ignore it; a caller that needs the guard also checks names itself.
+        /// </summary>
+        [Key(4)]
+        public bool CreateOnly { get; set; }
     }
 }

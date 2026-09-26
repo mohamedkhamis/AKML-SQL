@@ -1,0 +1,242 @@
+@page "/admin/feedback"
+@layout AdminLayout
+@using System.Globalization
+@using AkmlSql.Site.Admin
+@using AkmlSql.Site.Analytics
+@using AkmlSql.Site.Feedback
+@using Microsoft.AspNetCore.Antiforgery
+@using Microsoft.Extensions.Options
+@inject FeedbackStore Store
+@inject FeedbackNotifier Notifier
+@inject FeedbackEmailStatus EmailStatus
+@inject IOptions<FeedbackOptions> FeedbackConfig
+@inject ReportClock Clock
+@inject IAntiforgery Antiforgery
+
+@* The inbox for messages sent from /feedback. Every action is a plain POST form (static SSR,
+   antiforgery token) guarded by the admin middleware like the rest of /admin. The reporting window
+   deliberately does not filter this page: a message is open until the owner deals with it,
+   however old it is. *@
+
+<PageTitle>Feedback — AKML SQL Admin</PageTitle>
+<HeadContent>
+    <meta name="robots" content="noindex, nofollow" />
+</HeadContent>
+
+<header class="page-header">
+    <p class="eyebrow">Admin</p>
+    <h1>Feedback</h1>
+    <p class="page-intro">
+        Problems, complaints and suggestions sent from the site's
+        <a href="/feedback">feedback page</a>. Open messages stay here until you mark them handled.
+    </p>
+</header>
+
+@if (Result is not null)
+{
+    <div class="notice" role="status"><p>@ResultText</p></div>
+}
+
+<nav class="admin-toolbar" aria-label="Feedback status">
+    <ul class="admin-ranges">
+        @foreach (var (key, label, count) in Tabs)
+        {
+            <li>
+                @if (key == _show)
+                {
+                    <a href="@TabUrl(key)" aria-current="true" class="is-current">@label (@count)</a>
+                }
+                else
+                {
+                    <a href="@TabUrl(key)">@label (@count)</a>
+                }
+            </li>
+        }
+    </ul>
+</nav>
+
+@if (_items.Count == 0)
+{
+    <section class="admin-panel">
+        <p class="admin-empty">
+            @(_show == "open" ? "Nothing open — every message has been handled." : "No messages here.")
+        </p>
+    </section>
+}
+else
+{
+    <ol class="feedback-inbox">
+        @foreach (var item in _items)
+        {
+            <li class="feedback-item @(item.Handled ? "is-handled" : "")">
+                <article aria-labelledby="@($"fb-{item.Id}-title")">
+                    <header class="feedback-item-head">
+                        <p class="feedback-item-category" id="@($"fb-{item.Id}-title")">
+                            @item.Category.Label <span class="feedback-item-id">#@item.Id</span>
+                        </p>
+                        <p class="feedback-item-meta">
+                            <time datetime="@item.ReceivedUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture)">@Local(item.ReceivedUtc)</time>
+                            @if (item.Country is not null) { <span> · @item.Country</span> }
+                            @if (item.Browser is not null) { <span> · @item.Browser</span> }
+                            @if (item.Page is not null) { <span> · from <code>@item.Page</code></span> }
+                        </p>
+                    </header>
+
+                    @* Razor encodes this: whatever a visitor typed is shown as text, never as markup. *@
+                    <p class="feedback-item-message">@item.Message</p>
+
+                    <footer class="feedback-item-actions">
+                        @if (item.Email is not null)
+                        {
+                            <a class="btn btn-secondary" href="@ReplyLink(item)">Reply to @item.Email</a>
+                        }
+                        else
+                        {
+                            <span class="admin-choice-hint">No email left — can't reply.</span>
+                        }
+
+                        <form method="post" action="@($"/admin/feedback/{item.Id}/{(item.Handled ? "reopen" : "handled")}")">
+                            <AntiforgeryField Token="@_requestToken" />
+                            <input type="hidden" name="show" value="@_show" />
+                            <button type="submit" class="btn @(item.Handled ? "btn-secondary" : "btn-primary")">
+                                @(item.Handled ? "Reopen" : "Mark handled")
+                            </button>
+                        </form>
+
+                        <form method="post" action="@($"/admin/feedback/{item.Id}/delete")">
+                            <AntiforgeryField Token="@_requestToken" />
+                            <input type="hidden" name="show" value="@_show" />
+                            <button type="submit" class="btn btn-secondary btn-danger-quiet">Delete</button>
+                        </form>
+
+                        @if (item.Handled && item.HandledUtc is { } handledAt)
+                        {
+                            <span class="admin-choice-hint">Handled @Local(handledAt)</span>
+                        }
+                    </footer>
+                </article>
+            </li>
+        }
+    </ol>
+}
+
+@* Email notification status: stated, not assumed. A wrong password fails silently otherwise --
+   messages keep arriving here, the owner believes they are being emailed, and stops looking. *@
+<section class="admin-panel" aria-labelledby="email-heading">
+    <h2 id="email-heading">Email notifications</h2>
+    @if (!Notifier.Enabled)
+    {
+        <p>
+            <strong>Off.</strong> New messages only appear here. To also get an email for each one, set these on
+            the server (for the IIS site, as app-pool environment variables) and recycle the app pool:
+        </p>
+        <div class="table-scroll">
+            <table class="admin-table">
+                <tbody>
+                    <tr><th scope="row"><code>Feedback__NotifyEmail</code></th><td>where to send them, e.g. you&#64;example.com</td></tr>
+                    <tr><th scope="row"><code>Feedback__Smtp__Host</code></th><td>e.g. <code>smtp.gmail.com</code></td></tr>
+                    <tr><th scope="row"><code>Feedback__Smtp__Port</code></th><td>usually <code>587</code></td></tr>
+                    <tr><th scope="row"><code>Feedback__Smtp__UserName</code></th><td>the sending account</td></tr>
+                    <tr><th scope="row"><code>Feedback__Smtp__Password</code></th><td>for Gmail, an <em>app password</em>, not your account password</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="admin-choice-hint">
+            <code>scripts/set-feedback-email.ps1</code> sets all of them in one step.
+        </p>
+    }
+    else
+    {
+        <p>
+            <strong>On.</strong> Each new message is emailed to <strong>@FeedbackConfig.Value.NotifyEmail</strong>
+            through <code>@FeedbackConfig.Value.Smtp.Host</code>.
+        </p>
+        @if (EmailStatus.LastError is not null)
+        {
+            <div class="notice" role="alert">
+                <h2>The last email failed</h2>
+                <p>@(EmailStatus.LastAttemptUtc is { } at ? Local(at) : "") — <code>@EmailStatus.LastError</code></p>
+                <p>Messages are still saved here. Check the settings above, then send a test.</p>
+            </div>
+        }
+        else if (EmailStatus.LastSuccessUtc is { } ok)
+        {
+            <p class="admin-choice-hint">Last sent successfully @Local(ok).</p>
+        }
+        else
+        {
+            <p class="admin-choice-hint">Nothing has been sent since the site last started.</p>
+        }
+
+        <form method="post" action="/admin/feedback/test-email">
+            <AntiforgeryField Token="@_requestToken" />
+            <button type="submit" class="btn btn-secondary">Send a test email</button>
+        </form>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "show")]
+    private string? ShowQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "result")]
+    private string? Result { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string _show = "open";
+    private IReadOnlyList<FeedbackItem> _items = [];
+    private (long Open, long Handled) _counts;
+    private string? _requestToken;
+
+    private IEnumerable<(string Key, string Label, long Count)> Tabs =>
+    [
+        ("open", "Open", _counts.Open),
+        ("handled", "Handled", _counts.Handled),
+        ("all", "All", _counts.Open + _counts.Handled),
+    ];
+
+    private string ResultText => Result switch
+    {
+        "handled" => "Marked handled.",
+        "reopened" => "Reopened.",
+        "deleted" => "Deleted, including any email address it held.",
+        "test-sent" => $"Test email sent to {FeedbackConfig.Value.NotifyEmail}. Check that inbox (and its spam folder).",
+        "test-failed" => "The test email could not be sent — see the error below.",
+        "missing" => "That message no longer exists.",
+        _ => "",
+    };
+
+    protected override void OnInitialized()
+    {
+        _show = ShowQuery is "handled" or "all" ? ShowQuery : "open";
+        _items = Store.List(_show switch { "handled" => true, "all" => null, _ => false });
+        _counts = Store.Counts();
+
+        if (HttpContext is not null)
+        {
+            _requestToken = Antiforgery.GetAndStoreTokens(HttpContext).RequestToken;
+        }
+    }
+
+    private static string TabUrl(string key) => key == "open" ? "/admin/feedback" : $"/admin/feedback?show={key}";
+
+    private string Local(DateTimeOffset utc) =>
+        TimeZoneInfo.ConvertTime(utc, Clock.Zone).ToString("ddd d MMM yyyy, HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>A mailto link that opens a reply with the subject and the original quoted.</summary>
+    private static string ReplyLink(FeedbackItem item)
+    {
+        var subject = Uri.EscapeDataString($"Re: your AKML SQL feedback (#{item.Id})");
+        var quoted = string.Join("\n", item.Message.Split('\n').Select(line => "> " + line));
+        var body = Uri.EscapeDataString($"\n\n{quoted}");
+        // mailto bodies over ~2,000 characters are truncated or refused by some clients.
+        if (body.Length > 1_800)
+        {
+            body = Uri.EscapeDataString("\n\n(original message in the admin inbox)");
+        }
+
+        return $"mailto:{item.Email}?subject={subject}&body={body}";
+    }
+}

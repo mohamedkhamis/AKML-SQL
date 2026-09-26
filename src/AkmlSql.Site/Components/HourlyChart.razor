@@ -1,0 +1,100 @@
+@using System.Globalization
+
+@* Hour-by-hour bar chart, for a one-day window. A daily chart over a single day is one bar, which
+   says nothing; the same day split into 24 hours says when things happened.
+
+   Same construction as Chart: pure CSS bars from the precomputed .bar-h-* classes (strict CSP, no
+   inline styles), a visible axis maximum, and a real data table for assistive technology. Hours
+   are LOCAL, in the report's timezone. *@
+
+<section class="admin-panel" aria-labelledby="@($"{IdPrefix}-chart-heading")">
+    <div class="admin-chart-head">
+        <h2 id="@($"{IdPrefix}-chart-heading")">@Title — @Caption</h2>
+        <p class="admin-chart-total">@Values.Sum().ToString("N0", CultureInfo.InvariantCulture) total</p>
+    </div>
+
+    <div class="admin-chart admin-chart-hourly" aria-hidden="true">
+        <div class="admin-chart-scale">
+            <span>@Max.ToString("N0", CultureInfo.InvariantCulture)</span>
+            <span>0</span>
+        </div>
+        <div class="admin-chart-plot">
+            <div class="admin-chart-bars">
+                @for (var hour = 0; hour < 24; hour++)
+                {
+                    <div class="admin-chart-col" title="@HourRange(hour): @Values[hour] @Title.ToLowerInvariant()">
+                        <div class="admin-chart-bar bar-h-@HeightBucket(Values[hour])"></div>
+                    </div>
+                }
+            </div>
+            <div class="admin-chart-labels">
+                @for (var hour = 0; hour < 24; hour++)
+                {
+                    @* Every third hour: eight labels stay legible at phone width. *@
+                    <span class="admin-chart-label">@(hour % 3 == 0 ? hour.ToString("00", CultureInfo.InvariantCulture) : "")</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <details class="admin-chart-data">
+        <summary>View @Title.ToLowerInvariant() by hour as a table</summary>
+        <div class="table-scroll">
+            <table class="admin-table">
+                <caption class="visually-hidden">@Title by hour, @Caption</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Hour</th>
+                        <th scope="col" class="admin-num">@Title</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var hour = 0; hour < 24; hour++)
+                    {
+                        <tr>
+                            <th scope="row">@HourRange(hour)</th>
+                            <td class="admin-num">@Values[hour]</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </details>
+</section>
+
+@code {
+    /// <summary>Chart heading, e.g. "Visits".</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = "";
+
+    /// <summary>What the hours cover, e.g. "today, hour by hour (Cairo time)".</summary>
+    [Parameter, EditorRequired]
+    public string Caption { get; set; } = "";
+
+    /// <summary>24 values, index = local hour.</summary>
+    [Parameter, EditorRequired]
+    public long[] Values { get; set; } = new long[24];
+
+    /// <summary>Prefix for element ids, so two charts on one page stay unique.</summary>
+    [Parameter, EditorRequired]
+    public string IdPrefix { get; set; } = "";
+
+    private long Max => Values.Length == 0 ? 0 : Values.Max();
+
+    private static string HourRange(int hour) =>
+        $"{hour.ToString("00", CultureInfo.InvariantCulture)}:00–{hour.ToString("00", CultureInfo.InvariantCulture)}:59";
+
+    /// <summary>Same bucketing as Chart: 5% steps, and a non-zero value always gets a visible bar.</summary>
+    private int HeightBucket(long count)
+    {
+        var max = Max;
+        if (count <= 0 || max <= 0)
+        {
+            return 0;
+        }
+
+        var percent = (int)Math.Round(count * 100.0 / max, MidpointRounding.AwayFromZero);
+        var bucket = (int)Math.Round(percent / 5.0, MidpointRounding.AwayFromZero) * 5;
+        return Math.Clamp(bucket, 5, 100);
+    }
+}

@@ -18,7 +18,7 @@ Each rule has an ID like `PE003` (category letters plus a number). The full list
 ## Where results appear
 
 - Squiggles in the editor under the offending code — hover for the rule message.
-- The Visual Studio / SSMS **Error List** window, with rule ID, message, and location.
+- The SSMS **Error List** window, with rule ID, message, and location.
 
 Many rules offer a lightbulb auto-fix. Click the squiggle and choose the fix; the change is undoable with Ctrl+Z.
 
@@ -31,7 +31,7 @@ change should reach. The four scopes go from narrowest to widest:
 |---|---|---|---|
 | **Suppress PE001 on this line** | that one line | until you delete the comment | a comment in your script |
 | **Disable PE001 in this script** | the whole file | until you delete the comment | a comment in your script |
-| **Disable PE001 for this session** | every file | until you close SSMS / Visual Studio | nowhere — it is held in memory |
+| **Disable PE001 for this session** | every file | until you close SSMS | nowhere — it is held in memory |
 | **Disable PE001 everywhere** | every file | permanently | `config.json` |
 
 The first two write a comment, so they travel with the file — commit them and your team sees the

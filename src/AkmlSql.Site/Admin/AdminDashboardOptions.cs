@@ -1,3 +1,6 @@
+using System.Globalization;
+using AkmlSql.Site.Analytics;
+
 namespace AkmlSql.Site.Admin;
 
 /// <summary>
@@ -40,4 +43,36 @@ public static class AdminDashboardOptions
         1 => "1 day",
         _ => $"{days} days",
     };
+
+    /// <summary>
+    /// Resolves the <c>days</c> query-string value to a reporting range. Every page and every CSV
+    /// export goes through this one function, so they cannot disagree about what a URL means.
+    /// <para>
+    /// The parameter keeps its old name and its old numeric values (<c>?days=30</c>), so every
+    /// bookmark and shared link made before Today/Yesterday existed still opens the same report.
+    /// New values are the range keys: <c>?days=today</c>, <c>?days=yesterday</c>.
+    /// </para>
+    /// <para>
+    /// A number that is not one of the offered ranges is still honoured the way it always was --
+    /// clamped by <see cref="NormalizeDays"/> -- and anything else falls back to the default
+    /// (contract A4.4: a bad query string must not break the owner's portal).
+    /// </para>
+    /// </summary>
+    public static ReportRange ResolveRange(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return ReportRange.Default;
+        }
+
+        var named = ReportRange.All.FirstOrDefault(r => string.Equals(r.Key, raw.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (named is not null)
+        {
+            return named;
+        }
+
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var days) && days >= 1
+            ? ReportRange.LastDays(NormalizeDays(days))
+            : ReportRange.Default;
+    }
 }

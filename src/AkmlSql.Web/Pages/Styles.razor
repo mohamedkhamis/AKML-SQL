@@ -1,0 +1,742 @@
+@page "/styles"
+@*
+    Format styles — the SQL Prompt style editor: the same four categories, fourteen pages and
+    option names / values as SQL Prompt's own "Edit formatting styles" window, with a live
+    preview that reformats on every change and marks the lines that moved.
+
+    Styles are saved to the paired engine when it has one (the styles SSMS
+    uses), otherwise in this browser. SQL Prompt .json styles import and export unchanged.
+*@
+@using System.Text
+@using AkmlSql.Formatting.Profiles
+@using AkmlSql.Formatting.SqlPrompt
+@using AkmlSql.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IProfileStore Store
+@inject IFormatterService Formatter
+@inject IJSRuntime JS
+
+<PageTitle>Format styles — AKML SQL</PageTitle>
+
+<div class="akml-styles" data-testid="styles-page">
+    <div class="akml-styles-header">
+        <h2>Format styles</h2>
+        <span class="akml-styles-where" data-testid="styles-location">
+            @(Store.EngineStylesAvailable ? "New styles are saved on the engine, shared with SSMS." : "No engine paired: styles are saved in this browser.")
+        </span>
+        <span class="akml-styles-spacer"></span>
+        <button class="akml-tool-button" @onclick="NewStyleAsync" data-testid="style-new">New</button>
+        <label class="akml-tool-button" data-testid="style-import-label">
+            Import SQL Prompt style
+            <InputFile OnChange="ImportAsync" accept=".json" class="akml-hidden-file" data-testid="style-import" />
+        </label>
+    </div>
+
+    @if (Store.EngineStylesError is { } engineError)
+    {
+        <p class="akml-styles-status error" data-testid="styles-engine-error" role="status">
+            The engine's styles could not be listed: @(engineError.TrimEnd('.')). The styles in this browser are shown.
+        </p>
+    }
+
+    @if (!string.IsNullOrEmpty(_status))
+    {
+        <p class="akml-styles-status @(_statusIsError ? "error" : "")" data-testid="styles-status" role="status">@_status</p>
+    }
+
+    <div class="akml-styles-body">
+        @* ── style list ── *@
+        <nav class="akml-styles-list" data-testid="style-list" aria-label="Styles">
+            @foreach (var group in Groups())
+            {
+                <div class="akml-styles-group">@group.Title</div>
+                @foreach (var s in group.Styles)
+                {
+                    <button class="akml-styles-row @(s.Id == _selectedId ? "selected" : "")"
+                            data-testid="style-row" data-style="@s.Name"
+                            @onclick="() => ClickStyleAsync(s.Id)">
+                        <span class="akml-styles-name">@s.Name</span>
+                        @if (s.Id == _activeId)
+                        {
+                            <span class="akml-styles-badge active" title="Used by the editor's Format command">active</span>
+                        }
+                        @if (s.IsCustomizedBuiltIn)
+                        {
+                            <span class="akml-styles-badge" title="A built-in style you have edited">edited</span>
+                        }
+                        @if (!s.IsSqlPromptStyle && !s.IsSummary)
+                        {
+                            <span class="akml-styles-badge muted" title="Written in AKML's own model; saving it here makes it a SQL Prompt style">classic</span>
+                        }
+                    </button>
+                }
+            }
+        </nav>
+
+        @if (_document == null)
+        {
+            <div class="akml-styles-empty">Select a style, or click <strong>New</strong>.</div>
+        }
+        else
+        {
+            @* ── category tree ── *@
+            <nav class="akml-styles-tree" data-testid="style-pages" aria-label="Option pages">
+                @foreach (var category in SqlPromptOptionCatalog.Categories)
+                {
+                    <div class="akml-styles-category">@category</div>
+                    @foreach (var section in SqlPromptOptionCatalog.Sections.Where(x => x.Category == category))
+                    {
+                        var changed = section.Options.Count(o => _document.Get(o.Path) != o.Default);
+                        <button class="akml-styles-page @(section.Id == _sectionId ? "selected" : "")"
+                                data-testid="page-@section.Id" @onclick="() => SelectPage(section.Id)">
+                            <span>@section.Label</span>
+                            @if (changed > 0)
+                            {
+                                <span class="akml-styles-count" title="@changed option(s) differ from SQL Prompt's default">@changed</span>
+                            }
+                        </button>
+                    }
+                }
+            </nav>
+
+            @* ── options + preview ── *@
+            <section class="akml-styles-main">
+                <div class="akml-styles-toolbar">
+                    <strong class="akml-styles-title" data-testid="style-name">@_document.Name</strong>
+                    @if (_dirty)
+                    {
+                        <span class="akml-styles-dirty" data-testid="style-dirty">unsaved changes</span>
+                    }
+                    <span class="akml-styles-spacer"></span>
+                    <button class="akml-tool-button primary" @onclick="SaveAsync" disabled="@(!_dirty && _selectedId != null)" data-testid="style-save">Save</button>
+                    <button class="akml-tool-button" @onclick="SaveAsAsync" data-testid="style-saveas">Save as…</button>
+                    @if (_dirty)
+                    {
+                        <button class="akml-tool-button" @onclick="DiscardAsync" data-testid="style-discard">Discard changes</button>
+                    }
+                    @if (_selectedId != null && _selectedId != _activeId)
+                    {
+                        <button class="akml-tool-button" @onclick="SetActiveAsync" data-testid="style-set-active">Use in editor</button>
+                    }
+                    <button class="akml-tool-button" @onclick="ExportAsync" data-testid="style-export">Export .json</button>
+                    @if (Selected is { } sel && sel.Origin != ProfileOrigin.BuiltIn)
+                    {
+                        <button class="akml-tool-button" @onclick="RenameAsync" data-testid="style-rename">Rename</button>
+                        <button class="akml-tool-button danger" @onclick="DeleteAsync" data-testid="style-delete">Delete</button>
+                    }
+                    @if (Selected is { IsCustomizedBuiltIn: true })
+                    {
+                        <button class="akml-tool-button" @onclick="ResetAsync" data-testid="style-reset">Reset to built-in</button>
+                    }
+                </div>
+
+                @if (Selected is { IsSqlPromptStyle: false, IsSummary: false } || (Selected?.IsSummary == true && !_documentIsSqlPrompt))
+                {
+                    <p class="akml-styles-notice" data-testid="style-classic-notice">
+                        This style is written in AKML's own model. It is shown here in SQL Prompt's terms; saving it makes it a SQL Prompt style,
+                        formatted exactly as the preview shows.
+                    </p>
+                }
+
+                <div class="akml-styles-split">
+                    <div class="akml-styles-options" data-testid="options-@_sectionId">
+                        @{ var current = SqlPromptOptionCatalog.Sections.First(x => x.Id == _sectionId); }
+                        <h3>@current.Label</h3>
+                        @foreach (var group in current.Options.GroupBy(o => o.Group))
+                        {
+                            @if (group.Key != null)
+                            {
+                                <h4>@group.Key</h4>
+                            }
+                            @foreach (var option in group)
+                            {
+                                var value = _document.Get(option.Path);
+                                var enabled = IsEnabled(option);
+                                var changed = value != option.Default;
+                                <div class="akml-option @(changed ? "changed" : "") @(enabled ? "" : "disabled")" data-testid="option-row" data-option="@option.Path">
+                                    <label class="akml-option-label" for="@Id(option)" title="@option.Description">@option.Label</label>
+                                    <div class="akml-option-control">
+                                        @switch (option.Kind)
+                                        {
+                                            case SqlPromptOptionKind.Boolean:
+                                                <input id="@Id(option)" type="checkbox" checked="@(value == "true")" disabled="@(!enabled)"
+                                                       data-testid="option-@option.Path"
+                                                       @onchange="e => ChangeBool(option, e)" />
+                                                break;
+                                            case SqlPromptOptionKind.Integer:
+                                                <input id="@Id(option)" type="number" min="@option.Min" max="@option.Max" value="@NumberShown(option, value)" disabled="@(!enabled)"
+                                                       data-testid="option-@option.Path"
+                                                       @onchange="e => ChangeNumberAsync(option, e.Value?.ToString() ?? option.Default)" />
+                                                break;
+                                            default:
+                                                <select id="@Id(option)" value="@value" disabled="@(!enabled)" data-testid="option-@option.Path"
+                                                        @onchange="e => Change(option, e.Value?.ToString() ?? option.Default)">
+                                                    @foreach (var choice in option.Choices)
+                                                    {
+                                                        <option value="@choice.Value">@choice.Label</option>
+                                                    }
+                                                </select>
+                                                break;
+                                        }
+                                        @if (changed)
+                                        {
+                                            <button class="akml-option-reset" title="Back to SQL Prompt's default (@DefaultLabel(option))"
+                                                    data-testid="reset-@option.Path" @onclick="() => Change(option, option.Default)">↺</button>
+                                        }
+                                    </div>
+                                    <div class="akml-option-help">
+                                        @option.Description
+                                        @if (!enabled && option.EnabledWhen is { } gate)
+                                        {
+                                            <em> Takes effect when “@(SqlPromptOptionCatalog.Find(gate.Path)?.Label)” is @ValueLabel(gate.Path, gate.Value).</em>
+                                        }
+                                        @if (option.Note != null)
+                                        {
+                                            <em> @option.Note</em>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="akml-styles-preview">
+                        <div class="akml-preview-tabs" role="tablist">
+                            <button class="@(_mySql ? "" : "selected")" role="tab" data-testid="preview-sample" @onclick="() => SetPreviewSource(false)">@current.Label sample</button>
+                            <button class="@(_mySql ? "selected" : "")" role="tab" data-testid="preview-mysql" @onclick="() => SetPreviewSource(true)">My SQL</button>
+                        </div>
+                        @if (_mySql)
+                        {
+                            <textarea class="akml-preview-input" spellcheck="false" placeholder="Paste SQL to preview with this style"
+                                      data-testid="preview-input" value="@_customSql"
+                                      @oninput="e => { _customSql = e.Value?.ToString() ?? string.Empty; SchedulePreview(); }"></textarea>
+                        }
+                        <pre class="akml-preview-output" data-testid="preview" aria-live="polite">@foreach (var (line, moved) in _previewLines)
+{<span class="@(moved ? "moved" : null)">@(line + NewLine)</span>}</pre>
+                        <div class="akml-preview-status" data-testid="preview-status">@_previewStatus</div>
+                    </div>
+                </div>
+            </section>
+        }
+    </div>
+</div>
+
+<style>
+    .akml-styles { display: flex; flex-direction: column; height: 100%; font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); color: var(--akml-text-primary); }
+    .akml-styles-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m); background-color: var(--akml-surface-panel); border-bottom: 1px solid var(--akml-border-default); flex-wrap: wrap; }
+    .akml-styles-header h2 { margin: 0; font-size: var(--akml-type-chrometitle-size); }
+    .akml-styles-where { color: var(--akml-text-secondary); font-size: 12px; }
+    .akml-styles-spacer { flex: 1 1 auto; }
+    .akml-styles-status { margin: 0; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-status-info); }
+    .akml-styles-status.error { color: var(--akml-status-error, #c42b1c); }
+    .akml-styles-body { flex: 1 1 auto; display: grid; grid-template-columns: 220px 190px 1fr; min-height: 0; }
+    .akml-styles-list, .akml-styles-tree { display: flex; flex-direction: column; overflow: auto; background-color: var(--akml-surface-panel); border-right: 1px solid var(--akml-border-default); }
+    .akml-styles-group, .akml-styles-category { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m) 2px; color: var(--akml-text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .akml-styles-row, .akml-styles-page { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; font: inherit; padding: 5px var(--akml-scalar-spacing-m); cursor: pointer; }
+    .akml-styles-row:hover, .akml-styles-page:hover { background-color: var(--akml-surface-hover); }
+    .akml-styles-row.selected, .akml-styles-page.selected { background-color: var(--akml-surface-hover); box-shadow: inset 3px 0 0 var(--akml-accent, #0e639c); }
+    .akml-styles-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .akml-styles-badge { font-size: 10px; padding: 0 5px; border-radius: 8px; border: 1px solid var(--akml-border-default); color: var(--akml-text-secondary); }
+    .akml-styles-badge.active { color: var(--akml-text-onaccent); background-color: var(--akml-accent, #0e639c); border-color: transparent; }
+    .akml-styles-badge.muted { opacity: 0.8; }
+    .akml-styles-page span:first-child { flex: 1 1 auto; }
+    .akml-styles-count { font-size: 10px; min-width: 16px; text-align: center; border-radius: 8px; background-color: var(--akml-accent, #0e639c); color: var(--akml-text-onaccent); }
+    .akml-styles-empty { grid-column: 2 / span 2; padding: var(--akml-scalar-spacing-l, 24px); color: var(--akml-text-secondary); }
+    .akml-styles-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .akml-styles-toolbar { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m); border-bottom: 1px solid var(--akml-border-default); flex-wrap: wrap; }
+    .akml-styles-title { font-size: 14px; }
+    .akml-styles-dirty { color: var(--akml-status-warning, #b8860b); font-size: 12px; }
+    .akml-styles-notice { margin: 0; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-text-secondary); background-color: var(--akml-surface-panel); border-bottom: 1px solid var(--akml-border-subtle); }
+    .akml-styles-split { flex: 1 1 auto; display: grid; grid-template-columns: minmax(300px, 420px) 1fr; min-height: 0; }
+    .akml-styles-options { overflow: auto; padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-m); border-right: 1px solid var(--akml-border-default); }
+    .akml-styles-options h3 { margin: var(--akml-scalar-spacing-m) 0 var(--akml-scalar-spacing-s); font-size: 15px; }
+    .akml-styles-options h4 { margin: var(--akml-scalar-spacing-m) 0 var(--akml-scalar-spacing-xs); font-size: 12px; color: var(--akml-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+    .akml-option { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-bottom: 1px solid var(--akml-border-subtle); }
+    .akml-option.changed .akml-option-label { font-weight: 600; }
+    .akml-option.disabled { opacity: 0.55; }
+    .akml-option-control { display: flex; align-items: center; gap: 4px; }
+    .akml-option-control select, .akml-option-control input[type=number] { background-color: var(--akml-surface-input); color: var(--akml-text-primary); border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs); padding: 2px 4px; font: inherit; max-width: 230px; }
+    .akml-option-control input[type=number] { width: 72px; }
+    .akml-option-reset { background: transparent; border: 0; color: var(--akml-text-secondary); cursor: pointer; font-size: 14px; }
+    .akml-option-help { grid-column: 1 / span 2; color: var(--akml-text-secondary); font-size: 11px; }
+    .akml-styles-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+    .akml-preview-tabs { display: flex; gap: 2px; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m) 0; }
+    .akml-preview-tabs button { background: transparent; border: 1px solid transparent; border-bottom: 0; color: var(--akml-text-secondary); padding: 4px 10px; font: inherit; cursor: pointer; }
+    .akml-preview-tabs button.selected { color: var(--akml-text-primary); border-color: var(--akml-border-default); background-color: var(--akml-surface-panel); }
+    .akml-preview-input { margin: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m) 0; min-height: 90px; resize: vertical; font-family: var(--akml-type-editor-family); background-color: var(--akml-surface-input); color: var(--akml-text-primary); border: 1px solid var(--akml-border-default); }
+    .akml-preview-output { flex: 1 1 auto; margin: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); padding: var(--akml-scalar-spacing-s); overflow: auto; font-family: var(--akml-type-editor-family); font-size: 13px; line-height: 1.45; background-color: var(--akml-surface-input); border: 1px solid var(--akml-border-default); tab-size: @_tabSize; white-space: pre; }
+    .akml-preview-output .moved { background-color: color-mix(in srgb, var(--akml-accent, #0e639c) 22%, transparent); }
+    .akml-preview-status { padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); font-size: 12px; }
+    .akml-hidden-file { display: none; }
+    .akml-tool-button { font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); background-color: var(--akml-surface-panel); color: var(--akml-text-primary); border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs); padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer; }
+    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
+    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
+    .akml-tool-button.primary { border-color: var(--akml-accent, #0e639c); }
+    .akml-tool-button.danger:hover { color: var(--akml-status-error, #c42b1c); }
+    @@media (max-width: 900px) {
+        /* minmax(0, 1fr), not 1fr: a 1fr track never shrinks below its widest content (a long
+           preview line, a style name), so the one-column layout was wider than the phone. */
+        .akml-styles-body { grid-template-columns: minmax(0, 1fr); }
+        .akml-styles-split { grid-template-columns: minmax(0, 1fr); }
+        .akml-styles-list, .akml-styles-tree { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--akml-border-default); }
+        /* One column here: the desktop placement (columns 2-3) would add implicit columns and
+           scroll the page sideways. */
+        .akml-styles-empty { grid-column: auto; }
+    }
+</style>
+
+@code {
+    private const long MaxImportBytes = 1024 * 1024;
+
+    // Razor drops a literal line break inside <pre>; each preview line carries its own.
+    private const string NewLine = "\n";
+
+    private IReadOnlyList<ProfileRecord> _styles = Array.Empty<ProfileRecord>();
+    private string? _selectedId;
+    private string _activeId = string.Empty;
+    private SqlPromptStyleDocument? _document;   // what is being edited
+    private SqlPromptStyleDocument? _saved;      // what is stored (dirty check)
+    private bool _documentIsSqlPrompt;
+    private bool _dirty;
+    private string _sectionId = "whitespace";
+    private bool _mySql;
+    private string _customSql = string.Empty;
+    private List<(string Line, bool Moved)> _previewLines = new();
+    private string[] _previousPreview = Array.Empty<string>();
+    private string _previewStatus = string.Empty;
+    private int _tabSize = 4;
+    private string? _status;
+    private bool _statusIsError;
+    private CancellationTokenSource? _previewDelay;
+
+    // A typed number the style did not keep as typed (clamped to its range, or rejected). It is
+    // rendered once, so that the next render — the stored value — is a change Blazor writes into
+    // the box: Blazor only writes a value it sees change, and without this the box kept showing
+    // "0" while the style held 1. Re-creating the box instead (a new @key) lost keyboard focus.
+    private readonly Dictionary<string, string> _typedNumber = new();
+    private IJSObjectReference? _downloadModule;
+
+    private ProfileRecord? Selected => _styles.FirstOrDefault(s => s.Id == _selectedId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.StylesChanged += OnStylesChanged;
+        await ReloadAsync();
+        var initial = _styles.FirstOrDefault(s => s.Id == _activeId) ?? _styles.FirstOrDefault();
+        if (initial != null) await SelectAsync(initial.Id);
+    }
+
+    private void OnStylesChanged() => _ = InvokeAsync(async () => { await ReloadAsync(); StateHasChanged(); });
+
+    private async Task ReloadAsync()
+    {
+        _styles = await Store.ListAsync();
+        _activeId = await Store.GetActiveIdAsync();
+    }
+
+    private IEnumerable<(string Title, List<ProfileRecord> Styles)> Groups()
+    {
+        var browserBuiltIn = _styles.Where(s => s.Location == ProfileLocation.Browser && s.Origin == ProfileOrigin.BuiltIn).ToList();
+        var browserMine = _styles.Where(s => s.Location == ProfileLocation.Browser && s.Origin != ProfileOrigin.BuiltIn).ToList();
+        var engine = _styles.Where(s => s.Location == ProfileLocation.Engine).ToList();
+        if (engine.Count > 0) yield return ("Shared with SSMS", engine);
+        if (browserBuiltIn.Count > 0) yield return ("Built-in", browserBuiltIn);
+        if (browserMine.Count > 0) yield return ("In this browser", browserMine);
+    }
+
+    /// <summary>
+    /// A click on a style in the list. The style already open is left as it is: reloading it
+    /// silently threw away its unsaved edits (the discard prompt only covers switching styles).
+    /// </summary>
+    private async Task ClickStyleAsync(string id)
+    {
+        if (id == _selectedId && _document != null) return;
+        await SelectAsync(id);
+    }
+
+    /// <summary>
+    /// Opens a style; true when it opened. Unsaved edits are only discarded once the new style has
+    /// loaded — with <paramref name="discardEdits"/> the caller has settled that already (Discard,
+    /// Reset, a created copy); otherwise the user is asked. If loading fails, the open style and
+    /// its unsaved edits stay as they were.
+    /// </summary>
+    private async Task<bool> SelectAsync(string id, bool discardEdits = false)
+    {
+        if (!discardEdits && _dirty && id != _selectedId && !await ConfirmAsync("Discard the unsaved changes to this style?")) return false;
+        (SqlPromptStyleDocument Document, ProfileRecord Record)? opened;
+        try
+        {
+            // One engine request for both the document and the record.
+            opened = await Store.OpenAsync(id);
+        }
+        catch (Exception ex)
+        {
+            // An engine style whose engine is slow, busy or gone: say so instead of failing the page.
+            SetStatus($"That style could not be loaded: {(ex is OperationCanceledException ? "the engine did not answer in time" : ex.Message.TrimEnd('.'))}.", error: true);
+            return false;
+        }
+        if (opened is not { } style)
+        {
+            SetStatus("That style could not be loaded — is its engine still connected?", error: true);
+            return false;
+        }
+        var document = style.Document;
+        _documentIsSqlPrompt = style.Record.IsSqlPromptStyle;
+        _selectedId = id;
+        _document = document;
+        _saved = document.Clone();
+        _dirty = false;
+        _typedNumber.Clear();
+        _previousPreview = Array.Empty<string>();
+        SetStatus(null);
+        RenderPreview(markChanges: false);
+        return true;
+    }
+
+    private void SelectPage(string sectionId)
+    {
+        _sectionId = sectionId;
+        _previousPreview = Array.Empty<string>();
+        RenderPreview(markChanges: false);
+    }
+
+    private void SetPreviewSource(bool mySql)
+    {
+        _mySql = mySql;
+        _previousPreview = Array.Empty<string>();
+        RenderPreview(markChanges: false);
+    }
+
+    private void Change(SqlPromptOption option, string value)
+    {
+        if (_document == null) return;
+        try
+        {
+            _document.Set(option.Path, value);
+        }
+        catch (ArgumentException ex)
+        {
+            SetStatus(ex.Message, error: true);
+            return;
+        }
+        _dirty = _saved == null || !_document.FormatsLike(_saved) || _document.Name != _saved.Name;
+        SetStatus(null);
+        RenderPreview(markChanges: true);
+    }
+
+    private async Task ChangeNumberAsync(SqlPromptOption option, string typed)
+    {
+        Change(option, typed);
+        if (_document == null || _document.Get(option.Path) == typed) return;
+        _typedNumber[option.Path] = typed;
+        StateHasChanged();
+        await Task.Yield();
+        _typedNumber.Remove(option.Path);
+    }
+
+    private string NumberShown(SqlPromptOption option, string stored) =>
+        _typedNumber.TryGetValue(option.Path, out var typed) ? typed : stored;
+
+    private void ChangeBool(SqlPromptOption option, ChangeEventArgs e) =>
+        Change(option, e.Value is true || string.Equals(e.Value?.ToString(), "true", StringComparison.OrdinalIgnoreCase) ? "true" : "false");
+
+    private bool IsEnabled(SqlPromptOption option) =>
+        option.EnabledWhen is not { } gate || _document!.Get(gate.Path) == gate.Value;
+
+    private static string Id(SqlPromptOption option) => "opt-" + option.Path.Replace('.', '-');
+
+    private static string DefaultLabel(SqlPromptOption option) => ValueLabel(option.Path, option.Default);
+
+    private static string ValueLabel(string path, string value)
+    {
+        var option = SqlPromptOptionCatalog.Find(path);
+        if (option == null) return value;
+        return option.Kind switch
+        {
+            SqlPromptOptionKind.Boolean => value == "true" ? "on" : "off",
+            SqlPromptOptionKind.Choice => option.Choices.FirstOrDefault(c => c.Value == value)?.Label ?? value,
+            _ => value,
+        };
+    }
+
+    // ── preview ──────────────────────────────────────────────────────────────
+
+    private void SchedulePreview()
+    {
+        _previewDelay?.Cancel();
+        _previewDelay = new CancellationTokenSource();
+        var token = _previewDelay.Token;
+        _ = Task.Delay(250, token).ContinueWith(t =>
+        {
+            if (t.IsCanceled) return;
+            _ = InvokeAsync(() => { RenderPreview(markChanges: true); StateHasChanged(); });
+        }, TaskScheduler.Default);
+    }
+
+    private void RenderPreview(bool markChanges)
+    {
+        if (_document == null) return;
+        var sql = _mySql ? _customSql : SqlPromptPreviewSamples.For(_sectionId);
+        _tabSize = _document.GetInt("whitespace.numberOfSpacesInTabs");
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            _previewLines = new();
+            _previewStatus = "Paste some SQL to preview it with this style.";
+            return;
+        }
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = Formatter.Format(sql, new FormattingProfile { SqlPrompt = _document.Root });
+        watch.Stop();
+
+        var lines = result.FormattedText.Replace("\r\n", "\n").TrimEnd('\n').Split('\n');
+        var moved = 0;
+        _previewLines = new List<(string, bool)>(lines.Length);
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var isMoved = markChanges && _previousPreview.Length > 0 && (i >= _previousPreview.Length || _previousPreview[i] != lines[i]);
+            if (isMoved) moved++;
+            _previewLines.Add((lines[i], isMoved));
+        }
+        if (markChanges && _previousPreview.Length > lines.Length) moved += _previousPreview.Length - lines.Length;
+        var changedText = !markChanges || _previousPreview.Length == 0 ? "" : moved == 0 ? " · no lines changed" : $" · {moved} line{(moved == 1 ? "" : "s")} changed";
+        _previewStatus = !result.Success || !result.ValidationPassed
+            ? "The preview could not be formatted with this style: " + string.Join(" ", result.Diagnostics.Select(d => d.Message))
+            : $"Preview updated{changedText} · {watch.ElapsedMilliseconds} ms";
+        _previousPreview = lines;
+    }
+
+    // ── actions ──────────────────────────────────────────────────────────────
+
+    private async Task NewStyleAsync()
+    {
+        if (_dirty && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
+        var name = await PromptAsync("Name for the new style (it starts from SQL Prompt's defaults):", UniqueName("My style"));
+        if (string.IsNullOrWhiteSpace(name)) return;
+        await CreateAsync(SqlPromptStyleDocument.CreateDefault(name.Trim()));
+    }
+
+    private async Task CreateAsync(SqlPromptStyleDocument document)
+    {
+        try
+        {
+            var saved = await Store.SaveDocumentAsync(null, document);
+            await ReloadAsync();
+            // The new style takes the edited one's place (a "Save as" copy carries its edits; New
+            // and Import asked first). If it cannot be opened, the edited style stays open and
+            // still unsaved, and the status says both.
+            if (await SelectAsync(saved.Id, discardEdits: true))
+                SetStatus($"Created “{saved.Name}”{Where(saved)}.");
+            else
+                SetStatus($"Created “{saved.Name}”{Where(saved)}, but it could not be opened: {(_status ?? string.Empty).TrimEnd('.')}.", error: true);
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ErrorText(ex), error: true);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_document == null) return;
+        try
+        {
+            var saved = await Store.SaveDocumentAsync(_selectedId, _document);
+            await ReloadAsync();
+            _selectedId = saved.Id;
+            _saved = _document.Clone();
+            _documentIsSqlPrompt = true;
+            _dirty = false;
+            SetStatus($"Saved “{saved.Name}”{Where(saved)}.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ErrorText(ex), error: true);
+        }
+    }
+
+    private async Task SaveAsAsync()
+    {
+        if (_document == null) return;
+        var name = await PromptAsync("Save a copy of this style as:", UniqueName(_document.Name + " copy"));
+        if (string.IsNullOrWhiteSpace(name)) return;
+        var copy = _document.Clone();
+        copy.Name = name.Trim();
+        copy.Id = Guid.NewGuid().ToString();
+        // CreateAsync clears the unsaved flag once the copy is saved; if the save fails (a name
+        // already taken) the edits stay marked unsaved, so Save stays enabled and switching away asks.
+        await CreateAsync(copy);
+    }
+
+    private async Task DiscardAsync()
+    {
+        if (_selectedId == null) return;
+        await SelectAsync(_selectedId, discardEdits: true);
+    }
+
+    private async Task SetActiveAsync()
+    {
+        if (_selectedId == null) return;
+        if (_dirty) await SaveAsync();
+        await Store.SetActiveIdAsync(_selectedId!);
+        _activeId = await Store.GetActiveIdAsync();
+        SetStatus($"The editor's Format command now uses “{_document?.Name}”.");
+    }
+
+    private async Task RenameAsync()
+    {
+        if (_selectedId == null || _document == null) return;
+        var name = await PromptAsync("New name for the style:", _document.Name);
+        if (string.IsNullOrWhiteSpace(name) || name.Trim() == _document.Name) return;
+        try
+        {
+            var renamed = await Store.RenameAsync(_selectedId, name.Trim());
+            await ReloadAsync();
+            var wasDirty = _dirty;
+            var edits = _document.Clone();
+            await SelectAsyncForce(renamed.Id);
+            if (wasDirty && _document != null)
+            {
+                // keep unsaved option edits across the rename
+                foreach (var option in SqlPromptOptionCatalog.Options) _document.Set(option.Path, edits.Get(option.Path));
+                _dirty = !_document.FormatsLike(_saved!);
+            }
+            SetStatus($"Renamed to “{renamed.Name}”.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ErrorText(ex), error: true);
+        }
+    }
+
+    private Task<bool> SelectAsyncForce(string id) => SelectAsync(id, discardEdits: true);
+
+    private async Task DeleteAsync()
+    {
+        if (_selectedId == null || _document == null) return;
+        if (!await ConfirmAsync($"Delete the style “{_document.Name}”? This cannot be undone.")) return;
+        try
+        {
+            var name = _document.Name;
+            await Store.DeleteAsync(_selectedId);
+            if (_selectedId == _activeId) await Store.SetActiveIdAsync("builtin.khamis");
+            await ReloadAsync();
+            _document = null;
+            _selectedId = null;
+            _dirty = false;
+            SetStatus($"Deleted “{name}”.");
+            var next = _styles.FirstOrDefault(s => s.Id == _activeId) ?? _styles.FirstOrDefault();
+            if (next != null) await SelectAsync(next.Id);
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ErrorText(ex), error: true);
+        }
+    }
+
+    private async Task ResetAsync()
+    {
+        if (_selectedId == null || _document == null) return;
+        if (!await ConfirmAsync($"Discard your edits to the built-in style “{_document.Name}”?")) return;
+        try
+        {
+            await Store.ResetAsync(_selectedId);
+            await ReloadAsync();
+            await SelectAsyncForce(_selectedId);
+            SetStatus($"“{_document?.Name}” is back to the built-in style.");
+        }
+        catch (Exception ex)
+        {
+            SetStatus(ErrorText(ex), error: true);
+        }
+    }
+
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        // The imported style is opened in place of this one, exactly like New.
+        if (_dirty && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
+        var file = e.File;
+        if (file.Size > MaxImportBytes)
+        {
+            SetStatus("That file is larger than 1 MB — it is not a SQL Prompt style.", error: true);
+            return;
+        }
+        string text;
+        await using (var stream = file.OpenReadStream(MaxImportBytes))
+        using (var reader = new StreamReader(stream, Encoding.UTF8))
+        {
+            text = await reader.ReadToEndAsync();
+        }
+        if (!SqlPromptStyleDocument.TryParse(text, out var document, out var error))
+        {
+            SetStatus($"“{file.Name}” is not a SQL Prompt style (.json): {error}", error: true);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(document!.Name)) document.Name = Path.GetFileNameWithoutExtension(file.Name);
+        document.Name = UniqueName(document.Name);
+        var unknown = document.UnknownKeys();
+        await CreateAsync(document);
+        if (unknown.Count > 0 && !_statusIsError)
+            SetStatus(_status + $" {unknown.Count} setting(s) this version does not know were kept unchanged.");
+    }
+
+    private async Task ExportAsync()
+    {
+        if (_document == null) return;
+        _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
+        var json = _document.ToJson();
+        var file = string.Concat(_document.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)) + ".json";
+        await _downloadModule.InvokeVoidAsync("downloadBase64", file, "application/json", Convert.ToBase64String(Encoding.UTF8.GetBytes(json)));
+        SetStatus($"Exported “{_document.Name}” as a SQL Prompt style ({file}). SQL Prompt can import it as it is.");
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
+    private string UniqueName(string wanted)
+    {
+        var name = wanted;
+        for (var n = 2; _styles.Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)); n++) name = $"{wanted} ({n})";
+        return name;
+    }
+
+    private static string Where(ProfileRecord record) =>
+        record.Location == ProfileLocation.Engine ? " on the engine (shared with SSMS)" : " in this browser";
+
+    /// <summary>
+    /// A failed store action, for the status line. Every failure is reported there — an engine
+    /// timeout (the bridge cancels after 15 s) used to escape these handlers and break the page.
+    /// </summary>
+    private static string ErrorText(Exception ex) =>
+        ex is OperationCanceledException ? "The engine did not answer in time." : ex.Message;
+
+    private void SetStatus(string? text, bool error = false)
+    {
+        _status = text;
+        _statusIsError = error;
+    }
+
+    private async Task<bool> ConfirmAsync(string message)
+    {
+        try { return await JS.InvokeAsync<bool>("confirm", message); }
+        catch (JSException) { return true; }
+    }
+
+    private async Task<string?> PromptAsync(string message, string suggestion)
+    {
+        try { return await JS.InvokeAsync<string?>("prompt", message, suggestion); }
+        catch (JSException) { return suggestion; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Store.StylesChanged -= OnStylesChanged;
+        _previewDelay?.Cancel();
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

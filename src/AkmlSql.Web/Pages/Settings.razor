@@ -59,8 +59,9 @@
         <h3>Connect to SQL Server</h3>
         <p class="akml-settings-help">
             Tell the paired engine which SQL Server + database to open, so IntelliSense gets the live
-            schema. Windows authentication uses the <em>engine host's</em> identity (no password).
-            Requires a paired engine (above) and currently targets a local engine.
+            schema. The server can be on this computer or on another one — the other server does not
+            need AKML installed. Windows authentication uses the <em>engine host's</em> identity and works
+            for a SQL Server on the engine's own computer; for a remote server, use SQL Server authentication.
         </p>
 
         @if (SqlConn.IsConnected)

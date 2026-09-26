@@ -13,7 +13,7 @@ public sealed record Release
     /// <summary>Release date displayed on the download page (FR-003).</summary>
     public required DateOnly ReleasedAt { get; init; }
 
-    /// <summary>Hosts this release installs into, e.g. <c>SSMS 22</c>, <c>VS 2026</c> (FR-003).</summary>
+    /// <summary>Hosts this release installs into, e.g. <c>SSMS 22</c> (releases before SSMS-only also list <c>VS 2026</c>) (FR-003).</summary>
     public required IReadOnlyList<string> SupportedHosts { get; init; }
 
     /// <summary>Installer artifact location (host downloads folder or a future GitHub Release asset).</summary>

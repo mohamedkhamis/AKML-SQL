@@ -1,130 +1,295 @@
 @page "/download"
 @using System.Globalization
 @using AkmlSql.Site.Releases
+@using AkmlSql.Site.Settings
 @inject ReleasesManifest Manifest
 @inject ReleaseAvailability Availability
+@inject SiteSettingsStore Settings
 
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
    missing/invalid/empty manifest renders a friendly fallback plus the repo
-   /releases/latest link — never an error page. Static SSR only. *@
+   /releases/latest link — never an error page. Static SSR only.
+
+   Spec 038: rebuilt in the shape a product download page usually takes — one decisive call to
+   action with the size on it, the specs as a scannable table rather than prose, verification
+   folded away until wanted, and older versions in a table instead of a stack of cards.
+
+   Spec 038 follow-up: the stacked-cards version that replaced it had the opposite problem. Five
+   full-width panels, each holding one sentence, made a 2,000px page out of about six facts, and
+   half of them said the same thing twice — the filename and size appeared in the hero, in
+   "What's in this release", and again in Requirements. It read as unfinished rather than spare.
+
+   So: the facts move into a panel beside the hero, where they use the empty right half of the
+   page and answer "is this the right file" without scrolling. Everything below splits into a
+   main column (what changed, how to install, where to go next) and a narrow one (checksum, other
+   sources), which is the layout most vendor download pages settle on because it is dense without
+   being cramped. The checksum is now visible rather than collapsed: hiding it behind a disclosure
+   made the page look like it had nothing to say. *@
 
 <PageTitle>Download — AKML SQL</PageTitle>
 <HeadContent>
-    <meta name="description" content="Download the latest AKML SQL installer for SSMS 22 and Visual Studio 2026, with SHA-256 verification hashes and previous releases." />
+    <meta name="description" content="Download AKML SQL for SQL Server Management Studio 22. Free, open source, with SHA-256 verification and previous releases." />
     <meta property="og:title" content="Download" />
-    <meta property="og:description" content="Download the latest AKML SQL installer for SSMS 22 and Visual Studio 2026, with SHA-256 verification hashes and previous releases." />
+    <meta property="og:description" content="Download AKML SQL for SQL Server Management Studio 22. Free, open source, with SHA-256 verification and previous releases." />
 </HeadContent>
 
 <div class="page-body container">
-<header class="page-header">
-    <p class="eyebrow">Get AKML SQL</p>
-    <h1>Download AKML SQL</h1>
-    <p class="page-intro">
-        One installer covers SSMS 22 and Visual Studio 2026. Free and open source under the
-        MIT license.
-    </p>
-</header>
 
 @* DL-001: an entry in releases.json is not proof the installer exists. If the advertised file is
    missing from the downloads folder, fall through to the same friendly fallback used when there is
    no manifest at all — a broken primary CTA is worse than an honest "not available yet". *@
-@if (Manifest.IsAvailable && Manifest.Latest is { } latest && Availability.IsDownloadable(latest))
+@if (_latest is { } latest)
 {
-    <section class="release-card release-card-latest" aria-labelledby="latest-release-heading">
-        <h2 id="latest-release-heading">Latest release: @latest.Version</h2>
-        <dl class="release-facts">
-            <dt>Released</dt>
-            <dd><time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time></dd>
-            <dt>Supported hosts</dt>
-            <dd>
-                <ul class="host-badges">
-                    @foreach (var host in latest.SupportedHosts)
-                    {
-                        <li>@host</li>
-                    }
-                </ul>
-            </dd>
-            @if (latest.MinimumOsVersion is not null)
-            {
-                <dt>Requires</dt>
-                @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
-                <dd>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</dd>
-            }
-            @* DL-003: download size is something people check before clicking, so it belongs here
-               rather than buried in the notes prose. Read from the file, so it cannot be stale. *@
-            @if (Availability.DisplaySize(latest) is { } size)
-            {
-                <dt>Download size</dt>
-                <dd>@size</dd>
-            }
-        </dl>
-        @if (latest.NotesSummary is not null)
-        {
-            <p>@latest.NotesSummary</p>
-        }
-        <p class="cta-row">
-            @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
-               to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
-            <a class="btn btn-primary download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
-               data-file="@System.IO.Path.GetFileName(latest.DownloadUrl)"
-               data-cdn-url="@latest.CdnUrl">Download AKML SQL @latest.Version</a>
-            @if (latest.ReleaseNotesUrl is not null)
-            {
-                <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
-            }
-        </p>
-        @* SmartScreen guidance: the installer is currently UNSIGNED, and a brand-new domain has
-           no browser reputation — Edge/Chrome may hold the first download for evaluation or flag
-           it in the download shelf. Telling the user what the warning looks like and what to do
-           beats leaving them thinking the click did nothing. *@
-        <p class="download-note">
-            First time downloading? Your browser may briefly hold the file for a security review
-            or mark it <em>"not commonly downloaded"</em> — the installer is not yet code-signed.
-            Choose <strong>Keep</strong> (in Edge: <strong>… → Keep → Show more → Keep anyway</strong>),
-            then verify it against the SHA-256 below.
-        </p>
-        <div class="hash-block">
-            <h3>SHA-256</h3>
-            <p class="hash-hint">
-                Verify the downloaded installer against this digest.
-                @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
-                   (CSP-clean external script, so no-JS users never see a dead button). *@
-                <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
+    var fileName = System.IO.Path.GetFileName(latest.DownloadUrl);
+
+    @* .release-card / .release-card-latest keep the accent-bordered treatment that marks the
+       current release, and they are also how the visibility tests count what the page offers:
+       one .release-card per downloadable release, here and in the history table. *@
+    <section class="download-hero release-card release-card-latest" aria-labelledby="latest-release-heading">
+        <div class="download-hero-main">
+            <p class="eyebrow">Download</p>
+            <h1 id="latest-release-heading">AKML SQL for SQL Server Management Studio 22</h1>
+            <p class="download-hero-lead">
+                One installer for SQL Server Management Studio 22.
+                Free and open source under the MIT license.
             </p>
-            <code id="latest-sha256">@latest.Sha256Hash</code>
+
+            <p class="cta-row">
+                @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
+                   to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
+                <a class="btn btn-primary btn-lg download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
+                   data-file="@fileName"
+                   data-cdn-url="@latest.CdnUrl">
+                    Download AKML SQL
+                    @if (_latestSize is { } heroSize)
+                    {
+                        <span class="btn-sub">Windows · @heroSize</span>
+                    }
+                </a>
+                @if (latest.ReleaseNotesUrl is not null)
+                {
+                    <a class="btn btn-secondary" href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Release notes</a>
+                }
+            </p>
+
+            @* The facts panel beside this is taller than the column holding the button, which left
+               an empty block under the CTA. Rather than pad it, answer the two things a first-time
+               visitor wonders next: do I need an account, and do I have to pick the right build. *@
+            <p class="download-hero-note">
+                No account, no licence key. One installer detects every supported editor on the
+                machine and extends the ones you choose.
+            </p>
         </div>
-        <p>New here? See the <a href="/docs">documentation</a> for installation and getting-started guidance.</p>
+
+        @* The facts panel, not a "Requirements" section further down the page. These are the
+           questions asked BEFORE clicking — which version, how big, will it run here — so they
+           belong next to the button, not below three screens of prose. *@
+        <aside class="release-facts-panel" aria-labelledby="release-facts-heading">
+            <h2 id="release-facts-heading" class="release-facts-title">Release details</h2>
+            <dl class="release-facts-list">
+                <div>
+                    <dt>Version</dt>
+                    <dd><strong>@latest.Version</strong></dd>
+                </div>
+                <div>
+                    <dt>Released</dt>
+                    <dd>
+                        <time datetime="@latest.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@latest.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                    </dd>
+                </div>
+                @* DL-003: download size is something people check before clicking. Read from the
+                   file, so it cannot be stale. *@
+                @if (_latestSize is { } size)
+                {
+                    <div>
+                        <dt>Download size</dt>
+                        <dd>@size</dd>
+                    </div>
+                }
+                <div>
+                    <dt>Supported hosts</dt>
+                    <dd>
+                        <ul class="host-badges">
+                            @foreach (var host in latest.SupportedHosts)
+                            {
+                                <li>@host</li>
+                            }
+                        </ul>
+                    </dd>
+                </div>
+                @if (latest.MinimumOsVersion is not null)
+                {
+                    @* U23: "Windows 10.0 or later" reads like an API version — trim a trailing ".0". *@
+                    <div>
+                        <dt>Operating system</dt>
+                        <dd>Windows @DisplayOsVersion(latest.MinimumOsVersion) or later</dd>
+                    </div>
+                }
+                <div>
+                    <dt>License</dt>
+                    <dd><a href="https://github.com/mohamedkhamis/AKML-SQL/blob/master/LICENSE.txt" target="_blank" rel="noopener noreferrer">MIT</a></dd>
+                </div>
+                <div>
+                    <dt>File</dt>
+                    <dd><code class="release-facts-file">@fileName</code></dd>
+                </div>
+            </dl>
+        </aside>
     </section>
+
+    <HostSupportNotice HeadingId="download-host-support-heading" />
+
+    <div class="download-columns">
+        <div class="download-main">
+            @if (latest.NotesSummary is not null)
+            {
+                <section class="download-block" aria-labelledby="whats-new-heading">
+                    <h2 id="whats-new-heading">What's new in @latest.Version</h2>
+                    <p>@latest.NotesSummary</p>
+                    @if (latest.ReleaseNotesUrl is not null)
+                    {
+                        <p>
+                            <a href="@latest.ReleaseNotesUrl" target="_blank" rel="noopener noreferrer">Read the full release notes</a>
+                        </p>
+                    }
+                </section>
+            }
+
+            @* Every step here is checked against the installer script rather than assumed.
+               CloseApplications=yes with CloseApplicationsFilter=Ssms.exe means the installer
+               offers to close SSMS itself, so telling people to close it first would be wrong.
+               The silent switches are the ones AkmlSqlSetup.iss actually parses: ApplySilentTargets
+               in environment-scanner.iss matches "ssms22". *@
+            <section class="download-block" aria-labelledby="install-heading">
+                <h2 id="install-heading">Install</h2>
+                <ol class="download-steps">
+                    <li>
+                        <strong>Run the installer.</strong>
+                        It finds SQL Server Management Studio 22 on the machine and adds AKML SQL
+                        to it.
+                    </li>
+                    <li>
+                        <strong>Let it close SSMS if it is open.</strong>
+                        It writes into the SSMS extension folder, so it will offer to close SSMS
+                        and reopen it afterwards.
+                    </li>
+                    <li>
+                        <strong>Open the Tools menu.</strong>
+                        AKML SQL is there. The first launch after installing rebuilds the editor's
+                        component cache, so give it a few seconds longer than usual.
+                    </li>
+                </ol>
+                <p class="download-note">
+                    Deploying to a fleet? Install without any prompts:
+                </p>
+                <code class="download-cmd">@fileName /VERYSILENT /ACCEPTEULA /TARGETS=ssms22</code>
+            </section>
+
+            <section class="download-block" aria-labelledby="getting-started-heading">
+                <h2 id="getting-started-heading">Next steps</h2>
+                <ul class="download-links">
+                    <li>
+                        <a href="/docs">Documentation</a>
+                        — installation, configuration and every feature in detail.
+                    </li>
+                    <li>
+                        <a href="/features">Feature overview</a>
+                        — what the extension adds to SSMS.
+                    </li>
+                    <li>
+                        <a href="/docs/topics/connecting">Connecting to a server</a>
+                        — the first thing to do once it is installed.
+                    </li>
+                </ul>
+            </section>
+        </div>
+
+        <aside class="download-aside">
+            @* Verification used to sit inside a collapsed <details>. Standard practice on a vendor
+               page is the opposite: show the digest. Collapsed, the panel rendered as a single bare
+               line of text and made the page look empty. *@
+            <section class="download-card hash-block" aria-labelledby="verify-heading">
+                <h2 id="verify-heading">Verify this download</h2>
+                <p class="hash-hint">
+                    SHA-256 of the installer.
+                    @* U22: copy affordance — hidden by default, revealed by js/copy-hash.js
+                       (CSP-clean external script, so no-JS users never see a dead button). *@
+                    <button type="button" class="copy-hash-btn" data-copy-target="latest-sha256">Copy</button>
+                </p>
+                <code id="latest-sha256">@latest.Sha256Hash</code>
+                <p class="hash-hint">Compare it against the file you downloaded:</p>
+                <code class="hash-cmd">Get-FileHash .\@fileName -Algorithm SHA256</code>
+            </section>
+
+            <section class="download-card" aria-labelledby="other-sources-heading">
+                <h2 id="other-sources-heading">Other sources</h2>
+                <ul class="download-links">
+                    <li>
+                        <a href="https://github.com/mohamedkhamis/AKML-SQL/releases" target="_blank" rel="noopener noreferrer">All releases on GitHub</a>
+                    </li>
+                    @if (_previousReleases.Count > 0)
+                    {
+                        <li><a href="#previous-releases-heading">Previous versions</a></li>
+                    }
+                    <li>
+                        <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source code</a>
+                    </li>
+                </ul>
+            </section>
+
+            @* Where download problems actually happen, so reporting one is one click away. *@
+            <section class="download-card download-help" aria-labelledby="download-help-heading">
+                <h2 id="download-help-heading">Problem with the download?</h2>
+                <p>If it won't download, won't install, or doesn't show up in your editor, tell us.</p>
+                <p><a class="btn btn-secondary" href="/feedback?from=/download&amp;about=download">Report a problem</a></p>
+            </section>
+        </aside>
+    </div>
 
     @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
     <script src="@Assets["js/copy-hash.js"]" defer></script>
     <script src="@Assets["js/download-track.js"]" defer></script>
 
-    @* DL-001: only list previous releases whose installer is still present. *@
-    @if (PreviousReleases.Count > 0)
+    @* DL-001: only list previous releases that can actually be downloaded. A table rather than a
+       stack of cards: older versions are a reference list people scan, not content they read. *@
+    @if (_previousReleases.Count > 0)
     {
         <section class="release-history" aria-labelledby="previous-releases-heading">
-            <h2 id="previous-releases-heading">Previous releases</h2>
-            <ul class="release-list">
-                @foreach (var release in PreviousReleases)
-                {
-                    <li class="release-card">
-                        <h3>@release.Version</h3>
-                        <p>
-                            Released <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
-                            · Hosts: @string.Join(", ", release.SupportedHosts)
-                        </p>
-                        <p><a class="download-tracked" href="@ReleaseAvailability.TrackedUrl(release)"
-                              data-file="@System.IO.Path.GetFileName(release.DownloadUrl)"
-                              data-cdn-url="@release.CdnUrl">Download installer</a></p>
-                        <details class="hash-block">
-                            <summary>SHA-256</summary>
-                            <code>@release.Sha256Hash</code>
-                        </details>
-                    </li>
-                }
-            </ul>
+            <h2 id="previous-releases-heading">Previous versions</h2>
+            <div class="table-scroll">
+                <table class="spec-table release-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Version</th>
+                            <th scope="col">Released</th>
+                            <th scope="col">Hosts</th>
+                            <th scope="col"><span class="visually-hidden">Download</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var release in _previousReleases)
+                        {
+                            <tr class="release-card">
+                                <td><strong>@release.Version</strong></td>
+                                <td>
+                                    <time datetime="@release.ReleasedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)">@release.ReleasedAt.ToString("MMMM d, yyyy", CultureInfo.InvariantCulture)</time>
+                                </td>
+                                <td>@string.Join(", ", release.SupportedHosts)</td>
+                                <td class="release-table-action">
+                                    <a class="download-tracked" href="@ReleaseAvailability.TrackedUrl(release)"
+                                       data-file="@System.IO.Path.GetFileName(release.DownloadUrl)"
+                                       data-cdn-url="@release.CdnUrl">Download</a>
+                                    <details class="hash-block hash-block-inline">
+                                        <summary>SHA-256</summary>
+                                        <code>@release.Sha256Hash</code>
+                                    </details>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </section>
     }
 }
@@ -132,6 +297,10 @@ else
 {
     @* contracts/releases-json.md: missing/unreadable file, invalid JSON, or an empty
        releases array all land here. *@
+    <header class="page-header">
+        <p class="eyebrow">Download</p>
+        <h1>Download AKML SQL</h1>
+    </header>
     <div class="notice" role="status">
         <h2>No public release available yet</h2>
         <p>
@@ -150,12 +319,75 @@ else
     private static string DisplayOsVersion(string version) =>
         version.EndsWith(".0", StringComparison.Ordinal) ? version[..^2] : version;
 
+    /// <summary>The release shown in the primary card, or null when nothing is downloadable.</summary>
+    private Release? _latest;
+
+    /// <summary>Display size of the primary release, resolved once (null for a CDN-only release).</summary>
+    private string? _latestSize;
+
     /// <summary>
-    /// DL-001: older releases whose installer is still present in the downloads folder. An entry
-    /// whose file has been cleaned up is dropped rather than offered as a dead link.
-    /// URL construction lives in ReleaseAvailability.TrackedUrl so the page and the availability
-    /// check agree on what "served locally" means.
+    /// DL-001: older releases that can still actually be downloaded. An entry whose file has been
+    /// cleaned up AND has no CDN mirror is dropped rather than offered as a dead link. URL
+    /// construction lives in ReleaseAvailability.TrackedUrl so the page and the availability check
+    /// agree on what "served locally" means.
     /// </summary>
-    private List<Release> PreviousReleases =>
-        Manifest.Releases.Skip(1).Where(Availability.IsDownloadable).ToList();
+    private IReadOnlyList<Release> _previousReleases = [];
+
+    /// <summary>
+    /// Spec 038 T021 (US1): resolve the whole release list ONCE per render.
+    /// <para>
+    /// This was an expression-bodied property (<c>private List&lt;Release&gt; PreviousReleases =&gt; …</c>)
+    /// evaluated twice — once by <c>@@if (PreviousReleases.Count > 0)</c> and again by the
+    /// <c>@@foreach</c> — so every release was probed on the filesystem twice. With 16 releases that
+    /// was ~32 existence probes to render one download button. Fields resolved here cost one pass.
+    /// </para>
+    /// <para>
+    /// Availability is still resolved per render, not cached across requests: installers are dropped
+    /// into the folder between deploys, so presence must stay live (the DL-001 contract).
+    /// </para>
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        if (!Manifest.IsAvailable)
+        {
+            return;
+        }
+
+        // Spec 038 T033 (US2): the owner's visibility choice is applied BEFORE any availability
+        // probe, so per-render work follows what is SHOWN rather than what is published (contract
+        // R2.1). With "latest only" a hundred-release manifest costs a single probe.
+        //
+        // Settings.Current is an in-memory snapshot — the render path never touches SQLite, so a
+        // settings failure can neither break nor slow the site's primary call to action (FR-016a).
+        var settings = Settings.Current;
+        var releases = ReleaseVisibility.Apply(settings.Visibility, settings.VisibilityCount, Manifest.Releases);
+
+        var latest = releases.Count > 0 ? releases[0] : null;
+
+        if (latest is null || !Availability.IsDownloadable(latest))
+        {
+            // contracts/releases-json.md: fall through to the friendly fallback, never an error page.
+            return;
+        }
+
+        _latest = latest;
+        _latestSize = Availability.DisplaySize(latest);
+
+        // "Latest only" renders NO history section at all -- not an empty one (contract R2.2).
+        if (settings.Visibility == ReleaseVisibilityMode.LatestOnly)
+        {
+            return;
+        }
+
+        var previous = new List<Release>();
+        for (var i = 1; i < releases.Count; i++)
+        {
+            if (Availability.IsDownloadable(releases[i]))
+            {
+                previous.Add(releases[i]);
+            }
+        }
+
+        _previousReleases = previous;
+    }
 }

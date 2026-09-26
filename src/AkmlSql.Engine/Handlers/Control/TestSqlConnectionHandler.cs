@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Pairing;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Transports;
 using Microsoft.Data.SqlClient;
@@ -27,6 +28,13 @@ namespace AkmlSql.Engine.Handlers.Control
             if (request == null) throw new ArgumentNullException(nameof(request));
             if (string.IsNullOrEmpty(request.ConnectionString))
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = "No connection string supplied." };
+
+            if (BridgeSqlTargetGuard.Check(request.ConnectionString) is { } refused)
+            {
+                Log.Warning("TestSqlConnection refused for a bridge request — {ConnDesc}",
+                    ConnectionDiagnostics.Describe(request.ConnectionString));
+                return new TestSqlConnectionResponse { Ok = false, ErrorMessage = refused };
+            }
 
             try
             {

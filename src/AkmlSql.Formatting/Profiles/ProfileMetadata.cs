@@ -38,6 +38,27 @@ public class ProfileMetadata
     public bool IsBuiltIn { get; set; }
 
     /// <summary>
+    /// True when this entry is a user's edited copy of a shipped built-in style — a custom file
+    /// that shadows a built-in of the same name.
+    /// <para>
+    /// Derived from which directories the name resolves in, never stored: a file cannot know
+    /// whether something else shadows it, and a persisted flag would go stale the moment the
+    /// built-in it shadows was added or removed. <see cref="IsBuiltIn"/> is false for these —
+    /// the file being read really is the custom one — so the two flags answer different
+    /// questions and both are needed to describe an overridden style.
+    /// </para>
+    /// </summary>
+    [JsonIgnore]
+    public bool IsCustomizedBuiltIn { get; set; }
+
+    /// <summary>
+    /// True when the style is written in SQL Prompt's model (it carries a <c>sqlPrompt</c>
+    /// document). Derived when the file is read, never stored.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSqlPromptStyle { get; set; }
+
+    /// <summary>
     /// When true, the formatter skips semantic validation after formatting.
     /// Use in tests or internal pipelines where validation is handled externally.
     /// </summary>

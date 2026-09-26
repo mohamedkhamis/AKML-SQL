@@ -90,9 +90,12 @@ public class AliasProvider : ICompletionProvider
             candidates.Add(mapped);
         }
 
-        // 2. Generated candidates from the prefix-stripped name.
+        // 2. Generated candidates from the prefix-stripped name. A generated alias that is a
+        //    reserved word or not a regular identifier ("or" from Orders, "in" from Invoices) would
+        //    be invalid unbracketed, so it is not offered; the user's own map (1) is left as set.
         foreach (var c in GenerateAliasCandidates(StripIgnoredPrefixes(tableName)))
         {
+            if (SqlIdentifier.NeedsQuoting(c)) continue;
             if (!candidates.Contains(c, StringComparer.OrdinalIgnoreCase))
                 candidates.Add(c);
         }

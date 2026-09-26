@@ -8,6 +8,7 @@
     <span class="akml-spacer"></span>
     <a class="akml-nav-link" href="/">Editor</a>
     <a class="akml-nav-link" href="/snippets">Snippets</a>
+    <a class="akml-nav-link" href="/styles">Format styles</a>
     <a class="akml-nav-link" href="/history">History</a>
     <a class="akml-nav-link" href="/settings">Settings</a>
     <a class="akml-nav-link" href="/settings/ai">AI providers</a>
@@ -18,8 +19,11 @@
 <style>
     .akml-nav {
         display: flex;
+        /* Eight links and the brand in one row forced every page to ~760px on a phone (the whole
+           app then scrolled sideways); on a narrow screen they wrap onto a second row instead. */
+        flex-wrap: wrap;
         align-items: center;
-        gap: var(--akml-scalar-spacing-m);
+        gap: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
         padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
         background-color: var(--akml-surface-panel);
         border-bottom: 1px solid var(--akml-border-default);

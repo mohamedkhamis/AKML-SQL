@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 
@@ -232,6 +233,7 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             root.AppendChild(popup);
 
             var template = new ControlTemplate(typeof(ComboBox)) { VisualTree = root };
+            template.Triggers.Add(DisabledTextTrigger(theme));
             template.Seal();
             return template;
         }
@@ -347,19 +349,35 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             root.AppendChild(popup);
 
             var template = new ControlTemplate(typeof(ComboBox)) { VisualTree = root };
+            template.Triggers.Add(DisabledTextTrigger(theme));
             template.Seal();
             return template;
         }
 
+        /// <summary>
+        /// Disabled selection text. Apply sets the combo's Foreground as a LOCAL value, which
+        /// outranks a template trigger on the combo itself, so the inheritable
+        /// TextElement.Foreground is set on the ContentPresenter instead: the TextBlock it
+        /// generates inherits from there. Without it a disabled combo (an option switched off by
+        /// another, e.g. the JOIN alignment while "Place JOIN on new line" is off) looked exactly
+        /// like an active one. No blanket Opacity, for the reason ThemedButton gives.
+        /// </summary>
+        private static Trigger DisabledTextTrigger(PageTheme theme)
+        {
+            var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+            disabled.Setters.Add(new Setter(TextElement.ForegroundProperty, theme.FgSecondary, "contentPresenter"));
+            return disabled;
+        }
+
         private static ControlTemplate BuildToggleTemplate(PageTheme theme)
         {
-            var face = new FrameworkElementFactory(typeof(Border));
+            var face = new FrameworkElementFactory(typeof(Border), "Bd");
             face.SetValue(Border.BackgroundProperty, theme.Input);
             face.SetValue(Border.BorderBrushProperty, theme.ComboBorder);
             face.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             face.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
 
-            var arrow = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path));
+            var arrow = new FrameworkElementFactory(typeof(System.Windows.Shapes.Path), "Arrow");
             arrow.SetValue(System.Windows.Shapes.Path.DataProperty, Geometry.Parse("M 0 0 L 4 4 L 8 0 Z"));
             arrow.SetValue(System.Windows.Shapes.Shape.FillProperty, theme.FgSecondary);
             arrow.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Right);
@@ -368,6 +386,15 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             face.AppendChild(arrow);
 
             var template = new ControlTemplate(typeof(ToggleButton)) { VisualTree = face };
+
+            // Disabled face: the read-only input surface, a subtle edge and a faint arrow, so an
+            // unavailable dropdown reads as unavailable (the toggle inherits the combo's IsEnabled).
+            var disabled = new Trigger { Property = UIElement.IsEnabledProperty, Value = false };
+            disabled.Setters.Add(new Setter(Border.BackgroundProperty, theme.InputReadOnly, "Bd"));
+            disabled.Setters.Add(new Setter(Border.BorderBrushProperty, theme.Sep, "Bd"));
+            disabled.Setters.Add(new Setter(System.Windows.Shapes.Shape.FillProperty, theme.Border, "Arrow"));
+            template.Triggers.Add(disabled);
+
             template.Seal();
             return template;
         }

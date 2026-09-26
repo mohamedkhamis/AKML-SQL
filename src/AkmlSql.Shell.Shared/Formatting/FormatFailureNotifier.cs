@@ -13,7 +13,7 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// original text; this surfaces that outcome to the user with a clear, actionable message
     /// (otherwise a failed Format SQL looks like a silent no-op). Uses
     /// <see cref="VsShellUtilities.ShowMessageBox"/>, the shell's established user-message
-    /// mechanism (no InfoBar precedent in this codebase), which works in both SSMS 22 and VS 2026.
+    /// mechanism (no InfoBar precedent in this codebase), which works in SSMS 22.
     /// </summary>
     internal static class FormatFailureNotifier
     {

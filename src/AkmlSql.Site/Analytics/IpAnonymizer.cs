@@ -14,8 +14,11 @@ namespace AkmlSql.Site.Analytics;
 /// spotting a single noisy network.
 /// </para>
 /// <para>
-/// The full address is still used in-process (for the hash and for the geo lookup) and is never
-/// persisted.
+/// <b>Spec 038 changed what happens to the full address.</b> It is now persisted verbatim in the
+/// <c>ip</c> column for visitors who have explicitly consented; for everyone else that column stays
+/// NULL and this truncation remains the only network-level value stored. So this class is no longer
+/// the site's whole privacy story — it is the grouping key, and the fallback for non-consenting
+/// traffic. <c>AnalyticsStore</c> enforces the consent gate.
 /// </para>
 /// </summary>
 public static class IpAnonymizer

@@ -1,5 +1,6 @@
 namespace AkmlSql.Site.Analytics;
 
+using AkmlSql.Site.Consent;
 using AkmlSql.Site.Telemetry;
 
 // Site metrics models: events flow from the request pipeline (visit tracking middleware,
@@ -9,9 +10,10 @@ using AkmlSql.Site.Telemetry;
 /// <summary>
 /// One page-view event.
 /// <para>
-/// <see cref="IpAddress"/> is the full client address. It is used in-process for the per-day
-/// salted hash and the geo lookup, and is NEVER persisted: the store writes only the hash and
-/// the truncated <see cref="IpAnonymizer.ToPrefix">network prefix</see>.
+/// <see cref="IpAddress"/> is the full client address. Spec 038 changed what happens to it: it is
+/// persisted in full <b>only when the visitor has consented</b> (FR-038/FR-043). Without consent the
+/// <c>ip</c> column stays NULL and the store writes only the per-day salted hash and the truncated
+/// <see cref="IpAnonymizer.ToPrefix">network prefix</see>, as it always did.
 /// </para>
 /// <para>
 /// The optional members carry the enrichment added for analysis (device/OS/browser detail,
@@ -38,11 +40,25 @@ public sealed record VisitInfo(DateTimeOffset Utc, string Path, string? Referrer
 
     /// <summary>Server-side handling time in milliseconds, for spotting slow pages.</summary>
     public int? DurationMs { get; init; }
+
+    /// <summary>
+    /// Spec 038 (US5): the visitor's persistent id from the <c>akml.vid</c> cookie. Non-null only
+    /// when <see cref="Consent"/> is <see cref="ConsentState.Granted"/>; the store enforces that
+    /// independently of this caller.
+    /// </summary>
+    public string? VisitorId { get; init; }
+
+    /// <summary>
+    /// The visitor's recorded consent choice. Written to every row so the unattributed share is a
+    /// query rather than an inference (FR-047).
+    /// </summary>
+    public ConsentState Consent { get; init; } = ConsentState.Unknown;
 }
 
 /// <summary>
-/// One installer download event. <see cref="IpAddress"/> is hashed per-day by the store and never
-/// persisted raw; only the truncated prefix and derived location are stored.
+/// One installer download event. Spec 038: <see cref="IpAddress"/> is persisted in full only with
+/// the visitor's consent; otherwise only the per-day hash, the truncated prefix and the derived
+/// location are stored.
 /// <para>
 /// Carries the same acquisition context as a visit so "which campaign produced installs?" is
 /// answerable directly, without joining back through sessions.
@@ -64,6 +80,19 @@ public sealed record DownloadInfo(DateTimeOffset Utc, string File, string? Refer
 
     /// <summary>UTM parameters carried on the inbound link.</summary>
     public CampaignInfo Campaign { get; init; } = CampaignInfo.None;
+
+    /// <summary>Spec 038 (US5): persistent visitor id; non-null only with consent.</summary>
+    public string? VisitorId { get; init; }
+
+    /// <summary>Spec 038 (US5): the visitor's recorded consent choice, written on every row.</summary>
+    public ConsentState Consent { get; init; } = ConsentState.Unknown;
+
+    /// <summary>
+    /// Spec 038 (US3): the release this file belongs to, resolved from the manifest AT WRITE TIME.
+    /// Resolving at read time was rejected — the manifest is mutable, and a release later removed
+    /// from it would retroactively orphan its historical downloads.
+    /// </summary>
+    public string? ReleaseVersion { get; init; }
 }
 
 /// <summary>
@@ -102,6 +131,28 @@ public sealed class AnalyticsSummary
 {
     /// <summary>Requested window length in days (drives <see cref="VisitsWindow"/>, <see cref="DailyVisits"/>, top-pages and referrer tables).</summary>
     public required int Days { get; init; }
+
+    /// <summary>The window every windowed figure on this summary describes.</summary>
+    public required ReportWindow Window { get; init; }
+
+    /// <summary>The period <see cref="PreviousHeadline"/> describes — see <see cref="ReportWindow.Previous"/>.</summary>
+    public required ReportWindow PreviousWindow { get; init; }
+
+    /// <summary>The headline figures for <see cref="Window"/>.</summary>
+    public required HeadlineMetrics Headline { get; init; }
+
+    /// <summary>The same figures for <see cref="PreviousWindow"/>, for the change indicators.</summary>
+    public required HeadlineMetrics PreviousHeadline { get; init; }
+
+    /// <summary>
+    /// Human page views by LOCAL hour of day, index 0–23, summed over the window. For a one-day
+    /// window this is that day hour by hour -- which is what the overview charts instead of a
+    /// single daily bar that says nothing.
+    /// </summary>
+    public required long[] HourlyVisits { get; init; }
+
+    /// <summary>Downloads by local hour of day, index 0–23, summed over the window.</summary>
+    public required long[] HourlyDownloads { get; init; }
 
     /// <summary>Page views on the current UTC day.</summary>
     public required long VisitsToday { get; init; }
@@ -212,4 +263,37 @@ public sealed class AnalyticsSummary
 
     /// <summary>Mean session length in seconds (single-page sessions count as 0).</summary>
     public required double AverageSessionSeconds { get; init; }
+}
+
+/// <summary>
+/// The overview's headline figures for one window, in units that can be compared across windows.
+/// </summary>
+/// <param name="Visits">Human page views.</param>
+/// <param name="Visitors">
+/// Distinct visitor-DAYS. The anonymous identifier is a per-day hash that cannot link one day to
+/// the next (by design), so a person who visits on three days counts three times. Exact for a
+/// single day; over longer windows it is the sum of each day's unique visitors, and is labelled so.
+/// </param>
+/// <param name="Downloads">Installer downloads, crawlers excluded.</param>
+/// <param name="Downloaders">Visitor-days that included both a page view and a download.</param>
+/// <param name="DownloadsWithoutVisit">
+/// Downloads with no page view from the same visitor that day — a direct link from somewhere else.
+/// Reported so that <see cref="Downloads"/> and the conversion rate reconcile.
+/// </param>
+/// <param name="AutomatedVisits">Crawler and scripted page views, excluded from every figure above.</param>
+/// <param name="Sessions">Human browsing sessions.</param>
+public sealed record HeadlineMetrics(
+    long Visits,
+    long Visitors,
+    long Downloads,
+    long Downloaders,
+    long DownloadsWithoutVisit,
+    long AutomatedVisits,
+    long Sessions)
+{
+    /// <summary>
+    /// Share of visitor-days that included a download, 0–100. Same unit on both sides of the ratio,
+    /// so it is a real conversion rate rather than downloads over something counted differently.
+    /// </summary>
+    public double ConversionPercent => Visitors == 0 ? 0 : Math.Round(Downloaders * 100.0 / Visitors, 1);
 }

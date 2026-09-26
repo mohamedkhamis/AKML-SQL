@@ -20,7 +20,7 @@
 
 <div class="akml-status">
     <span class="akml-status-pill @PillClass" data-testid="status-pill">@PillLabel</span>
-    <span class="akml-status-text">@StatusText</span>
+    <span class="akml-status-text" title="@StatusText">@StatusText</span>
 
     @* A stalled bridge used to be a dead end: the pill said "Offline" and nothing said why or what
        to do, so the only way forward was knowing to open Settings. The reason and the way out now
@@ -118,7 +118,9 @@
     .akml-status-pill-connecting { background-color: var(--akml-status-info); }
     .akml-status-pill-reconnecting { background-color: var(--akml-status-warning); }
     .akml-status-pill-failed { background-color: var(--akml-status-danger); }
-    .akml-status-text { flex: 0 0 auto; }
+    /* Shrinks with an ellipsis when the bar runs out of room (a phone): a fixed-width status
+       line used to make every page wider than the screen. The full text is its tooltip. */
+    .akml-status-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-status-spacer { flex: 1 1 auto; }
 
     /* Clickable connection indicator — the third entry point into the connection manager
@@ -143,6 +145,13 @@
         border-color: var(--akml-border-default);
     }
     .akml-status-conn-icon { font-size: 11px; }
+    .akml-status-action { flex: 0 0 auto; }
+
+    /* A phone: the bar wraps onto a second line rather than squeezing its buttons into each other. */
+    @@media (max-width: 600px) {
+        .akml-status { flex-wrap: wrap; row-gap: 2px; }
+        .akml-status-spacer { display: none; }
+    }
 </style>
 
 @code {

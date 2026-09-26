@@ -102,7 +102,7 @@ namespace AkmlSql.Shell.Shared.Tests
             var fake = new FakeRpcClientAccessor();
             var vm = Vm(fake);
             vm.SelectedProfileName = "Default";
-            vm.Profiles.Add(new StyleListItem { Name = "Default", IsReadOnly = true });
+            vm.Profiles.Add(new StyleListItem { Name = "Default", IsShipped = true });
 
             var ok = await vm.DeleteSelectedAsync();
 

@@ -130,16 +130,39 @@ namespace AkmlSql.Shell.Shared.Update
             return process;
         }
 
+        /// <summary>
+        /// Runs <c>AkmlSql.Updater.exe --install</c>: the updater re-verifies the downloaded
+        /// installer against its checksum and launches it with its normal UI (and Windows' admin
+        /// prompt). One launch path for the startup offer and the update notification alike.
+        /// </summary>
+        public static void LaunchInstall()
+        {
+            var updaterPath = UpdaterPathProvider();
+            if (updaterPath == null)
+            {
+                return;
+            }
+
+            Log.Information("Launching verified update install: {Path}", updaterPath);
+            using (ProcessStarter(new ProcessStartInfo
+            {
+                FileName = updaterPath,
+                Arguments = "--install " + Constants.UpdateProtocolScheme + ":install",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            })) { }
+        }
+
         private static Process? StartProcessDefault(ProcessStartInfo info) => Process.Start(info);
 
         /// <summary>The candidate updater paths, x86 Program Files first. Exposed for tests.</summary>
         internal static IReadOnlyList<string> UpdaterPathCandidates()
         {
-            // The Inno installer is 32-bit, so {app} always lands under "Program Files (x86)"
-            // — check it FIRST (mirrors EngineProcessManager's engine lookup). From a 64-bit
-            // host process (SSMS 22, VS 2026) SpecialFolder.ProgramFiles AND ProgramW6432 both
-            // resolve to the 64-bit "Program Files", where the updater is never installed;
-            // looking there first made every update check fail with "updater not found".
+            // Installs up to 1.26.09xx came from a 32-bit installer and live under "Program Files
+            // (x86)"; they keep that folder on upgrade (UsePreviousAppDir). New installs are
+            // 64-bit and go to "Program Files". Both are checked, x86 first so an upgraded machine
+            // resolves exactly as before (mirrors EngineProcessManager's engine lookup).
             return new[]
             {
                 Path.Combine(

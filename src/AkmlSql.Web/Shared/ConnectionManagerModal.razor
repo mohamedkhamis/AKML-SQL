@@ -12,7 +12,8 @@
     (akml-connection-manager.js) rather than the palette module (which owns the global Ctrl+P).
 
     SECURITY: Connect/Test route through ISqlConnectionService, whose ValidateTarget enforces the
-    loopback-only SSRF guard before any IPC. No password is ever persisted — SQL-auth rows store
+    confused-deputy guard before any IPC: a remote server is allowed with SQL Server authentication,
+    Windows authentication only on the engine's own machine (the engine re-checks: BridgeSqlTargetGuard). No password is ever persisted — SQL-auth rows store
     only the login username; the password stays a transient field re-prompted at Connect/Test.
 *@
 @using System.Threading
@@ -78,7 +79,7 @@
                         <label for="conn-server">Server</label>
                         <input id="conn-server" class="akml-connmgr-input" @bind="_server" @bind:event="oninput"
                                @onchange="OnServerChanged"
-                               placeholder="localhost or server\instance" data-testid="conn-server-input" />
+                               placeholder="localhost, server\instance, or a remote host,port" data-testid="conn-server-input" />
                     </div>
                     <div class="akml-connmgr-field">
                         <label for="conn-database">Database</label>
@@ -125,6 +126,11 @@
                                    @onchange="@(() => SetAuth(false))" data-testid="conn-auth-sql" />
                             SQL Server authentication
                         </label>
+                        @* The one rule that decides remote connections, stated where the choice is made. *@
+                        <span class="akml-connmgr-hint" data-testid="conn-auth-hint">
+                            Windows authentication works for a SQL Server on the engine's own computer.
+                            For a remote server, use SQL Server authentication.
+                        </span>
                     </div>
                     @if (!_windowsAuth)
                     {
@@ -141,12 +147,14 @@
                         </div>
                     }
 
-                    <!-- Remote / Azure AD: DISABLED in this build (engine is loopback-scoped). -->
+                    <!-- Microsoft Entra ID sign-in: not available yet. (Remote servers ARE supported, with SQL
+                         Server authentication -- this used to read "Remote server / Azure AD", which made it
+                         look as if no remote server could be reached.) -->
                     <div class="akml-connmgr-field akml-connmgr-future" data-testid="conn-remote-future"
-                         title="Disabled in this build — the engine connects under its own Windows identity and is loopback-scoped.">
+                         title="Not available yet. Remote servers work today with SQL Server authentication.">
                         <label class="akml-connmgr-radio akml-connmgr-disabled">
                             <input type="radio" name="connauth-future" disabled />
-                            Remote server / Azure AD
+                            Microsoft Entra ID (Azure AD)
                             <span class="akml-connmgr-badge-future">Future</span>
                         </label>
                     </div>

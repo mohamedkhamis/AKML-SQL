@@ -133,12 +133,32 @@ namespace AkmlSql.Shell.Shared.Formatting
             private set { if (_isDirty != value) { _isDirty = value; OnPropertyChanged(); } }
         }
 
-        private bool _isSelectedReadOnly;
-        /// <summary>True when the loaded style is a built-in (controls disabled, Save refused).</summary>
-        public bool IsSelectedReadOnly
+        private bool _isSelectedBuiltIn;
+        /// <summary>
+        /// True when a style shipped with the product under the loaded name — whether or not the
+        /// user has since edited it.
+        /// <para>
+        /// This replaced IsSelectedReadOnly. Built-ins are no longer read-only: editing one writes
+        /// a custom file that shadows the shipped one, which is never written to. The flag still
+        /// matters, because a shipped name cannot be renamed or deleted (the name is what ties an
+        /// override to the original) and it is the only kind of style Reset can act on.
+        /// </para>
+        /// </summary>
+        public bool IsSelectedBuiltIn
         {
-            get => _isSelectedReadOnly;
-            private set { if (_isSelectedReadOnly != value) { _isSelectedReadOnly = value; OnPropertyChanged(); } }
+            get => _isSelectedBuiltIn;
+            private set { if (_isSelectedBuiltIn != value) { _isSelectedBuiltIn = value; OnPropertyChanged(); } }
+        }
+
+        private bool _isSelectedCustomized;
+        /// <summary>
+        /// True when the loaded style is a shipped one the user has edited — the only state in
+        /// which Reset has anything to discard. Gates the Reset control.
+        /// </summary>
+        public bool IsSelectedCustomized
+        {
+            get => _isSelectedCustomized;
+            private set { if (_isSelectedCustomized != value) { _isSelectedCustomized = value; OnPropertyChanged(); } }
         }
 
         /// <summary>
@@ -250,9 +270,54 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>The SQL the preview pane formats given the selected source.</summary>
         private string EffectivePreviewSample =>
-            PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery
-                ? _currentQueryText
-                : _previewSample;
+            PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery ? _currentQueryText
+            : PreviewSourceMode == FormatPreviewSource.PageSample && !string.IsNullOrWhiteSpace(_pageSample) ? _pageSample!
+            : _previewSample;
+
+        /// <summary>
+        /// True when the engine serves SQL Prompt's option model: settings are keyed
+        /// <c>sqlPrompt.&lt;path&gt;</c>, and preview / save carry the style's SQL Prompt document.
+        /// False against an older engine, which serves AKML's own settings schema.
+        /// </summary>
+        public bool IsSqlPromptModel { get; private set; }
+
+        /// <summary>
+        /// True when the loaded style is still written in AKML's own model: the editor shows its SQL
+        /// Prompt reading, and saving makes it a SQL Prompt style.
+        /// </summary>
+        public bool IsSelectedClassic
+        {
+            get => _isSelectedClassic;
+            private set { if (_isSelectedClassic != value) { _isSelectedClassic = value; OnPropertyChanged(); } }
+        }
+        private bool _isSelectedClassic;
+
+        /// <summary>SQL Prompt model: the current page's preview SQL (what its options act on).</summary>
+        public string? PageSample
+        {
+            get => _pageSample;
+            set
+            {
+                if (string.Equals(_pageSample, value, StringComparison.Ordinal)) return;
+                _pageSample = value;
+                OnPropertyChanged();
+                if (PreviewSourceMode == FormatPreviewSource.PageSample) QueuePreviewAsync();
+            }
+        }
+        private string? _pageSample;
+
+        /// <summary>
+        /// The merge base for a SQL Prompt-model edit: the stored file with its <c>sqlPrompt</c>
+        /// document replaced by the engine's explicit reading of the style (every option written
+        /// out). Editing against explicit values keeps the collapse-threshold rule and the
+        /// defaults exact; a classic style gains its document on first save.
+        /// </summary>
+        internal static string ComposeSqlPromptBase(string profileJson, string sqlPromptJson)
+        {
+            if (JsonNode.Parse(profileJson) is not JsonObject root) return profileJson;
+            root["sqlPrompt"] = JsonNode.Parse(sqlPromptJson);
+            return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        }
 
         private static string PreviewSamplePath
         {
@@ -336,6 +401,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             try
             {
                 using var doc = JsonDocument.Parse(schemaJson);
+                IsSqlPromptModel = doc.RootElement.TryGetProperty("model", out var model)
+                                   && model.ValueKind == JsonValueKind.String
+                                   && string.Equals(model.GetString(), "sqlPrompt", StringComparison.Ordinal);
                 if (!doc.RootElement.TryGetProperty("settings", out var settings)) return;
 
                 foreach (var s in settings.EnumerateArray())
@@ -531,24 +599,22 @@ namespace AkmlSql.Shell.Shared.Formatting
                     return false;
                 }
 
-                _workingValues.Clear();
-                if (!_schemaDefaults.IsEmpty)
-                {
-                    // Cheaper than re-parsing the ~180-setting schema JSON on every selection:
-                    // the defaults captured at seed time ARE the reseed source.
-                    foreach (var kvp in _schemaDefaults) _workingValues[kvp.Key] = kvp.Value;
-                }
-                else
-                {
-                    var schema = SchemaJson ?? _cachedSchemaJson;
-                    if (!string.IsNullOrEmpty(schema)) SeedWorkingValuesFromSchema(schema!);
-                }
-                OverlayProfileValuesFromJson(response.ProfileJson!);
+                var baseJson = IsSqlPromptModel && !string.IsNullOrEmpty(response.SqlPromptJson)
+                    ? ComposeSqlPromptBase(response.ProfileJson!, response.SqlPromptJson!)
+                    : response.ProfileJson!;
 
-                _loadedProfileJson = response.ProfileJson;
+                ReseedWorkingValues();
+                OverlayProfileValuesFromJson(baseJson);
+
+                _loadedProfileJson = baseJson;
                 _loadedProfileName = name;
+                IsSelectedClassic = IsSqlPromptModel && !response.IsSqlPromptStyle;
                 SelectedProfileName = name;
-                IsSelectedReadOnly = response.IsBuiltIn;
+                // HasBuiltIn, not IsBuiltIn: an edited built-in resolves from the custom directory,
+                // so IsBuiltIn is false for it even though it is still a shipped style that cannot
+                // be renamed or deleted and can still be reset.
+                IsSelectedBuiltIn = response.HasBuiltIn;
+                IsSelectedCustomized = response.IsCustomizedBuiltIn;
                 IsDirty = false;
                 LastError = null;
                 QueuePreviewAsync();
@@ -568,8 +634,32 @@ namespace AkmlSql.Shell.Shared.Formatting
             _loadedProfileJson = null;
             _loadedProfileName = null;
             SelectedProfileName = null;
-            IsSelectedReadOnly = false;
+            IsSelectedBuiltIn = false;
+            IsSelectedCustomized = false;
+            IsSelectedClassic = false;
             IsDirty = false;
+        }
+
+        /// <summary>
+        /// Resets every working value to the schema default, ready for a style's own values to be
+        /// overlaid on top. Shared by load and reset so the two cannot drift: a reset that reseeded
+        /// differently from a load would leave settings the restored style does not mention showing
+        /// whatever the previous style had put there.
+        /// </summary>
+        private void ReseedWorkingValues()
+        {
+            _workingValues.Clear();
+            if (!_schemaDefaults.IsEmpty)
+            {
+                // Cheaper than re-parsing the ~180-setting schema JSON on every selection:
+                // the defaults captured at seed time ARE the reseed source.
+                foreach (var kvp in _schemaDefaults) _workingValues[kvp.Key] = kvp.Value;
+            }
+            else
+            {
+                var schema = SchemaJson ?? _cachedSchemaJson;
+                if (!string.IsNullOrEmpty(schema)) SeedWorkingValuesFromSchema(schema!);
+            }
         }
 
         /// <summary>
@@ -589,6 +679,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 {
                     if (group.Value.ValueKind != JsonValueKind.Object) continue;
                     if (string.Equals(group.Name, "metadata", StringComparison.OrdinalIgnoreCase)) continue;
+                    // SQL Prompt model: the style is its sqlPrompt document; the AKML option groups
+                    // beside it are the engine's projection for older builds, not editor-owned.
+                    if (IsSqlPromptModel && !string.Equals(group.Name, "sqlPrompt", StringComparison.Ordinal)) continue;
                     OverlayObject(group.Name, group.Value);
                 }
             }
@@ -620,6 +713,110 @@ namespace AkmlSql.Shell.Shared.Formatting
         }
 
         // -----------------------------------------------------------------
+        // Reset / Revert
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Discards unsaved edits to the loaded style, putting every control back to the values in
+        /// the stored file. Nothing is written and nothing is asked of the engine — the merge base
+        /// the editor already holds IS the stored file, so this is purely local.
+        /// </summary>
+        /// <remarks>
+        /// Distinct from <see cref="ResetToBuiltInAsync"/>, which throws away edits that were
+        /// already SAVED. Collapsing the two into one "reset" would make an unrecoverable action
+        /// and a trivially recoverable one share a button.
+        /// </remarks>
+        public bool RevertChanges()
+        {
+            if (_loadedProfileJson == null || string.IsNullOrEmpty(_loadedProfileName))
+            {
+                LastError = "No style loaded.";
+                return false;
+            }
+
+            ReseedWorkingValues();
+            OverlayProfileValuesFromJson(_loadedProfileJson!);
+            IsDirty = false;
+            LastError = null;
+            QueuePreviewAsync();
+            return true;
+        }
+
+        /// <summary>
+        /// Discards the user's SAVED edits to a shipped style: the engine deletes the custom file
+        /// that shadows the built-in, and the shipped style resolves again.
+        /// <para>
+        /// The editor rebinds from the text the engine read back afterwards rather than from what
+        /// the reset was expected to produce, so what is displayed is what is now stored.
+        /// </para>
+        /// </summary>
+        public async Task<bool> ResetToBuiltInAsync()
+        {
+            if (string.IsNullOrEmpty(_loadedProfileName))
+            {
+                LastError = "No style loaded.";
+                return false;
+            }
+            if (!IsSelectedBuiltIn)
+            {
+                // Guarded here as well as in the engine: a custom style has no shipped original to
+                // return to, and the nearest thing -- wiping it to defaults -- would destroy work
+                // under a word that does not imply it.
+                LastError = $"'{_loadedProfileName}' is your own style, so there is no built-in version to reset to.";
+                return false;
+            }
+            if (!_rpc.IsConnected)
+            {
+                LastError = "Engine not connected.";
+                return false;
+            }
+
+            try
+            {
+                var response = await _rpc.SendRequestAsync<ProfileResetResponse, ProfileResetRequest>(
+                    MessageTypes.ProfileReset,
+                    new ProfileResetRequest { Name = _loadedProfileName! },
+                    timeoutMs: 5000).ConfigureAwait(true);
+
+                if (response == null || !response.Success || string.IsNullOrEmpty(response.ProfileJson))
+                {
+                    LastError = response?.ErrorMessage ?? "Reset failed.";
+                    return false;
+                }
+
+                var restored = response.ProfileJson!;
+                if (IsSqlPromptModel)
+                {
+                    var reread = await _rpc.SendRequestAsync<ProfileGetResponse, ProfileGetRequest>(
+                        MessageTypes.ProfileGet,
+                        new ProfileGetRequest { Name = _loadedProfileName! },
+                        timeoutMs: 5000).ConfigureAwait(true);
+                    if (reread is { Success: true, ProfileJson: not null } && !string.IsNullOrEmpty(reread.SqlPromptJson))
+                    {
+                        restored = ComposeSqlPromptBase(reread.ProfileJson, reread.SqlPromptJson!);
+                        IsSelectedClassic = !reread.IsSqlPromptStyle;
+                    }
+                }
+
+                ReseedWorkingValues();
+                OverlayProfileValuesFromJson(restored);
+
+                _loadedProfileJson = restored;
+                IsSelectedCustomized = false;
+                IsDirty = false;
+                LastError = null;
+                QueuePreviewAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                Log.Warning(ex, "FormatStylesEditor: reset {Name} failed", _loadedProfileName);
+                return false;
+            }
+        }
+
+        // -----------------------------------------------------------------
         // Spec 033 (T015): merge-save
         // -----------------------------------------------------------------
 
@@ -630,11 +827,6 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         public async Task<bool> SaveAsync()
         {
-            if (IsSelectedReadOnly)
-            {
-                LastError = "Built-in styles are read-only — copy this style to edit it.";
-                return false;
-            }
             if (_loadedProfileJson == null || string.IsNullOrEmpty(_loadedProfileName))
             {
                 LastError = "No style loaded.";
@@ -662,6 +854,17 @@ namespace AkmlSql.Shell.Shared.Formatting
                 }
 
                 _loadedProfileJson = merged;
+                if (IsSqlPromptModel) IsSelectedClassic = false;
+                // Saving over a shipped style just created the override that shadows it, so Reset
+                // becomes available from this moment -- without a reload. The list item is marked
+                // too: every save path comes through here (the Save button, and "Save changes?" when
+                // switching styles or closing), and Reset reads the item.
+                if (IsSelectedBuiltIn)
+                {
+                    IsSelectedCustomized = true;
+                    var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, _loadedProfileName, StringComparison.OrdinalIgnoreCase));
+                    if (item != null) item.IsCustomized = true;
+                }
                 IsDirty = false;
                 LastError = null;
                 return true;
@@ -757,7 +960,10 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             var target = _loadedProfileName ?? SelectedProfileName;
             if (string.IsNullOrWhiteSpace(target)) { LastError = "Select a style to rename."; return null; }
-            if (IsSelectedReadOnly) { LastError = "Built-in styles cannot be renamed."; return null; }
+            // Still refused, and not for the old reason. A built-in's name is what ties an
+            // override to the style it overrides, so renaming one would orphan the original rather
+            // than rename anything. Copy makes an independent style that can be named freely.
+            if (IsSelectedBuiltIn) { LastError = "Built-in styles cannot be renamed — use Copy to make one you can name."; return null; }
             if (string.IsNullOrWhiteSpace(newName)) { LastError = "Enter a new name."; return null; }
             if (!_rpc.IsConnected) { LastError = "Engine not connected."; return null; }
 
@@ -817,7 +1023,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (string.IsNullOrWhiteSpace(target)) { LastError = "Select a style to delete."; return false; }
 
             var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, target, StringComparison.OrdinalIgnoreCase));
-            if (item?.IsReadOnly == true) { LastError = "Built-in styles cannot be deleted."; return false; }
+            if (item?.IsShipped == true)
+            {
+                LastError = item.IsCustomized
+                    ? "Built-in styles cannot be deleted — reset it to discard your changes."
+                    : "Built-in styles cannot be deleted.";
+                return false;
+            }
 
             try
             {
@@ -1051,8 +1263,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                     {
                         Name = p.Name ?? string.Empty,
                         Description = p.Description ?? string.Empty,
-                        Kind = p.IsBuiltIn ? "Built-in" : "Native",
-                        IsReadOnly = p.IsBuiltIn,
+                        // IsBuiltIn alone cannot describe an edited built-in: the file that
+                        // resolves is the custom one, so IsBuiltIn is false while the style is
+                        // still shipped. The two flags together say "shipped" and "changed".
+                        IsShipped = p.IsBuiltIn || p.IsCustomizedBuiltIn,
+                        IsCustomized = p.IsCustomizedBuiltIn,
                         BasedOn = p.BasedOn,
                         IsActive = activeProfile != null && string.Equals(p.Name, activeProfile, StringComparison.OrdinalIgnoreCase),
                     });
@@ -1081,6 +1296,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                     {
                         ClientSchemaVersion = _cachedSchemaVersion,
                         IncludeUnsupported = true,
+                        // SQL Prompt's own option model; an older engine ignores this and sends
+                        // the AKML settings schema, which the editor still renders.
+                        SqlPromptModel = true,
                     },
                     timeoutMs: 3000,
                     ct).ConfigureAwait(false);
@@ -1151,15 +1369,44 @@ VALUES ('SampleQuery', GETDATE());";
     }
 
     /// <summary>Lightweight DTO bound to the style list (left panel).</summary>
-    internal sealed class StyleListItem
+    internal sealed class StyleListItem : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
+
         public string Name { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
 
-        /// <summary>"Built-in" (read-only) or "Native" (user-editable).</summary>
-        public string Kind { get; set; } = "Native";
+        /// <summary>
+        /// True when a style shipped under this name. Shipped styles are editable -- an edit
+        /// writes an override -- but they can never be renamed or deleted.
+        /// </summary>
+        public bool IsShipped { get; set; }
 
-        public bool IsReadOnly { get; set; }
+        /// <summary>
+        /// True when this is a shipped style the user has edited. Raises change notifications (and
+        /// for <see cref="Kind"/>), so a save marks the row "Built-in · modified" in place — the ⋮
+        /// menu's Reset and the window's Reset handler read this item.
+        /// </summary>
+        public bool IsCustomized
+        {
+            get => _isCustomized;
+            set
+            {
+                if (_isCustomized == value) return;
+                _isCustomized = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCustomized)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Kind)));
+            }
+        }
+
+        private bool _isCustomized;
+
+        /// <summary>
+        /// Badge text. "Built-in - modified" is the one that earns its place: without it there is
+        /// no way to tell, from the list, whether a built-in is the shipped style or your edited
+        /// version of it -- and that is exactly what someone reaching for Reset needs to know.
+        /// </summary>
+        public string Kind => IsCustomized ? "Built-in \u00b7 modified" : IsShipped ? "Built-in" : "Native";
 
         /// <summary>If this profile was forked from another, that source name.</summary>
         public string? BasedOn { get; set; }
@@ -1168,7 +1415,7 @@ VALUES ('SampleQuery', GETDATE());";
         public bool IsActive { get; set; }
 
         /// <summary>Spec 033 — list section header ("Your styles" / "Built-in styles").</summary>
-        public string Section => IsReadOnly ? "Built-in styles" : "Your styles";
+        public string Section => IsShipped ? "Built-in styles" : "Your styles";
 
         public override string ToString() =>
             string.IsNullOrEmpty(Description) ? Name : $"{Name} — {Description}";
@@ -1190,6 +1437,8 @@ VALUES ('SampleQuery', GETDATE());";
     {
         /// <summary>The persisted/default sample snippet.</summary>
         Sample,
+        /// <summary>SQL Prompt model: the current page's own sample (what its options act on).</summary>
+        PageSample,
         /// <summary>The text from the editor that was active when the styles editor opened.</summary>
         CurrentQuery,
     }

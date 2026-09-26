@@ -96,7 +96,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     {
         // Identifier + loopback (SSRF) guard — single-sourced in ValidateTarget so ConnectAsync and
         // TestAsync enforce IDENTICAL rules. Runs before anything touches the bridge.
-        var (ok, error) = ValidateTarget(server, database);
+        var (ok, error) = ValidateTarget(server, database, windowsAuth);
         if (!ok) return (false, error);
 
         if (_bridge.State != BridgeState.Open)
@@ -141,7 +141,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         // TestSqlConnectionHandler opens whatever string it receives with no engine-side host check,
         // so omitting this would make Test an SSRF/confused-deputy hole. Behaviour is unchanged:
         // loopback-only; remote/UNC/Azure targets are rejected here, never reaching the engine.
-        var (ok, error) = ValidateTarget(server, database);
+        var (ok, error) = ValidateTarget(server, database, windowsAuth);
         if (!ok) return (false, error);
 
         if (_bridge.State != BridgeState.Open)
@@ -184,7 +184,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         // SECURITY: identical loopback/identifier guard as Connect/Test, run FIRST — the engine opens
         // this connection under its own identity, so an unguarded server is an SSRF/confused-deputy
         // lever. Enumerate against "master" (always present, and the guard requires a non-empty db).
-        var (ok, error) = ValidateTarget(server, "master");
+        var (ok, error) = ValidateTarget(server, "master", windowsAuth);
         if (!ok) return (false, Array.Empty<string>(), error);
 
         if (_bridge.State != BridgeState.Open)
@@ -245,14 +245,21 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     /// <summary>
     /// SECURITY (Phase 4): the SINGLE source of truth for the SQL-target guard, shared by
-    /// <see cref="ConnectAsync"/> and <see cref="TestAsync"/>. Enforces, in order:
-    /// non-empty server/database, no connection-string metacharacters in the identifiers
-    /// (<see cref="IsSafeIdentifier"/>), and loopback-only host (<see cref="IsLoopbackServer"/>).
-    /// Pure/static (no bridge dependency) so both callers — and a unit test — get identical
-    /// behaviour. Returns (true, null) on pass; (false, message) on the first failure. Loopback-
-    /// only is unchanged: remote/UNC/named-pipe/Azure targets are rejected.
+    /// <see cref="ConnectAsync"/>, <see cref="TestAsync"/> and <see cref="ListDatabasesAsync"/>.
+    /// Enforces, in order: non-empty server/database, no connection-string metacharacters in the
+    /// identifiers (<see cref="IsSafeIdentifier"/>), and the identity rule below. Pure/static (no
+    /// bridge dependency) so every caller — and a unit test — gets identical behaviour. Returns
+    /// (true, null) on pass; (false, message) on the first failure.
+    ///
+    /// <para>
+    /// A remote SQL Server is allowed with SQL Server authentication: the engine forwards the login
+    /// the user typed, so no identity of its own is at stake. Windows authentication, and any
+    /// named-pipe/UNC address, stay limited to the engine's own machine, because both would sign in
+    /// as the engine's service account. The engine enforces the same rule itself
+    /// (<c>BridgeSqlTargetGuard</c>); this copy exists to explain the refusal before a round trip.
+    /// </para>
     /// </summary>
-    private static (bool Ok, string? Error) ValidateTarget(string server, string database)
+    private static (bool Ok, string? Error) ValidateTarget(string server, string database, bool windowsAuth)
     {
         if (string.IsNullOrWhiteSpace(server))
             return (false, "Server is required.");
@@ -269,19 +276,40 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (!IsSafeIdentifier(database))
             return (false, "Database name contains invalid characters.");
 
-        // Confused-deputy / SSRF guard. The engine opens this connection under ITS OWN identity
-        // (for Windows auth, its Windows account), so a browser-supplied host is a confused-deputy
-        // lever — a malicious/compromised page could make the engine reach an arbitrary SQL/SMB
-        // listener and authenticate as the engine host. This build is localhost-scoped, so we hard-
-        // restrict to loopback servers (localhost / 127.x / ::1 / . / (local) / (localdb)) and reject
-        // UNC/named-pipe/remote targets. Before any LAN exposure: replace this with a configured
-        // allow-list AND enforce the same check engine-side (defense in depth — the engine handlers
-        // currently apply no host check of their own).
-        if (!IsLoopbackServer(server))
-            return (false, "This build only connects to a LOCAL SQL Server (localhost, 127.0.0.1, ., (local), (localdb)). " +
-                           "Remote/UNC servers are disabled because the engine would connect under its own Windows identity.");
+        // Confused-deputy guard. With Windows authentication — or over a named pipe, which is SMB —
+        // the engine signs in as ITSELF, so a browser-supplied remote host would let a hostile page
+        // make the engine authenticate to a machine of its choosing (and leak NTLM credentials).
+        // Those stay limited to the engine's own machine. A remote server with SQL Server
+        // authentication uses only the login the user typed, so it is allowed.
+        if (IsLoopbackServer(server))
+            return (true, null);
+
+        if (!IsRemoteTcpServer(server))
+            return (false, "A remote SQL Server must be addressed over TCP: host, host\\instance or host,port. " +
+                           "Named-pipe and UNC addresses would sign in as the engine's service account.");
+
+        if (windowsAuth)
+            return (false, "Windows authentication only works for a SQL Server on the engine's own machine (enter it as localhost). " +
+                           "For a remote server, choose SQL Server authentication — the engine runs as a service and would sign in " +
+                           "as that service account, not as you.");
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// True for a remote server reached over TCP — a bare host, <c>host\instance</c>,
+    /// <c>host,port</c>, optionally with a <c>tcp:</c> prefix. False for UNC paths and the
+    /// named-pipe / shared-memory / DAC protocol prefixes, which are not plain TCP.
+    /// </summary>
+    private static bool IsRemoteTcpServer(string server)
+    {
+        var s = (server ?? string.Empty).Trim();
+        if (s.Length == 0 || s.StartsWith("\\\\")) return false;
+        if (s.StartsWith("np:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("lpc:", StringComparison.OrdinalIgnoreCase)
+            || s.StartsWith("admin:", StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
     }
 
     private static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password)

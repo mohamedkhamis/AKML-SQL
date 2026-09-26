@@ -17,7 +17,7 @@ namespace AkmlSql.Web.E2E.Tests;
 /// </summary>
 public sealed class EngineAutoConnectTests(ITestOutputHelper output) : IAsyncLifetime
 {
-    private const int BridgePort = 47291;
+    private static int BridgePort => Harness.InstalledEngine.BridgePort;
 
     // Every test here drives the app built from the working tree, not the deployed one. That
     // distinction is not pedantry: the bug these tests exist for lives in wwwroot/js/akml-bridge.js,
@@ -397,17 +397,14 @@ public sealed class EngineAutoConnectTests(ITestOutputHelper output) : IAsyncLif
         await page.Locator("button", new() { HasTextString = "Add" }).First.ClickAsync();
         await page.WaitForTimeoutAsync(600);
 
-        var dialog = page.Locator(".akml-connections-dialog");
-        await dialog.Locator("input:not([type=checkbox])").Nth(0).FillAsync("Local engine");
-        await dialog.Locator("input:not([type=checkbox])").Nth(1).FillAsync(Environment.MachineName);
-        await dialog.Locator("input:not([type=checkbox])").Nth(2).FillAsync(BridgePort.ToString());
-        await dialog.Locator("input[type=checkbox]").First.UncheckAsync();
-        await page.WaitForTimeoutAsync(300);
+        // The form works out "needs a PIN" from the address: a machine name is not loopback, so the
+        // PIN field appears on its own (there is no Localhost checkbox any more).
+        await page.FillAsync("[data-testid='engine-add-name']", "Local engine");
+        await page.FillAsync("[data-testid='engine-add-host']", Environment.MachineName);
+        await page.FillAsync("[data-testid='engine-add-port']", BridgePort.ToString());
+        await page.FillAsync("[data-testid='engine-add-pin']", ReadPairingPin());
 
-        var pin = dialog.Locator("input:not([type=checkbox])").Nth(3);
-        if (await pin.IsVisibleAsync()) await pin.FillAsync(ReadPairingPin());
-
-        await page.Locator("button", new() { HasTextString = "Pair" }).First.ClickAsync();
+        await page.ClickAsync("[data-testid='engine-add-pair']");
     }
 
     private static string ReadPairingPin()

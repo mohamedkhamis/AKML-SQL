@@ -42,7 +42,7 @@ param(
     [string] $InstallerPath,
     [string] $DownloadsFolder = 'C:\inetpub\akml.khamis.work-downloads',
     [string] $Version,
-    [string[]] $SupportedHosts = @('SSMS 22', 'VS 2026'),
+    [string[]] $SupportedHosts = @('SSMS 22'),
     [string] $NotesSummary,
     [string] $ReleaseNotesUrl = 'https://github.com/mohamedkhamis/AKML-SQL/releases',
     [string] $MinimumOsVersion = '10.0',
@@ -128,7 +128,8 @@ $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 
 if (-not $NotesSummary) {
     $existingLatest = $manifest.releases | Select-Object -First 1
-    $NotesSummary = if ($existingLatest) { $existingLatest.notesSummary } else { 'AKML SQL for SSMS 22 and Visual Studio 2026.' }
+    # Visual Studio 2026 support was removed: never carry an older summary that still offers it.
+    $NotesSummary = if ($existingLatest -and $existingLatest.notesSummary -notmatch 'Visual Studio') { $existingLatest.notesSummary } else { 'AKML SQL for SQL Server Management Studio 22.' }
 }
 
 $entry = [ordered]@{

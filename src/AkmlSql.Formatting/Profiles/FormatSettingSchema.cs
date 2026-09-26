@@ -68,6 +68,8 @@ public class FormatSettingSchema
             // Skip extension data + non-class properties
             if (categoryProp.Name == nameof(FormattingProfile.ExtensionData)) continue;
             if (categoryProp.Name == nameof(FormattingProfile.Metadata)) continue;
+            // The SQL Prompt document is a whole style in SQL Prompt's model, not an AKML option group.
+            if (categoryProp.Name == nameof(FormattingProfile.SqlPrompt)) continue;
             if (!categoryProp.PropertyType.IsClass) continue;
             if (categoryProp.PropertyType == typeof(string)) continue;
 

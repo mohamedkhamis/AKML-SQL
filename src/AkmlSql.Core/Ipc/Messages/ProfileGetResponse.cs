@@ -29,8 +29,33 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(3)]
         public string? ProfileJson { get; set; }
 
-        /// <summary>True when the profile is a read-only built-in (no custom shadow exists).</summary>
+        /// <summary>True when the name resolved from the built-in directory (no custom shadow).</summary>
         [Key(4)]
         public bool IsBuiltIn { get; set; }
+
+        /// <summary>
+        /// True when a shipped style of this name exists, whether or not it is currently
+        /// overridden. Built-ins are editable — an edit writes a custom file that shadows the
+        /// shipped one — so this, not <see cref="IsBuiltIn"/>, is what says whether Reset has an
+        /// original to return to.
+        /// </summary>
+        [Key(5)]
+        public bool HasBuiltIn { get; set; }
+
+        /// <summary>True when this is a shipped style the user has edited.</summary>
+        [Key(6)]
+        public bool IsCustomizedBuiltIn { get; set; }
+
+        /// <summary>
+        /// The style as a SQL Prompt style document (SQL Prompt 10.5+ JSON) — what the SQL Prompt
+        /// style editors edit. The style's own document when it is a SQL Prompt style; otherwise
+        /// the closest SQL Prompt reading of its AKML-model settings. Null from older engines.
+        /// </summary>
+        [Key(7)]
+        public string? SqlPromptJson { get; set; }
+
+        /// <summary>True when the stored style already is a SQL Prompt style (not a projection).</summary>
+        [Key(8)]
+        public bool IsSqlPromptStyle { get; set; }
     }
 }

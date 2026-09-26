@@ -127,6 +127,70 @@ public sealed class CompletionServiceOfflineTests
         Assert.NotNull(selectKw);
     }
 
+    // ------------------------------------------------------------------ bracketing
+    //
+    // This is the path that runs when the engine is unreachable, and it used to insert raw names.
+    // Picking "Order Details" wrote `Order Details` into the query -- invalid T-SQL, produced
+    // precisely when the engine was down, which is when a user is least able to tell why the query
+    // they just built will not run. It now applies the same SqlIdentifier rule as the engine.
+
+    [Fact]
+    public async Task Offline_a_table_with_a_space_is_inserted_bracketed_but_listed_plainly()
+    {
+        var store = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
+        await store.SetAsync(new SchemaSnapshot
+        {
+            ServerCanonicalIdentity = "s",
+            DatabaseName = "Northwind",
+            PhaseA = BuildPhaseABlob("Northwind", ("dbo", "Order Details"), ("dbo", "Orders")),
+        });
+
+        var service = new CompletionService(ClosedBridge(), store);
+        var response = await service.CompleteAsync(new CompletionRequest(), CancellationToken.None);
+
+        var orderDetails = response.Items.Single(i => i.SourceObject == "dbo.Order Details");
+        Assert.Equal("[Order Details]", orderDetails.InsertText);
+
+        // The label stays unbracketed: the editor matches typing against it, so "Ord" must find it.
+        Assert.DoesNotContain("[", orderDetails.DisplayText);
+
+        // And an ordinary name is left alone -- "when required", not "always".
+        Assert.Equal("Orders", response.Items.Single(i => i.SourceObject == "dbo.Orders").InsertText);
+    }
+
+    [Fact]
+    public async Task Offline_columns_are_bracketed_when_they_need_it_in_both_forms()
+    {
+        var store = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
+        await store.SetAsync(new SchemaSnapshot
+        {
+            ServerCanonicalIdentity = "s",
+            DatabaseName = "Northwind",
+            PhaseA = BuildPhaseABlob("Northwind", ("dbo", "Order Details")),
+            PhaseB = BuildPhaseBBlob("Northwind", "dbo", "Order Details", "OrderID", "Unit Price", "Order"),
+        });
+
+        var service = new CompletionService(ClosedBridge(), store);
+        var response = await service.CompleteAsync(new CompletionRequest(), CancellationToken.None);
+
+        var inserts = response.Items
+            .Where(i => i.ObjectType == (int)CompletionObjectType.Column)
+            .Select(i => i.InsertText)
+            .ToArray();
+
+        // Bare forms: a space, and a reserved word, both need brackets; a plain name does not.
+        Assert.Contains("[Unit Price]", inserts);
+        Assert.Contains("[Order]", inserts);
+        Assert.Contains("OrderID", inserts);
+
+        // Qualified forms bracket each PART separately. `[Order Details.OrderID]` would name a
+        // single identifier containing a dot, which is not what anyone meant.
+        Assert.Contains("[Order Details].OrderID", inserts);
+        Assert.Contains("[Order Details].[Unit Price]", inserts);
+        Assert.DoesNotContain(inserts, t => t.StartsWith("Order Details", System.StringComparison.Ordinal));
+        Assert.DoesNotContain("[Order Details.OrderID]", inserts);
+    }
+
     [Fact]
     public async Task Phase_B_columns_are_included_when_cached_in_both_bare_and_qualified_forms()
     {

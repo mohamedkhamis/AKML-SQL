@@ -44,10 +44,15 @@ namespace AkmlSql.Shell.Shared.Update
         /// Creates a ready-to-show dialog for the verified update. Caller owns the lifetime:
         /// <c>ShowDialog()</c>, then proceed only when the result is <c>true</c>.
         /// </summary>
-        public static UpdateInstallConfirmDialog CreateForUpdate(string version)
+        /// <param name="version">The downloaded version.</param>
+        /// <param name="declineText">
+        /// "Cancel" when the user asked (Check for Updates); "Later" when AKML SQL is the one
+        /// offering, at IDE startup.
+        /// </param>
+        public static UpdateInstallConfirmDialog CreateForUpdate(string version, string declineText = "Cancel")
         {
             var dlg = new UpdateInstallConfirmDialog();
-            dlg.Build(version);
+            dlg.Build(version, declineText);
             dlg.TryAttachOwnerToHost();
             return dlg;
         }
@@ -69,7 +74,7 @@ namespace AkmlSql.Shell.Shared.Update
             }
         }
 
-        private void Build(string version)
+        private void Build(string version, string declineText)
         {
             var registry = ThemeRegistry.Instance.Resources;
             _chromeFgBrush = (SolidColorBrush)registry[ThemeTokens.TextPrimary];
@@ -93,7 +98,7 @@ namespace AkmlSql.Shell.Shared.Update
             var root = new StackPanel();
             root.Children.Add(BuildHeader(version));
             root.Children.Add(BuildBody());
-            root.Children.Add(BuildFooter(out var cancelBtn));
+            root.Children.Add(BuildFooter(declineText, out var cancelBtn));
             Content = root;
 
             // FR-005 — Cancel is the default focus so Enter/Space defaults to "don't install".
@@ -143,20 +148,13 @@ namespace AkmlSql.Shell.Shared.Update
             });
             stack.Children.Add(new TextBlock
             {
-                Text = "The following applications must close during the installation — save your work in them first:",
+                // AkmlSqlSetup.iss CloseApplicationsFilter: Ssms.exe
+                Text = "SQL Server Management Studio closes during the installation — save your work in it first.",
                 TextWrapping = TextWrapping.Wrap,
                 FontSize = 12.5,
                 Foreground = _chromeFgBrush,
                 LineHeight = 18,
                 Margin = new Thickness(0, 0, 0, 6)
-            });
-            // AkmlSqlSetup.iss CloseApplicationsFilter: Ssms.exe,devenv.exe
-            stack.Children.Add(new TextBlock
-            {
-                Text = "   •  SQL Server Management Studio\n   •  Visual Studio",
-                FontSize = 12.5,
-                Foreground = _chromeFgBrush,
-                LineHeight = 18
             });
 
             return new Border
@@ -171,7 +169,7 @@ namespace AkmlSql.Shell.Shared.Update
             };
         }
 
-        private DockPanel BuildFooter(out Button cancelBtn)
+        private DockPanel BuildFooter(string declineText, out Button cancelBtn)
         {
             var footer = new DockPanel
             {
@@ -197,8 +195,8 @@ namespace AkmlSql.Shell.Shared.Update
 
             cancelBtn = new Button
             {
-                Content = "Cancel",
-                Width = 80,
+                Content = declineText,
+                MinWidth = 80,
                 Height = 32,
                 Margin = new Thickness(8, 0, 0, 0),
                 IsCancel = true,

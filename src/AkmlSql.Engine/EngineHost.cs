@@ -243,7 +243,12 @@ namespace AkmlSql.Engine
                 }
                 catch (OperationCanceledException)
                 {
-                    // graceful shutdown
+                    // Logged, not swallowed. This used to be a bare comment, so a normal stop left
+                    // no trace at all: the log went straight from "Awaiting connections" to the next
+                    // start, and there was no way to tell a requested stop from a process that
+                    // simply vanished. The distinction is the first question when the service is
+                    // found stopped.
+                    Log.Information("Engine (web mode) stopping: stop requested by the service control manager.");
                 }
             }
             catch (OperationCanceledException)

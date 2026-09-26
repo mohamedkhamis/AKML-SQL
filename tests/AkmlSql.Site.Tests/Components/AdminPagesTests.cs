@@ -110,13 +110,30 @@ public sealed class AdminPagesTests
         ctx.Services.Configure<AnalyticsOptions>(o => o.RetentionDays = 400);
         ctx.Services.AddSingleton(new GeoLookup(Path.Combine(dir.Path, "no-such-geo.mmdb")));
 
+        // Spec 038 T096: the dashboard's privacy paragraph reads the configured identifiable
+        // retention, so the page needs the settings store. (This test builds its own context rather
+        // than using NewDashboardCtx because it needs a populated downloads folder.)
+        var dashboardSettings = new AkmlSql.Site.Settings.SiteSettingsStore(Path.Combine(dir.Path, "settings.db"));
+        dashboardSettings.CreateTableIfMissing();
+        dashboardSettings.Load();
+        ctx.Services.AddSingleton(dashboardSettings);
+
         var cut = ctx.Render<AdminDashboard>();
 
-        // Stat tiles: visits today, unique today, 7d, window, downloads window, downloads total,
-        // bot hits. Two distinct IPs visited "/" plus one more for "/features" => 3 unique.
-        var values = cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value")
+        // Headline: visits, visitors, downloads, conversion. Three visitors (three IPs), one of
+        // whom downloaded the same day => 1 of 3 converted.
+        var headline = cut.FindAll(".admin-headline .admin-stat-value")
             .Select(e => e.TextContent.Trim()).ToList();
-        Assert.Equal(["3", "3", "3", "3", "1", "1", "0"], values);
+        Assert.Equal(["3", "3", "1", "33.3%"], headline);
+
+        // Each headline figure carries a change indicator against the comparison period. Nothing
+        // was recorded then, so each reads as new or flat -- never a made-up percentage.
+        Assert.Equal(4, cut.FindAll(".admin-headline .admin-delta").Count);
+
+        // Period-independent totals: downloads all time, visits today, visits 7 days, bot hits.
+        var totals = cut.FindAll("section[aria-label='Totals'] .admin-stat-value")
+            .Select(e => e.TextContent.Trim()).ToList();
+        Assert.Equal(["1", "3", "3", "0"], totals);
 
         // Two charts now (ADM-005): visits and downloads, one column per day of the window.
         Assert.Equal(2, cut.FindAll(".admin-chart").Count);
@@ -137,8 +154,8 @@ public sealed class AdminPagesTests
         // Downloads folder listing.
         Assert.Contains(downloadsDir, cut.Markup);
 
-        // Sign-out posts to the logout endpoint.
-        Assert.NotNull(cut.Find("form[action='/admin/logout'][method='post']"));
+        // Spec 038 T017: sign-out moved to AdminLayout, which every portal page now shares.
+        // AdminLayoutTests.Layout_RendersSignOutPostingToTheLogoutEndpoint covers it there.
     }
 
     [Fact]
@@ -156,9 +173,9 @@ public sealed class AdminPagesTests
         using var ctx = NewDashboardCtx(store, dir);
         var cut = ctx.Render<AdminDashboard>();
 
-        var values = cut.FindAll("section[aria-label='Key metrics'] .admin-stat-value")
+        var values = cut.FindAll(".admin-headline .admin-stat-value")
             .Select(e => e.TextContent.Trim()).ToList();
-        Assert.Equal("1", values[0]); // visits today: the human only
+        Assert.Equal("1", values[0]); // visits: the human only
         // Selected by class, not by position: an index from the end broke as soon as a second
         // stats row was added below this one.
         Assert.Equal("2", cut.Find(".admin-stat-muted .admin-stat-value").TextContent.Trim());
@@ -184,7 +201,8 @@ public sealed class AdminPagesTests
         Assert.Equal(days * 2, cut.FindAll(".admin-chart-col").Count); // both charts follow it
         Assert.Contains(label, cut.Markup);
         Assert.NotNull(cut.Find($"a[href='/admin/metrics.csv?days={days}']")); // export follows too
-        Assert.NotNull(cut.Find($"a[href='/admin?days={days}'].is-current"));
+        // Spec 038 T017: the range selector itself moved to AdminLayout, shared by every section
+        // (FR-032). AdminLayoutTests asserts the selected range is marked current there.
     }
 
     [Theory]
@@ -280,9 +298,8 @@ public sealed class AdminPagesTests
         Assert.NotNull(cut.Find("details summary"));
         Assert.Contains("By severity level", cut.Markup);
 
-        // Navigation: back to the dashboard, and the window filter is rendered.
-        Assert.NotNull(cut.Find("a[href='/admin']"));
-        Assert.NotNull(cut.Find("a[href='/admin/errors?days=30'].is-current"));
+        // Spec 038 T017: the hand-rolled "back to dashboard" link and the window selector both
+        // moved to AdminLayout's persistent navigation (FR-031/FR-032).
     }
 
     [Fact]
@@ -338,6 +355,14 @@ public sealed class AdminPagesTests
         // No .mmdb path: GeoLookup resolves to "unavailable", which is the state the dashboard
         // must render correctly on any machine without a MaxMind licence key.
         ctx.Services.AddSingleton(new GeoLookup(Path.Combine(dir.Path, "no-such-geo.mmdb")));
+
+        // Spec 038 T096: the dashboard's privacy paragraph now quotes the CONFIGURED identifiable
+        // retention rather than a literal, so it cannot drift from what the store enforces.
+        var settings = new AkmlSql.Site.Settings.SiteSettingsStore(Path.Combine(dir.Path, "settings.db"));
+        settings.CreateTableIfMissing();
+        settings.Load();
+        ctx.Services.AddSingleton(settings);
+
         return ctx;
     }
 }

@@ -7,8 +7,8 @@ namespace AkmlSql.Engine.Analysis;
 ///
 /// <para>
 /// "Session" is the lifetime of the engine process, and the engine process is started per shell
-/// instance (the named pipe is keyed on the shell PID), so this is exactly "until I close SSMS /
-/// Visual Studio". Nothing is written to disk: that is the point of the scope — a way to silence a
+/// instance (the named pipe is keyed on the shell PID), so this is exactly "until I close
+/// SSMS". Nothing is written to disk: that is the point of the scope — a way to silence a
 /// rule while working without leaving a directive in the script or an entry in config.json.
 /// </para>
 ///

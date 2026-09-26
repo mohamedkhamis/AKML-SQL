@@ -26,12 +26,11 @@ The file is created with defaults on first run and written safely (temp file plu
 - The result of the last check is cached under `%AppData%\AKML SQL\` and shown as a notification bar.
 - "Could not check for updates" means the machine could not reach the network.
 
-## After an SSMS or Visual Studio update
+## After an SSMS update
 
 IDE updates can leave a stale component cache, which stops extensions from loading. Clear the cache and restart:
 
 - SSMS 22: delete `%LocalAppData%\Microsoft\SSMS\22.0_*\ComponentModelCache\`
-- VS 2026: delete `%LocalAppData%\Microsoft\VisualStudio\18.0_*\ComponentModelCache\`
 
 ```powershell
 #Clear all SSMS 22 caches (PowerShell)
@@ -58,4 +57,4 @@ Do the same after installing or upgrading AKML SQL if the menu does not appear.
 
 Open an issue on GitHub: https://github.com/mohamedkhamis/AKML-SQL/issues
 
-Include: your SSMS/VS version, the AKML SQL version (from **AKML SQL** -> **About**), what you did, what happened, and the relevant lines from the log file. Logs never contain passwords or API keys, but review them before attaching. You can also use the **Send Feedback** command in the AKML SQL menu.
+Include: your SSMS version, the AKML SQL version (from **AKML SQL** -> **About**), what you did, what happened, and the relevant lines from the log file. Logs never contain passwords or API keys, but review them before attaching. You can also use the **Send Feedback** command in the AKML SQL menu.

@@ -10,7 +10,8 @@
     logic in-proc with a stub HttpMessageHandler.
   -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Matches AkmlSql.Updater (referenced below), which targets Windows for its notifications. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>AkmlSql.Installer.Tests</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>

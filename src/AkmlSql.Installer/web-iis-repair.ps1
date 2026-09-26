@@ -40,10 +40,15 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 function Read-RegString([string]$name, [string]$fallback) {
-    try {
-        $v = (Get-ItemProperty -Path 'HKLM:\Software\AKML SQL\Web' -Name $name -ErrorAction Stop).$name
-        if ($null -ne $v -and "$v" -ne '') { return "$v" }
-    } catch { }
+    # The 64-bit installer writes the 64-bit view. Installs made by the earlier 32-bit installer
+    # wrote WOW6432Node -- which this (64-bit) PowerShell never looked at, so Repair fell back to
+    # defaults and could rebind a working site to port 80.
+    foreach ($key in 'HKLM:\Software\AKML SQL\Web', 'HKLM:\Software\WOW6432Node\AKML SQL\Web') {
+        try {
+            $v = (Get-ItemProperty -Path $key -Name $name -ErrorAction Stop).$name
+            if ($null -ne $v -and "$v" -ne '') { return "$v" }
+        } catch { }
+    }
     return $fallback
 }
 

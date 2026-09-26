@@ -17,6 +17,7 @@ Input SQL
   Stage 1:  TSql170Parser        → parses into TSqlScript AST
   Stage 2:  AstAnnotator         → attaches comments to AST nodes
   Stage 3:  LayoutEngine         → produces LayoutNode list (tokens + whitespace rules)
+            — or, for a style written in SQL Prompt's model, SqlPromptLayout (see below)
   Stage 4:  CasingEngine         → applies keyword/identifier casing from profile
   Stage 5:  TextEmitter          → emits formatted string
   Stage 5b: SqlcmdPreprocessor   → restores SQLCMD placeholders
@@ -42,6 +43,68 @@ Output FormattedSQL
 
 **Stage 6 failure**: returns original SQL unchanged.
 **Stage 7 failure**: returns the (possibly non-idempotent) formatted SQL with a diagnostic warning appended.
+
+---
+
+## SQL Prompt Styles (spec 039)
+
+A style can be written in **SQL Prompt's own model**: the `.akmlstyle` then carries a
+`"sqlPrompt"` object — exactly the JSON document SQL Prompt 10.5+ reads and writes (one file per
+style: `metadata`, `whitespace`, `lists`, `parentheses`, `casing`, `dml`, `ddl`, `controlFlow`,
+`cte`, `variables`, `joinStatements`, `insertStatements`, `functionCalls`, `caseExpressions`,
+`operators`). Such a style **is** its document: it formats from it, the style editors edit it,
+and import / export move it unchanged.
+
+```jsonc
+{
+  "metadata": { "name": "Team", "id": "…" },          // AKML metadata
+  "sqlPrompt": {                                        // the style (SQL Prompt's JSON)
+    "metadata": { "id": "…", "name": "Team" },
+    "lists": { "placeCommasBeforeItems": true },
+    "casing": { "reservedKeywords": "uppercase" }
+  },
+  "list": { "commaPosition": "leading" }, …             // projection for older builds
+}
+```
+
+**Layout.** `FormatterPipeline.Layout` sends a style with a document to the SQL Prompt layout
+(`src/AkmlSql.Formatting/SqlPrompt/`) and every other style to the rule-based layout below
+(unchanged). Parsing, casing, formatting-off regions, semantic validation and the idempotency
+check are shared. The SQL Prompt layout emits every token once, in order, deciding only the
+whitespace before each (`Layout/SqlWriter`), so no option can change what the SQL means; one
+printer per construct (`Layout/SqlPromptPrinter.*`) reads its options straight from the style.
+
+**Options.** `SqlPromptOptionCatalog` holds SQL Prompt's 114 schema options plus
+`whitespace.newLines.alignMultilineCommentsMatchingPatterns`, grouped as SQL Prompt's editor
+groups them (Global: Whitespace, Lists, Parentheses, Casing · Statements: Data (DML), Schema
+(DDL), Control flow, CTE, Variables · Clauses: Join, Insert · Expressions: Function calls, CASE,
+Operators), with labels, allowed values, defaults, which option turns another on, and notes. It is
+pinned to Redgate's vendored schema by test. How each ambiguous option is read, and where to
+correct it, is listed in `specs/039-sqlprompt-style-editor/spec.md`.
+
+**The document.** `SqlPromptStyleDocument` keeps SQL Prompt's minimal form (an option at its
+default is left out), reads keys and values case-insensitively, keeps keys this build does not
+know, reads Redgate's historical `intentedFromWhen` typo, and applies SQL Prompt 11's collapse
+rule: a `…ShorterThan` threshold written without its `collapseShort…` switch means the collapse is
+on; switching it off writes `false` explicitly.
+
+**Styles written in AKML's model** keep formatting exactly as before. The editors show their SQL
+Prompt reading (`SqlPromptProjection`, or the `.source.json` a spec-031 import kept); saving one
+from an editor makes it a SQL Prompt style.
+
+**Editors.**
+- Web edition: **Format styles** page (`/styles`). Styles are saved to the paired engine when it
+  advertises `styles.sqlprompt.v1` — the styles folder SSMS uses — otherwise in
+  the browser (IndexedDB). Built-ins are edited as copies that shadow them (Reset restores).
+- SSMS: the Format Styles window asks the engine for SQL Prompt's model
+  (`StyleEditorSchemaRequest.SqlPromptModel`); settings are `sqlPrompt.<path>`, so preview and save
+  carry the document. Against an older engine the window falls back to AKML's settings schema.
+- Both preview each page's own sample (`SqlPromptPreviewSamples`) or the user's SQL, and reformat
+  on every change.
+
+**Import / export.** Importing a SQL Prompt `.json` keeps its document and id. Exporting to a path
+ending in `.json` writes the style's SQL Prompt document in SQL Prompt's minimal form (UTF-8, no
+BOM); `.sqlpromptstylev2` export (SQL Prompt 9 XML) is unchanged.
 
 ---
 

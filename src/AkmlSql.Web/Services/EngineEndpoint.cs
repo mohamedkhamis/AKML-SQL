@@ -92,6 +92,60 @@ public static class EngineEndpoint
             .ToList();
     }
 
+    /// <summary>
+    /// Reads what a person typed or pasted as an engine address: <c>host</c>, <c>host:port</c>,
+    /// <c>[ipv6]:port</c>, a bare IPv6 literal, or a whole URL such as
+    /// <c>wss://host:59417/akmlsql</c> or <c>https://host:59417/</c> (the address the trust page
+    /// is opened at). A port in the text wins over <paramref name="fallbackPort"/>.
+    /// </summary>
+    public static bool TryParseAddress(string? input, int fallbackPort, out string host, out int port)
+    {
+        host = string.Empty;
+        port = fallbackPort;
+        var text = input?.Trim() ?? string.Empty;
+        if (text.Length == 0) return false;
+
+        if (text.Contains("://", StringComparison.Ordinal))
+        {
+            if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || uri.Host.Length == 0) return false;
+            host = uri.Host.Trim('[', ']');
+            if (!uri.IsDefaultPort) port = uri.Port;
+            return IsValidHost(host);
+        }
+
+        if (text.StartsWith('['))
+        {
+            var close = text.IndexOf(']');
+            if (close < 0) return false;
+            host = text[1..close];
+            var rest = text[(close + 1)..];
+            if (rest.Length > 0 && !TryReadPort(rest, ref port)) return false;
+            return IsValidHost(host);
+        }
+
+        var firstColon = text.IndexOf(':');
+        if (firstColon >= 0 && firstColon == text.LastIndexOf(':'))
+        {
+            // One colon: host:port. More than one is a bare IPv6 literal.
+            if (!TryReadPort(text[firstColon..], ref port)) return false;
+            text = text[..firstColon];
+        }
+
+        host = text.TrimEnd('/');
+        return IsValidHost(host);
+    }
+
+    private static bool TryReadPort(string colonAndPort, ref int port)
+    {
+        if (colonAndPort.Length < 2 || colonAndPort[0] != ':') return false;
+        if (!int.TryParse(colonAndPort[1..].TrimEnd('/'), out var value) || value is < 1 or > 65535) return false;
+        port = value;
+        return true;
+    }
+
+    private static bool IsValidHost(string host) =>
+        host.Length > 0 && Uri.CheckHostName(host) != UriHostNameType.Unknown;
+
     /// <summary>The scheme part of a URL produced by <see cref="CandidateUrls"/>.</summary>
     public static string SchemeOf(string url)
     {

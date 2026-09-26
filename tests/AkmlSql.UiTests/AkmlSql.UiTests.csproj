@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    UI automation harness for SSMS 22 / Visual Studio 2026 — the desktop equivalent of the
+    UI automation harness for SSMS 22 — the desktop equivalent of the
     Playwright suite that covers the web edition.
 
     DELIBERATELY NOT IN AKML-SQL.slnx. These tests drive a real IDE on a real desktop: they need an

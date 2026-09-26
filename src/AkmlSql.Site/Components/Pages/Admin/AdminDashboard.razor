@@ -1,4 +1,5 @@
 @page "/admin"
+@layout AdminLayout
 @using System.Globalization
 @using AkmlSql.Site.Admin
 @using AkmlSql.Site.Analytics
@@ -8,6 +9,7 @@
 @inject IOptions<DownloadsOptions> DownloadsConfig
 @inject GeoLookup Geo
 @inject IOptions<AnalyticsOptions> AnalyticsConfig
+@inject AkmlSql.Site.Settings.SiteSettingsStore SiteSettings
 
 @* Admin metrics dashboard. Static SSR; the charts are PURE CSS — bar heights come from the
    precomputed .bar-h-* bucket classes in site.css (strict CSP: no inline styles).
@@ -20,100 +22,129 @@
     <meta name="robots" content="noindex, nofollow" />
 </HeadContent>
 
-<div class="page-body container">
+@* Spec 038 (US4): AdminLayout now owns the page wrapper, the section navigation, the shared
+   reporting window and sign-out. This page keeps only what it actually reports. *@
 <header class="page-header admin-header-row">
     <div>
         <p class="eyebrow">Admin</p>
         <h1>Site metrics</h1>
         <p class="page-intro">
-            Page visits and installer downloads over the last @AdminDashboardOptions.Label(_days).
+            Page visits and installer downloads for @_range.Phrase, compared with @_summary.Window.ComparisonLabel().
             Automated traffic — crawlers and scripted clients — is excluded from the visitor figures and reported separately. Installer downloads still count a scripted fetch, which is a real acquisition.
         </p>
-        @* Kept accurate deliberately: the store now also keeps a truncated network prefix and a
-           derived location, so the old "hashes only" wording would be a false claim. *@
+        @* Spec 038 T096: this paragraph must state what the site ACTUALLY does. Before this feature
+           it read "full IP addresses are never stored ... No cookies are set for visitors" — both
+           halves became false the moment the consent gate shipped, and a false privacy claim shown
+           to the owner is how a false one ends up shown to visitors. Kept in step with
+           /privacy, which PrivacyPageTests pins to the same configured retention value. *@
         <p class="admin-privacy">
-            <strong>Privacy:</strong> full IP addresses are never stored. Each visit keeps a per-day
-            salted hash (for unique counting) and the network prefix only —
-            <code>@($"/{IpAnonymizer.IPv4PrefixBits}")</code> for IPv4,
-            <code>@($"/{IpAnonymizer.IPv6PrefixBits}")</code> for IPv6 — plus the country
-            derived from the address at write time — no city, region or finer location is kept. No cookies are set for visitors.
-            Data older than @_retentionDays days is deleted automatically.
+            <strong>Privacy:</strong> for visitors who <em>accept</em> tracking, the full IP address
+            and a persistent id cookie are stored for @_identifiableRetentionDays days, then erased
+            while the visit itself is kept. For everyone else — declined, or not yet answered —
+            neither is ever written: only a per-day salted hash (for unique counting), the network
+            prefix (<code>@($"/{IpAnonymizer.IPv4PrefixBits}")</code> IPv4,
+            <code>@($"/{IpAnonymizer.IPv6PrefixBits}")</code> IPv6) and the country derived at write
+            time. No city, region or finer location is ever kept.
+            Rows older than @_retentionDays days are deleted entirely.
         </p>
     </div>
-    <form method="post" action="/admin/logout" class="admin-signout">
-        <a href="/admin/errors" class="btn btn-secondary">Error logs</a>
-        <button type="submit" class="btn btn-secondary">Sign out</button>
-    </form>
 </header>
 
-@* ADM-003/007: range selector and export. Plain links, so both work without JavaScript. *@
-<nav class="admin-toolbar" aria-label="Reporting window">
-    <span class="admin-toolbar-label" id="range-label">Window</span>
-    <ul class="admin-ranges" aria-labelledby="range-label">
-        @foreach (var range in AdminDashboardOptions.Ranges)
-        {
-            <li>
-                @if (range == _days)
-                {
-                    <a href="/admin?days=@range" aria-current="true" class="is-current">@AdminDashboardOptions.Label(range)</a>
-                }
-                else
-                {
-                    <a href="/admin?days=@range">@AdminDashboardOptions.Label(range)</a>
-                }
-            </li>
-        }
-    </ul>
-    <a class="admin-export" href="/admin/metrics.csv?days=@_days" download>Export CSV</a>
+@* ADM-007: export. The range selector itself moved to AdminLayout, which shares one window
+   across every portal section (FR-032). *@
+<nav class="admin-toolbar" aria-label="Export">
+    <a class="admin-export" href="@AdminNav.WithRange("/admin/metrics.csv", _range)" download>Export CSV</a>
 </nav>
 
-<section class="admin-stats" aria-label="Key metrics">
+@* The headline: four figures for the chosen period, each against the comparison period.
+
+   Deliberately four, and deliberately these. Visits say how much the site was read; visitors say
+   by how many people; downloads are what the site exists for; conversion joins the two. Every
+   other figure on this page explains one of these. *@
+<section class="admin-stats admin-headline" aria-label="Headline figures, @_range.Phrase">
     <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.VisitsToday</p>
-        <p class="admin-stat-label">Visits today</p>
+        <p class="admin-stat-value">@_summary.Headline.Visits.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Visits</p>
+        <Delta Change="@ChangeIndicator.ForCount(_summary.Headline.Visits, _summary.PreviousHeadline.Visits, _comparedWith)" />
     </div>
-    @* ADM-002: the per-day salted IP hash existed so this was countable without storing an IP;
-       nothing had ever used it. *@
     <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.UniqueVisitorsToday</p>
-        <p class="admin-stat-label">Unique today</p>
+        <p class="admin-stat-value">@_summary.Headline.Visitors.ToString("N0", CultureInfo.InvariantCulture)</p>
+        @* Over one day this is exact. Over several it is each day's unique visitors added up --
+           the anonymous identifier cannot link one day to the next -- so the label says so. *@
+        <p class="admin-stat-label">@(_range.IsSingleDay ? "Visitors" : "Visitors (daily, summed)")</p>
+        <Delta Change="@ChangeIndicator.ForCount(_summary.Headline.Visitors, _summary.PreviousHeadline.Visitors, _comparedWith)" />
     </div>
     <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.VisitsLast7Days</p>
+        <p class="admin-stat-value">@_summary.Headline.Downloads.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Downloads</p>
+        <Delta Change="@ChangeIndicator.ForCount(_summary.Headline.Downloads, _summary.PreviousHeadline.Downloads, _comparedWith)" />
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.Headline.ConversionPercent.ToString("0.#", CultureInfo.InvariantCulture)%</p>
+        <p class="admin-stat-label">Conversion</p>
+        <Delta Change="@ChangeIndicator.ForPoints(_summary.Headline.ConversionPercent, _summary.PreviousHeadline.ConversionPercent, _comparedWith)" />
+    </div>
+</section>
+
+<p class="admin-footnote">
+    Compared with @_comparedWith. Conversion is the share of visitors who downloaded that same day.
+    @if (_summary.Headline.DownloadsWithoutVisit > 0)
+    {
+        @* Named, not hidden: otherwise the download count and the conversion rate visibly disagree
+           and the reader cannot tell why. *@
+        <span>
+            @_summary.Headline.DownloadsWithoutVisit.ToString("N0", CultureInfo.InvariantCulture)
+            @(_summary.Headline.DownloadsWithoutVisit == 1 ? "download" : "downloads") came from a direct link
+            with no visit to the site that day, so @(_summary.Headline.DownloadsWithoutVisit == 1 ? "it is" : "they are")
+            counted as downloads but not in conversion.
+        </span>
+    }
+    <a href="@AdminNav.WithRange("/admin/insights", _range)">Conversion by country, source and page →</a>
+</p>
+
+@* Running totals that do not depend on the period, kept but visually secondary. *@
+<section class="admin-stats admin-stats-secondary" aria-label="Totals">
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.DownloadsTotal.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Downloads · all time</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.VisitsToday.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Visits · today</p>
+    </div>
+    <div class="admin-stat">
+        <p class="admin-stat-value">@_summary.VisitsLast7Days.ToString("N0", CultureInfo.InvariantCulture)</p>
         <p class="admin-stat-label">Visits · 7 days</p>
-    </div>
-    <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.VisitsWindow</p>
-        <p class="admin-stat-label">Visits · @_summary.Days days</p>
-    </div>
-    <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.DownloadsWindow</p>
-        <p class="admin-stat-label">Downloads · @_summary.Days days</p>
-    </div>
-    <div class="admin-stat">
-        <p class="admin-stat-value">@_summary.DownloadsTotal</p>
-        <p class="admin-stat-label">Downloads · total</p>
     </div>
     @* Crawlers and scripted clients, shown rather than silently discarded — a spike here
        explains an otherwise quiet week. Excluded from every visitor figure above. *@
     <div class="admin-stat admin-stat-muted">
-        <p class="admin-stat-value">@_summary.AutomatedVisitsWindow</p>
-        <p class="admin-stat-label">Automated · @_summary.Days days</p>
+        <p class="admin-stat-value">@_summary.AutomatedVisitsWindow.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Automated · @_range.Label</p>
     </div>
 </section>
 
-<Chart Title="Visits" Series="_summary.DailyVisits" Secondary="_summary.DailyUniqueVisitors"
-       SecondaryLabel="unique visitors" Days="_summary.Days" IdPrefix="visits" />
+@if (_range.IsSingleDay)
+{
+    @* One day is one bar on a daily chart, which says nothing; split it by hour instead. *@
+    <HourlyChart Title="Visits" Caption="@($"{_range.Phrase}, hour by hour")" Values="_summary.HourlyVisits" IdPrefix="visits" />
+    <HourlyChart Title="Downloads" Caption="@($"{_range.Phrase}, hour by hour")" Values="_summary.HourlyDownloads" IdPrefix="downloads" />
+}
+else
+{
+    <Chart Title="Visits" Series="_summary.DailyVisits" Secondary="_summary.DailyUniqueVisitors"
+           SecondaryLabel="unique visitors" Days="_range.Days" IdPrefix="visits" />
 
-@* ADM-005: downloads previously had only two scalars — the conversion metric that matters most
-   had no trend at all. *@
-<Chart Title="Downloads" Series="_summary.DailyDownloads" Days="_summary.Days" IdPrefix="downloads" />
+    @* ADM-005: downloads previously had only two scalars — the conversion metric that matters most
+       had no trend at all. *@
+    <Chart Title="Downloads" Series="_summary.DailyDownloads" Days="_range.Days" IdPrefix="downloads" />
+}
 
 @* Session shape: what page-view counts alone cannot say. *@
 <section class="admin-stats admin-stats-secondary" aria-label="Engagement">
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.Sessions</p>
-        <p class="admin-stat-label">Sessions · @_summary.Days days</p>
+        <p class="admin-stat-label">Sessions · @_range.Label</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.PagesPerSession.ToString("0.00", CultureInfo.InvariantCulture)</p>
@@ -131,7 +162,7 @@
 
 <div class="admin-tables">
     <section class="admin-panel" aria-labelledby="top-pages-heading">
-        <h2 id="top-pages-heading">Top pages · @_summary.Days days</h2>
+        <h2 id="top-pages-heading">Top pages · @_range.Label</h2>
         @if (_summary.TopPages.Count == 0)
         {
             <p class="admin-empty">No visits recorded yet.</p>
@@ -156,7 +187,7 @@
 
     @* ADM-002: ua_family was recorded on every row and never displayed. *@
     <section class="admin-panel" aria-labelledby="browsers-heading">
-        <h2 id="browsers-heading">Browsers · @_summary.Days days</h2>
+        <h2 id="browsers-heading">Browsers · @_range.Label</h2>
         @if (_summary.BrowserMix.Count == 0)
         {
             <p class="admin-empty">No visits recorded yet.</p>
@@ -208,7 +239,7 @@
     </section>
 
     <section class="admin-panel" aria-labelledby="referrers-heading">
-        <h2 id="referrers-heading">Top referrers · @_summary.Days days</h2>
+        <h2 id="referrers-heading">Top referrers · @_range.Label</h2>
         @if (_summary.TopReferrers.Count == 0)
         {
             <p class="admin-empty">No external referrers recorded yet.</p>
@@ -231,42 +262,42 @@
         }
     </section>
 
-    <MetricTable Id="countries" Heading="@($"Countries · {_summary.Days} days")" KeyHeader="Country"
+    <MetricTable Id="countries" Heading="@($"Countries · {_range.Label}")" KeyHeader="Country"
                  Rows="_summary.Countries" Total="_summary.Countries.Sum(r => r.Count)"
                  Empty="@(_geoAvailable ? "No located visits yet." : "No geo database installed — see Analytics:GeoDatabasePath.")" />
 
-    <MetricTable Id="devices" Heading="@($"Devices · {_summary.Days} days")" KeyHeader="Device"
+    <MetricTable Id="devices" Heading="@($"Devices · {_range.Label}")" KeyHeader="Device"
                  Rows="_summary.Devices" Total="_summary.Devices.Sum(r => r.Count)" Empty="No visits recorded yet." />
 
-    <MetricTable Id="os" Heading="@($"Operating systems · {_summary.Days} days")" KeyHeader="OS"
+    <MetricTable Id="os" Heading="@($"Operating systems · {_range.Label}")" KeyHeader="OS"
                  Rows="_summary.OperatingSystems" Total="_summary.OperatingSystems.Sum(r => r.Count)" Empty="No visits recorded yet." />
 
-    <MetricTable Id="languages" Heading="@($"Languages · {_summary.Days} days")" KeyHeader="Language"
+    <MetricTable Id="languages" Heading="@($"Languages · {_range.Label}")" KeyHeader="Language"
                  Rows="_summary.Languages" Total="_summary.Languages.Sum(r => r.Count)" Empty="No language data recorded yet." />
 
     @* Campaign attribution: what actually connects a download back to the link that produced it. *@
-    <MetricTable Id="campaigns" Heading="@($"Campaigns · {_summary.Days} days")" KeyHeader="Campaign / medium"
+    <MetricTable Id="campaigns" Heading="@($"Campaigns · {_range.Label}")" KeyHeader="Campaign / medium"
                  Rows="_summary.Campaigns" Total="_summary.Campaigns.Sum(r => r.Count)"
                  Empty="No UTM-tagged links seen yet — add ?utm_source=… to a shared link." />
 
-    <MetricTable Id="referrer-urls" Heading="@($"Referring pages · {_summary.Days} days")" KeyHeader="URL"
+    <MetricTable Id="referrer-urls" Heading="@($"Referring pages · {_range.Label}")" KeyHeader="URL"
                  Rows="_summary.ReferrerUrls" Total="_summary.ReferrerUrls.Sum(r => r.Count)"
                  Empty="No external referring pages recorded yet." />
 
-    <MetricTable Id="entry-pages" Heading="@($"Entry pages · {_summary.Days} days")" KeyHeader="Path"
+    <MetricTable Id="entry-pages" Heading="@($"Entry pages · {_range.Label}")" KeyHeader="Path"
                  Rows="_summary.EntryPages" CountHeader="Sessions" Empty="No sessions recorded yet." />
 
-    <MetricTable Id="exit-pages" Heading="@($"Exit pages · {_summary.Days} days")" KeyHeader="Path"
+    <MetricTable Id="exit-pages" Heading="@($"Exit pages · {_range.Label}")" KeyHeader="Path"
                  Rows="_summary.ExitPages" CountHeader="Sessions" Empty="No sessions recorded yet." />
 
-    <MetricTable Id="slow-pages" Heading="@($"Slowest pages · {_summary.Days} days")" KeyHeader="Path"
+    <MetricTable Id="slow-pages" Heading="@($"Slowest pages · {_range.Label}")" KeyHeader="Path"
                  Rows="_summary.SlowestPages" CountHeader="Mean ms"
                  Empty="Not enough samples yet (a page needs at least 3 views)." />
 
     @* ADM-008: broken inbound links. Only 2xx responses were tracked before, so these were
        invisible — and they are the one failure the owner can actually fix. *@
     <section class="admin-panel" aria-labelledby="notfound-heading">
-        <h2 id="notfound-heading">Broken links · @_summary.Days days</h2>
+        <h2 id="notfound-heading">Broken links · @_range.Label</h2>
         @if (_summary.TopNotFound.Count == 0)
         {
             <p class="admin-empty">No missing pages requested — nothing to fix.</p>
@@ -319,14 +350,19 @@
     </section>
 </div>
 
-</div>
 
 @code {
     private AnalyticsSummary _summary = null!;
     private IReadOnlyList<DownloadFileInfo> _files = [];
-    private int _days = AdminDashboardOptions.DefaultDays;
+    private ReportRange _range = ReportRange.Default;
+
+    /// <summary>What the change indicators compare with, in words ("yesterday until 10:00").</summary>
+    private string _comparedWith = "";
     private bool _geoAvailable;
     private int _retentionDays;
+
+    /// <summary>Spec 038: read from the live setting, so this paragraph cannot drift from behaviour.</summary>
+    private int _identifiableRetentionDays;
 
     /// <summary>
     /// ADM-003: reporting window from <c>?days=</c>; clamped, never trusted raw.
@@ -343,13 +379,12 @@
 
     protected override void OnParametersSet()
     {
-        _days = AdminDashboardOptions.NormalizeDays(
-            int.TryParse(Days, NumberStyles.Integer, CultureInfo.InvariantCulture, out var requested)
-                ? requested
-                : null);
+        _range = AdminDashboardOptions.ResolveRange(Days);
         _geoAvailable = Geo.IsAvailable;
         _retentionDays = AnalyticsConfig.Value.RetentionDays;
-        _summary = Store.GetSummary(_days);
+        _identifiableRetentionDays = SiteSettings.Current.IdentifiableRetentionDays;
+        _summary = Store.GetSummary(Store.ResolveWindow(_range));
+        _comparedWith = _summary.Window.ComparisonLabel();
         _files = DownloadsInfo.List(DownloadsConfig.Value.Folder);
     }
 

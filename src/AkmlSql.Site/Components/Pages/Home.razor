@@ -1,4 +1,6 @@
 @page "/"
+@using AkmlSql.Site.Releases
+@inject ReleasesManifest Manifest
 
 @* Spec 034 T014 (US1): landing page per contracts/site-routes.md (FR-001). Site redesign:
    full-bleed hero (gradient mesh + grid backdrop, display headline with gradient accent,
@@ -7,23 +9,35 @@
 
 <PageTitle>AKML SQL — AI-powered SQL development assistance</PageTitle>
 <HeadContent>
-    <meta name="description" content="AKML SQL brings AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance to SSMS 22 and Visual Studio 2026 — replicating and extending the Redgate SQL Prompt feature set." />
+    <meta name="description" content="Schema-aware IntelliSense, formatting, 130+ analysis rules and AI assistance for SQL Server Management Studio 22. Free and open source under the MIT license." />
     <meta property="og:title" content="AKML SQL — AI-powered SQL development assistance" />
-    <meta property="og:description" content="AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SSMS 22 and Visual Studio 2026." />
+    <meta property="og:description" content="AI-powered IntelliSense, formatting, static analysis, refactoring, snippets, SQL history, and AI assistance for SQL Server Management Studio 22." />
 </HeadContent>
 
 <section class="hero" aria-labelledby="hero-heading">
     <div class="hero-backdrop" aria-hidden="true"></div>
     <div class="container">
-        <p class="eyebrow hero-eyebrow">For SSMS 22 + Visual Studio 2026</p>
+        <p class="eyebrow hero-eyebrow">For SQL Server Management Studio 22</p>
         <h1 id="hero-heading">SQL development, <span class="text-gradient">supercharged.</span></h1>
+        @* The old tagline listed seven features in one sentence and ended on "replicating and
+           extending the Redgate SQL Prompt feature set" -- defining the product by someone else's,
+           in the last thing anyone reads. The comparison is a fair argument, so it moved to its own
+           section below where it can be made properly; the hero says what this does for you. *@
         <p class="hero-tagline">
-            AKML SQL brings AI-powered IntelliSense, formatting, static analysis, refactoring,
-            snippets, SQL history, and chat-style assistance to the tools you already use —
-            replicating and extending the Redgate SQL Prompt feature set.
+            Schema-aware IntelliSense, formatting, static analysis and AI assistance —
+            inside the SSMS 22 you already use.
+        </p>
+        <p class="hero-tagline hero-tagline-sub">
+            Free and open source under the MIT license. One installer, no account.
         </p>
         <p class="cta-row hero-cta">
-            <a class="btn btn-primary" href="/download">Download AKML SQL</a>
+            <a class="btn btn-primary btn-lg" href="/download">
+                Download AKML SQL
+                @if (Manifest.Latest is { } latest)
+                {
+                    <span class="btn-sub">Windows · @latest.Version</span>
+                }
+            </a>
             <a class="btn btn-secondary" href="/docs">Browse documentation</a>
         </p>
         <div class="hero-visual">
@@ -42,6 +56,31 @@
 </section>
 
 <div class="page-body container">
+    @* Concrete numbers, because "comprehensive" and "powerful" are what every tool's home page
+       says. These are all verifiable from the docs, which is the point of linking them. *@
+    <HostSupportNotice HeadingId="home-host-support-heading" />
+
+    <section class="proof-strip" aria-label="At a glance">
+        <dl class="proof-list">
+            <div class="proof-item">
+                <dt>130+</dt>
+                <dd><a href="/docs/analysis-rules">analysis rules</a> across 8 categories</dd>
+            </div>
+            <div class="proof-item">
+                <dt>7-stage</dt>
+                <dd><a href="/docs/formatting">formatting pipeline</a> with shareable styles</dd>
+            </div>
+            <div class="proof-item">
+                <dt>SSMS 22</dt>
+                <dd>SQL Server Management Studio 22, one installer</dd>
+            </div>
+            <div class="proof-item">
+                <dt>MIT</dt>
+                <dd>free and open source, no licence server</dd>
+            </div>
+        </dl>
+    </section>
+
     <section aria-labelledby="highlights-heading">
         <p class="eyebrow">Capabilities</p>
         <h2 id="highlights-heading">A complete SQL productivity toolkit</h2>
@@ -84,9 +123,35 @@
         </ul>
     </section>
 
+    <section class="comparison" aria-labelledby="comparison-heading">
+        <p class="eyebrow">Why another SQL tool</p>
+        <h2 id="comparison-heading">Familiar if you have used SQL Prompt</h2>
+        <p class="comparison-lead">
+            AKML SQL deliberately replicates the SQL Prompt feature set — the completions, the
+            formatting styles, the analysis rules — so there is nothing to relearn. It extends it
+            with AI assistance grounded in your actual schema, and a formatter that round-trips
+            SQL Prompt style files.
+        </p>
+        <p class="comparison-lead">
+            The difference that matters: it is MIT-licensed and free, it runs the heavy work
+            out-of-process so a crash cannot take your editor down, and everything it stores stays
+            on your machine.
+        </p>
+    </section>
+
     <section class="cta-banner" aria-labelledby="get-started-heading">
         <h2 id="get-started-heading">Ready to try it?</h2>
-        <p>Free and open source under the MIT license. One installer covers both hosts.</p>
-        <p class="cta-row"><a class="btn btn-primary" href="/download">Download the latest release</a></p>
+        @if (Manifest.Latest is { } release)
+        {
+            <p>
+                Version @release.Version — free and open source under the MIT license.
+                One installer for SQL Server Management Studio 22.
+            </p>
+        }
+        else
+        {
+            <p>Free and open source under the MIT license. One installer for SQL Server Management Studio 22.</p>
+        }
+        <p class="cta-row"><a class="btn btn-primary btn-lg" href="/download">Download the latest release</a></p>
     </section>
 </div>

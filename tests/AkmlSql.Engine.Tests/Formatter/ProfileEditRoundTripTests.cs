@@ -64,12 +64,14 @@ public class ProfileEditRoundTripTests : IDisposable
         Assert.False(get.IsBuiltIn);
         Assert.Contains("akmlFutureRootKey", get.ProfileJson);
 
-        // 3. Merge one edited setting into the raw JSON — the shell merger's output shape.
+        // 3. An imported SQL Prompt style keeps SQL Prompt's document: the editors edit that.
+        Assert.True(get.IsSqlPromptStyle);
         var root = JsonNode.Parse(get.ProfileJson!)!.AsObject();
-        if (root["casing"] is not JsonObject casing)
+        var document = root["sqlPrompt"]!.AsObject();
+        if (document["casing"] is not JsonObject casing)
         {
             casing = new JsonObject();
-            root["casing"] = casing;
+            document["casing"] = casing;
         }
         casing["reservedKeywords"] = "lowercase";
         var merged = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
@@ -81,7 +83,8 @@ public class ProfileEditRoundTripTests : IDisposable
         // 5. Reload: edit applied, identity kept, unknown root key survived, sidecar untouched.
         var reloaded = _profiles.Load(name);
         Assert.Equal(name, reloaded.Metadata.Name);
-        Assert.Equal("lowercase", reloaded.Casing.ReservedKeywords);
+        Assert.Equal("lowercase", reloaded.SqlPrompt!["casing"]!["reservedKeywords"]!.GetValue<string>());
+        Assert.Equal("lowercase", reloaded.Casing.ReservedKeywords); // projection refreshed on save
         Assert.NotNull(reloaded.ExtensionData);
         Assert.True(reloaded.ExtensionData!.ContainsKey("akmlFutureRootKey"));
 

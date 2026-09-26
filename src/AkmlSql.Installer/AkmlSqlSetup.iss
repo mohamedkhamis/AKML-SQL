@@ -1,6 +1,6 @@
 ; ============================================================================
 ; AKML SQL Installer
-; Wizard-based Windows EXE installer for SSMS 22 and VS 2026
+; Wizard-based Windows EXE installer for SQL Server Management Studio 22
 ; Built with Inno Setup 7
 ; ============================================================================
 ;
@@ -20,10 +20,10 @@
 ;     given (/LOG without =), defaults to %TEMP%\Setup Log YYYY-MM-DD #NNN.txt.
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /NOUPDATE /NOTELEMETRY
-;     Install with auto-update and telemetry disabled.
+;     Install with automatic updates and anonymous error reports turned off.
 ;
 ;   AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /FORCECLOSEAPPS
-;     Force-close running SSMS/VS instances before installing. (Redundant in
+;     Force-close running SSMS instances before installing. (Redundant in
 ;     silent mode: silent installs ALWAYS force-close selected running hosts —
 ;     there is no one to answer the prompt, and a still-open IDE respawns the
 ;     engine mid-install, failing the file copy with DeleteFile code 5.)
@@ -34,12 +34,13 @@
 ; Flags:
 ;   /VERYSILENT       No UI, no progress dialog
 ;   /ACCEPTEULA       Accept the EULA (required for silent mode)
-;   /TARGETS=...      Comma-separated target list: ssms22,vs2026
+;   /TARGETS=...      Target list: ssms22 (vs2026 from older scripts is accepted and ignored)
 ;   /LOG[=file]       Write detailed install log (native Inno Setup feature)
-;   /NOUPDATE         Disable built-in auto-update check
-;   /TELEMETRY        Enable anonymous usage telemetry (off by default)
-;   /NOTELEMETRY      Explicitly disable telemetry
-;   /FORCECLOSEAPPS   Force-close running SSMS/VS without prompting (default in silent mode)
+;   /NOUPDATE         Turn automatic updates off and do not create the update-check scheduled task
+;   /NOTELEMETRY      Turn anonymous error reports off (they are on by default)
+;   /TELEMETRY        Turn anonymous error reports on (the default; kept for older scripts)
+;   A silent UPGRADE keeps the user's existing choices for both unless a flag says otherwise.
+;   /FORCECLOSEAPPS   Force-close running SSMS without prompting (default in silent mode)
 ;   /IMPORTSQLPROMPT  Import SQL Prompt styles (only if SQL Prompt config detected)
 ;
 ; TODO T096: On uninstall, restore native SSMS IntelliSense if AKML SQL disabled it.
@@ -54,7 +55,7 @@
   #define MyAppVersion "1.0.0"
 #endif
 #define MyAppPublisher "Mohamed Khamis"
-#define MyAppURL "https://akmlsql.com"
+#define MyAppURL "https://akml.khamis.work"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
 
 ; --- Resolve $version$ in VSIX manifests before [Files] references them ---
@@ -89,8 +90,10 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-AppSupportURL={#MyAppURL}
-AppUpdatesURL={#MyAppURL}
+AppSupportURL={#MyAppURL}/feedback
+AppUpdatesURL={#MyAppURL}/download
+AppContact={#MyAppURL}/feedback
+AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
 ; VersionInfoVersion stamps the compiled installer .EXE's own file-properties
 ; (Details tab in Explorer → "File version" / "Product version"). Inno Setup
 ; requires the 4-segment x.y.z.w form here; our MyAppVersion already matches.
@@ -99,10 +102,14 @@ VersionInfoProductVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
-DefaultDirName={autopf}\{#MyAppName}
+VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
+; New installs: Program Files\AKML SQL (64-bit). An install made by the earlier 32-bit installer
+; stays in its Program Files (x86) folder -- see DefaultInstallDir and MigrateLegacy32BitInstall.
+DefaultDirName={code:DefaultInstallDir}
 DefaultGroupName={#MyAppName}
-LicenseFile=
-InfoBeforeFile=LICENSE.txt
+; A real license page with "I accept" (it used to be an information page with nothing to accept).
+; Silent installs still need /ACCEPTEULA.
+LicenseFile=LICENSE.txt
 ; Keep the installer filename stable — Deploy-Build-Release.ps1 and any
 ; existing download links expect AKMLSQLSetup.exe. The version is embedded
 ; in the EXE's file properties via VersionInfoVersion above.
@@ -113,27 +120,42 @@ SolidCompression=yes
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 UsePreviousAppDir=yes
-; Branded assets, generated from the design canvas artboards (TURN 5/6).
-; icon.ico carries 10 entries (16-256), all using the 5a glyph-only mark — the
-; design keeps the wordmark off the icon because it smudges below ~48px.
-; The wizard images list 100/125/150/200% variants; Inno picks the one matching
-; the current DPI. WizardSmallImageFile renders into a 55x55 box so those must
-; stay square — the design's 497x58 header strip is an NSIS size and has no
-; equivalent control in Inno's modern wizard.
+; 64-bit installer and install mode: every AKML SQL component is 64-bit. Switching modes on its own
+; would install a SECOND copy beside a 32-bit-mode install (Inno only looks for the previous
+; install in the new mode's registry view); DefaultInstallDir / MigrateLegacy32BitInstall take the
+; existing install over instead. Proven with probe installers before this was switched on.
+SetupArchitecture=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+; Windows 10 1809 / Server 2019: the oldest system the updater's notifications support.
+MinVersion=10.0.17763
+; Start-menu folder page: every product installs into "AKML SQL"; one less page to click through.
+DisableProgramGroupPage=yes
+; Always keep a setup log (%TEMP%\Setup Log *.txt) -- the first thing support asks for.
+SetupLogging=yes
+; The akmlsql-update: URL scheme ([Registry]) -- tell Explorer about it.
+ChangesAssociations=yes
+; icon.ico is the original AKML logo. The banner files are that AKML logo (from the 256px
+; icon artwork) rendered square at 100/125/150/200% (55/69/82/110 px): WizardSmallImageFile
+; is drawn in a square area and keeps its aspect ratio. The sidebar is the new design
+; (TURN 6a welcome panel) with 125/150/200% variants. Inno picks the variant matching the DPI.
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
 WizardSmallImageFile=assets\banner.bmp,assets\banner-125.bmp,assets\banner-150.bmp,assets\banner-200.bmp
-WizardStyle=modern
+; Windows 11 look that follows the system's light/dark setting; no bevel lines.
+WizardStyle=modern dynamic windows11 hidebevels
 WizardSizePercent=120
 DisableWelcomePage=no
-UninstallDisplayIcon={app}\AkmlSql.Core.dll
-; T030: Prompt user to close running SSMS/VS instances before installing.
-; Note: AppMutex is not used because SSMS/VS do not create named mutexes that
+; An icon file, not a DLL: AkmlSql.Core.dll carries no icon, so Apps & features showed a blank.
+UninstallDisplayIcon={app}\AKMLSQL.ico
+UninstallDisplayName={#MyAppName}
+; T030: Prompt user to close running SSMS instances before installing.
+; Note: AppMutex is not used because SSMS does not create named mutexes that
 ; we can reliably detect. CloseApplications with CloseApplicationsFilter is the
 ; correct approach — Inno Setup uses the Windows Restart Manager API to detect
 ; which apps hold locks on files being replaced.
 CloseApplications=yes
-CloseApplicationsFilter=Ssms.exe,devenv.exe
+CloseApplicationsFilter=Ssms.exe
 
 ; --- Code signing (off unless a thumbprint is supplied) ------------------------------
 ; SmartScreen builds reputation from the SIGNATURE, not the download domain: an unsigned
@@ -160,7 +182,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\AkmlSql.Updater\bin\Release\net10.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\AkmlSql.Updater\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
+; Icon for Apps & features, the Start-menu shortcuts and the akmlsql-update: scheme.
+Source: "assets\icon.ico"; DestDir: "{app}"; DestName: "AKMLSQL.ico"; Flags: ignoreversion
+; Registers / removes the update-check scheduled task (see [Run] / [UninstallRun]).
+Source: "update-task.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion
 ; Engine is SelfContained + PublishSingleFile=false — deploy ALL published output
 Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\*"; DestDir: "{app}\Engine"; Flags: ignoreversion recursesubdirs
 Source: "..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -171,14 +197,51 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22E
 Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
 
-; VS 2026 (x64) extension files
-Source: "..\AkmlSql.VS2026\bin\Release\net472\*.dll"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
-Source: "..\AkmlSql.VS2026\AkmlSql.VS2026.pkgdef"; DestDir: "{code:GetVS2026ExtDir}"; Check: CheckVS2026; Flags: ignoreversion
-Source: "generated\AkmlSql.VS2026\extension.vsixmanifest"; DestDir: "{code:GetVS2026ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckVS2026; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName} Settings"; Filename: "{app}\AkmlSql.Core.dll"; Comment: "AKML SQL"
-Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
+; "Settings" pointed at AkmlSql.Core.dll, which cannot be opened -- settings live inside SSMS
+; (Tools > AKML SQL > Options). The update shortcut's AppUserModelID is what lets the updater
+; show Windows notifications at all: an unpackaged app's notifications are attributed through a
+; Start-menu shortcut carrying its ID. Keep it equal to Constants.AppUserModelId.
+Name: "{group}\Check for {#MyAppName} updates"; Filename: "{app}\AkmlSql.Updater.exe"; Parameters: "--check-now"; \
+    IconFilename: "{app}\AKMLSQL.ico"; AppUserModelID: "AKML.AKMLSQL"; Comment: "Check for a newer version of AKML SQL now"
+Name: "{group}\{#MyAppName} documentation"; Filename: "{#MyAppURL}/docs"
+Name: "{group}\Report a problem with {#MyAppName}"; Filename: "{#MyAppURL}/feedback"
+Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\AKMLSQL.ico"
+
+[Registry]
+; akmlsql-update: -- what the update notification's "Install now" and body click run. The URL
+; carries no data the updater acts on: it only ever launches the installer it downloaded and
+; verified itself, verified again right before launch, with the normal installer UI.
+Root: HKLM; Subkey: "Software\Classes\akmlsql-update"; ValueType: string; ValueName: ""; ValueData: "URL:AKML SQL update"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\akmlsql-update"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKLM; Subkey: "Software\Classes\akmlsql-update\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\AKMLSQL.ico"
+Root: HKLM; Subkey: "Software\Classes\akmlsql-update\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\AkmlSql.Updater.exe"" --install ""%1"""
+
+[Run]
+; Automatic updates: the "AKML SQL\Update Check" scheduled task (daily and at sign-in) downloads,
+; verifies and announces updates; it never installs. Present only while automatic updates are on
+; -- unticking the option on an upgrade removes an existing task.
+Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\update-task.ps1"" -Action Add -UpdaterPath ""{app}\AkmlSql.Updater.exe"""; \
+    StatusMsg: "Scheduling automatic update checks..."; Check: AutoUpdateWanted; Flags: runhidden
+Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\update-task.ps1"" -Action Remove"; \
+    Check: not AutoUpdateWanted; Flags: runhidden
+; The options page's choices, written by the updater AS THE SIGNED-IN USER -- not by this elevated
+; installer -- so they land in that user's own %AppData%\AKML SQL\config.json.
+Filename: "{app}\AkmlSql.Updater.exe"; Parameters: "--configure {code:PreferenceArgs}"; \
+    StatusMsg: "Saving your preferences..."; Check: ShouldWritePreferences; Flags: runasoriginaluser runhidden
+; Finish page.
+Filename: "{code:WebSiteUrl}"; Description: "Open AKML SQL Web"; Check: IsWebSiteHosted; \
+    Flags: postinstall shellexec skipifsilent nowait
+Filename: "{#MyAppURL}/download"; Description: "See what's new in {#MyAppName} {#MyAppVersion}"; \
+    Flags: postinstall shellexec skipifsilent nowait unchecked
+
+[UninstallRun]
+Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\update-task.ps1"" -Action Remove"; \
+    RunOnceId: "RemoveUpdateTask"; Flags: runhidden
 
 [Tasks]
 Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt"; GroupDescription: "Migration:"; Check: SqlPromptConfigExists; Flags: unchecked
@@ -186,7 +249,11 @@ Name: "importsqlprompt"; Description: "Import formatting styles from &SQL Prompt
 [UninstallDelete]
 ; Clean up extension directories for selected targets only
 Type: filesandordirs; Name: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22
-Type: filesandordirs; Name: "{code:GetVS2026ExtDir}"; Check: CheckVS2026
+; An install taken over from the 32-bit installer starts a fresh uninstall log, which does not
+; record that {app} was created (it already existed) -- without these the folder, and any file
+; only an old version installed, would be left behind.
+Type: filesandordirs; Name: "{app}\Engine"
+Type: dirifempty; Name: "{app}"
 
 #include "environment-scanner.iss"
 
@@ -209,6 +276,16 @@ var
   AutoUpdateEnabled: Boolean;
   TelemetryEnabled: Boolean;
   ImportSqlPromptEnabled: Boolean;
+  // True when this run should write the two preferences for the signed-in user (a new install,
+  // an interactive run -- the page shows their current values -- or an explicit silent flag).
+  PreferencesChosen: Boolean;
+  // Set when an install made by the earlier 32-bit installer is being taken over (see
+  // MigrateLegacy32BitInstall); read again at ssPostInstall and on failure.
+  LegacyInstallDir: String;
+  LegacyUninstallerRetired: Boolean;
+  InstallSucceeded: Boolean;
+  EnvEmptyLabel: TNewStaticText;
+  OptionsNote: TNewStaticText;
   // PR-249 review follow-up: set by TerminateAkmlBackgroundProcesses when the AkmlSqlWebEngine
   // service existed AND was running before install; read by CurStepChanged(ssPostInstall) to
   // restart it on a desktop-only upgrade (web component unticked, so Web_PostInstall won't).
@@ -380,6 +457,170 @@ begin
     Log('No SQL Prompt style files found to stage.');
 end;
 
+// --- 32-bit install takeover ---------------------------------------------------------------
+//
+// Installs up to 1.26.09xx were made by a 32-bit installer in 32-bit mode: files under Program
+// Files (x86), uninstall entry in the 32-bit registry view. This installer is 64-bit and Inno only
+// looks for a previous install in the 64-bit view, so on its own it would install a SECOND copy
+// under Program Files and leave two entries in Apps & features. Instead it takes the old install
+// over: same folder, a fresh uninstall log (the old one mixes 32- and 64-bit records and then
+// cannot remove itself), and the old 32-bit uninstall entry removed once the install succeeds.
+// Every step here was proven with small probe installers (upgrade, re-upgrade, uninstall, fresh).
+
+const
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}_is1';
+
+function Legacy32BitInstallDir(var Dir: String): Boolean;
+begin
+  Result := (not RegKeyExists(HKLM64, UninstallKey))
+            and RegQueryStringValue(HKLM32, UninstallKey, 'InstallLocation', Dir)
+            and (Dir <> '');
+  if Result then
+    Dir := RemoveBackslashUnlessRoot(Dir);
+end;
+
+// [Setup] DefaultDirName: the old folder when taking over a 32-bit install, else Program Files.
+function DefaultInstallDir(Param: String): String;
+begin
+  if not Legacy32BitInstallDir(Result) then
+    Result := ExpandConstant('{autopf}\{#MyAppName}');
+end;
+
+// The components chosen last time live in the old 32-bit entry, which this installer cannot see
+// on its own -- without this, an upgrade would quietly re-select the web edition for someone who
+// had left it out.
+procedure RestoreLegacyComponents;
+var
+  Selected, Deselected, Negated, Item: String;
+  P: Integer;
+begin
+  if not RegQueryStringValue(HKLM32, UninstallKey, 'Inno Setup: Selected Components', Selected) then
+    Exit;
+  RegQueryStringValue(HKLM32, UninstallKey, 'Inno Setup: Deselected Components', Deselected);
+
+  Negated := '';
+  while Deselected <> '' do
+  begin
+    P := Pos(',', Deselected);
+    if P = 0 then P := Length(Deselected) + 1;
+    Item := Trim(Copy(Deselected, 1, P - 1));
+    Delete(Deselected, 1, P);
+    if Item <> '' then
+    begin
+      if Negated <> '' then Negated := Negated + ',';
+      Negated := Negated + '!' + Item;
+    end;
+  end;
+
+  if Selected <> '' then WizardSelectComponents(Selected);
+  if Negated <> '' then WizardSelectComponents(Negated);
+  Log('Restored components from the 32-bit install: [' + Selected + '] deselected [' + Negated + ']');
+end;
+
+// Before any file is copied: set the old uninstaller aside, so this install starts its own log.
+procedure MigrateLegacy32BitInstall;
+var
+  Dir: String;
+begin
+  if not Legacy32BitInstallDir(Dir) then
+    Exit;
+  LegacyInstallDir := Dir;
+  if FileExists(AddBackslash(Dir) + 'unins000.dat') then
+  begin
+    RenameFile(AddBackslash(Dir) + 'unins000.dat', AddBackslash(Dir) + 'unins000.dat.x86');
+    RenameFile(AddBackslash(Dir) + 'unins000.exe', AddBackslash(Dir) + 'unins000.exe.x86');
+    LegacyUninstallerRetired := True;
+    Log('Taking over the 32-bit install in ' + Dir + ': old uninstaller set aside');
+  end;
+end;
+
+// After a successful install: the old entry and uninstaller go; the new 64-bit entry manages all.
+procedure FinishLegacy32BitMigration;
+begin
+  if LegacyInstallDir = '' then
+    Exit;
+  RegDeleteKeyIncludingSubkeys(HKLM32, UninstallKey);
+  DeleteFile(AddBackslash(LegacyInstallDir) + 'unins000.dat.x86');
+  DeleteFile(AddBackslash(LegacyInstallDir) + 'unins000.exe.x86');
+  Log('32-bit install taken over; its uninstall entry removed');
+end;
+
+// Setup failed or was cancelled after the old uninstaller was set aside: put it back, so the
+// existing install can still be uninstalled.
+procedure DeinitializeSetup;
+begin
+  if LegacyUninstallerRetired and not InstallSucceeded then
+  begin
+    RenameFile(AddBackslash(LegacyInstallDir) + 'unins000.dat.x86', AddBackslash(LegacyInstallDir) + 'unins000.dat');
+    RenameFile(AddBackslash(LegacyInstallDir) + 'unins000.exe.x86', AddBackslash(LegacyInstallDir) + 'unins000.exe');
+    Log('Setup did not finish: the 32-bit install''s uninstaller was restored');
+  end;
+end;
+
+// --- Preferences: read the signed-in user's current values ------------------------------------
+
+// A deliberately small reader for one boolean in config.json: '"key"' then ':' then true/false.
+// Returns False when the file or the key is absent (the caller keeps its default).
+function ReadConfigBool(const Json, Key: String; var Value: Boolean): Boolean;
+var
+  P, I: Integer;
+  Rest: String;
+begin
+  Result := False;
+  P := Pos('"' + Key + '"', Json);
+  if P = 0 then Exit;
+  Rest := Copy(Json, P + Length(Key) + 2, 40);
+  I := Pos(':', Rest);
+  if I = 0 then Exit;
+  Rest := Trim(Copy(Rest, I + 1, 10));
+  if Copy(Rest, 1, 4) = 'true' then begin Value := True; Result := True; end
+  else if Copy(Rest, 1, 5) = 'false' then begin Value := False; Result := True; end;
+end;
+
+// config.json of the user running setup ({userappdata} is theirs: setup elevates the same account).
+function ExistingConfig(var Json: String): Boolean;
+var
+  Raw: AnsiString;
+begin
+  Result := LoadStringFromFile(ExpandConstant('{userappdata}\AKML SQL\config.json'), Raw);
+  if Result then Json := String(Raw);
+end;
+
+function OnOff(const Value: Boolean): String;
+begin
+  if Value then Result := 'on' else Result := 'off';
+end;
+
+// [Run] --configure arguments.
+function PreferenceArgs(Param: String): String;
+begin
+  Result := 'auto-update=' + OnOff(AutoUpdateEnabled) + ' error-reports=' + OnOff(TelemetryEnabled);
+end;
+
+function ShouldWritePreferences: Boolean;
+begin
+  Result := PreferencesChosen;
+end;
+
+function AutoUpdateWanted: Boolean;
+begin
+  Result := AutoUpdateEnabled;
+end;
+
+// Finish page: the web edition's address, when this run hosts it on IIS.
+function IsWebSiteHosted: Boolean;
+begin
+  Result := IsWebSelected() and WizardIsComponentSelected('web\iis') and (WebHostPage.SelectedValueIndex = 0);
+end;
+
+function WebSiteUrl(Param: String): String;
+begin
+  if WebIisPort = 80 then
+    Result := 'http://localhost/'
+  else
+    Result := 'http://localhost:' + IntToStr(WebIisPort) + '/';
+end;
+
 // --- Wizard Initialization ---
 
 procedure InitializeWizard;
@@ -387,33 +628,78 @@ begin
   // Run environment scan
   RunFullScan;
 
-  // Create Environment Scan page (Screen 3)
-  EnvPage := CreateCustomPage(wpInfoBefore,
-    'Detected Environments',
-    'Select which IDEs should have AKML SQL installed.');
+  // Environment page, right after the license.
+  EnvPage := CreateCustomPage(wpLicense,
+    'Where to install',
+    'Choose the SQL tools that should get AKML SQL.');
 
   EnvCheckListBox := TNewCheckListBox.Create(EnvPage);
   EnvCheckListBox.Parent := EnvPage.Surface;
   EnvCheckListBox.Left := 0;
   EnvCheckListBox.Top := 0;
   EnvCheckListBox.Width := EnvPage.SurfaceWidth;
-  EnvCheckListBox.Height := EnvPage.SurfaceHeight - 30;
+  EnvCheckListBox.Height := EnvPage.SurfaceHeight - ScaleY(40);
   EnvCheckListBox.Flat := True;
   EnvCheckListBox.ShowLines := True;
 
   PopulateEnvCheckList;
   EnvCheckListBox.OnClickCheck := @EnvCheckListBoxClickCheck;
 
-  // Create Additional Options page (Screen 5)
-  OptionsPage := CreateInputOptionPage(wpSelectDir,
-    'Additional Options',
-    'Configure AKML SQL behavior.',
-    'Select the options you prefer:',
+  // No SSMS 22: say so, and let the web edition be installed on its own
+  // (this page used to refuse to continue with nothing ticked, so a server could never get it).
+  EnvEmptyLabel := TNewStaticText.Create(EnvPage);
+  EnvEmptyLabel.Parent := EnvPage.Surface;
+  EnvEmptyLabel.Left := 0;
+  EnvEmptyLabel.Top := EnvCheckListBox.Top + EnvCheckListBox.Height + ScaleY(8);
+  EnvEmptyLabel.Width := EnvPage.SurfaceWidth;
+  EnvEmptyLabel.AutoSize := False;
+  EnvEmptyLabel.WordWrap := True;
+  EnvEmptyLabel.Height := ScaleY(32);
+  if TargetCount = 0 then
+  begin
+    EnvCheckListBox.Visible := False;
+    EnvEmptyLabel.Top := 0;
+    EnvEmptyLabel.Height := ScaleY(60);
+    EnvEmptyLabel.Caption := 'SQL Server Management Studio 22 was not found on this computer.' + #13#10 + #13#10 +
+      'You can still install the AKML SQL web edition. Install SSMS 22 first and run setup again to add AKML SQL to it.';
+  end
+  else
+    EnvEmptyLabel.Caption := 'AKML SQL works in SQL Server Management Studio 22. Untick it to install only the web edition.';
+
+  // Options page. Error reports are on by default for a new install; an upgrade shows the user's
+  // current choices (from their config.json), so nothing changes unless they change it.
+  // Last page before Ready: after the components and the web edition's pages (custom pages placed
+  // after wpSelectDir would come BEFORE the components page).
+  OptionsPage := CreateInputOptionPage(wpSelectTasks,
+    'Updates and error reports',
+    'Keep AKML SQL current and help fix what goes wrong.',
+    'You can change both later in SSMS: Tools > AKML SQL > Options > General.',
     False, False);
-  OptionsPage.Add('Check for updates automatically (once per 24h)');
-  OptionsPage.Add('Send anonymous usage telemetry (no PII)');
-  OptionsPage.Values[0] := True;   // Auto-update ON by default
-  OptionsPage.Values[1] := False;  // Telemetry OFF by default
+  OptionsPage.Add('Check for updates automatically, and download them in the background');
+  OptionsPage.Add('Send anonymous error reports (recommended)');
+  OptionsPage.Values[0] := AutoUpdateEnabled;
+  OptionsPage.Values[1] := TelemetryEnabled;
+
+  // The option list fills the whole page by default, which would push the note out of sight.
+  OptionsPage.CheckListBox.Height := ScaleY(52);
+
+  OptionsNote := TNewStaticText.Create(OptionsPage);
+  OptionsNote.Parent := OptionsPage.Surface;
+  OptionsNote.Left := 0;
+  OptionsNote.Top := OptionsPage.CheckListBox.Top + OptionsPage.CheckListBox.Height + ScaleY(12);
+  OptionsNote.Width := OptionsPage.SurfaceWidth;
+  OptionsNote.AutoSize := False;
+  OptionsNote.WordWrap := True;
+  OptionsNote.Height := ScaleY(90);
+  OptionsNote.Caption :=
+    'Updates are downloaded and checked in the background; you are told when one is ready, and nothing is installed without your OK.' + #13#10 + #13#10 +
+    'An error report is the error message and where in AKML SQL it happened -- never your queries or data. ' +
+    'User, computer, server and database names are removed before it is sent. Details: {#MyAppURL}/privacy#app';
+
+  // Taking over a 32-bit install: bring back what was installed last time.
+  if Legacy32BitInstallDir(LegacyInstallDir) then
+    RestoreLegacyComponents;
+  LegacyInstallDir := '';
 
   // Spec 026 (M4 closure) FR-002: create the Web-edition wizard pages (Hosting / Network /
   // IIS Port / Bridge Port / install-summary). No-op visually when the web component is unticked
@@ -446,6 +732,8 @@ begin
 end;
 
 function InitializeSetup: Boolean;
+var
+  ConfigText: String;
 begin
   Result := True;
 
@@ -477,11 +765,22 @@ begin
     ApplySilentTargets;
   end;
 
-  // Apply /NOTELEMETRY, /TELEMETRY, and /NOUPDATE
-  AutoUpdateEnabled := ExpandConstant('{param:NOUPDATE|}') = '';
-  TelemetryEnabled := ExpandConstant('{param:TELEMETRY|}') <> ''; // Off by default, enable with /TELEMETRY
-  if ExpandConstant('{param:NOTELEMETRY|}') <> '' then
-    TelemetryEnabled := False;
+  // Both on by default. An existing user's config.json wins over the defaults (an upgrade keeps
+  // their choice), and an explicit flag wins over both.
+  AutoUpdateEnabled := True;
+  TelemetryEnabled := True;
+  if ExistingConfig(ConfigText) then
+  begin
+    ReadConfigBool(ConfigText, 'autoUpdateEnabled', AutoUpdateEnabled);
+    ReadConfigBool(ConfigText, 'telemetryEnabled', TelemetryEnabled);
+    PreferencesChosen := not WizardSilent;   // interactive: the page shows them; save what it says
+  end
+  else
+    PreferencesChosen := True;               // first install for this user: record the defaults
+
+  if CmdLineParamExists('NOUPDATE') then begin AutoUpdateEnabled := False; PreferencesChosen := True; end;
+  if CmdLineParamExists('TELEMETRY') then begin TelemetryEnabled := True; PreferencesChosen := True; end;
+  if CmdLineParamExists('NOTELEMETRY') then begin TelemetryEnabled := False; PreferencesChosen := True; end;
 
   // Apply /IMPORTSQLPROMPT for silent mode SQL Prompt style import
   ImportSqlPromptEnabled := ExpandConstant('{param:IMPORTSQLPROMPT|}') <> '';
@@ -515,6 +814,7 @@ begin
   begin
     AutoUpdateEnabled := OptionsPage.Values[0];
     TelemetryEnabled := OptionsPage.Values[1];
+    PreferencesChosen := True;
   end;
 end;
 
@@ -527,7 +827,9 @@ var
 begin
   Result := True;
 
-  if CurPageID = EnvPage.ID then
+  // No IDE ticked is allowed -- the web edition can be installed on its own -- but installing
+  // nothing at all is not: checked once the components are known.
+  if CurPageID = wpSelectComponents then
   begin
     AnySelected := False;
     for I := 0 to EnvCheckListBox.Items.Count - 1 do
@@ -539,9 +841,11 @@ begin
       end;
     end;
 
-    if not AnySelected then
+    if not AnySelected and not IsWebSelected() then
     begin
-      MsgBox('Please select at least one target environment.', mbError, MB_OK);
+      MsgBox('There is nothing to install.' + #13#10 + #13#10 +
+        'Tick the web edition here, or go back and choose SQL Server Management Studio 22.',
+        mbError, MB_OK);
       Result := False;
     end;
   end;
@@ -556,24 +860,21 @@ end;
 // host the Web_Skip call that hides the web-edition pages when the web component is unticked
 // (and for service-only / silent installs). Returns False for all non-web pages.
 function ShouldSkipPage(PageID: Integer): Boolean;
+var
+  Dir: String;
 begin
+  // Taking over a 32-bit install is an upgrade, and like any upgrade it keeps its folder without
+  // asking. Showing the page also made Inno warn "the folder already exists -- install anyway?",
+  // because to this installer's registry view the install looks new.
+  if (PageID = wpSelectDir) and Legacy32BitInstallDir(Dir) then
+  begin
+    Result := True;
+    Exit;
+  end;
   Result := Web_Skip(PageID);
 end;
 
 // --- Post-Install Actions ---
-
-// Helper: Generate a pseudo-UUID v4 from timestamp and random values
-function GenerateInstallId: String;
-var
-  S: String;
-begin
-  S := GetDateTimeString('yyyymmddhhnnss', #0, #0);
-  Result := Copy(S, 1, 8) + '-'
-    + IntToStr(Random(9999)) + '-4'
-    + IntToStr(Random(999)) + '-'
-    + IntToStr(8000 + Random(3999)) + '-'
-    + IntToStr(Random(999999999999));
-end;
 
 // Helper: Clear MEF component model cache for VS with wildcard prefix (e.g. '16.0').
 // SAFETY: Only clears ComponentModelCache (MEF composition cache).
@@ -643,17 +944,47 @@ begin
   end;
 end;
 
+// Releases before SSMS-only shipped an extension for Visual Studio 2026. It is removed so VS stops
+// loading a copy that no longer matches the engine (and stops starting that engine, which would keep
+// {app}\Engine locked on the next upgrade). PrepareToInstall has already closed Visual Studio.
+procedure RemoveLegacyVSExtensions;
+var
+  I: Integer;
+begin
+  if LegacyVSExtCount = 0 then
+    Exit;
+  for I := 0 to LegacyVSExtCount - 1 do
+  begin
+    DelTree(LegacyVSExtDirs[I], True, True, True);
+    if DirExists(LegacyVSExtDirs[I]) then
+      Log('WARNING: could not fully remove the old Visual Studio extension: ' + LegacyVSExtDirs[I])
+    else
+      Log('Removed the old Visual Studio extension: ' + LegacyVSExtDirs[I]);
+    // Tell Visual Studio its extension set changed.
+    SaveStringToFile(ExtractFilePath(RemoveBackslashUnlessRoot(LegacyVSExtDirs[I])) + 'extensions.configurationchanged',
+      GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0), False);
+  end;
+  ClearVSMefCaches('18.0');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   I: Integer;
   ConfigDir: String;
   ConfigPath: String;
-  ConfigJson: String;
-  TelemetryStr: String;
   ResultCode: Integer;
 begin
+  if CurStep = ssInstall then
+  begin
+    MigrateLegacy32BitInstall;
+    RemoveLegacyVSExtensions;
+  end;
+
   if CurStep = ssPostInstall then
   begin
+    InstallSucceeded := True;
+    FinishLegacy32BitMigration;
+
     // Clear MEF caches for selected targets using proper directory enumeration
     Log('Clearing MEF component caches...');
 
@@ -663,12 +994,6 @@ begin
       ClearSSMSMefCaches('21.0');
     if IsTargetSelected('22') then
       ClearSSMSMefCaches('22.0');
-    if IsTargetSelected('2019') then
-      ClearVSMefCaches('16.0');
-    if IsTargetSelected('2022') then
-      ClearVSMefCaches('17.0');
-    if IsTargetSelected('2026') then
-      ClearVSMefCaches('18.0');
 
     Log('MEF caches cleared.');
 
@@ -686,35 +1011,16 @@ begin
       end;
     end;
 
-    // Write config.json only if it does not already exist (preserve on upgrade)
+    // config.json is no longer written here: the two preferences are recorded by
+    // "AkmlSql.Updater.exe --configure" as the signed-in user ([Run]), and everything else -- the
+    // anonymous install id included (a real GUID, not the old timestamp+Random() string) -- is
+    // created by the app on first use.
     ConfigDir := ExpandConstant('{userappdata}') + '\AKML SQL';
-    ConfigPath := ConfigDir + '\config.json';
-    ForceDirectories(ConfigDir);
-
-    if not FileExists(ConfigPath) then
-    begin
-      if TelemetryEnabled then
-        TelemetryStr := 'true'
-      else
-        TelemetryStr := 'false';
-
-      ConfigJson := '{"configVersion":1,"autoUpdateEnabled":';
-      if AutoUpdateEnabled then
-        ConfigJson := ConfigJson + 'true'
-      else
-        ConfigJson := ConfigJson + 'false';
-      ConfigJson := ConfigJson + ',"telemetryEnabled":' + TelemetryStr
-        + ',"installId":"' + GenerateInstallId + '"'
-        + ',"installedTargets":[]}';
-
-      SaveStringToFile(ConfigPath, ConfigJson, False);
-      Log('Default configuration written to ' + ConfigPath);
-    end
-    else
-      Log('Existing config.json preserved at ' + ConfigPath);
-
-    // Create logs directory
     ForceDirectories(ConfigDir + '\logs');
+
+    // The update this run just installed is no longer "ready": without this, SSMS would offer to
+    // install the version already running.
+    DeleteFile(ConfigDir + '\update-available.json');
 
     // T034: Stage SQL Prompt styles for engine import if user opted in
     // In interactive mode, check the task checkbox; in silent mode, check the /IMPORTSQLPROMPT flag
@@ -800,9 +1106,6 @@ begin
     ClearSSMSMefCaches('20.0');
     ClearSSMSMefCaches('21.0');
     ClearSSMSMefCaches('22.0');
-    ClearVSMefCaches('16.0');
-    ClearVSMefCaches('17.0');
-    ClearVSMefCaches('18.0');
 
     // Ask about settings/log removal. SQL history, snippets and saved styles are ALWAYS kept —
     // see RemoveSettingsPreservingUserData (an upgrade's silent uninstall would otherwise default
@@ -838,7 +1141,7 @@ end;
 
 // The AKML engine/updater/analyzer are HEADLESS out-of-process helpers deployed under {app}.
 // The engine in particular is spawned by the shell but OUTLIVES it — it can linger as an orphan
-// after SSMS/VS close — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
+// after SSMS closes — keeping Engine\*.dll memory-mapped. If any is still alive when Inno starts
 // copying files, replacement fails with "DeleteFile failed; code 5. Access is denied." They hold no
 // user state, so terminate them silently. MUST run AFTER the IDE hosts are closed: a live shell
 // would otherwise immediately respawn the engine and re-lock the files.
@@ -901,23 +1204,20 @@ begin
   RunningList := '';
   KillSsms := False;
   KillDevenv := False;
-  // Silent installs (the SSMS/VS "Check for updates" flow runs the installer with its normal UI,
+  // Silent installs (the SSMS "Check for updates" flow runs the installer with its normal UI,
   // but unattended /VERYSILENT deploys have no one to answer either) cannot show the close-apps
-  // prompt below — and skipping the close is fatal: a still-running SSMS/VS shell RESPAWNS the
+  // prompt below — and skipping the close is fatal: a still-running SSMS RESPAWNS the
   // engine the moment TerminateAkmlBackgroundProcesses kills it, re-locking Engine\*.dll so the
   // file copy dies with "DeleteFile failed; code 5". Force-close the selected running hosts in
   // silent mode, exactly as /FORCECLOSEAPPS does interactively-by-request.
   ForceClose := (ExpandConstant('{param:FORCECLOSEAPPS|}') <> '') or WizardSilent;
 
-  // First pass: flag WHICH IDE families need closing (selected + running only).
+  // First pass: flag WHICH hosts need closing (selected + running only).
   for I := 0 to TargetCount - 1 do
   begin
     if Targets[I].IsSelected and Targets[I].IsRunning then
     begin
-      if Pos('SSMS', Targets[I].Name) > 0 then
-        KillSsms := True
-      else
-        KillDevenv := True;
+      KillSsms := True;
 
       if not ForceClose then
       begin
@@ -925,6 +1225,19 @@ begin
           RunningList := RunningList + ', ';
         RunningList := RunningList + Targets[I].Name;
       end;
+    end;
+  end;
+
+  // Visual Studio is no longer supported, but one still carrying the old AKML SQL extension keeps
+  // starting the engine (locking Engine\*.dll) and holds the extension files setup removes.
+  if (LegacyVSExtCount > 0) and IsProcessRunning('devenv.exe') then
+  begin
+    KillDevenv := True;
+    if not ForceClose then
+    begin
+      if RunningList <> '' then
+        RunningList := RunningList + ', ';
+      RunningList := RunningList + 'Visual Studio (to remove the old AKML SQL extension)';
     end;
   end;
 

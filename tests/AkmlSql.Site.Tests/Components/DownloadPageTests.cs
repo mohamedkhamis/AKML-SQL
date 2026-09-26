@@ -1,5 +1,6 @@
 using AkmlSql.Site.Components.Pages;
 using AkmlSql.Site.Releases;
+using AkmlSql.Site.Settings;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -35,7 +36,7 @@ public sealed class DownloadPageTests : IDisposable
         {
             Version = version,
             ReleasedAt = DateOnly.Parse(releasedAt),
-            SupportedHosts = ["SSMS 22", "VS 2026"],
+            SupportedHosts = ["SSMS 22"],
             DownloadUrl = $"downloads/AKMLSQLSetup-{version}.exe",
             Sha256Hash = sha,
             NotesSummary = notesSummary,
@@ -78,7 +79,21 @@ public sealed class DownloadPageTests : IDisposable
         var ctx = new BunitContext();
         ctx.Services.AddSingleton(manifest);
         ctx.Services.AddSingleton(new ReleaseAvailability(_downloads.Path));
+        // Spec 038 T033: the page reads the owner's release-visibility choice. A real temp-file
+        // store keeps these tests exercising the production path; "All" preserves the pre-038
+        // behaviour these assertions were written against.
+        ctx.Services.AddSingleton(NewSettings(ReleaseVisibilityMode.All));
         return ctx;
+    }
+
+    /// <summary>A temp-file settings store pinned to one visibility choice.</summary>
+    private SiteSettingsStore NewSettings(ReleaseVisibilityMode mode, int count = 3)
+    {
+        var store = new SiteSettingsStore(Path.Combine(_downloads.Path, "settings.db"));
+        store.CreateTableIfMissing();
+        store.Load();
+        store.Save(store.Current with { Visibility = mode, VisibilityCount = count }, "test");
+        return store;
     }
 
     [Fact]
@@ -91,7 +106,6 @@ public sealed class DownloadPageTests : IDisposable
         Assert.Contains("1.1.0", cut.Markup);
         Assert.Contains("August 27, 2026", cut.Markup);
         Assert.Contains("SSMS 22", cut.Markup);
-        Assert.Contains("VS 2026", cut.Markup);
         Assert.Contains("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", cut.Markup);
         Assert.Contains("Format Styles window and autocomplete gate.", cut.Markup);
 
@@ -100,6 +114,23 @@ public sealed class DownloadPageTests : IDisposable
 
         var notesLink = cut.Find("a[href='https://github.com/mohamedkhamis/AKML-SQL/releases/tag/v1.1.0']");
         Assert.NotNull(notesLink);
+    }
+
+    [Fact]
+    public void Page_AnnouncesSsms22Only_AndOffersNoVisualStudioInstall()
+    {
+        using var ctx = NewCtx(TwoReleaseManifest());
+
+        var cut = ctx.Render<Download>();
+
+        Assert.Contains("SQL Server Management Studio 22", cut.Find("#latest-release-heading").TextContent);
+        var notice = cut.Find(".host-notice");
+        Assert.Contains("SQL Server Management Studio 22 only", notice.TextContent);
+        Assert.Contains("removes the", notice.TextContent);
+
+        // Apart from the announcement, nothing on the page offers Visual Studio.
+        notice.Remove();
+        Assert.DoesNotContain("Visual Studio", cut.Find(".page-body").TextContent);
     }
 
     [Fact]

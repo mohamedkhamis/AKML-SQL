@@ -30,6 +30,13 @@ public class ColumnProvider : ICompletionProvider
     public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
 
     /// <summary>
+    /// The IntelliSense bracket option (<c>IntelliSense.Qualification.BracketMode</c>) for inserted
+    /// column names — the same one table completions follow. Aliases are bracketed only when they
+    /// must be: they are not object names. Set by <see cref="CompletionEngine"/> before each request.
+    /// </summary>
+    public BracketMode BracketMode { get; set; } = BracketMode.WhenRequired;
+
+    /// <summary>
     /// Spec 030 T036 / FR-016 — limits the <see cref="ColumnSuggestionScope.All"/> column list
     /// to schemas in this set (case-insensitive). Empty = all schemas in scope. Mirrors the same
     /// property on <see cref="ObjectProvider"/>; pushed per request by <see cref="CompletionEngine"/>.
@@ -187,7 +194,12 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText   = displayText,
-                        InsertText    = displayText,
+                        // Display and dedup stay unquoted; only what is written into the query is
+                        // bracketed. A CTE column aliased `AS [Total Sales]` needs them as much as a
+                        // table does.
+                        InsertText    = multiTable
+                            ? FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), colName, BracketMode)
+                            : SqlIdentifier.Apply(colName, BracketMode),
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(CTE column) • " + alias,
                         SourceObject  = alias,
@@ -209,7 +221,12 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText   = displayText,
-                        InsertText    = displayText,
+                        // Display and dedup stay unquoted; only what is written into the query is
+                        // bracketed. A CTE column aliased `AS [Total Sales]` needs them as much as a
+                        // table does.
+                        InsertText    = multiTable
+                            ? FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), colName, BracketMode)
+                            : SqlIdentifier.Apply(colName, BracketMode),
                         ObjectType    = (int)CompletionObjectType.Column,
                         SecondaryText = "(temp table column) • " + alias,
                         SourceObject  = fullTableName,
@@ -292,7 +309,7 @@ public class ColumnProvider : ICompletionProvider
                         yield return new CompletionItem
                         {
                             DisplayText = bareDisplay,
-                            InsertText = bareDisplay,
+                            InsertText = SqlIdentifier.Apply(bareDisplay, BracketMode),
                             ObjectType = (int)CompletionObjectType.Column,
                             SecondaryText = FormatSecondaryText(column) + " • " + tableName,
                             SourceObject = dbObject.FullName,
@@ -317,7 +334,10 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText = qualifiedDisplay,
-                        InsertText = qualifiedDisplay,
+                        // `alias` is an AvailableAliases key; for an unaliased `FROM [Order Details]`
+                        // it is the bare "Order Details", which unquoted gives
+                        // `Order Details.OrderID` -- not a column reference at all.
+                        InsertText = FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), column.ColumnName, BracketMode),
                         ObjectType = (int)CompletionObjectType.Column,
                         SecondaryText = FormatSecondaryText(column) + " • " + tableName,
                         SourceObject = dbObject.FullName,
@@ -352,7 +372,7 @@ public class ColumnProvider : ICompletionProvider
     /// names with the owning table in the secondary text; the popup filter narrows as the user types.
     /// <para>FR-016: only schemas in <paramref name="scopeSchemas"/> are considered (empty = all).</para>
     /// </summary>
-    private static IEnumerable<CompletionItem> GetAllTableColumns(DatabaseCache cache,
+    private IEnumerable<CompletionItem> GetAllTableColumns(DatabaseCache cache,
         ISet<string>? scopeSchemas = null)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -382,7 +402,7 @@ public class ColumnProvider : ICompletionProvider
                     yield return new CompletionItem
                     {
                         DisplayText = column.ColumnName,
-                        InsertText = column.ColumnName,
+                        InsertText = SqlIdentifier.Apply(column.ColumnName, BracketMode),
                         ObjectType = (int)CompletionObjectType.Column,
                         SecondaryText = FormatSecondaryText(column) + " • " + obj.ObjectName,
                         SourceObject = obj.FullName,
@@ -397,7 +417,7 @@ public class ColumnProvider : ICompletionProvider
     /// Yields columns for a single table identified by <see cref="CursorContext.DotPrefix"/>
     /// (the original "alias." / "table." behavior).
     /// </summary>
-    private static IEnumerable<CompletionItem> GetDotQualifiedColumns(CursorContext context, DatabaseCache cache)
+    private IEnumerable<CompletionItem> GetDotQualifiedColumns(CursorContext context, DatabaseCache cache)
     {
         string schemaName;
         string tableName;
@@ -423,7 +443,7 @@ public class ColumnProvider : ICompletionProvider
                 yield return new CompletionItem
                 {
                     DisplayText   = colName,
-                    InsertText    = colName,
+                    InsertText    = SqlIdentifier.Apply(colName, BracketMode),
                     ObjectType    = (int)CompletionObjectType.Column,
                     SecondaryText = "(CTE column)",
                     SourceObject  = context.DotPrefix,
@@ -445,7 +465,7 @@ public class ColumnProvider : ICompletionProvider
                 yield return new CompletionItem
                 {
                     DisplayText   = colName,
-                    InsertText    = colName,
+                    InsertText    = SqlIdentifier.Apply(colName, BracketMode),
                     ObjectType    = (int)CompletionObjectType.Column,
                     SecondaryText = "(temp table column)",
                     SourceObject  = tempKey,
@@ -500,7 +520,7 @@ public class ColumnProvider : ICompletionProvider
             yield return new CompletionItem
             {
                 DisplayText = column.ColumnName,
-                InsertText = column.ColumnName,
+                InsertText = SqlIdentifier.Apply(column.ColumnName, BracketMode),
                 ObjectType = (int)CompletionObjectType.Column,
                 SecondaryText = FormatSecondaryText(column),
                 SourceObject = dbObject.FullName,

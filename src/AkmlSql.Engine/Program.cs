@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Hosting.WindowsServices;
 
 namespace AkmlSql.Engine;
 
@@ -84,19 +85,23 @@ public class Program
     /// </summary>
     private static async Task<int> RunWebServiceAsync(string? configPath)
     {
+        var service = new WebEngineBackgroundService(configPath);
+
         var builder = Host.CreateApplicationBuilder();
         builder.Services.AddWindowsService(options => options.ServiceName = "AkmlSqlWebEngine");
-        builder.Services.AddHostedService(_ => new WebEngineBackgroundService(configPath));
+        builder.Services.AddHostedService(_ => service);
 
         using var host = builder.Build();
         await host.RunAsync().ConfigureAwait(false);
-        return 0;
+
+        // Console mode only (a developer running `--web` by hand): the service path never gets here
+        // on failure, see WebEngineBackgroundService. Returning the real code rather than a fixed 0
+        // keeps a scripted launch honest about whether the bridge came up.
+        return service.FailureExitCode;
     }
 
     /// <summary>
-    /// Bridges the generic-host lifetime to <see cref="EngineHost.RunWebAsync"/>. A non-zero exit
-    /// (missing/disabled bridge config, bind failure, crash) is rethrown so the host stops and the
-    /// SCM reports the service as failed rather than running-but-broken.
+    /// Bridges the generic-host lifetime to <see cref="EngineHost.RunWebAsync"/>.
     /// </summary>
     private sealed class WebEngineBackgroundService : BackgroundService
     {
@@ -104,14 +109,46 @@ public class Program
 
         public WebEngineBackgroundService(string? configPath) => _configPath = configPath;
 
+        /// <summary>Non-zero when the web host failed; read after the host stops in console mode.</summary>
+        public int FailureExitCode { get; private set; }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var exit = await EngineHost.RunWebAsync(_configPath, stoppingToken).ConfigureAwait(false);
-            if (exit != 0 && !stoppingToken.IsCancellationRequested)
+            if (exit == 0 || stoppingToken.IsCancellationRequested)
             {
-                throw new InvalidOperationException(
-                    $"AkmlSqlWebEngine web host exited with code {exit} (see the engine log for details).");
+                return;
             }
+
+            FailureExitCode = exit;
+
+            if (WindowsServiceHelpers.IsWindowsService())
+            {
+                // Terminate the PROCESS with the failure code. This used to throw, and throwing is
+                // exactly what kept the service stopped.
+                //
+                // An exception out of a BackgroundService makes the generic host stop CLEANLY
+                // (BackgroundServiceExceptionBehavior.StopHost), and a clean stop is reported to
+                // the service control manager as exit code 0 -- indistinguishable from someone
+                // pressing Stop. Windows service recovery actions only act on failures, so they
+                // never fired, and the service sat Stopped until a person noticed and started it
+                // by hand. On the machine this was diagnosed on, the one stop Windows ever
+                // restarted in thirty days was a genuine crash; every failure reported as a clean
+                // stop was left alone.
+                //
+                // Microsoft's own guidance for BackgroundService-based Windows services is this
+                // call, for this reason: the process must end with a non-zero exit code for the
+                // SCM to apply its configured recovery options. The installer configures those
+                // (restart, with failure actions enabled for non-crash failures too).
+                //
+                // RunWebAsync has already logged the cause and flushed the logger in its finally,
+                // so nothing is lost by not unwinding further.
+                Environment.Exit(exit);
+            }
+
+            // Console mode: stop the host normally; RunWebServiceAsync returns FailureExitCode.
+            throw new InvalidOperationException(
+                $"AkmlSqlWebEngine web host exited with code {exit} (see the engine log for details).");
         }
     }
 }

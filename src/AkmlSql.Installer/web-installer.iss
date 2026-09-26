@@ -47,7 +47,13 @@ Name: "web\service"; Description: "Install Windows service for the engine"; Type
 ; FR-007 -- copy the web bundle to ProgramFiles. Built by
 ; `dotnet publish src/AkmlSql.Web -c Release`; lands under
 ; src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/. Recursive copy preserves _framework/.
+; The build scripts empty that folder before publishing: publish never deletes, so every old
+; fingerprinted bundle stayed behind and was packed too (215 MB instead of ~43 MB).
+; *.br / *.gz are the publish's pre-compressed copies. Only ASP.NET Core's static-assets
+; middleware serves them; the IIS site set up here has no rule that maps a request to them and
+; always serves the plain files, so they were ~16 MB of the download that is never read.
 Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
+    Excludes: "*.br,*.gz"; \
     DestDir: "{app}\Web"; \
     Flags: ignoreversion recursesubdirs createallsubdirs; \
     Components: web
@@ -55,11 +61,13 @@ Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
 ; PowerShell helpers. web-iis-setup.ps1 + web-iis-repair.ps1 are installed PERMANENTLY under
 ; {app}\Support so the "Repair AKML SQL Web hosting" Start-menu shortcut can re-provision the IIS
 ; site after a first install where IIS was not yet functional (web-iis-setup.ps1 exits 0 even on
-; failure, so such installs silently leave no site). The other helpers are bundled to {tmp} and
+; failure, so such installs silently leave no site). web-tls-setup.ps1 is kept there too, so an
+; operator can re-issue the bridge certificate with names the machine does not own (a public IP or
+; DNS name behind NAT: -ExtraNames ... -RestartEngine). The other helpers are bundled to {tmp} and
 ; removed after install.
 Source: "web-iis-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
 Source: "web-iis-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
-Source: "web-tls-setup.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
+Source: "web-tls-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
 
@@ -79,7 +87,7 @@ Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; \
 ; FR-004 -- web-tls-setup.ps1 receives the BRIDGE port (the cert is bound to the engine's
 ; WebSocket listener, not the IIS site). LAN mode only.
 Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
     StatusMsg: "Generating self-signed TLS certificate..."; \
     Check: IsLanExposed; \
     Components: web; \
@@ -102,6 +110,42 @@ Filename: "sc.exe"; \
     Parameters: "create AkmlSqlWebEngine binPath= ""\""{app}\Engine\AkmlSql.Engine.exe\"" --web --config \""{commonappdata}\AKML SQL Web\config.json\"""" start= auto DisplayName= ""AKML SQL Web Engine"""; \
     StatusMsg: "Installing AKML SQL Web Engine service..."; \
     Components: web\service; \
+    Flags: runhidden
+
+; Keep the engine running. These three run on EVERY install, not only when the service is first
+; created -- `sc create` above fails harmlessly on an existing service, so anything configured only at
+; creation time is lost the next time the service is deleted and recreated. That is exactly what
+; happened in practice: recovery had been set by hand on one machine, it restarted the engine after a
+; crash, and a later reinstall recreated the service without it. The machine then went back to
+; leaving the engine stopped until someone started it by hand.
+;
+; Gated on the service EXISTING rather than on web\service being ticked, so an upgrade that unticks
+; the component still fixes a service that an earlier install left running.
+;
+; 1. Delayed automatic start: the engine starts shortly after the boot-critical services instead of
+;    racing them. The web page reconnects on its own, so the short delay is invisible in practice.
+Filename: "sc.exe"; \
+    Parameters: "config AkmlSqlWebEngine start= delayed-auto"; \
+    StatusMsg: "Configuring AKML SQL Web Engine service..."; \
+    Check: AkmlWebServiceExists; \
+    Flags: runhidden
+
+; 2. Restart on failure: after 5 s, then 10 s, then every 60 s for as long as it keeps failing. The
+;    SCM repeats the LAST action for every failure after the third, so this never gives up -- which
+;    is the point: a stopped engine is never a state the web edition wants to stay in. The failure
+;    count resets after a day without one.
+Filename: "sc.exe"; \
+    Parameters: "failure AkmlSqlWebEngine reset= 86400 actions= restart/5000/restart/10000/restart/60000"; \
+    Check: AkmlWebServiceExists; \
+    Flags: runhidden
+
+; 3. Apply those actions to non-crash failures as well. Without this flag the SCM only acts when the
+;    process dies without reporting a status; an engine that shuts down and REPORTS a failure exit
+;    code is ignored. The engine now exits non-zero on failure (Program.cs, WebEngineBackgroundService)
+;    precisely so this flag has something to act on.
+Filename: "sc.exe"; \
+    Parameters: "failureflag AkmlSqlWebEngine 1"; \
+    Check: AkmlWebServiceExists; \
     Flags: runhidden
 
 ; Spec 026 (M4 closure) C2/C3 ordering fix: the service is NOT started here. Starting it from
@@ -153,8 +197,9 @@ Type: filesandordirs; Name: "{app}\Support"
 var
     WebHostPage: TInputOptionWizardPage;
     WebNetworkPage: TInputOptionWizardPage;
-    WebIisPortPage: TInputQueryWizardPage;       { FR-003: IIS site port (default 80) }
-    WebBridgePortPage: TInputQueryWizardPage;     { FR-003: engine bridge port (default 47291) }
+    { FR-003: both ports on one page -- Values[0] = IIS site port (default 80),
+      Values[1] = engine bridge port (default 47291). Two pages of one field each was one page too many. }
+    WebPortsPage: TInputQueryWizardPage;
     InstallSummaryPage: TOutputMsgWizardPage;
     WebIisPort: Integer;
     WebBridgePort: Integer;
@@ -163,6 +208,21 @@ var
     WebSilentActive: Boolean;     { US4: a /WEB_HOST / /WEB_EXPOSURE / /WEB_PORT / /BRIDGE_PORT flag was passed }
     WebSilentLan: Boolean;        { US4: /WEB_EXPOSURE=LAN }
     WebSilentDontHost: Boolean;   { US4: /WEB_HOST=NONE }
+
+{ The web edition's persisted settings (HKLM\Software\AKML SQL\Web). The 64-bit installer
+  writes the 64-bit view; installs made by the earlier 32-bit installer wrote the 32-bit view
+  (WOW6432Node). Read the 64-bit view first and fall back, so an upgrade keeps its ports and mode. }
+function WebRegQueryDWord(const Name: String; var Value: Cardinal): Boolean;
+begin
+    Result := RegQueryDWordValue(HKLM64, 'Software\AKML SQL\Web', Name, Value)
+              or RegQueryDWordValue(HKLM32, 'Software\AKML SQL\Web', Name, Value);
+end;
+
+function WebRegQueryString(const Name: String; var Value: String): Boolean;
+begin
+    Result := RegQueryStringValue(HKLM64, 'Software\AKML SQL\Web', Name, Value)
+              or RegQueryStringValue(HKLM32, 'Software\AKML SQL\Web', Name, Value);
+end;
 
 procedure Web_Init();
 var
@@ -191,23 +251,19 @@ begin
     WebNetworkPage.Add('LAN exposed -- other machines on my network can browse');
     WebNetworkPage.SelectedValueIndex := 0;
 
-    { FR-003: IIS site port (where the browser opens the app). Default 80. }
-    WebIisPortPage := CreateInputQueryPage(
+    { FR-003: both ports on one page. The IIS port is what the browser opens; the bridge port is
+      the engine's WebSocket listener. They must differ. }
+    WebPortsPage := CreateInputQueryPage(
         WebNetworkPage.ID,
-        'IIS site port',
-        'Pick the TCP port the IIS site serves the web bundle on.',
-        'This is the port you browse to (e.g. http://localhost/ for port 80). Use 80 or 1024..65535. Must differ from the bridge port.');
-    WebIisPortPage.Add('IIS port:', False);
-    WebIisPortPage.Values[0] := '80';
-
-    { FR-003: engine bridge port (the WebSocket transport). Default 47291. Must differ from IIS. }
-    WebBridgePortPage := CreateInputQueryPage(
-        WebIisPortPage.ID,
-        'Engine bridge port',
-        'Pick a TCP port for the engine bridge (WebSocket).',
-        'The engine serves WebSocket frames on this port. Must be 1024..65535 and differ from the IIS port. Default 47291.');
-    WebBridgePortPage.Add('Bridge port:', False);
-    WebBridgePortPage.Values[0] := '47291';
+        'Ports',
+        'Choose the ports the web edition uses.',
+        'The site port is the address you open in the browser (80 means http://localhost/). ' +
+        'The engine port is where the browser talks to the AKML SQL engine; other computers pairing ' +
+        'with this one need it. The two must be different. Keep the defaults unless something else uses them.');
+    WebPortsPage.Add('Site port (IIS) -- 80, or 1024 to 65535:', False);
+    WebPortsPage.Add('Engine port -- 1024 to 65535:', False);
+    WebPortsPage.Values[0] := '80';
+    WebPortsPage.Values[1] := '47291';
 
     { Install-summary page (shown on the post-install success path). Web_PostInstall always
       replaces this placeholder with the real summary text -- including on a partial-failure
@@ -233,16 +289,13 @@ begin
     begin
         WebIisPort := 80;
         WebBridgePort := 47291;
-        if RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'IisPort', prevPort)
-           and (prevPort > 0) then
+        if WebRegQueryDWord('IisPort', prevPort) and (prevPort > 0) then
             WebIisPort := prevPort;
-        if RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', prevPort)
-           and (prevPort > 0) then
+        if WebRegQueryDWord('BridgePort', prevPort) and (prevPort > 0) then
             WebBridgePort := prevPort;
-        WebIisPortPage.Values[0] := IntToStr(WebIisPort);
-        WebBridgePortPage.Values[0] := IntToStr(WebBridgePort);
-        if RegQueryStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', prevMode)
-           and (prevMode = 'Lan') then
+        WebPortsPage.Values[0] := IntToStr(WebIisPort);
+        WebPortsPage.Values[1] := IntToStr(WebBridgePort);
+        if WebRegQueryString('IisMode', prevMode) and (prevMode = 'Lan') then
             WebNetworkPage.SelectedValueIndex := 1;
     end;
 end;
@@ -371,7 +424,7 @@ function IsOwnPreviousBridgePort(portInt: Integer): Boolean;
 var
     prevPort: Cardinal;
 begin
-    Result := RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', prevPort)
+    Result := WebRegQueryDWord('BridgePort', prevPort)
               and (prevPort > 0)
               and (Integer(prevPort) = portInt)
               and AkmlWebServiceExists();
@@ -435,35 +488,32 @@ begin
         end;
     end;
 
-    { IIS port: 80 or 1024..65535. }
-    if CurPageID = WebIisPortPage.ID then
+    { Both ports are validated when leaving the ports page: IIS 80 or 1024..65535, engine
+      1024..65535, and they MUST differ (FR-003). }
+    if CurPageID = WebPortsPage.ID then
     begin
-        portStr := Trim(WebIisPortPage.Values[0]);
+        portStr := Trim(WebPortsPage.Values[0]);
         portInt := StrToIntDef(portStr, -1);
         if (portInt <> 80) and ((portInt < 1024) or (portInt > 65535)) then
         begin
-            MsgBox('IIS port must be 80 or in the range 1024..65535.', mbError, MB_OK);
+            MsgBox('The site port must be 80 or between 1024 and 65535.', mbError, MB_OK);
             Result := False;
             Exit;
         end;
         WebIisPort := portInt;
-    end;
 
-    { Bridge port: 1024..65535, and MUST differ from the IIS port (FR-003). }
-    if CurPageID = WebBridgePortPage.ID then
-    begin
-        portStr := Trim(WebBridgePortPage.Values[0]);
+        portStr := Trim(WebPortsPage.Values[1]);
         portInt := StrToIntDef(portStr, -1);
         if (portInt < 1024) or (portInt > 65535) then
         begin
-            MsgBox('Bridge port must be between 1024 and 65535.', mbError, MB_OK);
+            MsgBox('The engine port must be between 1024 and 65535.', mbError, MB_OK);
             Result := False;
             Exit;
         end;
         if portInt = WebIisPort then
         begin
-            MsgBox('IIS port and Bridge port must differ.' + #13#10 +
-                   'IIS serves the web files; the engine bridge serves WebSocket frames -- ' +
+            MsgBox('The site port and the engine port must be different.' + #13#10 +
+                   'IIS serves the web files; the engine serves WebSocket frames -- ' +
                    'they cannot share one TCP port.', mbError, MB_OK);
             Result := False;
             Exit;
@@ -502,8 +552,7 @@ begin
           installs -- otherwise a user who unticked the Web edition still sees an "AKML SQL Web is
           ready" page describing a PIN / URL / thumbprint that were never produced. }
         if (PageID = WebHostPage.ID) or (PageID = WebNetworkPage.ID) or
-           (PageID = WebIisPortPage.ID) or (PageID = WebBridgePortPage.ID) or
-           (PageID = InstallSummaryPage.ID) then
+           (PageID = WebPortsPage.ID) or (PageID = InstallSummaryPage.ID) then
             Result := True;
         Exit;
     end;
@@ -779,7 +828,7 @@ begin
     { Spec 026 (M4 closure) M3: read the bridge port persisted at install. The uninstaller never
       runs the wizard, so the WebBridgePort global is 0 here -- using it would delete the sslcert
       binding on port 0 and leak the real one. Fall back to the default if the value is missing. }
-    if not RegQueryDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', bridgePort) then
+    if not WebRegQueryDWord('BridgePort', bridgePort) then
         bridgePort := 47291;
 
     { Remove the netsh sslcert binding on the REAL bridge port (LAN installs only). Done before the
@@ -805,7 +854,9 @@ begin
         DelTree(appdata, True, True, True);
 
     { Clean up the persisted bridge-port marker. }
-    RegDeleteKeyIncludingSubkeys(HKLM, 'Software\AKML SQL\Web');
+    RegDeleteKeyIncludingSubkeys(HKLM64, 'Software\AKML SQL\Web');
+    { Installs made before the 64-bit installer kept their settings in the 32-bit view. }
+    RegDeleteKeyIncludingSubkeys(HKLM32, 'Software\AKML SQL\Web');
 
     { Never touch %AppData%/AKML SQL/ -- that's IDE plugin state (SC-007). }
 end;

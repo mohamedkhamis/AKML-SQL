@@ -19,6 +19,8 @@
     </PackageReference>
     <PackageReference Include="Xunit.SkippableFact" Version="1.*" />
     <PackageReference Include="Microsoft.Playwright" Version="1.*" />
+    <!-- FormatStylesTests compares exported SQL Prompt styles with the document model. -->
+    <ProjectReference Include="..\..\src\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
     <PackageReference Include="coverlet.collector" Version="10.0.1">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

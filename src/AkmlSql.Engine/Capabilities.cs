@@ -31,6 +31,14 @@ namespace AkmlSql.Engine
         /// <summary>Snippet save/delete via the bridge (M5).</summary>
         public const string SnippetsWrite = "snippets.write";
 
+        /// <summary>
+        /// SQL Prompt styles: the engine lists, reads (<c>ProfileGetResponse.SqlPromptJson</c>),
+        /// saves and previews styles written in SQL Prompt's model, stored in the same styles
+        /// folder SSMS uses. The web edition saves its styles through the engine
+        /// when this is advertised.
+        /// </summary>
+        public const string StylesSqlPromptV1 = "styles.sqlprompt.v1";
+
         /// <summary>Heavyweight schema-aware refactorings (M5).</summary>
         public const string RefactoringHeavy = "refactoring.heavy";
 
@@ -65,6 +73,7 @@ namespace AkmlSql.Engine
             SchemaCacheV1,
             DiagnosticsEngineLogTailV1,
             SnippetsWrite,
+            StylesSqlPromptV1,
         };
 
         /// <summary>

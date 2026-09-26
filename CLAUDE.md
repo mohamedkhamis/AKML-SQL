@@ -1,6 +1,6 @@
 # AKML-SQL Development Guidelines
 
-AI-powered SQL development assistance for SSMS 22 and Visual Studio 2026.
+AI-powered SQL development assistance for SSMS 22. (Visual Studio 2026 support was removed 2026-09-24 — the `AkmlSql.VS2026` project is gone; setup deletes the extension earlier releases put into VS.)
 Author: Mohamed Khamis | License: MIT | Version: 1.0.0
 
 ## Project Structure
@@ -18,10 +18,9 @@ src/
   AkmlSql.Analyzer/                    # CLI static analyzer (net10.0, win-x64, single-file, trimmed)
   AkmlSql.Shell.Shared/                # Shared project (.projitems) for the shell extensions
   AkmlSql.Ssms22/                      # SSMS 22 extension (net472, x64, VS SDK 17.14.x)
-  AkmlSql.VS2026/                      # VS 2026 extension (net472, x64, VS SDK 17.14.x)
   AkmlSql.Web/                         # Blazor WASM web edition (net10.0)
   AkmlSql.Web.Shared/                  # Web contracts (netstandard2.0)
-  AkmlSql.Site/                        # Blazor static-SSR product site (net10.0) — landing/features/download + docs auto-ingested from doc/ (spec 034)
+  AkmlSql.Site/                        # Blazor static-SSR product site (net10.0) — landing/features/download + docs auto-ingested from doc/ (spec 034); Settings/ + Consent/ + admin portal (spec 038)
   AkmlSql.Updater/                     # Self-contained updater (net10.0, win-x64, trimmed)
   AkmlSql.Installer/                   # Inno Setup 7 installer scripts
 tests/
@@ -49,7 +48,6 @@ specs/                                 # Specify framework feature specs (001–
 | Target   | VS SDK Version | VSSDK.BuildTools | Platform | Shell Assembly Version |
 |----------|---------------|------------------|----------|----------------------|
 | SSMS 22  | 17.14.*       | 17.*             | x64      | 17.0.0.0             |
-| VS 2026  | 17.14.*       | 17.*             | x64      | 17.0.0.0             |
 
 ## Build Commands
 
@@ -85,6 +83,7 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 - **CTO cross-contamination root cause (FIXED 2026-08-23)**: `Microsoft.VsSDK.targets` defaults `ResourceManifest`/`CtoFileManifest`/`CtoCacheFile` from `$(IntermediateOutputPath)`, which is still empty when the import is evaluated in an SDK-style project — collapsing all three to drive-root paths (`C:\ctoFiles.json`, `C:\resources.json`, `C:\mergeCto.cache`) shared by every VSSDK project on the machine. Whichever shell project built first left its CTO name in `C:\ctoFiles.json` and the next project read it → `VSSDK1307: Could not read cto data ... AkmlSqlSsms22.cto`. Both shell csprojs now pin the three properties to `$(BaseIntermediateOutputPath)$(Configuration)\$(TargetFramework)\...` right after the VsSDK import. Solution builds (VS or MSBuild `-m`) work again. Symptom of a recurrence: `ctoFiles.json`/`resources.json`/`mergeCto.cache` reappearing at a drive root.
 - **VSToolsPath / VS-restore doom loop (FIXED 2026-08-23)**: `$(VSToolsPath)` for the `Microsoft.VsSDK.targets` import is set by the `Microsoft.VSSDK.BuildTools` package's `build/*.props` (imported via `obj\*.nuget.g.props`), NOT by VS — the `MSBuild.exe.Config` fallback (`C:\Program Files (x86)\MSBuild\Microsoft\VisualStudio\v18.0`) has no VSSDK targets on this machine. If VS evaluates a shell project while restore assets are missing/broken (e.g. during an `obj` clean), the import fails (MSB4226) → project load fails → CPS nominates an EMPTY restore spec (assets show zero package refs) → VS auto-restore writes assets without the VSSDK packages → next evaluation fails again — a loop that overwrites healthy command-line restores. Both shell csprojs now carry a `VSToolsPath` fallback probe before the import (points at the NuGet cache when the normal resolution is invalid), so evaluation survives broken assets, the project loads, nomination is complete, and VS's restore self-heals. Recovery from a broken state: command-line `msbuild AKML-SQL.slnx -t:Restore`, then in VS close ALL instances and reopen the solution (do NOT rely on VS's "Restore NuGet Packages" while the loop is active).
 - **Always clean obj/bin after SDK version changes** — stale NuGet cache causes wrong assembly version references
+- **Installer size — empty `publish\` before publishing**: `dotnet publish` never deletes, so every old fingerprinted web bundle accumulated in `src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot` and the installer packed all of it (215 MB of web files for a 43 MB app; setup grew 104 → 120 MB over three releases). `build.ps1` and `doc/Deploy-Build-Release.ps1` now run `Clear-PublishOutput` before each publish, and `web-installer.iss` excludes `*.br`/`*.gz` (the IIS site never serves them). A manual `dotnet publish` of the web app before ISCC must clean that folder too.
 - **Web E2E needs a DEBUG build of `AkmlSql.Web` — a Release-only build silently tests stale code**: `WebAppFixture` (tests/AkmlSql.Web.E2E.Tests/Harness) starts the app with `dotnet run --no-build -c Debug`. Build only Release and it serves whatever Debug bundle was last produced, so the Playwright tests exercise OLD code and report a *plausible* failure that looks exactly like a broken fix (symptom seen 2026-09-12: a chat-composer key fix appeared not to work; the handler was simply not in the running bundle). Run `dotnet build src/AkmlSql.Web/AkmlSql.Web.csproj -c Debug` before any `AkmlSql.Web.E2E.Tests` run. Quickest confirmation that you are testing the bundle you think: a temporary `Console.WriteLine` in the component shows up in Playwright's `page.Console`; no line = stale bundle.
 - **`msbuild AKML-SQL.slnx -t:Build` without a prior `-t:Restore` fails both shell projects** with `NETSDK1004: Assets file ... project.assets.json not found` whenever `obj/` has been cleaned. Restore first (see the VSToolsPath entry above) — this is operator error, not the doom loop, and `ctoFiles.json`/`resources.json`/`mergeCto.cache` will NOT be at a drive root.
 - **All shell targets use Schema 2011 v2.0 vsixmanifest** (`<PackageManifest>` root)
@@ -95,29 +94,27 @@ dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 
 ## AutoLoad UI Contexts (Critical)
 
-Each SSMS/VS host uses different UI contexts for package autoloading:
+The SSMS 22 host autoloads the package on this UI context:
 
 | Target   | AutoLoad Context GUID                          | Context Name        |
 |----------|-------------------------------------------------|---------------------|
 | SSMS 22  | `{B7B07F42-6013-4C67-A504-C771CBC7625A}`       | UICONTEXT_SSMS      |
-| VS 2026  | `{e8fbc700-a1bd-11d0-a67c-00a0c9110051}`       | ShellInitialized    |
 
 ## vsixmanifest InstallationTarget
 
 | Target   | InstallationTarget Id              | Schema  |
 |----------|------------------------------------|---------|
 | SSMS 22  | `Microsoft.VisualStudio.Ssms`      | 2011    |
-| VS 2026  | `Microsoft.VisualStudio.Pro`       | 2011    |
 
 ## Architecture
 
-- **Shared Project Pattern**: `AkmlSql.Shell.Shared` (.projitems) is imported by both shell extension projects (SSMS 22 + VS 2026) — same source compiled against each host's VS SDK
+- **Shared Project Pattern**: `AkmlSql.Shell.Shared` (.projitems) is imported by the SSMS 22 shell project and by `AkmlSql.Shell.Shared.Tests`
 - **Package GUID**: `{A1B2C3D4-1111-2222-3333-444455556666}` (shared across all targets)
 - **Command Set GUID**: `{A1B2C3D4-1111-2222-3333-444455557777}`
 - **Menu Commands**: About, Check for Updates, Options, Send Feedback, View Logs
 - **Atomic Config Writes**: ConfigManager uses temp file + rename pattern
 - **Thread-safe Logger Init**: LoggerFactory uses Interlocked.CompareExchange
-- **Update Flow**: Shell extension fires updater process → updater writes result JSON → shell reads on next load
+- **Update Flow**: the `AKML SQL\Update Check` scheduled task (daily + at sign-in, as the user) and the shells' 24 h startup check run `AkmlSql.Updater.exe` → it writes `update-available.json`, downloads + SHA-256-verifies the installer, and shows one Windows notification per version (needs the `AKML.AKMLSQL` AppUserModelID Start-menu shortcut); SSMS offers a waiting update once at startup (`UpdateStartupPrompt`). Nothing installs without the user's click (`--install` re-verifies, then launches the installer with its UI)
 
 ### Process Boundary: Shell ↔ Engine
 
@@ -164,6 +161,7 @@ NoformatScanner → SqlcmdPreprocessor → TSql170Parser → AstAnnotator
   → LayoutEngine → CasingEngine → TextEmitter → SemanticValidator → IdempotencyCheck
 ```
 
+- A style written in SQL Prompt's model (`"sqlPrompt"` document in the `.akmlstyle`, spec 039) is laid out by `SqlPromptLayout` (`src/AkmlSql.Formatting/SqlPrompt/`) instead of LayoutEngine → rules → TextEmitter; all other stages are shared. Option semantics and where to correct them: `specs/039-sqlprompt-style-editor/spec.md`
 - Stage 6 (SemanticValidator) failure → return original SQL unchanged
 - Stage 7 (IdempotencyCheck) controlled by `profile.Metadata.EnableIdempotencyCheck`
 - `ProfileMetadata.SkipValidation` allows test pipelines to bypass stage 6
@@ -182,35 +180,35 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 
 - Config: `%AppData%/AKML SQL/config.json`
 - Logs: `%AppData%/AKML SQL/logs/akmlsql-*.log`
-- Update result: `%AppData%/AKML SQL/cache/update-available.json`
+- Update result: `%AppData%/AKML SQL/update-available.json`; downloaded installers: `%LocalAppData%/AKML SQL/cache/`
+- Program files: `C:\Program Files\AKML SQL\` (64-bit installer); installs from before it stay in `C:\Program Files (x86)\AKML SQL\` — the installer takes them over in place (`MigrateLegacy32BitInstall`)
 
 ### Extension Install Paths
 
 | Target  | Extension Directory |
 |---------|---------------------|
 | SSMS 22 | `C:\Program Files\Microsoft SQL Server Management Studio 22\Release\Common7\IDE\Extensions\AkmlSql\` |
-| VS 2026 | `<VS2026Root>\Common7\IDE\Extensions\AkmlSql\` (Enterprise / Professional / Community / Preview under `\2026\` or `\18\`) |
 
 ### Cache and Log Paths
 
 | Target  | MEF/Component Cache | Activity Log | Private Registry |
 |---------|---------------------|-------------|-----------------|
 | SSMS 22 | `%LocalAppData%/Microsoft/SSMS/22.0_*/ComponentModelCache/` | `%AppData%/Microsoft/SSMS/22.0_*/ActivityLog.xml` | `%LocalAppData%/Microsoft/SSMS/22.0_*/privateregistry.bin` |
-| VS 2026 | `%LocalAppData%/Microsoft/VisualStudio/18.0_*/ComponentModelCache/` | `%AppData%/Microsoft/VisualStudio/18.0_*/ActivityLog.xml` | `%LocalAppData%/Microsoft/VisualStudio/18.0_*/privateregistry.bin` |
 
 ## Installer Details
 
 - **Output**: `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`
 - **Detection**: Registry + vswhere.exe + filesystem fallback (see `environment-scanner.iss`)
 - **Post-install**: Clears MEF caches, writes config.json (only if absent)
-- **Silent mode**: `/VERYSILENT /ACCEPTEULA /TARGETS=20,22,2022 /NOUPDATE`
+- **Silent mode**: `/VERYSILENT /ACCEPTEULA /TARGETS=ssms22 /NOUPDATE /NOTELEMETRY` (`vs2026` from older scripts is accepted and ignored) (error reports and automatic updates are ON by default; a silent upgrade keeps the user's existing choices unless a flag is given)
+- **Installer tests**: `AkmlSql.Installer.Tests` smoke classes RUN THE REAL INSTALLER on any admin machine with IIS — filter to the unit classes (`ScheduledUpdateTests`, `UpdateDownloaderTests`) unless you mean to install
 
 ## Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
 | Out-of-process engine | .NET Framework ↔ .NET 10 isolation; crash safety; trimming/AOT |
-| Shared `.projitems` | One source compiled against both shell hosts (SSMS 22 + VS 2026) without duplication |
+| Shared `.projitems` | Shell source shared by the SSMS 22 extension and its test project |
 | MessagePack for IPC | ~3× faster + smaller than JSON; strongly typed; binary-safe |
 | `ConcurrentDictionary` for schema cache | Lock-free reads; multiple background writers safe |
 | Phase A / Phase B loading | Phase A < 500ms for first completion; columns/FKs in background |
@@ -318,7 +316,11 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 - **Spec 033 — Format Styles window promotion**: full style editor (load-on-select, dirty tracking, merge-save via `ProfileJsonMerger`, read-only built-ins), profile schema v2 (`parentId` hierarchy + `[SettingMeta]` on all 179 properties), new `ProfileGet` (34/134) + `ProfileRename` (35/135) IPC, Options → Format → Styles launcher page, legacy editor stack deleted.
 - **Spec 037 — Multiple AI agents**: up to 20 named agents under `ai.agents` (flat `ai.provider`/`model`/`apiKey`/`endpoint` are now a derived mirror of the active agent, rewritten on every load and save — downgrade-safe); per-feature assignments (`ai.featureAgents`) + ordered fallback chain (`ai.fallbackOrder`); engine resolution seam in `AiHandlerBase` — resolve + project the feature's agent BEFORE the privacy-consent gate; additive `AiChatResponse.AgentName` (key 6) answer attribution; chat empty state deep-links into a guided add-agent flow; agent list + health badges on Options → AI Assistance.
 
+- **Spec 039 — SQL Prompt style editor** (in progress, on the 038 branch): styles are SQL Prompt documents formatted by a dedicated layout; web Format styles page (`/styles`, saves through a paired engine advertising `styles.sqlprompt.v1`, else IndexedDB); SSMS Format Styles window on SQL Prompt's model; `.json` import/export.
+
 **Open follow-ups** (see `doc/progress.md` and the spec tasks files for full lists):
+
+- Spec 039: calibrate option interpretations against SQL Prompt's built-in style exports (user to send); manual SSMS window check. Web E2E needs `playwright.ps1 install chromium` (build 1243); `FormatStylesSharedEngineTests` also needs a Debug build of `AkmlSql.Engine` (it runs it sandboxed via `AKML_APP_DATA_ROOT`).
 
 - Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.

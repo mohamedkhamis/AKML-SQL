@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Completion;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Parser;
 using MessagePack;
@@ -190,6 +191,15 @@ internal sealed class CompletionService : ICompletionService
         }
     }
 
+    // Every InsertText below goes through SqlIdentifier.QuoteIfNeeded, the same rule the engine's
+    // ObjectProvider applies. This offline path is what runs when the engine is unreachable, and it
+    // used to insert raw names -- so picking "Order Details" produced `Order Details`, which is not
+    // valid T-SQL, and it did so precisely when the engine was down, which is exactly when a user
+    // is least able to tell why the query they just built will not run.
+    //
+    // DisplayText stays unquoted on purpose: it is the popup label, and the editor fuzzy-matches
+    // what the user typed against it. "Ord" should find "Order Details"; it would not find
+    // "[Order Details]" by prefix.
     private static void AppendSchemaSurface(List<CompletionItem> items, SchemaPhasePayload payload)
     {
         foreach (var schema in payload.Schemas)
@@ -197,7 +207,7 @@ internal sealed class CompletionService : ICompletionService
             items.Add(new CompletionItem
             {
                 DisplayText = schema.Name,
-                InsertText = schema.Name,
+                InsertText = SqlIdentifier.QuoteIfNeeded(schema.Name),
                 ObjectType = (int)CompletionObjectType.Schema,
                 SortPriority = 30,
             });
@@ -206,7 +216,7 @@ internal sealed class CompletionService : ICompletionService
                 items.Add(new CompletionItem
                 {
                     DisplayText = $"{obj.SchemaName}.{obj.ObjectName}",
-                    InsertText = obj.ObjectName,
+                    InsertText = SqlIdentifier.QuoteIfNeeded(obj.ObjectName),
                     ObjectType = MapObjectType(obj.ObjectType),
                     SecondaryText = obj.SchemaName,
                     SourceObject = $"{obj.SchemaName}.{obj.ObjectName}",
@@ -228,7 +238,7 @@ internal sealed class CompletionService : ICompletionService
                     items.Add(new CompletionItem
                     {
                         DisplayText = col.Name,
-                        InsertText = col.Name,
+                        InsertText = SqlIdentifier.QuoteIfNeeded(col.Name),
                         ObjectType = (int)CompletionObjectType.Column,
                         SecondaryText = col.TypeName,
                         SourceObject = $"{obj.SchemaName}.{obj.ObjectName}",
@@ -244,7 +254,9 @@ internal sealed class CompletionService : ICompletionService
                     items.Add(new CompletionItem
                     {
                         DisplayText = $"{obj.ObjectName}.{col.Name}",
-                        InsertText = $"{obj.ObjectName}.{col.Name}",
+                        // Each part quoted on its own: `[Order Details].UnitPrice`, never
+                        // `[Order Details.UnitPrice]`, which would name a single identifier.
+                        InsertText = SqlIdentifier.QuoteIfNeeded(obj.ObjectName, col.Name),
                         ObjectType = (int)CompletionObjectType.Column,
                         SecondaryText = col.TypeName,
                         SourceObject = $"{obj.SchemaName}.{obj.ObjectName}",

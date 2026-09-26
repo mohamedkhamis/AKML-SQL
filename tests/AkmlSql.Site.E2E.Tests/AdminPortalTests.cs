@@ -83,13 +83,10 @@ public sealed class AdminPortalTests(SiteFixture site)
         await page.ClickAsync(".admin-ranges a[href='/admin?days=7']");
 
         // Auto-retrying assertion rather than a URL wait plus a one-shot read, so the check
-        // cannot observe the page mid-update.
-        //
-        // Casing matters here: .admin-stat-label is text-transform: uppercase, and the two
-        // Playwright APIs disagree about it. InnerTextAsync is render-aware and returns
-        // "VISITS · 7 DAYS"; Expect(...).ToContainTextAsync compares textContent and sees the
-        // source casing. Match the source.
-        await Assertions.Expect(page.Locator("section[aria-label='Key metrics']")).ToContainTextAsync("Visits · 7 days");
+        // cannot observe the page mid-update (enhanced navigation changes the URL before it
+        // patches the DOM). The headline names its period in its accessible label.
+        await Assertions.Expect(page.Locator(".admin-headline"))
+            .ToHaveAttributeAsync("aria-label", "Headline figures, the last 7 days");
         await Assertions.Expect(page.Locator(".admin-ranges a[href='/admin?days=7']"))
             .ToHaveAttributeAsync("aria-current", "true");
         // The export follows the selected window.
@@ -108,7 +105,9 @@ public sealed class AdminPortalTests(SiteFixture site)
         var response = await page.GotoAsync(SiteFixture.BaseUrl + "/admin?days=banana");
 
         Assert.Equal(200, response!.Status);
-        await Assertions.Expect(page.Locator("section[aria-label='Key metrics']")).ToContainTextAsync("Visits · 30 days");
+        // Falls back to the default window rather than failing.
+        await Assertions.Expect(page.Locator(".admin-headline"))
+            .ToHaveAttributeAsync("aria-label", "Headline figures, the last 30 days");
     }
 
     [SkippableFact]
@@ -259,19 +258,30 @@ public sealed class AdminPortalTests(SiteFixture site)
     public async Task Dashboard_StatesWhatIsActuallyStored()
     {
         SkipIfUnavailable();
-        // The privacy note is a claim made to visitors; it must match the schema. Storing a
-        // truncated prefix and a location means the old "hashes only" wording would be false.
+        // The privacy note is a claim made to the owner about what the site does; it must match the
+        // schema. Spec 038 changed that behaviour, so this test changed with it: the site now stores
+        // the FULL address and a persistent cookie for consenting visitors, which makes the previous
+        // "full IP addresses are never stored ... No cookies are set for visitors" wording false.
         await using var context = await site.NewContextAsync();
         var page = await SignInAsync(context);
 
         var privacy = await page.Locator(".admin-privacy").InnerTextAsync();
 
-        Assert.Contains("never stored", privacy, StringComparison.OrdinalIgnoreCase);
+        // What IS now stored, and under what condition.
+        Assert.Contains("full IP address", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("accept", privacy, StringComparison.OrdinalIgnoreCase);
+
+        // What is still true for everyone who did not accept.
         Assert.Contains("/24", privacy, StringComparison.Ordinal);
         Assert.Contains("/48", privacy, StringComparison.Ordinal);
-        Assert.Contains("No cookies", privacy, StringComparison.OrdinalIgnoreCase);
-        // The note must say what is NOT collected too, now that only country is.
+        Assert.Contains("salted hash", privacy, StringComparison.OrdinalIgnoreCase);
+
+        // The note must say what is NOT collected too, since only country is.
         Assert.Contains("no city, region or finer location", privacy, StringComparison.OrdinalIgnoreCase);
+
+        // The claims the reversal invalidated must be gone, not merely contradicted elsewhere.
+        Assert.DoesNotContain("No cookies are set", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("full IP addresses are never stored", privacy, StringComparison.OrdinalIgnoreCase);
     }
 
     [SkippableFact]

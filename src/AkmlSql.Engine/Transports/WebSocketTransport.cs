@@ -168,8 +168,7 @@ namespace AkmlSql.Engine.Transports
 
                 if (!context.Request.IsWebSocketRequest)
                 {
-                    context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    context.Response.Close();
+                    RespondToPlainRequest(context);
                     continue;
                 }
 
@@ -183,12 +182,117 @@ namespace AkmlSql.Engine.Transports
                     continue;
                 }
 
+                // Localhost mode has no PIN, so the only thing between an arbitrary website the user
+                // happens to visit and this engine is the browser's Origin header: browsers let any
+                // page open a WebSocket to 127.0.0.1. Without this check such a page could drive the
+                // engine -- including SQL connections under the engine's Windows identity. LAN mode is
+                // gated by the pairing PIN / bearer token instead, and its pages legitimately come from
+                // other hosts, so it is not origin-restricted.
+                if (_options.IsLoopback && !IsAllowedLocalOrigin(context.Request.Headers["Origin"]))
+                {
+                    Log.Warning("WebSocketTransport: rejected connection from foreign origin {Origin}",
+                        context.Request.Headers["Origin"]);
+                    context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+                    context.Response.Close();
+                    continue;
+                }
+
                 _ = Task.Run(() => HandleConnectionAsync(context, ct));
             }
         }
 
         private static bool IsLoopback(IPAddress? addr) =>
             addr != null && IPAddress.IsLoopback(addr);
+
+        /// <summary>
+        /// True when a localhost-mode WebSocket upgrade may proceed for this <c>Origin</c> header.
+        /// <list type="bullet">
+        ///   <item><description>No Origin: not a browser (tests, tools). Browsers always send one on a
+        ///   WebSocket upgrade, so its absence cannot be a drive-by web page.</description></item>
+        ///   <item><description>A page served from this machine: <c>localhost</c>, a loopback IP, or
+        ///   this machine's own name (the IIS site answers on it too).</description></item>
+        /// </list>
+        /// Everything else -- including the literal <c>null</c> origin that sandboxed frames and
+        /// <c>file://</c> pages send -- is refused.
+        /// </summary>
+        internal static bool IsAllowedLocalOrigin(string? origin)
+        {
+            if (string.IsNullOrEmpty(origin))
+            {
+                return true;
+            }
+
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)
+                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return false;
+            }
+
+            var host = uri.Host.Trim('[', ']');
+            if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || host.Equals(Environment.MachineName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return IPAddress.TryParse(host, out var address) && IPAddress.IsLoopback(address);
+        }
+
+        /// <summary>
+        /// A request that is not a WebSocket upgrade -- in practice, a person opening the bridge
+        /// address in a browser. For a LAN engine that is the step that accepts its self-signed
+        /// certificate, after which the browser can open <c>wss://</c> to it; a bare 400 made that
+        /// step look like a failure. So GET gets a short explanation; nothing else is served.
+        /// </summary>
+        private static void RespondToPlainRequest(HttpListenerContext context)
+        {
+            try
+            {
+                var method = context.Request.HttpMethod;
+                if (method != "GET" && method != "HEAD")
+                {
+                    context.Response.StatusCode = (int)HttpStatusCode.MethodNotAllowed;
+                    context.Response.AddHeader("Allow", "GET");
+                    context.Response.Close();
+                    return;
+                }
+
+                var body = System.Text.Encoding.UTF8.GetBytes(PlainRequestPage);
+                context.Response.StatusCode = (int)HttpStatusCode.OK;
+                context.Response.ContentType = "text/html; charset=utf-8";
+                context.Response.AddHeader("Cache-Control", "no-store");
+                context.Response.AddHeader("X-Content-Type-Options", "nosniff");
+                context.Response.AddHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'");
+                context.Response.ContentLength64 = body.Length;
+                if (method == "GET")
+                {
+                    context.Response.OutputStream.Write(body, 0, body.Length);
+                }
+
+                context.Response.Close();
+            }
+            catch (Exception ex) when (ex is HttpListenerException or IOException or ObjectDisposedException)
+            {
+                // The browser went away mid-response; nothing to report.
+            }
+        }
+
+        /// <summary>
+        /// The page a browser sees at the bridge address. Static, no script, and nothing about this
+        /// machine beyond the fact that an engine answers here -- it is reachable without pairing.
+        /// </summary>
+        internal const string PlainRequestPage =
+            "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+            "<title>AKML SQL engine</title>" +
+            "<style>body{font:16px/1.6 system-ui,sans-serif;max-width:40rem;margin:3rem auto;padding:0 1rem;color:#1f2937}" +
+            "h1{font-size:1.4rem}code{background:#f3f4f6;padding:0 .25rem;border-radius:3px}</style></head><body>" +
+            "<h1>AKML SQL engine: reachable</h1>" +
+            "<p>This address is the connection point for AKML SQL Web. There is nothing to use here directly.</p>" +
+            "<p>If you opened it to accept its certificate, that is done: this browser can now connect. " +
+            "Go back to AKML SQL Web and pair with the PIN from the engine machine " +
+            "(<code>C:\\ProgramData\\AKML SQL Web\\pairing-pin.txt</code>).</p>" +
+            "</body></html>";
 
         private async Task HandleConnectionAsync(HttpListenerContext context, CancellationToken ct)
         {

@@ -25,5 +25,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(1)]
         public bool IncludeUnsupported { get; set; } = true;
+
+        /// <summary>
+        /// When true, the engine answers with SQL Prompt's option model — the 14 pages and 115
+        /// options of SQL Prompt's style editor (<c>"model":"sqlPrompt"</c> in the JSON) — instead
+        /// of AKML's own settings schema. Older engines ignore the flag and answer with the AKML
+        /// schema, which the shell detects by the missing <c>model</c> field.
+        /// </summary>
+        [Key(2)]
+        public bool SqlPromptModel { get; set; }
     }
 }

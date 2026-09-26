@@ -250,33 +250,18 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
         await addButton.ClickAsync();
         await page.WaitForTimeoutAsync(800);
 
-        // Scoped to the dialog and addressed positionally: the labels are not distinct enough for
-        // text matching, because "Localhost (no PIN required)" also contains "Host".
-        //
-        // "Localhost" is deliberately left UNCHECKED. That checkbox does not just waive the PIN --
-        // IEngineBridge builds "ws://" for it and "wss://" otherwise -- and the installer here
-        // provisioned the bridge in LAN mode with TLS, so the plaintext path is reset by the
-        // TLS listener. The host must also be a name the certificate covers: its SAN list is the
-        // machine name and the public IP, not 127.0.0.1.
-        var dialog = page.Locator(".akml-connections-dialog");
-        await dialog.Locator("input:not([type=checkbox])").Nth(0).FillAsync("Local engine");
-        await dialog.Locator("input:not([type=checkbox])").Nth(1).FillAsync(Environment.MachineName);
-        await dialog.Locator("input:not([type=checkbox])").Nth(2).FillAsync(BridgePort.ToString());
-        await dialog.Locator("input[type=checkbox]").First.UncheckAsync();
-        await page.WaitForTimeoutAsync(400);
+        // The host must be a name the certificate covers: the installer provisioned the bridge in
+        // LAN mode with TLS, and its SAN list is the machine name and the public IP, not 127.0.0.1.
+        // A machine name is not loopback, so the form shows the PIN field by itself. The engine
+        // publishes its current pairing PIN to %ProgramData%\AKML SQL Web\pairing-pin.txt
+        // (EngineHost FR-008) -- read it from there rather than baking a credential into the test.
+        await page.FillAsync("[data-testid='engine-add-name']", "Local engine");
+        await page.FillAsync("[data-testid='engine-add-host']", Environment.MachineName);
+        await page.FillAsync("[data-testid='engine-add-port']", BridgePort.ToString());
+        await page.FillAsync("[data-testid='engine-add-pin']", ReadPairingPin());
+        output.WriteLine("Pairing PIN supplied from the engine's published PIN file.");
 
-        // The PIN field only exists once Localhost is unchecked. The engine publishes its current
-        // pairing PIN to %ProgramData%\AKML SQL Web\pairing-pin.txt (EngineHost FR-008, so the
-        // installer can print it in INSTALL-SUMMARY.txt) -- read it from there rather than baking a
-        // credential into the test.
-        var pinBox = dialog.Locator("input:not([type=checkbox])").Nth(3);
-        if (await pinBox.IsVisibleAsync())
-        {
-            await pinBox.FillAsync(ReadPairingPin());
-            output.WriteLine("Pairing PIN supplied from the engine's published PIN file.");
-        }
-
-        await page.Locator("button", new() { HasTextString = "Pair" }).First.ClickAsync();
+        await page.ClickAsync("[data-testid='engine-add-pair']");
 
         // The handshake takes a while, and the status bar animates through it — which also means
         // Playwright's stability check will refuse to click anything until it settles.
@@ -297,7 +282,7 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
     }
 
     /// <summary>Bridge port from %ProgramData%\AKML SQL Web\config.json.</summary>
-    private const int BridgePort = 47291;
+    private static int BridgePort => Harness.InstalledEngine.BridgePort;
 
     /// <summary>
     /// The engine's current pairing PIN, as it publishes it for the installer to surface. A PIN is

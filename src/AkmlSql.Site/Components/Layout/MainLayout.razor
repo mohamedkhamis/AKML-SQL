@@ -38,6 +38,9 @@
             <li><NavLink href="/features">Features</NavLink></li>
             <li><NavLink href="/docs">Docs</NavLink></li>
             <li><NavLink href="/download">Download</NavLink></li>
+            @* In the main navigation, not tucked into the footer: the request was to make
+               complaints EASY to send, and a visitor with a problem looks at the top of the page. *@
+            <li><NavLink href="/feedback">Feedback</NavLink></li>
             <!-- FR-010: reserved insertion point for the future "Support" nav entry.
                  No /support route and no payment/donation UI until that feature lands. -->
             <li>
@@ -88,6 +91,10 @@
     @Body
 </main>
 
+@* Spec 038 (US5): non-blocking consent request. Placed AFTER <main> in document order so it never
+   precedes or obscures page content -- the download button above all (FR-043b). *@
+<ConsentBar />
+
 <footer class="site-footer">
     <div class="site-footer-inner container">
         <div class="site-footer-brand">
@@ -99,7 +106,7 @@
                 <span>AKML SQL</span>
             </a>
             <p class="site-footer-tagline">
-                AI-powered SQL development assistance for SSMS 22 and Visual Studio 2026.
+                AI-powered SQL development assistance for SQL Server Management Studio 22.
             </p>
         </div>
         <nav class="site-footer-col" aria-label="Product">
@@ -107,6 +114,7 @@
             <ul class="site-footer-list">
                 <li><a href="/features">Features</a></li>
                 <li><a href="/download">Download</a></li>
+                <li><a href="/feedback">Report a problem</a></li>
             </ul>
         </nav>
         <nav class="site-footer-col" aria-label="Documentation">
@@ -125,6 +133,7 @@
         <nav class="site-footer-col" aria-label="Legal and source code">
             <h2 class="site-footer-heading">Legal &amp; source</h2>
             <ul class="site-footer-list">
+                <li><a href="/privacy">Privacy</a></li>
                 <li><a href="https://github.com/mohamedkhamis/AKML-SQL/blob/master/LICENSE.txt" target="_blank" rel="noopener noreferrer">MIT License</a></li>
                 <li><a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source on GitHub</a></li>
                 <!-- FR-010: reserved slot for the future "Support" footer link. -->
