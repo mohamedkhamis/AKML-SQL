@@ -26,6 +26,12 @@ public class JoinOnFkProvider : ICompletionProvider
     /// </summary>
     public bool MatchByColumnName { get; set; } = true;
 
+    /// <summary>
+    /// The IntelliSense bracket option for the ON columns — the same one table and column
+    /// completions follow. Set by <see cref="CompletionEngine"/> before each call.
+    /// </summary>
+    public AkmlSql.Core.Config.BracketMode BracketMode { get; set; } = AkmlSql.Core.Config.BracketMode.WhenRequired;
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         if (cache == null)
@@ -115,7 +121,7 @@ public class JoinOnFkProvider : ICompletionProvider
                     // name ("Order Details") -- a single identifier either way, so safe to bracket.
                     var predicate = FkHelpers.BuildFkPredicate(
                         SqlIdentifier.QuoteIfNeeded(leftAlias), leftCols,
-                        SqlIdentifier.QuoteIfNeeded(rightAlias), rightCols);
+                        SqlIdentifier.QuoteIfNeeded(rightAlias), rightCols, BracketMode);
                     if (!seen.Add(predicate)) continue;
 
                     yield return new CompletionItem
@@ -193,7 +199,7 @@ public class JoinOnFkProvider : ICompletionProvider
                             {
                                 if (!leftSet.Contains(leftFkColumns[idx])) { parts.Clear(); break; }
                                 if (!rightSet.Contains(rightFkColumns[idx])) { parts.Clear(); break; }
-                                parts.Add($"{FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(leftAlias), leftFkColumns[idx])} = {FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(rightAlias), rightFkColumns[idx])}");
+                                parts.Add($"{FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(leftAlias), leftFkColumns[idx], BracketMode)} = {FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(rightAlias), rightFkColumns[idx], BracketMode)}");
                             }
                             if (parts.Count == 0) continue;
 
@@ -245,7 +251,7 @@ public class JoinOnFkProvider : ICompletionProvider
                     foreach (var col in leftCols)
                     {
                         if (!rightLookup.Contains(col)) continue;
-                        var predicate = $"{FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(leftAlias), col)} = {FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(rightAlias), col)}";
+                        var predicate = $"{FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(leftAlias), col, BracketMode)} = {FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(rightAlias), col, BracketMode)}";
                         if (!seen.Add(predicate)) continue;
 
                         // Id columns rank highest (most likely the intended join key),

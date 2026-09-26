@@ -105,6 +105,13 @@
     private string _activeId = "builtin.khamis";
     private ProfileRecord? _active;
 
+    // The active id this picker last resolved (null until the first load). The editor loads the
+    // active style itself at mount, so the first load does not notify; after that, any reload that
+    // resolves a DIFFERENT style -- the engine connecting and its style becoming active, or the
+    // engine going away and the default taking over -- tells the editor, so Format never uses a
+    // style other than the one the dropdown shows.
+    private string? _resolvedId;
+
     protected override async Task OnInitializedAsync()
     {
         ProfileStore.StylesChanged += OnStylesChanged;
@@ -124,7 +131,28 @@
         {
             _activeId = _active.Id;
         }
+
+        var changed = _resolvedId != null && _resolvedId != _activeId;
+        // Recorded before any await: a second reload running meanwhile (StylesChanged fires often)
+        // then sees no change and does not notify twice.
+        _resolvedId = _activeId;
         StateHasChanged();
+        if (changed && _active != null) await NotifyAsync(_active);
+    }
+
+    /// <summary>Hands the editor the whole style: engine styles are listed by name only.</summary>
+    private async Task NotifyAsync(ProfileRecord record)
+    {
+        try
+        {
+            var full = record.IsSummary ? await ProfileStore.GetAsync(record.Id) : record;
+            if (full != null) await OnProfileChanged.InvokeAsync(full);
+        }
+        catch (Exception)
+        {
+            // The engine went away while the style was being read; the next StylesChanged reload
+            // resolves the style that is active then.
+        }
     }
 
     private async Task OnSelectionChanged(ChangeEventArgs e)
@@ -133,14 +161,10 @@
         if (newId == _activeId) return;
 
         _activeId = newId;
+        _resolvedId = newId;
         await ProfileStore.SetActiveIdAsync(newId);
         _active = _profiles?.FirstOrDefault(p => p.Id == newId);
-        // Engine styles are listed by name only; load the whole style before handing it over.
-        var full = _active is { IsSummary: true } ? await ProfileStore.GetAsync(newId) : _active;
-        if (full != null)
-        {
-            await OnProfileChanged.InvokeAsync(full);
-        }
+        if (_active != null) await NotifyAsync(_active);
     }
 
     private async Task DeleteActiveAsync()
@@ -154,10 +178,7 @@
 
         await ProfileStore.DeleteAsync(_active.Id);
         await ProfileStore.SetActiveIdAsync("builtin.default");
+        // The active style changes, so the reload notifies the editor (with the full style).
         await ReloadAsync();
-        if (_active != null)
-        {
-            await OnProfileChanged.InvokeAsync(_active);
-        }
     }
 }

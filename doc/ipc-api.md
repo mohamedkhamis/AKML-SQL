@@ -607,7 +607,10 @@ importer (AKML's spec-020 export shape). Anything else fails with a clear error.
 
 **Failure semantics**: on any parse failure the response is `Success = false` and **nothing
 is saved**. Importing under a built-in profile name also fails (`Success = false`, error
-message mentions "built-in"). When `TargetProfileName` is set it overrides the style's
+message mentions "built-in") — in every format (JSON, XML `.sqlpromptstylev2` and `.akmlstyle`),
+whether or not the built-in has been edited: `ProfileSave` accepts a built-in's name (that is how a
+built-in is edited), so an import landing on it would silently become an edit of the built-in.
+`DuplicateProfile` likewise refuses a built-in's name or an existing style's name. When `TargetProfileName` is set it overrides the style's
 internal `metadata.name` (JSON) or names the profile (XML, which has no internal name).
 Successful JSON imports additionally preserve a verbatim `<name>.source.json` copy beside
 the saved profile for lossless re-export.

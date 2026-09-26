@@ -73,6 +73,34 @@ public static class SqlIdentifier
         return string.Join(".", quoted);
     }
 
+    /// <summary>
+    /// Brackets one identifier part the way the IntelliSense option
+    /// <c>IntelliSense.Qualification.BracketMode</c> asks: Always brackets every name,
+    /// WhenRequired (the default) only the ones that need it, Never none. Column, JOIN and ON
+    /// completions follow it exactly as table completions (ObjectProvider) do, so one completion
+    /// list never mixes two bracket policies.
+    /// </summary>
+    public static string Apply(string? part, AkmlSql.Core.Config.BracketMode mode)
+    {
+        if (string.IsNullOrEmpty(part)) return part ?? string.Empty;
+        return mode switch
+        {
+            AkmlSql.Core.Config.BracketMode.Always => IsAlreadyQuoted(part) ? part : Quote(part),
+            AkmlSql.Core.Config.BracketMode.Never => part,
+            _ => QuoteIfNeeded(part),
+        };
+    }
+
+    /// <summary>Each part per <paramref name="mode"/>, joined with dots (see <see cref="QuoteIfNeeded(string[])"/>).</summary>
+    public static string Apply(AkmlSql.Core.Config.BracketMode mode, params string[] parts)
+    {
+        if (parts is null || parts.Length == 0) return string.Empty;
+        var result = new string[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+            result[i] = Apply(parts[i], mode);
+        return string.Join(".", result);
+    }
+
     private static bool IsAlreadyQuoted(string part) =>
         part.Length >= 2 &&
         part.StartsWith("[", StringComparison.Ordinal) &&

@@ -5,7 +5,7 @@
     preview that reformats on every change and marks the lines that moved.
 
     Styles are saved to the paired engine when it has one (the styles SSMS
-    use), otherwise in this browser. SQL Prompt .json styles import and export unchanged.
+    uses), otherwise in this browser. SQL Prompt .json styles import and export unchanged.
 *@
 @using System.Text
 @using AkmlSql.Formatting.Profiles
@@ -34,6 +34,13 @@
         </label>
     </div>
 
+    @if (Store.EngineStylesError is { } engineError)
+    {
+        <p class="akml-styles-status error" data-testid="styles-engine-error" role="status">
+            The engine's styles could not be listed: @(engineError.TrimEnd('.')). The styles in this browser are shown.
+        </p>
+    }
+
     @if (!string.IsNullOrEmpty(_status))
     {
         <p class="akml-styles-status @(_statusIsError ? "error" : "")" data-testid="styles-status" role="status">@_status</p>
@@ -49,7 +56,7 @@
                 {
                     <button class="akml-styles-row @(s.Id == _selectedId ? "selected" : "")"
                             data-testid="style-row" data-style="@s.Name"
-                            @onclick="() => SelectAsync(s.Id)">
+                            @onclick="() => ClickStyleAsync(s.Id)">
                         <span class="akml-styles-name">@s.Name</span>
                         @if (s.Id == _activeId)
                         {
@@ -160,6 +167,7 @@
                                                 break;
                                             case SqlPromptOptionKind.Integer:
                                                 <input id="@Id(option)" type="number" min="@option.Min" max="@option.Max" value="@value" disabled="@(!enabled)"
+                                                       @key="@(option.Path + "#" + _inputVersion)"
                                                        data-testid="option-@option.Path"
                                                        @onchange="e => Change(option, e.Value?.ToString() ?? option.Default)" />
                                                 break;
@@ -269,9 +277,14 @@
     .akml-tool-button.primary { border-color: var(--akml-accent, #0e639c); }
     .akml-tool-button.danger:hover { color: var(--akml-status-error, #c42b1c); }
     @@media (max-width: 900px) {
-        .akml-styles-body { grid-template-columns: 1fr; }
-        .akml-styles-split { grid-template-columns: 1fr; }
+        /* minmax(0, 1fr), not 1fr: a 1fr track never shrinks below its widest content (a long
+           preview line, a style name), so the one-column layout was wider than the phone. */
+        .akml-styles-body { grid-template-columns: minmax(0, 1fr); }
+        .akml-styles-split { grid-template-columns: minmax(0, 1fr); }
         .akml-styles-list, .akml-styles-tree { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--akml-border-default); }
+        /* One column here: the desktop placement (columns 2-3) would add implicit columns and
+           scroll the page sideways. */
+        .akml-styles-empty { grid-column: auto; }
     }
 </style>
 
@@ -298,6 +311,10 @@
     private string? _status;
     private bool _statusIsError;
     private CancellationTokenSource? _previewDelay;
+
+    // Bumped when a typed number is not what the style ends up holding (clamped to its range, or
+    // rejected): Blazor would keep the typed text, because the value it renders did not change.
+    private int _inputVersion;
     private IJSObjectReference? _downloadModule;
 
     private ProfileRecord? Selected => _styles.FirstOrDefault(s => s.Id == _selectedId);
@@ -328,16 +345,34 @@
         if (browserMine.Count > 0) yield return ("In this browser", browserMine);
     }
 
+    /// <summary>
+    /// A click on a style in the list. The style already open is left as it is: reloading it
+    /// silently threw away its unsaved edits (the discard prompt only covers switching styles).
+    /// </summary>
+    private Task ClickStyleAsync(string id) =>
+        id == _selectedId && _document != null ? Task.CompletedTask : SelectAsync(id);
+
     private async Task SelectAsync(string id)
     {
         if (_dirty && id != _selectedId && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
-        var document = await Store.GetDocumentAsync(id);
+        SqlPromptStyleDocument? document;
+        ProfileRecord? record;
+        try
+        {
+            document = await Store.GetDocumentAsync(id);
+            record = document == null ? null : await Store.GetAsync(id);
+        }
+        catch (Exception ex)
+        {
+            // An engine style whose engine is slow, busy or gone: say so instead of failing the page.
+            SetStatus($"That style could not be loaded: {(ex is OperationCanceledException ? "the engine did not answer in time" : ex.Message.TrimEnd('.'))}.", error: true);
+            return;
+        }
         if (document == null)
         {
             SetStatus("That style could not be loaded — is its engine still connected?", error: true);
             return;
         }
-        var record = await Store.GetAsync(id);
         _documentIsSqlPrompt = record?.IsSqlPromptStyle ?? false;
         _selectedId = id;
         _document = document;
@@ -371,9 +406,11 @@
         }
         catch (ArgumentException ex)
         {
+            _inputVersion++;   // show the stored value again, not the rejected text
             SetStatus(ex.Message, error: true);
             return;
         }
+        if (_document.Get(option.Path) != value) _inputVersion++;   // clamped to the option's range
         _dirty = _saved == null || !_document.FormatsLike(_saved) || _document.Name != _saved.Name;
         SetStatus(null);
         RenderPreview(markChanges: true);
@@ -501,7 +538,8 @@
         var copy = _document.Clone();
         copy.Name = name.Trim();
         copy.Id = Guid.NewGuid().ToString();
-        _dirty = false;
+        // CreateAsync clears the unsaved flag once the copy is saved; if the save fails (a name
+        // already taken) the edits stay marked unsaved, so Save stays enabled and switching away asks.
         await CreateAsync(copy);
     }
 
@@ -595,6 +633,8 @@
 
     private async Task ImportAsync(InputFileChangeEventArgs e)
     {
+        // The imported style is opened in place of this one, exactly like New.
+        if (_dirty && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
         var file = e.File;
         if (file.Size > MaxImportBytes)
         {

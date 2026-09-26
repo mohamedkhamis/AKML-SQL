@@ -438,6 +438,12 @@ public class CompletionEngine
             _joinProvider.UseAliases = TableAliasEnabled;
             _joinProvider.SchemaQualifyMode = SchemaQualifyMode;
 
+            // One bracket policy for the whole list: tables (ObjectProvider, below), columns,
+            // FK-join targets and ON predicates all follow IntelliSense.Qualification.BracketMode.
+            _joinProvider.BracketMode = BracketMode;
+            _joinOnFkProvider.BracketMode = BracketMode;
+            _columnProvider.BracketMode = BracketMode;
+
             // Push IntelliSense policy flags into ObjectProvider before each request.
             _objectProvider.IncludeSystemObjects = IncludeSystemObjects;
             _objectProvider.SchemaQualifyMode = SchemaQualifyMode;

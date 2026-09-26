@@ -74,6 +74,23 @@ namespace AkmlSql.Shell.Shared.Formatting
         // showing; _currentGroupCategory is its parent category (for the breadcrumb title).
         private FormatStylesSchemaModel.Group? _currentGroup;
         private string? _currentGroupCategory;
+
+        /// <summary>Rows on the current page whose option another option turns on (EnabledWhen).</summary>
+        private readonly System.Collections.Generic.List<GatedRow> _gatedRows = new System.Collections.Generic.List<GatedRow>();
+
+        private sealed class GatedRow
+        {
+            public GatedRow(FormatSettingNode setting, TextBlock label, FrameworkElement control)
+            {
+                Setting = setting;
+                Label = label;
+                Control = control;
+            }
+
+            public FormatSettingNode Setting { get; }
+            public TextBlock Label { get; }
+            public FrameworkElement Control { get; }
+        }
         private TextBlock? _breadcrumbText;
         private bool _suppressSelectionChanged;
         private bool _closeConfirmed;
@@ -290,9 +307,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 try
                 {
-                    SetStatus(await _viewModel.SaveAsync()
-                        ? $"Saved '{_viewModel.LoadedProfileName}'."
-                        : _viewModel.LastError ?? "Save failed.");
+                    await SaveSelectedStyleAsync();
                 }
                 catch (Exception ex)
                 {
@@ -1026,6 +1041,31 @@ namespace AkmlSql.Shell.Shared.Formatting
             SetStatus(await _viewModel.DeleteSelectedAsync()
                 ? $"Deleted '{current}'."
                 : _viewModel.LastError ?? "Delete failed.");
+        }
+
+        /// <summary>
+        /// Saves the loaded style. The first save of a shipped style creates the override that
+        /// shadows it, so its list item has to become "Built-in · modified": the ⋮ menu's Reset and
+        /// <see cref="OnResetStyleAsync"/> read that item, and a stale one refused the reset the
+        /// footer had just offered. The list is rebuilt the way Reset rebuilds it;
+        /// RestoreListSelection keeps the style loaded without re-fetching it.
+        /// </summary>
+        private async System.Threading.Tasks.Task SaveSelectedStyleAsync()
+        {
+            var name = _viewModel.LoadedProfileName;
+            var wasCustomized = _viewModel.IsSelectedCustomized;
+            if (!await _viewModel.SaveAsync())
+            {
+                SetStatus(_viewModel.LastError ?? "Save failed.");
+                return;
+            }
+            if (_viewModel.IsSelectedCustomized && !wasCustomized)
+            {
+                await _viewModel.RefreshProfilesAsync();
+                RestoreListSelection(name);
+                UpdateHeaderState();
+            }
+            SetStatus($"Saved '{name}'.");
         }
 
         /// <summary>
@@ -1890,6 +1930,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     : group.DisplayName;
 
             _settingControlsHost.Children.Clear();
+            _gatedRows.Clear();
 
             if (group.Settings.Count == 0)
             {
@@ -1940,14 +1981,21 @@ namespace AkmlSql.Shell.Shared.Formatting
                    || string.Equals(current.ToString(), setting.EnabledWhenValue?.ToString(), StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>Re-renders the page when the changed setting turns another on this page on or off.</summary>
+        /// <summary>
+        /// Enables or disables the rows the changed setting turns on, in place. Rebuilding the page
+        /// instead destroyed the control being toggled, so keyboard focus fell out of the form and
+        /// Tab started again from the top.
+        /// </summary>
         private void RefreshIfGate(FormatSettingNode changed)
         {
-            if (_currentGroup == null) return;
-            if (!_currentGroup.Settings.Any(x => x.EnabledWhenId == changed.Id)) return;
-            var group = _currentGroup;
-            var category = _currentGroupCategory;
-            Dispatcher.BeginInvoke(new Action(() => UpdateRightForGroup(group, category)));
+            foreach (var row in _gatedRows)
+            {
+                if (!string.Equals(row.Setting.EnabledWhenId, changed.Id, StringComparison.Ordinal)) continue;
+                var open = IsGateOpen(row.Setting);
+                row.Control.IsEnabled = open;
+                row.Label.SetResourceReference(TextBlock.ForegroundProperty, open ? ThemeTokens.TextSecondary : ThemeTokens.TextDisabled);
+                row.Label.ToolTip = RowTooltip(row.Setting, open);
+            }
         }
 
         /// <summary>One form row: setting label (left; +Unsupported badge; description as a tooltip)
@@ -1955,7 +2003,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         private FrameworkElement BuildSettingRow(FormatSettingNode setting, int index)
         {
             var gateOpen = IsGateOpen(setting);
-            var isDisabled = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase) || !gateOpen;
+            var unsupported = string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
+            var isDisabled = unsupported || !gateOpen;
             var currentValue = _viewModel.GetWorkingValue(setting.Id);
 
             var rowBorder = new Border
@@ -1993,7 +2042,11 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             // Each control sets its own horizontal alignment (checkbox left; combos/text boxes
             // stretch to fill the column up to MaxWidth); the row only caps and centres them.
-            var control = BuildControlForSetting(setting, currentValue, isDisabled);
+            // Wired whenever the option is supported: a closed gate only disables the control, so
+            // RefreshIfGate can turn it back on without rebuilding the row.
+            var control = BuildControlForSetting(setting, currentValue, unsupported);
+            if (!gateOpen) control.IsEnabled = false;
+            if (!unsupported && setting.EnabledWhenId != null) _gatedRows.Add(new GatedRow(setting, label, control));
             control.VerticalAlignment = VerticalAlignment.Center;
             control.MaxWidth = 280;
             Grid.SetColumn(control, 1);

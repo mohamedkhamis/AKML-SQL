@@ -49,10 +49,14 @@ internal sealed class FakeStylesEngine : IEngineBridge
         StateChanged?.Invoke(state);
     }
 
+    /// <summary>When set, ProfileList fails with it — an engine that is busy, slow or broken.</summary>
+    public Exception? ListFailure { get; set; }
+
     public Task<TResponse> SendAsync<TRequest, TResponse>(int requestMessageType, TRequest request, CancellationToken ct)
         where TRequest : class where TResponse : class
     {
         Sent.Add(requestMessageType);
+        if (request is ProfileListRequest && ListFailure != null) return Task.FromException<TResponse>(ListFailure);
         object response = request switch
         {
             ProfileListRequest => new ProfileListResponse

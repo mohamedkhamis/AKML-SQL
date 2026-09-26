@@ -638,6 +638,24 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
+    /// <summary>
+    /// FR-008 — an import never lands on a built-in style's name, whatever its format.
+    /// <see cref="ProfileManager.Save"/> allows that name on purpose (it is how a built-in is
+    /// edited), so every import path has to refuse it here; otherwise importing
+    /// "Compact.sqlpromptstylev2" silently became an edit of the built-in Compact and, if the user
+    /// had already edited it, overwrote those edits. HasBuiltIn is true whether or not the built-in
+    /// has been edited, which an IsBuiltIn-only test missed. The shells rely on this refusal: their
+    /// overwrite prompt skips shipped names.
+    /// </summary>
+    private ProfileImportResponse? RefuseBuiltInName(string name) =>
+        profileManager.HasBuiltIn(name)
+            ? new ProfileImportResponse
+            {
+                Success = false,
+                ErrorMessage = $"'{name}' is a built-in style name. Re-import with a different target name.",
+            }
+            : null;
+
     public ProfileImportResponse HandleProfileImport(ProfileImportRequest request)
     {
         try
@@ -696,25 +714,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     };
                     jsonResult.Profile.Metadata.BasedOn = "SQL Prompt Import";
 
-                    // FR-008 — built-in names cannot be shadowed by import.
-                    //
-                    // IsCustomizedBuiltIn is part of the test, not a refinement of it. Once built-ins
-                    // became editable, an ALREADY-EDITED one reports IsBuiltIn=false (the file that
-                    // resolves is the custom one), so an IsBuiltIn-only check would wave the import
-                    // through and silently overwrite the user's own edits to a shipped style — the
-                    // exact shadowing FR-008 exists to prevent, made worse by destroying work on the
-                    // way. Editing a built-in in the editor is a deliberate act on a named style;
-                    // an import landing on that name is not.
-                    if (profileManager.List().Any(p =>
-                            (p.IsBuiltIn || p.IsCustomizedBuiltIn)
-                            && string.Equals(p.Name, jsonResult.Profile.Metadata.Name, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        return new ProfileImportResponse
-                        {
-                            Success = false,
-                            ErrorMessage = $"'{jsonResult.Profile.Metadata.Name}' is a built-in style name. Re-import with a different target name.",
-                        };
-                    }
+                    if (RefuseBuiltInName(jsonResult.Profile.Metadata.Name) is { } jsonRefusal) return jsonRefusal;
 
                     profileManager.Save(jsonResult.Profile);
 
@@ -759,6 +759,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     };
                 }
 
+                if (RefuseBuiltInName(importResult.Profile.Metadata.Name) is { } xmlRefusal) return xmlRefusal;
+
                 profileManager.Save(importResult.Profile);
                 return new ProfileImportResponse
                 {
@@ -781,6 +783,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 }
                 profile.Metadata.Id = Guid.NewGuid().ToString();
                 profile.Metadata.IsBuiltIn = false;
+                if (RefuseBuiltInName(profile.Metadata.Name) is { } nativeRefusal) return nativeRefusal;
                 profileManager.Save(profile);
 
                 return new ProfileImportResponse

@@ -606,6 +606,14 @@ public class ProfileManager
         ArgumentNullException.ThrowIfNull(sourceName);
         ArgumentNullException.ThrowIfNull(newName);
 
+        // A duplicate is a NEW style. Save accepts a built-in's name (that is how a built-in is
+        // edited), so without these a copy named like a built-in silently became an edit of it,
+        // and one named like an existing style overwrote that style.
+        if (HasBuiltIn(newName))
+            throw new InvalidOperationException($"'{newName}' is a built-in style name. Choose a different name.");
+        if (File.Exists(GetCustomFilePath(newName)))
+            throw new InvalidOperationException($"A style named '{newName}' already exists.");
+
         var source = Load(sourceName);
 
         // Create a fresh copy with new identity

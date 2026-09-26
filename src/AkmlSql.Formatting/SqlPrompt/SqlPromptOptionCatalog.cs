@@ -78,6 +78,9 @@ public static class SqlPromptOptionCatalog
     public const string CategoryClauses = "Clauses";
     public const string CategoryExpressions = "Expressions";
 
+    // Sub-heading of the Data (DML) page's statement-keyword options.
+    private const string DmlKeywords = "INSERT, DISTINCT and TOP";
+
     public static readonly IReadOnlyList<string> Categories =
         [CategoryGlobal, CategoryStatements, CategoryClauses, CategoryExpressions];
 
@@ -337,12 +340,14 @@ public static class SqlPromptOptionCatalog
                 "Place WHERE condition on new line", "When to place a WHERE condition in a DML statement on a new line.", "List items"),
             Choice("dml.listItems.placeGroupByAndOrderByOnNewLine", "never", AlwaysNeverIfMultiple,
                 "Place GROUP BY and ORDER BY items on new line", "When to place GROUP BY and ORDER BY clauses in a DML statement on a new line.", "List items"),
+            // Their own heading: after "List items", an ungrouped option is drawn under that heading
+            // by both editors (they only start a heading when the group changes to a named one).
             Bool("dml.placeInsertTableOnNewLine", false,
-                "Place INSERT table on new line", "In INSERT statements, place the table name on a new line."),
+                "Place INSERT table on new line", "In INSERT statements, place the table name on a new line.", DmlKeywords),
             Bool("dml.placeDistinctAndTopClausesOnNewLine", false,
-                "Place DISTINCT and TOP on new line", "Whether to place DISTINCT and TOP clauses on a new line."),
+                "Place DISTINCT and TOP on new line", "Whether to place DISTINCT and TOP clauses on a new line.", DmlKeywords),
             Bool("dml.addNewLineAfterDistinctAndTopClauses", false,
-                "Add new line after DISTINCT and TOP", "Whether to add a new line after DISTINCT and TOP clauses."),
+                "Add new line after DISTINCT and TOP", "Whether to add a new line after DISTINCT and TOP clauses.", DmlKeywords),
             Bool("dml.collapseShortStatements", false,
                 "Collapse short statements", "Collapse short statements onto a single line.", "Collapsing"),
             Int("dml.collapseStatementsShorterThan", 80, 1, 1000,

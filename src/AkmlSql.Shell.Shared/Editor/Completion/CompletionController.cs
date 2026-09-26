@@ -994,7 +994,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                     default:
                     {
-                        var insertText = ApplyFunctionParens(item, snapshot, caretPos, start, item.InsertText,
+                        // A bracketed insert ("[Total Sales]") also replaces the "[" typed before the
+                        // partial and an auto-closed "]" after the caret; see BracketedRange.
+                        var (from, to) = BracketedRange(i => snapshot[i], snapshot.Length, item.InsertText, start, caretPos);
+                        span = new Span(from, to - from);
+                        var insertText = ApplyFunctionParens(item, snapshot, caretPos, from, item.InsertText,
                             out int caretBetweenParens);
 
                         _textView.TextBuffer.Replace(span, insertText);
@@ -1310,8 +1314,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 // Replace: partial text + space → insertText + space. Functions get the same
                 // add-parens treatment as the Enter/Tab commit path (PR #248 review finding #7).
-                var span = new Span(start, beforeSpace - start); // exclude the space itself
-                var insertText = ApplyFunctionParens(item, snapshot, beforeSpace, start, item.InsertText,
+                // A bracketed insert also takes in a "[" typed before the partial (see BracketedRange).
+                var (from, _) = BracketedRange(i => snapshot[i], snapshot.Length, item.InsertText, start, beforeSpace);
+                var span = new Span(from, beforeSpace - from); // exclude the space itself
+                var insertText = ApplyFunctionParens(item, snapshot, beforeSpace, from, item.InsertText,
                     out int caretBetweenParens);
                 _textView.TextBuffer.Replace(span, insertText);
                 MoveCaretIntoParens(caretBetweenParens);
@@ -1524,6 +1530,34 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                  & System.Windows.Input.ModifierKeys.Control) != 0;
                 _adornment.PopupOpacity = ctrlDown ? 0.3 : 1.0;
             }
+        }
+
+        /// <summary>
+        /// The range a completion replaces, widened for an insert that brings its own brackets.
+        /// The identifier scan stops at "[", so for `SELECT [Tot` (with SSMS's auto-closed "]")
+        /// committing "[Total Sales]" replaced only "Tot" and gave `[[Total Sales]]`. Back to a
+        /// "[" before the partial — stopping at "]", a line break, ";" or a quote, so an earlier,
+        /// closed identifier is never swallowed — and over a "]" right after the caret. The same
+        /// rule as the web editor's bracketedRange (akml-editor.js).
+        /// </summary>
+        internal static (int Start, int End) BracketedRange(Func<int, char> charAt, int length, string insertText, int start, int end)
+        {
+            if (string.IsNullOrEmpty(insertText)) return (start, end);
+
+            if (insertText[0] == '[')
+            {
+                for (int k = start - 1; k >= 0; k--)
+                {
+                    var c = charAt(k);
+                    if (c == ']' || c == '\n' || c == '\r' || c == ';' || c == '\'') break;
+                    if (c == '[') { start = k; break; }
+                }
+            }
+
+            if (insertText[insertText.Length - 1] == ']' && end < length && charAt(end) == ']')
+                end++;
+
+            return (start, end);
         }
 
         private static bool IsIdentifierChar(char c)

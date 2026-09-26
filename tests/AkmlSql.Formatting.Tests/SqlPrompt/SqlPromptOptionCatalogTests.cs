@@ -106,4 +106,21 @@ public class SqlPromptOptionCatalogTests
             }
         }
     }
+
+    [Fact]
+    public void Once_a_page_has_a_sub_heading_every_later_option_has_one()
+    {
+        // Both editors start a heading only when the group changes to a named one, so an ungrouped
+        // option after "List items" was drawn under LIST ITEMS (the DML page's INSERT / DISTINCT /
+        // TOP options). An ungrouped option may only come before the first heading.
+        foreach (var section in SqlPromptOptionCatalog.Sections)
+        {
+            var headed = false;
+            foreach (var option in section.Options)
+            {
+                if (option.Group != null) headed = true;
+                else Assert.False(headed, $"{section.Id}: '{option.Path}' has no sub-heading but follows one");
+            }
+        }
+    }
 }

@@ -199,6 +199,58 @@ public sealed class FormatStylesTests
         Assert.Fail($"The preview did not change after changing {because}.");
     }
 
+    [SkippableFact]
+    public async Task A_number_box_shows_the_value_the_style_keeps()
+    {
+        // Blazor re-renders a value only when it changes: typing 0 into "Spaces per tab" (1-16)
+        // clamped the style to 1 while the box kept showing 0, and a cleared box stayed blank.
+        await using var web = await StartWebOrSkipAsync();
+        var (pw, browser, page) = await OpenAsync(web);
+        using var _ = pw;
+        await using var __ = browser;
+
+        await CreateStyleAsync(page, "E2E Style");
+        await page.Locator("[data-testid=page-whitespace]").ClickAsync();
+        var box = page.Locator("[data-testid='option-whitespace.numberOfSpacesInTabs']");
+        await Assertions.Expect(box).ToHaveValueAsync("4");
+
+        await box.FillAsync("0");
+        await box.PressAsync("Tab");
+        await Assertions.Expect(page.Locator("[data-testid='option-whitespace.numberOfSpacesInTabs']")).ToHaveValueAsync("1");
+
+        box = page.Locator("[data-testid='option-whitespace.numberOfSpacesInTabs']");
+        await box.FillAsync("");
+        await box.PressAsync("Tab");
+        await Assertions.Expect(page.Locator("[data-testid='option-whitespace.numberOfSpacesInTabs']")).ToHaveValueAsync("1");
+        await Assertions.Expect(page.Locator("[data-testid=styles-status]")).ToBeVisibleAsync();
+    }
+
+    [SkippableFact]
+    public async Task The_page_does_not_scroll_sideways_on_a_phone()
+    {
+        await using var web = await StartWebOrSkipAsync();
+        using var pw = await Playwright.CreateAsync();
+        IBrowser browser;
+        try { browser = await pw.Chromium.LaunchAsync(); }
+        catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
+        await using var __ = browser;
+        var page = await (await browser.NewContextAsync(new() { ViewportSize = new ViewportSize { Width = 390, Height = 844 } })).NewPageAsync();
+
+        await page.GotoAsync(web.Url + "styles");
+        await page.Locator("[data-testid=style-row]").First.WaitForAsync(new() { Timeout = 60_000 });
+        await Assertions.Expect(page.Locator("[data-testid=style-name]")).Not.ToBeEmptyAsync();
+
+        var overflow = await page.EvaluateAsync<int>("() => document.documentElement.scrollWidth - document.documentElement.clientWidth");
+        // Name what sticks out, so a failure says where to look.
+        var offenders = await page.EvaluateAsync<string>(@"() => [...document.querySelectorAll('body *')]
+            .filter(e => e.getBoundingClientRect().right > document.documentElement.clientWidth + 1)
+            .filter(e => ![...e.children].some(c => c.getBoundingClientRect().right > document.documentElement.clientWidth + 1))
+            .slice(0, 12)
+            .map(e => e.tagName.toLowerCase() + (e.className && typeof e.className === 'string' ? '.' + e.className.trim().split(/\s+/).join('.') : '') + ' w=' + Math.round(e.getBoundingClientRect().width))
+            .join(' | ')");
+        Assert.True(overflow <= 0, $"The styles page is {overflow}px wider than a 390px screen: {offenders}");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static Task SetEditorTextAsync(IPage page, string sql) =>

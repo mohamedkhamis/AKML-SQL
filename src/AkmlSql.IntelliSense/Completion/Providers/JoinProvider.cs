@@ -37,6 +37,12 @@ public class JoinProvider : ICompletionProvider
     /// </summary>
     public AkmlSql.Core.Config.SchemaQualifyMode SchemaQualifyMode { get; set; } = AkmlSql.Core.Config.SchemaQualifyMode.Always;
 
+    /// <summary>
+    /// The IntelliSense bracket option for the JOIN target and its ON columns — the same one the
+    /// plain table list follows. Set by <see cref="CompletionEngine"/> before each call.
+    /// </summary>
+    public AkmlSql.Core.Config.BracketMode BracketMode { get; set; } = AkmlSql.Core.Config.BracketMode.WhenRequired;
+
     public bool CanHandle(CursorContext context, DatabaseCache? cache)
     {
         // Activate ONLY when in JoinTable clause (after a JOIN keyword) — never in plain FROM.
@@ -129,11 +135,11 @@ public class JoinProvider : ICompletionProvider
                 // contain a dot.
                 var qualifiedName = SchemaQualifyMode switch
                 {
-                    AkmlSql.Core.Config.SchemaQualifyMode.Always => SqlIdentifier.QuoteIfNeeded(otherSchema, otherTable),
-                    AkmlSql.Core.Config.SchemaQualifyMode.Never => SqlIdentifier.QuoteIfNeeded(otherTable),
+                    AkmlSql.Core.Config.SchemaQualifyMode.Always => SqlIdentifier.Apply(BracketMode, otherSchema, otherTable),
+                    AkmlSql.Core.Config.SchemaQualifyMode.Never => SqlIdentifier.Apply(otherTable, BracketMode),
                     _ => otherSchema.Equals("dbo", StringComparison.OrdinalIgnoreCase)
-                        ? SqlIdentifier.QuoteIfNeeded(otherTable)
-                        : SqlIdentifier.QuoteIfNeeded(otherSchema, otherTable),
+                        ? SqlIdentifier.Apply(otherTable, BracketMode)
+                        : SqlIdentifier.Apply(BracketMode, otherSchema, otherTable),
                 };
 
                 // When UseAliases is off, both sides of the ON clause fall back to bare
@@ -158,7 +164,7 @@ public class JoinProvider : ICompletionProvider
                 // `alias` is an AvailableAliases key -- for an unaliased `FROM [Order Details]` that is
                 // the bare "Order Details" -- so it is bracketed here.
                 var onClause = FkHelpers.BuildFkPredicate(
-                    targetReference, otherColumns, SqlIdentifier.QuoteIfNeeded(alias), existingColumns);
+                    targetReference, otherColumns, SqlIdentifier.QuoteIfNeeded(alias), existingColumns, BracketMode);
                 var insertText = UseAliases
                     ? $"{qualifiedName} {targetReference} ON {onClause}"
                     : $"{qualifiedName} ON {onClause}";
@@ -181,6 +187,12 @@ public class JoinProvider : ICompletionProvider
     /// T058: Generate a short alias from a table name using PascalCase first letters.
     /// E.g., "OrderDetails" -> "od", "CustomerAddress" -> "ca"
     /// Checks for conflicts with existing aliases and appends a number if needed.
+    /// <para>
+    /// An alias is written unbracketed after the table, so it must be a regular identifier and
+    /// not a reserved word. Initials often are one: "Order Notes" / "OrderNotes" give "on",
+    /// "InvoiceFee" "if", "IssueSummary" "is" — `JOIN [Order Notes] on ON on.Id = …` is not
+    /// T-SQL. Such an alias gets a number, like an alias already in use: "on2".
+    /// </para>
     /// </summary>
     internal static string GenerateAlias(string tableName, Dictionary<string, string> existingAliases)
     {
@@ -188,15 +200,19 @@ public class JoinProvider : ICompletionProvider
 
         if (string.IsNullOrEmpty(alias))
         {
-            alias = tableName.Length >= 2
-                ? tableName[..2].ToLowerInvariant()
-                : tableName.ToLowerInvariant();
+            // Letters, digits and underscores only, starting with a letter: the fallback takes the
+            // name's first characters, which can be a space or a digit.
+            var cleaned = new string(tableName.Where(c => char.IsLetterOrDigit(c) || c == '_').ToArray()).TrimStart('_');
+            while (cleaned.Length > 0 && !char.IsLetter(cleaned[0])) cleaned = cleaned[1..];
+            alias = cleaned.Length >= 2
+                ? cleaned[..2].ToLowerInvariant()
+                : cleaned.Length == 1 ? cleaned.ToLowerInvariant() : "t";
         }
 
-        // Ensure no conflict with existing aliases
+        // Ensure no conflict with existing aliases, and never a reserved word.
         var candidate = alias;
         int suffix = 2;
-        while (existingAliases.ContainsKey(candidate))
+        while (existingAliases.ContainsKey(candidate) || SqlIdentifier.NeedsQuoting(candidate))
         {
             candidate = $"{alias}{suffix}";
             suffix++;

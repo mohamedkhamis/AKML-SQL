@@ -1698,3 +1698,41 @@ than it had to be, and removing VS was not what fixed that.
 
 Verified: installer compiles (53.48 MB); Site 873, Shell 406, Installer unit 40, Web styles 23 +
 E2E 5/5 (Chromium, incl. the sandboxed-engine save) all pass; solution restores without the project.
+
+---
+
+## 2026-09-26 — Review fixes: Format styles (web + SSMS), completion brackets, narrow screens
+
+A code review of the branch (focus: site / plugin options / format styles) found 15 issues; all fixed.
+
+- **SSMS Format Styles window**: saving a built-in rebuilds the style list, so it reads "Built-in ·
+  modified" and Reset works at once (it refused until the window was reopened). A gate option
+  (e.g. "Collapse short statements") enables/disables its dependent rows in place instead of
+  rebuilding the page, so keyboard focus stays on the toggle. Disabled dropdowns now look disabled
+  (`ComboBoxTheming`: read-only face, subtle edge, faint arrow, secondary text).
+- **Engine**: every import format (XML, `.akmlstyle`, JSON) and Duplicate refuse a built-in's name
+  (FR-008); Duplicate also refuses an existing style's name. Before, an XML import named like a
+  built-in silently became an edit of it — overwriting the user's own edits.
+- **Web Format styles page**: a click on the open style no longer reloads it (and drops its edits);
+  a failed "Save as" keeps the edits unsaved; Import asks before replacing unsaved edits; a number
+  box shows the value the style keeps after clamping/rejection; an engine that cannot list its
+  styles is reported (`IProfileStore.EngineStylesError`) instead of failing the page.
+- **Web style picker**: when a reload changes the active style (the engine connecting after the
+  editor loaded, or going away), the editor is told — Format used a different style than the
+  dropdown showed. Engine styles are handed over whole, not as list summaries.
+- **Completion**: columns, FK-join targets and ON predicates follow `IntelliSense.Qualification.
+  BracketMode` like tables do (`SqlIdentifier.Apply`); generated aliases are never reserved words
+  (`on2`, not `on` for "Order Notes"; "or"/"in" no longer offered); SSMS commit of a bracketed
+  completion takes in a typed `[` and an auto-closed `]` (was `[[Total Sales]]`).
+- **Option catalog**: the DML page's INSERT / DISTINCT / TOP options have their own heading (they
+  were drawn under "LIST ITEMS"); a catalog test pins "no ungrouped option after a heading".
+- **Narrow screens (web)**: the app grid is `minmax(0, 1fr)` (its implicit auto column grew to the
+  widest content), the top nav wraps, status texts ellipsize and the bar wraps under 600px, and the
+  styles page's one-column tracks are `minmax(0, 1fr)`. At 390px the styles page no longer scrolls
+  sideways (it was 367px too wide).
+
+Tests: engine `BuiltInNameGuardTests`, `BracketModeAndAliasTests`; formatting catalog heading
+test; shell `FormatStylesUiFixTests` (disabled combo, bracketed commit) and
+`FormatStylesWindowFixTests` (the window itself, headless — `DialogWindow`'s first construction
+outside VS fails once looking up IVsSettingsManager, the helper absorbs it); web
+`StylesReviewFixTests`; Chromium E2E number box + 390px layout.

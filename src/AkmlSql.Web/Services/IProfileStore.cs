@@ -51,6 +51,12 @@ public interface IProfileStore
     /// <summary>True when a paired engine stores styles (new styles are saved there).</summary>
     bool EngineStylesAvailable { get; }
 
+    /// <summary>
+    /// Why the last listing could not include the engine's styles (a timeout, an engine error),
+    /// or null when it could. The browser's styles are listed either way.
+    /// </summary>
+    string? EngineStylesError { get; }
+
     /// <summary>Raised when styles were added, changed, renamed or deleted, or the engine came or went.</summary>
     event Action? StylesChanged;
 
@@ -129,6 +135,8 @@ internal sealed class ProfileStore : IProfileStore
         _bridge != null &&
         _bridge.State == BridgeState.Open &&
         Array.IndexOf(_bridge.EngineCapabilities, CapabilityStyles) >= 0;
+
+    public string? EngineStylesError { get; private set; }
 
     public async Task<IReadOnlyList<ProfileRecord>> ListAsync()
     {
@@ -386,12 +394,24 @@ internal sealed class ProfileStore : IProfileStore
 
     private static string EngineName(string id) => id[EnginePrefix.Length..];
 
+    /// <summary>
+    /// The engine's styles, or none when it cannot list them. It never throws: the built-in and
+    /// browser styles do not need the engine, and a slow or failing engine (the 15 s timeout, an
+    /// engine error, a response without a list) used to fail the whole listing, taking the
+    /// styles page and the editor's style picker down with it.
+    /// </summary>
     private async Task<IReadOnlyList<ProfileRecord>> ListEngineAsync()
     {
+        EngineStylesError = null;
         if (!EngineStylesAvailable) return Array.Empty<ProfileRecord>();
         try
         {
             var response = await SendAsync<ProfileListRequest, ProfileListResponse>(MessageTypes.ProfileList, new ProfileListRequest()).ConfigureAwait(false);
+            if (response?.Profiles == null)
+            {
+                EngineStylesError = "The engine did not return its styles.";
+                return Array.Empty<ProfileRecord>();
+            }
             return response.Profiles
                 .OrderBy(p => p.IsBuiltIn || p.IsCustomizedBuiltIn ? 0 : 1)
                 .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
@@ -411,8 +431,13 @@ internal sealed class ProfileStore : IProfileStore
                 })
                 .ToList();
         }
-        catch (Exception) when (_bridge?.State != BridgeState.Open)
+        catch (Exception ex)
         {
+            // A bridge that closed mid-request is not an error worth showing: the engine is gone.
+            if (_bridge?.State == BridgeState.Open)
+                EngineStylesError = ex is OperationCanceledException
+                    ? "The engine did not answer in time."
+                    : ex.Message;
             return Array.Empty<ProfileRecord>();
         }
     }

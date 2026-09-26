@@ -48,6 +48,10 @@
     .akml-app {
         display: grid;
         grid-template-rows: auto 1fr auto;
+        /* One column exactly the window's width. Without it the implicit auto column grew to the
+           widest content (a long style name, a preview line), so on a phone every page scrolled
+           sideways; .akml-main already scrolls whatever does not fit. */
+        grid-template-columns: minmax(0, 1fr);
         height: 100vh;
         background-color: var(--akml-surface-canvas);
         color: var(--akml-text-primary);
