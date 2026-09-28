@@ -393,6 +393,284 @@
           <ButtonText>AI: Chat Panel</ButtonText>
         </Strings>
       </Button>
+      <!-- Spec 040 (T106) — AKML SQL › Active Style: one slot per style (text, check and
+           visibility set from ActiveStyleCache when the menu opens) plus Edit Styles…. US7 regroups them. -->
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot0" priority="0x0680" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot1" priority="0x0681" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot2" priority="0x0682" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot3" priority="0x0683" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot4" priority="0x0684" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot5" priority="0x0685" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot6" priority="0x0686" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot7" priority="0x0687" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot8" priority="0x0688" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot9" priority="0x0689" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot10" priority="0x068A" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot11" priority="0x068B" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot12" priority="0x068C" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot13" priority="0x068D" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot14" priority="0x068E" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot15" priority="0x068F" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot16" priority="0x0690" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot17" priority="0x0691" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot18" priority="0x0692" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot19" priority="0x0693" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot20" priority="0x0694" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot21" priority="0x0695" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot22" priority="0x0696" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot23" priority="0x0697" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot24" priority="0x0698" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot25" priority="0x0699" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot26" priority="0x069A" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot27" priority="0x069B" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot28" priority="0x069C" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot29" priority="0x069D" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
+        <CommandFlag>TextChanges</CommandFlag>
+        <Strings>
+          <ButtonText>Style</ButtonText>
+        </Strings>
+      </Button>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdEditStyles" priority="0x06A0" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Edit Styles...</ButtonText>
+        </Strings>
+      </Button>
     </Buttons>
   </Commands>
 
@@ -557,6 +835,38 @@
       <IDSymbol name="CmdSnippetSurroundWith" value="0x091C" />
       <!-- Spec 030 T087 — Bulk Format wizard (FR-046) -->
       <IDSymbol name="cmdBulkFormat" value="0x091D" />
+      <!-- Spec 040 (T106) — Active Style slots 0x0920..0x093D and Edit Styles 0x093E -->
+      <IDSymbol name="CmdActiveStyleSlot0" value="0x0920" />
+      <IDSymbol name="CmdActiveStyleSlot1" value="0x0921" />
+      <IDSymbol name="CmdActiveStyleSlot2" value="0x0922" />
+      <IDSymbol name="CmdActiveStyleSlot3" value="0x0923" />
+      <IDSymbol name="CmdActiveStyleSlot4" value="0x0924" />
+      <IDSymbol name="CmdActiveStyleSlot5" value="0x0925" />
+      <IDSymbol name="CmdActiveStyleSlot6" value="0x0926" />
+      <IDSymbol name="CmdActiveStyleSlot7" value="0x0927" />
+      <IDSymbol name="CmdActiveStyleSlot8" value="0x0928" />
+      <IDSymbol name="CmdActiveStyleSlot9" value="0x0929" />
+      <IDSymbol name="CmdActiveStyleSlot10" value="0x092A" />
+      <IDSymbol name="CmdActiveStyleSlot11" value="0x092B" />
+      <IDSymbol name="CmdActiveStyleSlot12" value="0x092C" />
+      <IDSymbol name="CmdActiveStyleSlot13" value="0x092D" />
+      <IDSymbol name="CmdActiveStyleSlot14" value="0x092E" />
+      <IDSymbol name="CmdActiveStyleSlot15" value="0x092F" />
+      <IDSymbol name="CmdActiveStyleSlot16" value="0x0930" />
+      <IDSymbol name="CmdActiveStyleSlot17" value="0x0931" />
+      <IDSymbol name="CmdActiveStyleSlot18" value="0x0932" />
+      <IDSymbol name="CmdActiveStyleSlot19" value="0x0933" />
+      <IDSymbol name="CmdActiveStyleSlot20" value="0x0934" />
+      <IDSymbol name="CmdActiveStyleSlot21" value="0x0935" />
+      <IDSymbol name="CmdActiveStyleSlot22" value="0x0936" />
+      <IDSymbol name="CmdActiveStyleSlot23" value="0x0937" />
+      <IDSymbol name="CmdActiveStyleSlot24" value="0x0938" />
+      <IDSymbol name="CmdActiveStyleSlot25" value="0x0939" />
+      <IDSymbol name="CmdActiveStyleSlot26" value="0x093A" />
+      <IDSymbol name="CmdActiveStyleSlot27" value="0x093B" />
+      <IDSymbol name="CmdActiveStyleSlot28" value="0x093C" />
+      <IDSymbol name="CmdActiveStyleSlot29" value="0x093D" />
+      <IDSymbol name="CmdEditStyles" value="0x093E" />
     </GuidSymbol>
   </Symbols>
 

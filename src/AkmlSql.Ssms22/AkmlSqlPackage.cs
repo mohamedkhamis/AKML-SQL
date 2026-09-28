@@ -142,6 +142,8 @@ namespace AkmlSql.Ssms22
                 TryInitCommand("BulkFormatCommand", () => AkmlSql.Shell.Shared.Productivity.BulkFormatCommand.Initialize(this, commandService));
                 TryInitCommand("BookmarkCommands", () => AkmlSql.Shell.Shared.Navigation.BookmarkCommands.Initialize(this, commandService));
                 TryInitCommand("SplitTableCommand", () => SplitTableCommand.Initialize(this, commandService));
+                // Spec 040 (T107) — AKML SQL › Active Style: style slots + Edit Styles…
+                TryInitCommand("ActiveStyleMenuCommands", () => ActiveStyleMenuCommands.Initialize(this, commandService));
             }
 
             // Non-critical initialization — failures must not break the extension
@@ -198,6 +200,16 @@ namespace AkmlSql.Ssms22
                 // exited or crashed (kept for restore on start).
                 _ = JoinableTaskFactory.RunAsync(() => ReconcileHistoryOpenStateAsync(engineLaunch));
 
+                // Spec 040 (T104): the Active Style menu has its style list before it first opens.
+                _ = engineLaunch.ContinueWith(_ => ActiveStyleCache.Instance.RefreshNow(),
+                    System.Threading.Tasks.TaskScheduler.Default);
+
+#if DEBUG
+                // Spec 040 (T105): the menu table is tested against RegisteredCommands.Ids, so a
+                // command registered without being listed there is flagged here.
+                if (commandService != null) LogUnlistedCommands(commandService);
+#endif
+
                 ExecutionCapture.Initialize(this);
                 ExecutionInterceptor.Initialize(this);
                 TabManagementInitializer.Initialize(this);
@@ -236,6 +248,33 @@ namespace AkmlSql.Ssms22
                 }
             }
         }
+
+#if DEBUG
+        /// <summary>
+        /// Spec 040 (T105) — Debug builds only: logs every command registered in the AKML command set
+        /// that <see cref="RegisteredCommands.Ids"/> does not list. Reads the service's registered
+        /// commands through <c>MenuCommandService.GetCommandList</c> (protected), by reflection.
+        /// </summary>
+        private static void LogUnlistedCommands(OleMenuCommandService commandService)
+        {
+            try
+            {
+                var getList = typeof(MenuCommandService).GetMethod("GetCommandList",
+                    BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(Guid) }, null);
+                if (!(getList?.Invoke(commandService, new object[] { PackageGuids.AkmlSqlCmdSet }) is System.Collections.ICollection commands))
+                    return;
+                foreach (var command in commands)
+                {
+                    if (command is MenuCommand mc && !RegisteredCommands.Ids.Contains(mc.CommandID.ID))
+                        Log.Warning("Command 0x{Id:X4} is registered but missing from RegisteredCommands.Ids", mc.CommandID.ID);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "RegisteredCommands check failed");
+            }
+        }
+#endif
 
         /// <summary>
         /// Invokes a single command's Initialize call. Catches and logs any exception so that a
@@ -485,6 +524,12 @@ namespace AkmlSql.Ssms22
                     }
                 }
 
+                // Spec 040 (T110) — interim placement until US7's menu builder: an "Active Style"
+                // submenu under AKML SQL, and the same submenu plus Format Document on the query
+                // editor's context menu.
+                AddActiveStylePopup(dte, popupBar, cmdSetGuid);
+                AddEditorContextActiveStyle(dte, bars, cmdSetGuid);
+
                 popup.Visible = true;
                 Log.Information("AKML SQL top-level menu created with {Count} items", cmds.Length);
             }
@@ -492,6 +537,80 @@ namespace AkmlSql.Ssms22
             {
                 Log.Warning(ex, "Failed to create AKML SQL top-level menu (non-fatal)");
                 System.Threading.Interlocked.Exchange(ref _menuInjected, 0);
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (T110) — adds an "Active Style" popup (30 style slots + Edit Styles…) to
+        /// <paramref name="parentBar"/>. The slots show only as many styles as exist (their
+        /// BeforeQueryStatus hides the rest). Best effort: a failure leaves the rest of the menu.
+        /// </summary>
+        private static void AddActiveStylePopup(EnvDTE.DTE dte, dynamic parentBar, string cmdSetGuid)
+        {
+            try
+            {
+                dynamic popup = parentBar.Controls.Add(10, Type.Missing, Type.Missing, Type.Missing, true);
+                popup.Caption = "Active Style";
+                dynamic bar = popup.CommandBar;
+                for (var i = 0; i < CommandIds.ActiveStyleSlotCount; i++)
+                {
+                    var cmd = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdActiveStyleSlot0 + i);
+                    cmd?.AddControl(bar, bar.Controls.Count + 1);
+                }
+                var edit = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdEditStyles);
+                if (edit != null)
+                {
+                    dynamic control = edit.AddControl(bar, bar.Controls.Count + 1);
+                    control.BeginGroup = true;
+                }
+                popup.Visible = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Active Style: could not add the submenu");
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (T110) — finds the query editor's context menu among the DTE command bars (a
+        /// name containing "SQL" and "Context", or "Code Window") and adds Active Style and Format
+        /// Document to it. SSMS's bar names are not documented, so every candidate is logged; when
+        /// none matches, the menu bar placement is all there is.
+        /// </summary>
+        private static void AddEditorContextActiveStyle(EnvDTE.DTE dte, dynamic bars, string cmdSetGuid)
+        {
+            try
+            {
+                dynamic? target = null;
+                string? targetName = null;
+                foreach (dynamic bar in bars)
+                {
+                    string name;
+                    try { name = (string)bar.Name; }
+                    catch { continue; }
+                    var candidate =
+                        (name.IndexOf("SQL", StringComparison.OrdinalIgnoreCase) >= 0
+                         && name.IndexOf("Context", StringComparison.OrdinalIgnoreCase) >= 0)
+                        || string.Equals(name, "Code Window", StringComparison.OrdinalIgnoreCase);
+                    if (!candidate) continue;
+                    Log.Debug("Active Style: editor context menu candidate '{Name}'", name);
+                    if (target == null) { target = bar; targetName = name; }
+                }
+
+                if (target == null)
+                {
+                    Log.Information("Active Style: no editor context menu found");
+                    return;
+                }
+
+                AddActiveStylePopup(dte, target, cmdSetGuid);
+                var format = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdFormatDocument);
+                format?.AddControl(target, target.Controls.Count + 1);
+                Log.Information("Active Style: added to the editor context menu '{Name}'", targetName);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Active Style: could not add to the editor context menu");
             }
         }
 

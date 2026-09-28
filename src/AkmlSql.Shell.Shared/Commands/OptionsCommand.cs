@@ -188,6 +188,16 @@ namespace AkmlSql.Shell.Shared.Commands
             try { Analysis.ErrorListReporter.ReapplyAll(); }
             catch (Exception ex) { Log.Debug(ex, "Options: Error List re-apply failed"); }
 
+            // Spec 040 (T108): the status bar follows "Show active style in status bar" at once,
+            // and (T104) the Active Style menu shows a style chosen on the Format page.
+            try
+            {
+                StatusBar.StatusBarManager.ApplyStatusBarSetting(
+                    settings.Formatter.ShowProfileInStatusBar, settings.Formatter.ActiveProfile);
+            }
+            catch (Exception ex) { Log.Debug(ex, "Options: status bar update failed"); }
+            Formatting.ActiveStyleCache.Instance.RefreshNow();
+
             // T066: Notify the engine to reload its settings cache (fire-and-forget)
             var accessor = TestRpcAccessor;
             if (accessor != null)

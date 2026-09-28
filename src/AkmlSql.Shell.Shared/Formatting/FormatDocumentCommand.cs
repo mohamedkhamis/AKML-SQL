@@ -99,10 +99,6 @@ namespace AkmlSql.Shell.Shared.Formatting
                         var response = await client.SendRequestAsync<FormatResponse, FormatRequest>(
                             MessageTypes.FormatDocument, request, timeoutMs: 10000);
 
-                        // A style that cannot be loaded still "succeeds" (with defaults), so this is
-                        // reported outside the preserve branch below — which stays silent on success.
-                        FormatFailureNotifier.NotifyProfileFallbackOnce(response.ProfileFallbackWarning);
-
                         if (response.Success && response.WasModified)
                         {
                             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
@@ -114,6 +110,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                             await FormatFailureNotifier.NotifyIfPreservedAsync(
                                 response.Success, response.ValidationPassed, response.Diagnostics);
                         }
+
+                        // Spec 040 (T109): "Formatted with 'X'", or — when the style could not be
+                        // loaded and defaults were used — the warn-once notice instead.
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        FormatFeedback.Report(request.ProfileName, response.Success && response.ValidationPassed,
+                            response.ProfileFallbackWarning);
                     }
                     catch (Exception ex)
                     {

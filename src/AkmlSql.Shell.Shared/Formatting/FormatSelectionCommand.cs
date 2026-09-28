@@ -85,6 +85,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                             await FormatFailureNotifier.NotifyIfPreservedAsync(
                                 response.Success, response.ValidationPassed, diagnostics: null);
                         }
+
+                        // Spec 040 (T109): the same feedback as Format Document, including the
+                        // style-fallback warning (FormatSelectionResponse key 7).
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        FormatFeedback.Report(request.ProfileName, response.Success && response.ValidationPassed,
+                            response.ProfileFallbackWarning);
                     }
                     catch (Exception ex)
                     {

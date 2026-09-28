@@ -324,6 +324,7 @@ OriginalEnd       int      Adjusted selection end
 WasModified       bool
 ValidationPassed  bool
 ElapsedMs         long
+ProfileFallbackWarning string?  Key 7 (spec 040): set when the style could not be loaded and defaults were used
 ```
 
 ---

@@ -521,88 +521,91 @@ It covers gap items STY-04 to STY-09.
 
 ### Tests for User Story 4 (write first)
 
-- [ ] T084 [P] [US4] Write `tests/AkmlSql.Core.Tests/Ipc/FormatSelectionResponseTests.cs`: key 7 `ProfileFallbackWarning` round-trips, and the legacy shape deserialises with null.
-- [ ] T085 [P] [US4] Extend `tests/AkmlSql.Engine.Tests/Formatter/ProfileFallbackWarningTests.cs`: `FormatSelection` with a missing profile name returns a non-null `ProfileFallbackWarning` with the same text as `FormatDocument`.
-- [ ] T086 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesSearchTests.cs`:
+- [X] T084 [P] [US4] Write `tests/AkmlSql.Core.Tests/Ipc/FormatSelectionResponseTests.cs`: key 7 `ProfileFallbackWarning` round-trips, and the legacy shape deserialises with null.
+- [X] T085 [P] [US4] Extend `tests/AkmlSql.Engine.Tests/Formatter/ProfileFallbackWarningTests.cs`: `FormatSelection` with a missing profile name returns a non-null `ProfileFallbackWarning` with the same text as `FormatDocument`.
+- [X] T086 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesSearchTests.cs`:
   - The view model's `Search("comma")` returns only groups whose options mention "comma" in DisplayName, Description, Note, Subgroup, EnumLabels or the option id, with per-group counts, and the first match's id.
   - An empty query returns every group with no counts.
-- [ ] T087 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesChangeMarkersTests.cs`:
+- [X] T087 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesChangeMarkersTests.cs`:
   - `IsChanged(id)` is true when the working value ≠ the catalog default.
   - `ChangedCount(groupId)` counts per page.
   - `ResetOption(id)` restores the default and lowers the count.
   - `MovedLines` is computed positionally between the previous and current preview, **only** after an option edit (not after a style or page switch).
   - `IsDirty` returns to false when the user sets every edited option back to its saved value.
-- [ ] T088 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/StyleNameDialogValidationTests.cs`:
+- [X] T088 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/StyleNameDialogValidationTests.cs`:
   - empty name, a name longer than 80 characters, illegal file-name characters, "..", and an existing name (case-insensitive, trimmed) each show a message and disable OK;
   - Rename allows the current name, including a change of case only;
   - a valid name enables OK.
-- [ ] T089 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/ActiveStyleMenuTests.cs`, with a fake `ActiveStyleCache`:
+- [X] T089 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/ActiveStyleMenuTests.cs`, with a fake `ActiveStyleCache`:
   - slot N shows style N's name, checked when active, visible only when style N exists;
   - more than 30 styles → only 30 are shown, and the last visible slot is style 30;
   - invoking a slot sets `Formatter.ActiveProfile` (AppData isolated) and raises the cache's refresh.
-- [ ] T090 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/StatusBarTransientTests.cs`, with an `IVsStatusbar` fake (or an internal text sink seam added to `StatusBarManager`):
+- [X] T090 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/StatusBarTransientTests.cs`, with an `IVsStatusbar` fake (or an internal text sink seam added to `StatusBarManager`):
   - `ShowTransient` shows the text, then restores the idle text after the timeout;
   - while the transaction indicator is active, the idle text isn't restored over it;
   - `SetActiveProfile` does nothing when `ShowProfileInStatusBar` is false.
-- [ ] T091 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesKeyboardTests.cs` (`[StaFact]`, window built headlessly with a fake engine client), calling `HandleKey(key, modifiers, listFocused)` (T102):
+- [X] T091 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesKeyboardTests.cs` (`[StaFact]`, window built headlessly with a fake engine client), calling `HandleKey(key, modifiers, listFocused)` (T102):
   - Ctrl+S saves only when Save is enabled; Ctrl+F focuses the search box;
   - F2 on the list opens rename through the injectable name-dialog hook;
   - Delete on a built-in, team or active style shows a status message and doesn't delete;
   - Enter on the list makes the selected style active;
   - the style list's ⋮ button has `AutomationProperties.Name` "Style actions" (T185).
-- [ ] T092 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatFeedbackTests.cs` for `FormatFeedback.Report(profileName, success, fallbackWarning)` (T109):
+- [X] T092 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/FormatFeedbackTests.cs` for `FormatFeedback.Report(profileName, success, fallbackWarning)` (T109):
   - success with no warning → the status-bar test hook receives `Formatted with 'X'`;
   - with a warning → the warn-once notifier hook (`FormatFailureNotifier.ProfileFallbackNotifierOverride`) gets the text, and no "Formatted with" message appears;
   - failure → neither message.
-- [ ] T093 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/ActiveStyleCacheTests.cs` for `ActiveStyleCache` (T104), with a fake ProfileList client, a fake clock and AppData isolated:
+- [X] T093 [P] [US4] Write `tests/AkmlSql.Shell.Shared.Tests/ActiveStyleCacheTests.cs` for `ActiveStyleCache` (T104), with a fake ProfileList client, a fake clock and AppData isolated:
   - `RefreshAsync` marks as active the style named by `Formatter.ActiveProfile` in config;
   - several `RequestRefresh` calls within 5 s cause one refresh, and a call after 5 s causes another;
   - `Changed` fires once per completed refresh;
   - when the ProfileList call fails, `Styles` keeps the last snapshot and `Changed` doesn't fire.
-- [ ] T094 [P] [US4] Extend `tests/AkmlSql.Shell.Shared.Tests/FormatStylesRowLayoutTests.cs` (T075) for the row additions in T103:
+- [X] T094 [P] [US4] Extend `tests/AkmlSql.Shell.Shared.Tests/FormatStylesRowLayoutTests.cs` (T075) for the row additions in T103:
   - every Integer option has ▲ and ▼ buttons that step the value by 1 and stop at the range limits;
   - every option with a Note or "Takes effect when …" text shows it in a `TextBlock` under its row;
   - options with an `EnabledWhen` gate are indented by `Spacing.Lg` more than their parent.
 
 ### Implementation for User Story 4
 
-- [ ] T095 [P] [US4] Add `[Key(7)] public string? ProfileFallbackWarning { get; set; }` to `src/AkmlSql.Core/Ipc/Messages/FormatSelectionResponse.cs`. In `HandleFormatSelection` (`src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` ~:68), use the `LoadProfile(name, out var warning)` overload (~:895-914) and set the field.
-- [ ] T096 [US4] In `FormatStylesEditorViewModel.cs` and `FormatStylesEditorWindow.cs`:
+- [X] T095 [P] [US4] Add `[Key(7)] public string? ProfileFallbackWarning { get; set; }` to `src/AkmlSql.Core/Ipc/Messages/FormatSelectionResponse.cs`. In `HandleFormatSelection` (`src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` ~:68), use the `LoadProfile(name, out var warning)` overload (~:895-914) and set the field.
+- [X] T096 [US4] In `FormatStylesEditorViewModel.cs` and `FormatStylesEditorWindow.cs`:
   - keep the parsed `FormatStylesSchemaModel` model (today a local at ~:1812) as `_viewModel.SchemaModel`, and keep a `Dictionary<string, TreeViewItem>` groupId → leaf;
   - add `internal SearchResult Search(string query)`, matching DisplayName, Description, Note, Subgroup, EnumLabels and the option id, case-insensitive. It returns the matching group ids with counts, the matching option ids, and the first match.
-- [ ] T097 [US4] In `FormatStylesEditorWindow.cs`, add the option search box:
+- [X] T097 [US4] In `FormatStylesEditorWindow.cs`, add the option search box:
   - A `TextBox` above the page tree (~:1473-1511) with placeholder `Search for options…`, and a 150 ms debounce.
   - The tree hides leaves (and emptied categories) with no matches, and each shown leaf gets a count badge (`Typography.Small`, `AccentPrimary`).
   - `UpdateRightForGroup` highlights matching rows with the `SurfaceSelection` background.
   - Enter selects the first match's page and scrolls to its row.
   - Esc, handled in the TextBox's `PreviewKeyDown` with `e.Handled = true`, clears the query when there is one. When the box is already empty, Esc falls through to the window's `IsCancel` Close.
-- [ ] T098 [US4] In `FormatStylesEditorViewModel.cs`:
+  - *Done differently:* the leaf badges ("(N)" matches, "● N" changed) inherit the leaf's foreground instead of `AccentPrimary`, so they stay readable on the selected (accent) leaf.
+- [X] T098 [US4] In `FormatStylesEditorViewModel.cs`:
   - add `IsChanged(string id)` (working value ≠ `_schemaDefaults[id]`), `ChangedCount(string groupId)` and `ResetOption(string id)` (sets the default, queues the preview);
   - replace the sticky `IsDirty` with a recomputation against the saved values: rebuild them the way `RevertChanges` does (~:737-738) into `_savedValues` whenever a style loads or saves;
   - capture a `markChanges` flag alongside the preview sequence in `QueuePreviewAsync` (~:472-548): true only from `SetWorkingValue`/`ResetOption`;
   - store `PreviousPreviewLines` and expose `MovedLines` (a positional compare, as in `src/AkmlSql.Web/Pages/Styles.razor` ~:478-509).
-- [ ] T099 [US4] In `FormatStylesEditorWindow.cs`:
+- [X] T099 [US4] In `FormatStylesEditorWindow.cs`:
   - a changed option shows a bold label and a small `↺` button, tooltip `Back to SQL Prompt's default (‹value›)`, that calls `ResetOption`;
   - tree leaves show the changed count (distinct from search counts: prefix `●` or use a different token);
   - after an option edit, set `SqlPreviewView.HighlightLines = MovedLines` for 2 s with a `DispatcherTimer`, then clear it.
-- [ ] T100 [US4] Move the preview in `FormatStylesEditorWindow.cs` to theme colours (the colours were done early, in T080):
+- [X] T100 [US4] Move the preview in `FormatStylesEditorWindow.cs` to theme colours (the colours were done early, in T080):
   - remove the fixed `PreviewBgBrush`/`PreviewTextBrush`/`PreviewMutedBrush` card colours (~:117-128, ~:1609-1611) in favour of `ThemeTokens.EditorPanelBackground` (or `SurfaceInput`), `TextPrimary` and `TextSecondary` through `SetResourceReference`;
   - turn on `ShowLineNumbers`;
   - keep the amber warning bar semantic colours.
-- [ ] T101 [US4] Friendlier names:
+- [X] T101 [US4] Friendlier names:
   - `src/AkmlSql.Shell.Shared/Formatting/StyleNameDialog.cs`: accept `IReadOnlyCollection<string> existingNames` and `string? currentName`. `Revalidate` (~:147-159) checks empty, longer than 80 characters, illegal characters, "..", and duplicates (OrdinalIgnoreCase, trimmed; the current name is exempt). OK is disabled until valid.
   - `ShowNewStyle`/`ShowRename` pass the names from `_viewModel.Profiles`.
   - Add `ShowCopyStyle(owner, existingNames, suggested)`.
   - `FormatStylesEditorWindow.OnCopyStyleAsync` (~:1111-1117) prompts with `UniqueName($"{name} copy")` pre-filled, then calls a new `FormatStylesEditorViewModel.CopyProfileAsync(source, newName)`.
   - The Import rename prompt (T081) also passes the existing style names, so a clashing name is caught before the import.
-- [ ] T102 [US4] Keyboard in `FormatStylesEditorWindow.cs`, using the `SettingsWindow.OnWindowKeyDown` pattern (~:1638-1658). Put all key handling in `internal bool HandleKey(Key key, ModifierKeys mods, bool listFocused)`, called from the window's `PreviewKeyDown`, with an injectable rename-dialog hook (tested by T091):
+  - *Done:* the duplicate check was already in place for Import (T081); Copy now asks for a name (`ShowCopyStyle`) and calls `CopyProfileAsync(source, newName)`.
+- [X] T102 [US4] Keyboard in `FormatStylesEditorWindow.cs`, using the `SettingsWindow.OnWindowKeyDown` pattern (~:1638-1658). Put all key handling in `internal bool HandleKey(Key key, ModifierKeys mods, bool listFocused)`, called from the window's `PreviewKeyDown`, with an injectable rename-dialog hook (tested by T091):
   - **Window:** Ctrl+S → Save (when enabled); Ctrl+F → focus the search box.
   - **Style list:** F2 → Rename; Delete → Delete (refuse built-in, team and active styles with `SetStatus` explaining why); Enter → Set active.
-- [ ] T103 [US4] In `FormatStylesEditorWindow.cs` (tested by T094):
+  - *Done differently:* there is no "team" style yet (no shared-folder styles exist in the list model), so Delete refuses built-in and active styles. The ⋮ glyph's accessible name (T185) was set here because T091 tests it.
+- [X] T103 [US4] In `FormatStylesEditorWindow.cs` (tested by T094):
   - **Integers:** in `BuildControlForSetting` (~:2097-2156), add small ▲/▼ buttons that step by 1 within the range and reuse the existing validation.
   - **Notes:** show each option's Note and "Takes effect when …" as grey `Typography.Small` text **under** the row, not only in the tooltip.
   - **Child options:** indent options with an `EnabledWhen` gate by `Spacing.Lg`.
-- [ ] T104 [US4] Create `src/AkmlSql.Shell.Shared/Formatting/ActiveStyleCache.cs` (add it to the projitems):
+- [X] T104 [US4] Create `src/AkmlSql.Shell.Shared/Formatting/ActiveStyleCache.cs` (add it to the projitems):
   - a thread-safe snapshot `IReadOnlyList<(string Name, string Source, bool IsActive)> Styles`;
   - `Task RefreshAsync()` via the existing ProfileList IPC, marking active from `ConfigManager.Load().Formatter.ActiveProfile`;
   - `void RequestRefresh()`, throttled to once per 5 s, fire-and-forget;
@@ -612,14 +615,14 @@ It covers gap items STY-04 to STY-09.
     - after `FormatStylesEditorWindow.Launch` returns (`Commands/FormatStylesCommand.cs`, `Dialogs/Pages/FormattingPage.cs` ~:98);
     - after `OptionsCommand.SaveAndNotify`.
   - Take the client accessor (`IRpcClientAccessor`) and a clock (`Func<DateTime>`) through an internal constructor, so it can be tested (T093). Production uses the engine client and `DateTime.UtcNow`.
-- [ ] T105 [US4] Create `src/AkmlSql.Shell.Shared/Commands/RegisteredCommands.cs` (add it to the projitems) with `internal static readonly IReadOnlyCollection<int> Ids`, listing every command id the SSMS package registers.
+- [X] T105 [US4] Create `src/AkmlSql.Shell.Shared/Commands/RegisteredCommands.cs` (add it to the projitems) with `internal static readonly IReadOnlyCollection<int> Ids`, listing every command id the SSMS package registers.
   - Start from `TryInitCommand` in `src/AkmlSql.Ssms22/AkmlSqlPackage.cs` (~:62-143), and add the Active Style slots and Edit Styles (T106).
   - In `AkmlSqlPackage`, after registration, add a debug-only check that every registered id is in `RegisteredCommands.Ids`, logging any that are missing.
   - Keep the list in sync whenever a command is added.
-- [ ] T106 [US4] Add the command ids and VSCT buttons:
+- [X] T106 [US4] Add the command ids and VSCT buttons:
   - `src/AkmlSql.Shell.Shared/PackageGuids.cs`: `CmdActiveStyleSlot0 = 0x0920` through `CmdActiveStyleSlot29 = 0x093D` (a base constant plus a count is enough) and `CmdEditStyles = 0x093E`, inside the reserved free range, checking there are no clashes.
   - `src/AkmlSql.Ssms22/AkmlSqlSsms22.vsct`: matching IDSymbols and 31 `<Button>`s with `DynamicVisibility` and `TextChanges`, placeholder text "Style", in `AkmlSqlMenuGroup` for now. US7 regroups them.
-- [ ] T107 [US4] Create `src/AkmlSql.Shell.Shared/Formatting/ActiveStyleMenuCommands.cs` (add it to the projitems):
+- [X] T107 [US4] Create `src/AkmlSql.Shell.Shared/Formatting/ActiveStyleMenuCommands.cs` (add it to the projitems):
   - **Initialize:** register 30 `OleMenuCommand`s whose `BeforeQueryStatus` sets `Text`, `Checked` and `Visible` from `ActiveStyleCache` (slot index → style), and calls `ActiveStyleCache.RequestRefresh()`.
   - **Invoke:**
     1. `ConfigManager.Load()`, set `Formatter.ActiveProfile`, `ConfigManager.Save`;
@@ -627,16 +630,16 @@ It covers gap items STY-04 to STY-09.
     3. `ActiveStyleCache.RequestRefresh()`.
   - **Edit Styles…:** run the same path as `FormatStylesCommand`.
   - Register it in `AkmlSqlPackage.TryInitCommand` (`src/AkmlSql.Ssms22/AkmlSqlPackage.cs` ~:62-143).
-- [ ] T108 [US4] In `src/AkmlSql.Shell.Shared/StatusBar/StatusBarManager.cs`:
+- [X] T108 [US4] In `src/AkmlSql.Shell.Shared/StatusBar/StatusBarManager.cs`:
   - add `ShowTransient(string text, int seconds)`: a `DispatcherTimer` restores `_idleText` unless `_transactionIndicatorActive`;
   - make `SetActiveProfile` a no-op when `ConfigManager.Load().Formatter.ShowProfileInStatusBar` is false (2 s cached read);
   - gate the editor's call in `FormatStylesEditorWindow.UpdateStatusBarActiveStyle` (~:1371-1383) the same way;
   - in `OptionsCommand.SaveAndNotify`, set or clear the active-style idle text from the saved settings;
   - add an internal text-sink seam for T090.
-- [ ] T109 [US4] Show which style formatted the code, through a new `src/AkmlSql.Shell.Shared/Formatting/FormatFeedback.cs` (add it to the projitems; tested by T092) with `internal static void Report(string profileName, bool success, string? fallbackWarning)`, which both commands call:
+- [X] T109 [US4] Show which style formatted the code, through a new `src/AkmlSql.Shell.Shared/Formatting/FormatFeedback.cs` (add it to the projitems; tested by T092) with `internal static void Report(string profileName, bool success, string? fallbackWarning)`, which both commands call:
   - `src/AkmlSql.Shell.Shared/Formatting/FormatDocumentCommand.cs` (~:84-121): on success with no `ProfileFallbackWarning`, call `StatusBarManager.ShowTransient($"Formatted with '{profileName}'", 4)`.
   - `FormatSelectionCommand.cs` (~:56-92): the same, and call `FormatFailureNotifier.NotifyProfileFallbackOnce(response.ProfileFallbackWarning)` when it is present.
-- [ ] T110 [US4] Add an interim menu placement in `src/AkmlSql.Ssms22/AkmlSqlPackage.cs` `EnsureTopLevelMenu` (~:383-490), until US7 replaces the builder:
+- [X] T110 [US4] Add an interim menu placement in `src/AkmlSql.Ssms22/AkmlSqlPackage.cs` `EnsureTopLevelMenu` (~:383-490), until US7 replaces the builder:
   - Add an "Active Style" `msoControlPopup` whose controls are the 30 slots plus "Edit Styles…" (`dte.Commands.Item(guid, id).AddControl`).
   - Find SSMS's query-editor context command bar by enumerating `dte.CommandBars` names that contain "SQL" and "Context", or equal "Code Window". Log every candidate name at Debug level and pick the first match. Add the same popup and a "Format Document" control to it.
   - When nothing matches, log `Active Style: no editor context menu found` at Information level and continue (quickstart scenario 26 may be waived).

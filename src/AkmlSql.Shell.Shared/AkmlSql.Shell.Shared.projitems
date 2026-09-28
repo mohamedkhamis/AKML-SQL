@@ -32,6 +32,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatRequestDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleMenuCommands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatFeedback.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RegisteredCommands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ImportSummaryDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\SsmsConnectionContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />

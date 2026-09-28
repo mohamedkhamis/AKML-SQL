@@ -173,5 +173,84 @@ namespace AkmlSql.Shell.Shared.Tests
                 CloseWithoutPrompt(window);
             }
         }
+
+        /// <summary>The row of one option: the editor tags each row with the option's id.</summary>
+        private static Border Row(StackPanel host, string settingId) =>
+            host.Children.OfType<Border>().Single(b => Equals(b.Tag, settingId));
+
+        /// <summary>
+        /// Spec 040 (T094, T103) — the row additions: ▲/▼ steppers on every number option that
+        /// stop at its range, each option's note shown under its row, and options another option
+        /// turns on indented under it.
+        /// </summary>
+        [StaFact]
+        public async Task Number_steppers_notes_and_child_indentation()
+        {
+            var schema = SchemaJson();
+            var vm = await LoadedAsync(schema);
+            var window = NewWindow(vm);
+            try
+            {
+                var pages = FormatStylesSchemaModel.Parse(schema).FlatGroups.Where(g => g.Settings.Count > 0).ToList();
+                var layoutRoot = LayoutRoot(window);
+                int steppers = 0, notes = 0, children = 0;
+
+                foreach (var page in pages)
+                {
+                    ShowPage(window, layoutRoot, page);
+                    var host = Host(window);
+
+                    foreach (var setting in page.Settings)
+                    {
+                        var row = Row(host, setting.Id);
+
+                        if (FormatStylesSchemaModel.ControlKindFor(setting) == FormatStylesSchemaModel.ControlKind.IntBox)
+                        {
+                            var box = Descendants<TextBox>(row).Single();
+                            var up = Descendants<System.Windows.Controls.Primitives.RepeatButton>(row).Single(b => Equals(b.Content, "▲"));
+                            var down = Descendants<System.Windows.Controls.Primitives.RepeatButton>(row).Single(b => Equals(b.Content, "▼"));
+                            Assert.Equal("Increase", System.Windows.Automation.AutomationProperties.GetName(up));
+                            Assert.Equal("Decrease", System.Windows.Automation.AutomationProperties.GetName(down));
+                            if (!box.IsEnabled || setting.Max == null || setting.Min == null) continue;
+
+                            box.Text = setting.Max.ToString();
+                            Click(up);
+                            Assert.Equal(setting.Max.ToString(), box.Text);
+                            Click(down);
+                            Assert.Equal((setting.Max - 1).ToString(), box.Text);
+
+                            box.Text = setting.Min.ToString();
+                            Click(down);
+                            Assert.Equal(setting.Min.ToString(), box.Text);
+                            Click(up);
+                            Assert.Equal((setting.Min + 1).ToString(), box.Text);
+                            steppers++;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(setting.Note))
+                        {
+                            Assert.Contains(Descendants<TextBlock>(row), t => t.Text == setting.Note && t.Visibility == Visibility.Visible);
+                            notes++;
+                        }
+
+                        var gated = setting.EnabledWhenId != null;
+                        Assert.Equal(gated ? Ui.Theme.Spacing.Lg : 0, row.Margin.Left);
+                        if (gated) children++;
+                    }
+                }
+
+                // The snapshot has all three kinds; a vacuous pass would hide a broken lookup.
+                Assert.True(steppers > 0, "no number option was stepped");
+                Assert.True(notes > 0, "no option note was found");
+                Assert.True(children > 0, "no dependent option was found");
+            }
+            finally
+            {
+                CloseWithoutPrompt(window);
+            }
+        }
+
+        private static void Click(System.Windows.Controls.Primitives.ButtonBase button) =>
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
     }
 }

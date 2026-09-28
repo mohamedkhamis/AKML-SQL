@@ -65,7 +65,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
-            var profile = LoadProfile(request.ProfileName);
+            var profile = LoadProfile(request.ProfileName, out var fallbackWarning);
             var selFormatter = new SelectionFormatter();
             var result = selFormatter.FormatSelection(
                 request.Text, request.SelectionStart, request.SelectionEnd, profile);
@@ -78,7 +78,8 @@ public class FormatRequestHandler(ProfileManager profileManager)
                 OriginalEnd = result.OriginalEnd,
                 WasModified = result.WasModified,
                 ValidationPassed = result.ValidationPassed,
-                ElapsedMs = result.ElapsedMs
+                ElapsedMs = result.ElapsedMs,
+                ProfileFallbackWarning = fallbackWarning,
             };
         }
         catch (Exception ex)

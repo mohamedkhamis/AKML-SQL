@@ -82,6 +82,39 @@ public class ProfileFallbackWarningTests : IDisposable
     }
 
     [Fact]
+    public void FormatSelection_WithAMissingStyle_ReportsTheSameFallbackAsFormatDocument()
+    {
+        // Spec 040 (T085, STY-09): Format Selection used to fall back to defaults silently.
+        var document = _handler.HandleFormat(new FormatRequest { Text = "select 1", ProfileName = "No Such Style" });
+        var selection = _handler.HandleFormatSelection(new FormatSelectionRequest
+        {
+            Text = "select 1",
+            SelectionStart = 0,
+            SelectionEnd = 8,
+            ProfileName = "No Such Style",
+        });
+
+        Assert.True(selection.Success);
+        Assert.NotNull(selection.ProfileFallbackWarning);
+        Assert.Equal(document.ProfileFallbackWarning, selection.ProfileFallbackWarning);
+    }
+
+    [Fact]
+    public void FormatSelection_WithAResolvableStyle_ReportsNoFallback()
+    {
+        var selection = _handler.HandleFormatSelection(new FormatSelectionRequest
+        {
+            Text = "select 1",
+            SelectionStart = 0,
+            SelectionEnd = 8,
+            ProfileName = "Present Style",
+        });
+
+        Assert.True(selection.Success);
+        Assert.Null(selection.ProfileFallbackWarning);
+    }
+
+    [Fact]
     public void Warning_RoundTripsOverTheWire_AndOldPayloadsDeserializeNull()
     {
         var response = new FormatResponse { Success = true, ProfileFallbackWarning = "style X missing" };

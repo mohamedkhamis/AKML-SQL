@@ -25,5 +25,13 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(6)]
         public long ElapsedMs { get; set; }
+
+        /// <summary>
+        /// Spec 040 (STY-09): set when the requested style could not be loaded and the built-in
+        /// defaults were used — the same notice as <see cref="FormatResponse.ProfileFallbackWarning"/>.
+        /// Null otherwise. Appended key: an older engine omits it and it deserializes null.
+        /// </summary>
+        [Key(7)]
+        public string? ProfileFallbackWarning { get; set; }
     }
 }

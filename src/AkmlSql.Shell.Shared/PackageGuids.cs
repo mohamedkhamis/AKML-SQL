@@ -140,5 +140,10 @@ namespace AkmlSql.Shell.Shared
         public const int CmdSnippetSurroundWith          = 0x091C;
         // Spec 030 T087 — Bulk Format… wizard launcher (FR-046).
         public const int CmdBulkFormat                   = 0x091D;
+        // Spec 040 (T106, STY-08) — AKML SQL › Active Style: 30 style slots (0x0920..0x093D,
+        // CmdActiveStyleSlot0 + n) and Edit Styles… (0x093E), inside the reserved 0x0917..0x093F.
+        public const int CmdActiveStyleSlot0             = 0x0920;
+        public const int ActiveStyleSlotCount            = 30;
+        public const int CmdEditStyles                   = 0x093E;
     }
 }

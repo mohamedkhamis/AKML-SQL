@@ -69,14 +69,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // (FormattingControls.Save writes the dropdown selection unconditionally).
             btnEdit.Click += (_, _) =>
             {
-                try
-                {
-                    Formatting.FormatStylesEditorWindow.Launch();
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "FormattingPage: Format Styles editor launch failed");
-                }
+                // The shared open path: reports a launch failure and refreshes the Active Style menu.
+                Commands.FormatStylesCommand.Open();
                 controls.RefreshActiveStyleFromDisk();
             };
 

@@ -76,3 +76,52 @@ default size) are taken with Northwind data when the scenarios are run.
   thread (`ThreadHelper`).
 - `FormatStylesRowLayoutTests` lays out the window's content in a themed host, because a window
   that is never shown stays Collapsed and skips layout.
+
+## Engine test isolation fix (2026-09-28, after the P1 commit)
+
+The P1 Release run migrated this machine's real `%AppData%\AKML SQL\history\sqlhistory.db` to
+schema v3 (no rows lost: 1,525 before and after; the morning backup is intact). The cause was
+already there before spec 040: `HistoryDatabase()` and five other engine paths read
+`Environment.SpecialFolder.ApplicationData` directly and ignored `AKML_APP_DATA_ROOT`. The engine
+tests that build the whole engine (`EngineComposition.Build`, `EngineHost`) therefore opened the
+user's real config and history database, including retention trimming.
+
+- The six paths now use `AkmlSql.Core.Constants.AppDataPath`, which gives the same path in
+  production.
+- `tests/AkmlSql.Engine.Tests/TestAppDataRoot.cs` redirects `AKML_APP_DATA_ROOT` to a temp folder
+  for the whole engine test run (module initializer).
+- Two full Engine runs since the fix: the real history database and `config.json` keep their
+  timestamps.
+
+## US4 verification (T111, 2026-09-28)
+
+**Build.** Release solution build: green (0 errors), including the VSCT (31 new buttons).
+
+| Suite | Passed | Failed | Skipped | Against the P1 run |
+|---|---|---|---|---|
+| AkmlSql.Core.Tests | 910 | 1 | 3 | +2 (`FormatSelectionResponseTests`). Same pre-existing red |
+| AkmlSql.Engine.Tests | 1,918 | 0 | 0 | +2 (`ProfileFallbackWarningTests` for Format Selection) |
+| AkmlSql.IntelliSense.Tests | 25 | 0 | 0 | Unchanged |
+| AkmlSql.Formatting.Tests | 1,499 | 0 | 0 | Unchanged |
+| AkmlSql.Web.Tests | 503 | 42 | 0 | Unchanged (the same 42 sp031 goldens) |
+| AkmlSql.Shell.Shared.Tests | 590 | 0 | 0 | +52 US4 tests |
+
+- **Completion corpus:** 1,311 / 1,343 = 97.6 %, unchanged. **Format-parity goldens:** unchanged.
+- One Debug shell run (of eight) failed `ActiveStyleMenuTests.Choosing_an_empty_slot_changes_nothing`
+  once and passed in the other seven; it reads `config.json` through the process-wide
+  `AKML_APP_DATA_ROOT`, so a test in another xunit collection touching config at the same moment
+  is the likely cause. Watch for a recurrence.
+- **T110 context bar:** not known until SSMS runs this build; the package logs every candidate
+  name at Debug and the one it picked at Information ("Active Style: added to the editor context
+  menu '…'").
+
+**Quickstart scenarios 22–28: pending**, together with 1–21: deploying this build into SSMS was
+requested but blocked by the session's permission rules, so nothing has been installed.
+
+**Deviations from tasks.md:**
+
+- T097: the page-tree badges inherit the leaf's colour rather than `AccentPrimary`, so they stay
+  readable on the selected leaf.
+- T102: no "team" styles exist yet, so Delete refuses built-in and active styles. The ⋮ glyph's
+  accessible name (part of T185) was added here because T091 tests it.
+- T098: `IsDirty` is now "differs from the saved values", so setting an option back clears it.

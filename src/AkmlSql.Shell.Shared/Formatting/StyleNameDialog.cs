@@ -11,23 +11,35 @@ namespace AkmlSql.Shell.Shared.Formatting
 {
     /// <summary>
     /// Spec 033 (T035) — small themed name prompt for the Format Styles editor: New Style…
-    /// (name + based-on picker) and Rename… (name pre-filled). Follows the ShowRuleEditor
-    /// accepted-flag shape; callers set <c>Owner</c> to the styles window per the
-    /// nested-modal rule documented on <see cref="ImportSummaryDialog"/> (WPF only disables
-    /// and centres over the actual Owner).
+    /// (name + based-on picker), Rename… (name pre-filled), Copy… and Import… of a taken name.
+    /// Follows the ShowRuleEditor accepted-flag shape; callers set <c>Owner</c> to the styles
+    /// window per the nested-modal rule documented on <see cref="ImportSummaryDialog"/> (WPF only
+    /// disables and centres over the actual Owner).
+    /// <para>
+    /// Spec 040 (T101, STY-07): the name is checked as it is typed — not empty, at most
+    /// <see cref="MaxNameLength"/> characters, no characters a file name cannot hold, and not the
+    /// name of another style (case-insensitive, trimmed; Rename accepts the style's own name).
+    /// OK stays disabled until it is valid.
+    /// </para>
     /// </summary>
     internal sealed class StyleNameDialog : ThemeAwareWindow
     {
+        internal const int MaxNameLength = 80;
+
         private readonly TextBox _nameBox;
         private readonly ComboBox? _basedOnCombo;
         private readonly TextBlock _validationText;
+        private readonly Button _okBtn;
+        private readonly HashSet<string> _existingNames;
+        private readonly string? _currentName;
         private bool _accepted;
 
-        /// <summary>Names already taken (Import… only); null when duplicates are not checked here.</summary>
-        private HashSet<string>? _existingNames;
-
-        private StyleNameDialog(string title, string prompt, string initialName, IReadOnlyList<string>? baseCandidates, string? defaultBase)
+        private StyleNameDialog(string title, string prompt, string initialName, IReadOnlyList<string>? baseCandidates, string? defaultBase,
+            IReadOnlyCollection<string>? existingNames = null, string? currentName = null)
         {
+            _existingNames = new HashSet<string>((existingNames ?? new string[0]).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+            _currentName = currentName?.Trim();
+
             Title = title;
             Width = 420;
             SizeToContent = SizeToContent.Height;
@@ -58,7 +70,6 @@ namespace AkmlSql.Shell.Shared.Formatting
             _nameBox.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             _nameBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _nameBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
-            _nameBox.TextChanged += (_, _) => Revalidate();
             root.Children.Add(_nameBox);
 
             if (baseCandidates != null)
@@ -107,7 +118,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, Spacing.Sm, 0, 0),
             };
-            var okBtn = new Button
+            var okBtn = _okBtn = new Button
             {
                 Content = "OK",
                 MinWidth = 80,
@@ -138,8 +149,28 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             Content = root;
 
+            _nameBox.TextChanged += (_, _) => Revalidate();
+            Revalidate();
+
             Loaded += (_, _) => { _nameBox.Focus(); _nameBox.SelectAll(); };
         }
+
+        /// <summary>Test seam: builds the dialog without showing it.</summary>
+        internal static StyleNameDialog ForTests(string initialName, IReadOnlyCollection<string>? existingNames, string? currentName) =>
+            new StyleNameDialog("AKML SQL — Style name", "Name:", initialName, null, null, existingNames, currentName);
+
+        /// <summary>Test seam: the name box's text.</summary>
+        internal string NameText
+        {
+            get => _nameBox.Text;
+            set => _nameBox.Text = value;
+        }
+
+        /// <summary>Test seam: what is wrong with the name, or null when it is valid.</summary>
+        internal string? ValidationMessage => _validationText.Visibility == Visibility.Visible ? _validationText.Text : null;
+
+        /// <summary>Test seam: whether OK is enabled.</summary>
+        internal bool CanAccept => _okBtn.IsEnabled;
 
         private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
         {
@@ -149,26 +180,35 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private bool Revalidate()
         {
-            var name = _nameBox.Text?.Trim() ?? string.Empty;
-            string? error = null;
-            if (name.Length == 0)
-                error = "Enter a style name.";
-            else if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.Contains(".."))
-                error = "The name contains characters that cannot be used in a file name.";
-            else if (_existingNames != null && _existingNames.Contains(name))
-                error = $"A style named '{name}' already exists.";
-
+            var error = Validate(_nameBox.Text, _existingNames, _currentName);
             _validationText.Text = error ?? string.Empty;
             _validationText.Visibility = error == null ? Visibility.Collapsed : Visibility.Visible;
+            _okBtn.IsEnabled = error == null;
             return error == null;
+        }
+
+        /// <summary>What is wrong with <paramref name="rawName"/> as a style name, or null when it is valid.</summary>
+        internal static string? Validate(string? rawName, ICollection<string> existingNames, string? currentName)
+        {
+            var name = rawName?.Trim() ?? string.Empty;
+            if (name.Length == 0)
+                return "Enter a style name.";
+            if (name.Length > MaxNameLength)
+                return $"Use {MaxNameLength} characters or fewer.";
+            if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.Contains(".."))
+                return "The name contains characters that cannot be used in a file name.";
+            var ownName = currentName != null && string.Equals(name, currentName, StringComparison.OrdinalIgnoreCase);
+            if (!ownName && existingNames.Contains(name))
+                return $"A style named '{name}' already exists.";
+            return null;
         }
 
         /// <summary>New Style… — returns (accepted, name, basedOn).</summary>
         internal static (bool Accepted, string Name, string BasedOn) ShowNewStyle(
-            Window owner, IReadOnlyList<string> baseCandidates, string? defaultBase)
+            Window owner, IReadOnlyList<string> baseCandidates, string? defaultBase, IReadOnlyCollection<string> existingNames)
         {
             var dialog = new StyleNameDialog(
-                "AKML SQL — New Style", "Name for the new style:", string.Empty, baseCandidates, defaultBase)
+                "AKML SQL — New Style", "Name for the new style:", string.Empty, baseCandidates, defaultBase, existingNames)
             {
                 Owner = owner,
             };
@@ -188,21 +228,34 @@ namespace AkmlSql.Shell.Shared.Formatting
             var dialog = new StyleNameDialog(
                 "AKML SQL — Import Style",
                 $"A style named '{takenName}' already exists. Import this one as:",
-                suggested, null, null)
+                suggested, null, null, existingNames)
             {
                 Owner = owner,
             };
-            dialog._existingNames = new HashSet<string>(existingNames.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
-            dialog.Revalidate();
+            dialog.ShowDialog();
+            return dialog._accepted ? dialog._nameBox.Text?.Trim() : null;
+        }
+
+        /// <summary>
+        /// Spec 040 (T101) — Copy…: the name for the copy, pre-filled with <paramref name="suggested"/>.
+        /// Returns null when cancelled.
+        /// </summary>
+        internal static string? ShowCopyStyle(Window owner, string sourceName, IReadOnlyCollection<string> existingNames, string suggested)
+        {
+            var dialog = new StyleNameDialog(
+                "AKML SQL — Copy Style", $"Name for the copy of '{sourceName}':", suggested, null, null, existingNames)
+            {
+                Owner = owner,
+            };
             dialog.ShowDialog();
             return dialog._accepted ? dialog._nameBox.Text?.Trim() : null;
         }
 
         /// <summary>Rename… — returns (accepted, newName).</summary>
-        internal static (bool Accepted, string Name) ShowRename(Window owner, string currentName)
+        internal static (bool Accepted, string Name) ShowRename(Window owner, string currentName, IReadOnlyCollection<string> existingNames)
         {
             var dialog = new StyleNameDialog(
-                "AKML SQL — Rename Style", $"New name for '{currentName}':", currentName, null, null)
+                "AKML SQL — Rename Style", $"New name for '{currentName}':", currentName, null, null, existingNames, currentName)
             {
                 Owner = owner,
             };
