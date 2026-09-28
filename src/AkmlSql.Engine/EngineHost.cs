@@ -372,8 +372,7 @@ namespace AkmlSql.Engine
         {
             try
             {
-                var appDataFolder = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
+                var appDataFolder = AkmlSql.Core.Constants.AppDataPath;
                 var pendingPath = Path.Combine(appDataFolder, "pending-import.json");
 
                 if (!File.Exists(pendingPath))
@@ -468,9 +467,7 @@ namespace AkmlSql.Engine
                 // up the manifest to avoid retrying on every startup.
                 try
                 {
-                    var pendingPath = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                        "AKML SQL", "pending-import.json");
+                    var pendingPath = Path.Combine(AkmlSql.Core.Constants.AppDataPath, "pending-import.json");
                     if (File.Exists(pendingPath))
                         File.Delete(pendingPath);
                 }

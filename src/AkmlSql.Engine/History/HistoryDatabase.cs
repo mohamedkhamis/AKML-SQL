@@ -24,9 +24,9 @@ public sealed class HistoryDatabase : IDisposable
 
     public HistoryDatabase()
     {
-        var dbDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AKML SQL", "history");
+        // Constants.AppDataPath honours AKML_APP_DATA_ROOT, so an engine built by a test never
+        // opens (and migrates or trims) the user's real history database.
+        var dbDir = Path.Combine(AkmlSql.Core.Constants.AppDataPath, "history");
         Directory.CreateDirectory(dbDir);
 
         var dbPath = Path.Combine(dbDir, "sqlhistory.db");
@@ -739,9 +739,7 @@ public sealed class HistoryDatabase : IDisposable
             return _connectionString.Substring(prefix.Length);
         }
         // Fallback to default path
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AKML SQL", "history", "sqlhistory.db");
+        return Path.Combine(AkmlSql.Core.Constants.AppDataPath, "history", "sqlhistory.db");
     }
 
     /// <summary>

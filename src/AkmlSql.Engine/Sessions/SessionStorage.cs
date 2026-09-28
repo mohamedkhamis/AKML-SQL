@@ -19,9 +19,7 @@ public class SessionStorage
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    private readonly string _sessionsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "AKML SQL", "sessions");
+    private readonly string _sessionsDir = Path.Combine(AkmlSql.Core.Constants.AppDataPath, "sessions");
 
     /// <summary>
     /// Atomically saves a session snapshot to disk.

@@ -54,8 +54,7 @@ internal static class EngineHandlerRegistry
         var quickInfoProvider = new QuickInfoProvider();
         var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
 
-        var appDataFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
+        var appDataFolder = AkmlSql.Core.Constants.AppDataPath;
         var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");
         var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
         var teamSnippets = ctx.EnsureSettings().Snippets.TeamFolder;
