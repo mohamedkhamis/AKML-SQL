@@ -196,7 +196,7 @@ Full shapes are in [contracts/ipc.md](./contracts/ipc.md).
 | `HistoryActionRequest` | 9 `bool? GroupScope`, 10 `string? SessionKey`, 11 `int? OwnerPid`, 12 `string[]? OpenSessionKeys` | Group-scoped actions, open state, reconcile |
 | `HistoryActions` codes | 11 `ReconcileOpen`, 12 `GetFilterValues` | New actions |
 | `HistoryActionResponse` | 8 `bool? IsFavorite`, 9 `string[]? Servers`, 10 `string[]? Databases`, 11 `long[]? RestorableEntryIds` | Toggle result, filter lists, restore on start |
-| `HistoryEntryDto` | 17 `string? SessionKey` | "Opened from History" adopts the session |
+| `HistoryEntryDto` | 17 `string? SessionKey` | "Opened from History" adopts the session, unless another open tab holds it |
 | `HistoryRecordRequest` | 12 `bool IsDraft` | Draft capture |
 | `HistorySearchRequest` | 13 `string? PathFilter` | `path:` prefix |
 | `FormatRequest` | 5 `FormatSqlActionsDto? Actions` | Interactive Format SQL actions |

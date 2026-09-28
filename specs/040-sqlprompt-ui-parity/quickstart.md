@@ -127,6 +127,8 @@ dotnet test tests/AkmlSql.Shell.Shared.Tests/bin/Release/net472/AkmlSql.Shell.Sh
     2. The tree keeps only pages with matches, with counts, and the matching rows are
        highlighted.
     3. Enter jumps to the first match. Esc clears the search; a second Esc closes the window.
+    4. **Timed (SC-012):** before starting, pick three option names from three different pages.
+       From a cleared search box, find each one: each takes under 10 seconds.
 23. **Change markers.**
     1. Change *Place commas before items*: its label turns bold, a ↺ appears, and the Lists
        leaf's count goes up by one.

@@ -335,7 +335,7 @@ There is no "Show execution warnings" master today, and none is added.
 - **Close:** add `DocumentSessionKeys.TryGet` and call it *before* `Forget` (`History/ExecutionCapture.cs:311`); send `SetOpenStatus(false)`.
 - **Startup:** after the engine connects, send `ReconcileOpen(pid, keys of open documents)`.
 - **Package shutdown:** set a "shutting down" flag, so shutdown's document closes don't mark rows closed (R17).
-- **Opened from History:** the new document adopts the entry's session key. This needs `HistoryEntryDto [Key(17)] SessionKey` and `DocumentSessionKeys.Adopt`.
+- **Opened from History:** the new document adopts the entry's session key, unless another open tab already holds it. An older version opened beside the open query starts its own session. This needs `HistoryEntryDto [Key(17)] SessionKey` and `DocumentSessionKeys.Adopt`.
 
 **Filters**
 - The open/closed and favourite filters move to the outer, grouped level: a `WHERE` on the group's `MAX()` values, counted over the grouped subquery.

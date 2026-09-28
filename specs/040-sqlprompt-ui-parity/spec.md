@@ -177,8 +177,8 @@ Document and read the status message.
    moved are highlighted briefly. (STY-05)
 4. **Given** the light theme, **When** the preview is shown, **Then** it uses the theme's
    colours, with keywords, strings and comments coloured. (STY-06)
-5. **Given** the AKML SQL menu or the editor's right-click menu, **When** the user opens
-   "Active Style", **Then** every style is listed, the active one is ticked, and "Edit Styles…"
+5. **Given** the AKML SQL menu (and the editor's right-click menu, where SSMS exposes it),
+   **When** the user opens "Active Style", **Then** every style is listed, the active one is ticked, and "Edit Styles…"
    is at the end. Picking a style makes it active immediately. (STY-07)
 6. **Given** the active style changed anywhere, **When** the status bar is visible, **Then**
    it shows the new style name (if the user chose to show it). (STY-07)
@@ -419,7 +419,9 @@ moving settings that do nothing would only move the problem.
   chronological order.
 - **FR-016** (HIS-06): History settings MUST only be shown when they work. The grouping
   setting MUST be described as grouping repeated runs, not as avoiding storage. Settings that
-  take effect only after a restart MUST say so.
+  take effect only after a restart MUST say so. The History settings MUST include **Maximum
+  query size** (SQL Prompt parity, 16–1024 KB, default 1024). A query larger than the limit is
+  stored cut to that size, and its preview says so.
 
 **Format styles: trust (P1)**
 
@@ -446,8 +448,8 @@ moving settings that do nothing would only move the problem.
   whose layout changed.
 - **FR-033** (STY-06): The preview MUST syntax-colour SQL, show line numbers, and follow the
   current theme's colours.
-- **FR-034** (STY-07): An "Active Style" submenu MUST be available from the AKML SQL menu and
-  the SQL editor's context menu. It lists all styles, ticks the active one and ends with
+- **FR-034** (STY-07): An "Active Style" submenu MUST be available from the AKML SQL menu and,
+  where SSMS exposes a query-editor context menu to extensions, from that context menu. It lists all styles, ticks the active one and ends with
   "Edit Styles…". Choosing a style makes it active at once.
 - **FR-035** (STY-07): The status-bar style indicator MUST update whenever the active style
   changes anywhere, and MUST respect the "Show active style in status bar" setting.
@@ -485,7 +487,8 @@ moving settings that do nothing would only move the problem.
     colour when a rule matches.
   - Open entries MUST carry a visible "open" marker.
   - Date groups MUST be Today, Yesterday, This week, Last week, This month and Older, with
-    counts.
+    counts. An entry goes in the first group that matches, in that order (yesterday is
+    Yesterday, not This week).
 - **FR-043** (HIS-10): Opening, copying or re-executing MUST use the selected version. A
   version MUST be comparable with the current text, with added, removed and changed lines
   highlighted. The sides MUST be labelled with name and time.
@@ -520,14 +523,15 @@ moving settings that do nothing would only move the problem.
     Aliases · Special characters
   - **Format:** Styles
   - **Navigation**
-  - **Queries:** Query Results · History (also holds the restore-on-start settings, see
+  - **Queries:** Query results · History (also holds the restore-on-start settings, see
     FR-047) · Color (today's Tabs › Color) · Execution
   - **Editor:** Productivity · Refactoring
-  - **Code Analysis**
-  - **Connections & Memory** (also holds all schema-cache settings, including today's
-    Suggestions › Database)
-  - **AI Assistance**
-  - **Labs**
+  - **Code analysis**
+  - **Connections & memory** (any schema-cache setting that is shown lives here)
+  - **AI assistance**
+
+  Pages whose every setting is hidden under FR-001 (today "Suggestions › Database" and "Labs")
+  are removed from the tree. They return when a working setting is added to them.
 
   In addition:
   - Each page MUST use one name for its tree label, header and title, in sentence case.
@@ -576,7 +580,10 @@ moving settings that do nothing would only move the problem.
 
 **Scope**
 
-- **FR-070**: This feature covers the SSMS 22 plugin only. The web edition MUST NOT change.
+- **FR-070**: This feature changes the SSMS 22 plugin and the shared engine. Web edition code
+  (`src/AkmlSql.Web`) MUST NOT change. Engine fixes shared with the web edition are intended and
+  apply there too: wider history search, starred and open filters applied per grouped query,
+  correct delete counts, and team styles listed read-only.
 - **FR-071**: This feature delivers all three priorities: all 38 gap-plan items (P1, P2 and
   P3). Work proceeds in priority order: every P1 requirement is complete and verified before
   P2 work is merged, and P2 before P3. Each user story stays independently testable.

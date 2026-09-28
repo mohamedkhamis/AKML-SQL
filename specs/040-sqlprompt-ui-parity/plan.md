@@ -79,7 +79,7 @@ Ratchets: completion corpus and format-parity goldens.
 - Shell builds with full MSBuild only.
 - New shell files are listed in `AkmlSql.Shell.Shared.projitems`.
 
-**Scale/Scope**: 38 gap-plan items, 7 slices, about 18 new files and about 70 modified; about 41 working days.
+**Scale/Scope**: 38 gap-plan items, 7 slices, about 27 new source and doc files, about 70 new test files and about 70 modified files; about 41 working days.
 
 ## Constitution Check
 
@@ -154,7 +154,7 @@ Ratchets: completion corpus and format-parity goldens.
 ```text
 specs/040-sqlprompt-ui-parity/
 ├── plan.md              # This file
-├── spec.md              # Feature specification (7 user stories, 49 FRs, 17 SCs, clarifications)
+├── spec.md              # Feature specification (7 user stories, 48 FRs, 17 SCs, clarifications)
 ├── research.md          # Phase 0 — findings N1..N10, decisions R1..R33
 ├── data-model.md        # Phase 1 — settings, history schema v3, IPC keys, view models, state machines
 ├── quickstart.md        # Phase 1 — 49 manual validation scenarios (acceptance gate)
@@ -180,6 +180,8 @@ src/AkmlSql.Core/
 │                                                   Formatter.{TeamStyleFolder,FormatSqlActions}
 ├── Config/ConfigManager.cs                       [F] environments migration on Load; [A] PreserveInstallState helper
 ├── Config/WindowTitles.cs                        [G] NEW — "AKML SQL – " + name
+├── Config/TeamStyleFolderValidator.cs            [G] NEW — rooted/canonical check for the team style folder
+├── Config/FormatSqlActionsMapper.cs              [G] NEW — settings → FormatSqlActionsDto
 ├── Ipc/Messages/HistoryActionRequest.cs          [B][E] keys 9–12; codes 11 ReconcileOpen, 12 GetFilterValues
 ├── Ipc/Messages/HistoryActionResponse.cs         [B][E] keys 8–10  (file holding the response type)
 ├── Ipc/Messages/HistoryEntryDto.cs               [B] key 17 SessionKey
@@ -194,6 +196,8 @@ src/AkmlSql.Core/
 ├── Models/History/HistoryDateGroups.cs           [E] NEW — Today/Yesterday/This week/Last week/This month/Older
 ├── Models/Tabs/EnvironmentMatcher.cs             [F] server AND database for server rules with DatabaseName
 ├── Models/Tabs/TabEnvironment.cs                 [F] NEW
+├── Models/Tabs/EnvironmentValidator.cs           [F] NEW — unique names, #RRGGBB, in-use delete check
+├── Models/Tabs/ColoringRuleOrdering.cs           [F] NEW — move rules, renumber Order 0..n-1
 └── Text/LineDiff.cs                              [E] NEW — LCS line diff
 
 src/AkmlSql.Engine/
@@ -220,13 +224,21 @@ src/AkmlSql.Formatting/
 
 src/AkmlSql.Shell.Shared/
 ├── AkmlSql.Shell.Shared.projitems                [all] register new files
+├── Commands/RegisteredCommands.cs                [D] NEW — every command id the package registers (menu-table test source)
+├── Commands/AkmlMenuTable.cs                     [G] NEW — declarative AKML SQL menu (contracts/ui.md §2)
+├── Editor/Completion/CompletionTriggerPolicy.cs  [A] NEW — pure trigger decision (delay, after-dot, Ctrl+Space)
+├── Snippets/SnippetGate.cs                       [A] NEW — pure snippet switches
+├── History/OpenStateReporter.cs                  [B] NEW — ReconcileOpen request and open/close decisions
+├── History/HistoryRestoreState.cs                [B] NEW — holds RestorableEntryIds from startup
+├── History/VersionLoadGuard.cs                   [B] NEW — drops stale version-list responses
+├── History/DraftCapturePolicy.cs                 [E] NEW — draft, truncation and autosave rules
 ├── Dialogs/SettingsWindow.cs                     [A] theme handler + loading flag + WorkingCopy, reset via page Save,
 │                                                   PreserveInstallState, readable confirmations, Import text;
 │                                                   [F] tree (labels only), BuildOptionsCatalog, FlashRow any Panel,
 │                                                   Color grid host; [G] F1 → page HelpTopic
 ├── Dialogs/Pages/IPageBuilder.cs                 [G] + HelpTopic
 ├── Dialogs/Pages/RowFactory.cs                   [F] parent gating, AddNumber, themed AddButton
-├── Dialogs/Pages/PageTheme.cs                    [F] + TextDisabled
+├── Ui/Theme/PageTheme.cs                         [F] + TextDisabled, + HighContrast palette
 ├── Dialogs/Pages/*Page.cs                        [A] remove dead rows (and their RegisterSearch); labels, restart notes;
 │                                                   [F] gating parents, number rows; [E] History page gains restore rows;
 │                                                   [G] Format page: team folder, Format SQL actions
@@ -264,7 +276,7 @@ src/AkmlSql.Shell.Shared/
 ├── History/ExecutionCapture.cs                   [B] record as request, SetOpenStatus on execute/activate/close,
 │                                                   ReconcileOpen at connect, shutdown flag; [E] drafts + autosave
 │                                                   snapshots, HistoryRecorded event, MaxQuerySizeKb
-├── History/DocumentSessionKeys.cs                [B] TryGet, Adopt
+├── History/DocumentSessionKeys.cs                [B] TryGet, Adopt (refuses a key another tab holds), TryFindDocument
 ├── History/HistorySearchParser.cs                [E] path:, date:[…], help table
 ├── History/RestoreQueriesDialog.cs               [E] NEW — themed WPF restore prompt
 ├── History/HistoryRestoreService.cs              [E] NEW — startup restore (Always/Prompt/Never, max N, reconnect)
@@ -291,12 +303,12 @@ doc/
 
 tests/
 ├── AkmlSql.Core.Tests/{Ipc,Config,Text,History,Tabs}/…   DTO round-trips, migration, LineDiff, date groups, matcher
-├── AkmlSql.Engine.Tests/{History,Handlers,Formatter}/…    v3 migration, group actions, reconcile, search, drafts,
+├── AkmlSql.Engine.Tests/{History,Handlers,Formatter}/…    v3 migration, group actions, handler routing, reconcile, search, drafts,
 │                                                           completion flags, team styles, actions, selection warning
 ├── AkmlSql.IntelliSense.Tests/…                            detail text flags, prefix-only matching
-├── AkmlSql.Shell.Shared.Tests/…                            Options theme/reset/tree/gating/number/palette/allow-list,
-│                                                           History paging/debounce/row target, style rows/tabs/search/
-│                                                           markers/import-export/name validation
+├── AkmlSql.Shell.Shared.Tests/…                            Options theme/reset/reopen loop/tree/gating/number/palette/allow-list,
+│                                                           History paging/debounce/row target/open-state decisions/version guard, style rows/tabs/search/
+│                                                           markers/import-export/name validation, active style cache
 ├── AkmlSql.Site.Tests/Docs/F1SlugTests.cs                  every F1 slug and anchor exists
 └── AkmlSql.UiTests/                                        tour extended: menu, Active Style, Options light/dark,
                                                             History keyboard, style editor at default size

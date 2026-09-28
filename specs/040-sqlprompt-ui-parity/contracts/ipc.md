@@ -55,7 +55,7 @@
 
 | Key | Field | Type | Meaning |
 |---|---|---|---|
-| **17** | `SessionKey` | `string?` | The query session's key. When History opens an entry, the new document adopts it, so re-running continues the same session |
+| **17** | `SessionKey` | `string?` | The query session's key. When History opens an entry, the new document adopts it, so re-running continues the same session. It isn't adopted when another open tab already holds it, so two tabs never share a key |
 
 ### `HistoryRecordRequest`
 

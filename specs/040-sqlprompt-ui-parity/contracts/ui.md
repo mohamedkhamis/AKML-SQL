@@ -124,7 +124,7 @@ AKML SQL
 | Search box | Enter | Searches now; focus moves to the first row |
 | Search box | Esc | Clears the text; if already empty, clears the filters |
 | List | ↑ / ↓ / Home / End | Move the selection |
-| List | Enter | Open in a new tab |
+| List | Enter | Open query: switch to its tab when it's open, otherwise open it in a new tab |
 | List | Delete | Remove query and its history (asks first) |
 | List | F2 | Rename query (not while open) |
 | List | Ctrl+C | Copy the selected version's SQL |
@@ -159,7 +159,7 @@ help topic.
 | Where | Text |
 |---|---|
 | History search placeholder | `Search` |
-| History row menu | `Open query` · `Open in new tab` · `Copy SQL` · `Re-execute` · `Rename query` · `Compare…` · `Remove query and its history` · `Remove queries older than this…` |
+| History row menu | `Open query` · `Copy SQL` · `Re-execute` · `Rename query` · `Compare…` · `Remove query and its history` · `Remove queries older than this…` |
 | History toolbar overflow | `Export…` · `Clear history…` |
 | History Delete confirmation | `Remove '‹name›' and its history?` |
 | History Remove older | `Remove all queries older than ‹d MMM yyyy HH:mm›? Starred queries are kept. This can't be undone.` |
