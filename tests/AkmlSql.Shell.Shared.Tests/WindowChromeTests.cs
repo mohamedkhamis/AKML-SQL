@@ -187,58 +187,32 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         /// <summary>
-        /// Phase 2 C.6 regression test: every page key registered in
-        /// <c>_pageBuilders</c> must have a matching case in
-        /// <c>ResetPageToDefaultsCore</c>. The Phase 1 final reviewer flagged
-        /// that the OnResetThisPageClick switch coverage is brittle when new
-        /// pages are added — a missing case used to silently no-op. This test
-        /// reflects on <c>_pageBuilders.Keys</c>, calls
-        /// <c>ResetPageToDefaultsCore(key)</c> for each, and asserts no throw.
-        /// The default branch in <c>ResetPageToDefaultsCore</c> throws
-        /// <c>InvalidOperationException</c> for unhandled keys, so a missing
-        /// case fails the test loudly.
+        /// Spec 040 (T029, OPT-03) — replaces the old per-page switch check. Page reset now goes
+        /// through each page's own controls (reset, save, load), so every registered page must
+        /// reset without throwing once the window is built; an unregistered key throws.
         /// </summary>
-        [Fact]
-        public void ResetPageToDefaultsCore_HasCaseForEveryRegisteredPageKey()
+        [StaFact]
+        public void ResetPageToDefaultsCore_ResetsEveryRegisteredPageWithoutThrowing()
         {
-            var settings = new AppSettings();
-            var dialog = new SettingsWindow(settings);
+            var dialog = new SettingsWindow(new AppSettings());
+            _ = dialog.TestBuildWindowForRenderTest();
 
-            var pageBuildersField = typeof(SettingsWindow).GetField(
-                "_pageBuilders",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(pageBuildersField);
-            var pageBuilders = (IDictionary)pageBuildersField!.GetValue(dialog)!;
+            var pageBuilders = (IDictionary)typeof(SettingsWindow)
+                .GetField("_pageBuilders", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
             Assert.True(pageBuilders.Count > 0, "Expected at least one registered IPageBuilder");
 
-            var resetMethod = typeof(SettingsWindow).GetMethod(
-                "ResetPageToDefaultsCore",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(resetMethod);
-
             foreach (DictionaryEntry entry in pageBuilders)
-            {
-                var key = (string)entry.Key;
-                try
-                {
-                    resetMethod!.Invoke(dialog, new object[] { key });
-                }
-                catch (TargetInvocationException tie)
-                    when (tie.InnerException is System.InvalidOperationException ioe)
-                {
-                    Assert.Fail(
-                        $"ResetPageToDefaultsCore is missing a case for page key '{key}'. " +
-                        $"When adding a page to _pageBuilders, also add a case to " +
-                        $"ResetPageToDefaultsCore. Inner: {ioe.Message}");
-                }
-            }
+                dialog.ResetPageToDefaultsCore((string)entry.Key);
+
+            Assert.Throws<System.InvalidOperationException>(() => dialog.ResetPageToDefaultsCore("No such page"));
         }
 
         /// <summary>
-        /// Companion to <see cref="ResetPageToDefaultsCore_HasCaseForEveryRegisteredPageKey"/>
+        /// Companion to <see cref="ResetPageToDefaultsCore_ResetsEveryRegisteredPageWithoutThrowing"/>
         /// — guards against the Phase 2 Block C bug where 5 newly-registered
         /// pages (SuggestionTypes / Qualification / InsertOptions / JoinOptions
-        /// / Labs) had entries in <c>_pageBuilders</c> but were absent from
+        /// / the since-removed Labs) had entries in <c>_pageBuilders</c> but were absent from
         /// the hardcoded dispatch lists in <c>LoadSettingsToControls</c> /
         /// <c>SaveControlsToSettings</c>. Their controls rendered but never
         /// loaded from settings and silently discarded changes on OK.

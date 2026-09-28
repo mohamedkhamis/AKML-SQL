@@ -32,6 +32,7 @@ namespace AkmlSql.Shell.Shared.History
         private static CommandEvents? _commandEvents;
         private static DocumentEvents? _documentEvents;
         private static WindowEvents? _windowEvents;
+        private static DTEEvents? _dteEvents;
 
         // Tracks execution start time between BeforeExecute and AfterExecute
         private static DateTime? _executeStartTimeUtc;
@@ -44,6 +45,15 @@ namespace AkmlSql.Shell.Shared.History
 
         // Cached Query.Execute command GUID — avoids resolving every DTE command
         private static string? _queryExecuteGuid;
+
+        /// <summary>
+        /// Spec 040 (HIS-02): set by the package when SSMS starts shutting down, before its
+        /// documents close. Tabs closed by shutdown are NOT marked closed in History, so the
+        /// queries open at exit can be offered for restore on the next start.
+        /// </summary>
+        public static volatile bool ShuttingDown;
+
+        private static readonly int CurrentPid = System.Diagnostics.Process.GetCurrentProcess().Id;
 
         /// <summary>
         /// Initializes execution capture. Reads configuration to determine if history
@@ -102,6 +112,11 @@ namespace AkmlSql.Shell.Shared.History
                 // Hook WindowActivated to record the previous tab's SQL on focus change
                 _windowEvents = _dte.Events.WindowEvents;
                 _windowEvents.WindowActivated += OnWindowActivated;
+
+                // Spec 040 (HIS-02): shutdown starts before its documents close — mark it, so those
+                // closes leave the queries open in History (offered for restore on the next start).
+                _dteEvents = _dte.Events.DTEEvents;
+                _dteEvents.OnBeginShutdown += () => ShuttingDown = true;
 
                 // Initialize the last active document path
                 try
@@ -306,6 +321,11 @@ namespace AkmlSql.Shell.Shared.History
                 ThreadHelper.ThrowIfNotOnUIThread();
                 if (document == null) return;
 
+                // Spec 040 (HIS-02): read the key BEFORE forgetting it, to mark the query closed
+                // (unless SSMS is shutting down — see ShuttingDown).
+                DocumentSessionKeys.TryGet(document.FullName, out var closingKey);
+                SendOpenState(OpenStateReporter.OnClosing(closingKey, CurrentPid, ShuttingDown));
+
                 // The document is closing regardless of what follows — release its session key now
                 // so reopening the same file starts a brand-new session.
                 DocumentSessionKeys.Forget(document.FullName);
@@ -326,7 +346,7 @@ namespace AkmlSql.Shell.Shared.History
 
                 Log.Debug("ExecutionCapture: saving version snapshot on close for '{Source}'", source);
 
-                SaveVersionSnapshot(source, content);
+                SaveVersionSnapshot(source, content, closingKey);
             }
             catch (Exception ex)
             {
@@ -436,7 +456,22 @@ namespace AkmlSql.Shell.Shared.History
             try
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
-                if (_dte == null || lostFocus == null) return;
+                if (_dte == null) return;
+
+                // Spec 040 (HIS-02): the document that gained focus is open in this SSMS (if it has
+                // run before — a document with no session key has no history rows yet).
+                try
+                {
+                    var gained = gotFocus?.Document?.FullName;
+                    if (!string.IsNullOrEmpty(gained) && DocumentSessionKeys.TryGet(gained!, out var gainedKey))
+                        SendOpenState(OpenStateReporter.OnActivated(gainedKey, CurrentPid));
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: could not read the activated document");
+                }
+
+                if (lostFocus == null) return;
 
                 // Only capture if the lost-focus window had a document
                 Document lostDoc = null;
@@ -507,7 +542,8 @@ namespace AkmlSql.Shell.Shared.History
 
                 Log.Debug("ExecutionCapture: saving version snapshot for '{Source}' on tab switch", docPath);
 
-                SaveVersionSnapshot(docPath, content);
+                DocumentSessionKeys.TryGet(docPath, out var lostKey);
+                SaveVersionSnapshot(docPath, content, lostKey);
             }
             catch (Exception ex)
             {
@@ -606,7 +642,7 @@ namespace AkmlSql.Shell.Shared.History
         /// both saved and unsaved documents.
         /// </para>
         /// </summary>
-        private static void SaveVersionSnapshot(string source, string sqlText)
+        private static void SaveVersionSnapshot(string source, string sqlText, string? sessionKey = null)
         {
             Task.Run(async () =>
             {
@@ -619,7 +655,9 @@ namespace AkmlSql.Shell.Shared.History
                     {
                         Action = HistoryActions.SaveVersion,
                         NewName = source, // reuse NewName field to carry the source path
-                        SqlText = sqlText
+                        SqlText = sqlText,
+                        // Spec 040 (T064): lets the engine find this session's own row first.
+                        SessionKey = string.IsNullOrEmpty(sessionKey) ? null : sessionKey
                     };
 
                     await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
@@ -628,6 +666,29 @@ namespace AkmlSql.Shell.Shared.History
                 catch (Exception ex)
                 {
                     Log.Debug(ex, "ExecutionCapture: failed to save version snapshot for '{Source}'", source);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Sends an open/closed request from <see cref="OpenStateReporter"/> (null = nothing to send)
+        /// on a background task. Failures are logged, never thrown into the UI thread.
+        /// </summary>
+        private static void SendOpenState(HistoryActionRequest? request)
+        {
+            if (request == null || !_enabled) return;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var client = EngineLifecycle.Manager?.Client;
+                    if (client == null || !client.IsConnected) return;
+                    await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                        MessageTypes.HistoryAction, request, timeoutMs: 5000);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "ExecutionCapture: open-state update failed");
                 }
             });
         }
@@ -730,11 +791,19 @@ namespace AkmlSql.Shell.Shared.History
                         SessionKey = sessionKey
                     };
 
-                    // Send as notification (RequestId=0) to avoid blocking query execution
-                    await client.SendNotificationAsync(MessageTypes.HistoryRecord, request);
+                    // Spec 040 (HIS-02): a request, not a notification, so the row exists before the
+                    // query is marked open. Still off the UI thread, so execution never waits on it.
+                    var response = await client.SendRequestAsync<HistoryRecordResponse, HistoryRecordRequest>(
+                        MessageTypes.HistoryRecord, request, timeoutMs: 5000);
 
-                    Log.Debug("ExecutionCapture: history record sent to engine (server={Server}, db={Database})",
-                        server, database);
+                    Log.Debug("ExecutionCapture: history record sent to engine (server={Server}, db={Database}, ok={Ok})",
+                        server, database, response?.Success);
+
+                    if (response?.Success == true && !string.IsNullOrEmpty(sessionKey))
+                    {
+                        await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                            MessageTypes.HistoryAction, OpenStateReporter.OnRecorded(sessionKey!, CurrentPid), timeoutMs: 5000);
+                    }
                 }
                 catch (Exception ex)
                 {

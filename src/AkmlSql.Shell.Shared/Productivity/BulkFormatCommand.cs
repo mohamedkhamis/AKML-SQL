@@ -46,6 +46,7 @@ namespace AkmlSql.Shell.Shared.Productivity
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            if (!Formatting.FormatActionHelper.EnsureFormatterEnabled()) return;
             try
             {
                 using var wizard = new BulkFormatWizard(GetAvailableProfiles());

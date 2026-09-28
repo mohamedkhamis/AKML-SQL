@@ -381,6 +381,37 @@ namespace AkmlSql.Shell.Shared.Formatting
         public object? GetWorkingValue(string settingId) =>
             _workingValues.TryGetValue(settingId, out var v) ? v : null;
 
+        /// <summary>SQL Prompt's "Number of spaces in tabs" — the tab width in the SQL Prompt model.</summary>
+        internal const string SqlPromptTabSizeId = "sqlPrompt.whitespace.numberOfSpacesInTabs";
+
+        /// <summary>The AKML model's tab width.</summary>
+        internal const string AkmlTabSizeId = "whitespace.tabSize";
+
+        /// <summary>
+        /// Spec 040 (STY-02, FR-021) — the selected style's tab width, which the live preview expands
+        /// tabs to: SQL Prompt's "Number of spaces in tabs", or the AKML model's tab size. Defaults to
+        /// 4 and is clamped to 1–16. Raises <see cref="INotifyPropertyChanged.PropertyChanged"/> when
+        /// either option is edited and whenever a style's values are loaded.
+        /// </summary>
+        internal int PreviewTabSize
+        {
+            get
+            {
+                var raw = GetWorkingValue(IsSqlPromptModel ? SqlPromptTabSizeId : AkmlTabSizeId);
+                double size;
+                try
+                {
+                    size = raw == null ? 4 : Convert.ToDouble(raw, System.Globalization.CultureInfo.InvariantCulture);
+                }
+                catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException)
+                {
+                    size = 4;
+                }
+                if (double.IsNaN(size)) size = 4;
+                return (int)Math.Max(1, Math.Min(16, Math.Round(size)));
+            }
+        }
+
         /// <summary>
         /// Records a user edit and triggers a debounced preview refresh. Marks the loaded
         /// style dirty (browsing edits with no style loaded stay preview-only, never dirty).
@@ -389,6 +420,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             _workingValues[settingId] = value;
             if (_loadedProfileName != null) IsDirty = true;
+            if (settingId == SqlPromptTabSizeId || settingId == AkmlTabSizeId)
+                OnPropertyChanged(nameof(PreviewTabSize));
             QueuePreviewAsync();
         }
 
@@ -689,6 +722,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Log.Debug(ex, "FormatStylesEditor: overlay of loaded profile values failed");
             }
+            // Every load path (select, revert, reset) reseeds and then overlays here, so this is
+            // the one place a newly loaded style's tab width reaches the preview.
+            OnPropertyChanged(nameof(PreviewTabSize));
         }
 
         private void OverlayObject(string prefix, JsonElement obj)

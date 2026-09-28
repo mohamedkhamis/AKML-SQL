@@ -88,6 +88,21 @@ public class CompletionEngine
     /// </summary>
     public ColumnSuggestionScope ColumnScopeMode { get; set; } = ColumnSuggestionScope.ReferencedOnly;
 
+    /// <summary>
+    /// Spec 040 (OPT-01) — Suggestions › Behavior "Enable fuzzy matching". When false, only
+    /// case-insensitive prefix matches (<see cref="FuzzyMatcher"/> score ≥ 800) are kept.
+    /// </summary>
+    public bool FuzzyMatchEnabled { get; set; } = true;
+
+    /// <summary>Spec 040 (OPT-01) — column detail flags, pushed into the providers per request.</summary>
+    public bool ShowDataTypes { get; set; } = true;
+
+    /// <summary>Show NULL / NOT NULL in column details.</summary>
+    public bool ShowNullability { get; set; } = true;
+
+    /// <summary>Show PK / IDENTITY / COMPUTED on columns and the FK note on tables.</summary>
+    public bool ShowKeyIndicators { get; set; } = true;
+
     // Spec 030 T035 / FR-015 — alias generation policy, pushed onto AliasProvider per request.
     public bool AliasIncludeAs { get; set; } = true;
     public IReadOnlyDictionary<string, string> AliasObjectMap { get; set; }
@@ -452,6 +467,10 @@ public class CompletionEngine
             // Push column-suggestion scope and connection scope into ColumnProvider (FR-012 / T032,
             // FR-016 / T036). ScopeSchemas is shared with ObjectProvider — same normalization.
             _columnProvider.ColumnScopeMode = ColumnScopeMode;
+            _columnProvider.ShowDataTypes = ShowDataTypes;
+            _columnProvider.ShowNullability = ShowNullability;
+            _columnProvider.ShowKeyIndicators = ShowKeyIndicators;
+            _objectProvider.ShowKeyIndicators = ShowKeyIndicators;
             _columnProvider.ScopeSchemas = ScopeSchemas is { Count: > 0 }
                 ? new HashSet<string>(ScopeSchemas, StringComparer.OrdinalIgnoreCase)
                 : _emptySchemaScope;
@@ -503,7 +522,7 @@ public class CompletionEngine
             {
                 allItems = allItems
                     .Select(item => (item, score: FuzzyMatcher.Score(context.PartialText, item.FilterText ?? item.DisplayText)))
-                    .Where(x => x.score > 0)
+                    .Where(x => FuzzyMatchEnabled ? x.score > 0 : x.score >= 800)
                     .OrderByDescending(x => x.score)
                     .ThenBy(x => x.item.SortPriority)
                     .Select(x => x.item)

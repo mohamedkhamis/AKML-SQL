@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -79,6 +80,29 @@ namespace AkmlSql.Core.Config
                 Log.Error(ex, "Failed to load config from {Path}, using defaults", path);
                 return new AppSettings();
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-007) — copies the installation's identity and first-run state from
+        /// <paramref name="from"/> onto <paramref name="to"/>: the install id and targets, the
+        /// last update check, the native-IntelliSense prompt flags, Command Palette usage and
+        /// recents, and the config version. Nothing else is touched. Used by "Restore all
+        /// defaults" and settings Import, which replace every user setting but must not make the
+        /// product look freshly installed.
+        /// </summary>
+        public static void PreserveInstallState(AppSettings from, AppSettings to)
+        {
+            if (from == null) throw new ArgumentNullException(nameof(from));
+            if (to == null) throw new ArgumentNullException(nameof(to));
+
+            to.ConfigVersion = from.ConfigVersion;
+            to.InstallId = from.InstallId;
+            to.InstalledTargets = new List<InstalledTarget>(from.InstalledTargets ?? new List<InstalledTarget>());
+            to.LastUpdateCheck = from.LastUpdateCheck;
+            to.NativeIntelliSensePrompted = from.NativeIntelliSensePrompted;
+            to.DisabledNativeIntelliSense = from.DisabledNativeIntelliSense;
+            to.CommandPalette.UsageCounts = new Dictionary<string, int>(from.CommandPalette?.UsageCounts ?? new Dictionary<string, int>());
+            to.CommandPalette.RecentItems = new List<string>(from.CommandPalette?.RecentItems ?? new List<string>());
         }
 
         /// <summary>

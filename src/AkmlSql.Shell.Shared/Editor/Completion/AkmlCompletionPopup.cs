@@ -268,6 +268,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// </summary>
         public bool CtrlTransparencyEnabled { get; set; } = true;
 
+        /// <summary>
+        /// Spec 040 (OPT-01) — latched from "Enable fuzzy matching" when the popup is shown: when
+        /// true the filter keeps prefix matches only.
+        /// </summary>
+        public bool PrefixOnly { get; set; }
+
         private void OnCtrlPollTick(object sender, EventArgs e)
         {
             if (!CtrlTransparencyEnabled)
@@ -418,8 +424,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 ? _allItems.OrderBy(i => i.SortPriority)
                     .ThenBy(i => i.DisplayText, StringComparer.OrdinalIgnoreCase)
                     .ToArray()
-                : _allItems.Where(i => i.MatchesFilter(_currentFilter))
-                    .OrderBy(i => i.FilterScore(_currentFilter))
+                : _allItems.Where(i => i.MatchesFilter(_currentFilter, PrefixOnly))
+                    .OrderBy(i => i.FilterScore(_currentFilter, PrefixOnly))
                     .ThenBy(i => i.SortPriority)
                     .ThenBy(i => i.DisplayText, StringComparer.OrdinalIgnoreCase)
                     .ToArray();

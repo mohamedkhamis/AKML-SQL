@@ -42,6 +42,13 @@ namespace AkmlSql.Shell.Shared.Ui
         /// </summary>
         public bool CreateBackups { get; private set; } = true;
 
+        /// <summary>The backup checkbox's starting state: the Options setting, or on when it can't be read.</summary>
+        private static bool CreateBackupsDefault()
+        {
+            try { return Core.Config.ConfigManager.Load().Formatter.CreateBackups; }
+            catch (Exception) { return true; }
+        }
+
         /// <summary>
         /// Whether to preview only (dry run) without writing changes.
         /// </summary>
@@ -140,7 +147,8 @@ namespace AkmlSql.Shell.Shared.Ui
                 Text = "Create .bak backups before formatting",
                 Location = new Point(12, 256),
                 AutoSize = true,
-                Checked = true
+                // Spec 040 (OPT-01): starts from Options › Format › Styles "Create backups".
+                Checked = CreateBackupsDefault()
             };
 
             _previewOnlyCheck = new CheckBox

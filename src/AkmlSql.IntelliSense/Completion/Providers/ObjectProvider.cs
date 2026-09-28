@@ -59,6 +59,12 @@ public class ObjectProvider : ICompletionProvider
     /// </summary>
     public bool IncludeLinkedServers { get; set; }
 
+    /// <summary>
+    /// Spec 040 (OPT-01) — Suggestions › Behavior "Show PK/FK indicators": when false the
+    /// table-level FK note is left out. The ranking boost for FK-related tables stays.
+    /// </summary>
+    public bool ShowKeyIndicators { get; set; } = true;
+
     /// <summary>True when the schema is in scope: an empty allow-list (all) or a case-insensitive match.</summary>
     private bool SchemaInScope(string schemaName) =>
         ScopeSchemas.Count == 0 || ScopeSchemas.Contains(schemaName);
@@ -628,7 +634,8 @@ public class ObjectProvider : ICompletionProvider
         // text and boost the sort priority so it appears near the top.
         if (fkRelated != null && fkRelated.TryGetValue(obj.FullName, out var relatedTo))
         {
-            secondaryText = $"{secondaryText}  •  \uD83D\uDD11 FK ↔ {relatedTo}";
+            if (ShowKeyIndicators)
+                secondaryText = $"{secondaryText}  •  \uD83D\uDD11 FK ↔ {relatedTo}";
             sortPriority -= 500; // strong bump: FK-related tables are almost always the right pick
         }
 

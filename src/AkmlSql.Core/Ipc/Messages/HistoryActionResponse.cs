@@ -43,6 +43,25 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Number of entries removed (returned by RemoveOlderThan / delete actions).</summary>
         [Key(7)]
         public int DeletedCount { get; set; }
+
+        /// <summary>Spec 040 (HIS-04): the favourite state after ToggleFavorite.</summary>
+        [Key(8)]
+        public bool? IsFavorite { get; set; }
+
+        /// <summary>Spec 040 (HIS-08): distinct server names (GetFilterValues).</summary>
+        [Key(9)]
+        public string[]? Servers { get; set; }
+
+        /// <summary>Spec 040 (HIS-08): distinct database names (GetFilterValues).</summary>
+        [Key(10)]
+        public string[]? Databases { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-02/HIS-14): from ReconcileOpen — the grouped rows that were open when their
+        /// shell exited or crashed, newest first. The restore-on-start service reads these.
+        /// </summary>
+        [Key(11)]
+        public long[]? RestorableEntryIds { get; set; }
     }
 
     /// <summary>

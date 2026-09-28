@@ -212,5 +212,53 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(path, result);
             Assert.Equal(key, DocumentSessionKeys.ForDocument(path));
         }
+
+        // ─── Spec 040 (T056, HIS-02): look-up without minting, adoption, reverse look-up ───
+
+        [Fact]
+        public void TryGet_is_false_for_an_unknown_document_and_creates_no_key()
+        {
+            var path = @"C:\t056\unknown.sql";
+
+            Assert.False(DocumentSessionKeys.TryGet(path, out _));
+            Assert.False(DocumentSessionKeys.TryGet(path, out _));
+        }
+
+        [Fact]
+        public void Adopt_makes_TryGet_return_that_key()
+        {
+            var path = @"C:\t056\opened-from-history.sql";
+
+            Assert.True(DocumentSessionKeys.Adopt(path, "session-from-history"));
+
+            Assert.True(DocumentSessionKeys.TryGet(path, out var key));
+            Assert.Equal("session-from-history", key);
+            DocumentSessionKeys.Forget(path);
+        }
+
+        [Fact]
+        public void Adopt_refuses_a_key_another_open_document_holds()
+        {
+            var original = @"C:\t056\original.sql";
+            var second = @"C:\t056\older-version-beside-it.sql";
+            var key = DocumentSessionKeys.ForDocument(original);
+
+            Assert.False(DocumentSessionKeys.Adopt(second, key));
+
+            Assert.False(DocumentSessionKeys.TryGet(second, out _));
+            DocumentSessionKeys.Forget(original);
+        }
+
+        [Fact]
+        public void TryFindDocument_returns_the_holder_until_it_is_forgotten()
+        {
+            var path = @"C:\t056\holder.sql";
+            var key = DocumentSessionKeys.ForDocument(path);
+
+            Assert.Equal(path, DocumentSessionKeys.TryFindDocument(key));
+
+            DocumentSessionKeys.Forget(path);
+            Assert.Null(DocumentSessionKeys.TryFindDocument(key));
+        }
     }
 }

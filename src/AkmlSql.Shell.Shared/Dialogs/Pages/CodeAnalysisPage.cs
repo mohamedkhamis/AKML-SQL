@@ -9,7 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Code Analysis";
         public string Display => "Code Analysis";
         public string Title   => "Code Analysis";
-        public string Help    => "Controls the code analysis engine: enable it overall, choose whether rules run while you type or on save, and whether issues appear in the Error List.";
+        public string Help    => "Controls the code analysis engine: enable it overall, choose whether rules run while you type, and whether issues appear in the Error List.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -25,10 +25,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Run analysis rules in real-time as you type");
             ctx.RegisterSearch("Analyze while typing", "Run analysis rules in real-time as you type", "Toggle", rowRunOnType);
 
-            var (rowRunOnSave, chkRunOnSave) = ctx.Rows.AddToggle(panel,
-                "Analyze on save",
-                "Run full analysis when the document is saved");
-            ctx.RegisterSearch("Analyze on save", "Run full analysis when the document is saved", "Toggle", rowRunOnSave);
+            // Spec 040 (OPT-01): "Analyze on save" changed nothing and is hidden; the saved value is kept.
 
             var (rowShowInErrorList, chkShowInErrorList) = ctx.Rows.AddToggle(panel,
                 "Show in Error List",
@@ -51,7 +48,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var scopeRow = ctx.Rows.AddInfoRow(panel, "Disable a rule", scopeHint);
             ctx.RegisterSearch("Disable a rule", scopeHint, "Info", scopeRow);
 
-            return new CodeAnalysisControls(chkEnabled, chkRunOnType, chkRunOnSave, chkShowInErrorList);
+            return new CodeAnalysisControls(chkEnabled, chkRunOnType, chkShowInErrorList);
         }
     }
 
@@ -59,14 +56,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         private readonly CheckBox _enabled;
         private readonly CheckBox _runOnType;
-        private readonly CheckBox _runOnSave;
         private readonly CheckBox _showInErrorList;
 
-        public CodeAnalysisControls(CheckBox enabled, CheckBox runOnType, CheckBox runOnSave, CheckBox showInErrorList)
+        public CodeAnalysisControls(CheckBox enabled, CheckBox runOnType, CheckBox showInErrorList)
         {
             _enabled = enabled;
             _runOnType = runOnType;
-            _runOnSave = runOnSave;
             _showInErrorList = showInErrorList;
         }
 
@@ -75,7 +70,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var ca = settings.CodeAnalysis;
             _enabled.IsChecked = ca.Enabled;
             _runOnType.IsChecked = ca.RunOnType;
-            _runOnSave.IsChecked = ca.RunOnSave;
             _showInErrorList.IsChecked = ca.ShowInErrorList;
         }
 
@@ -83,7 +77,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             settings.CodeAnalysis.Enabled = _enabled.IsChecked == true;
             settings.CodeAnalysis.RunOnType = _runOnType.IsChecked == true;
-            settings.CodeAnalysis.RunOnSave = _runOnSave.IsChecked == true;
             settings.CodeAnalysis.ShowInErrorList = _showInErrorList.IsChecked == true;
         }
 

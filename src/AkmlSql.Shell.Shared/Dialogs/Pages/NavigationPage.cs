@@ -4,66 +4,31 @@ using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
+    /// <summary>
+    /// Editor › Navigation. Spec 040 (OPT-01): the Go to Definition, Peek Definition, Find All
+    /// References and Object Search toggles changed nothing (the commands always run) and are
+    /// hidden; their saved values are kept. The page keeps one pointer to where the commands are
+    /// until US6 rearranges the tree.
+    /// </summary>
     internal sealed class NavigationPage : IPageBuilder
     {
         public string Key     => "Navigation";
         public string Display => "Editor › Navigation";
         public string Title   => "Navigation";
-        public string Help    => "Turn code-navigation commands on or off: Go to Definition (F12), Peek Definition (Alt+F12), Find All References (Shift+F12), and Object Search (Ctrl+T).";
+        public string Help    => "Go to Definition (F12), Peek Definition (Alt+F12), Find All References (Shift+F12) and Object Search (Ctrl+T) are always available from the AKML SQL menu.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            var (rowGoTo, chkGoTo) = ctx.Rows.AddToggle(panel,
-                "Go to Definition", "Enable Go to Definition (F12)");
-            ctx.RegisterSearch("Go to Definition", "Enable Go to Definition (F12)", "Toggle", rowGoTo);
-
-            var (rowPeek, chkPeek) = ctx.Rows.AddToggle(panel,
-                "Peek Definition", "Enable Peek Definition (Alt+F12)");
-            ctx.RegisterSearch("Peek Definition", "Enable Peek Definition (Alt+F12)", "Toggle", rowPeek);
-
-            var (rowFindRefs, chkFindRefs) = ctx.Rows.AddToggle(panel,
-                "Find All References", "Enable Find All References (Shift+F12)");
-            ctx.RegisterSearch("Find All References", "Enable Find All References (Shift+F12)", "Toggle", rowFindRefs);
-
-            var (rowObjSearch, chkObjSearch) = ctx.Rows.AddToggle(panel,
-                "Object Search", "Enable Object Search (Ctrl+T)");
-            ctx.RegisterSearch("Object Search", "Enable Object Search (Ctrl+T)", "Toggle", rowObjSearch);
-
-            return new NavigationControls(chkGoTo, chkPeek, chkFindRefs, chkObjSearch);
+            ctx.Rows.AddInfoRow(panel, "Navigation commands", "Navigation commands are in AKML SQL › Navigate.");
+            return new NavigationControls();
         }
     }
 
     internal sealed class NavigationControls : IPageControls
     {
-        private readonly CheckBox _goTo;
-        private readonly CheckBox _peek;
-        private readonly CheckBox _findRefs;
-        private readonly CheckBox _objSearch;
+        public void Load(AppSettings settings) { }
 
-        public NavigationControls(CheckBox goTo, CheckBox peek, CheckBox findRefs, CheckBox objSearch)
-        {
-            _goTo = goTo;
-            _peek = peek;
-            _findRefs = findRefs;
-            _objSearch = objSearch;
-        }
-
-        public void Load(AppSettings settings)
-        {
-            var nav = settings.Navigation;
-            _goTo.IsChecked = nav.GoToDefinition;
-            _peek.IsChecked = nav.PeekDefinition;
-            _findRefs.IsChecked = nav.FindReferences;
-            _objSearch.IsChecked = nav.ObjectSearch;
-        }
-
-        public void Save(AppSettings settings)
-        {
-            settings.Navigation.GoToDefinition = _goTo.IsChecked == true;
-            settings.Navigation.PeekDefinition = _peek.IsChecked == true;
-            settings.Navigation.FindReferences = _findRefs.IsChecked == true;
-            settings.Navigation.ObjectSearch = _objSearch.IsChecked == true;
-        }
+        public void Save(AppSettings settings) { }
 
         public void Reset(AppSettings defaults) => Load(defaults);
     }

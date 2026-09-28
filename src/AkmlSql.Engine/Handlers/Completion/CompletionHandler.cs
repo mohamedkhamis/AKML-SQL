@@ -74,6 +74,13 @@ namespace AkmlSql.Engine.Handlers.Completion
             _engine.AliasObjectMap           = settings.IntelliSense.AliasOptions.ObjectAliasMap;
             _engine.AliasPrefixesToIgnore    = settings.IntelliSense.AliasOptions.PrefixesToIgnore;
 
+            // Spec 040 (OPT-01): the Suggestions › Behavior settings that used to change nothing.
+            _engine.SetMaxSuggestions(Math.Max(5, Math.Min(200, settings.IntelliSense.MaxSuggestions)));
+            _engine.FuzzyMatchEnabled        = settings.IntelliSense.FuzzyMatch;
+            _engine.ShowDataTypes            = settings.IntelliSense.ShowDataTypes;
+            _engine.ShowNullability          = settings.IntelliSense.ShowNullability;
+            _engine.ShowKeyIndicators        = settings.IntelliSense.ShowPkFk;
+
             // Spec 030 T036 / FR-016 — suggestion connection scope. The schema cache is single-database,
             // so the database allow-list resolves to a single in-scope bool against the session's database
             // (suppress when the connected DB is excluded); the schema allow-list filters the object list.

@@ -47,6 +47,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             Log.Information("Format Document: command invoked");
+            if (!FormatActionHelper.EnsureFormatterEnabled()) return;
 
             try
             {

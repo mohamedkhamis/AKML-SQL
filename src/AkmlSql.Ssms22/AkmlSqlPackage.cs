@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
+using Microsoft.VisualStudio.Threading; // awaiting TaskScheduler.Default (history reconcile)
 using Constants = AkmlSql.Core.Constants;
 using AkmlSql.Core.Logging;
 using AkmlSql.Shell.Shared;
@@ -190,7 +191,12 @@ namespace AkmlSql.Ssms22
                 UpdateStartupPrompt.ScheduleIfReady(JoinableTaskFactory, DisposalToken);
 
                 // Launch Engine process for IntelliSense, formatting, analysis
-                System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());
+                var engineLaunch = System.Threading.Tasks.Task.Run(() => EngineLifecycle.LaunchAsync());
+
+                // Spec 040 (HIS-02): once the engine is up, tell History which queries this SSMS has
+                // open; it closes stale open marks and reports the queries left open by an SSMS that
+                // exited or crashed (kept for restore on start).
+                _ = JoinableTaskFactory.RunAsync(() => ReconcileHistoryOpenStateAsync(engineLaunch));
 
                 ExecutionCapture.Initialize(this);
                 ExecutionInterceptor.Initialize(this);
@@ -599,8 +605,71 @@ namespace AkmlSql.Ssms22
         //   • The AKML SQL top-level menu (injected by EnsureTopLevelMenu)
         //   • The editor margin toolbar on SQL files (WPF, no DTE involvement)
 
+        /// <summary>
+        /// Spec 040 (HIS-02): after the engine launch completes, sends
+        /// <see cref="OpenStateReporter.BuildReconcileRequest"/> for the documents open now and keeps
+        /// the reply's restorable entries in <see cref="HistoryRestoreState"/>. Best effort — History
+        /// works without it.
+        /// </summary>
+        private async System.Threading.Tasks.Task ReconcileHistoryOpenStateAsync(System.Threading.Tasks.Task engineLaunch)
+        {
+            try
+            {
+                await engineLaunch;
+                await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+
+                var documents = new System.Collections.Generic.List<(string FullName, string Key)>();
+                try
+                {
+                    if (await GetServiceAsync(typeof(EnvDTE.DTE)) is EnvDTE.DTE dte)
+                    {
+                        foreach (EnvDTE.Document doc in dte.Documents)
+                        {
+                            var name = doc.FullName;
+                            DocumentSessionKeys.TryGet(name, out var key);
+                            documents.Add((name, string.IsNullOrEmpty(key) ? null : key));
+                        }
+                    }
+                }
+                catch (Exception docEx)
+                {
+                    Log.Debug(docEx, "History reconcile: could not list open documents");
+                }
+
+                await System.Threading.Tasks.TaskScheduler.Default;
+                var client = EngineLifecycle.Manager?.Client;
+                if (client == null || !client.IsConnected) return;
+
+                var request = OpenStateReporter.BuildReconcileRequest(
+                    System.Diagnostics.Process.GetCurrentProcess().Id, documents);
+                var response = await client.SendRequestAsync<
+                    AkmlSql.Core.Ipc.Messages.HistoryActionResponse,
+                    AkmlSql.Core.Ipc.Messages.HistoryActionRequest>(
+                    AkmlSql.Core.Ipc.MessageTypes.HistoryAction, request, timeoutMs: 10000);
+
+                HistoryRestoreState.RestorableEntryIds = response?.RestorableEntryIds ?? Array.Empty<long>();
+                Log.Information("History reconcile: {Count} queries were open when SSMS last closed",
+                    HistoryRestoreState.RestorableEntryIds.Length);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "History reconcile failed (non-fatal)");
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-02): SSMS is about to close. Mark it first, so the tabs shutdown closes stay
+        /// open in History and can be offered for restore on the next start.
+        /// </summary>
+        protected override int QueryClose(out bool canClose)
+        {
+            ExecutionCapture.ShuttingDown = true;
+            return base.QueryClose(out canClose);
+        }
+
         protected override void Dispose(bool disposing)
         {
+            ExecutionCapture.ShuttingDown = true;
             if (disposing)
             {
                 TransactionMonitor.Shutdown();

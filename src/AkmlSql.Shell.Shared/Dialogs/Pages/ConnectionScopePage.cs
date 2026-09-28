@@ -9,7 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     /// <summary>
     /// Spec 030 T082 (FR-043) — Options UI for the suggestion connection scope shipped in T036
     /// (<see cref="ConnectionScopeSettings"/>): limit the object-suggestion list to a set of
-    /// databases and/or schemas, and a forward-looking toggle to include linked-server objects.
+    /// databases and/or schemas, and whether linked servers are suggested.
     /// Database/schema lists are edited as comma-separated text; empty means “no restriction”.
     /// </summary>
     internal sealed class ConnectionScopePage : IPageBuilder
@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "ConnectionScope";
         public string Display => "Suggestions › Connections";
         public string Title   => "Connections & Linked Servers";
-        public string Help    => "Narrow the object-suggestion list to specific databases and/or schemas (leave a field empty for no restriction), and choose whether linked-server objects are included once that data is available.";
+        public string Help    => "Narrow the object-suggestion list to specific databases and/or schemas (leave a field empty for no restriction), and choose whether linked servers are suggested after FROM and JOIN.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -38,8 +38,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowLinked, chkLinked) = ctx.Rows.AddToggle(panel,
                 "Include linked-server objects in suggestions",
-                "Forward-looking: the schema cache does not yet load linked-server objects, so this currently has no effect.");
-            ctx.RegisterSearch("Include linked-server objects in suggestions", "Forward-looking toggle for linked-server suggestions (no effect yet)", "Toggle", rowLinked);
+                "Suggest the server's linked servers after FROM and JOIN, so you can write four-part names.");
+            ctx.RegisterSearch("Include linked-server objects in suggestions", "Suggest the server's linked servers after FROM and JOIN", "Toggle", rowLinked);
 
             return new ConnectionScopeControls(txtDatabases, txtSchemas, chkLinked);
         }

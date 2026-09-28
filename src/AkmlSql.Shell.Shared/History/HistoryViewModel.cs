@@ -39,6 +39,16 @@ namespace AkmlSql.Shell.Shared.History
         private HistoryEntryDto? _selectedEntry;
         private const int PageSize = 100;
 
+        // Spec 040 (HIS-03): rows the last page returned. "More" needs a full last page AND fewer
+        // rows than the total — the old rule added the offset to the already-accumulated list,
+        // so it counted every earlier page twice and stopped after page two.
+        private int _lastPageCount;
+
+        // Spec 040 (HIS-01): full text per entry for the preview, cleared on every refresh.
+        private readonly Dictionary<long, string> _previewCache = new Dictionary<long, string>();
+
+        private readonly IRpcClientAccessor _rpc;
+
         /// <summary>
         /// Raised when a "Compare" action completes with two SQL texts for side-by-side diff.
         /// The event handler receives the left and right SQL strings.
@@ -46,10 +56,11 @@ namespace AkmlSql.Shell.Shared.History
         internal event Action<string, string>? CompareRequested;
 
         /// <summary>
-        /// Raised when an "Open in New Tab" action completes with the full SQL text.
-        /// The event handler receives the SQL text, server, and database to open.
+        /// Raised when an "Open query" action completes with the full SQL text.
+        /// The event handler receives the SQL text, server, database and the entry's session key
+        /// (spec 040: the new document adopts it, so running it again continues the session).
         /// </summary>
-        internal event Action<string, string?, string?>? OpenInNewTabRequested;
+        internal event Action<string, string?, string?, string?>? OpenInNewTabRequested;
 
         /// <summary>
         /// Raised when a "Re-execute" action completes with the full SQL text.
@@ -57,8 +68,12 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         internal event Action<string>? ReExecuteRequested;
 
-        public HistoryViewModel()
+        public HistoryViewModel() : this(EngineRpcClientAccessor.Instance) { }
+
+        /// <summary>Spec 040: the engine client is injectable so paging and row actions are testable.</summary>
+        internal HistoryViewModel(IRpcClientAccessor rpc)
         {
+            _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
             Entries = new ObservableCollection<HistoryEntryDto>();
             SelectedEntries = new ObservableCollection<HistoryEntryDto>();
             Servers = new ObservableCollection<string>();
@@ -75,9 +90,12 @@ namespace AkmlSql.Shell.Shared.History
             ReExecuteCommand = new RelayCommand(_ => ExecuteReExecuteAsync(), _ => !IsLoading && SelectedEntry != null);
             CompareCommand = new RelayCommand(_ => ExecuteCompareAsync(), _ => !IsLoading && SelectedEntries.Count == 2);
 
-            // US9 action commands
-            ToggleFavoriteCommand = new RelayCommand(_ => ExecuteToggleFavoriteAsync(), _ => !IsLoading && SelectedEntry != null);
-            DeleteCommand = new RelayCommand(_ => ExecuteDeleteAsync(), _ => !IsLoading && SelectedEntries.Count > 0);
+            // US9 action commands. Spec 040 (HIS-04): a row's star / delete pass that row as the
+            // command parameter; without one, the selected entry.
+            ToggleFavoriteCommand = new RelayCommand(p => ExecuteToggleFavoriteAsync(p as HistoryEntryDto ?? SelectedEntry),
+                p => !IsLoading && (p is HistoryEntryDto || SelectedEntry != null));
+            DeleteCommand = new RelayCommand(p => ExecuteDeleteAsync(p as HistoryEntryDto ?? SelectedEntry),
+                p => !IsLoading && (p is HistoryEntryDto || SelectedEntry != null));
             RemoveOlderThanCommand = new RelayCommand(_ => ExecuteRemoveOlderThanAsync(), _ => !IsLoading && SelectedEntry != null);
             ExportCommand = new RelayCommand(_ => ExecuteExportAsync(), _ => !IsLoading);
         }
@@ -178,8 +196,18 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>Whether there are more entries available beyond the current page.</summary>
-        public bool HasMoreEntries => _currentOffset + Entries.Count < TotalCount;
+        /// <summary>Whether there are more entries available beyond the loaded ones.</summary>
+        public bool HasMoreEntries => _lastPageCount == PageSize && Entries.Count < TotalCount;
+
+        /// <summary>Spec 040 test seam: where settings come from (grouping on/off). Production reads config.</summary>
+        internal Func<Core.Config.AppSettings> SettingsProvider { get; set; } = Core.Config.ConfigManager.Load;
+
+        /// <summary>
+        /// Spec 040 (HIS-04) seam: asks the user to confirm a destructive row action; true = go
+        /// ahead. Defaults to a Yes/No message box.
+        /// </summary>
+        internal Func<string, bool> ConfirmPrompt { get; set; } = text =>
+            MessageBox.Show(text, Core.Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
 
         /// <summary>Count of entries in the current page that are marked as favorite.
         /// Bound to the star badge on the Starred filter tab. Refreshed after every search.</summary>
@@ -362,10 +390,12 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
+        /// <summary>Runs a search now (first page, or the next page) and completes when it has.</summary>
+        internal Task RunSearchAsync(bool resetOffset) => SearchInternalAsync(resetOffset);
+
         private async Task SearchInternalAsync(bool resetOffset)
         {
-            var client = EngineLifecycle.Manager?.Client;
-            if (client == null || !client.IsConnected)
+            if (!_rpc.IsConnected)
             {
                 Log.Debug("HistoryViewModel: engine not connected, cannot search");
                 IsDisconnected = true;
@@ -380,6 +410,7 @@ namespace AkmlSql.Shell.Shared.History
                 if (resetOffset)
                 {
                     _currentOffset = 0;
+                    _previewCache.Clear();
                 }
                 else
                 {
@@ -387,7 +418,7 @@ namespace AkmlSql.Shell.Shared.History
                 }
 
                 // Read deduplication preference from config
-                var settings = Core.Config.ConfigManager.Load();
+                var settings = SettingsProvider();
                 var deduplicate = settings.History.Deduplication;
 
                 // Parse advanced search syntax (prefix filters, wildcards, etc.)
@@ -448,7 +479,7 @@ namespace AkmlSql.Shell.Shared.History
                     CamelCaseTokens = parsed.CamelCaseTokens?.ToArray()
                 };
 
-                var response = await client.SendRequestAsync<HistorySearchResponse, HistorySearchRequest>(
+                var response = await _rpc.SendRequestAsync<HistorySearchResponse, HistorySearchRequest>(
                     MessageTypes.HistorySearch, request, timeoutMs: 10000);
 
                 if (response.Success)
@@ -458,12 +489,15 @@ namespace AkmlSql.Shell.Shared.History
                         Entries.Clear();
                     }
 
-                    foreach (var entry in response.Entries)
+                    var page = response.Entries ?? Array.Empty<HistoryEntryDto>();
+                    foreach (var entry in page)
                     {
                         Entries.Add(entry);
                     }
 
+                    _lastPageCount = page.Length;
                     TotalCount = response.TotalCount;
+                    OnPropertyChanged(nameof(HasMoreEntries));
                     OnPropertyChanged(nameof(StarredCount));
                 }
                 else
@@ -557,7 +591,7 @@ namespace AkmlSql.Shell.Shared.History
                 var fullSql = await GetFullSqlAsync(entry.Id);
                 if (fullSql != null)
                 {
-                    OpenInNewTabRequested?.Invoke(fullSql, entry.Server, entry.Database);
+                    OpenInNewTabRequested?.Invoke(fullSql, entry.Server, entry.Database, entry.SessionKey);
                 }
             }
             catch (Exception ex)
@@ -601,8 +635,7 @@ namespace AkmlSql.Shell.Shared.History
                 var id1 = SelectedEntries[0].Id;
                 var id2 = SelectedEntries[1].Id;
 
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
+                if (!_rpc.IsConnected) return;
 
                 IsLoading = true;
                 try
@@ -613,7 +646,7 @@ namespace AkmlSql.Shell.Shared.History
                         EntryIds = new[] { id1, id2 }
                     };
 
-                    var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
                         MessageTypes.HistoryAction, actionRequest, timeoutMs: 10000);
 
                     if (response.Success && response.DiffLeftSql != null && response.DiffRightSql != null)
@@ -637,12 +670,41 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
+        /// Spec 040 (HIS-01, FR-010): the entry's complete text for the preview — the list rows
+        /// carry only the first 500 characters. Cached per entry until the next refresh, and it
+        /// does not raise <see cref="IsLoading"/>, so selecting a row never flashes the list.
+        /// </summary>
+        internal async Task<string?> GetPreviewTextAsync(HistoryEntryDto entry)
+        {
+            if (entry == null) return null;
+            if (_previewCache.TryGetValue(entry.Id, out var cached)) return cached;
+            if (!_rpc.IsConnected) return entry.SqlText;
+
+            try
+            {
+                var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    MessageTypes.HistoryAction,
+                    new HistoryActionRequest { Action = HistoryActions.GetFullSql, EntryIds = new[] { entry.Id } },
+                    timeoutMs: 10000);
+                if (response.Success && response.FullSqlText != null)
+                {
+                    _previewCache[entry.Id] = response.FullSqlText;
+                    return response.FullSqlText;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "HistoryViewModel: preview text for entry {Id} failed", entry.Id);
+            }
+            return entry.SqlText;
+        }
+
+        /// <summary>
         /// Helper: sends a GetFullSql action and returns the full SQL text.
         /// </summary>
         private async Task<string?> GetFullSqlAsync(long entryId)
         {
-            var client = EngineLifecycle.Manager?.Client;
-            if (client == null || !client.IsConnected) return null;
+            if (!_rpc.IsConnected) return null;
 
             IsLoading = true;
             try
@@ -653,7 +715,7 @@ namespace AkmlSql.Shell.Shared.History
                     EntryIds = new[] { entryId }
                 };
 
-                var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
                     MessageTypes.HistoryAction, actionRequest, timeoutMs: 10000);
 
                 if (response.Success)
@@ -674,46 +736,11 @@ namespace AkmlSql.Shell.Shared.History
 
         #region Action Command Implementations (US9)
 
-        /// <summary>
-        /// Sends a ToggleFavorite action to the engine, then refreshes the entries list.
-        /// </summary>
-        private async void ExecuteToggleFavoriteAsync()
+        private async void ExecuteToggleFavoriteAsync(HistoryEntryDto? entry)
         {
             try
             {
-                if (SelectedEntry == null) return;
-
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
-
-                IsLoading = true;
-                try
-                {
-                    var actionRequest = new HistoryActionRequest
-                    {
-                        Action = HistoryActions.ToggleFavorite,
-                        EntryIds = new[] { SelectedEntry.Id }
-                    };
-
-                    var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
-                        MessageTypes.HistoryAction, actionRequest, timeoutMs: 10000);
-
-                    if (response.Success)
-                    {
-                        // Toggle the local entry's favorite state for immediate UI feedback
-                        SelectedEntry.IsFavorite = !SelectedEntry.IsFavorite;
-                        // Refresh the list to reflect the change
-                        await SearchInternalAsync(resetOffset: true);
-                    }
-                    else
-                    {
-                        Log.Warning("HistoryViewModel: ToggleFavorite returned error: {Error}", response.Error);
-                    }
-                }
-                finally
-                {
-                    IsLoading = false;
-                }
+                if (entry != null) await ToggleFavoriteEntryAsync(entry);
             }
             catch (Exception ex)
             {
@@ -722,50 +749,99 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Sends a Delete action for all selected entries, then refreshes the entries list.
+        /// Spec 040 (HIS-04, FR-014): stars or un-stars the row's query. With grouping on, the whole
+        /// grouped query (every run) changes, so the star stays after the next run; the row takes
+        /// the state the engine returns.
         /// </summary>
-        private async void ExecuteDeleteAsync()
+        internal async Task ToggleFavoriteEntryAsync(HistoryEntryDto entry)
+        {
+            if (entry == null || !_rpc.IsConnected) return;
+
+            IsLoading = true;
+            try
+            {
+                var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    MessageTypes.HistoryAction,
+                    new HistoryActionRequest
+                    {
+                        Action = HistoryActions.ToggleFavorite,
+                        EntryIds = new[] { entry.Id },
+                        GroupScope = GroupingOn() ? true : (bool?)null,
+                    },
+                    timeoutMs: 10000);
+
+                if (response.Success)
+                {
+                    entry.IsFavorite = response.IsFavorite ?? !entry.IsFavorite;
+                    await SearchInternalAsync(resetOffset: true);
+                }
+                else
+                {
+                    Log.Warning("HistoryViewModel: ToggleFavorite returned error: {Error}", response.Error);
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async void ExecuteDeleteAsync(HistoryEntryDto? entry)
         {
             try
             {
-                if (SelectedEntries.Count == 0) return;
-
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
-
-                var entryIds = SelectedEntries.Select(e => e.Id).ToArray();
-
-                IsLoading = true;
-                try
-                {
-                    var actionRequest = new HistoryActionRequest
-                    {
-                        Action = HistoryActions.Delete,
-                        EntryIds = entryIds
-                    };
-
-                    var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
-                        MessageTypes.HistoryAction, actionRequest, timeoutMs: 10000);
-
-                    if (response.Success)
-                    {
-                        Log.Information("HistoryViewModel: deleted {Count} entries", entryIds.Length);
-                        await SearchInternalAsync(resetOffset: true);
-                    }
-                    else
-                    {
-                        Log.Warning("HistoryViewModel: Delete returned error: {Error}", response.Error);
-                    }
-                }
-                finally
-                {
-                    IsLoading = false;
-                }
+                if (entry != null) await DeleteEntryAsync(entry);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "HistoryViewModel: delete failed");
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-04, FR-014): removes the row's query after confirmation. With grouping on,
+        /// that is the whole grouped query — every run, its versions and its session — so nothing
+        /// of it reappears on the next refresh.
+        /// </summary>
+        internal async Task DeleteEntryAsync(HistoryEntryDto entry)
+        {
+            if (entry == null || !_rpc.IsConnected) return;
+            if (!ConfirmPrompt($"Remove '{HistoryRowDisplay.DisplayNameFor(entry)}' and its history?")) return;
+
+            IsLoading = true;
+            try
+            {
+                var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    MessageTypes.HistoryAction,
+                    new HistoryActionRequest
+                    {
+                        Action = HistoryActions.Delete,
+                        EntryIds = new[] { entry.Id },
+                        GroupScope = GroupingOn() ? true : (bool?)null,
+                    },
+                    timeoutMs: 10000);
+
+                if (response.Success)
+                {
+                    Log.Information("HistoryViewModel: deleted {Count} entries", response.DeletedCount);
+                    await SearchInternalAsync(resetOffset: true);
+                }
+                else
+                {
+                    Log.Warning("HistoryViewModel: Delete returned error: {Error}", response.Error);
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        /// <summary>Whether History shows one row per query (the "Group repeated runs" setting).</summary>
+        private bool GroupingOn()
+        {
+            try { return SettingsProvider().History.Deduplication; }
+            catch (Exception) { return true; }
         }
 
         /// <summary>
@@ -779,8 +855,7 @@ namespace AkmlSql.Shell.Shared.History
                 var entry = SelectedEntry;
                 if (entry == null) return;
 
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
+                if (!_rpc.IsConnected) return;
 
                 var confirm = MessageBox.Show(
                     $"Remove all history older than this entry ({entry.ExecutedAt})?\n\n" +
@@ -798,7 +873,7 @@ namespace AkmlSql.Shell.Shared.History
                         KeepFavorites = true
                     };
 
-                    var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
                         MessageTypes.HistoryAction, actionRequest, timeoutMs: 10000);
 
                     if (response.Success)
@@ -833,8 +908,7 @@ namespace AkmlSql.Shell.Shared.History
         {
             try
             {
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
+                if (!_rpc.IsConnected) return;
 
                 // Show SaveFileDialog (must be on UI thread — we are, since this is a command handler)
                 var dialog = new Microsoft.Win32.SaveFileDialog
@@ -884,7 +958,7 @@ namespace AkmlSql.Shell.Shared.History
                         Filter = filterRequest
                     };
 
-                    var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                    var response = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
                         MessageTypes.HistoryAction, actionRequest, timeoutMs: 60000);
 
                     if (response.Success)

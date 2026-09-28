@@ -10,6 +10,7 @@ using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Editor;
 using Serilog;
+using AkmlSql.Shell.Shared.Snippets;
 
 namespace AkmlSql.Shell.Shared.Editor.Completion
 {
@@ -58,7 +59,6 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// </summary>
         public Microsoft.VisualStudio.Language.Intellisense.ISignatureHelpBroker SignatureBroker { get; set; }
 
-        private const int DebounceMs = 150;
         private const int QuickInfoDebounceMs = 300;
 
         public CompletionController(IWpfTextView textView, CompletionPopupAdornment adornment, string sessionId)
@@ -235,6 +235,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                     case VSConstants.VSStd2KCmdID.RETURN:
                     case VSConstants.VSStd2KCmdID.TAB:
+                        CancelPendingTrigger();
                         // Wildcard expansion popup is open — commit checked columns
                         if (_adornment.IsWildcardOpen)
                         {
@@ -263,8 +264,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                             // Check for snippet abbreviation at cursor (e.g., "ssf" + Tab → expand snippet)
                             // Only attempt expansion if the word matches a known snippet shortcode
+                            // and snippets are enabled (spec 040, OPT-01).
                             var wordAtCaret = GetWordAtCaret();
-                            if (!string.IsNullOrEmpty(wordAtCaret) && wordAtCaret.Length >= 2
+                            if (SnippetGate.ExpansionEnabled(SettingsSnapshot())
+                                && !string.IsNullOrEmpty(wordAtCaret) && wordAtCaret.Length >= 2
                                 && IsKnownSnippetShortcode(wordAtCaret))
                             {
                                 TryExpandSnippet(wordAtCaret);
@@ -274,6 +277,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         break;
 
                     case VSConstants.VSStd2KCmdID.CANCEL:
+                        CancelPendingTrigger();
                         if (_adornment.IsWildcardOpen)
                         {
                             DismissWildcardPopup();
@@ -424,7 +428,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     }
                 }
                 _filterText = string.Empty;
-                AutoTriggerCompletion();
+                AutoTriggerCompletion('.');
             }
             else if (char.IsLetter(c) || c == '_' || c == '@' || c == '#')
             {
@@ -437,9 +441,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 }
                 else
                 {
-                    // Trigger IMMEDIATELY — no debounce. Show cached items instantly
-                    // to beat SSMS native IntelliSense which also triggers immediately.
-                    AutoTriggerCompletion();
+                    // Spec 040 (OPT-01): after "Trigger delay (ms)" (0 = immediately, as before).
+                    AutoTriggerCompletion(c);
                 }
             }
             else if (c == ' ' && _adornment.Popup.IsOpen)
@@ -463,7 +466,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                         if (item != null)
                         {
                             CommitItemFromSpaceKey(item);
-                            if (byContext) AutoTriggerCompletion();
+                            if (byContext) AutoTriggerCompletion(' ', contextTrigger: true);
                             return; // Space is already inserted by VS before HandleTypedChar
                         }
                     }
@@ -475,11 +478,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
-                    AutoTriggerCompletion();
+                    AutoTriggerCompletion(' ', contextTrigger: true);
                 }
                 else if (byContext)
                 {
-                    AutoTriggerCompletion();
+                    AutoTriggerCompletion(' ', contextTrigger: true);
                 }
             }
             else if (c == ' ' || c == '(' || c == ')' || c == ';' || c == ',')
@@ -499,7 +502,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (c == ' ' && IsObjectExpectingKeywordBeforeCaret())
                 {
                     _expectsObjects = true;
-                    AutoTriggerCompletion();
+                    AutoTriggerCompletion(' ', contextTrigger: true);
                 }
                 // SQL-Prompt-style smart GROUP BY: auto-trigger after "GROUP BY " (and
                 // "ORDER BY ") so the engine's "▶ Add columns from SELECT" action and column
@@ -508,7 +511,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 // set _expectsObjects — GROUP BY wants columns + the smart item, not tables.
                 else if (c == ' ' && IsByKeywordBeforeCaret())
                 {
-                    AutoTriggerCompletion();
+                    AutoTriggerCompletion(' ', contextTrigger: true);
                 }
             }
             else if (char.IsDigit(c))
@@ -713,18 +716,24 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             }
         }
 
-        /// <summary>Auto-trigger (typing) gate (FR-012). Requires Enabled AND AutoTrigger.</summary>
-        private bool AutoTriggerEnabled()
+        /// <summary>
+        /// Trigger completion from a typing event. Spec 040 (OPT-01): every automatic trigger goes
+        /// through <see cref="CompletionTriggerPolicy"/> — auto-trigger on/off, "Trigger after dot",
+        /// and the "Trigger delay (ms)" debounce (0 = immediately). Ctrl+Space never comes here.
+        /// </summary>
+        private void AutoTriggerCompletion(char typed, bool contextTrigger = false)
         {
-            var i = IntelliSenseSettings();
-            return i.Enabled && i.AutoTrigger;
-        }
-
-        /// <summary>Trigger completion from a typing event — no-op unless auto-trigger is on.</summary>
-        private void AutoTriggerCompletion()
-        {
-            if (AutoTriggerEnabled())
-                TriggerCompletion();
+            var decision = CompletionTriggerPolicy.Decide(typed, ctrlSpace: false, IntelliSenseSettings(), contextTrigger);
+            switch (decision.Kind)
+            {
+                case TriggerKind.Immediate:
+                    CancelPendingTrigger();
+                    TriggerCompletion();
+                    break;
+                case TriggerKind.Delayed:
+                    TriggerCompletionDebounced(decision.DelayMs);
+                    break;
+            }
         }
 
         /// <summary>
@@ -749,17 +758,38 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             catch (Exception ex) { Log.Debug(ex, "SignatureHelp: dismiss failed"); }
         }
 
-        private void TriggerCompletionDebounced()
+        /// <summary>
+        /// Opens the suggestions box <paramref name="delayMs"/> after the last keystroke; each new
+        /// keystroke restarts the wait. The callback re-reads the word at the caret, so the filter
+        /// matches what was typed during the wait.
+        /// </summary>
+        private void TriggerCompletionDebounced(int delayMs)
         {
-            _debounceTimer?.Dispose();
-            _debounceTimer = new Timer(_ =>
+            CancelPendingTrigger();
+            Timer timer = null;
+            timer = new Timer(_ =>
             {
                 try
                 {
-                    _textView.VisualElement.Dispatcher.Invoke(() => FetchAndShowCompletions());
+                    _textView.VisualElement.Dispatcher.Invoke(() =>
+                    {
+                        // Cancelled, or replaced by a later keystroke, while this callback was queued.
+                        if (!ReferenceEquals(_debounceTimer, timer)) return;
+                        CancelPendingTrigger();
+                        TriggerCompletion();
+                    });
                 }
                 catch { /* UI might be disposed */ }
-            }, null, DebounceMs, Timeout.Infinite);
+            }, null, delayMs, Timeout.Infinite);
+            _debounceTimer = timer;
+        }
+
+        /// <summary>Drops a delayed trigger that hasn't fired yet (popup dismissed, committed, Esc).</summary>
+        private void CancelPendingTrigger()
+        {
+            var timer = _debounceTimer;
+            _debounceTimer = null;
+            timer?.Dispose();
         }
 
         // Latched once per popup show: keeps the per-keystroke paths (Exec fall-through,
@@ -772,6 +802,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             var snapshot = SettingsSnapshot();
             _adornment.Popup.CtrlTransparencyEnabled = snapshot.IntelliSense.CtrlTransparentPopups;
+            _adornment.Popup.PrefixOnly = !snapshot.IntelliSense.FuzzyMatch;
             _showDefinitionBoxLatched = snapshot.CompletionPolish.ShowObjectDefinitionBox;
         }
 
@@ -853,7 +884,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                             try
                             {
                                 var s = AkmlSql.Core.Config.ConfigManager.Load();
-                                showSnippets = s.IntelliSense.SnippetsInCompletion;
+                                showSnippets = SnippetGate.ShouldOfferSnippets(s);
                                 showAlias = s.IntelliSense.AutoAlias;
                             }
                             catch { }
@@ -883,7 +914,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                     SecondaryText = item.SecondaryText ?? string.Empty,
                                     ObjectType = item.ObjectType,
                                     SortPriority = item.SortPriority,
-                                    SourceObject = item.SourceObject ?? string.Empty
+                                    SourceObject = item.SourceObject ?? string.Empty,
+                                    FilterText = item.FilterText
                                 });
                             }
 
@@ -1126,7 +1158,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     SessionId = _sessionId,
                     Shortcode = abbreviation,
                     CursorOffset = caretPos,
-                    FormatOnExpand = true
+                    FormatOnExpand = SnippetGate.FormatOnExpand(SettingsSnapshot())
                 };
 
                 // Fire-and-forget with callback on UI thread
@@ -1176,7 +1208,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                     SessionId = _sessionId,
                     Shortcode = abbreviation,
                     CursorOffset = insertPos + replaceLen,
-                    FormatOnExpand = true
+                    FormatOnExpand = SnippetGate.FormatOnExpand(SettingsSnapshot())
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>
@@ -1334,7 +1366,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 if (item.ObjectType == 3 && IsObjectExpectingKeyword(item.InsertText))
                 {
                     _expectsObjects = true;
-                    AutoTriggerCompletion();
+                    AutoTriggerCompletion(' ', contextTrigger: true);
                 }
             }
             catch (Exception ex)
@@ -1345,6 +1377,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         private void DismissPopup()
         {
+            CancelPendingTrigger();
             CancelQuickInfo();
             _adornment.PopupOpacity = 1.0;
             _adornment.Hide();

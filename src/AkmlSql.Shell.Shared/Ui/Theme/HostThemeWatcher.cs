@@ -47,6 +47,16 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         /// </summary>
         public ThemeVariant LastDetectedHostVariant { get; private set; } = ThemeVariant.Light;
 
+        /// <summary>
+        /// Spec 040 (T021) test seam: when set, <see cref="CurrentHostVariant"/> returns this instead
+        /// of the detected host theme. Production code never sets it.
+        /// </summary>
+        internal static Func<ThemeVariant> VariantOverrideForTests { get; set; }
+
+        /// <summary>The host theme the Options window resolves "System" against.</summary>
+        internal static ThemeVariant CurrentHostVariant =>
+            VariantOverrideForTests != null ? VariantOverrideForTests() : Instance.LastDetectedHostVariant;
+
         /// <summary>Mirrors <see cref="SystemParameters.HighContrast"/>.</summary>
         public bool IsHighContrast { get; private set; }
 

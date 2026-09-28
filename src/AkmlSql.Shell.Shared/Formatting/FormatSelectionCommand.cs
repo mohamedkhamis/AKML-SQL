@@ -21,6 +21,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         private static void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            if (!FormatActionHelper.EnsureFormatterEnabled()) return;
 
             try
             {

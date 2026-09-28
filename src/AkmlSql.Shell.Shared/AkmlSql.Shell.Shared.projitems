@@ -16,6 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\KeyboardHook.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionTriggerPolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
@@ -56,7 +57,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SafetyPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ExecutionPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\EditorPage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SchemaCachePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\HistoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAssistancePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAgentListView.cs" />
@@ -72,7 +72,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SpecialCharactersPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\JoinCompletionPage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\LabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateAvailableDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateCheckFlow.cs" />
@@ -110,6 +109,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemedButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareUserControl.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreview\SqlPreviewView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
@@ -178,6 +178,9 @@
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DocumentSessionKeys.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\OpenStateReporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\VersionLoadGuard.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRestoreState.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryTimeFormat.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRowDisplay.cs" />
@@ -190,6 +193,7 @@
     <!-- Phase 7 — Tab management: environment detection, coloring, tooltips -->
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\EnvironmentDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabColoringManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\HexBrush.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabTooltipProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabManagementInitializer.cs" />
     <!-- Phase 7 US6 — Restore Recently Closed Tabs -->
@@ -323,6 +327,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetGate.cs" />
     <!-- Spec 030 T044/T045 — Create Snippet from Selection + Surround With -->
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\CreateFromSelectionCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SurroundWithCommand.cs" />

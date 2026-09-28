@@ -17,6 +17,7 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Ui;
+using AkmlSql.Shell.Shared.Ui.SqlPreview;
 using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.History
@@ -39,7 +40,10 @@ namespace AkmlSql.Shell.Shared.History
         // Main panels
         private ListView? _queryListView;
         private ListBox? _versionListBox;
-        private TextBlock? _codePreviewTextBlock;
+        private SqlPreviewView? _codePreview;
+
+        // Spec 040 (HIS-04): drops a slower version list for an entry selected earlier.
+        private readonly VersionLoadGuard _versionGuard = new VersionLoadGuard();
         private TextBlock? _codePreviewHeaderTimestamp;
         private TextBlock? _codePreviewHeaderFilename;
         private TextBlock? _metadataServerLabel;
@@ -871,6 +875,18 @@ namespace AkmlSql.Shell.Shared.History
             var outerDock = new FrameworkElementFactory(typeof(DockPanel));
             outerDock.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 4, 4, 4));
 
+            // Spec 040 (HIS-02, FR-011): a 3 px accent bar marks a query that is open in a tab (it
+            // replaces the red/green dot, which read "closed" as an error).
+            var openBar = new FrameworkElementFactory(typeof(Border));
+            openBar.SetValue(FrameworkElement.WidthProperty, 3.0);
+            openBar.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 6, 0));
+            openBar.SetResourceBinding(Border.BackgroundProperty, ThemeTokens.AccentPrimary);
+            openBar.SetValue(DockPanel.DockProperty, Dock.Left);
+            openBar.SetBinding(VisibilityProperty,
+                new Binding(nameof(HistoryEntryDto.IsOpen)) { Converter = new BoolToHiddenConverter() });
+            openBar.SetValue(ToolTipProperty, "Open in a tab");
+            outerDock.AppendChild(openBar);
+
             // Far-left star toggle (reuses FavoriteIconConverter / FavoriteColorConverter + OnFavoriteStarClick).
             var starText = new FrameworkElementFactory(typeof(TextBlock));
             starText.SetBinding(TextBlock.TextProperty,
@@ -945,17 +961,6 @@ namespace AkmlSql.Shell.Shared.History
             connText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             line2.AppendChild(connText);
 
-            var connDot = new FrameworkElementFactory(typeof(TextBlock));
-            connDot.SetValue(TextBlock.TextProperty, "\u25CF ");
-            connDot.SetBinding(TextBlock.ForegroundProperty,
-                new Binding(nameof(HistoryEntryDto.IsOpen))
-                {
-                    Converter = new OpenClosedColorConverter()
-                });
-            connDot.SetValue(TextBlock.FontSizeProperty, 9.0);
-            connDot.SetValue(DockPanel.DockProperty, Dock.Right);
-            connDot.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            line2.AppendChild(connDot);
 
             // Left (fills): relative time + " \u00B7 " + "\u00D7N \u00B7 M versions" meta (HistoryRowDisplay.MetaFor;
             // separator + meta both hidden when the meta line is empty \u2014 see MetaVisibilityConverter).
@@ -1288,26 +1293,13 @@ namespace AkmlSql.Shell.Shared.History
             DockPanel.SetDock(metaBar, Dock.Bottom);
             dock.Children.Add(metaBar);
 
-            // --- CENTER: monospaced read-only preview in a ScrollViewer (added LAST = fills) ---
-            _codePreviewTextBlock = new TextBlock
-            {
-                FontFamily = AkmlSql.Shell.Shared.Ui.Theme.Typography.MonoFont,
-                FontSize = 11.0,
-                TextWrapping = TextWrapping.Wrap,
-                Padding = new Thickness(10, 6, 10, 6)
-            };
-            _codePreviewTextBlock.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
-            _codePreviewTextBlock.SetResourceReference(TextBlock.BackgroundProperty, ThemeTokens.EditorPopupBackground);
+            // --- CENTER: read-only, selectable preview of the FULL text (added LAST = fills) ---
+            // Spec 040 (HIS-01, HIS-11): the rows carry only 500 characters; the preview fetches the
+            // whole query (HistoryViewModel.GetPreviewTextAsync) and can be selected and copied.
+            _codePreview = new SqlPreviewView { Padding = new Thickness(4, 6, 4, 6) };
+            _codePreview.SetResourceReference(Control.BackgroundProperty, ThemeTokens.EditorPopupBackground);
 
-            var previewScroll = new ScrollViewer
-            {
-                Content = _codePreviewTextBlock,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
-            };
-            previewScroll.SetResourceReference(ScrollViewer.BackgroundProperty, ThemeTokens.EditorPopupBackground);
-
-            dock.Children.Add(previewScroll);
+            dock.Children.Add(_codePreview);
 
             return dock;
         }
@@ -1429,14 +1421,14 @@ namespace AkmlSql.Shell.Shared.History
         /// with (b) search-match background highlighting (from <see cref="FindHighlightRegions"/>).
         /// Also refreshes the dark header (filename + ISO timestamp).
         /// </summary>
-        private void UpdatePreviewWithHighlighting()
+        private async void UpdatePreviewWithHighlighting()
         {
-            if (_codePreviewTextBlock == null) return;
+            if (_codePreview == null) return;
 
             var entry = _viewModel.SelectedEntry;
             if (entry == null)
             {
-                _codePreviewTextBlock.Inlines.Clear();
+                _codePreview.Show(string.Empty, null);
                 if (_codePreviewHeaderTimestamp != null)
                     _codePreviewHeaderTimestamp.Text = string.Empty;
                 if (_codePreviewHeaderFilename != null)
@@ -1462,194 +1454,43 @@ namespace AkmlSql.Shell.Shared.History
                 }
             }
 
+            // The row's first 500 characters at once, then the full text when it arrives —
+            // unless the user has selected another entry meanwhile.
             RenderPreview(entry.SqlText ?? string.Empty);
+            try
+            {
+                var full = await _viewModel.GetPreviewTextAsync(entry);
+                if (full != null && ReferenceEquals(_viewModel.SelectedEntry, entry)
+                    && _versionListBox?.SelectedItem == null)
+                    RenderPreview(full);
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug(ex, "HistoryToolWindowControl: full preview text failed");
+            }
         }
 
         /// <summary>
-        /// Renders <paramref name="sqlText"/> into the preview TextBlock with one merged pass:
-        /// syntax-color foreground (live theme tokens) + search-match background. Used by both the
-        /// entry-selection preview drive and the version-selection drive so both share coloring.
+        /// Shows <paramref name="sqlText"/> in the preview: syntax colours and search-match
+        /// highlights come from the shared <see cref="SqlPreviewView"/>. Used by both the
+        /// entry-selection preview and the version-selection preview.
         /// </summary>
         private void RenderPreview(string sqlText)
         {
-            if (_codePreviewTextBlock == null) return;
-            _codePreviewTextBlock.Inlines.Clear();
+            _codePreview?.Show(sqlText ?? string.Empty, CurrentHighlightTerms());
+        }
 
-            if (string.IsNullOrEmpty(sqlText)) return;
-
-            // (a) Tokenize ALWAYS (coloring is not gated on search). Spans cover every character so
-            //     the concatenated Run text equals sqlText verbatim. Shared Core tokenizer.
-            var tokens = AkmlSql.Core.Text.SqlPreviewTokenizer.Tokenize(sqlText);
-
-            // (b) Search-match regions (background only). Empty when no search / no match.
-            var regions = new List<HighlightRegion>();
+        /// <summary>
+        /// The words of the current search, for highlighting. Delegates to the shared quote-aware
+        /// extractor <see cref="AkmlSql.Core.Text.HistorySearchTerms.Extract"/> (the same rules as
+        /// the web History page).
+        /// </summary>
+        private IReadOnlyList<string> CurrentHighlightTerms()
+        {
             var searchText = _viewModel.SearchText;
-            if (!string.IsNullOrWhiteSpace(searchText))
-            {
-                var terms = ExtractHighlightTerms(searchText);
-                if (terms.Count > 0)
-                    regions = FindHighlightRegions(sqlText, terms);
-            }
-
-            // Walk token spans, clipping each against the sorted match regions so each emitted Run
-            // is a sub-span whose foreground = the token colour and whose background = match highlight
-            // iff the sub-span lies inside a region. Run brushes are LIVE-bound (theme-switch safe).
-            int regionIdx = 0;
-            foreach (var token in tokens)
-            {
-                int spanStart = token.Start;
-                int spanEnd = token.Start + token.Length;
-                int cursor = spanStart;
-
-                // Advance past regions that end before this span.
-                while (regionIdx < regions.Count &&
-                       regions[regionIdx].Start + regions[regionIdx].Length <= spanStart)
-                {
-                    regionIdx++;
-                }
-
-                int localRegion = regionIdx;
-                while (cursor < spanEnd)
-                {
-                    // Find the next region overlapping [cursor, spanEnd).
-                    while (localRegion < regions.Count &&
-                           regions[localRegion].Start + regions[localRegion].Length <= cursor)
-                    {
-                        localRegion++;
-                    }
-
-                    if (localRegion >= regions.Count || regions[localRegion].Start >= spanEnd)
-                    {
-                        // No more overlap in this span — emit the remainder unhighlighted.
-                        EmitRun(sqlText.Substring(cursor, spanEnd - cursor), token.Kind, highlighted: false);
-                        cursor = spanEnd;
-                        break;
-                    }
-
-                    var region = regions[localRegion];
-                    int regionStart = Math.Max(region.Start, cursor);
-                    int regionEnd = Math.Min(region.Start + region.Length, spanEnd);
-
-                    // Plain segment before the region.
-                    if (regionStart > cursor)
-                    {
-                        EmitRun(sqlText.Substring(cursor, regionStart - cursor), token.Kind, highlighted: false);
-                    }
-
-                    // Highlighted segment (clipped to this span).
-                    if (regionEnd > regionStart)
-                    {
-                        EmitRun(sqlText.Substring(regionStart, regionEnd - regionStart), token.Kind, highlighted: true);
-                    }
-
-                    cursor = regionEnd;
-                }
-            }
-        }
-
-        /// <summary>Emits one preview Run with a live-bound foreground (token colour) and optional match background.</summary>
-        private void EmitRun(string text, string kind, bool highlighted)
-        {
-            if (_codePreviewTextBlock == null || text.Length == 0) return;
-
-            var run = new Run(text);
-
-            // Foreground: theme-aware per token kind (NO hardcoded blue). Kinds are the shared
-            // AkmlSql.Core.Text.SqlPreviewTokenizer constants.
-            string fgKey;
-            if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindKeyword) fgKey = ThemeTokens.AccentPrimary;
-            else if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindString) fgKey = ThemeTokens.StatusSuccess;
-            else if (kind == AkmlSql.Core.Text.SqlPreviewTokenizer.KindComment) fgKey = ThemeTokens.TextSecondary;
-            else fgKey = ThemeTokens.TextPrimary;
-            run.SetResourceReference(TextElement.ForegroundProperty, fgKey);
-
-            // Background: search-match highlight (live-bound) only on matched sub-spans.
-            if (highlighted)
-                run.SetResourceReference(TextElement.BackgroundProperty, ThemeTokens.HistoryMatchHighlight);
-
-            _codePreviewTextBlock.Inlines.Add(run);
-        }
-
-        /// <summary>
-        /// Extracts highlight terms from the search text. Delegates to the shared, canonical
-        /// quote-aware extractor <see cref="AkmlSql.Core.Text.HistorySearchTerms.Extract"/> (one
-        /// implementation shared with the web History page). This adopts the web's quote-aware rules:
-        /// a double-quoted span is one term (quotes stripped); bare AND/OR/NOT are dropped
-        /// (case-insensitive); the value of metadata prefixes (server:/db:/database:/name:/starred:/
-        /// is:/open:) is dropped entirely while sql: keeps its value; unknown prefixes stay literal;
-        /// and a single trailing FTS5 <c>*</c> is stripped.
-        /// </summary>
-        private static List<string> ExtractHighlightTerms(string searchText) =>
-            AkmlSql.Core.Text.HistorySearchTerms.Extract(searchText).ToList();
-
-        /// <summary>
-        /// Finds all highlight regions in the SQL text for the given terms.
-        /// Performs case-insensitive matching. Overlapping regions are merged.
-        /// Returns a sorted, non-overlapping list of (Start, Length) regions.
-        /// </summary>
-        private static List<HighlightRegion> FindHighlightRegions(string sqlText, List<string> terms)
-        {
-            var regions = new List<HighlightRegion>();
-
-            foreach (var term in terms)
-            {
-                if (string.IsNullOrEmpty(term)) continue;
-
-                int pos = 0;
-                while (pos < sqlText.Length)
-                {
-                    int matchIdx = sqlText.IndexOf(term, pos, StringComparison.OrdinalIgnoreCase);
-                    if (matchIdx < 0) break;
-
-                    regions.Add(new HighlightRegion(matchIdx, term.Length));
-                    pos = matchIdx + 1; // advance by 1 to find overlapping matches from different terms
-                }
-            }
-
-            if (regions.Count == 0) return regions;
-
-            // Sort by start position, then by length descending (longer matches first for merging)
-            regions.Sort((a, b) =>
-            {
-                int cmp = a.Start.CompareTo(b.Start);
-                return cmp != 0 ? cmp : b.Length.CompareTo(a.Length);
-            });
-
-            // Merge overlapping/adjacent regions
-            var merged = new List<HighlightRegion> { regions[0] };
-            for (int i = 1; i < regions.Count; i++)
-            {
-                var last = merged[merged.Count - 1];
-                var current = regions[i];
-
-                if (current.Start <= last.Start + last.Length)
-                {
-                    // Overlapping or adjacent — extend the last region
-                    int newEnd = Math.Max(last.Start + last.Length, current.Start + current.Length);
-                    merged[merged.Count - 1] = new HighlightRegion(last.Start, newEnd - last.Start);
-                }
-                else
-                {
-                    merged.Add(current);
-                }
-            }
-
-            return merged;
-        }
-
-        /// <summary>
-        /// Represents a highlighted region in the SQL text (start index + length).
-        /// </summary>
-        private readonly struct HighlightRegion
-        {
-            public readonly int Start;
-            public readonly int Length;
-
-            public HighlightRegion(int start, int length)
-            {
-                Start = start;
-                Length = length;
-            }
+            return string.IsNullOrWhiteSpace(searchText)
+                ? Array.Empty<string>()
+                : AkmlSql.Core.Text.HistorySearchTerms.Extract(searchText).ToList();
         }
 
         /// <summary>
@@ -1664,6 +1505,9 @@ namespace AkmlSql.Shell.Shared.History
                 _metadataServerLabel.Text = entry != null
                     ? "\u25CF " + (entry.Server ?? "")
                     : "";
+                // Spec 040 (HIS-02): green only while the query is open in a tab.
+                _metadataServerLabel.SetResourceReference(TextBlock.ForegroundProperty,
+                    entry?.IsOpen == true ? ThemeTokens.StatusSuccess : ThemeTokens.TextSecondary);
             }
 
             if (_metadataDatabaseLabel != null)
@@ -1698,19 +1542,27 @@ namespace AkmlSql.Shell.Shared.History
             if (_versionPanelHeader != null)
                 _versionPanelHeader.Text = "History for " + QueryDisplayName(entry);
 
+            var token = _versionGuard.Begin();
             try
             {
                 var client = EngineLifecycle.Manager?.Client;
                 if (client == null || !client.IsConnected) return;
 
+                // Spec 040 (HIS-04): the whole grouped query's runs and snapshots — the same set the
+                // row's "M versions" counts.
                 var actionRequest = new HistoryActionRequest
                 {
                     Action = HistoryActions.GetVersions,
-                    EntryIds = new[] { entry.Id }
+                    EntryIds = new[] { entry.Id },
+                    GroupScope = true
                 };
 
                 var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
                     MessageTypes.HistoryAction, actionRequest, timeoutMs: 5000);
+
+                // A later selection has started its own load: this answer is for another entry.
+                if (!_versionGuard.IsCurrent(token)) return;
+                _versionListBox.Items.Clear();
 
                 if (response.Success && response.Versions != null)
                 {
@@ -1785,7 +1637,7 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         private void OnVersionSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_codePreviewTextBlock == null || _versionListBox == null) return;
+            if (_codePreview == null || _versionListBox == null) return;
 
             if (_versionListBox.SelectedItem is ListBoxItem item && item.Tag is string versionSql)
             {
@@ -1951,11 +1803,10 @@ namespace AkmlSql.Shell.Shared.History
         {
             if (sender is TextBlock textBlock && textBlock.DataContext is HistoryEntryDto entry)
             {
-                // Temporarily set the selected entry to this entry for the toggle command
-                _viewModel.SelectedEntry = entry;
-                if (_viewModel.ToggleFavoriteCommand.CanExecute(null))
+                // Spec 040 (HIS-04): the star acts on its own row, whatever is selected.
+                if (_viewModel.ToggleFavoriteCommand.CanExecute(entry))
                 {
-                    _viewModel.ToggleFavoriteCommand.Execute(null);
+                    _viewModel.ToggleFavoriteCommand.Execute(entry);
                 }
                 e.Handled = true;
             }
@@ -1985,7 +1836,7 @@ namespace AkmlSql.Shell.Shared.History
         /// Opens the given SQL text in a new editor tab via DTE,
         /// and sets the connection to the original server/database if available.
         /// </summary>
-        private void OnOpenInNewTabRequested(string sqlText, string? server, string? database)
+        private void OnOpenInNewTabRequested(string sqlText, string? server, string? database, string? sessionKey)
         {
             try
             {
@@ -2025,6 +1876,14 @@ namespace AkmlSql.Shell.Shared.History
                     var editPoint = textDocument.StartPoint.CreateEditPoint();
                     editPoint.Insert(sqlText);
                     textDocument.Selection.StartOfDocument();
+                }
+
+                // Spec 040 (HIS-02): the new tab continues the query's session, so running it again
+                // adds to the same history row — unless another open tab already holds that session.
+                if (!string.IsNullOrEmpty(sessionKey) && activeDoc != null)
+                {
+                    try { DocumentSessionKeys.Adopt(activeDoc.FullName, sessionKey!); }
+                    catch (Exception adoptEx) { Serilog.Log.Debug(adoptEx, "History: session adoption skipped"); }
                 }
 
                 // Try to set the connection on the new query window via SSMS ScriptFactory
@@ -2189,14 +2048,11 @@ namespace AkmlSql.Shell.Shared.History
 
         #region Value Converters
 
-        /// <summary>Converts IsOpen bool to a theme-aware brush via Status.Success / Status.Danger.</summary>
-        private class OpenClosedColorConverter : IValueConverter
+        /// <summary>true → Visible, false → Hidden (keeps the row layout stable).</summary>
+        private class BoolToHiddenConverter : IValueConverter
         {
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                var key = value is true ? ThemeTokens.StatusSuccess : ThemeTokens.StatusDanger;
-                return ThemeRegistry.Instance.Resources[key];
-            }
+                => value is true ? Visibility.Visible : Visibility.Hidden;
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             {

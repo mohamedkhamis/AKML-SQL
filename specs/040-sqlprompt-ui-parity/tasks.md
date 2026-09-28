@@ -52,11 +52,11 @@ US6–US7 = P3. Deliver P1 before P2, and P2 before P3 (FR-071).
 
 **Purpose**: a trustworthy baseline before anything changes.
 
-- [ ] T001 Build the whole solution green in one pass, with the MSBuild commands above, from `C:\Repos\AKML\AKML-SQL`. Fix nothing yet: just confirm it builds.
-- [ ] T002 [P] Run `tests/AkmlSql.Core.Tests`, `tests/AkmlSql.Engine.Tests`, `tests/AkmlSql.IntelliSense.Tests`, `tests/AkmlSql.Formatting.Tests`, `tests/AkmlSql.Site.Tests`, `tests/AkmlSql.Web.Tests` (`dotnet test <csproj>`) and `tests/AkmlSql.Shell.Shared.Tests` (MSBuild build, then `dotnet test` the built dll).
+- [X] T001 Build the whole solution green in one pass, with the MSBuild commands above, from `C:\Repos\AKML\AKML-SQL`. Fix nothing yet: just confirm it builds.
+- [X] T002 [P] Run `tests/AkmlSql.Core.Tests`, `tests/AkmlSql.Engine.Tests`, `tests/AkmlSql.IntelliSense.Tests`, `tests/AkmlSql.Formatting.Tests`, `tests/AkmlSql.Site.Tests`, `tests/AkmlSql.Web.Tests` (`dotnet test <csproj>`) and `tests/AkmlSql.Shell.Shared.Tests` (MSBuild build, then `dotnet test` the built dll).
   - Record pass/fail counts in `specs/040-sqlprompt-ui-parity/baseline.md`. Include the completion-corpus pass rate (`CorpusGateTests`) and the format-parity golden count.
   - List any failures that were already failing: `PerformanceBaselineTests`, the History 2 ms timing test, `VisualReferenceCoverageTests`, the `sp031-*` goldens.
-- [ ] T003 [P] Copy `%AppData%\AKML SQL\config.json`, `%AppData%\AKML SQL\history\` and `%AppData%\AKML SQL\profiles\` to `%UserProfile%\Documents\AKML SQL backups\spec-040-<yyyyMMdd>\`, and record the path in `specs/040-sqlprompt-ui-parity/baseline.md`. Manual checks later reset settings and delete history.
+- [X] T003 [P] Copy `%AppData%\AKML SQL\config.json`, `%AppData%\AKML SQL\history\` and `%AppData%\AKML SQL\profiles\` to `%UserProfile%\Documents\AKML SQL backups\spec-040-<yyyyMMdd>\`, and record the path in `specs/040-sqlprompt-ui-parity/baseline.md`. Manual checks later reset settings and delete history.
 
 **Checkpoint**: baseline recorded. From now on, any new red in T002's list is a regression this feature caused.
 
@@ -66,13 +66,13 @@ US6–US7 = P3. Deliver P1 before P2, and P2 before P3 (FR-071).
 
 **Purpose**: shared UI pieces that several stories use. **US2, US3, US4, US5 and US6 depend on this phase.**
 
-- [ ] T004 Write `tests/AkmlSql.Shell.Shared.Tests/SqlPreviewViewTests.cs` (`[StaFact]`, in the "AkmlSql ThemeRegistry" collection) **before** the control in T005; it also covers FR-033 (coloured preview). Cover:
+- [X] T004 Write `tests/AkmlSql.Shell.Shared.Tests/SqlPreviewViewTests.cs` (`[StaFact]`, in the "AkmlSql ThemeRegistry" collection) **before** the control in T005; it also covers FR-033 (coloured preview). Cover:
   - `ExpandTabs("ab\tc", 4) == "ab  c"`, `ExpandTabs("\tx", 2) == "  x"`, and multi-line text where the tab stops restart on each line;
   - keyword, string and comment tokens produce `Run`s whose foreground resolves to the matching token brush;
   - `HighlightLines = {1}` sets that line's background;
   - text over `MaxDisplayChars` ends with the notice line;
   - the `RichTextBox` is read-only but focusable, so text can be selected.
-- [ ] T005 Create the read-only, selectable SQL preview control `SqlPreviewView` in `src/AkmlSql.Shell.Shared/Ui/SqlPreview/SqlPreviewView.cs`, and add it to the projitems. Research R20.
+- [X] T005 Create the read-only, selectable SQL preview control `SqlPreviewView` in `src/AkmlSql.Shell.Shared/Ui/SqlPreview/SqlPreviewView.cs`, and add it to the projitems. Research R20.
   - **Base:** a `UserControl` containing a gutter `TextBlock` (line numbers) plus a `RichTextBox` (`IsReadOnly=true`, `IsDocumentEnabled=true`, no border, `Typography.MonoFont`, `Typography.Body`) that holds one `FlowDocument` `Paragraph`.
   - **Properties** (plain CLR properties that re-render on set):
     - `string Text`
@@ -90,7 +90,7 @@ US6–US7 = P3. Deliver P1 before P2, and P2 before P3 (FR-071).
     6. When the text is longer than `MaxDisplayChars`, show only that many characters and a final muted line: `— Showing the first 256 KB. Open the query to see all of it.`
   - **Context menu:** "Copy" and "Copy all".
   - **Theme:** call `ThemeRegistry.Instance.AttachTo(this)`.
-- [ ] T006 [P] Extract a shared hex → frozen brush helper into `src/AkmlSql.Shell.Shared/Tabs/HexBrush.cs`, and add it to the projitems.
+- [X] T006 [P] Extract a shared hex → frozen brush helper into `src/AkmlSql.Shell.Shared/Tabs/HexBrush.cs`, and add it to the projitems.
   - API: `static bool TryParse(string hex, out Color color)` and `static SolidColorBrush Get(string hex)` (cached per hex string, frozen, falls back to transparent).
   - Replace the private `ParseHexColor` (~:851) and `CreateBrushFromHex` (~:1080) in `src/AkmlSql.Shell.Shared/Tabs/TabColoringManager.cs` with calls to it.
   - Tests: `tests/AkmlSql.Shell.Shared.Tests/HexBrushTests.cs` (valid `#RRGGBB`, invalid input, caching returns the same frozen instance).
@@ -112,47 +112,47 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
 
 ### Tests for User Story 1 (write first; they must fail)
 
-- [ ] T007 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsThemeSafetyTests.cs` (`[StaFact]`, `AppDataIsolatedTest`, ThemeRegistry collection). Use the host-variant seam from T021 and `SettingsWindow.TestBuildWindowForRenderTest`. Four cases:
+- [X] T007 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsThemeSafetyTests.cs` (`[StaFact]`, `AppDataIsolatedTest`, ThemeRegistry collection). Use the host-variant seam from T021 and `SettingsWindow.TestBuildWindowForRenderTest`. Four cases:
   1. With `theme:"system"` and a Dark host variant, building the window and loading controls leaves `config.json` byte-identical and `ThemeChangeRequested == false`.
   2. With a saved `"dark"` theme, calling `ResetAllToDefaultsCore()` then discarding leaves `config.json` unchanged.
   3. Importing a settings file whose theme differs doesn't write `config.json`.
   4. When the user picks Light while the window is Dark, `ThemeChangeRequested == true`, `WorkingCopy` contains an unsaved edit made on another page, and `config.json` is unchanged.
-- [ ] T008 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsPageResetTests.cs`.
+- [X] T008 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsPageResetTests.cs`.
   - **Sentinels:** seed `CodeAnalysis.RuleOverrides["ST001"]={Enabled=false}`, one `Ai.Agents` entry, one `Navigation.ConnectionAliases` entry, `Safety.EnvironmentSeverity["PRODUCTION"]`, and `Formatter.ActiveProfile="Collapsed"`.
   - **For every registered page key:** call `ResetPageToDefaultsCore(key)` and assert every sentinel survives, except the fields that page shows. The Formatting page resets `ActiveProfile`; the AI Assistance page resets the agents.
   - **Unsaved edits:** an unsaved edit on a different page survives a page reset.
   - **Confirmation text:** `ResetConfirmationText(key)` uses the page's display name (e.g. contains "Suggestions › Tooltips" or the post-US6 label), and for AI Assistance contains the agent count.
-- [ ] T009 [P] [US1] Write `tests/AkmlSql.Core.Tests/Config/PreserveInstallStateTests.cs`: `ConfigManager.PreserveInstallState(from, to)` copies `InstallId`, `InstalledTargets`, `LastUpdateCheck`, `NativeIntelliSensePrompted`, `DisabledNativeIntelliSense`, `CommandPalette.UsageCounts`, `CommandPalette.RecentItems` and `ConfigVersion`, and nothing else.
-- [ ] T010 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs`.
+- [X] T009 [P] [US1] Write `tests/AkmlSql.Core.Tests/Config/PreserveInstallStateTests.cs`: `ConfigManager.PreserveInstallState(from, to)` copies `InstallId`, `InstalledTargets`, `LastUpdateCheck`, `NativeIntelliSensePrompted`, `DisabledNativeIntelliSense`, `CommandPalette.UsageCounts`, `CommandPalette.RecentItems` and `ConfigVersion`, and nothing else.
+- [X] T010 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs`.
   - Build the window and read the private `_searchIndex` by reflection (the pattern in `OptionsConnectionsHelpTests.cs:117-131`).
   - Assert every `(PageKey, Label)` is in an explicit allow-list declared in the test. That list is today's labels minus the hidden rows (research R1, spec Appendix A).
   - Assert none of the hidden labels appear: "Keyword casing", "List all database columns after a SELECT statement", "Freeze headers", "Encrypt at rest", "Record failed executions", "Format on paste", "Format on save", "Format on delimiter", "Confirm before bulk format", "Validate formatting preserves semantics", "Respect --noformat regions", "Named regions", "Show preview before applying", "Rename scope", "Chat panel", and the Labs rows.
   - Assert the tree has no leaf tagged `Schema Cache` or `Labs`.
-- [ ] T011 [P] [US1] Write `tests/AkmlSql.Engine.Tests/Handlers/CompletionHandlerSettingsTests.cs`, extending the setup in `CompletionHandlerTests.cs`. Assert:
+- [X] T011 [P] [US1] Write `tests/AkmlSql.Engine.Tests/Handlers/CompletionHandlerSettingsTests.cs`, extending the setup in `CompletionHandlerTests.cs`. Assert:
   - `IntelliSense.MaxSuggestions = 10` → at most 10 items for `SELECT * FROM dbo.` on the test schema;
   - `FuzzyMatch = false` → only case-insensitive prefix matches: `unit` finds `UnitPrice` but not `QuantityPerUnit`;
   - `ShowNullability = false` → no `NULL`/`NOT NULL` in `SecondaryText`;
   - all three detail flags off → `SecondaryText` has no type, key or `•` prefix;
   - defaults reproduce today's text exactly.
-- [ ] T012 [P] [US1] Write `tests/AkmlSql.IntelliSense.Tests/Completion/ColumnProviderSecondaryTextTests.cs` covering every flag combination of `FormatSecondaryText` (types, nullability, key indicators including IDENTITY/COMPUTED, and the table suffix `" • Products"` only when something precedes it).
-- [ ] T013 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/CompletionPrefixOnlyFilterTests.cs`. `CompletionItemModel.MatchesFilter` and `FilterScore` in prefix-only mode:
+- [X] T012 [P] [US1] Write `tests/AkmlSql.IntelliSense.Tests/Completion/ColumnProviderSecondaryTextTests.cs` covering every flag combination of `FormatSecondaryText` (types, nullability, key indicators including IDENTITY/COMPUTED, and the table suffix `" • Products"` only when something precedes it).
+- [X] T013 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/CompletionPrefixOnlyFilterTests.cs`. `CompletionItemModel.MatchesFilter` and `FilterScore` in prefix-only mode:
   - use `FilterText` when it is set (`"p.UnitPrice"` matches `"p.Unit"`);
   - reject substring and CamelCase matches;
   - keep today's behaviour when prefix-only is off.
-- [ ] T014 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/ErrorListGateTests.cs` for the pure helper `ErrorListReporter.ShouldPublish(CodeAnalysisSettings)` and for the static registry's `ReapplyAll()` (with a fake reporter that records clear and republish calls).
-- [ ] T015 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/CompletionTriggerPolicyTests.cs` for the pure helper `CompletionTriggerPolicy.Decide(char typed, bool ctrlSpace, IntelliSenseSettings s)` (created in T035):
+- [X] T014 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/ErrorListGateTests.cs` for the pure helper `ErrorListReporter.ShouldPublish(CodeAnalysisSettings)` and for the static registry's `ReapplyAll()` (with a fake reporter that records clear and republish calls).
+- [X] T015 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/CompletionTriggerPolicyTests.cs` for the pure helper `CompletionTriggerPolicy.Decide(char typed, bool ctrlSpace, IntelliSenseSettings s)` (created in T035):
   - `TriggerDelayMs = 0` → Immediate; `TriggerDelayMs = 1000` → Delayed(1000);
   - typed `.` with `AfterDot = false` → None; with `AfterDot = true` → the delay rule;
   - Ctrl+Space → always Immediate;
   - a non-identifier character (space, `;`) → None.
-- [ ] T016 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/AnalysisTriggerPolicyTests.cs`: `AnalysisController.ShouldAnalyzeOnEdit(CodeAnalysisSettings s)` returns `s.RunOnType`, and false whenever `s.Enabled` is false.
-- [ ] T017 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/FormatterEnabledGateTests.cs`: `FormatActionHelper.FormatterDisabledMessage(FormatterSettings s)` returns null when `Enabled` is true, and `AKML SQL formatting is off — turn it on in Options › Format › Styles.` when false.
-- [ ] T018 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/SnippetGateTests.cs` for the pure `SnippetGate` (created in T039):
+- [X] T016 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/AnalysisTriggerPolicyTests.cs`: `AnalysisController.ShouldAnalyzeOnEdit(CodeAnalysisSettings s)` returns `s.RunOnType`, and false whenever `s.Enabled` is false.
+- [X] T017 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/FormatterEnabledGateTests.cs`: `FormatActionHelper.FormatterDisabledMessage(FormatterSettings s)` returns null when `Enabled` is true, and `AKML SQL formatting is off — turn it on in Options › Format › Styles.` when false.
+- [X] T018 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/SnippetGateTests.cs` for the pure `SnippetGate` (created in T039):
   - `ShouldOfferSnippets` is false when `Snippets.Enabled` or `IntelliSense.SnippetsInCompletion` is false;
   - `ExpansionEnabled` follows `Snippets.Enabled`;
   - `FormatOnExpand` returns `Snippets.FormatOnExpand`.
-- [ ] T019 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/BulkFormatWizardDefaultsTests.cs` (`[StaFact]`, AppData isolated): constructing `BulkFormatWizard` with `Formatter.CreateBackups = false` leaves the backup checkbox unchecked; with `true` it is checked.
-- [ ] T020 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsReopenLoopTests.cs` (`[StaFact]`, AppData isolated, `OptionsCommand.TestRpcAccessor` fake), driving `ShowOptions` through `WindowFactoryOverride` (T023) with scripted fake dialogs:
+- [X] T019 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/BulkFormatWizardDefaultsTests.cs` (`[StaFact]`, AppData isolated): constructing `BulkFormatWizard` with `Formatter.CreateBackups = false` leaves the backup checkbox unchecked; with `true` it is checked.
+- [X] T020 [P] [US1] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsReopenLoopTests.cs` (`[StaFact]`, AppData isolated, `OptionsCommand.TestRpcAccessor` fake), driving `ShowOptions` through `WindowFactoryOverride` (T023) with scripted fake dialogs:
   - `NextStep` returns `Reopen` whenever a theme change was requested, `Save` for OK and `Cancel` otherwise;
   - a theme change opens the next window with the previous window's `WorkingCopy` and `CurrentPageKey`, and `config.json` is unchanged;
   - OK then saves once (one `AnalysisSettingsChanged` notification), and the saved theme is the `ThemeRegistry` preference;
@@ -160,8 +160,8 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
 
 ### Implementation for User Story 1 — OPT-02 (Theme drop-down)
 
-- [ ] T021 [US1] In `src/AkmlSql.Shell.Shared/Ui/Theme/HostThemeWatcher.cs`, add `internal static Func<ThemeVariant>? VariantOverrideForTests` and a read-only accessor `CurrentHostVariant` that returns the override when set and otherwise `LastDetectedHostVariant`.
-- [ ] T022 [US1] In `src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs`, fix the Theme handler (research R2):
+- [X] T021 [US1] In `src/AkmlSql.Shell.Shared/Ui/Theme/HostThemeWatcher.cs`, add `internal static Func<ThemeVariant>? VariantOverrideForTests` and a read-only accessor `CurrentHostVariant` that returns the override when set and otherwise `LastDetectedHostVariant`.
+- [X] T022 [US1] In `src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs`, fix the Theme handler (research R2):
   1. Add `internal static PageTheme ResolvePageTheme(string? pref)`: "dark" → Dark; "system" → Dark when `HostThemeWatcher.CurrentHostVariant == ThemeVariant.Dark`, else Light; anything else → Light. Use it in the constructor (~:183-184).
   2. Add a `_loadingControls` flag, set with try/finally around the whole body of `LoadSettingsToControls` (~:1953-1974).
   3. In `OnThemeSelectionChanged` (~:1660-1701):
@@ -171,7 +171,7 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
      - otherwise run `SaveControlsToSettings()` **without** `ConfigManager.Save`, then `ThemeRegistry.Instance.SetPreference(pick)`, `ThemeChangeRequested = true`, `_dialogResult = true`, and `_window?.Close()`.
   4. Add `internal AppSettings WorkingCopy => _settings;` and `internal string? CurrentPageKey`, the selected tree leaf's `Tag`.
   5. Extract `internal void ResetAllToDefaultsCore()` from `OnResetAllClick` (~:1932-1947). The click handler keeps only the confirmation.
-- [ ] T023 [US1] Rework the loop in `OptionsCommand.ShowOptions` (`src/AkmlSql.Shell.Shared/Commands/OptionsCommand.cs` ~:52-92):
+- [X] T023 [US1] Rework the loop in `OptionsCommand.ShowOptions` (`src/AkmlSql.Shell.Shared/Commands/OptionsCommand.cs` ~:52-92):
   - Capture `var originalTheme = settings.Theme` before the loop.
   - After `ShowDialog`, **check `window.ThemeChangeRequested` first**. When set, continue the loop with `settings = window.WorkingCopy; pageKey = window.CurrentPageKey ?? pageKey;`.
   - On OK: `SaveAndNotify(window.GetSettings())`, then `ThemeRegistry.Instance.SetPreference(settings.Theme)`.
@@ -181,8 +181,8 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
 
 ### Implementation for User Story 1 — OPT-03 (Restore Defaults)
 
-- [ ] T024 [P] [US1] Add `public static void PreserveInstallState(AppSettings from, AppSettings to)` to `src/AkmlSql.Core/Config/ConfigManager.cs` (fields as in T009). Use it in `SettingsWindow` Import, replacing the inline copy (~:1780-1782).
-- [ ] T025 [US1] Replace the per-page switch in `ResetPageToDefaultsCore(string pageKey)` (`SettingsWindow.cs` ~:1845-1929) with this, so hidden fields survive:
+- [X] T024 [P] [US1] Add `public static void PreserveInstallState(AppSettings from, AppSettings to)` to `src/AkmlSql.Core/Config/ConfigManager.cs` (fields as in T009). Use it in `SettingsWindow` Import, replacing the inline copy (~:1780-1782).
+- [X] T025 [US1] Replace the per-page switch in `ResetPageToDefaultsCore(string pageKey)` (`SettingsWindow.cs` ~:1845-1929) with this, so hidden fields survive:
   ```
   if (!_pageControlsByKey.TryGetValue(pageKey, out var controls)) throw new InvalidOperationException(...)
   SaveControlsToSettings()
@@ -192,32 +192,32 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
   ```
   - For the `"Tabs & UI"` key, also restore `_settings.Tabs.ColoringRules` to `new TabSettings().ColoringRules`, then call `PopulateColoringRulesList()`. The rules are shown on that page.
   - In `OnResetThisPageClick` (~:1813-1836), remove the call that reloads every page (it discarded unsaved edits on other pages).
-- [ ] T026 [US1] Add `internal string ResetConfirmationText(string pageKey)` to `SettingsWindow.cs` and use it in `OnResetThisPageClick`.
+- [X] T026 [US1] Add `internal string ResetConfirmationText(string pageKey)` to `SettingsWindow.cs` and use it in `OnResetThisPageClick`.
   - First line: `Reset the settings on {_pageBuilders[pageKey].Display}?`.
   - For `"AI Assistance"` with agents, add a second line: `This also removes your {n} AI agent(s) and their API keys.`
   - For `"Tabs & UI"`, add: `This also restores the default environments and rules.`
   - Never show the raw page key.
-- [ ] T027 [US1] In `ResetAllToDefaultsCore()` (`SettingsWindow.cs`): create `var fresh = new AppSettings();`, then `ConfigManager.PreserveInstallState(_settings, fresh); _settings = fresh; LoadSettingsToControls();`. The loading flag from T022 blocks the theme handler.
-- [ ] T028 [US1] In `SettingsWindow.cs` Import (~:1788), change the success text to `Settings imported. Click OK to save them, or Cancel to discard.`.
-- [ ] T029 [US1] Update `tests/AkmlSql.Shell.Shared.Tests/WindowChromeTests.cs`:
+- [X] T027 [US1] In `ResetAllToDefaultsCore()` (`SettingsWindow.cs`): create `var fresh = new AppSettings();`, then `ConfigManager.PreserveInstallState(_settings, fresh); _settings = fresh; LoadSettingsToControls();`. The loading flag from T022 blocks the theme handler.
+- [X] T028 [US1] In `SettingsWindow.cs` Import (~:1788), change the success text to `Settings imported. Click OK to save them, or Cancel to discard.`.
+- [X] T029 [US1] Update `tests/AkmlSql.Shell.Shared.Tests/WindowChromeTests.cs`:
   - Replace `ResetPageToDefaultsCore_HasCaseForEveryRegisteredPageKey` (~:201-235) with `ResetPageToDefaultsCore_ResetsEveryRegisteredPageWithoutThrowing`, which builds the window and calls it for each key.
   - Keep `PageControls_RegisteredForEveryPageBuilder`.
 
 ### Implementation for User Story 1 — OPT-01 (wire seven settings, hide the rest)
 
-- [ ] T030 [P] [US1] In `src/AkmlSql.IntelliSense/Completion/Providers/ColumnProvider.cs`:
+- [X] T030 [P] [US1] In `src/AkmlSql.IntelliSense/Completion/Providers/ColumnProvider.cs`:
   - Make `FormatSecondaryText` (~:557-581) an instance method gated by new public bool properties `ShowDataTypes`, `ShowNullability` and `ShowKeyIndicators` (all default true).
     - `TypeDisplay` needs ShowDataTypes; `NULL`/`NOT NULL` needs ShowNullability; `PK`, `IDENTITY` and `COMPUTED` need ShowKeyIndicators.
   - At the call sites (~:314, ~:342, ~:407, ~:525), append the `" • {table}"` suffix only when the formatted part isn't empty, and otherwise use just the table name.
   - Defaults must produce today's text byte-for-byte.
-- [ ] T031 [P] [US1] In `src/AkmlSql.IntelliSense/Completion/Providers/ObjectProvider.cs` (~:629-633), add `ShowKeyIndicators` (default true) and show the table-level `🔑 FK ↔ …` text only when it is true. Keep the −500 sort adjustment either way.
-- [ ] T032 [US1] In `src/AkmlSql.IntelliSense/Completion/CompletionEngine.cs`:
+- [X] T031 [P] [US1] In `src/AkmlSql.IntelliSense/Completion/Providers/ObjectProvider.cs` (~:629-633), add `ShowKeyIndicators` (default true) and show the table-level `🔑 FK ↔ …` text only when it is true. Keep the −500 sort adjustment either way.
+- [X] T032 [US1] In `src/AkmlSql.IntelliSense/Completion/CompletionEngine.cs`:
   - add `public bool FuzzyMatchEnabled { get; set; } = true;`;
   - at the filter (~:502-511), use `.Where(x => FuzzyMatchEnabled ? x.score > 0 : x.score >= 800)` (800 = case-insensitive prefix in `FuzzyMatcher`);
   - add `ShowDataTypes`, `ShowNullability` and `ShowKeyIndicators` properties that push into `_columnProvider` and `_objectProvider` next to where `ColumnScopeMode` is applied (~:447-457).
 
   Depends on T030 and T031.
-- [ ] T033 [US1] In `src/AkmlSql.Engine/Handlers/Completion/CompletionHandler.cs`, after ~:75 (where settings are read for each request), apply:
+- [X] T033 [US1] In `src/AkmlSql.Engine/Handlers/Completion/CompletionHandler.cs`, after ~:75 (where settings are read for each request), apply:
   - `_engine.SetMaxSuggestions(Math.Clamp(settings.IntelliSense.MaxSuggestions, 5, 200))`
   - `_engine.FuzzyMatchEnabled = settings.IntelliSense.FuzzyMatch`
   - `_engine.ShowDataTypes = settings.IntelliSense.ShowDataTypes`
@@ -225,11 +225,11 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
   - `_engine.ShowKeyIndicators = settings.IntelliSense.ShowPkFk`
 
   They refresh after Options OK through the existing `AnalysisSettingsChanged` → `InvalidateSettings` path. Depends on T032.
-- [ ] T034 [US1] Carry `FilterText` and add prefix-only filtering in the shell:
+- [X] T034 [US1] Carry `FilterText` and add prefix-only filtering in the shell:
   - `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionItemModel.cs`: add `FilterText`; in `MatchesFilter`/`FilterScore`, prefix-only mode uses a case-insensitive `StartsWith` against `FilterText ?? DisplayText`.
   - `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionController.cs`: populate `FilterText` from the DTO (~:879-887), and latch `Popup.PrefixOnly = !IntelliSense.FuzzyMatch` in `LatchPopupSettings` (~:771-776).
   - `src/AkmlSql.Shell.Shared/Editor/Completion/AkmlCompletionPopup.cs`: honour `PrefixOnly` in `ApplyFilter` (~:415-425).
-- [ ] T035 [US1] Create the pure helper `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionTriggerPolicy.cs` (add it to the projitems; tested by T015) with `static TriggerDecision Decide(char typed, bool ctrlSpace, IntelliSenseSettings s)` returning Immediate, Delayed(ms) or None. Then, in `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionController.cs`, route every automatic trigger through it to add the trigger delay and the after-dot switch:
+- [X] T035 [US1] Create the pure helper `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionTriggerPolicy.cs` (add it to the projitems; tested by T015) with `static TriggerDecision Decide(char typed, bool ctrlSpace, IntelliSenseSettings s)` returning Immediate, Delayed(ms) or None. Then, in `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionController.cs`, route every automatic trigger through it to add the trigger delay and the after-dot switch:
   - `AutoTriggerCompletion()` (~:724-728) calls the existing `TriggerCompletionDebounced()` (~:752-763) with the delay from `SettingsSnapshot().IntelliSense.TriggerDelayMs` instead of the constant `DebounceMs`. When the delay is 0, trigger immediately as today.
   - The debounce callback calls `TriggerCompletion()` (not `FetchAndShowCompletions()`), so the filter text is recomputed.
   - Cancel the timer in `DismissPopup()` (~:1346), on commit and on Esc.
@@ -237,7 +237,7 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
   - Ctrl+Space paths (~:370-392, ~:548-560) stay immediate.
 
   Depends on T034 (same file).
-- [ ] T036 [US1] Wire "Show in Error List":
+- [X] T036 [US1] Wire "Show in Error List":
   - In `src/AkmlSql.Shell.Shared/Analysis/ErrorListReporter.cs`:
     - add `internal static bool ShouldPublish(CodeAnalysisSettings s) => s.ShowInErrorList;`;
     - add a 2-second cached settings read;
@@ -245,40 +245,40 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
     - in `RefreshTaskList` (~:48-80), when `ShouldPublish` is false, clear the tasks, call `Refresh()` and return.
   - `ReapplyAll()` re-runs `RefreshTaskList` with each reporter's controller's `CurrentIssues`.
   - Call `ErrorListReporter.ReapplyAll()` from `OptionsCommand.SaveAndNotify` (`Commands/OptionsCommand.cs` ~:110-134).
-- [ ] T037 [US1] In `src/AkmlSql.Shell.Shared/Analysis/AnalysisController.cs`, add `internal static bool ShouldAnalyzeOnEdit(CodeAnalysisSettings s) => s.Enabled && s.RunOnType;` (tested by T016) and gate the edit-triggered analysis (~:48-52) on it, with a 2 s cached settings read. Opening a document and the explicit "run analysis" commands still analyse.
-- [ ] T038 [P] [US1] In `src/AkmlSql.Shell.Shared/Formatting/FormatActionHelper.cs`, add the pure `internal static string? FormatterDisabledMessage(FormatterSettings s)` (tested by T017), returning `AKML SQL formatting is off — turn it on in Options › Format › Styles.` when `Enabled` is false and null otherwise. Add `internal static bool EnsureFormatterEnabled()`, which writes that message to the status bar and returns false when it isn't null.
+- [X] T037 [US1] In `src/AkmlSql.Shell.Shared/Analysis/AnalysisController.cs`, add `internal static bool ShouldAnalyzeOnEdit(CodeAnalysisSettings s) => s.Enabled && s.RunOnType;` (tested by T016) and gate the edit-triggered analysis (~:48-52) on it, with a 2 s cached settings read. Opening a document and the explicit "run analysis" commands still analyse.
+- [X] T038 [P] [US1] In `src/AkmlSql.Shell.Shared/Formatting/FormatActionHelper.cs`, add the pure `internal static string? FormatterDisabledMessage(FormatterSettings s)` (tested by T017), returning `AKML SQL formatting is off — turn it on in Options › Format › Styles.` when `Enabled` is false and null otherwise. Add `internal static bool EnsureFormatterEnabled()`, which writes that message to the status bar and returns false when it isn't null.
   - Call it at the start of `Execute` in `FormatDocumentCommand.cs`, `FormatSelectionCommand.cs` and `src/AkmlSql.Shell.Shared/Productivity/BulkFormatCommand.cs`.
-- [ ] T039 [US1] In `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionController.cs`:
+- [X] T039 [US1] In `src/AkmlSql.Shell.Shared/Editor/Completion/CompletionController.cs`:
   - Create the pure helper `src/AkmlSql.Shell.Shared/Snippets/SnippetGate.cs` (add it to the projitems; tested by T018) with `ShouldOfferSnippets(AppSettings)` (= `Snippets.Enabled && IntelliSense.SnippetsInCompletion`), `ExpansionEnabled(AppSettings)` (= `Snippets.Enabled`) and `FormatOnExpand(AppSettings)`.
   - Replace the hard-coded `FormatOnExpand = true` (~:1129, ~:1179) with `SnippetGate.FormatOnExpand(SettingsSnapshot())`.
   - Filter snippet items (ObjectType 4) out of the list when `SnippetGate.ShouldOfferSnippets` is false (replacing the `SnippetsInCompletion` check at ~:856-871), and skip Tab expansion when `SnippetGate.ExpansionEnabled` is false.
 
   Depends on T035 (same file).
-- [ ] T040 [P] [US1] In `src/AkmlSql.Shell.Shared/Ui/BulkFormatWizard.cs` (~:138-144), set the backup checkbox's initial `Checked` from `ConfigManager.Load().Formatter.CreateBackups` instead of `true` (tested by T019).
-- [ ] T041 [P] [US1] Hide dead rows on the Suggestions pages:
+- [X] T040 [P] [US1] In `src/AkmlSql.Shell.Shared/Ui/BulkFormatWizard.cs` (~:138-144), set the backup checkbox's initial `Checked` from `ConfigManager.Load().Formatter.CreateBackups` instead of `true` (tested by T019).
+- [X] T041 [P] [US1] Hide dead rows on the Suggestions pages:
   - `src/AkmlSql.Shell.Shared/Dialogs/Pages/IntelliSensePage.cs`: "Keyword casing" dropdown (~:51).
   - `SuggestionTypesPage.cs`: "List all database columns after a SELECT statement" (~:28).
   - `CompletionPolishPage.cs`: rows at ~:23 (MS_Description), ~:28 (parameter highlight), ~:41 (decrypt), ~:46 (temp-table IntelliSense) and ~:54 (column picker default sort). Keep "Show the object definition box" (~:33).
 
   For each row, remove the `RowFactory` call, its `ctx.RegisterSearch` call and the matching assignments in the page's `Controls.Load`/`Save`, so the saved value is never overwritten. Leave the `AppSettings` properties alone.
-- [ ] T042 [P] [US1] Hide dead rows, using the same technique as T041:
+- [X] T042 [P] [US1] Hide dead rows, using the same technique as T041:
   - `ConnectionsMemoryPage.cs`: the cache group header and rows (~:42-54). Keep the SQL-auth row and "Manage…".
   - `QualificationPage.cs`: "Qualify columns with table name or alias" and its header (~:32-34).
   - `FormattingPage.cs`: Format on paste/save/delimiter (~:53, ~:57, ~:61), Confirm before bulk format (~:68), Respect --noformat regions (~:78) and Validate formatting preserves semantics (~:83). Keep Enable SQL formatter, Show active style in status bar and Create backups.
-- [ ] T043 [P] [US1] Hide dead rows, using the same technique as T041:
+- [X] T043 [P] [US1] Hide dead rows, using the same technique as T041:
   - `EditorPage.cs`: Named regions (~:24), Document Outline toggle (~:36).
   - `NavigationPage.cs`: Go to Definition, Peek Definition, Find All References and Object Search toggles (~:16, ~:20, ~:24, ~:28). If the page is left with no rows, keep it with one info row, "Navigation commands are in AKML SQL › Navigate.", until US6 moves it.
   - `RefactoringPage.cs`: Show preview before applying (~:18), Create backups (~:23), Format after refactoring (~:28), Include string literals in rename scope (~:41), Rename scope (~:46).
-- [ ] T044 [P] [US1] Hide dead rows, using the same technique as T041:
+- [X] T044 [P] [US1] Hide dead rows, using the same technique as T041:
   - `GridPage.cs`: Freeze headers (~:29).
   - `CodeAnalysisPage.cs`: Analyze on save (~:28).
   - `SnippetsPage.cs`: Show in IntelliSense completions (~:28), Filter by SQL context (~:38), Track usage for ranking (~:43), Personal folder (~:51). Also add "Takes effect after SSMS restarts" to the Team folder description (~:56).
   - `AiAssistancePage.cs`: Chat panel toggle (~:329).
-- [ ] T045 [US1] Remove the Suggestions › Database (`Schema Cache`) and `Labs` pages. Every row on both does nothing.
+- [X] T045 [US1] Remove the Suggestions › Database (`Schema Cache`) and `Labs` pages. Every row on both does nothing.
   - In `SettingsWindow.cs`, delete their entries from `_pageBuilders` (~:64, ~:79), the nav tree (~:537, ~:569-570) and `pages[]` (~:1140-1167).
   - Delete `src/AkmlSql.Shell.Shared/Dialogs/Pages/SchemaCachePage.cs` and `LabsPage.cs`, and remove them from the projitems.
   - Update any test that referenced them (search `tests/AkmlSql.Shell.Shared.Tests` for `SchemaCache` and `Labs`).
-- [ ] T046 [P] [US1] Fix stale descriptions:
+- [X] T046 [P] [US1] Fix stale descriptions:
   - `ConnectionScopePage.cs`: the linked-server description saying it "currently has no effect". It works now; describe what it does.
   - Remove "(Phase B)" / "Phase A and Phase B" jargon from any remaining Options description (search `Dialogs/Pages`).
 - [ ] T047 [US1] Build (MSBuild), then run the Shell, Engine and IntelliSense test suites, `CorpusGateTests` (the pass rate must not drop) and the format-parity goldens. Run quickstart.md scenarios 1–10 manually in SSMS 22 and record the results in `specs/040-sqlprompt-ui-parity/baseline.md` under "US1 verification".
@@ -303,13 +303,13 @@ It covers gap items HIS-01 to HIS-06.
 
 ### Tests for User Story 2 (write first)
 
-- [ ] T048 [P] [US2] Write `tests/AkmlSql.Core.Tests/Ipc/HistoryActionContractTests.cs`, following `HistoryRecordRequestTests`. Round-trip:
+- [X] T048 [P] [US2] Write `tests/AkmlSql.Core.Tests/Ipc/HistoryActionContractTests.cs`, following `HistoryRecordRequestTests`. Round-trip:
   - `HistoryActionRequest` keys 9–12;
   - `HistoryActionResponse` keys 8 and 11;
   - `HistoryEntryDto` key 17.
 
   Also assert a payload serialised **without** the new keys deserialises with them null or false (the legacy shape).
-- [ ] T049 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistorySchemaV3Tests.cs`. Build a v2 database file through the internal `HistoryDatabase(dbPath)` constructor, then use raw SQL to:
+- [X] T049 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistorySchemaV3Tests.cs`. Build a v2 database file through the internal `HistoryDatabase(dbPath)` constructor, then use raw SQL to:
   - insert rows whose `executed_at`/`saved_at` use the space format;
   - insert an orphan `history_versions` row;
   - update `history.sql_text` directly so the full-text index is out of step.
@@ -321,63 +321,63 @@ It covers gap items HIS-01 to HIS-06.
   - `metadata.history_v3 = '1'`;
   - the `open_pid` column and the `history_au` trigger exist;
   - a second initialisation changes nothing.
-- [ ] T050 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryGroupActionsTests.cs`. Record three runs in one session, then check each action with `GroupScope = true`:
+- [X] T050 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryGroupActionsTests.cs`. Record three runs in one session, then check each action with `GroupScope = true`:
   - Delete removes every row, its `history_versions` and its `query_sessions` row, and returns `DeletedCount = 3`.
   - ToggleFavorite sets `is_favorite` on all rows and returns `IsFavorite = true`. After another run, a second toggle clears every row.
   - GetVersions returns distinct texts newest first, and the count equals the grouped row's `VersionCount`.
 
   With `GroupScope = null`, the per-id behaviour is unchanged, except that `DeletedCount` is now set.
-- [ ] T051 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryOpenStateTests.cs`:
+- [X] T051 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryOpenStateTests.cs`:
   - `SetOpenStatus` with `SessionKey` and `OwnerPid` marks every row of that session open and sets `open_pid`; `IsOpen = false` clears both.
   - `ReconcileOpen(ownerPid, openKeys)`:
     - closes rows owned by `ownerPid` whose session isn't in `openKeys`;
     - closes rows whose `open_pid` is a process that doesn't exist (use `int.MaxValue - 1`) and returns their group's representative id in `RestorableEntryIds`;
     - does **not** touch rows owned by a live process (use `Environment.ProcessId`);
     - leaves rows with `open_pid IS NULL` (web rows) unchanged.
-- [ ] T052 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistorySnapshotSearchTests.cs`. After `SaveVersionBySourceAsync`:
+- [X] T052 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistorySnapshotSearchTests.cs`. After `SaveVersionBySourceAsync`:
   - a search for the new text finds the entry, and a search for the replaced text doesn't;
   - `executed_at` is ISO "o";
   - `content_hash` matches the new text;
   - ordering is by time across rows written before and after.
-- [ ] T053 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryGroupFiltersTests.cs`:
+- [X] T053 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryGroupFiltersTests.cs`:
   - With grouping on, `IsOpen = false` never returns a group with any open run.
   - `FavoritesOnly` returns a group whose older run is starred.
   - `TotalCount` equals the number of groups the filters return.
-- [ ] T054 [US2] Update `tests/AkmlSql.Engine.Tests/History/HistoryVersionSnapshotBySourceTests.cs` (~:84-100) to expect the ISO "o" `executed_at` instead of the space format. This is a deliberate behaviour change (research R15).
-- [ ] T055 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryPagingTests.cs`:
+- [X] T054 [US2] Update `tests/AkmlSql.Engine.Tests/History/HistoryVersionSnapshotBySourceTests.cs` (~:84-100) to expect the ISO "o" `executed_at` instead of the space format. This is a deliberate behaviour change (research R15).
+- [X] T055 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryPagingTests.cs`:
   - With a fake search client serving 250 matches at page size 100, `HasMoreEntries` stays true until all 250 are loaded, then false.
   - When a page returns fewer rows than the page size, `HasMoreEntries` is false.
-- [ ] T056 [P] [US2] Extend `tests/AkmlSql.Shell.Shared.Tests/QuerySessionKeyTests.cs`:
+- [X] T056 [P] [US2] Extend `tests/AkmlSql.Shell.Shared.Tests/QuerySessionKeyTests.cs`:
   - `DocumentSessionKeys.TryGet` returns false for an unknown document and doesn't create a key.
   - `Adopt(fullName, key)` makes `TryGet` return that key.
   - `Adopt` of a key that another open document holds returns false, and `TryGet` for the new document still returns false.
   - `TryFindDocument(key)` returns the document that holds the key, and null once that document is forgotten.
-- [ ] T057 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryPreviewAndActionsTests.cs`, using a fake client:
+- [X] T057 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryPreviewAndActionsTests.cs`, using a fake client:
   - selecting an entry requests `GetFullSql` once per id (cached), doesn't set `IsLoading`, and the cache is cleared by Refresh;
   - Delete and ToggleFavorite invoked for a row send that row's id with `GroupScope = true` when grouping is on, even when `SelectedEntries` holds other rows;
   - Delete asks for confirmation through an injectable prompt with the text `Remove '‹name›' and its history?`.
-- [ ] T058 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/ReconcileOpenRequestTests.cs` for the pure `OpenStateReporter.BuildReconcileRequest(int pid, IEnumerable<(string FullName, string? Key)> documents)` (created in T069):
+- [X] T058 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/ReconcileOpenRequestTests.cs` for the pure `OpenStateReporter.BuildReconcileRequest(int pid, IEnumerable<(string FullName, string? Key)> documents)` (created in T069):
   - it keeps only documents named `*.sql` or `SQLQuery*` that have a key;
   - it sets `Action = ReconcileOpen` and `OwnerPid = pid`;
   - it returns an empty `OpenSessionKeys` array (not null) when no document qualifies.
-- [ ] T059 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryRequestHandlerTests.cs`, sending `HistoryActionRequest`s through `HistoryRequestHandler` (T067) against a temporary database:
+- [X] T059 [P] [US2] Write `tests/AkmlSql.Engine.Tests/History/HistoryRequestHandlerTests.cs`, sending `HistoryActionRequest`s through `HistoryRequestHandler` (T067) against a temporary database:
   - with `GroupScope = true`, Delete, ToggleFavorite and GetVersions act on the whole query session and return `DeletedCount`, `IsFavorite` and `Versions`;
   - without `GroupScope`, the same actions keep today's per-id behaviour, and per-id Delete now also sets `DeletedCount`;
   - `SetOpenStatus` with `SessionKey` and `OwnerPid` opens and closes every row of that session, and the old `EntryIds` path still works;
   - `ReconcileOpen` returns `RestorableEntryIds` for the groups whose owner process is gone, newest first.
-- [ ] T060 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/OpenStateReporterTests.cs` for the open-state decisions in `OpenStateReporter` (T069):
+- [X] T060 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/OpenStateReporterTests.cs` for the open-state decisions in `OpenStateReporter` (T069):
   - `OnRecorded(key, pid)` returns a `SetOpenStatus` request with `IsOpen = true`, that `SessionKey` and that `OwnerPid`;
   - `OnActivated(key, pid)` returns the same open request, or null when the key is null;
   - `OnClosing(key, pid, shuttingDown)` returns a close request, or null when the key is null or `shuttingDown` is true.
-- [ ] T061 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryVersionLoadGuardTests.cs` for `VersionLoadGuard` (T072): when two loads overlap and the older one finishes last, its result is discarded and the newer one's is kept; a single load is always current.
+- [X] T061 [P] [US2] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryVersionLoadGuardTests.cs` for `VersionLoadGuard` (T072): when two loads overlap and the older one finishes last, its result is discarded and the newer one's is kept; a single load is always current.
 
 ### Implementation for User Story 2
 
-- [ ] T062 [P] [US2] Add the DTO keys (contracts/ipc.md):
+- [X] T062 [P] [US2] Add the DTO keys (contracts/ipc.md):
   - `src/AkmlSql.Core/Ipc/Messages/HistoryActionRequest.cs`: `[Key(9)] bool? GroupScope`, `[Key(10)] string? SessionKey`, `[Key(11)] int? OwnerPid`, `[Key(12)] string[]? OpenSessionKeys`, and the action constant `ReconcileOpen = 11`.
   - The response class (same folder; search for `class HistoryActionResponse`): `[Key(8)] bool? IsFavorite` and `[Key(11)] long[]? RestorableEntryIds`. Keys 9 and 10 are reserved for US5; add them now as nullable `string[]? Servers`/`Databases` so the numbering stays contiguous.
   - `HistoryEntryDto.cs`: `[Key(17)] string? SessionKey`.
-- [ ] T063 [US2] Add schema v3 to `src/AkmlSql.Engine/History/HistoryDatabase.cs` `InitializeCoreAsync` (~:90-230), per data-model.md §2.1:
+- [X] T063 [US2] Add schema v3 to `src/AkmlSql.Engine/History/HistoryDatabase.cs` `InitializeCoreAsync` (~:90-230), per data-model.md §2.1:
   - `SchemaVersion = 3`;
   - `ALTER TABLE history ADD COLUMN open_pid INTEGER NULL`, in the same try/catch "duplicate column" pattern as ~:147-159;
   - `CREATE TRIGGER IF NOT EXISTS history_au AFTER UPDATE OF sql_text ON history …` (delete the old text, insert the new);
@@ -388,29 +388,29 @@ It covers gap items HIS-01 to HIS-06.
     4. writes the flag in the same transaction.
 
   The file is shared with the web engine and other SSMS instances, so everything must be idempotent.
-- [ ] T064 [US2] In `SaveVersionBySourceAsync` (`HistoryDatabase.cs` ~:1735-1765):
+- [X] T064 [US2] In `SaveVersionBySourceAsync` (`HistoryDatabase.cs` ~:1735-1765):
   - write `executed_at = DateTime.UtcNow.ToString("o")` (not `datetime('now')`);
   - update `content_hash` with the same hash function the insert path uses;
   - look the row up by session key when a `SessionKey` is supplied (new optional parameter), falling back to source.
-- [ ] T065 [US2] Add group-scoped operations to `HistoryDatabase.cs`, resolving the group from an entry id with the GroupKey expression (~:910):
+- [X] T065 [US2] Add group-scoped operations to `HistoryDatabase.cs`, resolving the group from an entry id with the GroupKey expression (~:910):
   - `DeleteGroupAsync(long entryId)`: one transaction deleting `history_versions` for the group's ids, then the `history` rows, then the `query_sessions` row. Returns the number of rows deleted.
   - `ToggleFavoriteGroupAsync(long entryId)`: sets all rows to `1 - MAX(is_favorite)` and returns the new state.
   - `GetVersionsForGroupAsync(long entryId)`: runs and snapshots of the group, de-duplicated by content hash, newest first, id tiebreak.
   - Make per-id `DeleteAsync` return its count.
-- [ ] T066 [US2] Add open state and group-level filters to `HistoryDatabase.cs`:
+- [X] T066 [US2] Add open state and group-level filters to `HistoryDatabase.cs`:
   - `SetOpenStatusBySessionAsync(string sessionKey, bool isOpen, int ownerPid)`, updating every row of the session.
   - `ReconcileOpenAsync(int ownerPid, string[] openKeys)`, returning the ids from dead owners. Check liveness with `Process.GetProcessById` inside try/catch (`ArgumentException` = dead).
   - Move the `FavoritesOnly`/`IsOpen` filters in `SearchAsync` (~:889-896) to the grouped outer level: `WHERE` on `MAX(is_favorite)` / `MAX(is_open)`. Compute `TotalCount` with `SELECT COUNT(*) FROM (<grouped query without LIMIT>)`. The flat mode keeps per-row filters.
   - Delete the dead `CloseByTabTitleAsync` (~:1276-1287).
-- [ ] T067 [US2] In `src/AkmlSql.Engine/History/HistoryRequestHandler.cs` (~:178-420):
+- [X] T067 [US2] In `src/AkmlSql.Engine/History/HistoryRequestHandler.cs` (~:178-420):
   - route `GroupScope == true` for Delete, ToggleFavorite and GetVersions to the group methods;
   - set `DeletedCount` for both Delete paths;
   - return `IsFavorite`;
   - route `SetOpenStatus` with `SessionKey` and `OwnerPid` to `SetOpenStatusBySessionAsync`, keeping the old `EntryIds` path;
   - add `case ReconcileOpen` returning `RestorableEntryIds`.
   - Tested by T059.
-- [ ] T068 [US2] Add `public static bool TryGet(string fullName, out string key)` (never creates a key), `public static bool Adopt(string fullName, string key)` and `public static string? TryFindDocument(string sessionKey)` (the full name of the open document holding that key, or null; History's Open query uses it) to `src/AkmlSql.Shell.Shared/History/DocumentSessionKeys.cs`. `Adopt` returns false, and adopts nothing, when another open document already holds that key; the new document then gets its own key when it first runs.
-- [ ] T069 [US2] Create the pure helper `src/AkmlSql.Shell.Shared/History/OpenStateReporter.cs` (add it to the projitems; tested by T058 and T060). It holds every open-state decision; callers only send what it returns:
+- [X] T068 [US2] Add `public static bool TryGet(string fullName, out string key)` (never creates a key), `public static bool Adopt(string fullName, string key)` and `public static string? TryFindDocument(string sessionKey)` (the full name of the open document holding that key, or null; History's Open query uses it) to `src/AkmlSql.Shell.Shared/History/DocumentSessionKeys.cs`. `Adopt` returns false, and adopts nothing, when another open document already holds that key; the new document then gets its own key when it first runs.
+- [X] T069 [US2] Create the pure helper `src/AkmlSql.Shell.Shared/History/OpenStateReporter.cs` (add it to the projitems; tested by T058 and T060). It holds every open-state decision; callers only send what it returns:
   - `BuildReconcileRequest(int pid, IEnumerable<(string FullName, string? Key)> documents)` (used by T070);
   - `OnRecorded(string key, int pid)` → a `SetOpenStatus` request with `IsOpen = true`, `SessionKey` and `OwnerPid`;
   - `OnActivated(string? key, int pid)` → the same open request, or null when the document has no key;
@@ -423,22 +423,22 @@ It covers gap items HIS-01 to HIS-06.
   4. Add `public static volatile bool ShuttingDown`.
 
   All sends are fire-and-forget on a background task, with errors logged and never thrown into the UI thread.
-- [ ] T070 [US2] In `src/AkmlSql.Ssms22/AkmlSqlPackage.cs`, using `OpenStateReporter` (T069):
+- [X] T070 [US2] In `src/AkmlSql.Ssms22/AkmlSqlPackage.cs`, using `OpenStateReporter` (T069):
   - **Startup (~:193-199):** once the engine launch task completes, send the request from `OpenStateReporter.BuildReconcileRequest(currentPid, documents)` on a background task, where `documents` are every open DTE document's full name with its `DocumentSessionKeys.TryGet` key. Keep the returned `RestorableEntryIds` in a static for US5 (`History/HistoryRestoreState.cs`, new small static holder, added to the projitems).
   - **Shutdown:** in `Dispose(bool)` (~:602-610), and in a `QueryClose` override if one exists, set `ExecutionCapture.ShuttingDown = true` **first**.
-- [ ] T071 [US2] In `src/AkmlSql.Shell.Shared/History/HistoryViewModel.cs`:
+- [X] T071 [US2] In `src/AkmlSql.Shell.Shared/History/HistoryViewModel.cs`:
   - **Paging:** set `HasMoreEntries => _lastPageCount == PageSize && Entries.Count < TotalCount` (~:182), recording `_lastPageCount` after each page (~:386, ~:461).
   - **Preview:** add `Task<string?> GetPreviewTextAsync(HistoryEntryDto e)`, using `GetFullSql` with a per-id cache cleared on Refresh. It must **not** touch `IsLoading`.
   - **Row actions:** make Delete and ToggleFavorite take the row entry explicitly (not `SelectedEntries`) and send `GroupScope = true` when deduplication/grouping is on.
   - **Delete:** ask `Remove '‹name›' and its history?` through an injectable `Func<string,bool> ConfirmPrompt`, defaulting to a MessageBox.
   - **ToggleFavorite:** apply the returned `IsFavorite` to the row.
   - **Open query (new tab):** call `DocumentSessionKeys.Adopt(newDoc.FullName, entry.SessionKey)` when a session key is present. `Adopt` refuses a key another open tab holds (T068), so an older version opened beside the open query starts its own session.
-- [ ] T072 [US2] In `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs`:
+- [X] T072 [US2] In `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs`:
   - **Preview:** replace the preview `TextBlock` and `RenderPreview` (~:1292-1302, ~:1473-1571) with a `SqlPreviewView` (T005). Its `Text` comes from `GetPreviewTextAsync`, and `HighlightTerms` from `HistorySearchTerms.Extract`.
   - **Versions:** load them (~:1684-1781) with `GroupScope = true`, guarded against stale responses by a new `src/AkmlSql.Shell.Shared/History/VersionLoadGuard.cs` (add it to the projitems; tested by T061): `Begin()` returns a token for each load, and `IsCurrent(token)` is false once a later load has begun, so a slower, older response is dropped.
   - **Open marker:** replace the red/green `connDot` (~:948-958) with a 3 px `AccentPrimary` left bar shown when `IsOpen`, and remove the `OpenClosedColorConverter` usage. The footer dot (~:1264) shows green only when the entry is open.
   - **Star and ⋯:** pass their row's entry to the view-model commands.
-- [ ] T073 [US2] In `src/AkmlSql.Shell.Shared/Dialogs/Pages/HistoryPage.cs`:
+- [X] T073 [US2] In `src/AkmlSql.Shell.Shared/Dialogs/Pages/HistoryPage.cs`:
   - hide "Record failed executions" (~:24) and "Encrypt at rest" (~:47), with the T041 technique;
   - rename "Enable deduplication" to **Group repeated runs of the same query**, with the description "Show one row per query tab, with its runs and versions inside.";
   - add "Takes effect after SSMS restarts" to the descriptions of Enable SQL history recording, Retention, Max entries and Disable automatic history trimming.
@@ -462,12 +462,12 @@ It covers gap items STY-01 to STY-03.
 
 ### Tests for User Story 3 (write first)
 
-- [ ] T075 [P] [US3] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesRowLayoutTests.cs` (`[StaFact]`), building the window headlessly as `FormatStylesWindowFixTests` does.
+- [X] T075 [P] [US3] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesRowLayoutTests.cs` (`[StaFact]`), building the window headlessly as `FormatStylesWindowFixTests` does.
   - Load the SQL Prompt schema and set the window size to 1060×680.
   - For each of the 14 pages, run `Measure`/`Arrange`, then assert for every label `TextBlock`: it is not inside a horizontal `StackPanel`; `TextTrimming == None`; and either its unconstrained width (`Measure(new Size(double.PositiveInfinity, double.PositiveInfinity))`) is at most its arranged width, or it wraps (its `ActualHeight` is greater than one line height). This catches mid-word clipping that a plain desired-width check misses.
   - For every Bool option, assert the `CheckBox.Content` is the label, so clicking the text toggles it.
-- [ ] T076 [P] [US3] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesPreviewTabTests.cs`: `FormatStylesEditorViewModel.PreviewTabSize` returns `sqlPrompt.whitespace.numberOfSpacesInTabs` for SQL Prompt-model styles and `whitespace.tabSize` for AKML-model styles, and follows option edits.
-- [ ] T077 [P] [US3] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesImportExportTests.cs`, extending `FormatStylesLifecycleTests` with a fake IPC client:
+- [X] T076 [P] [US3] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesPreviewTabTests.cs`: `FormatStylesEditorViewModel.PreviewTabSize` returns `sqlPrompt.whitespace.numberOfSpacesInTabs` for SQL Prompt-model styles and `whitespace.tabSize` for AKML-model styles, and follows option edits.
+- [X] T077 [P] [US3] Write `tests/AkmlSql.Shell.Shared.Tests/FormatStylesImportExportTests.cs`, extending `FormatStylesLifecycleTests` with a fake IPC client:
   - After a successful import plus activation, `Profiles` shows `IsActive` on the imported style, and the window's header state and set-active button are in sync.
   - Import with `IsDirty` calls `DirtyDecisionHandler` **before** the import request is sent.
   - Export with `IsDirty` for the loaded style calls the save prompt: Cancel aborts, Yes saves and then exports, No exports the saved file.
@@ -475,7 +475,7 @@ It covers gap items STY-01 to STY-03.
 
 ### Implementation for User Story 3
 
-- [ ] T078 [US3] Rework `BuildSettingRow` in `src/AkmlSql.Shell.Shared/Formatting/FormatStylesEditorWindow.cs` (~:1995-2049) and the Bool branch of `BuildControlForSetting` (~:2081-2095):
+- [X] T078 [US3] Rework `BuildSettingRow` in `src/AkmlSql.Shell.Shared/Formatting/FormatStylesEditorWindow.cs` (~:1995-2049) and the Bool branch of `BuildControlForSetting` (~:2081-2095):
   - **Bool options:** a `CheckBox` whose `Content` is a `TextBlock` (`TextWrapping.Wrap`, label text, the existing foreground token), spanning both columns (`Grid.SetColumnSpan(checkbox, 2)`), with no separate label cell. Pass that `TextBlock` as `GatedRow.Label` so `RefreshIfGate` keeps working.
   - **Other kinds:**
     - The label column is `new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "lbl", MinWidth = 200 }`.
@@ -483,18 +483,19 @@ It covers gap items STY-01 to STY-03.
     - The control column keeps its 280 px cap.
   - **Host:** set `Grid.IsSharedSizeScope="True"` on `_settingControlsHost` (~:1577).
   - **Tooltips:** they include the full label text.
-- [ ] T079 [US3] Add `internal int PreviewTabSize` to `src/AkmlSql.Shell.Shared/Formatting/FormatStylesEditorViewModel.cs`:
+- [X] T079 [US3] Add `internal int PreviewTabSize` to `src/AkmlSql.Shell.Shared/Formatting/FormatStylesEditorViewModel.cs`:
   - SQL Prompt model: `GetWorkingValue("sqlPrompt.whitespace.numberOfSpacesInTabs")`.
   - Otherwise: `GetWorkingValue("whitespace.tabSize")`.
   - Parse as int, default 4, clamp 1–16. Raise `PropertyChanged` when either option changes.
-- [ ] T080 [US3] In `FormatStylesEditorWindow.cs`, show the formatted preview in a `SqlPreviewView` (T005) with `TabSize = _viewModel.PreviewTabSize`, updated on `PreviewText`/`PreviewTabSize` changes (~:2284-2301).
+- [X] T080 [US3] In `FormatStylesEditorWindow.cs`, show the formatted preview in a `SqlPreviewView` (T005) with `TabSize = _viewModel.PreviewTabSize`, updated on `PreviewText`/`PreviewTabSize` changes (~:2284-2301).
   - Keep `_previewTextBox` only for "Edit sample" mode, and toggle visibility between the two (~:1692-1778).
   - Keep the dark card for now; US4 moves it to theme tokens.
-- [ ] T081 [US3] Import (`FormatStylesEditorWindow.cs` ~:1175-1248):
+  - *Done differently:* the card's colours moved to theme tokens here (T100's colour part). `SqlPreviewView` colours SQL from theme tokens, which are unreadable on the fixed dark card in the light theme. T100 keeps the line-number switch.
+- [X] T081 [US3] Import (`FormatStylesEditorWindow.cs` ~:1175-1248):
   - **Before** showing the file dialog, when `_viewModel.IsDirty`, ask via `PromptSaveDecision`: Yes saves, No discards, Cancel aborts.
   - After a successful import and `SetActiveProfile`, run the same sequence as set-active (~:1119-1145): `await _viewModel.RefreshProfilesAsync(); RestoreListSelection(name);`, sync `_setActiveButton`, `UpdateHeaderState();`, then update the status bar.
   - When the imported style's name matches a built-in or an existing style, show the existing `StyleNameDialog` pre-filled with `‹name› (imported)` and import under the chosen name. A built-in style is never overwritten.
-- [ ] T082 [US3] Export (`FormatStylesEditorWindow.cs` ~:1147-1168): when `_viewModel.IsDirty && name == _viewModel.LoadedProfileName`, show `Save changes to '{name}' before exporting?` (Yes / No / Cancel).
+- [X] T082 [US3] Export (`FormatStylesEditorWindow.cs` ~:1147-1168): when `_viewModel.IsDirty && name == _viewModel.LoadedProfileName`, show `Save changes to '{name}' before exporting?` (Yes / No / Cancel).
   - Yes → `await SaveSelectedStyleAsync()`, then export.
   - No → export the saved file.
   - Cancel → stop.
@@ -584,7 +585,7 @@ It covers gap items STY-04 to STY-09.
   - a changed option shows a bold label and a small `↺` button, tooltip `Back to SQL Prompt's default (‹value›)`, that calls `ResetOption`;
   - tree leaves show the changed count (distinct from search counts: prefix `●` or use a different token);
   - after an option edit, set `SqlPreviewView.HighlightLines = MovedLines` for 2 s with a `DispatcherTimer`, then clear it.
-- [ ] T100 [US4] Move the preview in `FormatStylesEditorWindow.cs` to theme colours:
+- [ ] T100 [US4] Move the preview in `FormatStylesEditorWindow.cs` to theme colours (the colours were done early, in T080):
   - remove the fixed `PreviewBgBrush`/`PreviewTextBrush`/`PreviewMutedBrush` card colours (~:117-128, ~:1609-1611) in favour of `ThemeTokens.EditorPanelBackground` (or `SurfaceInput`), `TextPrimary` and `TextSecondary` through `SetResourceReference`;
   - turn on `ShowLineNumbers`;
   - keep the amber warning bar semantic colours.

@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.StatusBar;
+using AkmlSql.Shell.Shared.Ui.SqlPreview;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
@@ -42,7 +43,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         private TreeView? _settingsTree;
         private StackPanel? _settingControlsHost;
         private TextBlock? _settingControlsEmpty;
-        private TextBox? _previewTextBox;
+        private TextBox? _previewTextBox;      // "Edit sample" mode only: the raw, editable sample
+        private SqlPreviewView? _previewView;  // the formatted preview (spec 040 T080)
         private Border? _previewWarningBar;
         private TextBlock? _previewWarningText;
         private TextBlock? _statusText;
@@ -103,6 +105,30 @@ namespace AkmlSql.Shell.Shared.Formatting
         private RadioButton? _rbPageSample;
         private bool EditingSample => _editSampleToggle?.IsChecked == true;
 
+        /// <summary>
+        /// Spec 040 (T078) — the <see cref="FrameworkElement.Tag"/> of every option label on a
+        /// settings page, so tests find the labels without depending on the row's layout.
+        /// </summary>
+        internal const string OptionLabelTag = "akml-option-label";
+
+        // Spec 040 (T077) — seams for the dialogs Import and Export show. Null in the product,
+        // where the real file pickers, prompts and summary dialog appear.
+
+        /// <summary>Returns the file to import, or null when the user cancels.</summary>
+        internal Func<string?>? ImportFileOverride { get; set; }
+
+        /// <summary>Given the suggested file name, returns the export path, or null when cancelled.</summary>
+        internal Func<string, string?>? ExportFileOverride { get; set; }
+
+        /// <summary>Given the suggested name and the existing style names, returns the name to import under, or null.</summary>
+        internal Func<string, System.Collections.Generic.IReadOnlyCollection<string>, string?>? ImportNameOverride { get; set; }
+
+        /// <summary>Answers the Save / Discard / Cancel prompt shown with the given message.</summary>
+        internal Func<string, StyleSwitchDecision>? SaveDecisionOverride { get; set; }
+
+        /// <summary>Replaces the import summary dialog.</summary>
+        internal Action<ProfileImportResponse>? ImportSummaryOverride { get; set; }
+
         private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
         {
             b.Freeze();
@@ -114,18 +140,9 @@ namespace AkmlSql.Shell.Shared.Formatting
         private static readonly System.Windows.Media.SolidColorBrush InvalidInputBrush =
             Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x14, 0x00)));
 
-        // Fixed dark editor palette for the live-preview card — theme-independent in BOTH light and
-        // dark, matching SQL Prompt (its preview renders on a dark editor panel regardless of theme).
-        // CLAUDE.md allows fixed colours for a surface that must read the same in every theme; the
-        // theme-token EditorPopupBackground is white in light theme, so it can't serve here.
-        private static readonly System.Windows.Media.SolidColorBrush PreviewBgBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x22, 0x30)));
-        private static readonly System.Windows.Media.SolidColorBrush PreviewTextBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD4, 0xD8, 0xE0)));
-        private static readonly System.Windows.Media.SolidColorBrush PreviewMutedBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8B, 0x93, 0xA5)));
-        private static readonly System.Windows.Media.SolidColorBrush PreviewCaptionBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6A, 0xC4, 0x7A)));
+        // The live-preview card follows the theme (spec 040 T080): its SqlPreviewView colours SQL
+        // from theme tokens, which a fixed dark card would make unreadable in the light theme.
+        // Only the amber warning strip keeps fixed (semantic) colours.
         private static readonly System.Windows.Media.SolidColorBrush PreviewWarnTextBrush =
             Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x24, 0x1A, 0x00)));
 
@@ -780,13 +797,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (_suppressSelectionChanged || _styleList?.SelectedItem is not StyleListItem item) return;
 
             // "Set as active" tracks the selection: pointless on the style that is already active.
-            if (_setActiveButton != null)
-            {
-                _setActiveButton.IsEnabled = !item.IsActive;
-                _setActiveButton.ToolTip = item.IsActive
-                    ? $"'{item.Name}' is already the active style"
-                    : $"Make '{item.Name}' the style Format SQL uses";
-            }
+            SyncSetActiveButton(item.Name, item.IsActive);
 
             var previous = _viewModel.LoadedProfileName;
             bool ok;
@@ -821,6 +832,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                 : _viewModel.IsSelectedBuiltIn
                     ? $"Loaded '{item.Name}' — editing it saves your own copy; the original is kept."
                     : $"Loaded '{item.Name}'.");
+        }
+
+        /// <summary>"Set as active style" is disabled, with a reason, on the style that is already active.</summary>
+        private void SyncSetActiveButton(string name, bool isActive)
+        {
+            if (_setActiveButton == null) return;
+            _setActiveButton.IsEnabled = !isActive;
+            _setActiveButton.ToolTip = isActive
+                ? $"'{name}' is already the active style"
+                : $"Make '{name}' the style Format SQL uses";
         }
 
         /// <summary>Re-points the list selection at <paramref name="name"/> (or clears it) without re-triggering the load.</summary>
@@ -910,6 +931,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>The ONE Save / Discard / Cancel prompt (style switch + window close share it).</summary>
         private StyleSwitchDecision PromptSaveDecision(string message)
         {
+            if (SaveDecisionOverride != null) return SaveDecisionOverride(message);
+
             var result = MessageBox.Show(
                 this,
                 message,
@@ -928,6 +951,13 @@ namespace AkmlSql.Shell.Shared.Formatting
         private System.Threading.Tasks.Task<StyleSwitchDecision> PromptStyleSwitchDecisionAsync() =>
             System.Threading.Tasks.Task.FromResult(
                 PromptSaveDecision($"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}'?"));
+
+        /// <summary>Spec 040 (T080) — "Edit sample" swaps the formatted preview for the raw, editable sample.</summary>
+        private void ShowSampleEditor(bool editing)
+        {
+            if (_previewTextBox != null) _previewTextBox.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+            if (_previewView != null) _previewView.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        }
 
         /// <summary>Persists the in-box sample text if the Edit-sample toggle is active.</summary>
         private void CommitSampleEdit()
@@ -1130,11 +1160,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 // RestoreListSelection suppresses SelectionChanged, so sync the button here or it
                 // would stay enabled on the style that just became active.
-                if (_setActiveButton != null)
-                {
-                    _setActiveButton.IsEnabled = false;
-                    _setActiveButton.ToolTip = $"'{name}' is already the active style";
-                }
+                SyncSetActiveButton(name!, isActive: true);
 
                 UpdateHeaderState();   // "Active: <name>" follows immediately
             }
@@ -1144,35 +1170,54 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
-        private async System.Threading.Tasks.Task OnExportAsync()
+        internal async System.Threading.Tasks.Task OnExportAsync()
         {
             var name = SelectedStyle();
             if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to export."); return; }
+
+            // Spec 040 (STY-03, FR-023): Export writes the SAVED style, so unsaved edits to it are
+            // offered for saving first rather than silently left out of the file.
+            if (_viewModel.IsDirty && string.Equals(name, _viewModel.LoadedProfileName, StringComparison.OrdinalIgnoreCase))
+            {
+                switch (PromptSaveDecision($"Save changes to '{name}' before exporting?"))
+                {
+                    case StyleSwitchDecision.Cancel:
+                        SetStatus("Export cancelled.");
+                        return;
+                    case StyleSwitchDecision.Save:
+                        await SaveSelectedStyleAsync();
+                        if (_viewModel.IsDirty) return; // the save failed; its error is in the status bar
+                        break;
+                }
+            }
+
+            var fileName = name + (_viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2");
+            var path = ExportFileOverride != null ? ExportFileOverride(fileName) : PickExportFile(fileName);
+            if (path == null) return;
+            if (await _viewModel.ExportProfileAsync(name!, path))
+                SetStatus($"Exported '{name}'");
+            else
+                SetStatus(_viewModel.LastError ?? "Export failed.");
+        }
+
+        private string? PickExportFile(string fileName)
+        {
             // SQL Prompt 10.5+ reads and writes one .json per style; the engine writes the style's
             // SQL Prompt document there. .sqlpromptstylev2 stays available for older SQL Prompts.
             var dialog = new Microsoft.Win32.SaveFileDialog
             {
                 Title = "Export formatting style",
-                FileName = name + (_viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2"),
+                FileName = fileName,
                 Filter = _viewModel.IsSqlPromptModel
                     ? "SQL Prompt style (*.json)|*.json|SQL Prompt 9 style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*"
                     : "SQL Prompt style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*",
                 DefaultExt = _viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2",
                 OverwritePrompt = true,
             };
-            if (dialog.ShowDialog(this) != true) return;
-            if (await _viewModel.ExportProfileAsync(name!, dialog.FileName))
-                SetStatus($"Exported '{name}'");
-            else
-                SetStatus(_viewModel.LastError ?? "Export failed.");
+            return dialog.ShowDialog(this) == true ? dialog.FileName : null;
         }
 
-        /// <summary>
-        /// Spec 031 FR-010/FR-011/FR-012 — imports a SQL Prompt style file (JSON or legacy XML)
-        /// via <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>, selects + activates
-        /// the resulting style, and shows a per-option summary dialog.
-        /// </summary>
-        private async System.Threading.Tasks.Task OnImportAsync()
+        private string? PickImportFile()
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -1180,10 +1225,43 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Filter = "SQL Prompt style (*.json;*.sqlpromptstylev2)|*.json;*.sqlpromptstylev2|All files (*.*)|*.*",
                 CheckFileExists = true,
             };
-            if (dialog.ShowDialog(this) != true) return;
+            return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+        }
 
-            var stem = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
-            var peekedName = TryPeekStyleName(dialog.FileName, out var kind);
+        /// <summary>
+        /// Spec 031 FR-010/FR-011/FR-012 — imports a SQL Prompt style file (JSON or legacy XML)
+        /// via <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>, selects + activates
+        /// the resulting style, and shows a per-option summary dialog. Spec 040 (STY-03): unsaved
+        /// edits are settled before the file is picked, a taken name is never overwritten, and the
+        /// list, header and "Set as active style" show the new active style at once (FR-022).
+        /// </summary>
+        internal async System.Threading.Tasks.Task OnImportAsync()
+        {
+            // The import selects the new style, so settle unsaved edits first — asked here, before
+            // the file picker, instead of halfway through the import.
+            if (_viewModel.IsDirty)
+            {
+                var decision = _viewModel.DirtyDecisionHandler != null
+                    ? await _viewModel.DirtyDecisionHandler()
+                    : StyleSwitchDecision.Discard;
+                if (decision == StyleSwitchDecision.Cancel) { SetStatus("Import cancelled."); return; }
+                if (decision == StyleSwitchDecision.Save)
+                {
+                    await SaveSelectedStyleAsync();
+                    if (_viewModel.IsDirty) return; // the save failed; its error is in the status bar
+                }
+                else
+                {
+                    _viewModel.RevertChanges();
+                    RefreshVisibleSettingControls();
+                }
+            }
+
+            var file = ImportFileOverride != null ? ImportFileOverride() : PickImportFile();
+            if (file == null) return;
+
+            var stem = System.IO.Path.GetFileNameWithoutExtension(file);
+            var peekedName = TryPeekStyleName(file, out var kind);
 
             // Three-way naming rule (the engine falls back to a hardcoded name whenever it
             // can't derive one, so consecutive fallback imports would silently overwrite each
@@ -1206,45 +1284,51 @@ namespace AkmlSql.Shell.Shared.Formatting
             // JSON: the peeked metadata.name (the engine derives the profile name from it),
             // falling back to the stem exactly when the stem is what we pass as targetName.
             // XML: the stem we just chose as the target name. Unrecognized/malformed content:
-            // skip the confirmation — the engine rejects it with a clear error, nothing saved.
+            // skip the check — the engine rejects it with a clear error, nothing saved.
+            // Spec 040 (STY-03): a taken name — a built-in or one of your own styles — is never
+            // overwritten by an import; the user picks another, "‹name› (imported)" suggested.
             string? collisionName = kind == StyleFileKind.Unknown ? null : (peekedName ?? stem);
-            var existing = collisionName == null
-                ? null
-                : _viewModel.Profiles.FirstOrDefault(p =>
-                    !p.IsShipped && string.Equals(p.Name, collisionName, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
+            var existingNames = _viewModel.Profiles.Select(p => p.Name).ToList();
+            if (collisionName != null && existingNames.Contains(collisionName, StringComparer.OrdinalIgnoreCase))
             {
-                var confirm = MessageBox.Show(
-                    this,
-                    $"Style '{existing.Name}' already exists. Overwrite?",
-                    "AKML SQL",
-                    MessageBoxButton.OKCancel,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.Cancel);
-                if (confirm != MessageBoxResult.OK)
+                var suggested = collisionName + " (imported)";
+                for (var n = 2; existingNames.Contains(suggested, StringComparer.OrdinalIgnoreCase); n++)
+                    suggested = $"{collisionName} (imported {n})";
+
+                var chosen = ImportNameOverride != null
+                    ? ImportNameOverride(suggested, existingNames)
+                    : StyleNameDialog.ShowImportName(this, collisionName, suggested, existingNames);
+                if (string.IsNullOrWhiteSpace(chosen))
                 {
                     SetStatus("Import cancelled.");
                     return;
                 }
+                targetName = chosen!.Trim();
             }
 
-            var response = await _viewModel.ImportProfileAsync(dialog.FileName, targetName);
-
-            // Engine rejects built-in collisions; custom collisions overwrite by ProfileManager
-            // semantics, so the confirm above (against the client-side list) is the only gate.
-            if (response != null && response.Success && response.ProfileName != null)
-            {
-                AfterCreate(response.ProfileName, BuildImportSummary(response));
-                if (_viewModel.SetActiveProfile(response.ProfileName))
-                    UpdateStatusBarActiveStyle(response.ProfileName); // FR-011 — import + set active
-                else
-                    SetStatus(_viewModel.LastError ?? "Imported, but could not set active style.");
-                ShowImportSummaryDialog(response);                    // FR-012 — import itself succeeded
-            }
-            else
+            var response = await _viewModel.ImportProfileAsync(file, targetName);
+            if (response == null || !response.Success || response.ProfileName == null)
             {
                 SetStatus(_viewModel.LastError ?? "Import failed.");
+                return;
             }
+
+            // FR-011 — an imported style becomes the active one. Then the same refresh as "Set as
+            // active" (spec 040 FR-022): the list's ACTIVE pill, the header chip and the button
+            // show it at once, without reopening the window.
+            var imported = response.ProfileName;
+            var activated = _viewModel.SetActiveProfile(imported);
+            await _viewModel.RefreshProfilesAsync();
+            AfterCreate(imported, BuildImportSummary(response)); // selects the style, which loads it
+            var importedItem = _viewModel.Profiles.FirstOrDefault(
+                p => string.Equals(p.Name, imported, StringComparison.OrdinalIgnoreCase));
+            SyncSetActiveButton(imported, importedItem?.IsActive == true);
+            UpdateHeaderState();
+            if (activated)
+                UpdateStatusBarActiveStyle(imported);
+            else
+                SetStatus(_viewModel.LastError ?? "Imported, but could not set active style.");
+            ShowImportSummaryDialog(response); // FR-012 — the import itself succeeded
         }
 
         private static string BuildImportSummary(ProfileImportResponse r)
@@ -1334,6 +1418,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         private void ShowImportSummaryDialog(ProfileImportResponse response)
         {
+            if (ImportSummaryOverride != null) { ImportSummaryOverride(response); return; }
+
             var dialog = new ImportSummaryDialog(
                 response.ProfileName ?? "(unknown)",
                 BuildImportSummary(response),
@@ -1575,6 +1661,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             };
             _settingControlsHost = new StackPanel { Orientation = Orientation.Vertical };
+            // Spec 040 (T078): every row's label column is one SharedSizeGroup, so a page's labels
+            // line up at the width of its longest label.
+            Grid.SetIsSharedSizeScope(_settingControlsHost, true);
             _settingControlsEmpty = new TextBlock
             {
                 Text = "Select a category on the left to edit its settings.",
@@ -1605,10 +1694,10 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(hSplitter, 1);
             panel.Children.Add(hSplitter);
 
-            // ── Live preview card (fixed dark editor panel in both themes, à la SQL Prompt) ──
+            // ── Live preview card ──
             var previewCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
             previewCard.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
-            previewCard.Background = PreviewBgBrush;
+            previewCard.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
 
             var previewGrid = new Grid();
             previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source controls
@@ -1629,7 +1718,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontWeight = Typography.WeightSemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            previewLabel.Foreground = PreviewMutedBrush;
+            previewLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             Grid.SetColumn(previewLabel, 0);
             previewHeader.Children.Add(previewLabel);
 
@@ -1646,7 +1735,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
             };
-            rbSample.Foreground = PreviewTextBrush;
+            rbSample.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             var rbCurrent = new RadioButton
             {
                 Content = "Current query",
@@ -1658,7 +1747,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 IsEnabled = _viewModel.HasCurrentQuery,
                 ToolTip = _viewModel.HasCurrentQuery ? null : "No active SQL editor when this dialog opened.",
             };
-            rbCurrent.Foreground = PreviewTextBrush;
+            rbCurrent.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             rbSample.Checked += (_, _) =>
             {
                 _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
@@ -1688,19 +1777,18 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Small,
                 ToolTip = "Edit the sample SQL the preview formats. Changes persist across sessions.",
             };
-            _editSampleToggle.Foreground = PreviewTextBrush;
+            _editSampleToggle.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _editSampleToggle.Checked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
-                _previewTextBox.IsReadOnly = false;
                 _previewTextBox.Text = _viewModel.PreviewSample;
+                ShowSampleEditor(true);
             };
             _editSampleToggle.Unchecked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
                 CommitSampleEdit(); // one persist + one preview refresh for the whole edit session
-                _previewTextBox.IsReadOnly = true;
-                _previewTextBox.Text = _viewModel.PreviewText;
+                ShowSampleEditor(false);
             };
 
             // SQL Prompt model: each page previews its own sample, like SQL Prompt's editor.
@@ -1715,7 +1803,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Visibility = Visibility.Collapsed,
                 ToolTip = "Preview code this page's options act on.",
             };
-            _rbPageSample.Foreground = PreviewTextBrush;
+            _rbPageSample.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _rbPageSample.Checked += (_, _) =>
             {
                 _viewModel.PreviewSourceMode = FormatPreviewSource.PageSample;
@@ -1743,7 +1831,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 BorderThickness = new Thickness(0, 1, 0, 1),
             };
             // Amber/yellow is a semantic colour per CLAUDE.md's allow-list. Near-solid fill + fixed
-            // dark text so the strip reads on the dark preview panel in both themes.
+            // dark text so the strip reads the same in every theme.
             _previewWarningBar.Background = Freeze(new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromArgb(0xF2, 0xFB, 0xBF, 0x24)));
             _previewWarningBar.BorderBrush = Freeze(new System.Windows.Media.SolidColorBrush(
@@ -1759,9 +1847,21 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(_previewWarningBar, 1);
             previewGrid.Children.Add(_previewWarningBar);
 
+            // The formatted preview: selectable, syntax-coloured, with tabs at the style's own width
+            // (spec 040 STY-02) — a TextBox always used 8.
+            _previewView = new SqlPreviewView
+            {
+                ShowLineNumbers = false,
+                TabSize = _viewModel.PreviewTabSize,
+                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Xs, Spacing.Xs),
+                Text = "-- The live preview appears once the schema loads and a style is selected.",
+            };
+            Grid.SetRow(_previewView, 2);
+            previewGrid.Children.Add(_previewView);
+
+            // "Edit sample" swaps the preview for this box holding the raw, editable sample.
             _previewTextBox = new TextBox
             {
-                IsReadOnly = true,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
                 FontFamily = Typography.MonoFont,
@@ -1771,9 +1871,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Text = "-- The live preview appears once the schema loads and a style is selected.",
+                Visibility = Visibility.Collapsed,
             };
-            _previewTextBox.Foreground = PreviewTextBrush;
+            _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             Grid.SetRow(_previewTextBox, 2);
             previewGrid.Children.Add(_previewTextBox);
 
@@ -1784,7 +1884,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Small,
                 Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Sm),
             };
-            caption.Foreground = PreviewCaptionBrush;
+            caption.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             Grid.SetRow(caption, 3);
             previewGrid.Children.Add(caption);
 
@@ -1990,8 +2090,14 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
-        /// <summary>One form row: setting label (left; +Unsupported badge; description as a tooltip)
-        /// and its type-driven control (right). Alternate rows get a subtle zebra tint.</summary>
+        /// <summary>
+        /// One form row. An on/off option is a checkbox whose own content is its label, across the
+        /// whole row, so clicking the words toggles it (as in SQL Prompt). Any other option has its
+        /// label on the left — in a column the page's rows share, at least 200 px and at most 45% of
+        /// the page — and its control on the right. Labels wrap instead of being cut off (spec 040
+        /// STY-01, FR-020); the tooltip repeats the label and adds the description. Alternate rows
+        /// get a subtle zebra tint.
+        /// </summary>
         private FrameworkElement BuildSettingRow(FormatSettingNode setting, int index)
         {
             var gateOpen = IsGateOpen(setting);
@@ -2007,51 +2113,99 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (index % 2 == 1)
                 rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceCanvas); // zebra
 
-            var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var labelStack = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Sm, 0),
-            };
             var label = new TextBlock
             {
                 Text = setting.DisplayName,
+                Tag = OptionLabelTag,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.None,
                 ToolTip = RowTooltip(setting, gateOpen),
             };
             label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextSecondary);
-            labelStack.Children.Add(label);
-            if (isDisabled && gateOpen) labelStack.Children.Add(BuildUnsupportedBadge());
-            Grid.SetColumn(labelStack, 0);
-            row.Children.Add(labelStack);
 
-            // Each control sets its own horizontal alignment (checkbox left; combos/text boxes
-            // stretch to fill the column up to MaxWidth); the row only caps and centres them.
             // Wired whenever the option is supported: a closed gate only disables the control, so
             // RefreshIfGate can turn it back on without rebuilding the row.
             var control = BuildControlForSetting(setting, currentValue, unsupported);
             if (!gateOpen) control.IsEnabled = false;
             if (!unsupported && setting.EnabledWhenId != null) _gatedRows.Add(new GatedRow(setting, label, control));
             control.VerticalAlignment = VerticalAlignment.Center;
-            control.MaxWidth = 280;
-            Grid.SetColumn(control, 1);
-            row.Children.Add(control);
+            var badge = isDisabled && gateOpen ? BuildUnsupportedBadge() : null;
+
+            var row = new Grid();
+            if (control is CheckBox checkBox)
+            {
+                checkBox.Content = label;
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetColumn(checkBox, 0);
+                row.Children.Add(checkBox);
+                if (badge != null)
+                {
+                    badge.VerticalAlignment = VerticalAlignment.Center;
+                    Grid.SetColumn(badge, 1);
+                    row.Children.Add(badge);
+                }
+            }
+            else
+            {
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "lbl", MinWidth = 200 });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                if (_settingControlsHost != null)
+                {
+                    label.SetBinding(FrameworkElement.MaxWidthProperty, new System.Windows.Data.Binding(nameof(ActualWidth))
+                    {
+                        Source = _settingControlsHost,
+                        Converter = LabelMaxWidthConverter.Instance,
+                    });
+                }
+
+                FrameworkElement labelCell = label;
+                if (badge != null)
+                {
+                    badge.HorizontalAlignment = HorizontalAlignment.Left;
+                    badge.Margin = new Thickness(0, 2, 0, 0);
+                    labelCell = new StackPanel
+                    {
+                        Orientation = Orientation.Vertical,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Children = { label, badge },
+                    };
+                }
+                labelCell.Margin = new Thickness(0, 0, Spacing.Sm, 0);
+                Grid.SetColumn(labelCell, 0);
+                row.Children.Add(labelCell);
+
+                // Each control sets its own horizontal alignment (combos/text boxes stretch to fill
+                // the column up to MaxWidth); the row only caps and centres them.
+                control.MaxWidth = 280;
+                Grid.SetColumn(control, 1);
+                row.Children.Add(control);
+            }
 
             rowBorder.Child = row;
             return rowBorder;
         }
 
-        /// <summary>Description, the option's "shows when…" note, and why it is disabled.</summary>
+        /// <summary>Spec 040 (T078) — an option label takes at most 45% of the page's width.</summary>
+        private sealed class LabelMaxWidthConverter : System.Windows.Data.IValueConverter
+        {
+            internal static readonly LabelMaxWidthConverter Instance = new LabelMaxWidthConverter();
+
+            public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => value is double width && width > 0 ? width * 0.45 : double.PositiveInfinity;
+
+            public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => throw new NotSupportedException();
+        }
+
+        /// <summary>The label in full, then the description, the option's "shows when…" note, and why it is disabled.</summary>
         private string? RowTooltip(FormatSettingNode setting, bool gateOpen)
         {
-            var parts = new System.Collections.Generic.List<string>();
+            var parts = new System.Collections.Generic.List<string> { setting.DisplayName };
             if (!string.IsNullOrWhiteSpace(setting.Description)) parts.Add(setting.Description!);
             if (!string.IsNullOrWhiteSpace(setting.Note)) parts.Add(setting.Note!);
             if (!gateOpen && setting.EnabledWhenId != null)
@@ -2077,7 +2231,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 case FormatStylesSchemaModel.ControlKind.CheckBox:
                 {
                     var initial = currentValue is bool b ? b : ParseBool(setting.DefaultJson);
-                    // Bare checkbox — the setting name is the row label to its left (SQL Prompt layout).
+                    // BuildSettingRow makes the option's label this checkbox's content (SQL Prompt layout).
                     var checkBox = new CheckBox
                     {
                         IsChecked = initial,
@@ -2293,11 +2447,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // The list (and therefore the active style + count) is settled once loading ends.
                 if (!_viewModel.IsLoading) UpdateHeaderState();
             }
-            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewTextBox != null)
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewView != null)
             {
-                // Spec 033 (T025): while the user is editing the sample, the box shows the RAW
-                // sample — a formatted-preview refresh must not clobber their typing.
-                if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
+                // The sample being edited is in its own box (spec 033 T025), so a formatted-preview
+                // refresh never clobbers the user's typing.
+                _previewView.Text = _viewModel.PreviewText;
+            }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewTabSize) && _previewView != null)
+            {
+                // Spec 040 (STY-02): tabs line up at the selected style's own width.
+                _previewView.TabSize = _viewModel.PreviewTabSize;
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))
             {

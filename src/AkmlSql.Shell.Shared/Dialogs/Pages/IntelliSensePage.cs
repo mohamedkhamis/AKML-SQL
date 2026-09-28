@@ -10,7 +10,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "IntelliSense";
         public string Display => "Suggestions › Behavior";
         public string Title   => "IntelliSense";
-        public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, keyword casing, column/PK/FK detail badges, popup Ctrl-transparency, FK-assisted JOIN and alias generation, commit keys, and snippets. Special-character handling lives on Inserted Code › Special characters; SQL-auth credentials on Connections & Memory.";
+        public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, column/PK/FK details, popup Ctrl-transparency, FK-assisted JOIN and alias generation, commit keys, and snippets. Special-character handling lives on Inserted Code › Special characters; SQL-auth credentials on Connections & Memory.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -48,11 +48,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Debounce delay before showing completions");
             ctx.RegisterSearch("Trigger delay (ms)", "Debounce delay before showing completions", "Slider", rowTrigDelay);
 
-            var (rowCase, cboCase) = ctx.Rows.AddDropdown(panel,
-                "Keyword casing",
-                new[] { "UPPER", "lower", "PascalCase", "As-Is" },
-                "Casing applied to SQL keywords inserted by IntelliSense");
-            ctx.RegisterSearch("Keyword casing", "Casing applied to SQL keywords inserted by IntelliSense", "Dropdown", rowCase);
+            // Spec 040 (OPT-01): "Keyword casing" is hidden — nothing reads it; the saved value is kept.
 
             var (rowDataTypes, chkDataTypes) = ctx.Rows.AddToggle(panel,
                 "Show column data types",
@@ -118,7 +114,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // (SQL Prompt's "Connections & memory" pane).
 
             return new IntelliSenseControls(chkEnabled, chkAutoTrig, chkAfterDot, chkFuzzy,
-                sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay, cboCase,
+                sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay,
                 chkDataTypes, chkNullable, chkPkFk, chkCtrlTransparent,
                 chkJoin, chkAlias, chkDisableNative,
                 chkSpaceCommit, chkDotCommit, chkSnippets);
@@ -135,7 +131,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly TextBlock _maxSuggestionsLabel;
         private readonly Slider _triggerDelay;
         private readonly TextBlock _triggerDelayLabel;
-        private readonly ComboBox _keywordCase;
         private readonly CheckBox _showDataTypes;
         private readonly CheckBox _showNullability;
         private readonly CheckBox _showPkFk;
@@ -148,7 +143,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _snippetsInCompletion;
 
         public IntelliSenseControls(CheckBox enabled, CheckBox autoTrig, CheckBox afterDot, CheckBox fuzzy,
-            Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay, ComboBox cboCase,
+            Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay,
             CheckBox dataTypes, CheckBox nullable, CheckBox pkFk, CheckBox ctrlTransparentPopups,
             CheckBox join, CheckBox alias, CheckBox disableNative,
             CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
@@ -161,7 +156,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _maxSuggestionsLabel = lblMaxSugg;
             _triggerDelay = sldTrigDelay;
             _triggerDelayLabel = lblTrigDelay;
-            _keywordCase = cboCase;
             _showDataTypes = dataTypes;
             _showNullability = nullable;
             _showPkFk = pkFk;
@@ -195,7 +189,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _triggerDelayLabel.Text = i.TriggerDelayMs.ToString(CultureInfo.InvariantCulture);
             _maxSuggestions.Value = i.MaxSuggestions;
             _maxSuggestionsLabel.Text = i.MaxSuggestions.ToString(CultureInfo.InvariantCulture);
-            _keywordCase.SelectedIndex = (int)i.KeywordCase;
         }
 
         public void Save(AppSettings settings)
@@ -216,7 +209,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.IntelliSense.SnippetsInCompletion = _snippetsInCompletion.IsChecked == true;
             settings.IntelliSense.TriggerDelayMs = (int)_triggerDelay.Value;
             settings.IntelliSense.MaxSuggestions = (int)_maxSuggestions.Value;
-            settings.IntelliSense.KeywordCase = (KeywordCaseOption)_keywordCase.SelectedIndex;
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

@@ -14,7 +14,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "SuggestionTypes";
         public string Display => "Suggestions › Types of suggestion";
         public string Title   => "Types of suggestion";
-        public string Help    => "Controls which kinds of items appear in the completion list, including system objects, all database columns after SELECT, and SQL keywords, and whether column suggestions are scoped to referenced tables only or every table in the database.";
+        public string Help    => "Controls which kinds of items appear in the completion list, including system objects and SQL keywords, and whether column suggestions are scoped to referenced tables only or every table in the database.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -25,10 +25,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Include system stored procs and functions (sp_*, sys.*) in suggestions.");
             ctx.RegisterSearch("List system objects", "Include system stored procs and functions in suggestions", "Toggle", rowSysObjs);
 
-            var (rowAllCols, chkAllCols) = ctx.Rows.AddToggle(panel,
-                "List all database columns after SELECT",
-                "Show every column from every table immediately after SELECT.");
-            ctx.RegisterSearch("List all database columns after SELECT", "Show every column from every table immediately after SELECT", "Toggle", rowAllCols);
+            // Spec 040 (OPT-01): "List all database columns after SELECT" is hidden — nothing reads
+            // it (use "Suggest columns from: All tables"); the saved value is kept.
 
             var (rowKeywords, chkKeywords) = ctx.Rows.AddToggle(panel,
                 "Show keywords in suggestions",
@@ -44,21 +42,19 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Whether typing in WHERE/SELECT shows columns from only the FROM-clause tables, or every table in the database.");
             ctx.RegisterSearch("Suggest columns from", "Scope of column suggestions", "Dropdown", rowScope);
 
-            return new SuggestionTypesControls(chkSysObjs, chkAllCols, chkKeywords, cboScope);
+            return new SuggestionTypesControls(chkSysObjs, chkKeywords, cboScope);
         }
     }
 
     internal sealed class SuggestionTypesControls : IPageControls
     {
         private readonly CheckBox _systemObjects;
-        private readonly CheckBox _allColumnsAfterSelect;
         private readonly CheckBox _keywords;
         private readonly ComboBox _columnScope;
 
-        public SuggestionTypesControls(CheckBox sysObjs, CheckBox allCols, CheckBox keywords, ComboBox scope)
+        public SuggestionTypesControls(CheckBox sysObjs, CheckBox keywords, ComboBox scope)
         {
             _systemObjects = sysObjs;
-            _allColumnsAfterSelect = allCols;
             _keywords = keywords;
             _columnScope = scope;
         }
@@ -67,7 +63,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             var s = settings.IntelliSense.SuggestionTypes;
             _systemObjects.IsChecked = s.IncludeSystemObjects;
-            _allColumnsAfterSelect.IsChecked = s.SuggestAllColumnsAfterSelect;
             _keywords.IsChecked = s.IncludeKeywords;
             // ColumnScope: ReferencedOnly = 0, All = 1.
             // Map enum value to dropdown index (the dropdown lists Referenced first).
@@ -78,7 +73,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             var s = settings.IntelliSense.SuggestionTypes;
             s.IncludeSystemObjects = _systemObjects.IsChecked == true;
-            s.SuggestAllColumnsAfterSelect = _allColumnsAfterSelect.IsChecked == true;
             s.IncludeKeywords = _keywords.IsChecked == true;
             s.ColumnScope = _columnScope.SelectedIndex == 1
                 ? ColumnSuggestionScope.All

@@ -44,6 +44,18 @@ public class ColumnProvider : ICompletionProvider
     public ISet<string> ScopeSchemas { get; set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Spec 040 (OPT-01) — Suggestions › Behavior detail flags, pushed per request by
+    /// <see cref="CompletionEngine"/>. All default to true, which reproduces the historic text.
+    /// </summary>
+    public bool ShowDataTypes { get; set; } = true;
+
+    /// <summary>Show <c>NULL</c> / <c>NOT NULL</c> in the column detail text.</summary>
+    public bool ShowNullability { get; set; } = true;
+
+    /// <summary>Show <c>PK</c>, <c>IDENTITY</c> and <c>COMPUTED</c> in the column detail text.</summary>
+    public bool ShowKeyIndicators { get; set; } = true;
+
+    /// <summary>
     /// Clause contexts where bare column names are valid completions
     /// (i.e. expression positions inside a query referencing in-scope tables).
     /// </summary>
@@ -311,7 +323,7 @@ public class ColumnProvider : ICompletionProvider
                             DisplayText = bareDisplay,
                             InsertText = SqlIdentifier.Apply(bareDisplay, BracketMode),
                             ObjectType = (int)CompletionObjectType.Column,
-                            SecondaryText = FormatSecondaryText(column) + " • " + tableName,
+                            SecondaryText = FormatSecondaryText(column, tableName),
                             SourceObject = dbObject.FullName,
                             SortPriority = priority
                         };
@@ -339,7 +351,7 @@ public class ColumnProvider : ICompletionProvider
                         // `Order Details.OrderID` -- not a column reference at all.
                         InsertText = FkHelpers.ColumnRef(SqlIdentifier.QuoteIfNeeded(alias), column.ColumnName, BracketMode),
                         ObjectType = (int)CompletionObjectType.Column,
-                        SecondaryText = FormatSecondaryText(column) + " • " + tableName,
+                        SecondaryText = FormatSecondaryText(column, tableName),
                         SourceObject = dbObject.FullName,
                         // Qualified items rank slightly lower than bare so that in
                         // single-table queries the bare form stays the default.
@@ -404,7 +416,7 @@ public class ColumnProvider : ICompletionProvider
                         DisplayText = column.ColumnName,
                         InsertText = SqlIdentifier.Apply(column.ColumnName, BracketMode),
                         ObjectType = (int)CompletionObjectType.Column,
-                        SecondaryText = FormatSecondaryText(column) + " • " + obj.ObjectName,
+                        SecondaryText = FormatSecondaryText(column, obj.ObjectName),
                         SourceObject = obj.FullName,
                         SortPriority = priority,
                     };
@@ -554,29 +566,52 @@ public class ColumnProvider : ICompletionProvider
         return fkColumnNames;
     }
 
-    private static string FormatSecondaryText(Column column)
+    /// <summary>
+    /// The column detail text ("int, NOT NULL, PK"), with each part gated by its flag. Empty when
+    /// every part is off.
+    /// </summary>
+    internal string FormatSecondaryText(Column column)
     {
-        var parts = new List<string>(3)
-        {
-            column.TypeDisplay,
-            column.IsNullable ? "NULL" : "NOT NULL"
-        };
+        var parts = new List<string>(5);
 
-        if (column.IsPrimaryKey)
+        if (ShowDataTypes)
         {
-            parts.Add("PK");
+            parts.Add(column.TypeDisplay);
         }
 
-        if (column.IsIdentity)
+        if (ShowNullability)
         {
-            parts.Add("IDENTITY");
+            parts.Add(column.IsNullable ? "NULL" : "NOT NULL");
         }
 
-        if (column.IsComputed)
+        if (ShowKeyIndicators)
         {
-            parts.Add("COMPUTED");
+            if (column.IsPrimaryKey)
+            {
+                parts.Add("PK");
+            }
+
+            if (column.IsIdentity)
+            {
+                parts.Add("IDENTITY");
+            }
+
+            if (column.IsComputed)
+            {
+                parts.Add("COMPUTED");
+            }
         }
 
         return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// The detail text followed by " • ‹table›", or just the table name when there are no details
+    /// (so the text never starts with a bullet).
+    /// </summary>
+    internal string FormatSecondaryText(Column column, string tableName)
+    {
+        var details = FormatSecondaryText(column);
+        return details.Length == 0 ? tableName : details + " • " + tableName;
     }
 }

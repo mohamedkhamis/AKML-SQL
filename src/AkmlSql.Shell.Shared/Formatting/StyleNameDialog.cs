@@ -23,6 +23,9 @@ namespace AkmlSql.Shell.Shared.Formatting
         private readonly TextBlock _validationText;
         private bool _accepted;
 
+        /// <summary>Names already taken (Import… only); null when duplicates are not checked here.</summary>
+        private HashSet<string>? _existingNames;
+
         private StyleNameDialog(string title, string prompt, string initialName, IReadOnlyList<string>? baseCandidates, string? defaultBase)
         {
             Title = title;
@@ -152,6 +155,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 error = "Enter a style name.";
             else if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.Contains(".."))
                 error = "The name contains characters that cannot be used in a file name.";
+            else if (_existingNames != null && _existingNames.Contains(name))
+                error = $"A style named '{name}' already exists.";
 
             _validationText.Text = error ?? string.Empty;
             _validationText.Visibility = error == null ? Visibility.Collapsed : Visibility.Visible;
@@ -171,6 +176,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             return (dialog._accepted,
                 dialog._nameBox.Text?.Trim() ?? string.Empty,
                 dialog._basedOnCombo?.SelectedItem as string ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Spec 040 (T081) — Import… of a style whose name is taken: asks for another name,
+        /// pre-filled with <paramref name="suggested"/>. A taken name is refused, so an import never
+        /// overwrites a built-in or one of the user's styles. Returns null when cancelled.
+        /// </summary>
+        internal static string? ShowImportName(Window owner, string takenName, string suggested, IReadOnlyCollection<string> existingNames)
+        {
+            var dialog = new StyleNameDialog(
+                "AKML SQL — Import Style",
+                $"A style named '{takenName}' already exists. Import this one as:",
+                suggested, null, null)
+            {
+                Owner = owner,
+            };
+            dialog._existingNames = new HashSet<string>(existingNames.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
+            dialog.Revalidate();
+            dialog.ShowDialog();
+            return dialog._accepted ? dialog._nameBox.Text?.Trim() : null;
         }
 
         /// <summary>Rename… — returns (accepted, newName).</summary>

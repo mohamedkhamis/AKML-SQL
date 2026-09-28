@@ -72,13 +72,11 @@ public class HistoryVersionSnapshotBySourceTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Finding 4 (PR #249 review): the target-row lookup must be immune to executed_at's mixed
-    /// ISO/space format. This method REWRITES its target row's executed_at to the space format
-    /// (via datetime('now')) every time it snapshots -- so the SECOND snapshot for a given source
-    /// runs with one row already in the space format and one still in ISO. A raw
-    /// `ORDER BY executed_at DESC` sorts any same-day space-format timestamp BELOW any ISO one,
-    /// so the buggy version would pick the OLDER, never-snapshotted row instead of the newest.
-    /// `id DESC` sidesteps the format entirely.
+    /// Finding 4 (PR #249 review): the target-row lookup is by <c>id DESC</c>, not by
+    /// executed_at. Before spec 040 a snapshot rewrote its row's executed_at to the space format
+    /// (datetime('now')), which sorted below every same-day ISO timestamp; spec 040 (T054,
+    /// research R15) deliberately changed the rewrite to the insert path's ISO "o" form, so the
+    /// second snapshot now sees two ISO rows — and must still land on the newest one.
     /// </summary>
     [Fact]
     public async Task Second_snapshot_still_attaches_to_the_newest_row_after_the_first_rewrites_it_to_space_format()
@@ -95,14 +93,11 @@ public class HistoryVersionSnapshotBySourceTests : IAsyncLifetime
 
         Assert.True(newerId > olderId);
 
-        // First snapshot: both rows are still ISO-format here, so even the buggy raw-string
-        // ORDER BY happens to pick the right (newest) row -- this call rewrites the newest row's
-        // executed_at to the SPACE format.
+        // First snapshot: rewrites the newest row's executed_at (ISO "o" since spec 040).
         Assert.True(await _db.SaveVersionBySourceAsync(source, "-- first edit"));
         Assert.Single(await _db.GetVersionsAsync(newerId));
 
-        // Second snapshot: newerId is now space-format; olderId is still ISO-format. Must still
-        // land on newerId, not fall back to the older, untouched entry.
+        // Second snapshot: must still land on newerId, not fall back to the older, untouched entry.
         Assert.True(await _db.SaveVersionBySourceAsync(source, "-- second edit"));
 
         var newerVersions = await _db.GetVersionsAsync(newerId);

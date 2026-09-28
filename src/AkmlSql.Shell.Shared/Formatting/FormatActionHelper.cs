@@ -1,6 +1,8 @@
+#nullable enable
 using System;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.TextManager.Interop;
 using Serilog;
 
@@ -11,6 +13,39 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </summary>
     internal static class FormatActionHelper
     {
+        /// <summary>
+        /// Spec 040 (OPT-01) — the status message shown when Options › Format › Styles "Enable SQL
+        /// formatter" is off, or null when formatting is allowed.
+        /// </summary>
+        internal static string? FormatterDisabledMessage(Core.Config.FormatterSettings s) =>
+            s.Enabled ? null : "AKML SQL formatting is off — turn it on in Options › Format › Styles.";
+
+        /// <summary>
+        /// Returns false (and says why in the status bar) when "Enable SQL formatter" is off. Every
+        /// format command calls this first.
+        /// </summary>
+        internal static bool EnsureFormatterEnabled()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            string? message;
+            try { message = FormatterDisabledMessage(Core.Config.ConfigManager.Load().Formatter); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Format: could not read settings; formatting stays enabled");
+                return true;
+            }
+            if (message == null) return true;
+
+            try
+            {
+                var statusBar = (IVsStatusbar?)Package.GetGlobalService(typeof(SVsStatusbar));
+                statusBar?.SetText(message);
+            }
+            catch (Exception ex) { Log.Debug(ex, "Format: status bar unavailable"); }
+            Log.Information("Format: skipped because the formatter is turned off in Options");
+            return false;
+        }
+
         /// <summary>
         /// The formatting style every format request must be sent with — read FRESH from config on
         /// each call, never cached.

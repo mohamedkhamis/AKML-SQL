@@ -27,7 +27,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
     /// Supports Dark and Light themes. Code-only (no XAML) — compatible with
     /// SharedProject (.projitems) across all 6 host targets.
     /// </summary>
-    internal sealed class SettingsWindow
+    internal sealed class SettingsWindow : Commands.IOptionsDialog
     {
         // ─── Theme brush set ────────────────────────────────────────────────
         // PageTheme was lifted to Pages/PageTheme.cs (Phase 2 B.1) so per-page
@@ -61,7 +61,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Safety"] = new SafetyPage(),
             ["Execution"] = new ExecutionPage(),
             ["Editor"] = new EditorPage(),
-            ["Schema Cache"] = new SchemaCachePage(),
             ["History"] = new HistoryPage(),
             ["AI Assistance"] = new AiAssistancePage(),
             ["Formatting"] = new FormattingPage(),
@@ -76,12 +75,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["SpecialCharacters"] = new SpecialCharactersPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
             ["JoinOptions"] = new JoinCompletionPage(),
-            ["Labs"] = new LabsPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
         // Track whether user confirmed via OK
         private bool _dialogResult;
+
+        // Spec 040 (OPT-02): true while controls are being filled from settings, so the Theme
+        // drop-down's SelectionChanged (raised by Load, Reset or Import) is not mistaken for a pick.
+        private bool _loadingControls;
 
         // ─── Search index (built lazily by Add* helpers) ─────────────────────
         /// <summary>One entry per searchable setting across all pages.</summary>
@@ -133,9 +135,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         // IntelliSense
         // IntelliSense controls migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
 
-        // Schema Cache
-        // Schema Cache controls migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
-
         // Formatting
         // Formatting controls migrated to Pages/FormattingPage.cs (Phase 2 B.14).
 
@@ -178,11 +177,37 @@ namespace AkmlSql.Shell.Shared.Dialogs
         public SettingsWindow(AppSettings settings)
         {
             _settings = settings;
-
-            // Pick theme based on settings (default: light, like SQL Prompt)
-            var themeName = settings.Theme?.ToLowerInvariant() ?? "light";
-            _theme = themeName == "dark" ? PageTheme.Dark : PageTheme.Light;
+            _theme = ResolvePageTheme(settings.Theme);
         }
+
+        /// <summary>
+        /// Spec 040 (OPT-02) — the window's brush set for a theme preference: "dark" → Dark,
+        /// "system" → the host's current theme, anything else → Light.
+        /// </summary>
+        internal static PageTheme ResolvePageTheme(string? preference)
+        {
+            switch ((preference ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "dark":
+                    return PageTheme.Dark;
+                case "system":
+                    return Ui.Theme.HostThemeWatcher.CurrentHostVariant == Ui.Theme.ThemeVariant.Dark
+                        ? PageTheme.Dark
+                        : PageTheme.Light;
+                default:
+                    return PageTheme.Light;
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-02) — the settings as edited so far, including unsaved edits on every page.
+        /// After a theme change the reopened window starts from this, so nothing is lost and nothing
+        /// is written to disk before OK.
+        /// </summary>
+        public AppSettings WorkingCopy => _settings;
+
+        /// <summary>The page key of the selected tree leaf, so a reopened window lands on the same page.</summary>
+        public string? CurrentPageKey => (_navTree?.SelectedItem as TreeViewItem)?.Tag as string;
 
         /// <summary>
         /// Shows the settings window as a modal dialog.
@@ -533,8 +558,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 ("Types of suggestion", "SuggestionTypes"),
                 ("Tooltips", "CompletionPolish"),
                 ("Connections", "ConnectionScope"),
-                ("Join conditions", "JoinOptions"),
-                ("Database", "Schema Cache"));
+                ("Join conditions", "JoinOptions"));
 
             // Inserted Code group introduced in Phase 2 (C.2-C.4).
             AddTreeGroup("Inserted Code",
@@ -565,9 +589,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             AddTreeLeaf("Connections & Memory", "ConnectionsMemory");
             AddTreeLeaf("AI Assistance", "AI Assistance");
 
-            // "Application" moved to the top-level "General" landing leaf; Labs stays under Miscellaneous.
-            AddTreeGroup("Miscellaneous",
-                ("Labs", "Labs"));
+            // Spec 040 (OPT-01): Suggestions › Database and Miscellaneous › Labs are gone — every
+            // row on both changed nothing. "Application" moved to the top-level "General" leaf.
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -1145,7 +1168,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 "CompletionPolish",
                 "Aliases",
                 "ConnectionScope",
-                "Schema Cache",
                 "ConnectionsMemory",
                 "Qualification",
                 "SpecialCharacters",
@@ -1163,7 +1185,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 "Editor",
                 "Execution",
                 "Navigation",
-                "Labs",
             };
 
             foreach (var key in pages)
@@ -1228,11 +1249,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  IntelliSense
         // ═══════════════════════════════════════════════════════════════════════
         // BuildIntelliSensePage migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
-
-        // ═══════════════════════════════════════════════════════════════════════
-        //  Schema Cache
-        // ═══════════════════════════════════════════════════════════════════════
-        // BuildSchemaCachePage migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Formatting
@@ -1657,44 +1673,33 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
         }
 
+        /// <summary>
+        /// Spec 040 (OPT-02, FR-004, research R2) — a real Theme pick closes the window so it can
+        /// reopen under the new brushes. Nothing is written to disk: every page's unsaved edits go
+        /// into the working copy the reopened window starts from, and OK or Cancel in that window
+        /// decides. Selection changes raised while controls load (window open, Reset, Import) are
+        /// ignored — they used to save half-loaded settings and reopen the window by themselves.
+        /// </summary>
         private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_loadingControls) return;
             if (!_pageControlsByKey.TryGetValue("General", out var c) || c is not GeneralControls gen)
                 return;
-            var idx = gen.Theme.SelectedIndex;
 
-            // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
-            // Spec 020 (US1 T021): replaced ThemeManager.DetectFromEnvironment() facade with the
-            // canonical HostThemeWatcher signal — same semantic, no legacy intermediary.
-            var requestedTheme = idx switch
+            // Index 0 = Dark, 1 = Light, 2 = System (follow VS/SSMS)
+            var pick = gen.Theme.SelectedIndex switch
             {
-                0 => PageTheme.Dark,
-                2 => Ui.Theme.HostThemeWatcher.Instance.LastDetectedHostVariant == Ui.Theme.ThemeVariant.Dark
-                    ? PageTheme.Dark : PageTheme.Light,
-                _ => PageTheme.Light
+                0 => "dark",
+                2 => "system",
+                _ => "light",
             };
+            if (ResolvePageTheme(pick) == _theme)
+                return; // same brushes — nothing to reopen
 
-            if (_theme == requestedTheme)
-                return; // no change needed
-
-            // Save the new theme preference immediately so the reopened window uses it
             SaveControlsToSettings();
-            try
-            {
-                ConfigManager.Save(_settings);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "SettingsWindow: Failed to save theme change");
-            }
+            // Other AKML surfaces preview the pick at once; Cancel in the reopened window restores it.
+            Commands.OptionsCommand.ApplyThemePreference(pick);
 
-            // Spec 020 (US1 T021): replaced ThemeManager.Instance.SetUserTheme facade with the
-            // canonical ThemeRegistry.SetPreference call. Every chrome surface that uses
-            // SetResourceReference picks up the change automatically; surfaces that snapshot
-            // brushes at BuildUi-time (like this dialog) reopen after a theme change.
-            Ui.Theme.ThemeRegistry.Instance.SetPreference(_settings.Theme);
-
-            // Signal that the window should be reopened with the new theme
             ThemeChangeRequested = true;
             _dialogResult = true;
             _window?.Close();
@@ -1776,16 +1781,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     return;
                 }
 
-                // Preserve the current install-specific fields that should not be overwritten
-                imported.InstallId = _settings.InstallId;
-                imported.InstalledTargets = _settings.InstalledTargets;
-                imported.LastUpdateCheck = _settings.LastUpdateCheck;
-
-                _settings = imported;
-                LoadSettingsToControls();
+                ImportSettings(imported);
                 Log.Information("Settings imported from {Path}", dlg.FileName);
                 MessageBox.Show(
-                    "Settings imported successfully.\nClick OK or Apply to save.",
+                    "Settings imported. Click OK to save them, or Cancel to discard.",
                     Constants.ProductName,
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -1810,6 +1809,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
         }
 
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-007) — replaces the working copy with <paramref name="imported"/>,
+        /// keeping this installation's identity and first-run state. Nothing is saved until OK.
+        /// </summary>
+        internal void ImportSettings(AppSettings imported)
+        {
+            ConfigManager.PreserveInstallState(_settings, imported);
+            _settings = imported;
+            LoadSettingsToControls();
+        }
+
         private void OnResetThisPageClick(object sender, RoutedEventArgs e)
         {
             try
@@ -1822,12 +1832,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     return;
                 }
 
-                if (MessageBox.Show($"Reset all settings on the '{pageName}' page to defaults?",
+                if (MessageBox.Show(ResetConfirmationText(pageName!),
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
+                // Only this page's controls change; unsaved edits on other pages stay as they are.
                 ResetPageToDefaultsCore(pageName!);
-                LoadSettingsToControls();
             }
             catch (Exception ex)
             {
@@ -1836,114 +1846,84 @@ namespace AkmlSql.Shell.Shared.Dialogs
         }
 
         /// <summary>
-        /// Mutates <c>_settings</c> back to defaults for the named page. Extracted
-        /// from <see cref="OnResetThisPageClick"/> so tests can exercise every page
-        /// key without spawning the confirmation MessageBox. Throws when a page
-        /// key has no Reset case — the missing-case bug becomes a loud failure
-        /// (Phase 2 C.6 regression test).
+        /// Spec 040 (OPT-03, FR-005) — resets exactly the settings the page shows: the page's own
+        /// controls load the defaults and write them back, so settings hidden from every page
+        /// (rule overrides, connection aliases, severities …) and the other pages' unsaved edits
+        /// survive. Throws for an unknown page key. Needs the window to be built.
         /// </summary>
-        internal void ResetPageToDefaultsCore(string pageName)
+        internal void ResetPageToDefaultsCore(string pageKey)
         {
-            var defaults = new AppSettings();
-            switch (pageName)
+            if (!_pageControlsByKey.TryGetValue(pageKey, out var controls))
+                throw new InvalidOperationException($"Page '{pageKey}' is not registered in the Options window.");
+
+            SaveControlsToSettings();
+            _loadingControls = true;
+            try
             {
-                case "General":
-                    _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
-                    _settings.TelemetryEnabled = defaults.TelemetryEnabled;
-                    _settings.Theme = defaults.Theme;
-                    break;
-                case "IntelliSense":
-                    // Field-scoped to what the Suggestions › Behavior page owns — replacing the
-                    // whole IntelliSense object would also reset sub-objects owned by other pages
-                    // (Qualification, Aliases, SpecialCharOptions, ConnectionScope, SQL-auth creds).
-                    _settings.IntelliSense.Enabled = defaults.IntelliSense.Enabled;
-                    _settings.IntelliSense.AutoTrigger = defaults.IntelliSense.AutoTrigger;
-                    _settings.IntelliSense.AfterDot = defaults.IntelliSense.AfterDot;
-                    _settings.IntelliSense.FuzzyMatch = defaults.IntelliSense.FuzzyMatch;
-                    _settings.IntelliSense.MaxSuggestions = defaults.IntelliSense.MaxSuggestions;
-                    _settings.IntelliSense.TriggerDelayMs = defaults.IntelliSense.TriggerDelayMs;
-                    _settings.IntelliSense.KeywordCase = defaults.IntelliSense.KeywordCase;
-                    _settings.IntelliSense.ShowDataTypes = defaults.IntelliSense.ShowDataTypes;
-                    _settings.IntelliSense.ShowNullability = defaults.IntelliSense.ShowNullability;
-                    _settings.IntelliSense.ShowPkFk = defaults.IntelliSense.ShowPkFk;
-                    _settings.IntelliSense.CtrlTransparentPopups = defaults.IntelliSense.CtrlTransparentPopups;
-                    _settings.IntelliSense.AutoAlias = defaults.IntelliSense.AutoAlias;
-                    _settings.IntelliSense.JoinAssist = defaults.IntelliSense.JoinAssist;
-                    _settings.IntelliSense.DisableNativeIntelliSense = defaults.IntelliSense.DisableNativeIntelliSense;
-                    _settings.IntelliSense.SpaceCommits = defaults.IntelliSense.SpaceCommits;
-                    _settings.IntelliSense.DotCommits = defaults.IntelliSense.DotCommits;
-                    _settings.IntelliSense.SnippetsInCompletion = defaults.IntelliSense.SnippetsInCompletion;
-                    break;
-                case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
-                case "CompletionPolish": _settings.CompletionPolish = defaults.CompletionPolish; break;
-                case "Aliases": _settings.IntelliSense.AliasOptions = defaults.IntelliSense.AliasOptions; break;
-                case "ConnectionScope": _settings.IntelliSense.ConnectionScope = defaults.IntelliSense.ConnectionScope; break;
-                case "Qualification":
-                    // Reset only schema + column qualification; BracketMode now belongs to the
-                    // Special characters page, so leave it untouched here.
-                    _settings.IntelliSense.Qualification.SchemaMode = defaults.IntelliSense.Qualification.SchemaMode;
-                    _settings.IntelliSense.Qualification.QualifyColumnsWithTableOrAlias = defaults.IntelliSense.Qualification.QualifyColumnsWithTableOrAlias;
-                    break;
-                case "SpecialCharacters":
-                    // Consolidated pane owns both special-char toggles and the bracket-identifier policy.
-                    _settings.IntelliSense.SpecialCharOptions = defaults.IntelliSense.SpecialCharOptions;
-                    _settings.IntelliSense.Qualification.BracketMode = defaults.IntelliSense.Qualification.BracketMode;
-                    break;
-                case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
-                case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
-                case "Labs": _settings.Labs = defaults.Labs; break;
-                case "Schema Cache":
-                    // Reset only the refresh-behavior fields; storage/memory belongs to the
-                    // Connections & Memory page.
-                    _settings.Cache.AutoRefresh = defaults.Cache.AutoRefresh;
-                    _settings.Cache.DetectDdl = defaults.Cache.DetectDdl;
-                    _settings.Cache.RefreshIntervalSeconds = defaults.Cache.RefreshIntervalSeconds;
-                    break;
-                case "ConnectionsMemory":
-                    _settings.IntelliSense.EnableSqlAuthCredentials = defaults.IntelliSense.EnableSqlAuthCredentials;
-                    _settings.Cache.MaxDatabases = defaults.Cache.MaxDatabases;
-                    _settings.Cache.LazyLoadColumns = defaults.Cache.LazyLoadColumns;
-                    _settings.Cache.PersistToDisk = defaults.Cache.PersistToDisk;
-                    break;
-                case "Formatting": _settings.Formatter = defaults.Formatter; break;
-                case "Snippets": _settings.Snippets = defaults.Snippets; break;
-                case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
-                case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
-                case "History": _settings.History = defaults.History; break;
-                case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
-                case "Safety": _settings.Safety = defaults.Safety; break;
-                case "Grid": _settings.Grid = defaults.Grid; break;
-                case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
-                case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
-                case "Navigation": _settings.Navigation = defaults.Navigation; break;
-                case "AI Assistance":
-                    // Whole-object reset: the default AiSettings carries an empty agent list, a
-                    // blank active id, cleared feature assignments and an empty fallback order
-                    // (spec 037 US2, T048) as well as the flat fields.
-                    _settings.Ai = defaults.Ai;
-                    break;
-                default:
-                    throw new InvalidOperationException(
-                        $"Page '{pageName}' has no Reset case in SettingsWindow.ResetPageToDefaultsCore. " +
-                        "When you add a new page to _pageBuilders, also add a case here.");
+                controls.Reset(new AppSettings());
+                controls.Save(_settings);
+                controls.Load(_settings);
             }
+            finally
+            {
+                _loadingControls = false;
+            }
+
+            // The environment rules are shown on the Color page too, but kept by the host.
+            if (pageKey == "Tabs & UI")
+            {
+                _settings.Tabs.ColoringRules = new TabSettings().ColoringRules;
+                PopulateColoringRulesList();
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-006) — the page reset confirmation, naming the page as the tree
+        /// shows it (never the raw page key) and warning about what else goes with it.
+        /// </summary>
+        internal string ResetConfirmationText(string pageKey)
+        {
+            var display = _pageBuilders.TryGetValue(pageKey, out var builder) ? builder.Display : pageKey;
+            var text = $"Reset the settings on {display}?";
+            if (pageKey == "AI Assistance")
+            {
+                var agents = _settings.Ai.Agents?.Count ?? 0;
+                if (agents > 0)
+                    text += Environment.NewLine + $"This also removes your {agents} AI agent{(agents == 1 ? "" : "s")} and their API keys.";
+            }
+            else if (pageKey == "Tabs & UI")
+            {
+                text += Environment.NewLine + "This also restores the default environments and rules.";
+            }
+            return text;
         }
 
         private void OnResetAllClick(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (MessageBox.Show("Reset ALL settings to defaults? This cannot be undone.",
+                if (MessageBox.Show("Reset ALL settings to defaults? Click OK afterwards to save, or Cancel to keep your settings.",
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                     return;
 
-                _settings = new AppSettings();
-                LoadSettingsToControls();
+                ResetAllToDefaultsCore();
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "SettingsWindow: Reset all failed");
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-007) — every setting back to its default in the working copy,
+        /// keeping this installation's identity and first-run state. Saved only on OK.
+        /// </summary>
+        internal void ResetAllToDefaultsCore()
+        {
+            var fresh = new AppSettings();
+            ConfigManager.PreserveInstallState(_settings, fresh);
+            _settings = fresh;
+            LoadSettingsToControls();
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1952,25 +1932,33 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void LoadSettingsToControls()
         {
-            // Spec 037 (US1, FR-017): hand the deep-link agent id to the AI Assistance page
-            // before it loads — it selects that agent, or performs its implicit Add when the
-            // id is "" and the agent list is empty.
-            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
-                aiPageControls is AiAssistanceControls aiControls)
+            _loadingControls = true;
+            try
             {
-                aiControls.InitialAgentId = InitialAgentId;
+                // Spec 037 (US1, FR-017): hand the deep-link agent id to the AI Assistance page
+                // before it loads — it selects that agent, or performs its implicit Add when the
+                // id is "" and the agent list is empty.
+                if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
+                    aiPageControls is AiAssistanceControls aiControls)
+                {
+                    aiControls.InitialAgentId = InitialAgentId;
+                }
+
+                // Single dispatch loop covers every registered IPageBuilder. Adding
+                // a new page to _pageBuilders automatically picks up Load coverage —
+                // there is no second list to keep in sync, which was the root cause
+                // of the C.1-C.5 silent-discard bug fixed in this commit.
+                foreach (var controls in _pageControlsByKey.Values)
+                    controls.Load(_settings);
+
+                // Coloring rules list is rebuilt by the host — CRUD lives on
+                // SettingsWindow, not on TabsControls.
+                PopulateColoringRulesList();
             }
-
-            // Single dispatch loop covers every registered IPageBuilder. Adding
-            // a new page to _pageBuilders automatically picks up Load coverage —
-            // there is no second list to keep in sync, which was the root cause
-            // of the C.1-C.5 silent-discard bug fixed in this commit.
-            foreach (var controls in _pageControlsByKey.Values)
-                controls.Load(_settings);
-
-            // Coloring rules list is rebuilt by the host — CRUD lives on
-            // SettingsWindow, not on TabsControls.
-            PopulateColoringRulesList();
+            finally
+            {
+                _loadingControls = false;
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════

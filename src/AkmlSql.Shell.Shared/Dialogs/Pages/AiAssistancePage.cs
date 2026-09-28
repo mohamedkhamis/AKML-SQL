@@ -326,9 +326,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Index suggestions", "AI-powered index analysis and recommendations");
             ctx.RegisterSearch("Index suggestions", "AI-powered index analysis and recommendations", "Toggle", rowIdx);
 
-            var (rowChat, chkChat) = ctx.Rows.AddToggle(panel,
-                "Chat panel", "Enable the AI chat side panel for interactive assistance");
-            ctx.RegisterSearch("Chat panel", "Enable the AI chat side panel for interactive assistance", "Toggle", rowChat);
+            // Spec 040 (OPT-01): the "Chat panel" toggle changed nothing (the chat window is always
+            // available from the menu) and is hidden; the saved value is kept.
 
             var (rowInline, chkInline) = ctx.Rows.AddToggle(panel,
                 "Inline ghost text", "Show AI-powered inline completion suggestions as ghost text");
@@ -340,7 +339,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
                 sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
-                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
+                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkInline, chkAutoFix,
                 chkConsent, btnTest, testResult, keyNotice, txtName, nameError, chkAgentEnabled, agentListView, featureRows);
         }
     }
@@ -387,7 +386,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _fix;
         private readonly CheckBox _optimize;
         private readonly CheckBox _indexSuggestions;
-        private readonly CheckBox _chatPanel;
         private readonly CheckBox _inlineCompletion;
         private readonly CheckBox _autoFixOnError;
         private readonly Button _testButton;
@@ -769,7 +767,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             Slider sldMax, TextBlock lblMax, Slider sldTemp, TextBlock lblTemp,
             Slider sldTimeout, TextBlock lblTimeout, Slider sldRetries, TextBlock lblRetries,
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
-            CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
+            CheckBox idx, CheckBox inline, CheckBox autoFix,
             CheckBox cloudConsent, Button testButton, TextBlock testResult, Border keyNotice,
             TextBox name, TextBlock nameError, CheckBox agentEnabled, AiAgentListView listView, FeatureAssignmentRows featureRows)
         {
@@ -792,7 +790,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _fix = fix;
             _optimize = optimize;
             _indexSuggestions = idx;
-            _chatPanel = chat;
             _inlineCompletion = inline;
             _autoFixOnError = autoFix;
             _testButton = testButton;
@@ -1198,7 +1195,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _fix.IsChecked = ai.Fix;
             _optimize.IsChecked = ai.Optimize;
             _indexSuggestions.IsChecked = ai.IndexSuggestions;
-            _chatPanel.IsChecked = ai.ChatPanel;
             _inlineCompletion.IsChecked = ai.InlineCompletion;
             _autoFixOnError.IsChecked = ai.AutoFixOnError;
         }
@@ -1459,7 +1455,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.Ai.Fix = _fix.IsChecked == true;
             settings.Ai.Optimize = _optimize.IsChecked == true;
             settings.Ai.IndexSuggestions = _indexSuggestions.IsChecked == true;
-            settings.Ai.ChatPanel = _chatPanel.IsChecked == true;
             settings.Ai.InlineCompletion = _inlineCompletion.IsChecked == true;
             settings.Ai.AutoFixOnError = _autoFixOnError.IsChecked == true;
         }
