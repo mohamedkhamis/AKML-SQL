@@ -138,7 +138,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 var settings = ConfigManager.Load();
                 if (!settings.IntelliSense.EnableSqlAuthCredentials) return; // opt-out → behave like Unsupported
 
-                var pwd = ResolveSqlAuthPassword(conn.Server, conn.Login);
+                var pwd = ResolveSqlAuthPassword(conn.DataSource, conn.Server, conn.Login);
                 bool has = !string.IsNullOrEmpty(pwd);
 
                 if (textView != null)
@@ -146,6 +146,7 @@ namespace AkmlSql.Shell.Shared.Editor
                     textView.TextBuffer.Properties["AkmlSqlAuthState"] = new SqlAuthState
                     {
                         Server = conn.Server,
+                        DataSource = conn.DataSource,
                         Database = conn.Database,
                         Login = conn.Login,
                         NeedsCredentials = !has
@@ -155,7 +156,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (has)
                 {
                     conn.ConnectionString = SsmsConnectionDetector.BuildSqlAuthConnectionString(
-                        conn.Server, conn.Database, conn.Login, pwd);
+                        conn.DataSource, conn.Database, conn.Login, pwd);
                     conn.IsEngineUsable = true;
                 }
             }
@@ -172,7 +173,10 @@ namespace AkmlSql.Shell.Shared.Editor
         /// Returns null when neither yields a password (the caller then shows the click-to-enter
         /// affordance). MUST run on the UI thread — the inherit step reads the SSMS ScriptFactory.
         /// </summary>
-        private static string ResolveSqlAuthPassword(string server, string login)
+        /// <param name="server">The server connected to (the credential store's key).</param>
+        /// <param name="shownServer">The server as SSMS shows it; credentials stored under it before
+        /// custom connection names were resolved are still found.</param>
+        private static string ResolveSqlAuthPassword(string server, string shownServer, string login)
         {
             // Tier 1: inherit the password SSMS already holds for the active window (no prompt).
             if (SsmsConnectionDetector.TryGetActiveSqlAuthPassword(server, login, out var inherited)
@@ -186,6 +190,9 @@ namespace AkmlSql.Shell.Shared.Editor
             // Tier 2: a previously entered/inherited credential from the DPAPI store.
             if (SqlCredentialStore.TryGet(server, login, out var stored) && !string.IsNullOrEmpty(stored))
                 return stored;
+            if (!string.Equals(server, shownServer, StringComparison.OrdinalIgnoreCase)
+                && SqlCredentialStore.TryGet(shownServer, login, out var legacy) && !string.IsNullOrEmpty(legacy))
+                return legacy;
 
             return null; // Tier 3: caller prompts via the click-to-enter affordance.
         }
@@ -206,7 +213,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (!textView.TextBuffer.Properties.TryGetProperty<SqlAuthState>("AkmlSqlAuthState", out var state)
                     || state == null)
                     return false;
-                var pwd = ResolveSqlAuthPassword(state.Server, state.Login);
+                var pwd = ResolveSqlAuthPassword(state.DataSource, state.Server, state.Login);
                 if (string.IsNullOrEmpty(pwd))
                     return false;
 
@@ -221,10 +228,11 @@ namespace AkmlSql.Shell.Shared.Editor
                 var conn = new SsmsConnectionDetector.ConnectionResult
                 {
                     Server = state.Server,
+                    DataSource = state.DataSource,
                     Database = state.Database,
                     Login = state.Login,
                     ConnectionString = SsmsConnectionDetector.BuildSqlAuthConnectionString(
-                        state.Server, state.Database, state.Login, pwd),
+                        state.DataSource, state.Database, state.Login, pwd),
                     AuthMode = SsmsConnectionDetector.AuthMode.SqlPassword,
                     IsEngineUsable = true
                 };

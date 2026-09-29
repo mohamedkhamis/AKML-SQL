@@ -283,7 +283,9 @@ namespace AkmlSql.Shell.Shared.History
                         var connectionResult = Editor.SsmsConnectionDetector.TryDetectConnection(sp);
                         if (connectionResult != null)
                         {
-                            server = connectionResult.Server;
+                            // The server connected to, not a custom connection name: History reconnects
+                            // to it on Open, Re-execute and restore.
+                            server = connectionResult.DataSource;
                             database = connectionResult.Database;
                         }
                     }
@@ -749,7 +751,7 @@ namespace AkmlSql.Shell.Shared.History
                     return (null, null);
                 if (ServiceProvider.GlobalProvider is IServiceProvider sp
                     && Editor.SsmsConnectionDetector.TryDetectConnection(sp) is { } c)
-                    return (c.Server, c.Database);
+                    return (c.DataSource, c.Database);
             }
             catch (Exception ex)
             {

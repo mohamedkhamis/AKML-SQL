@@ -34,6 +34,10 @@ namespace AkmlSql.Engine.Handlers.Control
             if (ctx.SchemaMetadata == null)
                 throw new InvalidOperationException("RpcContext.SchemaMetadata is required for ConnectionChanged dispatch.");
 
+            // A SQL Server client alias ("ServerDemo") becomes the server it points at before anything
+            // else — the guard below must judge the real target, and SqlClient can't resolve aliases.
+            request.ConnectionString = SqlAliasResolution.Apply(request.ConnectionString);
+
             // A notification has no reply to carry a refusal, so a bridge request for a target the
             // engine will not open under its own identity is logged and ignored: the session keeps
             // its previous connection. The web client runs the same check first and shows the reason.

@@ -81,5 +81,53 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.True(b.Encrypt);                    // spec 029 security review: encrypt the password-bearing wire
             Assert.True(b.TrustServerCertificate);     // internal self-signed certs; mirrors SSMS 22 default
         }
+
+        // ---- Server aliases: the caption shows a name, the engine needs the server -------------------
+
+        [Fact]
+        public void A_custom_connection_name_in_the_caption_connects_to_the_real_server()
+        {
+            // SSMS 22's custom connection name ("ServerDemo") is what the tab shows; SSMS itself is
+            // connected to 192.168.4.5. The engine must connect to the server, the name stays for display.
+            var r = SsmsConnectionDetector.ParseCaption(
+                @"SQLQuery1.sql - ServerDemo.Northwind (DOMAIN\me (61))",
+                SsmsConnectionDetector.AuthMode.Windows, "Windows Authentication", "192.168.4.5");
+
+            Assert.Equal("ServerDemo", r.Server);
+            Assert.Equal("192.168.4.5", r.DataSource);
+            Assert.Contains("Data Source=192.168.4.5;", r.ConnectionString);
+            Assert.DoesNotContain("ServerDemo", r.ConnectionString);
+        }
+
+        [Fact]
+        public void Without_a_connected_server_the_caption_server_is_used()
+        {
+            var r = SsmsConnectionDetector.ParseCaption(
+                @"SQLQuery1.sql - sql01.Northwind (DOMAIN\me (61))",
+                SsmsConnectionDetector.AuthMode.Windows, "Windows Authentication", null);
+
+            Assert.Equal("sql01", r.DataSource);
+            Assert.Contains("Data Source=sql01;", r.ConnectionString);
+        }
+
+        [Theory]
+        [InlineData("ServerDemo", "192.168.4.5", "192.168.4.5")]
+        [InlineData("sql01", null, "sql01")]
+        [InlineData("sql01", "  ", "sql01")]
+        [InlineData("sql01", " sql01 ", "sql01")]
+        public void The_connected_server_wins_when_known(string caption, string? connected, string expected)
+            => Assert.Equal(expected, SsmsConnectionDetector.ChooseDataSource(caption, connected!));
+
+        [Fact]
+        public void A_result_without_a_data_source_connects_to_its_server()
+            => Assert.Equal("sql01", new SsmsConnectionDetector.ConnectionResult { Server = "sql01" }.DataSource);
+
+        [Theory]
+        [InlineData("sql01", "sql01", "sql01")]
+        [InlineData("ServerDemo", "192.168.4.5", "ServerDemo \u2192 192.168.4.5")]
+        [InlineData("ServerDemo", "ServerDemo", "ServerDemo (alias for tcp:192.168.4.5,1433)")]
+        public void The_credential_popup_says_which_server_it_connects_to(string shown, string dataSource, string expected)
+            => Assert.Equal(expected, SqlCredentialDialog.ServerDescription(shown, dataSource,
+                name => name == "ServerDemo" ? "DBMSSOCN,192.168.4.5,1433" : null));
     }
 }

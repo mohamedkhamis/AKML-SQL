@@ -9,7 +9,17 @@ namespace AkmlSql.Shell.Shared.Editor
     /// </summary>
     internal sealed class SqlAuthState
     {
+        /// <summary>The server as SSMS shows it.</summary>
         public string Server { get; set; } = string.Empty;
+
+        private string _dataSource = string.Empty;
+
+        /// <summary>The server to connect to (SSMS's connected server); <see cref="Server"/> when unknown.</summary>
+        public string DataSource
+        {
+            get => string.IsNullOrEmpty(_dataSource) ? Server : _dataSource;
+            set => _dataSource = value ?? string.Empty;
+        }
         public string Database { get; set; } = string.Empty;
         public string Login { get; set; } = string.Empty;
 

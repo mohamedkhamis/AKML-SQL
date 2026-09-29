@@ -37,13 +37,34 @@ namespace AkmlSql.Shell.Shared.Editor
         private SolidColorBrush _fgBrush = null!;
         private readonly SolidColorBrush _errorBrush = Freeze(new SolidColorBrush(Color.FromRgb(0xDC, 0x35, 0x45)));
 
-        public SqlCredentialDialog(string server, string database, string login, bool hasExistingCredential)
+        /// <param name="server">The server as SSMS shows it.</param>
+        /// <param name="dataSource">The server AKML connects to (SSMS's connected server); defaults to
+        /// <paramref name="server"/>. A client alias in it is shown with the server it points at.</param>
+        public SqlCredentialDialog(string server, string database, string login, bool hasExistingCredential, string? dataSource = null)
         {
-            _server = server ?? string.Empty;
+            _shownServer = server ?? string.Empty;
+            _server = string.IsNullOrWhiteSpace(dataSource) ? _shownServer : dataSource!.Trim();
             _database = database ?? string.Empty;
             _login = login ?? string.Empty;
             Build(hasExistingCredential);
             TryAttachOwnerToHost();
+        }
+
+        private readonly string _shownServer;
+
+        /// <summary>
+        /// What the Server line shows: the name SSMS shows, then — when it differs — the server
+        /// connected to, and a client alias's target: <c>ServerDemo → 192.168.4.5 (alias for tcp:192.168.4.5,1433)</c>.
+        /// </summary>
+        internal static string ServerDescription(string shown, string dataSource, Func<string, string?> aliasLookup)
+        {
+            var text = string.Equals(shown, dataSource, StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(dataSource)
+                ? shown
+                : $"{shown} \u2192 {dataSource}";
+            var target = AkmlSql.Core.Models.Connections.SqlServerAliases.Resolve(dataSource, aliasLookup);
+            return AkmlSql.Core.Models.Connections.SqlServerAliases.IsAlias(dataSource, target)
+                ? $"{text} (alias for {target})"
+                : text;
         }
 
         private void TryAttachOwnerToHost()
@@ -86,7 +107,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 Margin = new Thickness(0, 0, 0, 14)
             });
 
-            root.Children.Add(LabeledValue("Server", _server));
+            root.Children.Add(LabeledValue("Server", ServerDescription(_shownServer, _server, ClientAliasRegistry.Lookup)));
             root.Children.Add(LabeledValue("Database", _database));
             root.Children.Add(LabeledValue("Login", _login));
 

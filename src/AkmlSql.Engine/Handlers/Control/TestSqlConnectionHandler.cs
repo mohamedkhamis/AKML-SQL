@@ -29,6 +29,9 @@ namespace AkmlSql.Engine.Handlers.Control
             if (string.IsNullOrEmpty(request.ConnectionString))
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = "No connection string supplied." };
 
+            // A SQL Server client alias becomes the server it points at (the guard judges the real target).
+            request.ConnectionString = SqlAliasResolution.Apply(request.ConnectionString);
+
             if (BridgeSqlTargetGuard.Check(request.ConnectionString) is { } refused)
             {
                 Log.Warning("TestSqlConnection refused for a bridge request — {ConnDesc}",

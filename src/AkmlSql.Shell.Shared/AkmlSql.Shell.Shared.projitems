@@ -186,6 +186,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)History\DraftCapturePolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryAdvancedSearch.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryQueryOpener.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\ClientAliasRegistry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRestoreService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\RestoreQueriesDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\VersionLoadGuard.cs" />
