@@ -84,7 +84,9 @@ namespace AkmlSql.Shell.Shared.Analysis
         private readonly AnalysisController _controller;
         private readonly IServiceProvider   _serviceProvider;
         private readonly string             _documentPath;
-        private TaskProvider                _taskProvider;
+        // Spec 040 (OPT-01): an ErrorListProvider, not a plain TaskProvider — a TaskProvider's items go
+        // to the Task List window, so "Show in Error List" never reached the Error List.
+        private ErrorListProvider           _taskProvider;
         private bool                        _disposed;
 
         public ErrorListReporter(AnalysisController controller, IServiceProvider serviceProvider, string documentPath)
@@ -93,7 +95,7 @@ namespace AkmlSql.Shell.Shared.Analysis
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _documentPath    = documentPath    ?? string.Empty;
 
-            _taskProvider = new TaskProvider(serviceProvider);
+            _taskProvider = new ErrorListProvider(serviceProvider) { ProviderName = "AKML SQL" };
             _controller.DiagnosticsUpdated += OnDiagnosticsUpdated;
             Register(this);
         }
