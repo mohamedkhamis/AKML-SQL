@@ -60,5 +60,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(11)]
         public string? SessionKey { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-13): the text was captured without being run (autosave, or a tab that
+        /// closed unrun). Stored with <c>ExecutionStatus.NotExecuted</c> and not counted as a run.
+        /// Appended key: an older shell omits it (false).
+        /// </summary>
+        [Key(12)]
+        public bool IsDraft { get; set; }
     }
 }

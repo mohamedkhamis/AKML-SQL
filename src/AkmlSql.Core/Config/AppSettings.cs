@@ -786,6 +786,56 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("shortcut")]
         public string Shortcut { get; set; } = "Ctrl+Alt+H";
+
+        /// <summary>Spec 040 (HIS-13): largest query text History keeps, in KB (16–1024). Longer text is cut, with a note.</summary>
+        [JsonPropertyName("maxQuerySizeKb")]
+        public int MaxQuerySizeKb { get; set; } = 1024;
+
+        /// <summary>Spec 040 (HIS-12): at most this many queries are reopened when SSMS starts (1–100).</summary>
+        [JsonPropertyName("restoreMaxQueries")]
+        public int RestoreMaxQueries { get; set; } = 20;
+
+        /// <summary>Spec 040 (HIS-12): reopened queries connect to the server and database they last ran on.</summary>
+        [JsonPropertyName("reconnectRestoredQueries")]
+        public bool ReconnectRestoredQueries { get; set; } = true;
+
+        /// <summary>Spec 040 (HIS-07): keep the Advanced search panel's filters between sessions.</summary>
+        [JsonPropertyName("rememberAdvancedSearch")]
+        public bool RememberAdvancedSearch { get; set; }
+
+        /// <summary>Spec 040 (HIS-07): the saved Advanced search filters; kept only while <see cref="RememberAdvancedSearch"/> is on.</summary>
+        [JsonPropertyName("advancedSearch")]
+        public HistoryAdvancedSearchState? AdvancedSearch { get; set; }
+    }
+
+    /// <summary>Spec 040 (HIS-07): SQL History's Advanced search filters.</summary>
+    public class HistoryAdvancedSearchState
+    {
+        /// <summary>"all" | "week" | "month" | "3months" | "custom".</summary>
+        [JsonPropertyName("period")]
+        public string Period { get; set; } = "all";
+
+        /// <summary>ISO date (yyyy-MM-dd), for "custom" only.</summary>
+        [JsonPropertyName("from")]
+        public string? From { get; set; }
+
+        /// <summary>ISO date (yyyy-MM-dd), for "custom" only.</summary>
+        [JsonPropertyName("to")]
+        public string? To { get; set; }
+
+        /// <summary>Null for every server.</summary>
+        [JsonPropertyName("server")]
+        public string? Server { get; set; }
+
+        /// <summary>Null for every database.</summary>
+        [JsonPropertyName("database")]
+        public string? Database { get; set; }
+
+        [JsonPropertyName("starred")]
+        public bool Starred { get; set; }
+
+        [JsonPropertyName("openOnly")]
+        public bool OpenOnly { get; set; }
     }
 
     /// <summary>Settings for tab management and session recovery (Phase 7).</summary>

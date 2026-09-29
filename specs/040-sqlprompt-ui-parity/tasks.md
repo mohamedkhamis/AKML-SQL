@@ -668,21 +668,21 @@ It covers gap items HIS-07 to HIS-14.
 
 ### Tests for User Story 5 (write first)
 
-- [ ] T112 [P] [US5] Write `tests/AkmlSql.Core.Tests/History/HistoryDateGroupsTests.cs`: `HistoryDateGroups.For(now, t)` gives Today, Yesterday, This week (from `CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek`), Last week, This month and Older. Test the boundaries at midnight, week start and month start, in UTC and local time. A time that fits several groups goes in the first one that matches, in the order listed (yesterday is Yesterday, not This week).
-- [ ] T113 [P] [US5] Write `tests/AkmlSql.Core.Tests/Text/LineDiffTests.cs`: identical texts; a pure insert; a pure delete; a changed line (reported as changed, not delete plus add, when lines align); empty left or right; CRLF and LF inputs normalised.
-- [ ] T114 [P] [US5] Write `tests/AkmlSql.Core.Tests/Ipc/HistoryUs5ContractTests.cs`: `HistoryRecordRequest` key 12, `HistorySearchRequest` key 13 and `HistoryActionResponse` keys 9–10 round-trip, the legacy shapes still deserialise, and `ExecutionStatus.NotExecuted == 3`.
-- [ ] T115 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistorySearchScopeTests.cs`:
+- [X] T112 [P] [US5] Write `tests/AkmlSql.Core.Tests/History/HistoryDateGroupsTests.cs`: `HistoryDateGroups.For(now, t)` gives Today, Yesterday, This week (from `CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek`), Last week, This month and Older. Test the boundaries at midnight, week start and month start, in UTC and local time. A time that fits several groups goes in the first one that matches, in the order listed (yesterday is Yesterday, not This week).
+- [X] T113 [P] [US5] Write `tests/AkmlSql.Core.Tests/Text/LineDiffTests.cs`: identical texts; a pure insert; a pure delete; a changed line (reported as changed, not delete plus add, when lines align); empty left or right; CRLF and LF inputs normalised.
+- [X] T114 [P] [US5] Write `tests/AkmlSql.Core.Tests/Ipc/HistoryUs5ContractTests.cs`: `HistoryRecordRequest` key 12, `HistorySearchRequest` key 13 and `HistoryActionResponse` keys 9–10 round-trip, the legacy shapes still deserialise, and `ExecutionStatus.NotExecuted == 3`.
+- [X] T115 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistorySearchScopeTests.cs`:
   - free text matches a session name, source path, server or database through `LIKE`, as well as SQL through the full-text index;
   - `PathFilter` limits results to the source;
   - `DateFrom`/`DateTo` filter on ISO timestamps;
   - an invalid full-text query still falls back to `LIKE`;
   - `TotalCount` is correct in grouped mode.
-- [ ] T116 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistoryFilterValuesAndDraftTests.cs`:
+- [X] T116 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistoryFilterValuesAndDraftTests.cs`:
   - `GetFilterValues` returns distinct, sorted, non-empty servers and databases, capped at 500.
   - A record with `IsDraft = true` is stored with `status = 3`, listed, and excluded from `exec_count`.
   - A later real run in the same session keeps the draft text as a version.
-- [ ] T117 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistorySearchParserTests.cs`: `path:foo`, `date:[20260901 TO 20260927]` and every row of `HistorySearchParser.HelpRows` parse to the expected filters; unknown prefixes stay free text.
-- [ ] T118 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryInteractionTests.cs`, using a fake client and an injectable scheduler/clock:
+- [X] T117 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistorySearchParserTests.cs`: `path:foo`, `date:[20260901 TO 20260927]` and every row of `HistorySearchParser.HelpRows` parse to the expected filters; unknown prefixes stay free text.
+- [X] T118 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryInteractionTests.cs`, using a fake client and an injectable scheduler/clock:
   - typing triggers one search 250 ms after the last change;
   - after a search the first row is selected;
   - a `HistoryRecorded` refresh keeps the selected id;
@@ -690,47 +690,47 @@ It covers gap items HIS-07 to HIS-14.
   - row-menu actions target the invoked row;
   - while the engine is disconnected, the fake scheduler runs a connection check every 5 s. Once the fake client reconnects, the checks stop and the list reloads. `RetryCommand` searches again at once;
   - removing a chip from `ActiveFilterChips` clears only that filter and searches again.
-- [ ] T119 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryRestoreServiceTests.cs`, with fake opener and prompt:
+- [X] T119 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryRestoreServiceTests.cs`, with fake opener and prompt:
   - **Always** opens up to `RestoreMaxQueries` entries, passing the reconnect flag;
   - **Prompt** shows the prompt with the entries and opens only the chosen ones;
   - **Never** opens nothing;
   - `Tabs.SessionRecovery = false` disables restore entirely.
-- [ ] T120 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/DraftCapturePolicyTests.cs` for the pure `DraftCapturePolicy` (created in T133):
+- [X] T120 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/DraftCapturePolicyTests.cs` for the pure `DraftCapturePolicy` (created in T133):
   - `ShouldCaptureDraft(docName, text, hasKey)` is true only for `*.sql` or `SQLQuery*` names with non-whitespace text and no session key;
   - `TruncateToLimit(text, kb)` leaves text within the limit unchanged, and cuts longer text to `kb * 1024` characters with a final line `-- [truncated by AKML SQL: query larger than ‹kb› KB]`;
   - `SelectAutosaveTargets(docs)` returns only dirty query documents.
-- [ ] T121 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/RestoreClosedTabFallbackTests.cs`, with a fake history client and opener: with an empty `ClosedTabStack`, the command asks history for the newest closed entry (`IsOpen = false`, first row) and opens it; with a non-empty stack, history isn't asked.
-- [ ] T122 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryVersionActionsTests.cs`, using the view model with a fake client and the injectable hooks from T137:
+- [X] T121 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/RestoreClosedTabFallbackTests.cs`, with a fake history client and opener: with an empty `ClosedTabStack`, the command asks history for the newest closed entry (`IsOpen = false`, first row) and opens it; with a non-empty stack, history isn't asked.
+- [X] T122 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryVersionActionsTests.cs`, using the view model with a fake client and the injectable hooks from T137:
   - with `SelectedVersion` set, Open, Copy and Re-execute receive that version's text;
   - with none selected, they receive the entry's full text;
   - "Compare with current" passes the version text and the current full text to `ShowCompare`.
   - Open on a query that is open in a tab, with no older version selected, calls `ActivateDocument` for that tab instead of `OpenDocument` (T140).
-- [ ] T123 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryKeyboardTests.cs` (`[StaFact]`, control built headlessly with a fake view model), calling `HandleListKey(key, modifiers)` (T139):
+- [X] T123 [P] [US5] Write `tests/AkmlSql.Shell.Shared.Tests/HistoryKeyboardTests.cs` (`[StaFact]`, control built headlessly with a fake view model), calling `HandleListKey(key, modifiers)` (T139):
   - Enter opens; Delete removes after the confirmation hook; F2 renames and is refused while the query is open; Ctrl+C copies the SQL; Space stars or un-stars; each returns handled;
   - Esc in the search box first clears the text, then the filters;
   - the row star and ⋯ are focusable `Button`s with `AutomationProperties.Name` "Star query" and "Query actions";
   - every icon-only toolbar control has the `AutomationProperties.Name` listed in T185: "Refresh", "Show starred queries only", "Show open queries only", "Show closed queries only", "Filter by server or database", "More actions" and "Clear search".
-- [ ] T124 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistoryScaleTests.cs` (`[Trait("Category","Performance")]`, skippable like `PerformanceBaselineTests`): insert 100,000 rows in about 20,000 sessions, then:
+- [X] T124 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistoryScaleTests.cs` (`[Trait("Category","Performance")]`, skippable like `PerformanceBaselineTests`): insert 100,000 rows in about 20,000 sessions, then:
   - a grouped search page (100 rows) and its `TotalCount` each return in under 250 ms after a warm-up query;
   - paging with the fixed `HasMoreEntries` rule reaches the last page;
   - a free-text search that also matches names and servers stays under 250 ms.
-- [ ] T125 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistoryRequestHandlerUs5Tests.cs`, through `HistoryRequestHandler` (T130) against a temporary database:
+- [X] T125 [P] [US5] Write `tests/AkmlSql.Engine.Tests/History/HistoryRequestHandlerUs5Tests.cs`, through `HistoryRequestHandler` (T130) against a temporary database:
   - `GetFilterValues` returns distinct, sorted `Servers` and `Databases`, leaving out empty values;
   - a `HistoryRecordRequest` with `IsDraft = true` is stored with status `NotExecuted` and isn't counted as a run;
   - a search with `PathFilter` returns only entries whose source contains the value.
 
 ### Implementation for User Story 5 — Core and engine
 
-- [ ] T126 [P] [US5] Create `src/AkmlSql.Core/Models/History/HistoryDateGroups.cs` (enum plus `For(DateTime nowLocal, DateTime whenLocal)` plus `Label(group)`: "Today", "Yesterday", "This week", "Last week", "This month", "Older"). **Do not change** `HistoryDateBucket.Of`: the web edition and `WebHistoryLogicTests` depend on it.
-- [ ] T127 [P] [US5] Create `src/AkmlSql.Core/Text/LineDiff.cs`: `static IReadOnlyList<LineDiffEntry> Diff(string left, string right)` using an LCS over lines. Each `LineDiffEntry` is (`Kind`: Same, Added, Removed or Changed, `LeftLine?`, `RightLine?`, `LeftText`, `RightText`). Pair adjacent Removed and Added runs as Changed.
-- [ ] T128 [P] [US5] Add the DTO changes:
+- [X] T126 [P] [US5] Create `src/AkmlSql.Core/Models/History/HistoryDateGroups.cs` (enum plus `For(DateTime nowLocal, DateTime whenLocal)` plus `Label(group)`: "Today", "Yesterday", "This week", "Last week", "This month", "Older"). **Do not change** `HistoryDateBucket.Of`: the web edition and `WebHistoryLogicTests` depend on it.
+- [X] T127 [P] [US5] Create `src/AkmlSql.Core/Text/LineDiff.cs`: `static IReadOnlyList<LineDiffEntry> Diff(string left, string right)` using an LCS over lines. Each `LineDiffEntry` is (`Kind`: Same, Added, Removed or Changed, `LeftLine?`, `RightLine?`, `LeftText`, `RightText`). Pair adjacent Removed and Added runs as Changed.
+- [X] T128 [P] [US5] Add the DTO changes:
   - `src/AkmlSql.Core/Models/History/ExecutionStatus.cs`: `NotExecuted = 3`;
   - `HistoryRecordRequest.cs`: `[Key(12)] bool IsDraft`;
   - `HistorySearchRequest.cs`: `[Key(13)] string? PathFilter`;
   - `HistoryActionRequest.cs`: action constant `GetFilterValues = 12`.
 
   Response keys 9–10 were added in T062.
-- [ ] T129 [US5] In `src/AkmlSql.Engine/History/HistoryDatabase.cs` `SearchAsync` (~:833-1136):
+- [X] T129 [US5] In `src/AkmlSql.Engine/History/HistoryDatabase.cs` `SearchAsync` (~:833-1136):
   - replace the full-text `INNER JOIN` with the OR clause from data-model.md §2.4: full-text `IN` subquery **or** `LIKE` on `COALESCE(qs.name, h.tab_title, '')`, `h.source`, `h.server` and `h.database_name`;
   - build the `LIKE` terms from `HistorySearchTerms.Extract`, requiring every term;
   - add the same `LEFT JOIN query_sessions qs` to the count query;
@@ -739,75 +739,77 @@ It covers gap items HIS-07 to HIS-14.
   - add `GetFilterValuesAsync()` over `GetDistinctServersAsync`/`GetDistinctDatabasesAsync` (~:1141-1176), capped at 500;
   - on insert, store drafts (`IsDraft`) with `status = 3`, and make grouped `exec_count` count `status <> 3`;
   - when a real run is recorded for a session whose latest row is a draft, copy the draft text into `history_versions` first.
-- [ ] T130 [US5] In `src/AkmlSql.Engine/History/HistoryRequestHandler.cs`, route `GetFilterValues` (fill `Servers`/`Databases`), and pass `IsDraft` and `PathFilter` through (tested by T125).
+- [X] T130 [US5] In `src/AkmlSql.Engine/History/HistoryRequestHandler.cs`, route `GetFilterValues` (fill `Servers`/`Databases`), and pass `IsDraft` and `PathFilter` through (tested by T125).
 
 ### Implementation for User Story 5 — shell
 
-- [ ] T131 [US5] Add the History settings to `src/AkmlSql.Core/Config/AppSettings.cs` `HistorySettings` (~:758-789), per data-model.md §1.2: `MaxQuerySizeKb` (1024), `RestoreMaxQueries` (20), `ReconnectRestoredQueries` (true), `RememberAdvancedSearch` (false), `HistoryAdvancedSearchState? AdvancedSearch`, plus the new `HistoryAdvancedSearchState` class.
-- [ ] T132 [US5] In `src/AkmlSql.Shell.Shared/History/HistorySearchParser.cs`, parse `path:` into `PathFilter`, and `date:[yyyyMMdd TO yyyyMMdd]` into `DateFrom`/`DateTo`. Add `internal static IReadOnlyList<(string Syntax, string Meaning)> HelpRows` listing every supported form: `name:`, `path:`, `sql:`, `server:`, `database:`/`db:`, `starred:true|false`, `open:true|false`, `date:[… TO …]`, `"phrase"`, `OR`, `NOT`, `word*`.
-- [ ] T133 [US5] In `src/AkmlSql.Shell.Shared/History/ExecutionCapture.cs`:
+- [X] T131 [US5] Add the History settings to `src/AkmlSql.Core/Config/AppSettings.cs` `HistorySettings` (~:758-789), per data-model.md §1.2: `MaxQuerySizeKb` (1024), `RestoreMaxQueries` (20), `ReconnectRestoredQueries` (true), `RememberAdvancedSearch` (false), `HistoryAdvancedSearchState? AdvancedSearch`, plus the new `HistoryAdvancedSearchState` class.
+- [X] T132 [US5] In `src/AkmlSql.Shell.Shared/History/HistorySearchParser.cs`, parse `path:` into `PathFilter`, and `date:[yyyyMMdd TO yyyyMMdd]` into `DateFrom`/`DateTo`. Add `internal static IReadOnlyList<(string Syntax, string Meaning)> HelpRows` listing every supported form: `name:`, `path:`, `sql:`, `server:`, `database:`/`db:`, `starred:true|false`, `open:true|false`, `date:[… TO …]`, `"phrase"`, `OR`, `NOT`, `word*`.
+- [X] T133 [US5] In `src/AkmlSql.Shell.Shared/History/ExecutionCapture.cs`:
   - create the pure helper `src/AkmlSql.Shell.Shared/History/DraftCapturePolicy.cs` (add it to the projitems; tested by T120) with `ShouldCaptureDraft`, `TruncateToLimit` and `SelectAutosaveTargets`, and use it for the rules below;
   - truncate captured text to `History.MaxQuerySizeKb` KB with `DraftCapturePolicy.TruncateToLimit`;
   - raise a new `public static event Action<long?>? HistoryRecorded` after the awaited record from T069;
   - on `OnDocumentClosing` for a `.sql`/`SQLQuery*` document with non-empty text and **no** session key, send a record with `IsDraft = true` (plus the server and database, if known) before closing;
   - add a `DispatcherTimer` every `Tabs.AutoSaveInterval` seconds (when `Tabs.SessionRecovery` is on) that snapshots dirty open query documents: `SaveVersion` when a session key exists, otherwise an `IsDraft` record plus `Adopt` of the new session key once the response returns;
   - stop the timer when `ShuttingDown`.
-- [ ] T134 [US5] In `src/AkmlSql.Shell.Shared/History/HistoryViewModel.cs` (tested by T118):
+- [X] T134 [US5] In `src/AkmlSql.Shell.Shared/History/HistoryViewModel.cs` (tested by T118):
   - **Search:** debounce `SearchText` changes by 250 ms (a `DispatcherTimer`, injectable for tests); select the first entry after each search.
   - **Advanced search:** add an `AdvancedSearch` object (Period preset → `DateFrom`/`DateTo`; `Server`/`Database` filled from `GetFilterValues`; `Starred`; `OpenOnly`) and an `ActiveFilterChips` collection with remove commands. Load it from, and save it to, settings when `RememberAdvancedSearch` is on.
   - **Live refresh:** subscribe to `ExecutionCapture.HistoryRecorded` and re-query on the UI thread, preserving the selected entry id and scroll offset (exposed for the control). Preserve them after star and delete too.
   - **Disconnected:** show the overlay, run a 5-second probe while it is up, and add `RetryCommand`.
-- [ ] T135 [US5] In `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs`, the search area:
+- [X] T135 [US5] In `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs`, the search area:
   - placeholder `Search` (~:208);
   - a `?` button beside the box opening a popup that lists `HistorySearchParser.HelpRows`;
   - a collapsible **Advanced search** panel under the box: Period combo (Everything, Last week, Last month, Last 3 months, Custom), two `DatePicker`s shown only for Custom, Server and Database combos, Starred and Open toggles, and Reset;
   - a chips row showing the active filters, each with a remove button.
 
   Texts come from contracts/ui.md §4.
-- [ ] T136 [US5] In `HistoryToolWindowControl.cs`, the rows (~:866-1000) and groups (~:685-688, ~:789-840):
+- [X] T136 [US5] In `HistoryToolWindowControl.cs`, the rows (~:866-1000) and groups (~:685-688, ~:789-840):
   - Line 2 right shows `server · database`, plus an environment badge when `EnvironmentMatcher.Match(rules, server, db)` matches. The rules come from `ConfigManager.Load().Tabs.ColoringRules`; the badge is the rule label, on a `HexBrush.Get(color)` background, with a contrasting foreground.
   - Grouping uses `HistoryDateGroups`, and group headers show `Label (n)`.
   - `×N · M versions` uses the muted `TextSecondary` colour.
   - Draft rows show `Not executed`.
-- [ ] T137 [US5] Versions in `HistoryToolWindowControl.cs` (~:1684-1804) and `HistoryViewModel.cs`:
+- [X] T137 [US5] Versions in `HistoryToolWindowControl.cs` (~:1684-1804) and `HistoryViewModel.cs`:
   - each version row gets a page glyph and `server · environment`;
   - add `SelectedVersion` to the view model, and make Open, Copy and Re-execute use the selected version's text when set. Route them through injectable hooks (`OpenDocument`, `ActivateDocument`, `SetClipboard`, `Execute`, `ShowCompare`), so they can be tested (T122);
   - add a **Compare with current** context item on a version row.
-- [ ] T138 [US5] Upgrade `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs`:
+- [X] T138 [US5] Upgrade `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs`:
   - Each side's header reads `‹name› — ‹HistoryTimeFormat.Absolute(time)›`.
   - Both sides are rendered from `LineDiff.Diff`, one `SqlPreviewView` per side, aligned line by line with blank filler lines. Added, removed and changed lines get tints from `StatusSuccess`, `StatusDanger` and `StatusWarning` at low opacity, through theme resources.
   - It serves both "Compare with current" (a version against the entry's current text) and the existing two-row Compare.
-- [ ] T139 [US5] Keyboard and focus in `HistoryToolWindowControl.cs`. Put the list key mapping in `internal bool HandleListKey(Key key, ModifierKeys mods)` (tested by T123):
+- [X] T139 [US5] Keyboard and focus in `HistoryToolWindowControl.cs`. Put the list key mapping in `internal bool HandleListKey(Key key, ModifierKeys mods)` (tested by T123):
   - **List `PreviewKeyDown`:** Enter → Open, Delete → Remove (with confirmation), F2 → Rename (refused while open), Ctrl+C → Copy SQL, Space → toggle star.
   - **Tab order:** search → list → versions → preview.
   - **Row controls:** the row star and ⋯ (~:874-909) become focusable `Button`s (templated to look the same), with `AutomationProperties.Name` "Star query" and "Query actions".
   - **Search box Esc:** clear the text; when it is already empty, clear the filters.
-- [ ] T140 [US5] Row and toolbar menus in `HistoryToolWindowControl.cs` (~:1077-1133, ~:1967) and `HistoryViewModel.cs` (~:579, ~:736, ~:785-810, ~:832-918):
+- [X] T140 [US5] Row and toolbar menus in `HistoryToolWindowControl.cs` (~:1077-1133, ~:1967) and `HistoryViewModel.cs` (~:579, ~:736, ~:785-810, ~:832-918):
   - **Row ⋯:** shown on hover or keyboard focus only. Items, in order, as in contracts/ui.md §4: Open query, Copy SQL, Re-execute, Rename query, Compare…, Remove query and its history, Remove queries older than this…. Every item acts on that row.
   - **Toolbar ⋯:** holds `Export…` (moved from the row menu) and `Clear history…` (the existing DeleteAll action; confirmation `Remove all queries except starred ones? This can't be undone.`).
   - **Remove older:** the confirmation formats the date with `HistoryTimeFormat.Absolute`.
   - **Re-execute:** reuse Open's `ScriptFactory` connection code (~:1988-2082). When it can't connect, open the text in a new tab and put `Connect, then run (F5).` in the status bar.
   - **Open query** (row menu, Open button and Enter): when the query is open in a tab and no older version is selected, switch to that tab (`DocumentSessionKeys.TryFindDocument(entry.SessionKey)`, through the `ActivateDocument` hook); otherwise open the text in a new tab, as today.
-- [ ] T141 [US5] In `HistoryToolWindowControl.cs` (~:722-779, ~:1351-1392):
+- [X] T141 [US5] In `HistoryToolWindowControl.cs` (~:722-779, ~:1351-1392):
   - replace the "Loading..." text with a 12×12 ellipse spinner (the `SchemaProgressMargin` pattern in CLAUDE.md);
   - disconnected overlay: `History is unavailable — the AKML engine isn't connected.` plus a `Retry` button bound to `RetryCommand`;
   - empty states for the preview (`Select a query to see it here.`) and the versions pane (`No earlier versions.`).
-- [ ] T142 [US5] Create `src/AkmlSql.Shell.Shared/History/HistoryRestoreService.cs` (add it to the projitems):
+- [X] T142 [US5] Create `src/AkmlSql.Shell.Shared/History/HistoryRestoreService.cs` (add it to the projitems):
   - **Input:** `HistoryRestoreState.RestorableEntryIds` (from T070).
   - **Settings:** `Tabs.SessionRecovery` (master), `Tabs.RestoreOnStartup` ("always" / "prompt" / "never") and `History.RestoreMaxQueries`.
   - **Opening:** fetch each entry's full SQL, then open it with the same code as Open query's new-tab path, including the connection when `History.ReconnectRestoredQueries` is on, and `DocumentSessionKeys.Adopt` (same rule as T071).
   - **Test seams:** injectable opener and prompt.
-- [ ] T143 [US5] Create `src/AkmlSql.Shell.Shared/History/RestoreQueriesDialog.cs` (a `ThemeAwareWindow`, added to the projitems). Title `AKML SQL – Restore queries`. It lists the entries (name, `server · database`, time) with checkboxes, all checked by default, and has **Restore selected** and **Not now** buttons.
-- [ ] T144 [US5] In `src/AkmlSql.Ssms22/AkmlSqlPackage.cs`, once `ReconcileOpen` completes (T070), run `HistoryRestoreService` on the UI thread (`JoinableTaskFactory.SwitchToMainThreadAsync`).
-- [ ] T145 [US5] Move and add History settings rows:
+- [X] T143 [US5] Create `src/AkmlSql.Shell.Shared/History/RestoreQueriesDialog.cs` (a `ThemeAwareWindow`, added to the projitems). Title `AKML SQL – Restore queries`. It lists the entries (name, `server · database`, time) with checkboxes, all checked by default, and has **Restore selected** and **Not now** buttons.
+- [X] T144 [US5] In `src/AkmlSql.Ssms22/AkmlSqlPackage.cs`, once `ReconcileOpen` completes (T070), run `HistoryRestoreService` on the UI thread (`JoinableTaskFactory.SwitchToMainThreadAsync`).
+- [X] T145 [US5] Move and add History settings rows:
   - `src/AkmlSql.Shell.Shared/Dialogs/Pages/HistoryPage.cs` gains, with existing RowFactory methods (US6 turns the wide ranges into number fields): **Maximum query size** (KB, 16–1024), **Restore open queries when SSMS starts** (`Tabs.SessionRecovery`), **When restoring** (Always / Ask / Never → `Tabs.RestoreOnStartup`), **Maximum number of queries to restore**, **Automatically reconnect restored queries**, **Auto-save interval**, **Max closed tabs** and **Remember advanced search settings**.
   - Remove the moved rows from `TabsPage.cs` (~:73-95).
   - Page reset (T025) keeps working, because each page's `Save` writes only its own rows.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
-- [ ] T146 [US5] In `src/AkmlSql.Shell.Shared/Commands/RestoreClosedTabCommand.cs` (~:58-121), when `ClosedTabStack` is empty, search history for the most recent closed entry (`IsOpen = false`, first row) and open it through the History open path. The status bar says `Restored '‹name›' from SQL History.`. Make the history client and the opener injectable (tested by T121).
-- [ ] T147 [US5] Remove the never-wired session-recovery path: `src/AkmlSql.Shell.Shared/Sessions/SessionAutoSave.cs`, `SessionRecoveryInitializer*.cs` and `SessionRecoveryDialog.cs`, together with their projitems entries.
+- [X] T146 [US5] In `src/AkmlSql.Shell.Shared/Commands/RestoreClosedTabCommand.cs` (~:58-121), when `ClosedTabStack` is empty, search history for the most recent closed entry (`IsOpen = false`, first row) and open it through the History open path. The status bar says `Restored '‹name›' from SQL History.`. Make the history client and the opener injectable (tested by T121).
+- [X] T147 [US5] Remove the never-wired session-recovery path: `src/AkmlSql.Shell.Shared/Sessions/SessionAutoSave.cs`, `SessionRecoveryInitializer*.cs` and `SessionRecoveryDialog.cs`, together with their projitems entries.
   - First search `src/` (including `src/AkmlSql.Web` and `src/AkmlSql.Engine`) for other callers of the engine's session storage (`src/AkmlSql.Engine/Sessions/*`). Delete the engine handler and files **only** if nothing else uses them; otherwise leave them and note why in this task.
   - Update or remove any tests that referenced the deleted classes.
+  - **Done (2026-09-29):** the three shell files were not even in the projitems (never compiled). Nothing in `src/` (Web, Engine, shell) sent `SessionSave`/`SessionRestore`/`SessionDelete` (50–52), so the engine's `Sessions/SessionRequestHandler.cs` and `SessionStorage.cs`, their registration in `EngineHandlerRegistry`, and the seven Core `Session*Request/Response` + `RecoverableSessionDto` messages were deleted too. The constants 50–52 are removed and the numbers marked reserved. Two engine tests had an unused `using AkmlSql.Engine.Sessions;`, now removed.
+  - **Implementation notes for US5 (T135–T146):** restore on start needed each entry's name, server, database and session key, so `HistoryActions.GetEntries = 13` and `HistoryActionResponse.Entries` (Key 12) were added; version rows carry `Server`/`Database` (`HistoryVersionDto` Keys 3–4) for "server · environment". The open-in-new-tab code moved to `HistoryQueryOpener` (shared by Open query, Re-execute, restore on start and the Ctrl+Shift+T fallback). "Remove queries older than this…" formats the time with `HistoryTimeFormat.Absolute` (per T140) rather than the contract's `d MMM yyyy HH:mm` placeholder. Rename is refused while the query is open with "'‹name›' is open in a tab. Close it to rename the query."
 - [ ] T148 [US5] Build, then run the Core, Engine, Shell and Web.Tests (History) suites. Run quickstart.md scenarios 29–37 and record the results in `baseline.md` under "US5 verification".
 
 **Checkpoint**: SQL History matches SQL Prompt's patterns. **Stop and review before P3.**

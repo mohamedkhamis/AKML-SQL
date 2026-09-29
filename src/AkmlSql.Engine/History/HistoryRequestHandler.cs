@@ -42,7 +42,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 recordRequest.Username,
                 recordRequest.DurationMs,
                 recordRequest.RowCount,
-                recordRequest.Status,
+                // Spec 040 (HIS-14): a draft is stored as "not executed" and never counted as a run.
+                recordRequest.IsDraft ? (int)Core.Models.History.ExecutionStatus.NotExecuted : recordRequest.Status,
                 recordRequest.ErrorMessage,
                 recordRequest.Source,
                 recordRequest.TabTitle,
@@ -112,7 +113,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 Limit = searchRequest.Limit > 0 ? searchRequest.Limit : 100,
                 IsOpen = searchRequest.IsOpen,
                 NameFilter = searchRequest.NameFilter,
-                CamelCaseTokens = searchRequest.CamelCaseTokens
+                CamelCaseTokens = searchRequest.CamelCaseTokens,
+                PathFilter = searchRequest.PathFilter
             };
 
             // Parse ISO 8601 date strings to DateTime
@@ -192,6 +194,17 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         Success = fullSql != null,
                         FullSqlText = fullSql,
                         Error = fullSql == null ? "Entry not found" : null
+                    });
+                }
+
+                case HistoryActions.GetEntries:
+                {
+                    // Spec 040 (HIS-14): restore on start reopens these.
+                    var entries = await _database.GetEntriesAsync(actionRequest.EntryIds ?? Array.Empty<long>());
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        Entries = entries.ToArray()
                     });
                 }
 
@@ -374,19 +387,17 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         });
                     }
 
-                    // Spec 040 (HIS-04): GroupScope lists the grouped query's runs and snapshots.
+                    // Spec 040 (HIS-04): GroupScope lists the grouped query's runs and snapshots,
+                    // each with the server and database it ran on (HIS-12).
                     var versions = actionRequest.GroupScope == true
-                        ? await _database.GetVersionsForGroupAsync(actionRequest.EntryIds[0])
-                        : await _database.GetVersionsAsync(actionRequest.EntryIds[0]);
+                        ? (await _database.GetVersionsForGroupAsync(actionRequest.EntryIds[0]))
+                            .Select(v => new HistoryVersionDto { Id = v.Id, SqlText = v.SqlText, SavedAt = v.SavedAt, Server = v.Server, Database = v.Database })
+                        : (await _database.GetVersionsAsync(actionRequest.EntryIds[0]))
+                            .Select(v => new HistoryVersionDto { Id = v.Id, SqlText = v.SqlText, SavedAt = v.SavedAt });
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
                         Success = true,
-                        Versions = versions.Select(v => new HistoryVersionDto
-                        {
-                            Id = v.Id,
-                            SqlText = v.SqlText,
-                            SavedAt = v.SavedAt
-                        }).ToArray()
+                        Versions = versions.ToArray()
                     });
                 }
 
@@ -436,6 +447,18 @@ public class HistoryRequestHandler(HistoryDatabase database)
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
                         Success = saved
+                    });
+                }
+
+                case HistoryActions.GetFilterValues:
+                {
+                    // Spec 040 (HIS-07): the lists behind the filter menu.
+                    var (servers, databases) = await _database.GetFilterValuesAsync();
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        Servers = servers.ToArray(),
+                        Databases = databases.ToArray(),
                     });
                 }
 

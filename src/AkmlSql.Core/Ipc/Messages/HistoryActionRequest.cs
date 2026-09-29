@@ -124,5 +124,17 @@ namespace AkmlSql.Core.Ipc.Messages
         /// by shells that are gone; returns the latter in <see cref="HistoryActionResponse.RestorableEntryIds"/>.
         /// </summary>
         public const int ReconcileOpen = 11;
+
+        /// <summary>
+        /// Spec 040 (HIS-07): the distinct servers and databases in History, for the filter menu
+        /// (<c>HistoryActionResponse.Servers</c> / <c>Databases</c>, at most 500 each).
+        /// </summary>
+        public const int GetFilterValues = 12;
+
+        /// <summary>
+        /// Spec 040 (HIS-14): the entries named by <c>EntryIds</c>, with full text, query name and
+        /// session key (restore on start reopens them). Answers in <c>HistoryActionResponse.Entries</c>.
+        /// </summary>
+        public const int GetEntries = 13;
     }
 }

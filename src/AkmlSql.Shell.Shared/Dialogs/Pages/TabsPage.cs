@@ -11,7 +11,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Tabs & UI";
         public string Display => "Tabs › Color";
         public string Title   => "Tabs & UI";
-        public string Help    => "Configure environment-based tab coloring rules, session recovery with auto-save and startup restore, and a custom window title template.";
+        public string Help    => "Configure environment-based tab coloring rules and a custom window title template. Restoring queries on start is on the SQL History page.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -69,29 +69,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             buttonRow.Children.Add(btnRemove);
             panel.Children.Add(buttonRow);
 
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Session Recovery");
-
-            var (rowSession, chkSession) = ctx.Rows.AddToggle(panel,
-                "Enable session recovery",
-                "Save open documents and restore them on next startup");
-            ctx.RegisterSearch("Enable session recovery", "Save open documents and restore them on next startup", "Toggle", rowSession);
-
-            var (rowAutoSave, sldAutoSave, lblAutoSave) = ctx.Rows.AddSlider(panel,
-                "Auto-save interval (seconds)", 30, 300, 60,
-                "How often to save document state for recovery");
-            ctx.RegisterSearch("Auto-save interval (seconds)", "How often to save document state for recovery", "Slider", rowAutoSave);
-
-            var (rowRestore, cboRestore) = ctx.Rows.AddDropdown(panel,
-                "Restore on startup",
-                new[] { "Prompt", "Always", "Never" },
-                "Behavior when opening the IDE after a previous session");
-            ctx.RegisterSearch("Restore on startup", "Behavior when opening the IDE after a previous session", "Dropdown", rowRestore);
-
-            var (rowMaxClosed, sldMaxClosed, lblMaxClosed) = ctx.Rows.AddSlider(panel,
-                "Max closed tabs to remember", 1, 100, 20,
-                "Number of recently closed tabs available for Ctrl+Shift+T restore");
-            ctx.RegisterSearch("Max closed tabs to remember", "Number of recently closed tabs available for Ctrl+Shift+T restore", "Slider", rowMaxClosed);
+            // Spec 040 (HIS-14, T145): session recovery, auto-save and restore on start moved to the
+            // SQL History page.
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Window Title");
@@ -101,8 +80,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Use {server}, {database}, and other placeholders");
             ctx.RegisterSearch("Custom window title template", "Use {server}, {database}, and other placeholders", "Text", rowTitle);
 
-            return new TabsControls(chkEnabled, chkGradient, rulesList, btnAdd, btnEdit, btnRemove,
-                chkSession, sldAutoSave, lblAutoSave, cboRestore, sldMaxClosed, lblMaxClosed, txtTitle);
+            return new TabsControls(chkEnabled, chkGradient, rulesList, btnAdd, btnEdit, btnRemove, txtTitle);
         }
     }
 
@@ -114,18 +92,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public Button AddRuleButton { get; }
         public Button EditRuleButton { get; }
         public Button RemoveRuleButton { get; }
-        private readonly CheckBox _sessionRecovery;
-        private readonly Slider _autoSaveInterval;
-        private readonly TextBlock _autoSaveLabel;
-        private readonly ComboBox _restoreOnStartup;
-        private readonly Slider _maxClosedTabs;
-        private readonly TextBlock _maxClosedTabsLabel;
         private readonly TextBox _customWindowTitle;
 
         public TabsControls(CheckBox coloring, CheckBox gradient, ListBox rulesList,
             Button btnAdd, Button btnEdit, Button btnRemove,
-            CheckBox session, Slider sldAutoSave, TextBlock lblAutoSave,
-            ComboBox restore, Slider sldMaxClosed, TextBlock lblMaxClosed,
             TextBox title)
         {
             _coloringEnabled = coloring;
@@ -134,12 +104,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             AddRuleButton = btnAdd;
             EditRuleButton = btnEdit;
             RemoveRuleButton = btnRemove;
-            _sessionRecovery = session;
-            _autoSaveInterval = sldAutoSave;
-            _autoSaveLabel = lblAutoSave;
-            _restoreOnStartup = restore;
-            _maxClosedTabs = sldMaxClosed;
-            _maxClosedTabsLabel = lblMaxClosed;
             _customWindowTitle = title;
         }
 
@@ -148,18 +112,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var t = settings.Tabs;
             _coloringEnabled.IsChecked = t.ColoringEnabled;
             _gradientColors.IsChecked = t.GradientColors;
-            _sessionRecovery.IsChecked = t.SessionRecovery;
-            _autoSaveInterval.Value = t.AutoSaveInterval;
-            _autoSaveLabel.Text = t.AutoSaveInterval.ToString(CultureInfo.InvariantCulture);
-            _maxClosedTabs.Value = t.MaxClosedTabs;
-            _maxClosedTabsLabel.Text = t.MaxClosedTabs.ToString(CultureInfo.InvariantCulture);
             _customWindowTitle.Text = t.CustomWindowTitle ?? string.Empty;
-            _restoreOnStartup.SelectedIndex = t.RestoreOnStartup?.ToLowerInvariant() switch
-            {
-                "always" => 1,
-                "never"  => 2,
-                _        => 0,
-            };
             // Note: ColoringRulesList is populated by the host's
             // PopulateColoringRulesList — Tabs.ColoringRules CRUD lives there.
         }
@@ -168,16 +121,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             settings.Tabs.ColoringEnabled = _coloringEnabled.IsChecked == true;
             settings.Tabs.GradientColors = _gradientColors.IsChecked == true;
-            settings.Tabs.SessionRecovery = _sessionRecovery.IsChecked == true;
-            settings.Tabs.AutoSaveInterval = (int)_autoSaveInterval.Value;
-            settings.Tabs.MaxClosedTabs = (int)_maxClosedTabs.Value;
             settings.Tabs.CustomWindowTitle = _customWindowTitle.Text ?? string.Empty;
-            settings.Tabs.RestoreOnStartup = _restoreOnStartup.SelectedIndex switch
-            {
-                1 => "always",
-                2 => "never",
-                _ => "prompt",
-            };
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

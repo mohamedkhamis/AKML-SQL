@@ -14,7 +14,6 @@ using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Safety;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Server;
-using AkmlSql.Engine.Sessions;
 using AkmlSql.Engine.Snippets;
 using AkmlSql.Formatting.Profiles;
 using Serilog;
@@ -83,7 +82,6 @@ internal static class EngineHandlerRegistry
         // fresh per call via ctx.EnsureSettings().Ai so the AnalysisSettingsChanged invalidation
         // propagates without an explicit AI refresh hook (FR-013). AiRequestHandler is deleted.
         var aiServices = AiPipelineServices.Build(schemaCache, parser, () => ctx.EnsureSettings().Ai);
-        var sessionRequestHandler = new SessionRequestHandler();
         var gridExportService = new GridExportService();
 
         // History setup (per advisor guidance: build before registering handlers; closures
@@ -305,13 +303,9 @@ internal static class EngineHandlerRegistry
             return Task.FromResult<RpcMessage?>(null);
         });
 
-        // === Session-recovery, History, Productivity, Navigation, CRUD/ScriptAs, GridExport (15 raw) ===
-        router.RegisterRaw(MessageTypes.SessionSave,
-            (msg, ct) => sessionRequestHandler.HandleAsync(msg, MessageTypes.SessionSave));
-        router.RegisterRaw(MessageTypes.SessionRestore,
-            (msg, ct) => sessionRequestHandler.HandleAsync(msg, MessageTypes.SessionRestore));
-        router.RegisterRaw(MessageTypes.SessionDelete,
-            (msg, ct) => sessionRequestHandler.HandleAsync(msg, MessageTypes.SessionDelete));
+        // === History, Productivity, Navigation, CRUD/ScriptAs, GridExport (12 raw) ===
+        // Spec 040 (T147): the session-recovery handlers (50–52) are gone — no shell ever sent them;
+        // restore on start now reopens queries from SQL History.
 
         router.RegisterRaw(MessageTypes.SafetyCheck, (msg, ct) => safetyHandler.HandleAsync(msg));
 

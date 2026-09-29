@@ -40,6 +40,8 @@
 | 8 | `SetOpenStatus` | changed | With `SessionKey` + `OwnerPid`: sets `is_open` and `open_pid` on every row of that session (open) or clears both (close) |
 | **11** | **`ReconcileOpen`** | new | `OwnerPid`, `OpenSessionKeys`. Closes:<br>- rows with `open_pid = OwnerPid` whose session isn't in the list;<br>- rows whose `open_pid` isn't a running process.<br>Response:<br>- `Success`;<br>- **`RestorableEntryIds`**: the representative entry id of every group closed *because its owner process was gone*, i.e. the queries open when SSMS last exited or crashed. Newest first.<br>The shell sends it once after the engine connects; the restore service reads `RestorableEntryIds`. |
 | **12** | **`GetFilterValues`** | new | No input. Response `Servers`, `Databases` (distinct, non-empty, sorted, capped at 500 each) |
+| **13** | **`GetEntries`** | new (T142) | `EntryIds`. Response **`Entries`**: those entries with their full text, query name (`TabTitle`), server, database and `SessionKey`, in the order asked; unknown ids left out; at most 500. Restore on start reads the queries it reopens with it |
+| 7 | `GetVersions` | changed (T137) | With `GroupScope`, each version also carries the `Server` and `Database` it ran on (a snapshot: its run's) |
 
 ### `HistoryActionResponse`
 
@@ -50,6 +52,19 @@
 | **9** | `Servers` | `string[]?` | GetFilterValues |
 | **10** | `Databases` | `string[]?` | GetFilterValues |
 | **11** | `RestorableEntryIds` | `long[]?` | ReconcileOpen: entries that were open at the last exit (restore on start) |
+| **12** | `Entries` | `HistoryEntryDto[]?` | GetEntries |
+
+### `HistoryVersionDto`
+
+| Key | Field | Type | Meaning |
+|---|---|---|---|
+| 0–2 | *(unchanged)* | | Id, SqlText, SavedAt |
+| **3** | `Server` | `string?` | GetVersions with `GroupScope`: where the version ran. Null from older engines |
+| **4** | `Database` | `string?` | Same |
+
+### Retired: session recovery (50 `SessionSave`, 51 `SessionRestore`, 52 `SessionDelete`)
+
+Removed in T147. No shell ever sent them (the shell's session-recovery classes were never compiled); restore on start reopens queries from SQL History instead. The numbers stay reserved.
 
 ### `HistoryEntryDto`
 

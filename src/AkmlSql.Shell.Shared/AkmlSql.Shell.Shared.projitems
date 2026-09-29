@@ -183,6 +183,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DocumentSessionKeys.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\OpenStateReporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\DraftCapturePolicy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryAdvancedSearch.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryQueryOpener.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRestoreService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\RestoreQueriesDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\VersionLoadGuard.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRestoreState.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />

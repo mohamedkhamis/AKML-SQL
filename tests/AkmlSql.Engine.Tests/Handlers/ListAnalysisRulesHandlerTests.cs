@@ -9,7 +9,6 @@ using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Handlers.Analysis;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Server;
-using AkmlSql.Engine.Sessions;
 using AkmlSql.Engine.Transports;
 using MessagePack;
 using Serilog;

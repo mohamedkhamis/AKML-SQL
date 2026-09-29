@@ -48,5 +48,13 @@ namespace AkmlSql.Shell.Shared.Tabs
                 return brush;
             });
         }
+
+        /// <summary>Black or white, whichever reads better on <paramref name="hex"/> (BT.601 luminance).</summary>
+        public static SolidColorBrush ContrastFor(string? hex)
+        {
+            if (!TryParse(hex, out var color)) return Brushes.Black;
+            var luminance = (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255.0;
+            return luminance > 0.55 ? Brushes.Black : Brushes.White;
+        }
     }
 }

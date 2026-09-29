@@ -85,6 +85,12 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
                 FontSize = Typography.Body,
             };
             _box.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            // The text box answers to the name given to the whole preview (e.g. "Preview").
+            _box.SetBinding(System.Windows.Automation.AutomationProperties.NameProperty, new System.Windows.Data.Binding
+            {
+                Path = new PropertyPath(System.Windows.Automation.AutomationProperties.NameProperty),
+                Source = this,
+            });
             _box.ContextMenu = BuildContextMenu();
             // The inner ScrollViewer of a RichTextBox swallows the wheel even when it can't scroll;
             // hand it to the outer viewer that owns both the gutter and the text.
@@ -161,6 +167,34 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
         internal IReadOnlyList<Paragraph> Lines => _document.Blocks.OfType<Paragraph>().ToList();
 
         internal TextBlock Gutter => _gutter;
+
+        /// <summary>The viewer that scrolls the gutter and the text (the compare window keeps two in step).</summary>
+        internal ScrollViewer Scroller => _scroll;
+
+        private IReadOnlyList<int?>? _gutterNumbers;
+        private IReadOnlyDictionary<int, string>? _lineTints;
+
+        /// <summary>
+        /// Spec 040 (HIS-10): the gutter's number for each line (null leaves it blank), instead of
+        /// 1…n — the compare window pads each side with blank filler lines.
+        /// </summary>
+        internal IReadOnlyList<int?>? GutterNumbers
+        {
+            get => _gutterNumbers;
+            set { _gutterNumbers = value; Render(); }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-10): 0-based line → theme brush key, drawn as a faint tint of that colour
+        /// (added, removed and changed lines in the compare window).
+        /// </summary>
+        internal IReadOnlyDictionary<int, string>? LineTints
+        {
+            get => _lineTints;
+            set { _lineTints = value; ApplyLineHighlights(); }
+        }
+
+        internal const double LineTintOpacity = 0.22;
 
         /// <summary>
         /// Column-aware tab expansion: a tab advances to the next multiple of
@@ -307,7 +341,8 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
             for (int i = 1; i <= codeLines; i++)
             {
                 if (i > 1) numbers.Append('\n');
-                numbers.Append(i.ToString(CultureInfo.InvariantCulture));
+                if (_gutterNumbers == null) numbers.Append(i.ToString(CultureInfo.InvariantCulture));
+                else if (i - 1 < _gutterNumbers.Count && _gutterNumbers[i - 1] is int n) numbers.Append(n.ToString(CultureInfo.InvariantCulture));
             }
             if (truncated) numbers.Append('\n');
             _gutter.Text = numbers.ToString();
@@ -340,15 +375,31 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
 
         private void ApplyLineHighlights()
         {
+            Dictionary<string, Brush>? tints = null;
             int index = 0;
             foreach (var block in _document.Blocks)
             {
-                if (_highlightLines.Contains(index))
+                if (_lineTints != null && _lineTints.TryGetValue(index, out var key))
+                {
+                    tints ??= new Dictionary<string, Brush>();
+                    if (!tints.TryGetValue(key, out var tint)) tints[key] = tint = Tint(key);
+                    block.Background = tint;
+                }
+                else if (_highlightLines.Contains(index))
                     block.SetResourceReference(TextElement.BackgroundProperty, ThemeTokens.SurfaceSelection);
                 else
                     block.ClearValue(TextElement.BackgroundProperty);
                 index++;
             }
+        }
+
+        /// <summary>The theme colour behind <paramref name="key"/>, faint, as a frozen brush.</summary>
+        private Brush Tint(string key)
+        {
+            var color = TryFindResource(key) is SolidColorBrush b ? b.Color : Colors.Gray;
+            var brush = new SolidColorBrush(color) { Opacity = LineTintOpacity };
+            brush.Freeze();
+            return brush;
         }
 
         private double CharWidth()

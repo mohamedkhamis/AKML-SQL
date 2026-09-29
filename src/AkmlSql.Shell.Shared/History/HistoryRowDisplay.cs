@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using System.Globalization;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.History;
 
@@ -31,5 +33,30 @@ namespace AkmlSql.Shell.Shared.History
         /// <summary>"&#215;276 &#183; 12 versions". Both halves are omitted when they carry no information.</summary>
         public static string MetaFor(int executionCount, int versionCount) =>
             HistoryDisplayName.MetaFor(executionCount, versionCount);
+
+        /// <summary>Spec 040 (HIS-13): the meta line, led by "Not executed" for a query that was never run (a draft).</summary>
+        public static string MetaFor(int executionCount, int versionCount, int status)
+        {
+            var meta = MetaFor(executionCount, versionCount);
+            if (status != (int)ExecutionStatus.NotExecuted) return meta;
+            return meta.Length == 0 ? "Not executed" : "Not executed \u00B7 " + meta;
+        }
+
+        /// <summary>Spec 040 (HIS-05): "server · database" on the row's second line; either alone when the other is missing.</summary>
+        public static string ConnectionLabel(string? server, string? database)
+        {
+            var hasServer = !string.IsNullOrEmpty(server);
+            var hasDatabase = !string.IsNullOrEmpty(database);
+            if (hasServer && hasDatabase) return server + " \u00B7 " + database;
+            return hasServer ? server! : hasDatabase ? database! : string.Empty;
+        }
+
+        /// <summary>Spec 040 (HIS-05): the date group a row's ISO time falls in — "Today", "Yesterday", … "Older".</summary>
+        public static string DateGroupFor(string? executedAt, DateTime now)
+        {
+            if (!DateTime.TryParse(executedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var when))
+                return HistoryDateGroups.Label(HistoryDateGroup.Older);
+            return HistoryDateGroups.Label(HistoryDateGroups.For(now, when));
+        }
     }
 }

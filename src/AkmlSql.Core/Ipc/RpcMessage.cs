@@ -188,10 +188,9 @@ namespace AkmlSql.Core.Ipc
         public const int HistorySearch = 41;
         public const int HistoryAction = 42;
 
-        // Shell → Engine (Session Recovery — Phase 7)
-        public const int SessionSave = 50;
-        public const int SessionRestore = 51;
-        public const int SessionDelete = 52;
+        // 50–52 (SessionSave / SessionRestore / SessionDelete): retired in spec 040 (T147) — the
+        // session-recovery path was never wired; restore on start reopens queries from SQL History.
+        // Do not reuse these numbers.
 
         // Shell → Engine (Execution Safety — Phase 7)
         public const int SafetyCheck = 55;

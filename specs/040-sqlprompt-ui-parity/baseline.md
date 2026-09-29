@@ -125,3 +125,53 @@ requested but blocked by the session's permission rules, so nothing has been ins
 - T102: no "team" styles exist yet, so Delete refuses built-in and active styles. The ⋮ glyph's
   accessible name (part of T185) was added here because T091 tests it.
 - T098: `IsDirty` is now "differs from the saved values", so setting an option back clears it.
+
+## US5 verification (T148, 2026-09-29)
+
+**Build.** Release solution build (`-t:Restore`, then `-t:Build -p:Configuration=Release -m`):
+green, 0 errors. The warnings are the existing VS threading-analyzer ones.
+
+| Suite | Passed | Failed | Skipped | Against the US4 run |
+|---|---|---|---|---|
+| AkmlSql.Core.Tests | 952 | 1 | 3 | +42 (History date groups, line diff, US5 IPC contracts). Same pre-existing red (`ProfileGetMessageTests…append_only`: the response has 9 keys since spec 039, the test expects 7) |
+| AkmlSql.Engine.Tests | 1,944 | 0 | 0 | +26 US5 tests; 17 min 44 s. The first full run failed 3 timing tests under the parallel load (the two History scale tests at 506/561 ms, and the existing `RefactoringPerformanceTests.SC001`); all 8 passed alone. The scale tests now run in a non-parallel collection after the rest |
+| AkmlSql.Web.Tests | 503 | 42 | 0 | Unchanged: the same 42 sp031 goldens. History 37/37 |
+| AkmlSql.Shell.Shared.Tests | 673 | 0 | 0 | +83 US5 tests (Release; Debug 673/673 too) |
+
+- **Format-parity goldens:** unchanged (`git status tests/format-parity` clean).
+- **Scale (T124):** 100,000 runs in 20,000 sessions: a grouped page and its count in about
+  200 ms, a free-text search in about 250 ms (budget 250 ms each), after the grouped query was
+  rewritten (aggregate first, then page, one pass for the total) and indexed on the group key.
+- **Flaky shell tests:** tests that read `config.json` can fail once in several runs when a test
+  in another xunit collection loads config at the same moment (`ConfigManager.Load` writes the
+  defaults when the file is missing). The new History control, keyboard and restore tests run in
+  the AppData isolation collection, so they don't add to it. Seen this session:
+  `DisableRuleFixActionTests`, `ActiveProfileResolutionTests`, `FormatStylesLifecycleTests`, each
+  once, each green on rerun.
+
+**Found and fixed while testing (outside the US5 tasks):**
+
+- *Show in Error List* never reached the Error List: `ErrorListReporter` fed a `TaskProvider`
+  (the Task List). It is an `ErrorListProvider` now. (Scenario 6.)
+- Every command in the SQL editor's command group was recorded in History as a run:
+  `ExecutionCapture` matched the Query.Execute command by GUID only. It matches GUID and ID now
+  (`ExecutionCommandMatchTests`).
+- A never-run tab could not be offered for restore: the autosave and shutdown drafts did not mark
+  the query open for this SSMS. They do now.
+- Closing a query tab did not refresh an open History window, so the open bar stayed until the
+  next refresh. The close now refreshes it.
+- With rows loaded, a lost engine showed nothing: the centred message only covers an empty list.
+  A banner with Retry now shows above the rows.
+- History rows, versions, search box and preview had no accessible names (a screen reader read
+  `AkmlSql.Core.Ipc.Messages.HistoryEntryDto`). They are named now.
+
+**Quickstart scenarios 29–37 (and 1–28): queued.** The runner drives SSMS only while the desktop
+is visible and idle; the Remote Desktop window has been minimised since 22:45 on 2026-09-28. A
+chain is waiting: it closes the runner's own SSMS, deploys this build (SSMS only, the originals
+kept in `Documents\AKML SQL backups\spec-040-deploy-20260928`), runs scenarios 1, 6, 7, 9–17 and
+29–37 with a Format Styles probe, switches SSMS IntelliSense back on, closes SSMS and restores the
+original `config.json` and History database. Results land in the scratchpad's
+`verifyesults.txt`; they will be recorded here.
+
+**Deviations from tasks.md:** see the notes under T147 (the `GetEntries` action, version
+server/database, `HistoryQueryOpener`, the remove-older date format, the rename refusal text).

@@ -14,8 +14,7 @@ using Serilog;
 // Disambiguate: Microsoft.VisualStudio.Shell.Task (only defined in VS SDK 15.x/16.x
 // used by SSMS 20 and VS 2019) vs System.Threading.Tasks.Task. Newer SDKs don't
 // have the shell-side Task, but the shared project compiles against all six — so
-// we alias here to keep one source tree that builds everywhere. Matches the
-// pattern in Sessions/SessionAutoSave.cs.
+// we alias here to keep one source tree that builds everywhere.
 using Task = System.Threading.Tasks.Task;
 
 namespace AkmlSql.Shell.Shared.Commands

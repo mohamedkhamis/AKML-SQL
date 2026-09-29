@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using AutomationProperties = System.Windows.Automation.AutomationProperties;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
@@ -64,7 +65,10 @@ namespace AkmlSql.Shell.Shared.History
 
         // Status bar elements
         private TextBlock? _statusCountLabel;
-        private TextBlock? _statusLoadingLabel;
+        private Ellipse? _statusSpinner;
+        private Button? _retryButton;
+        private TextBlock? _versionsEmptyText;
+        private TextBlock? _previewEmptyText;
 
         // Centered placeholder overlaid on the query list — distinguishes a pipe-down engine
         // ("History unavailable") from a genuinely empty result ("No queries found").
@@ -74,26 +78,38 @@ namespace AkmlSql.Shell.Shared.History
         // Infinite-scroll guard — prevents duplicate LoadMore fires while one is in flight.
         private bool _loadMoreInFlight;
 
-        public HistoryToolWindowControl()
+        public HistoryToolWindowControl() : this(new HistoryViewModel()) { }
+
+        /// <summary>Spec 040: the view model is injectable, so keys and menus can be tested headlessly.</summary>
+        internal HistoryToolWindowControl(HistoryViewModel viewModel)
         {
-            _viewModel = new HistoryViewModel();
+            _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
             DataContext = _viewModel;
 
             // Wire ViewModel events to DTE actions
             _viewModel.OpenInNewTabRequested += OnOpenInNewTabRequested;
             _viewModel.ReExecuteRequested += OnReExecuteRequested;
             _viewModel.CompareRequested += OnCompareRequested;
+            _viewModel.ActivateDocument = ActivateOpenDocument;
+            _viewModel.PromptRename = current => ShowInputDialog("AKML SQL \u2013 Rename query", "Name:", current);
 
             BuildUi();
 
             // Initialize the ViewModel after UI is built
             Loaded += OnLoaded;
+            Unloaded += (_, __) => ExecutionCapture.HistoryRecorded -= OnHistoryRecorded;
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
+            // Spec 040 (HIS-09): refresh live when a run or draft reaches History.
+            ExecutionCapture.HistoryRecorded -= OnHistoryRecorded;
+            ExecutionCapture.HistoryRecorded += OnHistoryRecorded;
             _viewModel.InitializeAsync();
         }
+
+        private void OnHistoryRecorded(long? entryId) =>
+            Dispatcher.BeginInvoke(new Action(() => _viewModel.OnHistoryRecorded()));
 
         // ================================================================
         // Main UI Construction
@@ -178,15 +194,20 @@ namespace AkmlSql.Shell.Shared.History
                 BorderThickness = new Thickness(0),
                 Background = Brushes.Transparent,
                 Padding = new Thickness(0),
-                ToolTip = "Clear search and filters",
+                ToolTip = "Clear search",
                 FocusVisualStyle = FocusVisualStyles.HighStakes,
                 Content = BuildClearIcon(),
                 Template = BuildBareButtonTemplate()
             };
+            AutomationProperties.SetName(clearButton, "Clear search");
             clearButton.SetBinding(System.Windows.Controls.Primitives.ButtonBase.CommandProperty,
                 new Binding(nameof(HistoryViewModel.ClearFiltersCommand)));
             DockPanel.SetDock(clearButton, Dock.Right);
             searchDock.Children.Add(clearButton);
+
+            var helpButton = BuildSearchHelpButton();
+            DockPanel.SetDock(helpButton, Dock.Right);
+            searchDock.Children.Add(helpButton);
 
             // Search TextBox (fills remaining space) with placeholder overlay.
             var searchBox = new TextBox
@@ -209,7 +230,7 @@ namespace AkmlSql.Shell.Shared.History
 
             var placeholderText = new TextBlock
             {
-                Text = "Search SQL history...",
+                Text = "Search",
                 IsHitTestVisible = false,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
@@ -230,18 +251,19 @@ namespace AkmlSql.Shell.Shared.History
             searchBox.GotFocus += (_, __) => placeholderText.Visibility = Visibility.Collapsed;
             searchBox.LostFocus += (_, __) => SyncPlaceholder();
 
-            // Enter key triggers search (keeps SearchCommand + HistorySearchParser path).
-            searchBox.KeyDown += (s, e) =>
-            {
-                if (e.Key == Key.Enter && _viewModel.SearchCommand.CanExecute(null))
-                {
-                    _viewModel.SearchCommand.Execute(null);
-                }
-            };
+            // Typing searches after a short pause (the view model); Enter searches at once.
+            searchBox.PreviewKeyDown += (s, e) => { if (HandleSearchKey(e.Key)) e.Handled = true; };
+            KeyboardNavigation.SetTabIndex(searchBox, 1); // spec 040 (HIS-11): search → list → versions → preview
+            AutomationProperties.SetName(searchBox, "Search");
+            _searchBox = searchBox;
 
             searchDock.Children.Add(searchGrid); // LastChildFill \u2014 takes remaining space
             searchBorder.Child = searchDock;
             panel.Children.Add(searchBorder);
+
+            // Spec 040 (HIS-07): Advanced search, and the active filters as removable chips.
+            panel.Children.Add(BuildAdvancedSearch());
+            panel.Children.Add(BuildFilterChips());
 
             // ----- "Recent queries" toolbar row -----
             var toolbar = new DockPanel { Margin = new Thickness(0, 0, 0, 4) };
@@ -269,7 +291,7 @@ namespace AkmlSql.Shell.Shared.History
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
-            _favoritesStarButton = CreateToolbarIconButton(_favoritesStarGlyph, "Show favorites only", (_, __) =>
+            _favoritesStarButton = CreateToolbarIconButton(_favoritesStarGlyph, "Show starred queries only", (_, __) =>
             {
                 _viewModel.FavoritesOnly = !_viewModel.FavoritesOnly;
                 if (_viewModel.SearchCommand.CanExecute(null))
@@ -293,7 +315,7 @@ namespace AkmlSql.Shell.Shared.History
             UpdateOpenFilterVisual();
 
             // Source/server menu \u2014 small dropdown over Servers / Databases.
-            var sourceButton = CreateToolbarIconButton(BuildSourceIcon(), "Source / Server", null);
+            var sourceButton = CreateToolbarIconButton(BuildSourceIcon(), "Filter by server or database", null);
             sourceButton.ContextMenu = BuildSourceMenu();
             sourceButton.Click += (s, __) =>
             {
@@ -305,6 +327,23 @@ namespace AkmlSql.Shell.Shared.History
                 }
             };
             iconStack.Children.Add(sourceButton);
+
+            // Spec 040 (HIS-12): the window's own menu — Export and Clear history live here, not on a row.
+            var moreGlyph = new TextBlock { Text = "\u22EF", FontSize = 14, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            moreGlyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            var moreButton = CreateToolbarIconButton(moreGlyph, "More actions", null);
+            var moreMenu = new ContextMenu();
+            moreMenu.Items.Add(new MenuItem { Header = "Export\u2026", Command = _viewModel.ExportCommand });
+            moreMenu.Items.Add(new MenuItem { Header = "Clear history\u2026", Command = _viewModel.ClearHistoryCommand });
+            moreButton.ContextMenu = moreMenu;
+            moreButton.Click += (_, __) =>
+            {
+                moreMenu.PlacementTarget = moreButton;
+                moreMenu.Placement = PlacementMode.Bottom;
+                moreMenu.IsOpen = true;
+            };
+            iconStack.Children.Add(moreButton);
+            _toolbarMoreMenu = moreMenu;
 
             toolbar.Children.Add(iconStack);
 
@@ -319,6 +358,319 @@ namespace AkmlSql.Shell.Shared.History
             toolbar.Children.Add(heading); // LastChildFill
 
             panel.Children.Add(toolbar);
+            return panel;
+        }
+
+        private TextBox? _searchBox;
+        private ContextMenu? _toolbarMoreMenu;
+        private static readonly FontFamily MonoFont = new FontFamily("Consolas");
+
+        /// <summary>The query rows' template, for tests.</summary>
+        internal DataTemplate? QueryItemTemplate => _queryListView?.ItemTemplate;
+
+        /// <summary>The toolbar's ⋯ menu headers, for tests.</summary>
+        internal IReadOnlyList<string> ToolbarMenuHeaders =>
+            _toolbarMoreMenu?.Items.OfType<MenuItem>().Select(i => i.Header as string ?? string.Empty).ToList() ?? new List<string>();
+
+        /// <summary>
+        /// Spec 040 (HIS-07/HIS-11) — the search box's keys: Enter searches now; Esc clears the text,
+        /// and when it is already empty, the filters. True when handled.
+        /// </summary>
+        internal bool HandleSearchKey(Key key)
+        {
+            if (key == Key.Enter)
+            {
+                _viewModel.SearchNow();
+                return true;
+            }
+            if (key != Key.Escape) return false;
+
+            if (!string.IsNullOrEmpty(_viewModel.SearchText)) _viewModel.SearchText = string.Empty;
+            else if (_viewModel.ClearFiltersCommand.CanExecute(null)) _viewModel.ClearFiltersCommand.Execute(null);
+            return true;
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-11) — the list's keys on the selected query: Enter opens, Delete removes
+        /// (after asking), F2 renames, Ctrl+C copies the SQL, Space stars or un-stars. True when handled.
+        /// </summary>
+        internal bool HandleListKey(Key key, ModifierKeys modifiers)
+        {
+            var entry = _viewModel.SelectedEntry;
+            if (entry == null) return false;
+
+            ICommand? command = null;
+            if (modifiers == ModifierKeys.None)
+            {
+                switch (key)
+                {
+                    case Key.Enter: command = _viewModel.OpenInNewTabCommand; break;
+                    case Key.Delete: command = _viewModel.DeleteCommand; break;
+                    case Key.F2: command = _viewModel.RenameCommand; break;
+                    case Key.Space: command = _viewModel.ToggleFavoriteCommand; break;
+                }
+            }
+            else if (modifiers == ModifierKeys.Control && key == Key.C)
+            {
+                command = _viewModel.CopySqlCommand;
+            }
+            if (command == null) return false;
+
+            if (command.CanExecute(entry)) command.Execute(entry);
+            return true;
+        }
+
+        /// <summary>Spec 040 (HIS-07) — "?" beside the search box: every search form, with an example.</summary>
+        private Button BuildSearchHelpButton()
+        {
+            var glyph = new TextBlock { Text = "?", FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            glyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            var button = new Button
+            {
+                Width = 22,
+                Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Padding = new Thickness(0),
+                ToolTip = "Search syntax",
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                Content = glyph,
+                Template = BuildBareButtonTemplate()
+            };
+            AutomationProperties.SetName(button, "Search syntax");
+
+            var rows = new Grid { Margin = new Thickness(10, 8, 10, 8) };
+            rows.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            rows.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var r = 0;
+            foreach (var (syntax, meaning) in HistorySearchParser.HelpRows)
+            {
+                rows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                var s = new TextBlock { Text = syntax, FontFamily = MonoFont, Margin = new Thickness(0, 2, 14, 2) };
+                s.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+                var m = new TextBlock { Text = meaning, TextWrapping = TextWrapping.Wrap, MaxWidth = 320, Margin = new Thickness(0, 2, 0, 2) };
+                m.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                Grid.SetRow(s, r); Grid.SetRow(m, r); Grid.SetColumn(m, 1);
+                rows.Children.Add(s); rows.Children.Add(m);
+                r++;
+            }
+            var card = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Child = rows };
+            card.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceElevated);
+            card.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            var popup = new System.Windows.Controls.Primitives.Popup
+            {
+                Child = card,
+                StaysOpen = false,
+                PlacementTarget = button,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+                AllowsTransparency = true,
+            };
+            button.Click += (_, __) => popup.IsOpen = !popup.IsOpen;
+            return button;
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-07) — "Advanced search" under the search box: Period (with dates for
+        /// Custom), Server, Database, Starred, Open and Reset. Every change searches at once.
+        /// </summary>
+        private FrameworkElement BuildAdvancedSearch()
+        {
+            var advanced = _viewModel.AdvancedSearch;
+            var host = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+
+            var toggle = new TextBlock { Text = "\u25B8 Advanced search", FontSize = 11, Cursor = Cursors.Hand, Focusable = true };
+            toggle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
+            AutomationProperties.SetName(toggle, "Advanced search");
+            host.Children.Add(toggle);
+
+            var body = new Grid { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 0) };
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (var i = 0; i < 5; i++) body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            host.Children.Add(body);
+
+            var applying = false;
+            void Apply()
+            {
+                if (applying) return;
+                _ = _viewModel.ApplyAdvancedSearchAsync();
+            }
+
+            TextBlock Label(string text, int row)
+            {
+                var t = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 8, 2) };
+                t.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                Grid.SetRow(t, row);
+                body.Children.Add(t);
+                return t;
+            }
+
+            // Period
+            Label("Period", 0);
+            var period = new ComboBox { FontSize = 11, Margin = new Thickness(0, 2, 0, 2) };
+            foreach (var (_, label) in HistoryAdvancedSearch.Periods) period.Items.Add(label);
+            ComboBoxTheming.Apply(period);
+            AutomationProperties.SetName(period, "Period");
+            Grid.SetRow(period, 0); Grid.SetColumn(period, 1);
+            body.Children.Add(period);
+
+            // Custom dates
+            var dates = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            var from = new DatePicker { FontSize = 11, Width = 110 };
+            var to = new DatePicker { FontSize = 11, Width = 110, Margin = new Thickness(6, 0, 0, 0) };
+            dates.Children.Add(from); dates.Children.Add(to);
+            AutomationProperties.SetName(from, "From");
+            AutomationProperties.SetName(to, "To");
+            var datesLabel = Label("From / to", 1);
+            Grid.SetRow(dates, 1); Grid.SetColumn(dates, 1);
+            body.Children.Add(dates);
+
+            // Server / Database
+            Label("Server", 2);
+            var server = new ComboBox { FontSize = 11, Margin = new Thickness(0, 2, 0, 2) };
+            ComboBoxTheming.Apply(server);
+            AutomationProperties.SetName(server, "Server");
+            Grid.SetRow(server, 2); Grid.SetColumn(server, 1);
+            body.Children.Add(server);
+            Label("Database", 3);
+            var database = new ComboBox { FontSize = 11, Margin = new Thickness(0, 2, 0, 2) };
+            ComboBoxTheming.Apply(database);
+            AutomationProperties.SetName(database, "Database");
+            Grid.SetRow(database, 3); Grid.SetColumn(database, 1);
+            body.Children.Add(database);
+
+            // Starred / Open / Reset
+            var flags = new DockPanel { Margin = new Thickness(0, 4, 0, 2) };
+            var starred = new CheckBox { Content = "Starred", FontSize = 11, Margin = new Thickness(0, 0, 12, 0) };
+            var openOnly = new CheckBox { Content = "Open", FontSize = 11 };
+            starred.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            openOnly.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            var reset = new Button { Content = "Reset", FontSize = 11, Padding = new Thickness(8, 1, 8, 1) };
+            DockPanel.SetDock(reset, Dock.Right);
+            flags.Children.Add(reset);
+            flags.Children.Add(starred);
+            flags.Children.Add(openOnly);
+            Grid.SetRow(flags, 4); Grid.SetColumnSpan(flags, 2);
+            body.Children.Add(flags);
+
+            const string AllServers = "All servers", AllDatabases = "All databases";
+            void FillLists()
+            {
+                applying = true;
+                try
+                {
+                    server.Items.Clear(); server.Items.Add(AllServers);
+                    foreach (var s in _viewModel.Servers) server.Items.Add(s);
+                    database.Items.Clear(); database.Items.Add(AllDatabases);
+                    foreach (var d in _viewModel.Databases) database.Items.Add(d);
+                }
+                finally { applying = false; }
+                ShowState();
+            }
+
+            void ShowState()
+            {
+                applying = true;
+                try
+                {
+                    var index = Array.FindIndex(HistoryAdvancedSearch.Periods, p => p.Value == advanced.Period);
+                    period.SelectedIndex = index < 0 ? 0 : index;
+                    var custom = advanced.IsCustom ? Visibility.Visible : Visibility.Collapsed;
+                    dates.Visibility = custom; datesLabel.Visibility = custom;
+                    from.SelectedDate = advanced.From; to.SelectedDate = advanced.To;
+                    server.SelectedItem = advanced.Server ?? AllServers;
+                    database.SelectedItem = advanced.Database ?? AllDatabases;
+                    starred.IsChecked = advanced.Starred;
+                    openOnly.IsChecked = advanced.OpenOnly;
+                }
+                finally { applying = false; }
+            }
+
+            period.SelectionChanged += (_, __) =>
+            {
+                if (applying || period.SelectedIndex < 0) return;
+                advanced.Period = HistoryAdvancedSearch.Periods[period.SelectedIndex].Value;
+                ShowState();
+                if (!advanced.IsCustom) Apply();
+            };
+            from.SelectedDateChanged += (_, __) => { if (applying) return; advanced.From = from.SelectedDate; Apply(); };
+            to.SelectedDateChanged += (_, __) => { if (applying) return; advanced.To = to.SelectedDate; Apply(); };
+            server.SelectionChanged += (_, __) =>
+            {
+                if (applying) return;
+                advanced.Server = server.SelectedItem as string == AllServers ? null : server.SelectedItem as string;
+                Apply();
+            };
+            database.SelectionChanged += (_, __) =>
+            {
+                if (applying) return;
+                advanced.Database = database.SelectedItem as string == AllDatabases ? null : database.SelectedItem as string;
+                Apply();
+            };
+            starred.Click += (_, __) => { advanced.Starred = starred.IsChecked == true; Apply(); };
+            openOnly.Click += (_, __) => { advanced.OpenOnly = openOnly.IsChecked == true; Apply(); };
+            reset.Click += (_, __) => { advanced.Reset(); ShowState(); Apply(); };
+
+            async void Toggle()
+            {
+                var opening = body.Visibility != Visibility.Visible;
+                body.Visibility = opening ? Visibility.Visible : Visibility.Collapsed;
+                toggle.Text = (opening ? "\u25BE" : "\u25B8") + " Advanced search";
+                if (!opening) return;
+                try { await _viewModel.LoadFilterValuesAsync(); }
+                catch (Exception ex) { Serilog.Log.Debug(ex, "History: filter values failed"); }
+                FillLists();
+            }
+            toggle.MouseLeftButtonUp += (_, __) => Toggle();
+            toggle.KeyDown += (_, e) => { if (e.Key == Key.Enter || e.Key == Key.Space) { Toggle(); e.Handled = true; } };
+
+            // Chips removed elsewhere (or a remembered state) show here too.
+            _viewModel.ActiveFilterChips.CollectionChanged += (_, __) => { if (body.Visibility == Visibility.Visible) ShowState(); };
+            return host;
+        }
+
+        /// <summary>Spec 040 (HIS-07) — the active filters, each with a remove button.</summary>
+        private FrameworkElement BuildFilterChips()
+        {
+            var panel = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+            void Rebuild()
+            {
+                panel.Children.Clear();
+                foreach (var chip in _viewModel.ActiveFilterChips)
+                {
+                    var text = new TextBlock { Text = chip.Label, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+                    text.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+                    var remove = new Button
+                    {
+                        Content = "\u00D7",
+                        FontSize = 11,
+                        Padding = new Thickness(4, 0, 2, 0),
+                        BorderThickness = new Thickness(0),
+                        Background = Brushes.Transparent,
+                        Cursor = Cursors.Hand,
+                        Command = chip.Remove,
+                        CommandParameter = chip,
+                        Template = BuildBareButtonTemplate(),
+                        ToolTip = "Remove this filter",
+                    };
+                    remove.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextSecondary);
+                    AutomationProperties.SetName(remove, "Remove filter " + chip.Label);
+                    var pill = new Border
+                    {
+                        CornerRadius = new CornerRadius(9),
+                        BorderThickness = new Thickness(1),
+                        Padding = new Thickness(8, 1, 4, 1),
+                        Margin = new Thickness(0, 0, 4, 2),
+                        Child = new StackPanel { Orientation = Orientation.Horizontal, Children = { text, remove } },
+                    };
+                    pill.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceSelection);
+                    pill.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+                    panel.Children.Add(pill);
+                }
+                panel.Visibility = panel.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            _viewModel.ActiveFilterChips.CollectionChanged += (_, __) => Rebuild();
+            Rebuild();
             return panel;
         }
 
@@ -438,6 +790,7 @@ namespace AkmlSql.Shell.Shared.History
                 Template = BuildBareButtonTemplate()
             };
             if (onClick != null) button.Click += onClick;
+            AutomationProperties.SetName(button, toolTip); // spec 040 (T185): icon-only controls are named
             return button;
         }
 
@@ -688,7 +1041,7 @@ namespace AkmlSql.Shell.Shared.History
             // Bind ItemsSource through a CollectionViewSource that groups by date bucket.
             var cvs = new CollectionViewSource { Source = _viewModel.Entries };
             cvs.GroupDescriptions.Add(
-                new PropertyGroupDescription(nameof(HistoryEntryDto.ExecutedAt), new DateBucketConverter()));
+                new PropertyGroupDescription(nameof(HistoryEntryDto.ExecutedAt), new HistoryDateGroupConverter()));
             _queryListView.ItemsSource = cvs.View;
 
             // Item template: 2-line row per entry.
@@ -700,16 +1053,27 @@ namespace AkmlSql.Shell.Shared.History
             // GroupStyle: collapsible chevron + bucket name header.
             _queryListView.GroupStyle.Add(CreateDateGroupStyle());
 
-            // Context menu \u2014 all entry actions (Copy/Open/Re-run/Compare/Export/Delete + Rename/Favorite).
-            _queryListView.ContextMenu = BuildQueryContextMenu();
+            // Spec 040 (HIS-12): the row menu, filled for the row it opens on.
+            _queryListView.ContextMenu = _rowMenu;
+            _queryListView.ContextMenuOpening += OnListContextMenuOpening;
 
             // Events \u2014 the selection chain (preview drive + metadata + version load) is preserved here.
             _queryListView.MouseDoubleClick += OnListViewDoubleClick;
             _queryListView.SelectionChanged += OnListViewSelectionChanged;
+            _queryListView.PreviewKeyDown += (_, e) =>
+            {
+                if (Keyboard.FocusedElement is TextBox) return; // not while typing in the list (none today)
+                if (HandleListKey(e.Key, Keyboard.Modifiers)) e.Handled = true;
+            };
+            KeyboardNavigation.SetTabIndex(_queryListView, 2);
+            AutomationProperties.SetName(_queryListView, "Queries");
 
             // Infinite scroll \u2014 load more when scrolled near the bottom.
             _queryListView.AddHandler(ScrollViewer.ScrollChangedEvent,
                 new ScrollChangedEventHandler(OnQueryListScrollChanged));
+
+            // Spec 040 (HIS-13): with rows still shown, a banner above them says the engine is gone.
+            dock.Children.Add(BuildDisconnectedBanner());
 
             // Overlay a centered empty/disconnected placeholder on top of the list so a pipe-down
             // engine or a no-results search reads clearly instead of a silent blank list.
@@ -720,6 +1084,47 @@ namespace AkmlSql.Shell.Shared.History
 
             UpdateEmptyState();
             return dock;
+        }
+
+        private Border? _disconnectedBanner;
+
+        /// <summary>
+        /// Spec 040 (HIS-13): "History is unavailable…" with Retry, above rows that are still shown
+        /// (the centered overlay covers an empty list instead).
+        /// </summary>
+        private FrameworkElement BuildDisconnectedBanner()
+        {
+            var text = new TextBlock
+            {
+                Text = "History is unavailable \u2014 the AKML engine isn't connected.",
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            text.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            var retry = new Button
+            {
+                Content = "Retry",
+                Padding = new Thickness(10, 1, 10, 1),
+                Margin = new Thickness(8, 0, 0, 0),
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                Command = _viewModel.RetryCommand
+            };
+            DockPanel.SetDock(retry, Dock.Right);
+            var row = new DockPanel();
+            row.Children.Add(retry);
+            row.Children.Add(text);
+            _disconnectedBanner = new Border
+            {
+                Padding = new Thickness(8, 4, 8, 4),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Child = row,
+                Visibility = Visibility.Collapsed
+            };
+            _disconnectedBanner.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceElevated);
+            _disconnectedBanner.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.StatusWarning);
+            DockPanel.SetDock(_disconnectedBanner, Dock.Top);
+            return _disconnectedBanner;
         }
 
         /// <summary>Builds the centered, non-interactive placeholder shown over an empty query list.</summary>
@@ -741,10 +1146,22 @@ namespace AkmlSql.Shell.Shared.History
                 VerticalAlignment = VerticalAlignment.Center,
                 MaxWidth = 240,
                 Margin = new Thickness(16),
-                IsHitTestVisible = false,
                 Visibility = Visibility.Collapsed
             };
             _emptyStateOverlay.Children.Add(_emptyStateText);
+
+            // Spec 040 (HIS-13): Retry while the engine is down (it also reloads by itself when it returns).
+            _retryButton = new Button
+            {
+                Content = "Retry",
+                Margin = new Thickness(0, 8, 0, 0),
+                Padding = new Thickness(12, 2, 12, 2),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                Command = _viewModel.RetryCommand,
+                Visibility = Visibility.Collapsed
+            };
+            _emptyStateOverlay.Children.Add(_retryButton);
             return _emptyStateOverlay;
         }
 
@@ -762,7 +1179,7 @@ namespace AkmlSql.Shell.Shared.History
             if (entryCount > 0) return false;
 
             message = isDisconnected
-                ? "History unavailable — the AKML engine is not connected."
+                ? "History is unavailable \u2014 the AKML engine isn't connected."
                 : "No queries found.";
             return true;
         }
@@ -780,6 +1197,11 @@ namespace AkmlSql.Shell.Shared.History
                 _viewModel.IsLoading, _viewModel.IsDisconnected, _viewModel.Entries.Count, out var message);
             if (show) _emptyStateText.Text = message;
             _emptyStateOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            if (_retryButton != null)
+                _retryButton.Visibility = show && _viewModel.IsDisconnected ? Visibility.Visible : Visibility.Collapsed;
+            if (_disconnectedBanner != null)
+                _disconnectedBanner.Visibility = _viewModel.IsDisconnected && !show && !_viewModel.IsLoading
+                    ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>
@@ -812,7 +1234,11 @@ namespace AkmlSql.Shell.Shared.History
             headerDock.AppendChild(chevron);
 
             var name = new FrameworkElementFactory(typeof(TextBlock));
-            name.SetBinding(TextBlock.TextProperty, new Binding("Name")); // DataContext is the CollectionViewGroup
+            // DataContext is the CollectionViewGroup. Spec 040 (HIS-05): "Today (12)".
+            var header = new MultiBinding { StringFormat = "{0} ({1})" };
+            header.Bindings.Add(new Binding("Name"));
+            header.Bindings.Add(new Binding("ItemCount"));
+            name.SetBinding(TextBlock.TextProperty, header);
             name.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
             name.SetValue(TextBlock.FontSizeProperty, 10.5);
             name.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -887,7 +1313,9 @@ namespace AkmlSql.Shell.Shared.History
             openBar.SetValue(ToolTipProperty, "Open in a tab");
             outerDock.AppendChild(openBar);
 
-            // Far-left star toggle (reuses FavoriteIconConverter / FavoriteColorConverter + OnFavoriteStarClick).
+            // Far-left star (spec 040, HIS-11): a focusable button, named for screen readers.
+            var starButton = RowButtonFactory("Star query", Dock.Left, new Thickness(0, 0, 8, 0));
+            starButton.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnRowStarClick));
             var starText = new FrameworkElementFactory(typeof(TextBlock));
             starText.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryEntryDto.IsFavorite))
@@ -900,28 +1328,22 @@ namespace AkmlSql.Shell.Shared.History
                     Converter = new FavoriteColorConverter()
                 });
             starText.SetValue(TextBlock.FontSizeProperty, 14.0);
-            starText.SetValue(DockPanel.DockProperty, Dock.Left);
-            starText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            starText.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
-            starText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
-            starText.SetValue(ToolTipProperty, "Toggle favorite");
-            starText.AddHandler(UIElement.MouseLeftButtonDownEvent,
-                new MouseButtonEventHandler(OnFavoriteStarClick));
-            outerDock.AppendChild(starText);
+            starButton.AppendChild(starText);
+            outerDock.AppendChild(starButton);
 
-            // Far-right overflow "\u22EE" button (opens the query context menu).
+            // Far-right "\u22EE" (spec 040, HIS-12): the row menu, shown while the row is hovered or has focus.
+            var overflowButton = RowButtonFactory("Query actions", Dock.Right, new Thickness(4, 0, 0, 0));
+            overflowButton.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnOverflowClick));
+            var overflowShown = new MultiBinding { Converter = new AnyTrueToVisibleConverter() };
+            overflowShown.Bindings.Add(new Binding(nameof(IsMouseOver)) { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1) });
+            overflowShown.Bindings.Add(new Binding(nameof(IsKeyboardFocusWithin)) { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListViewItem), 1) });
+            overflowButton.SetBinding(VisibilityProperty, overflowShown);
             var overflowText = new FrameworkElementFactory(typeof(TextBlock));
             overflowText.SetValue(TextBlock.TextProperty, "\u22EE");
             overflowText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             overflowText.SetValue(TextBlock.FontSizeProperty, 14.0);
-            overflowText.SetValue(DockPanel.DockProperty, Dock.Right);
-            overflowText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            overflowText.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 0, 0));
-            overflowText.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
-            overflowText.SetValue(ToolTipProperty, "More actions");
-            overflowText.AddHandler(UIElement.MouseLeftButtonDownEvent,
-                new MouseButtonEventHandler(OnOverflowClick));
-            outerDock.AppendChild(overflowText);
+            overflowButton.AppendChild(overflowText);
+            outerDock.AppendChild(overflowButton);
 
             // Center: two-line content stack (fills via LastChildFill).
             var contentStack = new FrameworkElementFactory(typeof(StackPanel));
@@ -942,8 +1364,24 @@ namespace AkmlSql.Shell.Shared.History
             var line2 = new FrameworkElementFactory(typeof(DockPanel));
             line2.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 2, 0, 0));
 
-            // Right side, rendered as "\u25CF server\instance": with Dock.Right the FIRST child added docks
-            // rightmost, so add the server text first then the dot \u2014 the dot lands left-adjacent to it.
+            // Right side: "server · database", then the environment badge (spec 040, HIS-05). With
+            // Dock.Right the FIRST child added docks rightmost, so the badge goes in first.
+            var badge = new FrameworkElementFactory(typeof(Border));
+            badge.SetValue(Border.CornerRadiusProperty, new CornerRadius(3));
+            badge.SetValue(Border.PaddingProperty, new Thickness(4, 0, 4, 0));
+            badge.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
+            badge.SetValue(DockPanel.DockProperty, Dock.Right);
+            badge.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            badge.SetBinding(Border.BackgroundProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Background));
+            badge.SetBinding(VisibilityProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Visibility));
+            var badgeText = new FrameworkElementFactory(typeof(TextBlock));
+            badgeText.SetValue(TextBlock.FontSizeProperty, 9.5);
+            badgeText.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+            badgeText.SetBinding(TextBlock.TextProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Label));
+            badgeText.SetBinding(TextBlock.ForegroundProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Foreground));
+            badge.AppendChild(badgeText);
+            line2.AppendChild(badge);
+
             var connText = new FrameworkElementFactory(typeof(TextBlock));
             connText.SetBinding(TextBlock.TextProperty, new MultiBinding
             {
@@ -1059,6 +1497,9 @@ namespace AkmlSql.Shell.Shared.History
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(2, 0, 2, 0)));
             style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
 
+            // Spec 040 (T185): a screen reader reads the query's name, not the row's type name.
+            style.Setters.Add(new Setter(AutomationProperties.NameProperty, new Binding { Converter = new QueryNameConverter() }));
+
             // Selected state: accent background + left border
             var selectedTrigger = new Trigger
             {
@@ -1079,62 +1520,69 @@ namespace AkmlSql.Shell.Shared.History
             return style;
         }
 
-        private ContextMenu BuildQueryContextMenu()
+        private readonly ContextMenu _rowMenu = new ContextMenu();
+
+        /// <summary>
+        /// Spec 040 (HIS-12) — fills the row menu for <paramref name="entry"/>: every item acts on
+        /// that row, in SQL Prompt's order (contracts/ui.md §4).
+        /// </summary>
+        internal ContextMenu FillRowMenu(HistoryEntryDto entry)
         {
-            var contextMenu = new ContextMenu();
+            _rowMenu.Items.Clear();
+            void Add(string header, ICommand command) =>
+                _rowMenu.Items.Add(new MenuItem { Header = header, Command = command, CommandParameter = entry });
 
-            var copySqlItem = new MenuItem { Header = "Copy SQL" };
-            copySqlItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CopySqlCommand)));
-            contextMenu.Items.Add(copySqlItem);
+            Add("Open query", _viewModel.OpenInNewTabCommand);
+            Add("Copy SQL", _viewModel.CopySqlCommand);
+            Add("Re-execute", _viewModel.ReExecuteCommand);
+            Add("Rename query", _viewModel.RenameCommand);
+            Add("Compare\u2026", _viewModel.CompareCommand);
+            _rowMenu.Items.Add(new Separator());
+            Add("Remove query and its history", _viewModel.DeleteCommand);
+            Add("Remove queries older than this\u2026", _viewModel.RemoveOlderThanCommand);
+            return _rowMenu;
+        }
 
-            var openItem = new MenuItem { Header = "Open in New Tab" };
-            openItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.OpenInNewTabCommand)));
-            contextMenu.Items.Add(openItem);
+        /// <summary>Right-click or the menu key: the menu for the row under the pointer, else the selected row.</summary>
+        private void OnListContextMenuOpening(object sender, ContextMenuEventArgs e)
+        {
+            var entry = (FindAncestor<ListViewItem>(e.OriginalSource as DependencyObject)?.DataContext as HistoryEntryDto)
+                        ?? _viewModel.SelectedEntry;
+            if (entry == null)
+            {
+                e.Handled = true;
+                return;
+            }
+            FillRowMenu(entry);
+        }
 
-            var reExecItem = new MenuItem { Header = "Re-execute" };
-            reExecItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ReExecuteCommand)));
-            contextMenu.Items.Add(reExecItem);
+        private static T? FindAncestor<T>(DependencyObject? node) where T : DependencyObject
+        {
+            while (node != null && node is not T)
+                node = node is Visual || node is System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(node)
+                    : LogicalTreeHelper.GetParent(node);
+            return node as T;
+        }
 
-            contextMenu.Items.Add(new Separator());
-
-            var renameItem = new MenuItem { Header = "Rename" };
-            renameItem.Click += OnRenameMenuItemClick;
-            contextMenu.Items.Add(renameItem);
-
-            var favItem = new MenuItem { Header = "Toggle Favorite" };
-            favItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ToggleFavoriteCommand)));
-            contextMenu.Items.Add(favItem);
-
-            contextMenu.Items.Add(new Separator());
-
-            var compareItem = new MenuItem { Header = "Compare (select 2)" };
-            compareItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.CompareCommand)));
-            contextMenu.Items.Add(compareItem);
-
-            var exportItem = new MenuItem { Header = "Export..." };
-            exportItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.ExportCommand)));
-            contextMenu.Items.Add(exportItem);
-
-            contextMenu.Items.Add(new Separator());
-
-            var deleteItem = new MenuItem { Header = "Delete" };
-            deleteItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.DeleteCommand)));
-            contextMenu.Items.Add(deleteItem);
-
-            // Spec 030 T074 (FR-041) — remove all entries older than the selected one (favorites kept).
-            var removeOlderItem = new MenuItem { Header = "Remove older than this..." };
-            removeOlderItem.SetBinding(MenuItem.CommandProperty,
-                new Binding(nameof(HistoryViewModel.RemoveOlderThanCommand)));
-            contextMenu.Items.Add(removeOlderItem);
-
-            return contextMenu;
+        /// <summary>A chromeless, focusable row button (star, ⋯) named for screen readers; kept out of the Tab order (the list's keys reach them).</summary>
+        private static FrameworkElementFactory RowButtonFactory(string name, Dock dock, Thickness margin)
+        {
+            var button = new FrameworkElementFactory(typeof(Button));
+            button.SetValue(Control.TemplateProperty, BuildBareButtonTemplate());
+            button.SetValue(Control.BackgroundProperty, Brushes.Transparent);
+            button.SetValue(Control.BorderThicknessProperty, new Thickness(0));
+            button.SetValue(Control.PaddingProperty, new Thickness(2, 0, 2, 0));
+            button.SetValue(UIElement.FocusableProperty, true);
+            button.SetValue(Control.IsTabStopProperty, false);
+            // The default focus visual: a shared Style in a template would be sealed into it.
+            button.SetValue(DockPanel.DockProperty, dock);
+            button.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            button.SetValue(FrameworkElement.MarginProperty, margin);
+            button.SetValue(FrameworkElement.CursorProperty, Cursors.Hand);
+            button.SetValue(FrameworkElement.ToolTipProperty, name);
+            button.SetValue(AutomationProperties.NameProperty, name);
+            return button;
         }
 
         // ================================================================
@@ -1168,8 +1616,38 @@ namespace AkmlSql.Shell.Shared.History
             _versionListBox.SetResourceReference(ListBox.BackgroundProperty, ThemeTokens.SurfacePanel);
             _versionListBox.SetResourceReference(ListBox.ForegroundProperty, ThemeTokens.TextPrimary);
             _versionListBox.SelectionChanged += OnVersionSelectionChanged;
+            KeyboardNavigation.SetTabIndex(_versionListBox, 3);
+            AutomationProperties.SetName(_versionListBox, "Versions");
 
-            dock.Children.Add(_versionListBox);
+            // Spec 040 (HIS-10): "Compare with current" on an earlier version.
+            var compareItem = new MenuItem { Header = "Compare with current", Command = _viewModel.CompareWithCurrentCommand };
+            _versionListBox.ContextMenu = new ContextMenu { Items = { compareItem } };
+            _versionListBox.ContextMenuOpening += (_, e) =>
+            {
+                var item = FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) ?? _versionListBox.SelectedItem as ListBoxItem;
+                var index = item == null ? -1 : _versionListBox.Items.IndexOf(item);
+                if (index <= 0 || item?.Tag is not HistoryVersionDto version)
+                {
+                    e.Handled = true; // none, or the current text itself
+                    return;
+                }
+                compareItem.CommandParameter = version;
+            };
+
+            // Spec 040 (HIS-12): an empty state instead of a blank pane.
+            _versionsEmptyText = new TextBlock
+            {
+                Text = "No earlier versions.",
+                FontSize = 11,
+                Margin = new Thickness(10, 4, 10, 4),
+                Visibility = Visibility.Collapsed
+            };
+            _versionsEmptyText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+
+            var body = new Grid();
+            body.Children.Add(_versionListBox);
+            body.Children.Add(_versionsEmptyText);
+            dock.Children.Add(body);
 
             return dock;
         }
@@ -1298,8 +1776,24 @@ namespace AkmlSql.Shell.Shared.History
             // whole query (HistoryViewModel.GetPreviewTextAsync) and can be selected and copied.
             _codePreview = new SqlPreviewView { Padding = new Thickness(4, 6, 4, 6) };
             _codePreview.SetResourceReference(Control.BackgroundProperty, ThemeTokens.EditorPopupBackground);
+            KeyboardNavigation.SetTabIndex(_codePreview, 4);
+            AutomationProperties.SetName(_codePreview, "Preview");
 
-            dock.Children.Add(_codePreview);
+            // Spec 040 (HIS-12): an empty state instead of a blank pane.
+            _previewEmptyText = new TextBlock
+            {
+                Text = "Select a query to see it here.",
+                FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false
+            };
+            _previewEmptyText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+
+            var previewGrid = new Grid();
+            previewGrid.Children.Add(_codePreview);
+            previewGrid.Children.Add(_previewEmptyText);
+            dock.Children.Add(previewGrid);
 
             return dock;
         }
@@ -1348,23 +1842,45 @@ namespace AkmlSql.Shell.Shared.History
             };
             bar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfaceCanvas);
 
-            // Loading indicator
-            _statusLoadingLabel = new TextBlock
+            // Spec 040 (HIS-13): a spinner while a search runs (the CLAUDE.md editor-margin pattern).
+            var spinner = new Ellipse
             {
-                Text = "Loading...",
-                FontStyle = FontStyles.Italic,
-                FontSize = 10.5,
+                Width = 12,
+                Height = 12,
+                StrokeThickness = 1.6,
+                StrokeDashArray = new DoubleCollection { 10, 30 }, // ~90° arc, ~270° gap
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new RotateTransform(0),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 0, 0)
+                Margin = new Thickness(8, 0, 0, 0),
+                ToolTip = "Searching\u2026"
             };
-            _statusLoadingLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            _statusLoadingLabel.SetBinding(VisibilityProperty,
+            spinner.SetResourceReference(Shape.StrokeProperty, ThemeTokens.EditorSpinnerStroke);
+            AutomationProperties.SetName(spinner, "Searching");
+            spinner.SetBinding(VisibilityProperty,
                 new Binding(nameof(HistoryViewModel.IsLoading))
                 {
                     Converter = new BoolToVisibilityConverter()
                 });
-            DockPanel.SetDock(_statusLoadingLabel, Dock.Right);
-            bar.Children.Add(_statusLoadingLabel);
+            spinner.IsVisibleChanged += (_, __) =>
+            {
+                var rotate = (RotateTransform)spinner.RenderTransform;
+                if (spinner.IsVisible)
+                    rotate.BeginAnimation(RotateTransform.AngleProperty, new System.Windows.Media.Animation.DoubleAnimation
+                    {
+                        From = 0,
+                        To = 360,
+                        Duration = TimeSpan.FromMilliseconds(1100),
+                        RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever
+                    });
+                else
+                    rotate.BeginAnimation(RotateTransform.AngleProperty, null);
+            };
+            _statusSpinner = spinner;
+            DockPanel.SetDock(spinner, Dock.Right);
+            bar.Children.Add(spinner);
 
             // Total count
             _statusCountLabel = new TextBlock
@@ -1426,6 +1942,8 @@ namespace AkmlSql.Shell.Shared.History
             if (_codePreview == null) return;
 
             var entry = _viewModel.SelectedEntry;
+            if (_previewEmptyText != null)
+                _previewEmptyText.Visibility = entry == null ? Visibility.Visible : Visibility.Collapsed;
             if (entry == null)
             {
                 _codePreview.Show(string.Empty, null);
@@ -1529,6 +2047,7 @@ namespace AkmlSql.Shell.Shared.History
         {
             if (_versionListBox == null) return;
             _versionListBox.Items.Clear();
+            if (_versionsEmptyText != null) _versionsEmptyText.Visibility = Visibility.Collapsed;
 
             var entry = _viewModel.SelectedEntry;
             if (entry == null)
@@ -1584,7 +2103,13 @@ namespace AkmlSql.Shell.Shared.History
                             timestampText = HistoryTimeFormat.Absolute(savedDt.ToLocalTime());
                         }
 
-                        var itemPanel = new StackPanel { Margin = new Thickness(4, 4, 4, 4) };
+                        // Spec 040 (HIS-12): a page glyph, and "server · environment" under the time.
+                        var itemPanel = new StackPanel();
+                        var itemRow = new DockPanel { Margin = new Thickness(4, 4, 4, 4) };
+                        var glyph = BuildPageIcon();
+                        DockPanel.SetDock(glyph, Dock.Left);
+                        itemRow.Children.Add(glyph);
+                        itemRow.Children.Add(itemPanel);
 
                         var versionLabel = new TextBlock
                         {
@@ -1608,12 +2133,26 @@ namespace AkmlSql.Shell.Shared.History
                             itemPanel.Children.Add(timeLabel);
                         }
 
+                        var where = VersionConnectionLabel(version.Server ?? entry.Server, version.Database ?? entry.Database);
+                        if (where.Length > 0)
+                        {
+                            var whereLabel = new TextBlock
+                            {
+                                Text = where,
+                                FontSize = 9.5,
+                                TextTrimming = TextTrimming.CharacterEllipsis
+                            };
+                            whereLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+                            itemPanel.Children.Add(whereLabel);
+                        }
+
                         var item = new ListBoxItem
                         {
-                            Content = itemPanel,
-                            Tag = version.SqlText,
+                            Content = itemRow,
+                            Tag = version,
                             ToolTip = $"Version {versionNumber} - {version.SavedAt}"
                         };
+                        AutomationProperties.SetName(item, $"{label} {timestampText}".Trim());
                         _versionListBox.Items.Add(item);
 
                         versionNumber--;
@@ -1623,6 +2162,11 @@ namespace AkmlSql.Shell.Shared.History
                     if (_metadataVersionLabel != null && total > 0)
                     {
                         _metadataVersionLabel.Text = $"v{total} of {total}";
+                    }
+                    if (_versionsEmptyText != null && total <= 1)
+                    {
+                        _versionListBox.Items.Clear();
+                        _versionsEmptyText.Visibility = Visibility.Visible;
                     }
                 }
             }
@@ -1639,10 +2183,14 @@ namespace AkmlSql.Shell.Shared.History
         {
             if (_codePreview == null || _versionListBox == null) return;
 
-            if (_versionListBox.SelectedItem is ListBoxItem item && item.Tag is string versionSql)
+            if (_versionListBox.SelectedItem is ListBoxItem item && item.Tag is HistoryVersionDto version)
             {
                 // Same merged syntax + search highlighting pass as the entry-selection preview.
-                RenderPreview(versionSql);
+                RenderPreview(version.SqlText);
+
+                // Spec 040 (HIS-10): Open, Copy SQL and Re-execute now use this version — unless it
+                // is the current text (the first row).
+                _viewModel.SelectedVersion = _versionListBox.SelectedIndex > 0 ? version : null;
 
                 // Update version label in metadata bar
                 if (_metadataVersionLabel != null)
@@ -1652,53 +2200,6 @@ namespace AkmlSql.Shell.Shared.History
                     int versionNum = total - selectedIndex;
                     _metadataVersionLabel.Text = $"v{versionNum} of {total}";
                 }
-            }
-        }
-
-        /// <summary>
-        /// Handles the Rename context menu click. Shows a simple input dialog
-        /// and sends an IPC message to update the entry's tab_title.
-        /// </summary>
-        private async void OnRenameMenuItemClick(object sender, RoutedEventArgs e)
-        {
-            var entry = _viewModel.SelectedEntry;
-            if (entry == null) return;
-
-            // Show a simple WPF input dialog for the new name
-            var currentName = entry.TabTitle ?? string.Empty;
-            var newName = ShowInputDialog("Rename History Entry", "Enter new name:", currentName);
-            if (newName == null || newName == currentName) return;
-
-            try
-            {
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
-
-                var actionRequest = new HistoryActionRequest
-                {
-                    Action = HistoryActions.Rename,
-                    EntryIds = new[] { entry.Id },
-                    NewName = newName
-                };
-
-                var response = await client.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
-                    MessageTypes.HistoryAction, actionRequest, timeoutMs: 5000);
-
-                if (response.Success)
-                {
-                    // Update the local entry for immediate feedback
-                    entry.TabTitle = newName;
-                    // Refresh the list
-                    _viewModel.SearchCommand.Execute(null);
-                }
-                else
-                {
-                    Serilog.Log.Warning("HistoryToolWindowControl: rename failed: {Error}", response.Error);
-                }
-            }
-            catch (Exception ex)
-            {
-                Serilog.Log.Error(ex, "HistoryToolWindowControl: rename failed");
             }
         }
 
@@ -1799,9 +2300,9 @@ namespace AkmlSql.Shell.Shared.History
         /// Handles clicking on the favorite star icon in the list view.
         /// Finds the associated entry and toggles its favorite status.
         /// </summary>
-        private void OnFavoriteStarClick(object sender, MouseButtonEventArgs e)
+        private void OnRowStarClick(object sender, RoutedEventArgs e)
         {
-            if (sender is TextBlock textBlock && textBlock.DataContext is HistoryEntryDto entry)
+            if (sender is FrameworkElement button && button.DataContext is HistoryEntryDto entry)
             {
                 // Spec 040 (HIS-04): the star acts on its own row, whatever is selected.
                 if (_viewModel.ToggleFavoriteCommand.CanExecute(entry))
@@ -1812,24 +2313,41 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>
-        /// Handles clicking on the overflow "..." icon to open the context menu.
-        /// </summary>
-        private void OnOverflowClick(object sender, MouseButtonEventArgs e)
+        /// <summary>The row's ⋯: its own menu, below the button (spec 040, HIS-12: it acts on that row).</summary>
+        private void OnOverflowClick(object sender, RoutedEventArgs e)
         {
-            if (sender is TextBlock textBlock && textBlock.DataContext is HistoryEntryDto entry)
+            if (sender is FrameworkElement button && button.DataContext is HistoryEntryDto entry)
             {
-                _viewModel.SelectedEntry = entry;
-
-                // Open the query list's context menu at the overflow icon position
-                if (_queryListView?.ContextMenu != null)
-                {
-                    _queryListView.ContextMenu.PlacementTarget = textBlock;
-                    _queryListView.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-                    _queryListView.ContextMenu.IsOpen = true;
-                }
+                var menu = FillRowMenu(entry);
+                menu.PlacementTarget = button;
+                menu.Placement = PlacementMode.Bottom;
+                menu.IsOpen = true;
                 e.Handled = true;
             }
+        }
+
+        /// <summary>Switches to the open document named <paramref name="fullName"/> (Open query on an open query).</summary>
+        private bool ActivateOpenDocument(string fullName)
+        {
+            Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                if (dte == null) return false;
+                foreach (EnvDTE.Document document in dte.Documents)
+                {
+                    if (string.Equals(document.FullName, fullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        document.Activate();
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug(ex, "History: could not switch to the open query");
+            }
+            return false;
         }
 
         /// <summary>
@@ -1837,147 +2355,32 @@ namespace AkmlSql.Shell.Shared.History
         /// and sets the connection to the original server/database if available.
         /// </summary>
         private void OnOpenInNewTabRequested(string sqlText, string? server, string? database, string? sessionKey)
-        {
-            try
-            {
-                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
-                if (dte == null)
-                {
-                    Serilog.Log.Warning("HistoryToolWindowControl: DTE service unavailable");
-                    return;
-                }
-
-                // Capture the PREVIOUSLY active document's auth mode BEFORE we create
-                // the new tab (which will steal focus). This lets us build a connection
-                // string that matches the user's current SSMS session (AAD vs Windows)
-                // instead of always hardcoding Integrated Security — otherwise history
-                // restore would fail for AAD-authenticated users just like Phase A did.
-                var preExistingAuth = AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.AuthMode.Unknown;
-                try
-                {
-                    var prevDoc = dte.ActiveDocument;
-                    if (prevDoc != null)
-                    {
-                        var (mode, _) = AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.ReadAuthModeFromDocument(prevDoc);
-                        preExistingAuth = mode;
-                    }
-                }
-                catch { /* best effort */ }
-
-                dte.ItemOperations.NewFile(
-                    @"General\Sql File",
-                    "History.sql",
-                    EnvDTE.Constants.vsViewKindCode);
-
-                var activeDoc = dte.ActiveDocument;
-                var textDocument = activeDoc?.Object("TextDocument") as EnvDTE.TextDocument;
-                if (textDocument != null)
-                {
-                    var editPoint = textDocument.StartPoint.CreateEditPoint();
-                    editPoint.Insert(sqlText);
-                    textDocument.Selection.StartOfDocument();
-                }
-
-                // Spec 040 (HIS-02): the new tab continues the query's session, so running it again
-                // adds to the same history row — unless another open tab already holds that session.
-                if (!string.IsNullOrEmpty(sessionKey) && activeDoc != null)
-                {
-                    try { DocumentSessionKeys.Adopt(activeDoc.FullName, sessionKey!); }
-                    catch (Exception adoptEx) { Serilog.Log.Debug(adoptEx, "History: session adoption skipped"); }
-                }
-
-                // Try to set the connection on the new query window via SSMS ScriptFactory
-                if (!string.IsNullOrEmpty(server))
-                {
-                    try
-                    {
-                        Serilog.Log.Debug("History: restoring connection to {Server}.{Database}", server, database);
-                        var sfType = Type.GetType(
-                            "Microsoft.SqlServer.Management.UI.VSIntegration.ScriptFactory, SqlWorkbench.Interfaces");
-                        if (sfType != null && activeDoc != null)
-                        {
-                            var sfProp = sfType.GetProperty("Instance",
-                                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                            var scriptFactory = sfProp?.GetValue(null);
-                            if (scriptFactory != null)
-                            {
-                                // Try to get the current script and set its connection
-                                var getCurrentScript = sfType.GetMethod("GetCurrentScript");
-                                var currentScript = getCurrentScript?.Invoke(scriptFactory, null);
-                                if (currentScript != null)
-                                {
-                                    // Match the user's current SSMS auth mode. We can't restore
-                                    // a password (SQL auth) or replay an interactive AAD flow, so
-                                    // for those modes we fall back to Integrated Security and let
-                                    // SSMS prompt the user if the token isn't cached.
-                                    string authClause =
-                                        preExistingAuth == AkmlSql.Shell.Shared.Editor.SsmsConnectionDetector.AuthMode.AzureAdIntegrated
-                                            ? "Authentication=Active Directory Integrated"
-                                            : "Integrated Security=True";
-                                    var connStr = string.IsNullOrEmpty(database)
-                                        ? $"Data Source={server};{authClause};Trust Server Certificate=True"
-                                        : $"Data Source={server};Initial Catalog={database};{authClause};Trust Server Certificate=True";
-                                    var setConn = currentScript.GetType().GetMethod("SetConnectionInfo");
-                                    if (setConn != null)
-                                    {
-                                        setConn.Invoke(currentScript, new object[] { connStr });
-                                        Serilog.Log.Information("History: connection set to {Server}.{Database} (auth={Auth})",
-                                            server, database, preExistingAuth);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception connEx)
-                    {
-                        Serilog.Log.Debug(connEx, "History: connection restore failed (non-fatal)");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Serilog.Log.Error(ex, "HistoryToolWindowControl: failed to open SQL in new tab");
-            }
-        }
+            => HistoryQueryOpener.OpenInNewTab(sqlText, server, database, sessionKey, "History.sql");
 
         /// <summary>
-        /// Opens the SQL in a new tab and executes it via DTE's ExecuteCommand.
+        /// Spec 040 (HIS-12): re-execute on the entry's connection. Without one, the text opens in a
+        /// new tab and the status bar asks the user to connect and run it.
         /// </summary>
-        private void OnReExecuteRequested(string sqlText)
+        private void OnReExecuteRequested(string sqlText, string? server, string? database)
         {
             try
             {
-                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
-                if (dte == null)
+                if (!HistoryQueryOpener.OpenInNewTab(sqlText, server, database, sessionKey: null, "ReExecute.sql"))
                 {
-                    Serilog.Log.Warning("HistoryToolWindowControl: DTE service unavailable");
+                    _viewModel.Notify("Connect, then run (F5).");
                     return;
                 }
 
-                // Open SQL in a new tab first
-                dte.ItemOperations.NewFile(
-                    @"General\Sql File",
-                    "ReExecute.sql",
-                    EnvDTE.Constants.vsViewKindCode);
-
-                var activeDoc = dte.ActiveDocument;
-                var textDocument = activeDoc?.Object("TextDocument") as EnvDTE.TextDocument;
-                if (textDocument != null)
+                var dte = (EnvDTE.DTE)Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE));
+                try
                 {
-                    var editPoint = textDocument.StartPoint.CreateEditPoint();
-                    editPoint.Insert(sqlText);
-                    textDocument.Selection.StartOfDocument();
-
-                    // Execute the query (works in SSMS)
-                    try
-                    {
-                        dte.ExecuteCommand("Query.Execute");
-                    }
-                    catch (Exception)
-                    {
-                        // Query.Execute may not be available in all hosts; just open the tab
-                        Serilog.Log.Debug("HistoryToolWindowControl: Query.Execute not available, SQL opened in new tab");
-                    }
+                    dte?.ExecuteCommand("Query.Execute");
+                }
+                catch (Exception)
+                {
+                    // Query.Execute may not be available in all hosts; the tab is open.
+                    Serilog.Log.Debug("HistoryToolWindowControl: Query.Execute not available, SQL opened in new tab");
+                    _viewModel.Notify("Connect, then run (F5).");
                 }
             }
             catch (Exception ex)
@@ -1986,14 +2389,12 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        /// <summary>
-        /// Shows a side-by-side diff view comparing two SQL texts.
-        /// </summary>
-        private void OnCompareRequested(string leftSql, string rightSql)
+        /// <summary>Shows the side-by-side comparison (spec 040, HIS-10).</summary>
+        private void OnCompareRequested(HistoryCompareSide left, HistoryCompareSide right)
         {
             try
             {
-                var diffWindow = new HistoryDiffWindow(leftSql, rightSql);
+                var diffWindow = new HistoryDiffWindow(left, right);
                 diffWindow.ShowDialog();
             }
             catch (Exception ex)
@@ -2030,6 +2431,7 @@ namespace AkmlSql.Shell.Shared.History
             var binding = new MultiBinding { Converter = new MetaConverter() };
             binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.ExecutionCount)));
             binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.VersionCount)));
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.Status)));
             return binding;
         }
 
@@ -2039,6 +2441,16 @@ namespace AkmlSql.Shell.Shared.History
             var binding = new MultiBinding { Converter = new MetaVisibilityConverter() };
             binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.ExecutionCount)));
             binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.VersionCount)));
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.Status)));
+            return binding;
+        }
+
+        /// <summary>Fresh MultiBinding (Server, Database) → one part of the environment badge.</summary>
+        private static MultiBinding EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part part)
+        {
+            var binding = new MultiBinding { Converter = new EnvironmentBadgeConverter(part) };
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.Server)));
+            binding.Bindings.Add(new Binding(nameof(HistoryEntryDto.Database)));
             return binding;
         }
 
@@ -2081,24 +2493,14 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>
-        /// Renders the compact list-row connection label as just the server\instance \u2014 SQL Prompt
-        /// shows only the server here; the database is surfaced in the right-pane metadata bar, so
-        /// the old "server\u2192database" suffix made the rows busier than the reference. Falls back to the
-        /// database name when no server is recorded.
+        /// Spec 040 (HIS-05): the row's connection, "server · database" (<see cref="HistoryRowDisplay.ConnectionLabel"/>).
         /// </summary>
         private class ServerLabelConverter : IMultiValueConverter
         {
             public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
-            {
-                var server = values.Length > 0 ? values[0] as string : null;
-                var database = values.Length > 1 ? values[1] as string : null;
-
-                if (!string.IsNullOrEmpty(server))
-                    return server;
-                if (!string.IsNullOrEmpty(database))
-                    return database;
-                return "";
-            }
+                => HistoryRowDisplay.ConnectionLabel(
+                    values.Length > 0 ? values[0] as string : null,
+                    values.Length > 1 ? values[1] as string : null);
 
             public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
             {
@@ -2335,7 +2737,7 @@ namespace AkmlSql.Shell.Shared.History
         private class MetaConverter : IMultiValueConverter
         {
             public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
-                => HistoryRowDisplay.MetaFor(ExecCountOf(values), VersionCountOf(values));
+                => HistoryRowDisplay.MetaFor(ExecCountOf(values), VersionCountOf(values), StatusOf(values));
 
             public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
             {
@@ -2347,7 +2749,7 @@ namespace AkmlSql.Shell.Shared.History
         private class MetaVisibilityConverter : IMultiValueConverter
         {
             public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
-                => string.IsNullOrEmpty(HistoryRowDisplay.MetaFor(ExecCountOf(values), VersionCountOf(values)))
+                => string.IsNullOrEmpty(HistoryRowDisplay.MetaFor(ExecCountOf(values), VersionCountOf(values), StatusOf(values)))
                     ? Visibility.Collapsed
                     : Visibility.Visible;
 
@@ -2362,6 +2764,81 @@ namespace AkmlSql.Shell.Shared.History
 
         private static int VersionCountOf(object[] values) =>
             values.Length > 1 && values[1] is int vc ? vc : 0;
+
+        private static int StatusOf(object[] values) =>
+            values.Length > 2 && values[2] is int status ? status : 0;
+
+        /// <summary>
+        /// Spec 040 (HIS-05) — the row's environment badge: the label of the first colouring rule the
+        /// row's server and database match, on the rule's colour with black or white text.
+        /// </summary>
+        private sealed class EnvironmentBadgeConverter : IMultiValueConverter
+        {
+            internal enum Part { Label, Background, Foreground, Visibility }
+
+            private readonly Part _part;
+            public EnvironmentBadgeConverter(Part part) => _part = part;
+
+            public object? Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+            {
+                var rule = AkmlSql.Shell.Shared.Tabs.EnvironmentDetector.Match(
+                    values.Length > 0 ? values[0] as string : null,
+                    values.Length > 1 ? values[1] as string : null);
+                var show = rule != null && !string.IsNullOrWhiteSpace(rule.Label);
+                switch (_part)
+                {
+                    case Part.Visibility: return show ? Visibility.Visible : Visibility.Collapsed;
+                    case Part.Label: return show ? rule!.Label : string.Empty;
+                    case Part.Background: return show ? AkmlSql.Shell.Shared.Tabs.HexBrush.Get(rule!.Color) : Brushes.Transparent;
+                    default: return show ? AkmlSql.Shell.Shared.Tabs.HexBrush.ContrastFor(rule!.Color) : Brushes.Transparent;
+                }
+            }
+
+            public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        /// <summary>Visible when any bound value is true, else Hidden (the row keeps its layout).</summary>
+        private sealed class AnyTrueToVisibleConverter : IMultiValueConverter
+        {
+            public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+                => values.Any(v => v is true) ? Visibility.Visible : Visibility.Hidden;
+
+            public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            {
+                throw new NotSupportedException();
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-12): a version row's "server · environment" — the environment is the label of
+        /// the colouring rule the server and database match; without one, "server · database".
+        /// </summary>
+        private static string VersionConnectionLabel(string? server, string? database)
+        {
+            var rule = AkmlSql.Shell.Shared.Tabs.EnvironmentDetector.Match(server, database);
+            return rule != null && !string.IsNullOrWhiteSpace(rule.Label)
+                ? HistoryRowDisplay.ConnectionLabel(server, rule.Label)
+                : HistoryRowDisplay.ConnectionLabel(server, database);
+        }
+
+        /// <summary>A small line-art page with a folded corner (a version row's glyph).</summary>
+        private static Path BuildPageIcon()
+        {
+            var path = new Path
+            {
+                Data = Geometry.Parse("M 0.5,0.5 L 6.5,0.5 L 9.5,3.5 L 9.5,12.5 L 0.5,12.5 Z M 6.5,0.5 L 6.5,3.5 L 9.5,3.5"),
+                StrokeThickness = 1,
+                Width = 10,
+                Height = 13,
+                Margin = new Thickness(0, 2, 6, 0),
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            path.SetResourceReference(Shape.StrokeProperty, ThemeTokens.TextSecondary);
+            return path;
+        }
 
         /// <summary>Converts bool to Visibility.</summary>
         private class BoolToVisibilityConverter : IValueConverter

@@ -769,6 +769,13 @@ namespace AkmlSql.Ssms22
                 HistoryRestoreState.RestorableEntryIds = response?.RestorableEntryIds ?? Array.Empty<long>();
                 Log.Information("History reconcile: {Count} queries were open when SSMS last closed",
                     HistoryRestoreState.RestorableEntryIds.Length);
+
+                // Spec 040 (T144, HIS-14): reopen them as the History settings say (always / ask / never).
+                if (HistoryRestoreState.RestorableEntryIds.Length > 0)
+                {
+                    await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+                    await new HistoryRestoreService().RestoreAsync(HistoryRestoreState.RestorableEntryIds);
+                }
             }
             catch (Exception ex)
             {
