@@ -99,5 +99,21 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.False(ActiveStyleMenuCommands.ActivateSlot(5, cache));
             Assert.Equal("Style 01", ConfigManager.Load().Formatter.ActiveProfile);
         }
+
+        // Spec 040 (T110): SSMS 22's bars, in the order it lists them — the query editor's menu is
+        // "SQL Files Editor Context", not VS's generic "Code Window" (which used to win by coming first).
+        [Fact]
+        public void The_query_editor_context_menu_is_chosen_over_the_generic_code_window()
+        {
+            var ssms = new[]
+            {
+                "Code Window", "SQL Server Template Context Menu", "SQL Server Category Context Menu",
+                "SQL Files Editor Context", "SQL Results Messages Tab Context", "SQL Results Grid Tab Context",
+                "SQL Templates Plan Context",
+            };
+            Assert.Equal("SQL Files Editor Context", ActiveStyleMenuCommands.PickEditorContextBar(ssms));
+            Assert.Equal("Code Window", ActiveStyleMenuCommands.PickEditorContextBar(new[] { "Menu Bar", "Code Window" }));
+            Assert.Null(ActiveStyleMenuCommands.PickEditorContextBar(new[] { "Menu Bar", "SQL Results Grid Tab Context" }));
+        }
     }
 }

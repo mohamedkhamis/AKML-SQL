@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
+using System.Linq;
 using AkmlSql.Core.Config;
 using AkmlSql.Shell.Shared.Commands;
 using AkmlSql.Shell.Shared.StatusBar;
@@ -26,6 +27,20 @@ namespace AkmlSql.Shell.Shared.Formatting
             => slot >= 0 && slot < SlotCount && slot < styles.Count
                 ? (styles[slot].Name, styles[slot].IsActive, true)
                 : ("Style", false, false);
+
+        /// <summary>
+        /// Spec 040 (T110) — the query editor's context menu among SSMS's command bars:
+        /// "SQL Files Editor Context", else another "SQL … Editor Context", else VS's generic
+        /// "Code Window". Null when there is none.
+        /// </summary>
+        internal static string? PickEditorContextBar(IEnumerable<string> barNames)
+        {
+            var names = (barNames ?? Enumerable.Empty<string>()).Where(n => !string.IsNullOrEmpty(n)).ToList();
+            return names.FirstOrDefault(n => string.Equals(n, "SQL Files Editor Context", StringComparison.OrdinalIgnoreCase))
+                ?? names.FirstOrDefault(n => n.IndexOf("SQL", StringComparison.OrdinalIgnoreCase) >= 0
+                                          && n.IndexOf("Editor Context", StringComparison.OrdinalIgnoreCase) >= 0)
+                ?? names.FirstOrDefault(n => string.Equals(n, "Code Window", StringComparison.OrdinalIgnoreCase));
+        }
 
         /// <summary>
         /// Makes slot <paramref name="slot"/>'s style the active one: saves it as

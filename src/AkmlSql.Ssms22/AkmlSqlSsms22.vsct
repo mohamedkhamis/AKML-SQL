@@ -394,14 +394,19 @@
         </Strings>
       </Button>
       <!-- Spec 040 (T106) — AKML SQL › Active Style: one slot per style (text, check and
-           visibility set from ActiveStyleCache when the menu opens) plus Edit Styles…. US7 regroups them. -->
+           visibility set from ActiveStyleCache when the menu opens) plus Edit Styles…. US7 regroups them.
+           Each slot has its own text and canonical name: the Active Style popup is built with DTE
+           (Command.AddControl), and with all 30 named "Style" every control was bound to slot 0
+           (the same name, all visible, all choosing the first style). -->
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot0" priority="0x0680" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 1</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle1</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle1</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot1" priority="0x0681" type="Button">
@@ -410,7 +415,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 2</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle2</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle2</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot2" priority="0x0682" type="Button">
@@ -419,7 +426,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 3</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle3</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle3</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot3" priority="0x0683" type="Button">
@@ -428,7 +437,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 4</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle4</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle4</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot4" priority="0x0684" type="Button">
@@ -437,7 +448,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 5</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle5</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle5</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot5" priority="0x0685" type="Button">
@@ -446,7 +459,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 6</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle6</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle6</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot6" priority="0x0686" type="Button">
@@ -455,7 +470,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 7</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle7</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle7</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot7" priority="0x0687" type="Button">
@@ -464,7 +481,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 8</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle8</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle8</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot8" priority="0x0688" type="Button">
@@ -473,7 +492,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 9</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle9</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle9</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot9" priority="0x0689" type="Button">
@@ -482,7 +503,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 10</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle10</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle10</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot10" priority="0x068A" type="Button">
@@ -491,7 +514,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 11</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle11</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle11</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot11" priority="0x068B" type="Button">
@@ -500,7 +525,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 12</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle12</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle12</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot12" priority="0x068C" type="Button">
@@ -509,7 +536,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 13</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle13</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle13</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot13" priority="0x068D" type="Button">
@@ -518,7 +547,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 14</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle14</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle14</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot14" priority="0x068E" type="Button">
@@ -527,7 +558,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 15</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle15</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle15</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot15" priority="0x068F" type="Button">
@@ -536,7 +569,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 16</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle16</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle16</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot16" priority="0x0690" type="Button">
@@ -545,7 +580,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 17</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle17</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle17</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot17" priority="0x0691" type="Button">
@@ -554,7 +591,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 18</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle18</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle18</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot18" priority="0x0692" type="Button">
@@ -563,7 +602,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 19</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle19</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle19</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot19" priority="0x0693" type="Button">
@@ -572,7 +613,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 20</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle20</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle20</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot20" priority="0x0694" type="Button">
@@ -581,7 +624,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 21</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle21</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle21</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot21" priority="0x0695" type="Button">
@@ -590,7 +635,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 22</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle22</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle22</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot22" priority="0x0696" type="Button">
@@ -599,7 +646,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 23</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle23</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle23</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot23" priority="0x0697" type="Button">
@@ -608,7 +657,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 24</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle24</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle24</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot24" priority="0x0698" type="Button">
@@ -617,7 +668,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 25</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle25</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle25</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot25" priority="0x0699" type="Button">
@@ -626,7 +679,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 26</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle26</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle26</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot26" priority="0x069A" type="Button">
@@ -635,7 +690,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 27</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle27</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle27</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot27" priority="0x069B" type="Button">
@@ -644,7 +701,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 28</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle28</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle28</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot28" priority="0x069C" type="Button">
@@ -653,7 +712,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 29</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle29</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle29</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot29" priority="0x069D" type="Button">
@@ -662,7 +723,9 @@
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
         <Strings>
-          <ButtonText>Style</ButtonText>
+          <ButtonText>Style 30</ButtonText>
+          <CanonicalName>.AkmlSql.ActiveStyle30</CanonicalName>
+          <LocalizedCanonicalName>.AkmlSql.ActiveStyle30</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdEditStyles" priority="0x06A0" type="Button">

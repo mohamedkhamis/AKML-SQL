@@ -581,27 +581,24 @@ namespace AkmlSql.Ssms22
         {
             try
             {
-                dynamic? target = null;
-                string? targetName = null;
+                var byName = new Dictionary<string, dynamic>(StringComparer.OrdinalIgnoreCase);
                 foreach (dynamic bar in bars)
                 {
                     string name;
                     try { name = (string)bar.Name; }
                     catch { continue; }
-                    var candidate =
-                        (name.IndexOf("SQL", StringComparison.OrdinalIgnoreCase) >= 0
-                         && name.IndexOf("Context", StringComparison.OrdinalIgnoreCase) >= 0)
-                        || string.Equals(name, "Code Window", StringComparison.OrdinalIgnoreCase);
-                    if (!candidate) continue;
-                    Log.Debug("Active Style: editor context menu candidate '{Name}'", name);
-                    if (target == null) { target = bar; targetName = name; }
+                    if (!byName.ContainsKey(name)) byName[name] = bar;
                 }
 
-                if (target == null)
+                // The first candidate used to win, which was VS's generic "Code Window" menu, not
+                // the SQL query editor's ("SQL Files Editor Context").
+                var targetName = ActiveStyleMenuCommands.PickEditorContextBar(byName.Keys);
+                if (targetName == null)
                 {
                     Log.Information("Active Style: no editor context menu found");
                     return;
                 }
+                dynamic target = byName[targetName];
 
                 AddActiveStylePopup(dte, target, cmdSetGuid);
                 var format = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdFormatDocument);
