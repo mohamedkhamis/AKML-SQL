@@ -43,8 +43,9 @@ namespace AkmlSql.Shell.Shared.History
 
         private const string QueryExecuteCommandName = "Query.Execute";
 
-        // Cached Query.Execute command GUID — avoids resolving every DTE command
+        // Cached Query.Execute command GUID and ID — avoids resolving every DTE command
         private static string? _queryExecuteGuid;
+        private static int _queryExecuteId;
 
         /// <summary>
         /// Spec 040 (HIS-02): set by the package when SSMS starts shutting down, before its
@@ -89,7 +90,11 @@ namespace AkmlSql.Shell.Shared.History
                 try
                 {
                     var cmd = _dte.Commands.Item(QueryExecuteCommandName);
-                    if (cmd != null) _queryExecuteGuid = cmd.Guid;
+                    if (cmd != null)
+                    {
+                        _queryExecuteId = cmd.ID;
+                        _queryExecuteGuid = cmd.Guid;
+                    }
                 }
                 catch
                 {
@@ -568,6 +573,10 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         internal static bool IsSavedToDisk(string? path) => !string.IsNullOrEmpty(path);
 
+        /// <summary>A DTE command matches only when both its group GUID and its ID do.</summary>
+        internal static bool IsSameCommand(string? guid, int id, string expectedGuid, int expectedId) =>
+            id == expectedId && string.Equals(guid, expectedGuid, StringComparison.OrdinalIgnoreCase);
+
         /// <summary>
         /// Fast check: is this command the Query.Execute command?
         /// Uses the cached GUID when available (avoids per-command COM interop).
@@ -575,10 +584,12 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         private static bool IsQueryExecuteCommand(string guid, int id)
         {
-            // Fast path: compare cached GUID (covers 99%+ of calls — skips non-execute commands instantly)
+            // Fast path: the cached GUID and ID. Spec 040 (HIS): the GUID alone names the whole SQL
+            // editor command group, so every command in it (menu and query-window commands alike)
+            // used to be recorded in History as an execution that never happened.
             if (_queryExecuteGuid != null)
             {
-                return string.Equals(guid, _queryExecuteGuid, StringComparison.OrdinalIgnoreCase);
+                return IsSameCommand(guid, id, _queryExecuteGuid, _queryExecuteId);
             }
 
             // Slow fallback: resolve command name via COM
