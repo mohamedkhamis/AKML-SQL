@@ -1,5 +1,23 @@
 # AKML SQL vs SQL Prompt: UI/UX comparison and gap plan
 
+> **Implementation status (spec 040, branch `040-sqlprompt-ui-parity`):** all 38 items are built.
+> Tasks are in `specs/040-sqlprompt-ui-parity/tasks.md`; verification in `baseline.md` there.
+>
+> | Items | Status | Tasks |
+> |---|---|---|
+> | OPT-01, OPT-02, OPT-03 | Done | T007–T047 (US1) |
+> | HIS-01 … HIS-06 | Done | T048–T074 (US2) |
+> | STY-01, STY-02, STY-03 | Done | T075–T083 (US3) |
+> | STY-04 … STY-09 | Done | T084–T111 (US4) |
+> | HIS-07 … HIS-14 | Done | T112–T148 (US5) |
+> | OPT-04 … OPT-09 | Done | T149–T170 (US6) |
+> | X-01 … X-04, STY-10, STY-11 | Done | T171–T191 (US7) |
+>
+> Deferred (recorded in tasks.md › Deferred and `doc/progress.md`): commands with no handler stay
+> off the AKML SQL menu (X-01); the VSCT menu remains invisible in SSMS 22, so the runtime menu is
+> the one users see (X-01); Format SQL actions lack the AS-keyword and column-alias options (STY-11);
+> "Record failed executions" and "Encrypt at rest" stay hidden until they work (HIS-06).
+
 **Scope:** the SSMS 22 plugin only. The web edition is out of scope.
 
 This plan covers three areas:

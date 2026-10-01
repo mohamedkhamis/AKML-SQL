@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.Safety;
 using AkmlSql.Shell.Shared.Ui;
@@ -95,7 +96,8 @@ namespace AkmlSql.Shell.Shared.Safety
             // "Text on accent" — white in both themes; reads correctly on amber/red severity banners and the destructive button.
             _onAccentBrush = (SolidColorBrush)registry[ThemeTokens.TextOnAccent];
 
-            Title = "Execution Warning";
+            Title = WindowTitles.For("Execution warning");
+            WindowIcon.Apply(this);
             Width = 520;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

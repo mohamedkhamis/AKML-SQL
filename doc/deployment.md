@@ -5,9 +5,9 @@
 | Tool | Version | Purpose |
 |------|---------|---------|
 | .NET SDK | 10.0+ | Build Engine, Updater, Tests |
-| MSBuild | 17.x (VS 2022) | Build Shell extensions |
+| MSBuild | 18.x (Visual Studio 18 Insiders) | Build the SSMS extension and the solution |
 | Inno Setup | 7.x | Build installer |
-| Visual Studio | 2022 | Required for MSBuild |
+| Visual Studio | 18 (Insiders) | Provides MSBuild and the VS SDK build tools |
 
 ---
 
@@ -15,23 +15,32 @@
 
 ### Shell Extensions (MSBuild only — never `dotnet build`)
 
-Shell projects must be built individually with MSBuild to avoid VSCT `.cto` cross-contamination:
+The whole solution builds in one pass with MSBuild (restore first); the SSMS extension can also be
+built on its own:
 
 ```bash
-MSBUILD="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
+
+# Whole solution
+"$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
+"$MSBUILD" AKML-SQL.slnx -t:Build -p:Configuration=Release -m -v:minimal
 
 # Restore and build the SSMS 22 extension (the only shell target; Visual Studio 2026 support was removed)
 "$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Restore -p:Configuration=Release -v:quiet
 "$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Build  -p:Configuration=Release -v:minimal
 ```
 
-> **Critical**: Never `dotnet build` shell projects. Never build via the `.slnx` solution — VSCT CTO files will collide.
+> **Critical**: Never `dotnet build` shell projects — the VS SDK's `CodeTaskFactory` needs full MSBuild.
+> Building through the `.slnx` is fine again: the VSCT `.cto` cross-contamination is fixed (see
+> CLAUDE.md › Build Gotchas). If `ctoFiles.json`, `resources.json` or `mergeCto.cache` ever appear at a
+> drive root, it has come back.
 
 ### Engine (out-of-process IntelliSense host)
 
 ```bash
-dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj \
-  -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+# Self-contained; single-file and trimming are OFF (Microsoft.Data.SqlClient's native SNI
+# interop can't run from a single-file bundle)
+dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj -c Release -r win-x64
 ```
 
 Output: `src/AkmlSql.Engine/bin/Release/net10.0/win-x64/publish/AkmlSql.Engine.exe`

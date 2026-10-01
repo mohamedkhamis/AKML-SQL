@@ -117,10 +117,10 @@ namespace AkmlSql.Shell.Shared.Tests
         [StaFact]
         public void An_agent_with_only_request_parameters_touched_is_kept()
         {
-            // The blank-drop is one notch stricter than validation's blank exemption: moving a
-            // slider is a real (if incomplete) configuration and must survive the save.
+            // The blank-drop is one notch stricter than validation's blank exemption: changing a
+            // request parameter is a real (if incomplete) configuration and must survive the save.
             var (dialog, controls) = BuildPage(new AppSettings());
-            TimeoutSlider(controls).Value = 90;
+            TimeoutBox(controls).Text = "90";
 
             var saved = dialog.GetSettings();
 
@@ -197,7 +197,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
         private static TextBox ModelBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_model");
         private static ComboBox ProviderCombo(AiAssistanceControls controls) => GetField<ComboBox>(controls, "_provider");
-        private static Slider TimeoutSlider(AiAssistanceControls controls) => GetField<Slider>(controls, "_timeout");
+        private static TextBox TimeoutBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_timeout");
 
         private static T GetField<T>(object instance, string name) where T : class
         {

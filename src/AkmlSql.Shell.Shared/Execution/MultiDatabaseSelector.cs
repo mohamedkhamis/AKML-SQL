@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Execution
@@ -31,7 +33,8 @@ namespace AkmlSql.Shell.Shared.Execution
 
         public MultiDatabaseSelector(string serverName)
         {
-            Text = $"Multi-Database Execution — {serverName}";
+            Text = WindowTitles.For($"Multi-database execution — {serverName}");
+            WindowIcon.Apply(this);
             Size = new Size(420, 520);
             MinimumSize = new Size(350, 400);
             FormBorderStyle = FormBorderStyle.Sizable;

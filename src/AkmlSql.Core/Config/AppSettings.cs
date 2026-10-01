@@ -618,6 +618,57 @@ namespace AkmlSql.Core.Config
         /// <summary>Include column data types and nullability as inline comments in INSERT column expansions.</summary>
         [JsonPropertyName("insertColumnsIncludeTypes")]
         public bool InsertColumnsIncludeTypes { get; set; } = true;
+
+        /// <summary>
+        /// Spec 040 (STY-10, FR-064) — a shared folder whose styles are listed as team styles.
+        /// A full local or UNC path (<see cref="TeamStyleFolderValidator"/>); empty = off.
+        /// </summary>
+        [JsonPropertyName("teamStyleFolder")]
+        public string TeamStyleFolder { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 040 (STY-11, FR-065) — what Format Document and Format Selection do ("When you run
+        /// Format SQL, AKML SQL will:"). The defaults are what the shipped styles already do.
+        /// </summary>
+        [JsonPropertyName("formatSqlActions")]
+        public FormatSqlActions FormatSqlActions { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Spec 040 (STY-11, research R29) — the interactive Format SQL actions. Sent to the engine
+    /// with every Format Document / Format Selection (<see cref="FormatSqlActionsMapper"/>); the
+    /// CLI and bulk format keep using the style's own format actions. Only actions the formatter
+    /// can actually perform are here (FR-065).
+    /// </summary>
+    public class FormatSqlActions
+    {
+        public const string Leave = "leave";
+        public const string Insert = "insert";
+        public const string Add = "add";
+        public const string Remove = "remove";
+
+        /// <summary>False keeps the original line breaks and spacing.</summary>
+        [JsonPropertyName("applyLayout")]
+        public bool ApplyLayout { get; set; } = true;
+
+        [JsonPropertyName("applyCasing")]
+        public bool ApplyCasing { get; set; } = true;
+
+        /// <summary><c>"insert"</c>, <c>"remove"</c> or <c>"leave"</c>.</summary>
+        [JsonPropertyName("semicolons")]
+        public string Semicolons { get; set; } = Leave;
+
+        /// <summary><c>"add"</c>, <c>"remove"</c> or <c>"leave"</c>.</summary>
+        [JsonPropertyName("squareBrackets")]
+        public string SquareBrackets { get; set; } = Leave;
+
+        /// <summary>Expands <c>SELECT *</c> from the connected database's columns.</summary>
+        [JsonPropertyName("expandWildcards")]
+        public bool ExpandWildcards { get; set; }
+
+        /// <summary>Adds the schema to unqualified table names from the connected database.</summary>
+        [JsonPropertyName("qualifyObjectNames")]
+        public bool QualifyObjectNames { get; set; }
     }
 
     /// <summary>Settings for the SQL snippet feature.</summary>
@@ -853,6 +904,16 @@ namespace AkmlSql.Core.Config
             new() { Order = 3, Pattern = "*.database.windows.net", MatchTarget = "serverName", Color = "#4488FF", Label = "AZURE" }
         ];
 
+        /// <summary>
+        /// Spec 040 (OPT-08, FR-054) — the named environments (name + colour) the rules pick from.
+        /// Empty in configs written before spec 040 and in a new <see cref="AppSettings"/>:
+        /// <see cref="ConfigManager.Load()"/> fills it from the rules' label/colour pairs, or with the
+        /// four defaults when there are no rules (<see cref="Models.Tabs.TabEnvironmentMigration"/>).
+        /// Not given the defaults here: an older config without the key would then never migrate.
+        /// </summary>
+        [JsonPropertyName("environments")]
+        public List<Models.Tabs.TabEnvironment> Environments { get; set; } = new List<Models.Tabs.TabEnvironment>();
+
         [JsonPropertyName("sessionRecovery")]
         public bool SessionRecovery { get; set; } = true;
 
@@ -897,7 +958,8 @@ namespace AkmlSql.Core.Config
         /// Spec 030 T077 / FR-043 — database name this rule matches against when
         /// <see cref="MatchTarget"/> targets the database. Empty string = no database
         /// restriction (server-name matching only, the prior behaviour). Additive and
-        /// backward-compatible: absent in existing configs and ignored by the server-name matcher.
+        /// backward-compatible: absent in existing configs. Spec 040 (OPT-08): on a server-name
+        /// rule a non-empty value means "this server AND this database".
         /// </summary>
         [JsonPropertyName("databaseName")]
         public string DatabaseName { get; set; } = string.Empty;
@@ -907,6 +969,15 @@ namespace AkmlSql.Core.Config
 
         [JsonPropertyName("label")]
         public string Label { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 040 (OPT-08, FR-054) — the name of the <see cref="TabSettings.Environments"/> entry
+        /// this rule colours with. <see cref="Label"/> and <see cref="Color"/> stay and are rewritten
+        /// from the environment when the Color page saves, because Safety (the PROD check,
+        /// <c>EnvironmentSeverity</c>) and the History badge key on <see cref="Label"/>.
+        /// </summary>
+        [JsonPropertyName("environment")]
+        public string Environment { get; set; } = string.Empty;
     }
 
     /// <summary>Settings for execution safety warnings (Phase 7).</summary>

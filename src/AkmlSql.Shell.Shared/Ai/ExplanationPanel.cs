@@ -2,6 +2,8 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Ai
 {
@@ -31,7 +33,8 @@ namespace AkmlSql.Shell.Shared.Ai
             int latencyMs,
             int tokensUsed)
         {
-            Text = "AI: SQL Explanation";
+            Text = WindowTitles.For("SQL explanation");
+            WindowIcon.Apply(this);
             Size = new Size(620, 540);
             MinimumSize = new Size(400, 300);
             StartPosition = FormStartPosition.CenterParent;

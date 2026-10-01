@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Text;
 using AkmlSql.Shell.Shared.Ui.SqlPreview;
 using AkmlSql.Shell.Shared.Ui.Theme;
@@ -145,7 +146,7 @@ namespace AkmlSql.Shell.Shared.History
             _left = left ?? throw new ArgumentNullException(nameof(left));
             _right = right ?? throw new ArgumentNullException(nameof(right));
 
-            Title = "AKML SQL – SQL History comparison";
+            Title = WindowTitles.For("SQL History comparison");
             Width = 1000;
             Height = 600;
 

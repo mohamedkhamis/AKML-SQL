@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Productivity;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Shell;
@@ -83,7 +84,7 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
         {
             var window = new Window
             {
-                Title = "Command Palette",
+                Title = WindowTitles.For("Command palette"),
                 Width = 600,
                 Height = 400,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -183,8 +184,9 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             _listBox.SetResourceReference(ListBox.ForegroundProperty, ThemeTokens.TextPrimary);
             ScrollViewer.SetHorizontalScrollBarVisibility(_listBox, ScrollBarVisibility.Disabled);
 
-            // Custom ItemTemplate
-            _listBox.ItemTemplate = CreateItemTemplate();
+            // Commands show their shortcut on the right; Options settings (spec 040, OPT-07) show
+            // On / Off there instead. A selector, not ItemTemplate — ItemTemplate would win over it.
+            _listBox.ItemTemplateSelector = new PaletteItemTemplateSelector(CreateItemTemplate(), CreateOptionItemTemplate());
 
             // Bind ItemsSource to FilteredCommands
             _listBox.SetBinding(ItemsControl.ItemsSourceProperty,
@@ -293,6 +295,68 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
             template.VisualTree = dockFactory;
             return template;
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053): an Options setting — the "Options" category, the
+        /// <c>‹page› › ‹label›</c> name and, on the right, the toggle's live <c>On</c> / <c>Off</c>
+        /// (<see cref="OptionPaletteEntry.StateText"/>, which notifies, so the row updates in place
+        /// when the toggle flips).
+        /// </summary>
+        private static DataTemplate CreateOptionItemTemplate()
+        {
+            var template = new DataTemplate(typeof(OptionPaletteEntry));
+
+            var dockFactory = new FrameworkElementFactory(typeof(DockPanel));
+
+            var stateFactory = new FrameworkElementFactory(typeof(TextBlock));
+            stateFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(OptionPaletteEntry.StateText)));
+            stateFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
+            stateFactory.SetValue(TextBlock.FontSizeProperty, 12.0);
+            stateFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+            stateFactory.SetValue(FrameworkElement.MinWidthProperty, 28.0);
+            stateFactory.SetValue(TextBlock.TextAlignmentProperty, TextAlignment.Right);
+            stateFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stateFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(Spacing.Sm, 0, 0, 0));
+            stateFactory.SetValue(DockPanel.DockProperty, Dock.Right);
+            dockFactory.AppendChild(stateFactory);
+
+            var categoryFactory = new FrameworkElementFactory(typeof(TextBlock));
+            categoryFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(CommandEntry.Category)));
+            categoryFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextDisabled);
+            categoryFactory.SetValue(TextBlock.FontSizeProperty, 11.0);
+            categoryFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            categoryFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 6, 0));
+            categoryFactory.SetValue(DockPanel.DockProperty, Dock.Left);
+            dockFactory.AppendChild(categoryFactory);
+
+            var nameFactory = new FrameworkElementFactory(typeof(TextBlock));
+            nameFactory.SetBinding(TextBlock.TextProperty, new Binding(nameof(CommandEntry.Name)));
+            nameFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+            nameFactory.SetValue(TextBlock.FontSizeProperty, 13.0);
+            nameFactory.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+            nameFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            nameFactory.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            dockFactory.AppendChild(nameFactory);
+
+            template.VisualTree = dockFactory;
+            return template;
+        }
+
+        /// <summary>Picks the option template for <see cref="OptionPaletteEntry"/> items, the command template otherwise.</summary>
+        private sealed class PaletteItemTemplateSelector : DataTemplateSelector
+        {
+            private readonly DataTemplate _command;
+            private readonly DataTemplate _option;
+
+            public PaletteItemTemplateSelector(DataTemplate command, DataTemplate option)
+            {
+                _command = command;
+                _option = option;
+            }
+
+            public override DataTemplate SelectTemplate(object item, DependencyObject container) =>
+                item is OptionPaletteEntry ? _option : _command;
         }
 
         #endregion

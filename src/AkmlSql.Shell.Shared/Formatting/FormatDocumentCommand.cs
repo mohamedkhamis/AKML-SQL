@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel.Design;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TextManager.Interop;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -84,12 +85,16 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 var request = new FormatRequest
                 {
-                    SessionId = Guid.NewGuid().ToString("N"),
+                    // Spec 040 (T190): the editor's real session, so Expand wildcards / Qualify
+                    // object names can reach its database's schema cache (was a random GUID).
+                    SessionId = EditorSessionId(),
                     Text = documentText,
                     // Without this the engine gets null, falls back to new FormattingProfile(), and
                     // formats with POCO defaults — so Format SQL ignored the active style entirely.
                     // Resolved per invocation so activating a style takes effect immediately.
                     ProfileName = FormatActionHelper.ResolveActiveProfileName(),
+                    // Spec 040 (STY-11): "When you run Format SQL, AKML SQL will:".
+                    Actions = ResolveFormatSqlActions(),
                 };
 
                 System.Threading.Tasks.Task.Run(async () =>
@@ -126,6 +131,35 @@ namespace AkmlSql.Shell.Shared.Formatting
             catch (Exception ex)
             {
                 Log.Error(ex, "Format document command failed");
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (T190) — the active editor's real <c>AkmlSqlSessionId</c> (the
+        /// <see cref="Refactoring.RefactorCommandHelper.TryGetActiveEditor"/> pattern). It falls back
+        /// to a fresh id only when the editor has no session; formatting itself never needs one.
+        /// </summary>
+        internal static string EditorSessionId()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            return Refactoring.RefactorCommandHelper.TryGetActiveEditor()?.SessionId ?? Guid.NewGuid().ToString("N");
+        }
+
+        /// <summary>
+        /// Spec 040 (STY-11) — the saved Format SQL actions, read per invocation so a change in
+        /// Options applies to the next format. An unreadable config sends the defaults, which are
+        /// today's behaviour.
+        /// </summary>
+        internal static FormatSqlActionsDto ResolveFormatSqlActions()
+        {
+            try
+            {
+                return FormatSqlActionsMapper.ToDto(ConfigManager.Load().Formatter?.FormatSqlActions);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Format SQL actions: config read failed, defaults used");
+                return FormatSqlActionsMapper.ToDto(null);
             }
         }
     }

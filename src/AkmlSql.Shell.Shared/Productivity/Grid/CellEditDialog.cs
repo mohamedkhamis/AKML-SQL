@@ -2,6 +2,8 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
 
@@ -52,7 +54,8 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
             _pkColumnName = pkColumnName;
             _pkValue = pkValue;
 
-            Text = $"{Constants.ProductName} - Edit Cell";
+            Text = WindowTitles.For("Edit cell");
+            WindowIcon.Apply(this);
             Size = new Size(520, 440);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;

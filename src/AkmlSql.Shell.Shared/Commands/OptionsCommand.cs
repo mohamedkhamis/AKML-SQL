@@ -30,6 +30,8 @@ namespace AkmlSql.Shell.Shared.Commands
     internal interface IOptionsDialog
     {
         string? InitialAgentId { get; set; }
+        /// <summary>Spec 040 (T163): the label of an option to scroll to and focus once the window loads.</summary>
+        string? InitialFocusLabel { get; set; }
         bool ShowDialog(string? initialPageKey);
         bool ThemeChangeRequested { get; }
         AppSettings WorkingCopy { get; }
@@ -74,12 +76,21 @@ namespace AkmlSql.Shell.Shared.Commands
         /// must use this rather than saving settings themselves, or the engine keeps serving
         /// stale settings. Returns true when settings were saved.
         /// </summary>
-        internal static bool ShowOptions(string? pageKey, string? agentId)
+        internal static bool ShowOptions(string? pageKey, string? agentId) =>
+            ShowOptions(pageKey, agentId, null);
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053, T163): as <see cref="ShowOptions(string?, string?)"/>, and once
+        /// the window has loaded it scrolls to, flashes and focuses the option labelled
+        /// <paramref name="focusLabel"/> on that page — the Command Palette's way into an option it
+        /// can't toggle in place. A label no page shows just opens the page.
+        /// </summary>
+        internal static bool ShowOptions(string? pageKey, string? agentId, string? focusLabel)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
-                return RunOptionsLoop(pageKey, agentId);
+                return RunOptionsLoop(pageKey, agentId, focusLabel);
             }
             catch (Exception ex)
             {
@@ -97,8 +108,10 @@ namespace AkmlSql.Shell.Shared.Commands
         /// Spec 040 (OPT-02, FR-004) — open, and reopen after a theme pick, until OK or Cancel.
         /// A theme pick reopens the window with the previous window's working copy on the same
         /// page; nothing reaches disk until OK. Cancel restores the theme the dialog opened with.
+        /// <paramref name="focusLabel"/> goes to the first window only — after a theme pick the
+        /// reopened window stays where the user was.
         /// </summary>
-        internal static bool RunOptionsLoop(string? pageKey, string? agentId)
+        internal static bool RunOptionsLoop(string? pageKey, string? agentId, string? focusLabel = null)
         {
             var settings = ConfigManager.Load();
             var originalTheme = settings.Theme;
@@ -107,6 +120,7 @@ namespace AkmlSql.Shell.Shared.Commands
             {
                 var window = CreateDialog(settings);
                 window.InitialAgentId = agentId;
+                window.InitialFocusLabel = focusLabel;
                 bool ok = window.ShowDialog(pageKey);
 
                 switch (NextStep(ok, window.ThemeChangeRequested))
@@ -114,6 +128,7 @@ namespace AkmlSql.Shell.Shared.Commands
                     case OptionsLoopStep.Reopen:
                         settings = window.WorkingCopy;
                         pageKey = window.CurrentPageKey ?? pageKey;
+                        focusLabel = null;
                         continue;
 
                     case OptionsLoopStep.Save:

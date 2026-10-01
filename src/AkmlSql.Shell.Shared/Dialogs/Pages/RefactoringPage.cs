@@ -14,11 +14,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Refactoring";
         public string Display => "Editor › Refactoring";
         public string Title   => "Refactoring";
+        public string HelpTopic => "topics/options#editor-refactoring";
         public string Help    => "Controls Safe Rename: whether occurrences inside comments are renamed too.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "Rename Options");
+            ctx.Rows.AddGroupHeader(panel, "Rename options");
 
             var (rowComments, chkComments) = ctx.Rows.AddToggle(panel,
                 "Include comments in rename scope",

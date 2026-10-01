@@ -7,7 +7,9 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using AkmlSql.Core;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Refactoring
 {
@@ -77,7 +79,8 @@ namespace AkmlSql.Shell.Shared.Refactoring
 
         private void BuildLayout()
         {
-            Text = Constants.ProductName + " - Refactoring Preview";
+            Text = WindowTitles.For("Refactoring preview");
+            WindowIcon.Apply(this);
             Size = new Size(800, 550);
             MinimumSize = new Size(600, 400);
             FormBorderStyle = FormBorderStyle.Sizable;

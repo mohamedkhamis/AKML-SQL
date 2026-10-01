@@ -16,7 +16,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         public string Key     => "ConnectionScope";
         public string Display => "Suggestions › Connections";
-        public string Title   => "Connections & Linked Servers";
+        public string Title   => "Connections";
+        public string HelpTopic => "topics/options#suggestions-connections";
         public string Help    => "Narrow the object-suggestion list to specific databases and/or schemas (leave a field empty for no restriction), and choose whether linked servers are suggested after FROM and JOIN.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -24,13 +25,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.Rows.AddGroupHeader(panel, "Suggestion scope");
 
             var (rowDatabases, txtDatabases) = ctx.Rows.AddTextInput(panel,
-                "Limit databases to (comma-separated)",
-                "Only suggest objects from these databases. Leave empty to allow the connected database.");
+                "Limit databases to",
+                "Comma-separated database names. Only suggest objects from these databases. Leave empty to allow the connected database.");
             ctx.RegisterSearch("Limit databases to", "Only suggest objects from these databases (comma-separated; empty = no restriction)", "Text", rowDatabases);
 
             var (rowSchemas, txtSchemas) = ctx.Rows.AddTextInput(panel,
-                "Limit schemas to (comma-separated)",
-                "Only suggest objects from these schemas (case-insensitive). Leave empty to allow all schemas.");
+                "Limit schemas to",
+                "Comma-separated schema names (case-insensitive). Only suggest objects from these schemas. Leave empty to allow all schemas.");
             ctx.RegisterSearch("Limit schemas to", "Only suggest objects from these schemas (comma-separated; empty = all)", "Text", rowSchemas);
 
             ctx.Rows.AddGroupSeparator(panel);

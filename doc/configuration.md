@@ -164,6 +164,35 @@ It is created automatically on first run with all defaults. The file is written 
 | `respectNoformat` | bool | true | Honor `-- noformat` / `-- endnoformat` region comments |
 | `handleParseErrors` | bool | true | Skip files with parse errors in bulk format instead of aborting |
 | `semanticValidation` | bool | true | Run semantic round-trip validation after formatting |
+| `teamStyleFolder` | string | "" | A shared folder of team formatting styles (local or UNC path; empty = off). Its styles are listed under TEAM STYLES and are read-only when the folder can't be written to. A folder that can't be reached is skipped after 2 seconds. |
+| `formatSqlActions` | object | (below) | What Format Document and Format Selection do, whatever the style says |
+
+`formatSqlActions` (Options › Format › Styles › *When you run Format SQL, AKML SQL will:*):
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `applyLayout` | bool | true | Lay out line breaks and indentation |
+| `applyCasing` | bool | true | Change keyword, function and data type case |
+| `semicolons` | string | "leave" | `insert`, `remove` or `leave` statement-terminating semicolons |
+| `squareBrackets` | string | "leave" | `add`, `remove` or `leave` square brackets around names |
+| `expandWildcards` | bool | false | Replace `SELECT *` with the column list (needs a connection) |
+| `qualifyObjectNames` | bool | false | Add the schema to table names (needs a connection) |
+
+---
+
+## `tabs` Section
+
+Tab colouring by environment (Options › Queries › Color). Only the environment keys are listed here.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `coloringEnabled` | bool | true | Colour query tabs by environment |
+| `gradientColors` | bool | false | Lighter top, base colour bottom |
+| `environments` | array | PRODUCTION #FF4444, STAGING #FFB800, DEV #44BB44, AZURE #4488FF | Named environments: `{ "name": "...", "color": "#RRGGBB" }`. Older configs are given environments from their rules' label and colour when they load. |
+| `coloringRules[].pattern` | string | | Server or server-group pattern; `*` is a wildcard |
+| `coloringRules[].databaseName` | string | "" | When set, the rule matches that server **and** database |
+| `coloringRules[].environment` | string | | The environment the rule picks; its `label` and `color` are written from that environment when the Color page saves |
+| `coloringRules[].order` | int | | Evaluation order (0 first), renumbered when rules are moved |
 
 ---
 

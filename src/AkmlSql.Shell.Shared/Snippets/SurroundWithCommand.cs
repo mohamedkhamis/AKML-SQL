@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -278,7 +279,7 @@ namespace AkmlSql.Shell.Shared.Snippets
 
             public SurroundPickerDialog(SnippetInfo[] candidates)
             {
-                Title = "AKML SQL - Surround With";
+                Title = WindowTitles.For("Surround with");
                 Width = 460;
                 Height = 380;
                 MinWidth = 360;

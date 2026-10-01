@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 
 using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using AkmlSql.Shell.Shared.Ui.Theme;
 
 namespace AkmlSql.Shell.Shared.Editor
@@ -47,7 +48,8 @@ namespace AkmlSql.Shell.Shared.Editor
             _fgBrush = (SolidColorBrush)registry[ThemeTokens.TextPrimary];
             _mutedBrush = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
 
-            Title = "AKML SQL — saved SQL credentials";
+            Title = WindowTitles.For("Saved SQL credentials");
+            WindowIcon.Apply(this);
             Width = 470;
             Height = 360;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

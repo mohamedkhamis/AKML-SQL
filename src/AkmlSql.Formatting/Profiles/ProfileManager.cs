@@ -7,7 +7,7 @@ namespace AkmlSql.Formatting.Profiles;
 /// Built-in profiles come from an install directory; custom profiles live in %AppData%.
 /// </summary>
 [SuppressMessage("ReSharper", "GrammarMistakeInComment")]
-public class ProfileManager
+public partial class ProfileManager
 {
     private const string ProfileExtension = ".akmlstyle";
 
@@ -45,16 +45,24 @@ public class ProfileManager
     /// <param name="customProfilesPath">
     /// Directory for user-created/modified profiles (typically %AppData%/AKML SQL/profiles).
     /// </param>
-    public ProfileManager(string builtInProfilesPath, string customProfilesPath)
+    /// <param name="teamFolderProvider">
+    /// Spec 040 (STY-10) — returns the shared team style folder (empty or null = none). Read on
+    /// every use, so a changed setting applies without a restart.
+    /// </param>
+    public ProfileManager(string builtInProfilesPath, string customProfilesPath, Func<string?>? teamFolderProvider = null)
     {
         _builtInProfilesPath = builtInProfilesPath ?? throw new ArgumentNullException(nameof(builtInProfilesPath));
         _customProfilesPath = customProfilesPath ?? throw new ArgumentNullException(nameof(customProfilesPath));
+        _teamFolderProvider = teamFolderProvider;
     }
+
+    private readonly Func<string?>? _teamFolderProvider;
 
     /// <summary>
     /// Creates a <see cref="ProfileManager"/> using the default paths.
     /// </summary>
-    public static ProfileManager CreateDefault()
+    /// <param name="teamFolderProvider">Spec 040 — the team style folder setting (see the constructor).</param>
+    public static ProfileManager CreateDefault(Func<string?>? teamFolderProvider = null)
     {
         // AKML_APP_DATA_ROOT redirects the styles folder with the rest of AKML's app data
         // (AkmlSql.Core Constants.AppDataPath), so a test engine never writes the user's styles.
@@ -71,7 +79,7 @@ public class ProfileManager
         var assemblyDir = Path.GetDirectoryName(typeof(ProfileManager).Assembly.Location) ?? string.Empty;
         var builtInPath = Path.Combine(assemblyDir, "profiles");
 
-        return new ProfileManager(builtInPath, customPath);
+        return new ProfileManager(builtInPath, customPath, teamFolderProvider);
     }
 
     /// <summary>
@@ -109,11 +117,20 @@ public class ProfileManager
     /// (a custom file claiming built-in status must stay editable).
     /// </param>
     /// <returns>True when a stored profile with the given name exists.</returns>
-    public bool TryReadRaw(string name, out string json, out bool isBuiltIn)
+    public bool TryReadRaw(string name, out string json, out bool isBuiltIn) =>
+        TryReadRaw(name, out json, out isBuiltIn, out _);
+
+    /// <summary>
+    /// <see cref="TryReadRaw(string, out string, out bool)"/>, also saying which folder the style
+    /// resolved from: <see cref="SourceUser"/>, <see cref="SourceTeam"/> or <see cref="SourceBuiltIn"/>
+    /// (spec 040: names resolve user &gt; team &gt; built-in).
+    /// </summary>
+    public bool TryReadRaw(string name, out string json, out bool isBuiltIn, out string? source)
     {
         ArgumentNullException.ThrowIfNull(name);
         json = string.Empty;
         isBuiltIn = false;
+        source = null;
 
         // Tier 1 — exact filename match, custom first (the shadowing precedence both this
         // method and Load() promise). Fast path: one File.Exists per directory.
@@ -121,6 +138,16 @@ public class ProfileManager
         if (File.Exists(customFile))
         {
             json = File.ReadAllText(customFile);
+            source = SourceUser;
+            return true;
+        }
+
+        // Spec 040 — the team folder sits between the user's styles and the built-ins, by file
+        // name or stored name. Off (no cost) unless a team folder is set; bounded when it is.
+        if (_teamFolderProvider != null && TryResolveTeamOwner(name, probeWrite: false, out var team, out _))
+        {
+            json = team.Json;
+            source = SourceTeam;
             return true;
         }
 
@@ -129,6 +156,7 @@ public class ProfileManager
         {
             json = File.ReadAllText(builtInFile);
             isBuiltIn = true;
+            source = SourceBuiltIn;
             return true;
         }
 
@@ -143,6 +171,7 @@ public class ProfileManager
         // case-insensitive filesystems. Same custom-first precedence as tier 1.
         if (TryResolveByMetadataName(name, out json, out isBuiltIn))
         {
+            source = isBuiltIn ? SourceBuiltIn : SourceUser;
             return true;
         }
 
@@ -322,6 +351,14 @@ public class ProfileManager
         // "Khamis Style " would be a second name for the file "Khamis Style.akmlstyle".
         profile.Metadata.Name = name = name.Trim();
 
+        // Spec 040 — a team style is edited where it lives (that is what sharing it means), and a
+        // read-only one is refused rather than quietly turned into a personal copy.
+        if (_teamFolderProvider != null && !File.Exists(GetCustomFilePath(name)) && TeamWriteTarget(name) is { } team)
+        {
+            WriteTeamStyle(team, profile);
+            return;
+        }
+
         Directory.CreateDirectory(_customProfilesPath);
 
         var filePath = GetCustomFilePath(name);
@@ -353,7 +390,8 @@ public class ProfileManager
             throw new ArgumentException("Profile metadata must have a non-empty Name.", nameof(profile));
         if (HasBuiltIn(name))
             throw new InvalidOperationException($"'{name}' is a built-in style name. Choose a different name.");
-        if (File.Exists(GetCustomFilePath(name)) || TryReadByMetadataName(_customProfilesPath, name, out _, out _))
+        if (File.Exists(GetCustomFilePath(name)) || TryReadByMetadataName(_customProfilesPath, name, out _, out _)
+            || (_teamFolderProvider != null && TeamHasName(name)))
             throw new InvalidOperationException($"A style named '{name}' already exists.");
         profile.Metadata.Name = name;
         Save(profile);
@@ -409,6 +447,9 @@ public class ProfileManager
     {
         ArgumentNullException.ThrowIfNull(name);
 
+        // Spec 040 — a read-only team style is refused like every other write to it.
+        if (_teamFolderProvider != null && !File.Exists(GetCustomFilePath(name))) _ = TeamWriteTarget(name);
+
         if (!HasBuiltIn(name))
             throw new InvalidOperationException(
                 $"'{name}' is not a built-in style, so there is no original to reset to. Delete it instead.");
@@ -446,7 +487,16 @@ public class ProfileManager
     /// Lists all available profiles (custom + built-in), returning metadata only.
     /// Custom profiles with the same name shadow built-in ones.
     /// </summary>
-    public IReadOnlyList<ProfileMetadata> List()
+    public IReadOnlyList<ProfileMetadata> List() => List(out _);
+
+    /// <summary>
+    /// <see cref="List()"/>, also saying whether a team folder is set but can't be reached
+    /// (spec 040: the other styles are still listed, within the 2 s budget). Each entry's
+    /// <see cref="ProfileMetadata.Source"/> says where it came from; team styles in a folder that
+    /// can't be written to are <see cref="ProfileMetadata.IsReadOnly"/>. Names resolve
+    /// user &gt; team &gt; built-in.
+    /// </summary>
+    public IReadOnlyList<ProfileMetadata> List(out bool teamFolderUnavailable)
     {
         var profiles = new Dictionary<string, ProfileMetadata>(StringComparer.OrdinalIgnoreCase);
 
@@ -463,11 +513,26 @@ public class ProfileManager
                 var profile = TryLoadMetadata(file, isBuiltIn: true);
                 if (profile != null)
                 {
+                    profile.Source = SourceBuiltIn;
                     profiles[profile.Name] = profile;
                     shipped.Add(profile.Name);
                 }
             }
         }
+
+        // Spec 040 — team styles override built-in ones of the same name, and are overridden by
+        // the user's own. Off unless a team folder is set; an unreachable one lists nothing here.
+        teamFolderUnavailable = false;
+        if (_teamFolderProvider != null)
+        {
+            var team = CurrentTeam(probeWrite: true, out teamFolderUnavailable);
+            if (team != null)
+            {
+                foreach (var profile in TeamListEntries(team))
+                    profiles[profile.Name] = profile;
+            }
+        }
+        _teamFolderUnavailable = teamFolderUnavailable;
 
         // Custom profiles override built-in
         if (Directory.Exists(_customProfilesPath))
@@ -478,6 +543,7 @@ public class ProfileManager
                 if (profile != null)
                 {
                     profile.IsCustomizedBuiltIn = shipped.Contains(profile.Name);
+                    profile.Source = SourceUser;
                     profiles[profile.Name] = profile;
                 }
             }
@@ -495,6 +561,15 @@ public class ProfileManager
     public bool Delete(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
+
+        // Spec 040 — a writable team style is deleted from the team folder; a read-only one is refused.
+        if (_teamFolderProvider != null && !File.Exists(GetCustomFilePath(name)) && TeamWriteTarget(name) is { } team)
+        {
+            File.Delete(team.Path);
+            ForgetTeamSnapshot();
+            _nameResolutionCache.Clear();
+            return true;
+        }
 
         // Checked BEFORE looking for a custom file, and by name rather than by filename. Once
         // built-ins became editable, an overridden built-in IS a custom file, so the old
@@ -540,6 +615,11 @@ public class ProfileManager
 
         var oldFile = GetCustomFilePath(oldName);
         ValidatePathWithinBase(oldFile, _customProfilesPath);
+
+        // Spec 040 — a writable team style is renamed in the team folder; a read-only one is refused.
+        if (_teamFolderProvider != null && !File.Exists(oldFile) && TeamWriteTarget(oldName) is { } team)
+            return RenameTeamStyle(team, oldName, finalName);
+
         if (!File.Exists(oldFile))
         {
             if (File.Exists(GetBuiltInFilePath(oldName)))
@@ -556,6 +636,8 @@ public class ProfileManager
                 throw new InvalidOperationException($"A profile named '{finalName}' already exists.");
             if (File.Exists(GetBuiltInFilePath(finalName)))
                 throw new InvalidOperationException($"'{finalName}' is a built-in style name and cannot be used.");
+            if (_teamFolderProvider != null && TeamHasName(finalName))
+                throw new InvalidOperationException($"A team style named '{finalName}' already exists.");
         }
 
         var newFile = GetCustomFilePath(finalName);

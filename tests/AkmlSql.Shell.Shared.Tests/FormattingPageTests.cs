@@ -44,15 +44,18 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void Page_contains_edit_styles_button_and_behavior_header()
+        public void Page_contains_edit_styles_button_and_the_master_switch_leads()
         {
             var (_, page, _) = BuildFormattingPage(new AppSettings());
 
             var buttons = LogicalTree.Descendants<Button>(page).ToList();
             Assert.Contains(buttons, b => b.Content as string == "Edit formatting styles…");
 
-            var headers = LogicalTree.Descendants<TextBlock>(page).Select(t => t.Text).ToList();
-            Assert.Contains("Behavior", headers);
+            // Spec 040 (OPT-05): "Enable SQL formatter" is the first option; the rest are its children.
+            var texts = LogicalTree.Descendants<TextBlock>(page).Select(t => t.Text).ToList();
+            var master = texts.IndexOf("Enable SQL formatter");
+            Assert.True(master >= 0, "no Enable SQL formatter row");
+            Assert.True(master < texts.IndexOf("Active style"), "Enable SQL formatter must lead the page");
         }
 
         [StaFact]

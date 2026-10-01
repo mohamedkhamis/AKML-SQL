@@ -51,7 +51,10 @@ internal static class EngineHandlerRegistry
         var wildcardHandler = new WildcardExpansionHandler(parser);
         var signatureProvider = new SignatureProvider();
         var quickInfoProvider = new QuickInfoProvider();
-        var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
+        // Spec 040 (STY-10): the team style folder, read per use so a changed setting applies
+        // after AnalysisSettingsChanged invalidates the cached settings — no restart.
+        var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault(
+            () => ctx.EnsureSettings().Formatter.TeamStyleFolder));
 
         var appDataFolder = AkmlSql.Core.Constants.AppDataPath;
         var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");

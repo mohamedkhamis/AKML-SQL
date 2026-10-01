@@ -834,53 +834,53 @@ It covers gap items OPT-04 to OPT-09.
 
 ### Tests for User Story 6 (write first)
 
-- [ ] T149 [P] [US6] Rewrite `tests/AkmlSql.Shell.Shared.Tests/OptionsNavStructureTests.cs` to pin contracts/ui.md §1 exactly: group headers, leaf labels, order and page keys (Tags), plus breadcrumb (`Display`) == tree path. Keep the existing AI deep-link assertion (`TestBuildWindowForRenderTest("AI Assistance")`); it now finds a top-level leaf "AI assistance".
-- [ ] T150 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/RowFactoryGatingAndNumberTests.cs`:
+- [X] T149 [P] [US6] Rewrite `tests/AkmlSql.Shell.Shared.Tests/OptionsNavStructureTests.cs` to pin contracts/ui.md §1 exactly: group headers, leaf labels, order and page keys (Tags), plus breadcrumb (`Display`) == tree path. Keep the existing AI deep-link assertion (`TestBuildWindowForRenderTest("AI Assistance")`); it now finds a top-level leaf "AI assistance".
+- [X] T150 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/RowFactoryGatingAndNumberTests.cs`:
   - a child row is disabled with its label in `TextDisabled` while its parent CheckBox is unchecked, and re-enabled on check;
   - `AddNumber` accepts `250000`, rejects `abc` (red border, previous value kept), clamps to the range, and ▲/▼ step by `step`.
-- [ ] T151 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsPaletteTests.cs`:
+- [X] T151 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/OptionsPaletteTests.cs`:
   - `SettingsWindow.BuildOptionsCatalog(settings)` contains "Show nullability info" (Kind Toggle, PageKey `IntelliSense`), and excludes every AI Assistance row and every Info/Button row.
   - Toggling that entry through the palette handler changes **only** `IntelliSense.ShowNullability` in `config.json` (compare the JSON before and after, AppData isolated).
   - `ShowOptions(pageKey, null, "Retention (days)")` passes the label to the window through `WindowFactoryOverride` (T023). A `SettingsWindow` built without being shown, with `InitialFocusLabel = "Retention (days)"`, selects the History page and focuses that row once loaded.
-- [ ] T152 [P] [US6] Write `tests/AkmlSql.Core.Tests/Config/TabEnvironmentsMigrationTests.cs`:
+- [X] T152 [P] [US6] Write `tests/AkmlSql.Core.Tests/Config/TabEnvironmentsMigrationTests.cs`:
   - stock rules → four environments (PRODUCTION #FF4444, STAGING #FFB800, DEV #44BB44, AZURE #4488FF) and every rule linked;
   - duplicate labels with different colours → `Label (2)`;
   - a second load is idempotent;
   - no rules → the four defaults are seeded.
 
   Also write `tests/AkmlSql.Core.Tests/Tabs/EnvironmentMatcherServerDatabaseTests.cs`: a server rule with a non-empty `DatabaseName` matches only that server **and** database. Existing matcher tests stay green.
-- [ ] T153 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/ManageRulesWindowTests.cs` (`[StaFact]`):
+- [X] T153 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/ManageRulesWindowTests.cs` (`[StaFact]`):
   - the WPF window, given the same rule DTOs as the old dialog, returns identical `GetOverrides()` for a set of edits: only changed rows; a row set back to its default removes the override;
   - `RestoreSessionSuppressions` lists the restored ids;
   - rows are grouped by category.
-- [ ] T154 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/ThemedButtonPageThemeTests.cs`: `ThemedButton.ApplySecondary(button, PageTheme.Dark)` gives the button a template whose background, hover and pressed brushes come from the dark `PageTheme`, not the stock Aero chrome, using the pattern in `OptionsHoverContrastTests`.
-- [ ] T155 [P] [US6] Write `tests/AkmlSql.Core.Tests/Tabs/EnvironmentValidatorTests.cs` for the pure `EnvironmentValidator` (created in T164):
+- [X] T154 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/ThemedButtonPageThemeTests.cs`: `ThemedButton.ApplySecondary(button, PageTheme.Dark)` gives the button a template whose background, hover and pressed brushes come from the dark `PageTheme`, not the stock Aero chrome, using the pattern in `OptionsHoverContrastTests`.
+- [X] T155 [P] [US6] Write `tests/AkmlSql.Core.Tests/Tabs/EnvironmentValidatorTests.cs` for the pure `EnvironmentValidator` (created in T164):
   - names are unique (case-insensitive) and 1–40 characters;
   - colours match `^#[0-9A-Fa-f]{6}$`;
   - `CanDelete(name, rules)` is false when a rule uses the environment, and returns the rule patterns for the message.
-- [ ] T156 [P] [US6] Write `tests/AkmlSql.Core.Tests/Tabs/ColoringRuleOrderingTests.cs` for `ColoringRuleOrdering.Move(rules, index, delta)` (created in T164):
+- [X] T156 [P] [US6] Write `tests/AkmlSql.Core.Tests/Tabs/ColoringRuleOrderingTests.cs` for `ColoringRuleOrdering.Move(rules, index, delta)` (created in T164):
   - moving up or down swaps neighbours;
   - moves past either end are ignored;
   - `Order` is always renumbered 0..n-1, which also fixes duplicate orders left by older configs.
-- [ ] T157 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/PageThemeHighContrastTests.cs` (`[StaFact]`):
+- [X] T157 [P] [US6] Write `tests/AkmlSql.Shell.Shared.Tests/PageThemeHighContrastTests.cs` (`[StaFact]`):
   - with the high-contrast override on (a test seam next to `HostThemeWatcher.VariantOverrideForTests`), the Options window builds with `PageTheme.HighContrast`;
   - every `PageTheme.HighContrast` brush comes from `ThemePalette.HighContrast` (system colours), not the Light or Dark values.
 
 ### Implementation for User Story 6
 
-- [ ] T158 [US6] Rebuild the Options tree to contracts/ui.md §1 in `src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs`:
+- [X] T158 [US6] Rebuild the Options tree to contracts/ui.md §1 in `src/AkmlSql.Shell.Shared/Dialogs/SettingsWindow.cs`:
   - **Tree** (`CreateSidebar` ~:527-570): `AddTreeGroup`/`AddTreeLeaf` calls in the exact order and labels, in sentence case.
   - **`pages[]`** (~:1140-1167): the same order.
   - **Page keys stay unchanged.**
   - **Each page's `Display` and `Title`** (`src/AkmlSql.Shell.Shared/Dialogs/Pages/*Page.cs`): `Display` is the breadcrumb (e.g. `Suggestions › Warnings & highlighting` for `SafetyPage`, `Inserted code › Objects & statements` for `InsertStatementsPage`, `Queries › Color` for `TabsPage`, `Navigation` for `NavigationPage`); `Title` is the last segment.
-- [ ] T159 [P] [US6] Plain-language labels:
+- [X] T159 [P] [US6] Plain-language labels:
   - "Tables Alias" → "Suggest table aliases" (`IntelliSensePage.cs`);
   - "Temperature (x10)" → "Creativity (temperature)" (`AiAssistancePage.cs`);
   - group headers in sentence case on every page (e.g. "Refresh behavior", "Rename options");
   - every `ctx.RegisterSearch` label equals its on-page label (e.g. the column picker "Default sort"; the alias map label);
   - remove the "SQL Prompt style" wording from the Behavior descriptions.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
-- [ ] T160 [US6] Parent gating (research R5):
+- [X] T160 [US6] Parent gating (research R5):
   - `src/AkmlSql.Shell.Shared/Ui/Theme/PageTheme.cs`: add `TextDisabled` (from `ThemeTokens.TextDisabled` for both palettes).
   - `src/AkmlSql.Shell.Shared/Dialogs/Pages/RowFactory.cs`: add an optional `CheckBox? parent` to `AddToggle`, `AddDropdown`, `AddTextInput`, `AddButton` and `AddNumber`. When set:
     - add +20 px indent;
@@ -896,7 +896,7 @@ It covers gap items OPT-04 to OPT-09.
     - `SnippetsPage` (Enable snippets → all rows);
     - `SpecialCharactersPage` (auto-close master → five characters);
     - `FormattingPage` (Enable SQL formatter → all other rows).
-- [ ] T161 [US6] Number fields:
+- [X] T161 [US6] Number fields:
   - Add `RowFactory.AddNumber(StackPanel panel, string label, int min, int max, int step, string unit, string description = "", CheckBox? parent = null)`, returning `(FrameworkElement Row, TextBox Box)` with ▲/▼ buttons, the unit `TextBlock`, and validation (red border, last valid value kept).
   - Replace these sliders, updating each page's `Controls` `Load`/`Save`:
     - `IntelliSensePage` Maximum suggestions (~:41) and Trigger delay (~:46);
@@ -907,7 +907,7 @@ It covers gap items OPT-04 to OPT-09.
   - Remove units from the label text.
   - Extend `FlashRow` (`SettingsWindow.cs` ~:1111-1131) to any `Panel`, not only `Border`.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
-- [ ] T162 [US6] Options in the Command Palette (research R7):
+- [X] T162 [US6] Options in the Command Palette (research R7):
   - `SettingsWindow.cs`: add `internal static IReadOnlyList<OptionsCatalogEntry> BuildOptionsCatalog(AppSettings settings)`. It builds pages on a throwaway instance on the UI thread and returns PageKey, PageDisplay, Label, Description and Kind, with the Row kept internally. Cache it per session.
   - Create `src/AkmlSql.Shell.Shared/Productivity/CommandPalette/OptionPaletteEntry.cs` (a `CommandEntry` subclass implementing `INotifyPropertyChanged`, with IsOn and StateText; Id `opt:{pageKey}:{label}`) and add it to the projitems.
   - `CommandRegistry.cs`: an **Options** category listed when the query is at least 2 characters, excluding the AI Assistance page and Info/Button rows. Names read `‹PageDisplay› › ‹Label›`.
@@ -915,17 +915,17 @@ It covers gap items OPT-04 to OPT-09.
     - for `opt:` Toggle entries: `s = ConfigManager.Load()`, then `controls.Load(s)`, flip the CheckBox, `controls.Save(s)`, `OptionsCommand.SaveAndNotify(s)`; update IsOn; **don't** raise `CloseRequested`, and don't count usage;
     - for other kinds: close and call `OptionsCommand.ShowOptions(pageKey, null, label)`.
   - `CommandPaletteWindow.cs`: an item template selector that shows `On`/`Off` for option entries.
-- [ ] T163 [US6] Add an overload `internal static bool ShowOptions(string? pageKey, string? agentId, string? focusLabel)` to `src/AkmlSql.Shell.Shared/Commands/OptionsCommand.cs`. Keep the 2-argument method delegating to it, because `Ai/AiChatPanel.cs:135`'s `Func<string?,string?,bool>` must still compile.
+- [X] T163 [US6] Add an overload `internal static bool ShowOptions(string? pageKey, string? agentId, string? focusLabel)` to `src/AkmlSql.Shell.Shared/Commands/OptionsCommand.cs`. Keep the 2-argument method delegating to it, because `Ai/AiChatPanel.cs:135`'s `Func<string?,string?,bool>` must still compile.
   - After the window is built, find the `SearchEntry` with that label on that page and reuse the scroll-and-flash code from `CommitSelectedSearchResult` (`SettingsWindow.cs` ~:1046-1072).
   - Add `InitialFocusLabel` to `IOptionsDialog` (T023) and to `SettingsWindow`, applied when the window loads. `ShowOptions` passes `focusLabel` through `WindowFactoryOverride`.
-- [ ] T164 [US6] Environments model:
+- [X] T164 [US6] Environments model:
   - Create the pure helpers `src/AkmlSql.Core/Models/Tabs/EnvironmentValidator.cs` (tested by T155) and `src/AkmlSql.Core/Models/Tabs/ColoringRuleOrdering.cs` (tested by T156).
   - Create `src/AkmlSql.Core/Models/Tabs/TabEnvironment.cs` (Name, Color).
   - `src/AkmlSql.Core/Config/AppSettings.cs`: add `TabSettings.Environments` and `ColoringRule.Environment`.
   - `src/AkmlSql.Core/Config/ConfigManager.cs`: run the migration from data-model.md §1.3 in both `Load` overloads, idempotently.
   - `src/AkmlSql.Core/Models/Tabs/EnvironmentMatcher.cs` (~:39-64): a server rule with a non-empty `DatabaseName` requires the database to match as well.
   - When rules are saved, write each rule's `Label` and `Color` from its environment. Safety keys on `Label` (`Safety/ExecutionInterceptor.cs:257-262`, `EnvironmentSeverity`).
-- [ ] T165 [US6] Queries › Color page grid (`src/AkmlSql.Shell.Shared/Dialogs/Pages/TabsPage.cs`):
+- [X] T165 [US6] Queries › Color page grid (`src/AkmlSql.Shell.Shared/Dialogs/Pages/TabsPage.cs`):
   - replace the ListBox and Add/Edit/Remove buttons (~:33-70) with a themed grid: `ListView`/`GridView` built from `PageTheme` brushes, following the `AiAgentListView.BuildItemStyle` pattern;
   - columns: **Server / group pattern** (text), **Database** (text, optional), **Environment** (swatch plus combo of environment names);
   - **+ Add server/database**, **Remove** and ↑/↓ buttons; ↑/↓ move rules with `ColoringRuleOrdering.Move`, which renumbers `Order` 0..n-1;
@@ -933,12 +933,12 @@ It covers gap items OPT-04 to OPT-09.
   - an **Edit environments…** button;
   - rules and environments are part of the page's `Load`/`Save`;
   - remove the host-owned rule CRUD and `ShowRuleEditor` from `SettingsWindow.cs` (~:2001-2151), and remove the now-unused hooks (~:1191-1196).
-- [ ] T166 [US6] Create `src/AkmlSql.Shell.Shared/Dialogs/EditEnvironmentsDialog.cs` (`ThemeAwareWindow`, title `AKML SQL – Edit environments`, added to the projitems):
+- [X] T166 [US6] Create `src/AkmlSql.Shell.Shared/Dialogs/EditEnvironmentsDialog.cs` (`ThemeAwareWindow`, title `AKML SQL – Edit environments`, added to the projitems):
   - **List:** Name (editable) and Colour (a swatch that opens a colour grid of the 8 `ThemeTokens.TabColor*` colours plus **Custom…**, which opens `System.Windows.Forms.ColorDialog` and stores `#RRGGBB`).
   - **Options:** **Use gradient colors** (`Tabs.GradientColors`) and **Restore default environments**.
   - **Validation:** through `EnvironmentValidator` (names unique and 1–40 characters, `#RRGGBB` colours). Deleting an environment that rules use is refused, with the rule patterns named.
   - Save / Cancel.
-- [ ] T167 [US6] Themed buttons (research R9):
+- [X] T167 [US6] Themed buttons (research R9):
   - `src/AkmlSql.Shell.Shared/Ui/Theme/ThemedButton.cs`: add `ApplySecondary(Button, PageTheme)` and `ApplyPrimary(Button, PageTheme)`, with templates cached per `PageTheme`, following `ComboBoxTheming.ThemeCache`.
   - Use them in:
     - `SettingsWindow.MakeButton`/`MakePrimaryButton` (~:1467-1521);
@@ -946,7 +946,7 @@ It covers gap items OPT-04 to OPT-09.
     - `AiAgentListView.MakeButton` (~:333-343; add a `PageTheme` parameter; callers at ~:65-68 and `AiAssistancePage.cs` ~:241-244);
     - the Color page buttons.
   - Replace the hard-coded search badge colours (`SettingsWindow.cs` ~:905-912) with `PageTheme` brushes.
-- [ ] T168 [US6] Port `src/AkmlSql.Shell.Shared/Analysis/ManageRulesDialog.cs` from WinForms to a WPF `ThemeAwareWindow`, title `AKML SQL – Code analysis rules`:
+- [X] T168 [US6] Port `src/AkmlSql.Shell.Shared/Analysis/ManageRulesDialog.cs` from WinForms to a WPF `ThemeAwareWindow`, title `AKML SQL – Code analysis rules`:
   - rules grouped by category with expandable headers; each row has Enabled (CheckBox), Rule id, Name, a Severity combo (Hint / Information / Warning / Error) and a Fix ✓ glyph;
   - a description pane for the selected rule;
   - `Settings file:` showing `Constants.ConfigFilePath`;
@@ -956,7 +956,7 @@ It covers gap items OPT-04 to OPT-09.
   Keep the public surface that `ManageRulesCommand.cs` uses unchanged: the constructor inputs, `ShowDialog` result, `GetOverrides()` and `RestoreSessionSuppressions`.
 
   Also add a **Manage rules…** button to `CodeAnalysisPage.cs`. It opens the same window, then reloads `_settings.CodeAnalysis.RuleOverrides` from disk (the pattern in `FormattingPage.RefreshActiveStyleFromDisk` ~:197-207), so OK in Options doesn't write stale overrides.
-- [ ] T169 [US6] High contrast in the Options window:
+- [X] T169 [US6] High contrast in the Options window:
   - `src/AkmlSql.Shell.Shared/Ui/Theme/PageTheme.cs`: add a `HighContrast` snapshot built from `ThemePalette.HighContrast` (it delegates to Windows system colours), including the new `TextDisabled`;
   - `SettingsWindow.ResolvePageTheme` (T022) returns `PageTheme.HighContrast` when `SystemParameters.HighContrast` is on (or the host variant is HighContrast), whatever the saved theme;
   - the other AKML windows already follow `ThemeRegistry`'s high-contrast palette; check them in the screenshot tour (T193) with Windows high contrast on;
@@ -983,49 +983,49 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
 
 ### Tests for User Story 7 (write first)
 
-- [ ] T171 [P] [US7] Write `tests/AkmlSql.Site.Tests/Docs/F1SlugTests.cs`, following the `FooterDocLinksTests` pattern:
+- [X] T171 [P] [US7] Write `tests/AkmlSql.Site.Tests/Docs/F1SlugTests.cs`, following the `FooterDocLinksTests` pattern:
   - read `src/AkmlSql.Shell.Shared/Help/F1HelpRegistrations.cs` and every `HelpTopic` in `src/AkmlSql.Shell.Shared/Dialogs/Pages/*.cs` as text, and extract the slug and anchor;
   - assert each slug exists in `DocsCatalog.Scan(repo/doc, options)`;
   - assert each anchor matches a heading id in that doc (Markdig AutoIdentifiers rules).
-- [ ] T172 [P] [US7] Write `tests/AkmlSql.Core.Tests/Config/WindowTitlesTests.cs` (`WindowTitles.For("Options") == "AKML SQL – Options"`). Also write `tests/AkmlSql.Shell.Shared.Tests/WindowTitleUsageTests.cs`, a text scan asserting that every `Title =` and `Text =` assignment on a Window or Form in `src/AkmlSql.Shell.Shared` uses `WindowTitles.For(...)`, apart from an explicit allow-list (file dialogs, tool-window captions, message-box captions).
-- [ ] T173 [P] [US7] Write `tests/AkmlSql.Shell.Shared.Tests/AkmlMenuTableTests.cs` against the declarative table (T180), exposed as `internal static AkmlMenuTable.Entries`:
+- [X] T172 [P] [US7] Write `tests/AkmlSql.Core.Tests/Config/WindowTitlesTests.cs` (`WindowTitles.For("Options") == "AKML SQL – Options"`). Also write `tests/AkmlSql.Shell.Shared.Tests/WindowTitleUsageTests.cs`, a text scan asserting that every `Title =` and `Text =` assignment on a Window or Form in `src/AkmlSql.Shell.Shared` uses `WindowTitles.For(...)`, apart from an explicit allow-list (file dialogs, tool-window captions, message-box captions).
+- [X] T173 [P] [US7] Write `tests/AkmlSql.Shell.Shared.Tests/AkmlMenuTableTests.cs` against the declarative table (T180), exposed as `internal static AkmlMenuTable.Entries`:
   - exactly 12 top-level entries, in contracts/ui.md §2 order;
   - Help ▸ ends with Check for Updates then About AKML SQL;
   - every command id in the table is in `RegisteredCommands.Ids` (T105; it lives in `AkmlSql.Shell.Shared`, so the shell test project compiles it);
   - no unregistered command (TextToSql, AI Optimize, AI Index Analysis, CRUD, Grid Find) appears.
-- [ ] T174 [P] [US7] Write `tests/AkmlSql.Formatting.Tests/Profiles/TeamStyleFolderTests.cs`:
+- [X] T174 [P] [US7] Write `tests/AkmlSql.Formatting.Tests/Profiles/TeamStyleFolderTests.cs`:
   - a style in a team folder is listed with `Source = "team"`;
   - it is read-only when the folder has a read-only attribute or ACL (simulate with a provider flag or a temp folder marked read-only);
   - name precedence is user > team > built-in;
   - an unreachable folder (a non-existent UNC path) returns the other styles within 2 s, and `TeamFolderUnavailable = true`.
 
   Also add engine tests in `tests/AkmlSql.Engine.Tests/Formatter/TeamStyleWriteRefusalTests.cs`: Save, Rename, Delete and Reset on a read-only team style return `Success = false` with the contract error text.
-- [ ] T175 [P] [US7] Write `tests/AkmlSql.Engine.Tests/Formatter/FormatSqlActionsTests.cs`:
+- [X] T175 [P] [US7] Write `tests/AkmlSql.Engine.Tests/Formatter/FormatSqlActionsTests.cs`:
   - `Actions = null` → output identical to today for three golden inputs;
   - semicolons insert and remove;
   - brackets add and remove;
   - `ApplyCasing = false` keeps the original keyword case;
   - `ApplyLayout = false` keeps the original whitespace but still applies the semicolons action;
   - `ExpandWildcards = true` expands `SELECT *` using a schema-cache fixture (the pattern in `FormatActionDispatchTests.cs`).
-- [ ] T176 [P] [US7] Write `tests/AkmlSql.Core.Tests/Ipc/FormattingContractTests.cs`: round trips for `FormatSqlActionsDto`, `FormatRequest` key 5, `FormatSelectionRequest` key 5 and `ProfileInfo` keys 9–10, plus the legacy shapes.
+- [X] T176 [P] [US7] Write `tests/AkmlSql.Core.Tests/Ipc/FormattingContractTests.cs`: round trips for `FormatSqlActionsDto`, `FormatRequest` key 5, `FormatSelectionRequest` key 5 and `ProfileInfo` keys 9–10, plus the legacy shapes.
 
   Also write `tests/AkmlSql.Shell.Shared.Tests/HistoryAccessibilityTests.cs`: every icon-only control in the History toolbar and row template, and the style list ⋮, has a non-empty `AutomationProperties.Name`.
-- [ ] T177 [P] [US7] Write `tests/AkmlSql.Shell.Shared.Tests/HelpRoutingTests.cs` (`[StaFact]`), using the test hook `F1HelpListener.OpenOverride` (T183):
+- [X] T177 [P] [US7] Write `tests/AkmlSql.Shell.Shared.Tests/HelpRoutingTests.cs` (`[StaFact]`), using the test hook `F1HelpListener.OpenOverride` (T183):
   - the Options window's `CurrentHelpTopic` equals the selected page's `HelpTopic`, for every page;
   - the Format Styles window's help topic is `topics/formatting#edit-styles-with-live-preview`;
   - executing `ApplicationCommands.Help` on an element with `HelpBinding.Attach` calls the hook with the attached key.
-- [ ] T178 [P] [US7] Write `tests/AkmlSql.Core.Tests/Config/TeamStyleFolderValidatorTests.cs` for `TeamStyleFolderValidator.Normalize(string? input)` (created in T186):
+- [X] T178 [P] [US7] Write `tests/AkmlSql.Core.Tests/Config/TeamStyleFolderValidatorTests.cs` for `TeamStyleFolderValidator.Normalize(string? input)` (created in T186):
   - empty or whitespace → OK, and the folder is off;
   - a relative path → error;
   - a rooted local or UNC path → OK, returned in its `Path.GetFullPath` form;
   - `..` segments are resolved by that canonical form.
-- [ ] T179 [P] [US7] Write `tests/AkmlSql.Core.Tests/Config/FormatSqlActionsMapperTests.cs` for `FormatSqlActionsMapper.ToDto(FormatSqlActions)` (created in T188):
+- [X] T179 [P] [US7] Write `tests/AkmlSql.Core.Tests/Config/FormatSqlActionsMapperTests.cs` for `FormatSqlActionsMapper.ToDto(FormatSqlActions)` (created in T188):
   - each setting maps to its DTO field (semicolons and brackets strings → 0/1/2);
   - the defaults of `new FormatSqlActions()` equal the common `formatActions` of the built-in profiles in `src/AkmlSql.Formatting/Profiles/BuiltIn/*.akmlstyle`.
 
 ### Implementation for User Story 7
 
-- [ ] T180 [US7] Build the menu from one declarative table:
+- [X] T180 [US7] Build the menu from one declarative table:
   - Create `src/AkmlSql.Shell.Shared/Commands/AkmlMenuTable.cs` (added to the projitems): a declarative tree of groups, submenus and command ids matching contracts/ui.md §2, including the Active Style ▸ submenu (the US4 slots plus Edit Styles…).
   - Rewrite `EnsureTopLevelMenu` in `src/AkmlSql.Ssms22/AkmlSqlPackage.cs` (~:383-490) to build from it:
     - nested `msoControlPopup` (type 10) submenus;
@@ -1035,16 +1035,16 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
     - the AI ▸ submenu shown only when AI is enabled, reusing `AiCommandVisibility`;
     - the editor context popup from T110 kept.
   - Remove the interim placement code from T110 that the builder now covers.
-- [ ] T181 [US7] In `src/AkmlSql.Ssms22/AkmlSqlSsms22.vsct`:
+- [X] T181 [US7] In `src/AkmlSql.Ssms22/AkmlSqlSsms22.vsct`:
   - add groups and menus mirroring contracts/ui.md §2 (new IDSymbols for the submenus and groups, avoiding every id in `PackageGuids.cs` and the reserved ranges);
   - re-parent the buttons;
   - keep every command id and key binding unchanged;
   - after building, confirm `dte.ExecuteCommand("AKML_SQL.FormatDocument")` still resolves (the editor toolbar and completion popup use it). If the canonical name changed, pin it with `<Strings><CanonicalName>`.
-- [ ] T182 [US7] Window titles and icon:
+- [X] T182 [US7] Window titles and icon:
   - Create `src/AkmlSql.Core/Config/WindowTitles.cs` (`public static string For(string name) => Constants.ProductName + " – " + name;`).
   - Apply it to every window and form listed in contracts/ui.md §5. File references are in research R27; the list includes `SettingsWindow.cs:283`, `FormatStylesEditorWindow.cs:136`, `StyleNameDialog.cs:171/185`, `ImportSummaryDialog.cs:46`, `SnippetManagerDialog.cs:48`, `HistoryDiffWindow.cs:22`, `ObjectSearchWindow.cs:49` and the WinForms forms.
   - Add `src/AkmlSql.Shell.Shared/Ui/WindowIcon.cs` (added to the projitems): it sets the window icon from an embedded `akml.ico`, copied from `src/AkmlSql.Installer/assets/icon.ico` into `src/AkmlSql.Shell.Shared/Resources/akml.ico` and declared as `<EmbeddedResource>` in the projitems. Call it from `ThemeAwareWindow` and from the WPF windows above that don't derive from it.
-- [ ] T183 [US7] Wire F1 help:
+- [X] T183 [US7] Wire F1 help:
   - Add a test hook `internal static Action<string>? OpenOverride` to `F1HelpListener` (used instead of launching the browser when set), and `internal string? CurrentHelpTopic` to `SettingsWindow` and `FormatStylesEditorWindow` (tested by T177).
   - Create `src/AkmlSql.Shell.Shared/Help/HelpBinding.cs` (added to the projitems): `Attach(UIElement element, Func<string> topicKey)` adds a `CommandBinding(ApplicationCommands.Help)` that calls `F1HelpListener.Open`.
   - `F1HelpRegistrations.cs`: `DocBase = "https://akml.khamis.work/docs/"`; remap the existing keys to real slugs (`topics/formatting`, `topics/sql-history`, `topics/snippets`, `topics/static-analysis`, `topics/intellisense`, …) and remove keys with no topic.
@@ -1052,15 +1052,15 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
   - `SettingsWindow.OnWindowKeyDown` (~:1638): F1 → the current page's topic.
   - `FormatStylesEditorWindow`: set `HasHelpButton = true`, override `InvokeDialogHelp()`, and attach `HelpBinding` → `topics/formatting#edit-styles-with-live-preview`.
   - `src/AkmlSql.Shell.Shared/History/HistoryToolWindow.cs`: handle `VSConstants.VSStd97CmdID.F1Help` in the pane's command target (implement `IOleCommandTarget` on the pane if needed) → `topics/sql-history`.
-- [ ] T184 [P] [US7] Write the docs:
+- [X] T184 [P] [US7] Write the docs:
   - Create `doc/topics/options.md`, with one `##` section per Options page. Headings must produce exactly the anchors in contracts/ui.md §1 (e.g. `## Suggestions: Behavior` → check the generated id matches `suggestions-behavior`, and adjust the heading text if needed). Each section describes, in plain language, only the settings still shown after US1.
   - Update `doc/topics/formatting.md` (Active Style menu, option search, change markers, team style folder, Format SQL actions) and `doc/topics/sql-history.md` (search syntax, Advanced search, open marker, versions and compare, restore on start, keyboard).
-- [ ] T185 [US7] Accessibility and type (tested by T123 and T091):
+- [X] T185 [US7] Accessibility and type (tested by T123 and T091):
   - `src/AkmlSql.Shell.Shared/History/HistoryToolWindowControl.cs`: add `AutomationProperties.Name` to every icon-only control ("Refresh", "Show starred queries only", "Show open queries only", "Show closed queries only", "Filter by server or database", "More actions", "Clear search").
   - Map the hard-coded `FontSize` values (research R27: 9, 9.5, 10, 10.5, 11, 11.5 → `Typography.Small`; 12 → `Typography.Body`; 14 → `Typography.H4`).
   - Replace `OpenClosedColorConverter` and `FavoriteColorConverter` (~:2193, ~:2461) with `SetResourceReference` on `ThemeTokens.HistoryOpenIcon`, `HistoryClosedIcon`, `HistoryStarActive` and `HistoryStarInactive`, so they follow theme changes.
   - Give the style list ⋮ in `FormatStylesEditorWindow.cs` the name "Style actions".
-- [ ] T186 [US7] Team style folder, engine side:
+- [X] T186 [US7] Team style folder, engine side:
   - Create `src/AkmlSql.Core/Config/TeamStyleFolderValidator.cs` with `Normalize(string? input)` → (ok, full path or null, error) (tested by T178).
   - `src/AkmlSql.Core/Config/AppSettings.cs`: add `FormatterSettings.TeamStyleFolder` (default "").
   - `src/AkmlSql.Formatting/Profiles/ProfileManager.cs`:
@@ -1072,7 +1072,7 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
   - `src/AkmlSql.Engine/EngineHandlerRegistry.cs` (~:55): pass `() => ctx.EnsureSettings().Formatter.TeamStyleFolder`.
   - `src/AkmlSql.Core/Ipc/Messages/ProfileInfo.cs`: `[Key(9)] string? Source` and `[Key(10)] bool IsReadOnly`.
   - `src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` profile handlers: Save, Rename, Delete and Reset on a read-only team style return the contracts/ipc.md error text.
-- [ ] T187 [US7] Team style folder, shell side:
+- [X] T187 [US7] Team style folder, shell side:
   - `src/AkmlSql.Shell.Shared/Dialogs/Pages/FormattingPage.cs`: a **Team style folder** text row with a **…** button (`System.Windows.Forms.FolderBrowserDialog`), validated with `TeamStyleFolderValidator.Normalize`.
   - `FormatStylesEditorViewModel.cs` `StyleListItem`: add `Source` and `IsReadOnly`.
   - `FormatStylesEditorWindow.cs`:
@@ -1080,19 +1080,19 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
     - read-only team styles: options disabled, Save, Rename and Delete disabled, Copy allowed;
     - when the team folder is unavailable, a muted row `Team styles unavailable — ‹folder› can't be reached`.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
-- [ ] T188 [US7] Format SQL actions, settings and DTO:
+- [X] T188 [US7] Format SQL actions, settings and DTO:
   - `src/AkmlSql.Core/Config/AppSettings.cs`: a `FormatSqlActions` class and `FormatterSettings.FormatSqlActions`. Defaults come from the built-in profiles' `formatActions` (read `src/AkmlSql.Formatting/Profiles/BuiltIn/*.akmlstyle`; use the common value).
   - Create `src/AkmlSql.Core/Ipc/Messages/FormatSqlActionsDto.cs` per contracts/ipc.md.
   - `FormatRequest.cs` and `FormatSelectionRequest.cs`: `[Key(5)] FormatSqlActionsDto? Actions`.
   - Create `src/AkmlSql.Core/Config/FormatSqlActionsMapper.cs` with `ToDto(FormatSqlActions)` (tested by T179).
-- [ ] T189 [US7] Format SQL actions, engine side:
+- [X] T189 [US7] Format SQL actions, engine side:
   - `src/AkmlSql.Engine/Formatter/FormatRequestHandler.cs` `HandleFormat` / `HandleFormatSelection`: when `request.Actions != null`, use it instead of `profile.FormatActions`.
   - `src/AkmlSql.Formatting/Pipeline/FormatterPipeline.cs`:
     - add pipeline options `ApplyLayout` and `ApplyCasing`. When layout is off, skip the layout stage and keep the original whitespace; when casing is off, skip the casing stage.
     - Stage 8 takes the semicolons and brackets choices from the options.
     - All defaults preserve today's behaviour.
   - `src/AkmlSql.Engine/Handlers/Formatting/FormattingHandlers.cs` (~:27-28): pass `ctx.SchemaCache` and `ctx.Sessions`, and after validation run the schema-aware Expand wildcards / Qualify object names operations (the same ones `HandleFormatAction` uses) when requested.
-- [ ] T190 [US7] Format SQL actions, shell side:
+- [X] T190 [US7] Format SQL actions, shell side:
   - `src/AkmlSql.Shell.Shared/Formatting/FormatDocumentCommand.cs` (~:86) and `FormatSelectionCommand.cs`: send `Actions = FormatSqlActionsMapper.ToDto(settings.Formatter.FormatSqlActions)`, and the **real** editor session id (the `RefactorCommandHelper.TryGetActiveEditor()` pattern) instead of a random GUID.
   - `src/AkmlSql.Shell.Shared/Dialogs/Pages/FormattingPage.cs`: add a group headed `When you run Format SQL, AKML SQL will:` with Apply layout, Apply casing, Semicolons (Insert / Remove / Leave), Square brackets (Add / Remove / Leave), Expand wildcards and Qualify object names.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
@@ -1104,7 +1104,7 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
 
 ## Phase 10: Polish and cross-cutting concerns
 
-- [ ] T192 Run a full solution build (restore + build, MSBuild), then every suite from T002. Compare with `baseline.md`: new failures are regressions to fix. Confirm the `CorpusGateTests` pass rate hasn't dropped and the format-parity goldens are unchanged.
+- [X] T192 Run a full solution build (restore + build, MSBuild), then every suite from T002. Compare with `baseline.md`: new failures are regressions to fix. Confirm the `CorpusGateTests` pass rate hasn't dropped and the format-parity goldens are unchanged.
 - [ ] T193 [P] Extend `tests/AkmlSql.UiTests/SsmsScreenshotTour.cs`. Add captures of:
   - the AKML SQL menu expanded, and the Active Style ▸ submenu;
   - Options in light and dark (the Behavior, History and Color pages);
@@ -1113,27 +1113,32 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
 
   Keep Northwind only, and keep the forbidden-words assertion. Run it against the deployed build (quickstart §0 deploy).
 - [ ] T194 [P] Update `doc/progress.md`: append a `## Spec 040 — SQL Prompt UI/UX parity: Options, SQL History, format styles (2026-09-28)` section in the existing format ("What the investigation found", "What was built", "Verification" with pass counts, "Issues hit", "Open").
-- [ ] T195 [P] Update `CLAUDE.md`:
+- [X] T195 [P] Update `CLAUDE.md`:
   - "Latest merged work": add a spec 040 bullet;
   - "Open follow-ups": list the items in T196;
   - the Documentation table row and the Progress paragraph that name "most recently spec 037";
   - correct the stale "Theme colors come from `ThemeManager.Instance`" guidance (~:256) to ThemeRegistry / ThemeTokens / `SetResourceReference`.
 
   Also update `doc/deployment.md`: the stale VS 2022 MSBuild path and the "never build via .slnx" note (see CLAUDE.md Build Commands).
-- [ ] T196 [P] Record the follow-ups that stay open, in this file's "Deferred" section and in `doc/progress.md`:
+- [X] T196 [P] Record the follow-ups that stay open, in this file's "Deferred" section and in `doc/progress.md`:
   - commands with no registered handler (TextToSql, AI Optimize, AI Index Analysis, Generate CRUD Procedures, Find in Results Grid);
   - the VSCT menu parent (`IDM_VS_MENU_BAR` = 0x0081 is Edit), which leaves the VSCT menu invisible in SSMS 22;
   - AS keyword and column alias style in Format SQL actions;
   - Record failed executions and Encrypt at rest (hidden);
   - the editor context menu, if scenario 26 was waived.
-- [ ] T197 [P] Update `doc/_Prompt-Gap/11-UI-UX-Plan-Options-History-Styles.md`: add an "Implementation status (spec 040)" note at the top mapping each OPT/HIS/STY/X item to done or deferred, with the task ids. Refresh the file 10/11 lines in `doc/_Prompt-Gap/00-INDEX-and-Questions.md`.
+- [X] T197 [P] Update `doc/_Prompt-Gap/11-UI-UX-Plan-Options-History-Styles.md`: add an "Implementation status (spec 040)" note at the top mapping each OPT/HIS/STY/X item to done or deferred, with the task ids. Refresh the file 10/11 lines in `doc/_Prompt-Gap/00-INDEX-and-Questions.md`.
 - [ ] T198 Run quickstart.md end to end (scenarios 1–49) on the deployed build. Record pass, fail or waived (with a reason) for each scenario in `specs/040-sqlprompt-ui-parity/baseline.md` under "Final verification". Restore the developer's settings and history from the T003 backup if a scenario damaged them.
 
 ---
 
 ## Deferred
 
-*(Fill in during T196. Each entry: item · reason · where it's recorded.)*
+- Commands with no registered handler — Text to SQL, AI Optimize, AI Index Analysis, Generate CRUD Procedures, Find in Results Grid, and Split Table (`SplitTableCommand.Initialize` registers no handler for `CmdSplitTable`) · not placed in the AKML SQL menu (contracts/ui.md §2 rule); their VSCT buttons stay hidden by default · `doc/progress.md` (Spec 040 › Open)
+- VSCT menu parent — the VSCT top-level menu is parented to `IDM_VS_MENU_BAR` (0x0081 is Edit) and stays invisible in SSMS 22; the visible AKML SQL menu is built at runtime from `AkmlMenuTable` · a VSCT-only fix needs the SSMS menu-bar group id · `doc/progress.md`
+- Format SQL actions: AS keyword and column-alias style · SQL Prompt has them; no formatter support yet · `doc/progress.md`
+- History settings "Record failed executions" and "Encrypt at rest" · hidden (US1, HIS-06) until they do something; saved values kept · `doc/progress.md`
+- UI Automation reaches only the first row of each group in a grouped WPF list (SQL History, Format Styles list) when it walks the tree; rows are reachable through the list's ItemContainer pattern · a WPF navigation limit seen during verification; screen-reader impact unchecked · `doc/progress.md`
+- `ConfigManager.Save` swallows transient I/O errors (a file briefly locked by a scanner), which makes `DisableRuleFixActionTests.Invoke_preserves_an_existing_severity_override` fail about one run in six · a retry on transient errors would close it · `doc/progress.md`
 
 ---
 

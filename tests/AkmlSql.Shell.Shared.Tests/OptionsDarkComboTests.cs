@@ -117,7 +117,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
         /// <summary>
         /// SQL Prompt-parity header: the band shows the page's full breadcrumb (its Display),
-        /// e.g. "Inserted Code › Special characters" — not the short page Title.
+        /// e.g. "Inserted code › Special characters" — not the short page Title.
         /// </summary>
         [StaFact]
         public void PageHeader_ShowsBreadcrumbDisplay_ForSpecialCharactersPage()
@@ -136,7 +136,7 @@ namespace AkmlSql.Shell.Shared.Tests
             bool found = false;
             foreach (var tb in LogicalTree.Descendants<TextBlock>(window))
             {
-                if (tb.Text == "Inserted Code › Special characters")
+                if (tb.Text == "Inserted code › Special characters")
                 {
                     found = true;
                     break;

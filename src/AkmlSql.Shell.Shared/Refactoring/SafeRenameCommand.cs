@@ -3,9 +3,11 @@ using System;
 using System.ComponentModel.Design;
 using System.Linq;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Ui;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
@@ -173,7 +175,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
         {
             using var form = new Form
             {
-                Text = Constants.ProductName + " - Safe Rename",
+                Text = WindowTitles.For("Smart rename"),
                 Width = 420,
                 Height = 160,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
@@ -182,6 +184,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
                 StartPosition = FormStartPosition.CenterParent,
                 ShowInTaskbar = false
             };
+            WindowIcon.Apply(form);
 
             var label = new Label
             {

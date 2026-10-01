@@ -13,13 +13,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class SnippetsPage : IPageBuilder
     {
         public string Key     => "Snippets";
-        public string Display => "Snippets";
+        public string Display => "Suggestions › Snippets";
         public string Title   => "Snippets";
+        public string HelpTopic => "topics/options#suggestions-snippets";
         public string Help    => "Configure the snippet engine: enable snippets and format them after expansion. Set the team folder where shared .akmlsnippet files live. Whether snippets appear in the suggestions box is set on Suggestions › Behavior.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "Snippet Manager");
+            ctx.Rows.AddGroupHeader(panel, "Snippet manager");
 
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
                 "Enable snippets",
@@ -28,15 +29,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowFormatOnExpand, chkFormatOnExpand) = ctx.Rows.AddToggle(panel,
                 "Format after expansion",
-                "Apply SQL formatting after expanding a snippet");
+                "Apply SQL formatting after expanding a snippet", chkEnabled);
             ctx.RegisterSearch("Format after expansion", "Apply SQL formatting after expanding a snippet", "Toggle", rowFormatOnExpand);
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Snippet Folders");
+            ctx.Rows.AddGroupHeader(panel, "Snippet folders");
 
             var (rowTeamFolder, txtTeamFolder) = ctx.Rows.AddTextInput(panel,
                 "Team folder",
-                "Shared folder for team snippet distribution. Takes effect after SSMS restarts.");
+                "Shared folder for team snippet distribution. Takes effect after SSMS restarts.", parent: chkEnabled);
             ctx.RegisterSearch("Team folder", "Shared folder for team snippet distribution. Takes effect after SSMS restarts.", "Text", rowTeamFolder);
 
             return new SnippetsControls(chkEnabled, chkFormatOnExpand, txtTeamFolder);

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ui.Theme;
 
@@ -22,7 +23,7 @@ namespace AkmlSql.Shell.Shared.History
 
         public RestoreQueriesDialog(IReadOnlyList<HistoryEntryDto> entries)
         {
-            Title = "AKML SQL – Restore queries";
+            Title = WindowTitles.For("Restore queries");
             Width = 520;
             SizeToContent = SizeToContent.Height;
             MaxHeight = 560;

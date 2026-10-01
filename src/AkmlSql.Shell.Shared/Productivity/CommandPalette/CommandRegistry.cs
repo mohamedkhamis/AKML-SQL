@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Productivity;
+using AkmlSql.Shell.Shared.Dialogs;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
@@ -184,6 +185,105 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                 Category = category,
                 KeyboardShortcut = shortcut
             };
+        }
+
+        #endregion
+
+        #region Options (spec 040, OPT-07)
+
+        /// <summary>The Options category is listed once the query has at least this many characters.</summary>
+        internal const int OptionsMinQueryLength = 2;
+
+        /// <summary>The most option rows listed for one query.</summary>
+        internal const int MaxOptionResults = 20;
+
+        // Entries wrap the catalog SettingsWindow caches per UI thread; rebuilt when it is rebuilt.
+        private static IReadOnlyList<OptionsCatalogEntry>? _optionSource;
+        private static IReadOnlyList<OptionPaletteEntry> _optionEntries = Array.Empty<OptionPaletteEntry>();
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053, research R7): one entry per setting on the Options pages, from
+        /// <see cref="SettingsWindow.BuildOptionsCatalog"/> — the AI assistance page and Info/Button
+        /// rows are already left out there. Must run on the UI thread. Returns an empty list (and
+        /// logs) if the pages can't be built, so the palette keeps working without them.
+        /// </summary>
+        public static IReadOnlyList<OptionPaletteEntry> GetOptionEntries()
+        {
+            try
+            {
+                var catalog = SettingsWindow.BuildOptionsCatalog(ConfigManager.Load());
+                lock (Lock)
+                {
+                    if (!ReferenceEquals(catalog, _optionSource))
+                    {
+                        _optionEntries = catalog.Select(o => new OptionPaletteEntry(o)).ToList();
+                        _optionSource = catalog;
+                    }
+                    return _optionEntries;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "CommandRegistry: failed to build the Options catalog");
+                return Array.Empty<OptionPaletteEntry>();
+            }
+        }
+
+        /// <summary>
+        /// Sets each toggle entry's <see cref="OptionPaletteEntry.IsOn"/> from
+        /// <paramref name="settings"/>, loading each page's controls once.
+        /// </summary>
+        public static void RefreshOptionStates(IEnumerable<OptionPaletteEntry> entries, AppSettings settings)
+        {
+            var loaded = new HashSet<object>();
+            foreach (var entry in entries)
+            {
+                var option = entry.Option;
+                if (option.Toggle == null) continue;
+                if (loaded.Add(option.Controls))
+                    option.Controls.Load(settings);
+                entry.IsOn = option.Toggle.IsChecked == true;
+            }
+        }
+
+        /// <summary>
+        /// The options matching <paramref name="query"/>, best first: none below
+        /// <see cref="OptionsMinQueryLength"/> characters. Every word of the query must appear in the
+        /// option's label, page or description; a label that starts with or contains the whole query
+        /// ranks highest (the Options window's own search scoring).
+        /// </summary>
+        public static List<OptionPaletteEntry> MatchOptions(string? query, IReadOnlyList<OptionPaletteEntry> entries)
+        {
+            var q = (query ?? string.Empty).Trim().ToLowerInvariant();
+            if (q.Length < OptionsMinQueryLength || entries.Count == 0)
+                return new List<OptionPaletteEntry>();
+
+            var words = q.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            var scored = new List<(OptionPaletteEntry Entry, int Score)>();
+            foreach (var entry in entries)
+            {
+                var label = entry.Option.Label.ToLowerInvariant();
+                var page = entry.Option.PageDisplay.ToLowerInvariant();
+                var description = entry.Option.Description.ToLowerInvariant();
+                var haystack = label + " " + page + " " + description;
+                if (!words.All(w => haystack.Contains(w)))
+                    continue;
+
+                int score = 0;
+                if (label.StartsWith(q, StringComparison.Ordinal)) score += 100;
+                else if (label.Contains(q)) score += 60;
+                else if (words.All(w => label.Contains(w))) score += 40;
+                if (description.Contains(q)) score += 30;
+                if (page.Contains(q)) score += 10;
+                scored.Add((entry, score));
+            }
+
+            return scored
+                .OrderByDescending(m => m.Score)
+                .ThenBy(m => m.Entry.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(MaxOptionResults)
+                .Select(m => m.Entry)
+                .ToList();
         }
 
         #endregion

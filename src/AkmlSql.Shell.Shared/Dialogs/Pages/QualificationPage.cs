@@ -15,8 +15,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class QualificationPage : IPageBuilder
     {
         public string Key     => "Qualification";
-        public string Display => "Inserted Code › Qualification";
+        public string Display => "Inserted code › Qualification";
         public string Title   => "Qualification";
+        public string HelpTopic => "topics/options#inserted-code-qualification";
         public string Help    => "Controls whether object names inserted from the suggestions box carry their schema prefix. Bracket-identifier policy lives on Inserted Code › Special characters.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

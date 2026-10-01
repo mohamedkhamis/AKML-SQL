@@ -74,6 +74,9 @@ namespace AkmlSql.Shell.Shared.Formatting
         private TextBlock? _stylesHeader;
         private Border? _builtInHint;
         private TextBlock? _builtInHintText;
+
+        /// <summary>Spec 040 (T187) — "Team styles unavailable — ‹folder› can't be reached", under the list.</summary>
+        private TextBlock? _teamUnavailableRow;
         // SQL Prompt-parity redesign: the right pane edits a whole settings *group* (SQL Prompt's
         // "page") at once, not one setting at a time. _currentGroup is the group whose form is
         // showing; _currentGroupCategory is its parent category (for the breadcrumb title).
@@ -179,13 +182,13 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
 
-            Title = "AKML SQL — Format Styles Editor";
+            Title = AkmlSql.Core.Config.WindowTitles.For("Format styles");
             Width = 1060;
             Height = 680;
             MinWidth = 920;
             MinHeight = 560;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            HasHelpButton = false;
+            HasHelpButton = true; // spec 040 (X-03): the title-bar "?" opens CurrentHelpTopic
 
             // Ensure theme resources are merged so SetResourceReference resolves.
             ThemeRegistry.Instance.AttachTo(this);
@@ -205,7 +208,19 @@ namespace AkmlSql.Shell.Shared.Formatting
                     e.Handled = true;
             };
             Loaded += OnLoaded;
+
+            // Spec 040 (X-03, FR-062): F1 anywhere in the window opens the style-editor topic.
+            global::AkmlSql.Shell.Shared.Help.HelpBinding.Attach(this, () => CurrentHelpTopic);
         }
+
+        // ── F1 help (spec 040, X-03, FR-062) ─────────────────────────────────
+
+        /// <summary>What F1 and the title-bar "?" open (contracts/ui.md §3).</summary>
+        internal string? CurrentHelpTopic => global::AkmlSql.Shell.Shared.Help.F1HelpRegistrations.FormatStylesTopic;
+
+        /// <summary>The title-bar "?" (<see cref="DialogWindowBase.HasHelpButton"/>).</summary>
+        protected override void InvokeDialogHelp() =>
+            global::AkmlSql.Shell.Shared.Help.HelpBinding.Open(() => CurrentHelpTopic);
 
         // -----------------------------------------------------------------
 
@@ -242,7 +257,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var subjectStack = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Center };
 
             // "EDITING" labels the style name below it. (Deliberately not repeating the window's
-            // own title — the title bar already says "Format Styles Editor"; a header that echoes it
+            // own title — the title bar already says "AKML SQL – Format styles"; a header that echoes it
             // would spend the most valuable line in the window on nothing.)
             var eyebrow = new TextBlock
             {
@@ -529,8 +544,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             var view = new System.Windows.Data.ListCollectionView(_viewModel.Profiles);
             view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(
                 nameof(StyleListItem.Section), new UpperCaseConverter()));
+            // Your own styles, then TEAM STYLES (spec 040, STY-10), then built-in — robust to section-label rewording.
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
-                nameof(StyleListItem.IsShipped), System.ComponentModel.ListSortDirection.Ascending)); // your own styles first — robust to section-label rewording
+                nameof(StyleListItem.SectionOrder), System.ComponentModel.ListSortDirection.Ascending));
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
                 nameof(StyleListItem.Name), System.ComponentModel.ListSortDirection.Ascending));
             _styleList.ItemsSource = view;
@@ -569,9 +585,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                     // Shipped styles stay un-renameable and un-deletable even though they are now
                     // editable: the name is what ties an override to the style it overrides, so
                     // renaming would orphan the original rather than rename anything.
-                    miRename.IsEnabled = !selected.IsShipped;
-                    miDelete.IsEnabled = !selected.IsShipped && !selected.IsActive;
-                    miReset.IsEnabled = selected.IsCustomized;
+                    // A read-only team style (spec 040, STY-10) can only be copied.
+                    miRename.IsEnabled = !selected.IsShipped && !selected.IsReadOnly;
+                    miDelete.IsEnabled = !selected.IsShipped && !selected.IsActive && !selected.IsReadOnly;
+                    miReset.IsEnabled = selected.IsCustomized && !selected.IsReadOnly;
                     miSetActive.IsEnabled = !selected.IsActive;
                 }
             };
@@ -601,6 +618,20 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Khamis Style doesn't mark it". A first-class button makes the select→activate step
             // explicit and keeps the ⋮ menu working for users who already know it.
             var listFooter = new StackPanel { Orientation = Orientation.Vertical };
+
+            // Spec 040 (T187, STY-10): a muted row when the team style folder can't be reached —
+            // the user's own and built-in styles above it keep working.
+            _teamUnavailableRow = new TextBlock
+            {
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontStyle = FontStyles.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Sm),
+                Visibility = Visibility.Collapsed,
+            };
+            _teamUnavailableRow.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            listFooter.Children.Add(_teamUnavailableRow);
 
             _setActiveButton = new Button
             {
@@ -909,12 +940,13 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             if (_saveBtn != null)
             {
-                _saveBtn.IsEnabled = _viewModel.IsDirty;
+                _saveBtn.IsEnabled = _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly;
                 // A disabled button with no explanation reads as broken, so name the actual reason.
                 // Saving a built-in says where the change goes: it writes your own copy rather than
                 // altering the shipped file, which is why it can always be undone.
                 _saveBtn.ToolTip =
                     nothingLoaded ? "Select a style first"
+                    : _viewModel.IsSelectedReadOnly ? FormatStylesEditorViewModel.TeamReadOnlyText(_viewModel.LoadedProfileName!)
                     : !_viewModel.IsDirty ? "No changes to save"
                     : _viewModel.IsSelectedBuiltIn && !_viewModel.IsSelectedCustomized
                         ? $"Save your own copy of the built-in '{_viewModel.LoadedProfileName}' (the original is kept)"
@@ -934,18 +966,33 @@ namespace AkmlSql.Shell.Shared.Formatting
                     : Visibility.Collapsed;
         }
 
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — shows "Team styles unavailable — ‹folder› can't be reached"
+        /// under the list while the engine reports the team style folder unreachable.
+        /// </summary>
+        private void UpdateTeamUnavailableRow()
+        {
+            if (_teamUnavailableRow == null) return;
+            var show = _viewModel.TeamFolderUnavailable;
+            _teamUnavailableRow.Text = show
+                ? FormatStylesEditorViewModel.TeamFolderUnavailableText(
+                    string.IsNullOrWhiteSpace(_viewModel.TeamStyleFolder) ? "the team style folder" : _viewModel.TeamStyleFolder)
+                : string.Empty;
+            _teamUnavailableRow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void UpdateReadOnlyState()
         {
-            // The settings form is never disabled now — that was the read-only built-in behaviour,
-            // and it is what made the editor look broken on a fresh install where every style is
-            // built-in.
+            // The settings form is disabled only for a read-only team style (spec 040, STY-10) —
+            // built-ins are editable (an edit saves the user's own copy), and disabling them is what
+            // made the editor look broken on a fresh install where every style is built-in.
             if (_settingControlsHost != null)
-                _settingControlsHost.IsEnabled = true;
+                _settingControlsHost.IsEnabled = !_viewModel.IsSelectedReadOnly;
 
             if (_builtInHint != null)
             {
                 var loaded = !string.IsNullOrEmpty(_viewModel.LoadedProfileName);
-                _builtInHint.Visibility = loaded && (_viewModel.IsSelectedBuiltIn || _viewModel.IsSelectedClassic)
+                _builtInHint.Visibility = loaded && (_viewModel.IsSelectedBuiltIn || _viewModel.IsSelectedClassic || _viewModel.IsSelectedReadOnly)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
@@ -956,9 +1003,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                         : _viewModel.IsSelectedBuiltIn
                             ? "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time."
                             : string.Empty;
-                    if (_viewModel.IsSelectedClassic)
+                    if (_viewModel.IsSelectedClassic && !_viewModel.IsSelectedReadOnly)
                         text = (text.Length > 0 ? text + " " : string.Empty)
                                + "This style is written in AKML's own model; it is shown in SQL Prompt's terms, and saving makes it a SQL Prompt style, formatted as the preview shows.";
+                    if (_viewModel.IsSelectedReadOnly)   // spec 040 (T187)
+                        text = "This team style is read-only — its folder can't be written to. Copy it to make a style of your own you can edit.";
                     _builtInHintText.Text = text;
                 }
             }
@@ -1073,6 +1122,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to rename."); return; }
             var item = _viewModel.Profiles.FirstOrDefault(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase));
             if (item?.IsShipped == true) { SetStatus("Built-in styles cannot be renamed — use Copy to make one you can name."); return; }
+            if (item?.IsReadOnly == true) { SetStatus(FormatStylesEditorViewModel.TeamReadOnlyText(current!)); return; }   // spec 040 (T187)
 
             string? newName;
             if (RenameNameOverride != null)
@@ -1109,6 +1159,11 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (item?.IsShipped == true)
             {
                 SetStatus("Built-in styles cannot be deleted. Use Copy to make one of your own.");
+                return;
+            }
+            if (item?.IsReadOnly == true)   // spec 040 (T187): a read-only team style
+            {
+                SetStatus(FormatStylesEditorViewModel.TeamReadOnlyText(current!));
                 return;
             }
             if (item?.IsActive == true)
@@ -2885,6 +2940,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // Spec 040 (STY-02): tabs line up at the selected style's own width.
                 _previewView.TabSize = _viewModel.PreviewTabSize;
             }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.TeamFolderUnavailable))
+            {
+                UpdateTeamUnavailableRow();   // spec 040 (T187)
+            }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))
             {
                 // T070 — toggle the warning bar above the preview pane.
@@ -2893,7 +2952,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedBuiltIn)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedCustomized)
-                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedClassic))
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedClassic)
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
             {
                 // Spec 033 — both flip on the UI thread (SetWorkingValue / SelectProfileAsync).
                 UpdateSaveButtonState();

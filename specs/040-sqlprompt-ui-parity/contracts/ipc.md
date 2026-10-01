@@ -137,5 +137,11 @@ so the schema-aware operations can resolve the document.
 | **9** | `Source` | `string?` | `"builtIn"`, `"user"` or `"team"` |
 | **10** | `IsReadOnly` | `bool` | Team style in a folder that can't be written to |
 
+### `ProfileListResponse`
+
+| Key | Field | Type | Meaning |
+|---|---|---|---|
+| **1** | `TeamFolderUnavailable` | `bool` | The team style folder is set but couldn't be reached (or took longer than 2 s); the shell shows *Team styles unavailable* |
+
 **Engine rule:** Save, Rename, Delete and ResetToBuiltIn on a read-only team style return
 `Success = false`, `Error = "'X' is a team style and can't be changed here — copy it to edit."`.

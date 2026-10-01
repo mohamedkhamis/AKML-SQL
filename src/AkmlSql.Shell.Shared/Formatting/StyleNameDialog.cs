@@ -40,7 +40,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _existingNames = new HashSet<string>((existingNames ?? new string[0]).Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase);
             _currentName = currentName?.Trim();
 
-            Title = title;
+            Title = AkmlSql.Core.Config.WindowTitles.For(title);
             Width = 420;
             SizeToContent = SizeToContent.Height;
             ResizeMode = ResizeMode.NoResize;
@@ -157,7 +157,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         /// <summary>Test seam: builds the dialog without showing it.</summary>
         internal static StyleNameDialog ForTests(string initialName, IReadOnlyCollection<string>? existingNames, string? currentName) =>
-            new StyleNameDialog("AKML SQL — Style name", "Name:", initialName, null, null, existingNames, currentName);
+            new StyleNameDialog("Style name", "Name:", initialName, null, null, existingNames, currentName);
 
         /// <summary>Test seam: the name box's text.</summary>
         internal string NameText
@@ -208,7 +208,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             Window owner, IReadOnlyList<string> baseCandidates, string? defaultBase, IReadOnlyCollection<string> existingNames)
         {
             var dialog = new StyleNameDialog(
-                "AKML SQL — New Style", "Name for the new style:", string.Empty, baseCandidates, defaultBase, existingNames)
+                "New style", "Name for the new style:", string.Empty, baseCandidates, defaultBase, existingNames)
             {
                 Owner = owner,
             };
@@ -226,7 +226,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         internal static string? ShowImportName(Window owner, string takenName, string suggested, IReadOnlyCollection<string> existingNames)
         {
             var dialog = new StyleNameDialog(
-                "AKML SQL — Import Style",
+                "Import style",
                 $"A style named '{takenName}' already exists. Import this one as:",
                 suggested, null, null, existingNames)
             {
@@ -243,7 +243,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         internal static string? ShowCopyStyle(Window owner, string sourceName, IReadOnlyCollection<string> existingNames, string suggested)
         {
             var dialog = new StyleNameDialog(
-                "AKML SQL — Copy Style", $"Name for the copy of '{sourceName}':", suggested, null, null, existingNames)
+                "Copy style", $"Name for the copy of '{sourceName}':", suggested, null, null, existingNames)
             {
                 Owner = owner,
             };
@@ -255,7 +255,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         internal static (bool Accepted, string Name) ShowRename(Window owner, string currentName, IReadOnlyCollection<string> existingNames)
         {
             var dialog = new StyleNameDialog(
-                "AKML SQL — Rename Style", $"New name for '{currentName}':", currentName, null, null, existingNames, currentName)
+                "Rename style", $"New name for '{currentName}':", currentName, null, null, existingNames, currentName)
             {
                 Owner = owner,
             };

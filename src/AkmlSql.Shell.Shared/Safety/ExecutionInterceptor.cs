@@ -103,9 +103,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 // OnBeforeExecute re-checks settings dynamically on each invocation.
                 ExecutionCommandFilter.Install(package);
 
-                // Register F1 help context for the safety dialog.
-                Help.F1HelpListener.Default.Register("akmlsql.dialog.safety",
-                    "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/execution-safety.md");
+                // F1 in the safety dialog: F1HelpRegistrations maps "akmlsql.dialog.safety" to the docs site.
 
                 Log.Information("ExecutionInterceptor: initialized (safety checks enabled)");
             }

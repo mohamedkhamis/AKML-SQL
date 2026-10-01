@@ -231,6 +231,52 @@ namespace AkmlSql.Shell.Shared.Formatting
             private set { if (_isSelectedCustomized != value) { _isSelectedCustomized = value; OnPropertyChanged(); } }
         }
 
+        private bool _isSelectedReadOnly;
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — the loaded style is a team style in a folder that can't be
+        /// written to: its options are shown but disabled, and Save, Rename, Delete and Reset are
+        /// refused (the engine refuses them too). Copy still works.
+        /// </summary>
+        public bool IsSelectedReadOnly
+        {
+            get => _isSelectedReadOnly;
+            private set { if (_isSelectedReadOnly != value) { _isSelectedReadOnly = value; OnPropertyChanged(); } }
+        }
+
+        private bool _teamFolderUnavailable;
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — a team style folder is set but the engine couldn't reach it
+        /// (ProfileListResponse key 1). The list shows "Team styles unavailable".
+        /// </summary>
+        public bool TeamFolderUnavailable
+        {
+            get => _teamFolderUnavailable;
+            private set { if (_teamFolderUnavailable != value) { _teamFolderUnavailable = value; OnPropertyChanged(); } }
+        }
+
+        /// <summary>Spec 040 (T187) — the configured team style folder, named by the unavailable row.</summary>
+        public string TeamStyleFolder { get; private set; } = string.Empty;
+
+        /// <summary>Spec 040 (T187) — the unavailable row's text (contracts/ui.md §4).</summary>
+        internal static string TeamFolderUnavailableText(string folder) =>
+            $"Team styles unavailable — {folder} can't be reached";
+
+        /// <summary>The engine's refusal text for a write to a read-only team style (contracts/ipc.md).</summary>
+        internal static string TeamReadOnlyText(string name) =>
+            $"'{name}' is a team style and can't be changed here — copy it to edit.";
+
+        /// <summary>True (with the refusal in <see cref="LastError"/>) when <paramref name="name"/> is a read-only team style.</summary>
+        private bool RefuseReadOnlyTeamStyle(string? name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            var readOnly = item?.IsReadOnly == true
+                           || (IsSelectedReadOnly && string.Equals(name, _loadedProfileName, StringComparison.OrdinalIgnoreCase));
+            if (!readOnly) return false;
+            LastError = TeamReadOnlyText(name!);
+            return true;
+        }
+
         /// <summary>
         /// Window-provided prompt shown when switching away from (or closing over) unsaved
         /// edits. Null (headless/tests without a handler) behaves as Discard.
@@ -813,6 +859,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // be renamed or deleted and can still be reset.
                 IsSelectedBuiltIn = response.HasBuiltIn;
                 IsSelectedCustomized = response.IsCustomizedBuiltIn;
+                // Spec 040 (T187): a read-only team style is shown but can't be changed.
+                IsSelectedReadOnly = Profiles.Any(p => p.IsReadOnly && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
                 CaptureSavedValues();
                 IsDirty = false;
                 LastError = null;
@@ -835,6 +883,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             SelectedProfileName = null;
             IsSelectedBuiltIn = false;
             IsSelectedCustomized = false;
+            IsSelectedReadOnly = false;
             IsSelectedClassic = false;
             _savedValues = new Dictionary<string, object?>(StringComparer.Ordinal);
             IsDirty = false;
@@ -961,6 +1010,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 LastError = "No style loaded.";
                 return false;
             }
+            if (RefuseReadOnlyTeamStyle(_loadedProfileName)) return false;   // spec 040 (T187)
             if (!IsSelectedBuiltIn)
             {
                 // Guarded here as well as in the engine: a custom style has no shipped original to
@@ -1037,6 +1087,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 LastError = "No style loaded.";
                 return false;
             }
+            if (RefuseReadOnlyTeamStyle(_loadedProfileName)) return false;   // spec 040 (T187)
             if (!_rpc.IsConnected)
             {
                 LastError = "Engine not connected.";
@@ -1170,6 +1221,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             // override to the style it overrides, so renaming one would orphan the original rather
             // than rename anything. Copy makes an independent style that can be named freely.
             if (IsSelectedBuiltIn) { LastError = "Built-in styles cannot be renamed — use Copy to make one you can name."; return null; }
+            if (RefuseReadOnlyTeamStyle(target)) return null;   // spec 040 (T187)
             if (string.IsNullOrWhiteSpace(newName)) { LastError = "Enter a new name."; return null; }
             if (!_rpc.IsConnected) { LastError = "Engine not connected."; return null; }
 
@@ -1236,6 +1288,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     : "Built-in styles cannot be deleted.";
                 return false;
             }
+            if (RefuseReadOnlyTeamStyle(target)) return false;   // spec 040 (T187)
 
             try
             {
@@ -1466,11 +1519,17 @@ namespace AkmlSql.Shell.Shared.Formatting
                 else
                     await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
+                // Spec 040 (T187): the team folder's state, for the "Team styles unavailable" row.
+                try { TeamStyleFolder = ConfigManager.Load().Formatter.TeamStyleFolder ?? string.Empty; }
+                catch (Exception ex) { Log.Debug(ex, "FormatStylesEditor: team-folder read failed"); }
+                TeamFolderUnavailable = response?.TeamFolderUnavailable == true;
+
                 Profiles.Clear();
                 if (response?.Profiles == null) return;
 
                 foreach (var p in response.Profiles)
                 {
+                    var isTeam = string.Equals(p.Source, StyleListItem.TeamSource, StringComparison.OrdinalIgnoreCase);
                     Profiles.Add(new StyleListItem
                     {
                         Name = p.Name ?? string.Empty,
@@ -1478,10 +1537,14 @@ namespace AkmlSql.Shell.Shared.Formatting
                         // IsBuiltIn alone cannot describe an edited built-in: the file that
                         // resolves is the custom one, so IsBuiltIn is false while the style is
                         // still shipped. The two flags together say "shipped" and "changed".
-                        IsShipped = p.IsBuiltIn || p.IsCustomizedBuiltIn,
-                        IsCustomized = p.IsCustomizedBuiltIn,
+                        // A team style that shadows a shipped name is the team's, not shipped.
+                        IsShipped = !isTeam && (p.IsBuiltIn || p.IsCustomizedBuiltIn),
+                        IsCustomized = !isTeam && p.IsCustomizedBuiltIn,
                         BasedOn = p.BasedOn,
                         IsActive = activeProfile != null && string.Equals(p.Name, activeProfile, StringComparison.OrdinalIgnoreCase),
+                        // Spec 040 (T187, STY-10): team styles get their own group; read-only ones can only be copied.
+                        Source = p.Source,
+                        IsReadOnly = isTeam && p.IsReadOnly,
                     });
                 }
             }
@@ -1644,7 +1707,9 @@ VALUES ('SampleQuery', GETDATE());";
         /// no way to tell, from the list, whether a built-in is the shipped style or your edited
         /// version of it -- and that is exactly what someone reaching for Reset needs to know.
         /// </summary>
-        public string Kind => IsCustomized ? "Built-in \u00b7 modified" : IsShipped ? "Built-in" : "Native";
+        public string Kind =>
+            IsTeam ? (IsReadOnly ? "Team \u00b7 read-only" : "Team")
+            : IsCustomized ? "Built-in \u00b7 modified" : IsShipped ? "Built-in" : "Native";
 
         /// <summary>If this profile was forked from another, that source name.</summary>
         public string? BasedOn { get; set; }
@@ -1652,8 +1717,29 @@ VALUES ('SampleQuery', GETDATE());";
         /// <summary>Spec 033 — ✔ marker: this style is <c>Formatter.ActiveProfile</c> (shell config).</summary>
         public bool IsActive { get; set; }
 
-        /// <summary>Spec 033 — list section header ("Your styles" / "Built-in styles").</summary>
-        public string Section => IsShipped ? "Built-in styles" : "Your styles";
+        /// <summary>Spec 033 — list section header ("Your styles" / "Team styles" / "Built-in styles").</summary>
+        public string Section => IsTeam ? "Team styles" : IsShipped ? "Built-in styles" : "Your styles";
+
+        /// <summary>Spec 040 — section order: your styles, then team styles, then built-in styles.</summary>
+        public int SectionOrder => IsTeam ? 1 : IsShipped ? 2 : 0;
+
+        /// <summary><see cref="Source"/> of a style from the shared team style folder.</summary>
+        internal const string TeamSource = "team";
+
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — where the style comes from: "builtIn", "user" or "team"
+        /// (ProfileInfo key 9; null from an older engine).
+        /// </summary>
+        public string? Source { get; set; }
+
+        /// <summary>Spec 040 — a style from the shared team style folder.</summary>
+        public bool IsTeam => string.Equals(Source, TeamSource, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Spec 040 (T187) — a team style in a folder that can't be written to: options disabled,
+        /// Save / Rename / Delete disabled, Copy allowed.
+        /// </summary>
+        public bool IsReadOnly { get; set; }
 
         public override string ToString() =>
             string.IsNullOrEmpty(Description) ? Name : $"{Name} — {Description}";

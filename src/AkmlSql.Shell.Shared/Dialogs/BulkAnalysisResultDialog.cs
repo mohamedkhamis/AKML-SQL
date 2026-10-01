@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
-using Constants = AkmlSql.Core.Constants;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Dialogs
 {
@@ -40,7 +41,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void Build()
         {
-            Text            = Constants.ProductName + " — Code Analysis Results";
+            Text            = WindowTitles.For("Code analysis results");
+            WindowIcon.Apply(this);
             Size            = new Size(960, 580);
             MinimumSize     = new Size(720, 420);
             StartPosition   = FormStartPosition.CenterParent;

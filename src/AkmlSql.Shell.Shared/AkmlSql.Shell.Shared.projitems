@@ -29,6 +29,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpListener.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpRegistrations.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Help\HelpBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatRequestDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorWindow.cs" />
@@ -36,6 +37,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleMenuCommands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatFeedback.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RegisteredCommands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AkmlMenuTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ImportSummaryDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\SsmsConnectionContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
@@ -47,6 +49,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\EditEnvironmentsDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\PageTheme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
@@ -115,6 +118,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareUserControl.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreview\SqlPreviewView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
+    <!-- Spec 040 T182 — the AKML icon for windows and forms (embedded Resources\akml.ico, below) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\WindowIcon.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
@@ -259,6 +264,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\FuzzyMatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\OptionPaletteEntry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\CommandPaletteCommand.cs" />
     <!-- Phase 8 US6 — Highlight Occurrences & Bracket Matching -->
     <Compile Include="$(MSBuildThisFileDirectory)Editor\OccurrenceHighlightTagger.cs" />
@@ -345,5 +351,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkGlyphFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkCommands.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Spec 040 T182 — window/form icon (a copy of src\AkmlSql.Installer\assets\icon.ico), read by
+         Ui\WindowIcon.cs. LogicalName fixes the manifest name in every importing project. -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\akml.ico">
+      <LogicalName>AkmlSql.Shell.Shared.Resources.akml.ico</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

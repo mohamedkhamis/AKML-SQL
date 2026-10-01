@@ -13,8 +13,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class ConnectionsMemoryPage : IPageBuilder
     {
         public string Key     => "ConnectionsMemory";
-        public string Display => "Connections & Memory";
-        public string Title   => "Connections & Memory";
+        public string Display => "Connections & memory";
+        public string Title   => "Connections & memory";
+        public string HelpTopic => "topics/options#connections-memory";
         public string Help    => "Controls how AKML SQL connects to load the schema for suggestions, including reuse of SQL Server-auth passwords so SQL-auth windows get IntelliSense.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

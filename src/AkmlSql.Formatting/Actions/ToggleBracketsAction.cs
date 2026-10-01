@@ -17,11 +17,27 @@ namespace AkmlSql.Formatting.Actions;
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
 public class ToggleBracketsAction : IFormatAction
 {
+    private readonly bool? _addBrackets;
+
+    /// <summary>Adds or removes as the profile's <c>addSquareBrackets</c> says.</summary>
+    public ToggleBracketsAction()
+    {
+    }
+
+    /// <summary>
+    /// Spec 040 (STY-11) — adds (<c>true</c>) or removes (<c>false</c>) whatever the profile says, so
+    /// the Format SQL actions never have to change a (possibly shared) profile to choose.
+    /// </summary>
+    public ToggleBracketsAction(bool addBrackets)
+    {
+        _addBrackets = addBrackets;
+    }
+
     public FormatResult Execute(string sql, FormattingProfile profile)
     {
         var sw = Stopwatch.StartNew();
         var diagnostics = new List<FormatDiagnostic>();
-        bool addBrackets = profile.FormatActions.AddSquareBrackets;
+        bool addBrackets = _addBrackets ?? profile.FormatActions.AddSquareBrackets;
 
         try
         {
@@ -71,8 +87,9 @@ public class ToggleBracketsAction : IFormatAction
                         t.Text.StartsWith("[") && t.Text.EndsWith("]"))
                     {
                         var inner = t.Text[1..^1];
-                        // Only remove brackets if the inner text is a simple identifier
-                        if (IsSimpleIdentifier(inner))
+                        // Only remove brackets if the inner text is a simple identifier — and not a
+                        // reserved word, which needs them ("[Order]" unwrapped is ORDER, a syntax error).
+                        if (IsSimpleIdentifier(inner) && LexesAsIdentifier(inner, parser))
                         {
                             replacements.Add((t.Offset, t.Text.Length, inner));
                         }
@@ -121,6 +138,19 @@ public class ToggleBracketsAction : IFormatAction
                 Diagnostics = [new FormatDiagnostic { Severity = DiagnosticSeverity.Error, Message = ex.Message }]
             };
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="text"/> on its own is a plain identifier token — false for reserved
+    /// words (ORDER, TABLE, …), which only work as names inside brackets.
+    /// </summary>
+    private static bool LexesAsIdentifier(string text, TSql170Parser parser)
+    {
+        using var reader = new StringReader(text);
+        var tokens = parser.GetTokenStream(reader, out var errors);
+        if (errors.Count > 0) return false;
+        var significant = tokens.Where(t => t.TokenType is not (TSqlTokenType.EndOfFile or TSqlTokenType.WhiteSpace)).ToList();
+        return significant.Count == 1 && significant[0].TokenType == TSqlTokenType.Identifier;
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Ui;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Orientation = System.Windows.Controls.Orientation;
 
@@ -84,7 +85,8 @@ namespace AkmlSql.Shell.Shared.Editor
             _fgBrush = (SolidColorBrush)registry[ThemeTokens.TextPrimary];
             _mutedBrush = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
 
-            Title = "AKML SQL — SQL authentication";
+            Title = WindowTitles.For("SQL authentication");
+            WindowIcon.Apply(this);
             Width = 430;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

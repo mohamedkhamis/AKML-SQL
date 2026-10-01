@@ -16,8 +16,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class SpecialCharactersPage : IPageBuilder
     {
         public string Key     => "SpecialCharacters";
-        public string Display => "Inserted Code › Special characters";
+        public string Display => "Inserted code › Special characters";
         public string Title   => "Special characters";
+        public string HelpTopic => "topics/options#inserted-code-special-characters";
         public string Help    => "Controls the special characters AKML SQL inserts as you type and complete: when identifiers are wrapped in [square brackets], whether parentheses are added after a function is committed, and whether typing an opening bracket, brace, or quote inserts its matching closing character.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -48,27 +49,27 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowSingle, chkSingle) = ctx.Rows.AddToggle(panel,
                 "Single quotation mark ( ' )",
-                "Typing ' inserts the closing ' after the caret");
+                "Typing ' inserts the closing ' after the caret", chkAutoClose);
             ctx.RegisterSearch("Single quotation mark ( ' )", "Auto-close single quotation marks", "Toggle", rowSingle);
 
             var (rowDouble, chkDouble) = ctx.Rows.AddToggle(panel,
                 "Double quotation mark ( \" )",
-                "Typing \" inserts the closing \" after the caret");
+                "Typing \" inserts the closing \" after the caret", chkAutoClose);
             ctx.RegisterSearch("Double quotation mark ( \" )", "Auto-close double quotation marks", "Toggle", rowDouble);
 
             var (rowComment, chkComment) = ctx.Rows.AddToggle(panel,
                 "Comment mark ( */ )",
-                "Typing /* inserts the closing */ after the caret");
+                "Typing /* inserts the closing */ after the caret", chkAutoClose);
             ctx.RegisterSearch("Comment mark ( */ )", "Auto-close block comment marks", "Toggle", rowComment);
 
             var (rowParen, chkParen) = ctx.Rows.AddToggle(panel,
                 "Parenthesis )",
-                "Typing ( inserts the closing ) after the caret");
+                "Typing ( inserts the closing ) after the caret", chkAutoClose);
             ctx.RegisterSearch("Parenthesis )", "Auto-close parentheses", "Toggle", rowParen);
 
             var (rowSquare, chkSquare) = ctx.Rows.AddToggle(panel,
                 "Square bracket ]",
-                "Typing [ inserts the closing ] after the caret");
+                "Typing [ inserts the closing ] after the caret", chkAutoClose);
             ctx.RegisterSearch("Square bracket ]", "Auto-close square brackets", "Toggle", rowSquare);
 
             return new SpecialCharactersControls(cboBracket, chkAddParens, chkAutoClose,

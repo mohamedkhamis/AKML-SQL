@@ -35,6 +35,7 @@ namespace AkmlSql.Core.Config
                 {
                     Log.Information("No config file found at {Path}, creating defaults", path);
                     var defaults = new AppSettings();
+                    MigrateTabEnvironments(defaults);
                     Save(defaults);
                     return defaults;
                 }
@@ -42,6 +43,7 @@ namespace AkmlSql.Core.Config
                 var json = File.ReadAllText(path);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
                 AiAgentResolver.Normalize(settings.Ai);
+                MigrateTabEnvironments(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -67,18 +69,39 @@ namespace AkmlSql.Core.Config
                 if (!File.Exists(path))
                 {
                     Log.Warning("Config file not found at {Path}, using defaults", path);
-                    return new AppSettings();
+                    var defaults = new AppSettings();
+                    MigrateTabEnvironments(defaults);
+                    return defaults;
                 }
 
                 var json = File.ReadAllText(path);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
                 AiAgentResolver.Normalize(settings.Ai);
+                MigrateTabEnvironments(settings);
                 return settings;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Failed to load config from {Path}, using defaults", path);
                 return new AppSettings();
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-08, data-model §1.3) — the tab-colour environments migration, in memory
+        /// only (nothing is written here; the next save persists it). Idempotent. A failure is
+        /// logged and leaves the settings as read, so a migration bug can never cost the user the
+        /// rest of their configuration.
+        /// </summary>
+        private static void MigrateTabEnvironments(AppSettings settings)
+        {
+            try
+            {
+                Models.Tabs.TabEnvironmentMigration.Apply(settings.Tabs);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Config: tab-colour environment migration failed; settings kept as read");
             }
         }
 

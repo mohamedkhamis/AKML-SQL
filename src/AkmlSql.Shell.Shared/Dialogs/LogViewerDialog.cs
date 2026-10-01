@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Dialogs
@@ -67,7 +69,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void BuildUi()
         {
-            Text            = Constants.ProductName + " — Log Viewer";
+            Text            = WindowTitles.For("Log viewer");
+            WindowIcon.Apply(this);
             Size            = new Size(1080, 680);
             MinimumSize     = new Size(800, 520);
             StartPosition   = FormStartPosition.CenterParent;

@@ -123,7 +123,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 "The model 'kimi-k9' was not found at 'kimi' (HTTP 404). Use a valid model, e.g. \"kimi-latest\", or update the Model field.",
                 "Could not reach the AI provider endpoint 'https://api.moonshot.ai/v1'. Check the URL and the network connection.",
                 "The 'kimi' account is rate-limited or out of quota (HTTP 429). Check the plan/billing with the provider, or wait and retry.",
-                "The provider did not respond within the AI timeout (30s). Increase 'Timeout (seconds)' under Options → AI Assistance.",
+                "The provider did not respond within the AI timeout (30s). Increase 'Timeout' under Options → AI Assistance.",
             };
 
             var rendered = new System.Collections.Generic.List<string>();

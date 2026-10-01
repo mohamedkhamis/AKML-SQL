@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -33,7 +34,8 @@ namespace AkmlSql.Ssms22
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration(Constants.ProductName, "AI-powered SQL development assistance", Constants.Version)]
-    [ProvideMenuResource("Menus.ctmenu", 1)]
+    // Spec 040 (T181): version 2 — the command table's groups and submenus changed, so SSMS re-merges it.
+    [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideAutoLoad("B7B07F42-6013-4C67-A504-C771CBC7625A", PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideToolWindow(typeof(HistoryToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
     [ProvideToolWindow(typeof(DocumentOutlineToolWindow), Style = VsDockStyle.Tabbed, Window = "3ae79031-e1bc-11d0-8f78-00a0c9110057")]
@@ -222,11 +224,10 @@ namespace AkmlSql.Ssms22
                 // than one exists (recovers from any historical accumulation bug).
                 EnsureStandardToolbarHistoryButton();
 
-                // Top-level AKML SQL menu bar popup. This is added ONCE per process
-                // via a static guard and was never actually accumulating — only the
-                // Standard toolbar button was. We restore this call so the user has
-                // the AKML SQL menu back.
-                EnsureTopLevelMenu(this);
+                // Spec 040 (T180): the AKML SQL menu (built from AkmlMenuTable, once per process,
+                // rebuilt when an older menu lacks the version marker) and the SQL editor's context
+                // menu (one Format Document, one Active Style). Commands are registered above.
+                EnsureTopLevelMenu(commandService);
 
                 Log.Information("AKML SQL package initialized successfully for SSMS 22");
             }
@@ -419,13 +420,21 @@ namespace AkmlSql.Ssms22
         // Process-static guard: EnsureTopLevelMenu runs at most ONCE per process.
         private static int _menuInjected;
 
+        // Spec 040 (T180): the AI ▸ popup of the AKML SQL menu, and whether it is shown now.
+        private static object _aiPopup;
+        private static bool _aiPopupVisible;
+        private static bool _syncingAiMenu;
+
         /// <summary>
-        /// Programmatically adds the top-level "AKML SQL" popup to the DTE Menu Bar.
-        /// This function never accumulated duplicates (only the Standard toolbar did),
-        /// so we keep it. The once-per-process guard plus the duplicate-detection
-        /// loop at the top prevent any re-addition.
+        /// Spec 040 (T180, X-01, FR-060, FR-034) — the "AKML SQL" menu on the DTE menu bar, built from
+        /// <see cref="AkmlMenuTable.Entries"/> (the VSCT menu is invisible in SSMS 22): nested popups for
+        /// the submenus, separators from <c>BeginGroup</c>, and the version marker
+        /// <see cref="AkmlMenuTable.Marker"/> in the popup's <c>Tag</c>. An "AKML SQL" popup without the
+        /// marker (an older build's menu) is deleted and the menu rebuilt, once; one with it is kept.
+        /// Then the SQL editor's context menu gets Format Document and Active Style ▸. Runs after the
+        /// commands are registered, and every COM failure is logged and skipped.
         /// </summary>
-        private static void EnsureTopLevelMenu(AsyncPackage package)
+        private static void EnsureTopLevelMenu(OleMenuCommandService commandService)
         {
             if (System.Threading.Interlocked.CompareExchange(ref _menuInjected, 1, 0) != 0)
             {
@@ -442,96 +451,17 @@ namespace AkmlSql.Ssms22
                 dynamic bars = dte.CommandBars;
                 if (bars == null) return;
 
-                dynamic menuBar = bars["Menu Bar"];
-                if (menuBar == null) return;
-
-                // If an AKML SQL popup already exists, REUSE it as-is (don't add
-                // commands again — they're persisted from the previous load). This
-                // is the key to not accumulating child commands on re-loads.
-                foreach (dynamic ctrl in menuBar.Controls)
+                try
                 {
-                    string cap;
-                    try { cap = ((string)ctrl.Caption).Replace("&", "").Trim(); }
-                    catch { continue; }
-                    if (cap.Equals("AKML SQL", StringComparison.OrdinalIgnoreCase))
-                    {
-                        Log.Information("EnsureTopLevelMenu: AKML SQL popup already present, leaving as-is");
-                        return;
-                    }
+                    BuildAkmlMenu(dte, (object)bars);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "AKML SQL menu: could not build the menu (non-fatal)");
                 }
 
-                // Not found — insert a new popup just before the Window menu.
-                int insertPos = (int)menuBar.Controls.Count;
-                foreach (dynamic ctrl in menuBar.Controls)
-                {
-                    string cap;
-                    try { cap = ((string)ctrl.Caption).Replace("&", ""); }
-                    catch { continue; }
-                    if (cap.StartsWith("Window"))
-                    {
-                        insertPos = (int)ctrl.Index;
-                        break;
-                    }
-                }
-
-                // msoControlPopup = 10, Temporary = true
-                dynamic popup = menuBar.Controls.Add(10, Type.Missing, Type.Missing, insertPos, true);
-                popup.Caption = "AKML SQL";
-
-                // Populate commands via DTE.Commands
-                var cmdSetGuid = PackageGuids.AkmlSqlCmdSetString;
-                var cmds = new (int id, string label)[]
-                {
-                    (CommandIds.CmdAbout, "About AKML SQL"),
-                    (CommandIds.CmdCheckUpdate, "Check for Updates"),
-                    (CommandIds.CmdOptions, "Options"),
-                    // Spec 033 (T039) — was missing from this hardcoded DTE-popup list, so the
-                    // window was invisible in the injected SSMS menu despite the VSCT button.
-                    (CommandIds.CmdFormatStyles, "Format Styles..."),
-                    (CommandIds.CmdSendFeedback, "Send Feedback"),
-                    (CommandIds.CmdViewLogs, "View Logs"),
-                    (CommandIds.CmdRefreshCache, "Refresh Schema Cache"),
-                    (CommandIds.CmdFormatDocument, "Format Document"),
-                    (CommandIds.CmdFormatSelection, "Format Selection"),
-                    (CommandIds.CmdUnformat, "Unformat Document"),
-                    (CommandIds.CmdHistoryPanel, "SQL History"),
-                    (CommandIds.CmdRestoreClosedTab, "Restore Closed Tab"),
-                    (CommandIds.CmdCommandPalette, "Command Palette"),
-                    (CommandIds.CmdDocumentOutline, "Document Outline"),
-                    (CommandIds.CmdObjectSearch, "Object Search"),
-                };
-
-                dynamic popupBar = popup.CommandBar;
-                foreach (var (id, label) in cmds)
-                {
-                    try
-                    {
-                        var cmd = dte.Commands.Item("{" + cmdSetGuid + "}", id);
-                        if (cmd != null)
-                        {
-                            cmd.AddControl(popupBar, popupBar.Controls.Count + 1);
-                        }
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            dynamic btn = popupBar.Controls.Add(1, Type.Missing, Type.Missing, Type.Missing, true);
-                            btn.Caption = label;
-                            btn.Enabled = false;
-                        }
-                        catch { /* Swallow */ }
-                    }
-                }
-
-                // Spec 040 (T110) — interim placement until US7's menu builder: an "Active Style"
-                // submenu under AKML SQL, and the same submenu plus Format Document on the query
-                // editor's context menu.
-                AddActiveStylePopup(dte, popupBar, cmdSetGuid);
-                AddEditorContextActiveStyle(dte, bars, cmdSetGuid);
-
-                popup.Visible = true;
-                Log.Information("AKML SQL top-level menu created with {Count} items", cmds.Length);
+                EnsureEditorContextMenu(dte, (object)bars);
+                WatchAiMenuVisibility(commandService);
             }
             catch (Exception ex)
             {
@@ -541,57 +471,187 @@ namespace AkmlSql.Ssms22
         }
 
         /// <summary>
-        /// Spec 040 (T110) — adds an "Active Style" popup (30 style slots + Edit Styles…) to
-        /// <paramref name="parentBar"/>. The slots show only as many styles as exist (their
-        /// BeforeQueryStatus hides the rest). Best effort: a failure leaves the rest of the menu.
+        /// Spec 040 (T180) — applies <see cref="AkmlMenuTable.PlanMenuBar"/> to the menu bar: removes
+        /// any "AKML SQL" popup without the current marker (or a duplicate), keeps a current one, and
+        /// otherwise builds the menu just before Window.
         /// </summary>
-        private static void AddActiveStylePopup(EnvDTE.DTE dte, dynamic parentBar, string cmdSetGuid)
+        private static void BuildAkmlMenu(EnvDTE.DTE dte, object barsObject)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            dynamic bars = barsObject;
+            dynamic menuBar = bars["Menu Bar"];
+            if (menuBar == null) return;
+
+            var controls = new List<object>();
+            var seen = new List<(string Caption, string Tag)>();
+            foreach (dynamic ctrl in menuBar.Controls)
+            {
+                object control = ctrl;
+                controls.Add(control);
+                seen.Add((ReadCaption(control), ReadTag(control)));
+            }
+
+            var plan = AkmlMenuTable.PlanMenuBar(seen);
+            foreach (var index in plan.Remove)
+            {
+                RemoveControl(controls[index], "Menu Bar");
+            }
+
+            if (!plan.Add)
+            {
+                TrackAiPopup(controls[plan.Keep]);
+                Log.Information("AKML SQL menu: the current menu ({Marker}) is already there, kept", AkmlMenuTable.Marker);
+                return;
+            }
+
+            // A new popup just before the Window menu. msoControlPopup = 10, Temporary = true.
+            dynamic popup = menuBar.Controls.Add(10, Type.Missing, Type.Missing, PositionBeforeWindow((object)menuBar), true);
+            popup.Caption = AkmlMenuTable.MenuCaption;
+            try { popup.Tag = AkmlMenuTable.Marker; }
+            catch (Exception ex) { Log.Debug(ex, "AKML SQL menu: could not set the version marker"); }
+
+            var stats = new MenuBuildStats();
+            dynamic popupBar = popup.CommandBar;
+            foreach (var entry in AkmlMenuTable.Entries)
+            {
+                AddMenuEntry(dte, (object)popupBar, entry, null, stats);
+            }
+
+            popup.Visible = true;
+            Log.Information("AKML SQL menu built ({Marker}): {Added} items, {Failed} could not be added; removed {Removed} older menu(s)",
+                AkmlMenuTable.Marker, stats.Added, stats.Failed, plan.Remove.Count);
+        }
+
+        /// <summary>The 1-based position of the Window menu (where AKML SQL goes), else the end.</summary>
+        private static int PositionBeforeWindow(object menuBarObject)
+        {
+            dynamic menuBar = menuBarObject;
+            int position = (int)menuBar.Controls.Count + 1;
+            foreach (dynamic ctrl in menuBar.Controls)
+            {
+                if (AkmlMenuTable.NormalizeCaption(ReadCaption((object)ctrl)).StartsWith("Window", StringComparison.OrdinalIgnoreCase))
+                {
+                    try { position = (int)ctrl.Index; } catch { /* keep the end */ }
+                    break;
+                }
+            }
+            return position;
+        }
+
+        private sealed class MenuBuildStats
+        {
+            public int Added;
+            public int Failed;
+        }
+
+        /// <summary>
+        /// Spec 040 (T180) — adds one table entry to <paramref name="barObject"/> at <paramref name="before"/>
+        /// (1-based; null = at the end): a command through <c>Command.AddControl</c> with the table's
+        /// caption, or a temporary popup holding its children. Returns the control, or null.
+        /// </summary>
+        private static object AddMenuEntry(EnvDTE.DTE dte, object barObject, AkmlMenuEntry entry, int? before, MenuBuildStats stats)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            dynamic bar = barObject;
+            dynamic control = null;
             try
             {
-                dynamic popup = parentBar.Controls.Add(10, Type.Missing, Type.Missing, Type.Missing, true);
-                popup.Caption = "Active Style";
-                dynamic bar = popup.CommandBar;
-                for (var i = 0; i < CommandIds.ActiveStyleSlotCount; i++)
+                if (entry.IsSubmenu)
                 {
-                    var cmd = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdActiveStyleSlot0 + i);
-                    cmd?.AddControl(bar, bar.Controls.Count + 1);
+                    // msoControlPopup = 10, Temporary = true: rebuilt with the menu each start.
+                    control = bar.Controls.Add(10, Type.Missing, Type.Missing, before.HasValue ? (object)before.Value : Type.Missing, true);
+                    control.Caption = entry.Caption;
+                    dynamic childBar = control.CommandBar;
+                    foreach (var child in entry.Children)
+                    {
+                        AddMenuEntry(dte, (object)childBar, child, null, stats);
+                    }
+
+                    if (entry.AiOnly)
+                    {
+                        _aiPopup = control;
+                        _aiPopupVisible = IsAiMenuVisible();
+                        control.Visible = _aiPopupVisible;
+                    }
+                    else
+                    {
+                        control.Visible = true;
+                    }
                 }
-                var edit = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdEditStyles);
-                if (edit != null)
+                else
                 {
-                    dynamic control = edit.AddControl(bar, bar.Controls.Count + 1);
-                    control.BeginGroup = true;
+                    var command = dte.Commands.Item("{" + PackageGuids.AkmlSqlCmdSetString + "}", entry.CommandId);
+                    control = command.AddControl(bar, before ?? (int)bar.Controls.Count + 1);
+                    SetCaption((object)control, entry.Caption);
                 }
-                popup.Visible = true;
+
+                if (entry.BeginGroup) control.BeginGroup = true;
+                stats.Added++;
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Active Style: could not add the submenu");
+                stats.Failed++;
+                Log.Debug(ex, "AKML SQL menu: could not add '{Entry}' (0x{Id:X4})", entry, entry.CommandId);
+                if (control == null && !entry.IsSubmenu && entry.Caption != null)
+                {
+                    // As the old fallback did: show the item, disabled, rather than lose it silently.
+                    try
+                    {
+                        control = bar.Controls.Add(1, Type.Missing, Type.Missing, before.HasValue ? (object)before.Value : Type.Missing, true);
+                        control.Caption = entry.Caption;
+                        control.Enabled = false;
+                    }
+                    catch { control = null; }
+                }
+            }
+            return control;
+        }
+
+        /// <summary>Gives a command's control the table's text (the VSCT text stays the command's own).</summary>
+        private static void SetCaption(object control, string caption)
+        {
+            if (caption == null) return;
+            try
+            {
+                if (!string.Equals(AkmlMenuTable.NormalizeCaption(ReadCaption(control)), caption, StringComparison.Ordinal))
+                {
+                    ((dynamic)control).Caption = caption;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "AKML SQL menu: could not set the caption '{Caption}'", caption);
             }
         }
 
         /// <summary>
-        /// Spec 040 (T110) — finds the query editor's context menu among the DTE command bars (a
-        /// name containing "SQL" and "Context", or "Code Window") and adds Active Style and Format
-        /// Document to it. SSMS's bar names are not documented, so every candidate is logged; when
-        /// none matches, the menu bar placement is all there is.
+        /// Spec 040 (T110, T180, FR-034) — the SQL query editor's context menu (picked by
+        /// <see cref="ActiveStyleMenuCommands.PickEditorContextBar"/>) gets
+        /// <see cref="AkmlMenuTable.EditorContextEntries"/>: Format Document, then Active Style ▸.
+        /// Format Document is a persistent control (<c>Command.AddControl</c>), so it is found again on
+        /// the next start: <see cref="AkmlMenuTable.PlanEditorContext"/> keeps one of each, removes
+        /// extra copies (earlier builds added one per start) and adds only what is missing.
         /// </summary>
-        private static void AddEditorContextActiveStyle(EnvDTE.DTE dte, dynamic bars, string cmdSetGuid)
+        private static void EnsureEditorContextMenu(EnvDTE.DTE dte, object barsObject)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            dynamic bars = barsObject;
             try
             {
-                var byName = new Dictionary<string, dynamic>(StringComparer.OrdinalIgnoreCase);
+                var byName = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
                 foreach (dynamic bar in bars)
                 {
                     string name;
                     try { name = (string)bar.Name; }
                     catch { continue; }
-                    if (!byName.ContainsKey(name)) byName[name] = bar;
+                    if (!string.IsNullOrEmpty(name) && !byName.ContainsKey(name)) byName[name] = (object)bar;
                 }
+                Log.Debug("Active Style: context menu candidates: {Names}", string.Join(", ", byName.Keys.Where(n =>
+                    n.IndexOf("Context", StringComparison.OrdinalIgnoreCase) >= 0
+                    || string.Equals(n, "Code Window", StringComparison.OrdinalIgnoreCase))));
 
-                // The first candidate used to win, which was VS's generic "Code Window" menu, not
-                // the SQL query editor's ("SQL Files Editor Context").
+                // VS's generic "Code Window" used to win by coming first; SSMS's query editor menu is
+                // "SQL Files Editor Context".
                 var targetName = ActiveStyleMenuCommands.PickEditorContextBar(byName.Keys);
                 if (targetName == null)
                 {
@@ -600,14 +660,186 @@ namespace AkmlSql.Ssms22
                 }
                 dynamic target = byName[targetName];
 
-                AddActiveStylePopup(dte, target, cmdSetGuid);
-                var format = dte.Commands.Item("{" + cmdSetGuid + "}", CommandIds.CmdFormatDocument);
-                format?.AddControl(target, target.Controls.Count + 1);
-                Log.Information("Active Style: added to the editor context menu '{Name}'", targetName);
+                var controls = new List<object>();
+                var seen = new List<(string Caption, bool Visible)>();
+                foreach (dynamic ctrl in target.Controls)
+                {
+                    object control = ctrl;
+                    controls.Add(control);
+                    seen.Add((ReadCaption(control), ReadVisible(control)));
+                }
+
+                var plans = AkmlMenuTable.PlanEditorContext(seen);
+                foreach (var index in plans.SelectMany(p => p.Remove))
+                {
+                    RemoveControl(controls[index], targetName);
+                }
+
+                // What each entry ends up as: the kept control, else one added next to its neighbours.
+                var placed = new object[plans.Count];
+                for (var i = 0; i < plans.Count; i++)
+                {
+                    if (plans[i].Add) continue;
+                    placed[i] = controls[plans[i].Keep];
+                    if (plans[i].Reveal)
+                    {
+                        try { ((dynamic)placed[i]).Visible = true; }
+                        catch (Exception ex) { Log.Debug(ex, "Active Style: could not show a hidden item"); }
+                    }
+                }
+
+                var stats = new MenuBuildStats();
+                for (var i = 0; i < plans.Count; i++)
+                {
+                    if (!plans[i].Add) continue;
+                    placed[i] = AddMenuEntry(dte, (object)target, AkmlMenuTable.EditorContextEntries[i], PositionFor(placed, i), stats);
+                }
+
+                Log.Information("Active Style: editor context menu '{Name}' — kept {Kept}, added {Added}, removed {Removed} duplicate(s)",
+                    targetName, plans.Count(p => !p.Add), stats.Added, plans.Sum(p => p.Remove.Count));
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Active Style: could not add to the editor context menu");
+            }
+        }
+
+        /// <summary>
+        /// Where entry <paramref name="index"/> goes so the entries stay in table order: right after
+        /// the nearest earlier one that is placed, else before the nearest later one, else at the end
+        /// (null).
+        /// </summary>
+        private static int? PositionFor(object[] placed, int index)
+        {
+            try
+            {
+                for (var i = index - 1; i >= 0; i--)
+                {
+                    if (placed[i] != null) return (int)((dynamic)placed[i]).Index + 1;
+                }
+                for (var i = index + 1; i < placed.Length; i++)
+                {
+                    if (placed[i] != null) return (int)((dynamic)placed[i]).Index;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Active Style: could not read a menu position; adding at the end");
+            }
+            return null;
+        }
+
+        /// <summary>Deletes a control; when SSMS refuses, hides it instead.</summary>
+        private static void RemoveControl(object control, string barName)
+        {
+            var caption = ReadCaption(control);
+            try
+            {
+                ((dynamic)control).Delete();
+                Log.Information("Removed '{Caption}' from '{Bar}'", caption, barName);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Delete failed for '{Caption}' on '{Bar}'; hiding it", caption, barName);
+                try { ((dynamic)control).Visible = false; }
+                catch (Exception hideEx) { Log.Debug(hideEx, "Could not hide '{Caption}' on '{Bar}'", caption, barName); }
+            }
+        }
+
+        private static string ReadCaption(object control)
+        {
+            try { return (string)((dynamic)control).Caption; }
+            catch { return null; }
+        }
+
+        private static string ReadTag(object control)
+        {
+            try { return (string)((dynamic)control).Tag; }
+            catch { return null; }
+        }
+
+        private static bool ReadVisible(object control)
+        {
+            try { return (bool)((dynamic)control).Visible; }
+            catch { return true; }
+        }
+
+        /// <summary>
+        /// The AI ▸ submenu follows the same rule as the AI commands (<see cref="AiCommandVisibility"/>:
+        /// AI enabled and privacy mode not "disabled"), asked through a stand-in command.
+        /// </summary>
+        private static bool IsAiMenuVisible()
+        {
+            var probe = new OleMenuCommand((_, _) => { }, new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdAiChatPanel));
+            AiCommandVisibility.OnBeforeQueryStatus(probe, EventArgs.Empty);
+            return probe.Visible;
+        }
+
+        /// <summary>Finds the AI ▸ popup inside a kept AKML SQL menu, so its visibility stays current.</summary>
+        private static void TrackAiPopup(object akmlPopup)
+        {
+            var aiCaption = AkmlMenuTable.Entries.FirstOrDefault(e => e.AiOnly)?.Caption;
+            if (aiCaption == null) return;
+            try
+            {
+                foreach (dynamic child in ((dynamic)akmlPopup).CommandBar.Controls)
+                {
+                    object control = child;
+                    if (!string.Equals(AkmlMenuTable.NormalizeCaption(ReadCaption(control)), aiCaption, StringComparison.OrdinalIgnoreCase)) continue;
+                    _aiPopup = control;
+                    _aiPopupVisible = ReadVisible(control);
+                    SyncAiMenuVisibility();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "AKML SQL menu: could not find the AI submenu");
+            }
+        }
+
+        /// <summary>
+        /// Keeps AI ▸ in step with the AI setting while SSMS runs: Format Document — the menu's first
+        /// item — is queried whenever the AKML SQL menu opens, so its status check updates AI ▸.
+        /// </summary>
+        private static void WatchAiMenuVisibility(OleMenuCommandService commandService)
+        {
+            if (_aiPopup == null || commandService == null) return;
+            try
+            {
+                if (commandService.FindCommand(new CommandID(PackageGuids.AkmlSqlCmdSet, CommandIds.CmdFormatDocument)) is OleMenuCommand format)
+                {
+                    format.BeforeQueryStatus += (_, _) => SyncAiMenuVisibility();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "AKML SQL menu: could not watch the AI setting");
+            }
+        }
+
+        private static void SyncAiMenuVisibility()
+        {
+            var popup = _aiPopup;
+            if (popup == null || _syncingAiMenu || !ThreadHelper.CheckAccess()) return;
+            var visible = IsAiMenuVisible();
+            if (visible == _aiPopupVisible) return;
+
+            // Showing or hiding a control can query command status again (this handler included).
+            _syncingAiMenu = true;
+            _aiPopupVisible = visible;
+            try
+            {
+                ((dynamic)popup).Visible = visible;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "AKML SQL menu: could not update the AI submenu; no longer tracking it");
+                _aiPopup = null;
+            }
+            finally
+            {
+                _syncingAiMenu = false;
             }
         }
 

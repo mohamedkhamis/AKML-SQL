@@ -254,7 +254,8 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.HistoryOpenIcon]       = Solid(0x4A, 0xDE, 0x80),
                 [ThemeTokens.HistoryClosedIcon]     = Solid(0xF8, 0x71, 0x71),
                 [ThemeTokens.HistoryStarActive]     = Solid(0xFB, 0x92, 0x3C),
-                [ThemeTokens.HistoryStarInactive]   = Solid(0x14, 0xFF, 0xFF, 0xFF),
+                // Spec 040 (T185): the empty star is drawn in this colour now; at 8 % white it vanished.
+                [ThemeTokens.HistoryStarInactive]   = Solid(0x64, 0x74, 0x8B),
                 // Spec 020 PR-235 review fix: 30 % alpha (0x4D) preserves the legacy
                 // ThemeManager.HistorySearchHighlight read-through behaviour. Dark-theme
                 // hex (#DAA520 gold) per doc/SQL-PROMPT/SQL-Prompt-History §16.2.

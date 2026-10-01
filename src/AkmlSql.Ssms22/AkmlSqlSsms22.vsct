@@ -15,6 +15,66 @@
         </Strings>
       </Menu>
 
+      <!-- Spec 040 (T181) — the AKML SQL menu's submenus, mirroring contracts/ui.md §2 and
+           AkmlMenuTable (the DTE-built menu SSMS 22 shows). CommandName keeps each one's command-bar
+           name unique: "Tools", "Help" and others are also the names of VS's own menus. -->
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleMenu" priority="0x0300" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Active Style</ButtonText>
+          <CommandName>AKML SQL Active Style</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingMenu" priority="0x0400" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Strings>
+          <ButtonText>Formatting</ButtonText>
+          <CommandName>AKML SQL Formatting</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlCodeGroup"/>
+        <Strings>
+          <ButtonText>Refactor</ButtonText>
+          <CommandName>AKML SQL Refactor</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateMenu" priority="0x0200" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlCodeGroup"/>
+        <Strings>
+          <ButtonText>Navigate</ButtonText>
+          <CommandName>AKML SQL Navigate</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsMenu" priority="0x0200" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHistoryGroup"/>
+        <Strings>
+          <ButtonText>Tabs</ButtonText>
+          <CommandName>AKML SQL Tabs</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlAiMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlAssistGroup"/>
+        <Strings>
+          <ButtonText>AI</ButtonText>
+          <CommandName>AKML SQL AI</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsMenu" priority="0x0200" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlAssistGroup"/>
+        <Strings>
+          <ButtonText>Tools</ButtonText>
+          <CommandName>AKML SQL Tools</CommandName>
+        </Strings>
+      </Menu>
+      <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpMenu" priority="0x0200" type="Menu">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlSettingsGroup"/>
+        <Strings>
+          <ButtonText>Help</ButtonText>
+          <CommandName>AKML SQL Help</CommandName>
+        </Strings>
+      </Menu>
+
       <!-- Toolbar — SQL Prompt style, docked at top of SSMS -->
       <Menu guid="guidAkmlSqlCmdSet" id="AkmlSqlToolbar" type="Toolbar">
         <CommandFlag>DefaultDocked</CommandFlag>
@@ -30,8 +90,84 @@
         <Parent guid="guidVsMenuBar" id="IDM_VS_MENU_BAR"/>
       </Group>
 
+      <!-- Spec 040 (T181) — the AKML SQL menu in separated groups (contracts/ui.md §2). The first
+           group keeps the old AkmlSqlMenuGroup id; the buttons with no handler stay in it, invisible
+           (Text to SQL, AI Optimize, AI Index Analysis, CRUD, Find in Results Grid, Split Table). -->
+      <!-- Format Document, Format Selection, Active Style, Formatting -->
       <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup" priority="0x0600">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
+      </Group>
+      <!-- Refactor, Navigate -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlCodeGroup" priority="0x0700">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
+      </Group>
+      <!-- SQL History, Tabs -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlHistoryGroup" priority="0x0800">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
+      </Group>
+      <!-- AI, Tools -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlAssistGroup" priority="0x0900">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
+      </Group>
+      <!-- Options, Help -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlSettingsGroup" priority="0x0A00">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenu"/>
+      </Group>
+      <!-- Active Style: the 30 style slots -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleMenu"/>
+      </Group>
+      <!-- Active Style: Edit Styles -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleEditGroup" priority="0x0200">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleMenu"/>
+      </Group>
+      <!-- Formatting -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingMenu"/>
+      </Group>
+      <!-- Refactor -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorMenu"/>
+      </Group>
+      <!-- Navigate: definitions, search, statements, outline -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateMenu"/>
+      </Group>
+      <!-- Navigate: bookmarks -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlBookmarkGroup" priority="0x0200">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateMenu"/>
+      </Group>
+      <!-- Tabs -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsMenu"/>
+      </Group>
+      <!-- AI (the commands hide themselves while AI is off) -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlAiGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlAiMenu"/>
+      </Group>
+      <!-- Tools: palette and execution -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsRunGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsMenu"/>
+      </Group>
+      <!-- Tools: snippets -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsSnippetGroup" priority="0x0200">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsMenu"/>
+      </Group>
+      <!-- Tools: code analysis -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsAnalysisGroup" priority="0x0300">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsMenu"/>
+      </Group>
+      <!-- Tools: results grid -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsGridGroup" priority="0x0400">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsMenu"/>
+      </Group>
+      <!-- Help: feedback, logs, schema cache -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpSupportGroup" priority="0x0100">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpMenu"/>
+      </Group>
+      <!-- Help: Check for Updates, About (last) -->
+      <Group guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpAboutGroup" priority="0x0200">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpMenu"/>
       </Group>
 
       <!-- Toolbar button groups -->
@@ -41,163 +177,174 @@
     </Groups>
 
     <Buttons>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdAbout" priority="0x0100" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdAbout" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpAboutGroup"/>
         <Strings>
           <ButtonText>About AKML SQL</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdCheckUpdate" priority="0x0200" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdCheckUpdate" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpAboutGroup"/>
         <Strings>
           <ButtonText>Check for Updates</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdOptions" priority="0x0300" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdOptions" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlSettingsGroup"/>
         <Strings>
           <ButtonText>Options</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatStyles" priority="0x0301" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatStyles" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingGroup"/>
         <Strings>
           <ButtonText>Format Styles...</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdManageRules" priority="0x0302" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdManageRules" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsAnalysisGroup"/>
         <Strings>
           <ButtonText>Manage Code Analysis Rules...</ButtonText>
         </Strings>
       </Button>
       <!-- Spec 030 T067 — editor-context refactor commands -->
-      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineExec" priority="0x0303" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineExec" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup"/>
         <Strings>
           <ButtonText>Inline EXEC</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdInsertToUpdate" priority="0x0304" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInsertToUpdate" priority="0x0500" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup"/>
         <Strings>
           <ButtonText>Convert INSERT to UPDATE</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineStoredProcedure" priority="0x0305" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdInlineStoredProcedure" priority="0x0400" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup"/>
         <Strings>
           <ButtonText>Inline Stored Procedure</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdScriptAsAlter" priority="0x0306" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdScriptAsAlter" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup"/>
         <Strings>
           <ButtonText>Script as ALTER</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdShowFindInvalidObjects" priority="0x0307" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdShowFindInvalidObjects" priority="0x0700" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup"/>
         <Strings>
           <ButtonText>Find Invalid Objects</ButtonText>
         </Strings>
       </Button>
       <!-- Spec 030 T062 — database-wide Smart Rename (FR-018). Declaring the button lets the
            Command Palette's dte.Commands.Raise resolve CmdSafeRename (it had no VSCT entry before). -->
-      <Button guid="guidAkmlSqlCmdSet" id="cmdSafeRename" priority="0x030A" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdSafeRename" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlRefactorGroup"/>
         <Strings>
           <ButtonText>Smart Rename (Database-wide)</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdToggleCodeAnalysis" priority="0x0308" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdToggleCodeAnalysis" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsAnalysisGroup"/>
         <Strings>
           <ButtonText>Toggle Code Analysis</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdDisableFormattingForSelection" priority="0x0309" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdDisableFormattingForSelection" priority="0x0400" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingGroup"/>
         <Strings>
           <ButtonText>Disable Formatting for Selection</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdSendFeedback" priority="0x0400" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdSendFeedback" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpSupportGroup"/>
         <Strings>
           <ButtonText>Send Feedback</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdViewLogs" priority="0x0500" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdViewLogs" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpSupportGroup"/>
         <Strings>
           <ButtonText>View Logs</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdRefreshCache" priority="0x0550" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdRefreshCache" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHelpSupportGroup"/>
         <Strings>
           <ButtonText>Refresh Schema Cache</ButtonText>
+          <CanonicalName>.Edit.RefreshSchemaCache</CanonicalName>
+          <LocalizedCanonicalName>.Edit.RefreshSchemaCache</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0600" type="Button">
+      <!-- Spec 040 (T181) — pinned canonical names. AKML_SQL.FormatDocument is what the editor
+           toolbar and the completion popup run (dte.ExecuteCommand) and Edit.RefreshSchemaCache what
+           Ctrl+Shift+D runs; both now hold whatever the menu nesting. The DTE menu binds a control to
+           its command by name, so the commands whose text is also one of SSMS's own commands (Format
+           Selection, Go To / Peek Definition, Find All References, the bookmarks) get unique names. -->
+      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatDocument" priority="0x0100" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Format Document</ButtonText>
+          <CanonicalName>.AKML_SQL.FormatDocument</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.FormatDocument</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatSelection" priority="0x0601" type="Button">
+      <Button guid="guidAkmlSqlCmdSet" id="cmdFormatSelection" priority="0x0200" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Format Selection</ButtonText>
+          <CanonicalName>.AKML_SQL.FormatSelection</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.FormatSelection</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="cmdUnformat" priority="0x0602" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdUnformat" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Unformat Document</ButtonText>
         </Strings>
       </Button>
       <!-- Spec 030 T087 — Bulk Format wizard (FR-046) -->
-      <Button guid="guidAkmlSqlCmdSet" id="cmdBulkFormat" priority="0x0603" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="cmdBulkFormat" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlFormattingGroup"/>
         <Strings>
           <ButtonText>Bulk Format...</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdHistoryPanel" priority="0x0700" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdHistoryPanel" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlHistoryGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>SQL History</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdRestoreClosedTab" priority="0x0701" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdRestoreClosedTab" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Restore Closed Tab</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdCloseUnmodified" priority="0x0702" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdCloseUnmodified" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Close All Unmodified</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdDuplicateTab" priority="0x0703" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdDuplicateTab" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Duplicate Tab</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdPinTab" priority="0x0704" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdPinTab" priority="0x0400" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlTabsGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Pin Tab</ButtonText>
@@ -205,71 +352,77 @@
       </Button>
 
       <!-- Phase 8 — Productivity Toolkit -->
-      <Button guid="guidAkmlSqlCmdSet" id="CmdCommandPalette" priority="0x0800" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdCommandPalette" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsRunGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Command Palette</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdExecuteCurrentStatement" priority="0x0801" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdExecuteCurrentStatement" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsRunGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Execute Current Statement</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdExecuteToCursor" priority="0x0802" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdExecuteToCursor" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsRunGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Execute to Cursor</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdGoToDefinition" priority="0x0803" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdGoToDefinition" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Go To Definition</ButtonText>
+          <CanonicalName>.AKML_SQL.GoToDefinition</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.GoToDefinition</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdPeekDefinition" priority="0x0803" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdPeekDefinition" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Peek Definition</ButtonText>
+          <CanonicalName>.AKML_SQL.PeekDefinition</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.PeekDefinition</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdFindReferences" priority="0x0804" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdFindReferences" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Find All References</ButtonText>
+          <CanonicalName>.AKML_SQL.FindAllReferences</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.FindAllReferences</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdObjectSearch" priority="0x0805" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdObjectSearch" priority="0x0400" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Object Search</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigateNextStatement" priority="0x0806" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigateNextStatement" priority="0x0500" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Navigate Next Statement</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigatePrevStatement" priority="0x0807" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigatePrevStatement" priority="0x0600" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Navigate Previous Statement</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigateMatchingPair" priority="0x0808" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdNavigateMatchingPair" priority="0x0700" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Navigate Matching Pair</ButtonText>
@@ -278,12 +431,13 @@
       <Button guid="guidAkmlSqlCmdSet" id="CmdGridFind" priority="0x0809" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
         <Strings>
           <ButtonText>Find in Results Grid</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdGridExport" priority="0x080A" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdGridExport" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsGridGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Export Results Grid</ButtonText>
@@ -292,12 +446,13 @@
       <Button guid="guidAkmlSqlCmdSet" id="CmdCrudGeneration" priority="0x080B" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
         <Strings>
           <ButtonText>Generate CRUD Procedures</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdDocumentOutline" priority="0x080C" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdDocumentOutline" priority="0x0800" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlNavigateGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Document Outline</ButtonText>
@@ -305,8 +460,8 @@
       </Button>
 
       <!-- Phase 10: SQL Prompt Core Parity -->
-      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetManager" priority="0x0810" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetManager" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsSnippetGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Snippet Manager</ButtonText>
@@ -314,37 +469,44 @@
       </Button>
       <!-- Spec 030 T045 — Surround With needs a command-table entry so the Ctrl+K,Ctrl+S KeyBinding
            resolves (a KeyBinding without a Button/Command is ignored). Mirrors CmdBookmarkToggle. -->
-      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetSurroundWith" priority="0x0812" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdSnippetSurroundWith" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlToolsSnippetGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Surround Selection With Snippet…</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkToggle" priority="0x0811" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkToggle" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlBookmarkGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Toggle Bookmark</ButtonText>
+          <CanonicalName>.AKML_SQL.ToggleBookmark</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.ToggleBookmark</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkNext" priority="0x0812" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkNext" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlBookmarkGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Next Bookmark</ButtonText>
+          <CanonicalName>.AKML_SQL.NextBookmark</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.NextBookmark</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkPrev" priority="0x0813" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdBookmarkPrev" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlBookmarkGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>Previous Bookmark</ButtonText>
+          <CanonicalName>.AKML_SQL.PreviousBookmark</CanonicalName>
+          <LocalizedCanonicalName>.AKML_SQL.PreviousBookmark</LocalizedCanonicalName>
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdSplitTable" priority="0x0814" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
         <Strings>
           <ButtonText>Split Table</ButtonText>
         </Strings>
@@ -354,19 +516,20 @@
       <Button guid="guidAkmlSqlCmdSet" id="CmdTextToSql" priority="0x0900" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
         <Strings>
           <ButtonText>AI: Text to SQL</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdAiExplain" priority="0x0901" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiExplain" priority="0x0200" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlAiGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>AI: Explain SQL</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdAiFix" priority="0x0902" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiFix" priority="0x0300" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlAiGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>AI: Fix SQL</ButtonText>
@@ -375,6 +538,7 @@
       <Button guid="guidAkmlSqlCmdSet" id="CmdAiOptimize" priority="0x0903" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
         <Strings>
           <ButtonText>AI: Optimize SQL</ButtonText>
         </Strings>
@@ -382,12 +546,13 @@
       <Button guid="guidAkmlSqlCmdSet" id="CmdAiIndexAnalysis" priority="0x0904" type="Button">
         <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
+        <CommandFlag>DefaultInvisible</CommandFlag>
         <Strings>
           <ButtonText>AI: Index Analysis</ButtonText>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdAiChatPanel" priority="0x0905" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdAiChatPanel" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlAiGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <Strings>
           <ButtonText>AI: Chat Panel</ButtonText>
@@ -399,7 +564,7 @@
            (Command.AddControl), and with all 30 named "Style" every control was bound to slot 0
            (the same name, all visible, all choosing the first style). -->
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot0" priority="0x0680" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -410,7 +575,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot1" priority="0x0681" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -421,7 +586,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot2" priority="0x0682" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -432,7 +597,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot3" priority="0x0683" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -443,7 +608,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot4" priority="0x0684" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -454,7 +619,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot5" priority="0x0685" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -465,7 +630,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot6" priority="0x0686" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -476,7 +641,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot7" priority="0x0687" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -487,7 +652,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot8" priority="0x0688" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -498,7 +663,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot9" priority="0x0689" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -509,7 +674,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot10" priority="0x068A" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -520,7 +685,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot11" priority="0x068B" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -531,7 +696,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot12" priority="0x068C" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -542,7 +707,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot13" priority="0x068D" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -553,7 +718,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot14" priority="0x068E" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -564,7 +729,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot15" priority="0x068F" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -575,7 +740,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot16" priority="0x0690" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -586,7 +751,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot17" priority="0x0691" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -597,7 +762,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot18" priority="0x0692" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -608,7 +773,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot19" priority="0x0693" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -619,7 +784,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot20" priority="0x0694" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -630,7 +795,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot21" priority="0x0695" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -641,7 +806,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot22" priority="0x0696" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -652,7 +817,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot23" priority="0x0697" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -663,7 +828,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot24" priority="0x0698" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -674,7 +839,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot25" priority="0x0699" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -685,7 +850,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot26" priority="0x069A" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -696,7 +861,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot27" priority="0x069B" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -707,7 +872,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot28" priority="0x069C" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -718,7 +883,7 @@
         </Strings>
       </Button>
       <Button guid="guidAkmlSqlCmdSet" id="CmdActiveStyleSlot29" priority="0x069D" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleGroup"/>
         <CommandFlag>DynamicVisibility</CommandFlag>
         <CommandFlag>DefaultInvisible</CommandFlag>
         <CommandFlag>TextChanges</CommandFlag>
@@ -728,8 +893,8 @@
           <LocalizedCanonicalName>.AkmlSql.ActiveStyle30</LocalizedCanonicalName>
         </Strings>
       </Button>
-      <Button guid="guidAkmlSqlCmdSet" id="CmdEditStyles" priority="0x06A0" type="Button">
-        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlMenuGroup"/>
+      <Button guid="guidAkmlSqlCmdSet" id="CmdEditStyles" priority="0x0100" type="Button">
+        <Parent guid="guidAkmlSqlCmdSet" id="AkmlSqlActiveStyleEditGroup"/>
         <Strings>
           <ButtonText>Edit Styles...</ButtonText>
         </Strings>
@@ -738,9 +903,9 @@
   </Commands>
 
   <CommandPlacements>
-    <!-- The top-level AKML SQL menu is created programmatically by
-         AkmlSqlPackage.EnsureTopLevelMenu (which has a once-per-process guard
-         and a reuse-existing check). We do NOT add a Tools > External Tools
+    <!-- The AKML SQL menu SSMS 22 shows is built at run time by
+         AkmlSqlPackage.EnsureTopLevelMenu from AkmlMenuTable (once per process, with a
+         version marker); the groups above mirror it. We do NOT add a Tools > External Tools
          fallback here — in the past it caused every menu item to appear twice. -->
 
     <!-- Toolbar buttons — SQL Prompt style quick access -->
@@ -835,6 +1000,34 @@
       <IDSymbol name="AkmlSqlMenuBarGroup" value="0x1030" />
       <IDSymbol name="AkmlSqlToolbar" value="0x1040" />
       <IDSymbol name="AkmlSqlToolbarGroup" value="0x1050" />
+      <!-- Spec 040 (T181) — the AKML SQL menu's submenus (0x1100..) and groups (0x1110..), clear of
+           every command id in PackageGuids.cs and of the reserved 0x0917..0x093F range. -->
+      <IDSymbol name="AkmlSqlActiveStyleMenu" value="0x1100" />
+      <IDSymbol name="AkmlSqlFormattingMenu" value="0x1101" />
+      <IDSymbol name="AkmlSqlRefactorMenu" value="0x1102" />
+      <IDSymbol name="AkmlSqlNavigateMenu" value="0x1103" />
+      <IDSymbol name="AkmlSqlTabsMenu" value="0x1104" />
+      <IDSymbol name="AkmlSqlAiMenu" value="0x1105" />
+      <IDSymbol name="AkmlSqlToolsMenu" value="0x1106" />
+      <IDSymbol name="AkmlSqlHelpMenu" value="0x1107" />
+      <IDSymbol name="AkmlSqlCodeGroup" value="0x1110" />
+      <IDSymbol name="AkmlSqlHistoryGroup" value="0x1111" />
+      <IDSymbol name="AkmlSqlAssistGroup" value="0x1112" />
+      <IDSymbol name="AkmlSqlSettingsGroup" value="0x1113" />
+      <IDSymbol name="AkmlSqlActiveStyleGroup" value="0x1120" />
+      <IDSymbol name="AkmlSqlActiveStyleEditGroup" value="0x1121" />
+      <IDSymbol name="AkmlSqlFormattingGroup" value="0x1122" />
+      <IDSymbol name="AkmlSqlRefactorGroup" value="0x1123" />
+      <IDSymbol name="AkmlSqlNavigateGroup" value="0x1124" />
+      <IDSymbol name="AkmlSqlBookmarkGroup" value="0x1125" />
+      <IDSymbol name="AkmlSqlTabsGroup" value="0x1126" />
+      <IDSymbol name="AkmlSqlAiGroup" value="0x1127" />
+      <IDSymbol name="AkmlSqlToolsRunGroup" value="0x1128" />
+      <IDSymbol name="AkmlSqlToolsSnippetGroup" value="0x1129" />
+      <IDSymbol name="AkmlSqlToolsAnalysisGroup" value="0x112A" />
+      <IDSymbol name="AkmlSqlToolsGridGroup" value="0x112B" />
+      <IDSymbol name="AkmlSqlHelpSupportGroup" value="0x112C" />
+      <IDSymbol name="AkmlSqlHelpAboutGroup" value="0x112D" />
       <IDSymbol name="cmdAbout" value="0x0100" />
       <IDSymbol name="cmdCheckUpdate" value="0x0101" />
       <IDSymbol name="cmdOptions" value="0x0102" />

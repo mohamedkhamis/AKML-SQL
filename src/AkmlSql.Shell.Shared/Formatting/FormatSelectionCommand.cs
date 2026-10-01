@@ -56,7 +56,10 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 var request = new FormatSelectionRequest
                 {
-                    SessionId = Guid.NewGuid().ToString("N"),
+                    // Spec 040 (T190): the editor's real session (schema-aware Format SQL actions).
+                    SessionId = FormatDocumentCommand.EditorSessionId(),
+                    // Spec 040 (STY-11): "When you run Format SQL, AKML SQL will:".
+                    Actions = FormatDocumentCommand.ResolveFormatSqlActions(),
                     Text = fullText,
                     SelectionStart = startOffset,
                     SelectionEnd = endOffset,

@@ -11,18 +11,15 @@ namespace AkmlSql.Shell.Shared.Help
     /// <see cref="Open(string)"/> entry point that any host-specific F1 handler
     /// can call to launch the matching documentation in the system browser.
     /// <para>
-    /// This is the <b>Phase 2 foundational skeleton</b>: it has the registry
-    /// API and a no-op fallback when a context key is unknown. The actual
-    /// VS-host F1 wiring (subscribing to <c>IVsHelpSystem</c> and inspecting
-    /// the focused element's <c>HelpContextValues</c>) lands in the per-host
-    /// user-story phases that introduce each new dialog / tool window.
+    /// Pages open on the product docs site (<see cref="F1HelpRegistrations.DocBase"/>).
+    /// Unknown keys are a logged no-op.
     /// </para>
     /// <para>
-    /// Each user-story phase that adds a new UI surface MUST register its
-    /// help context key with this listener at construction time, e.g.
+    /// A surface either registers a context key in <see cref="F1HelpRegistrations"/>, or
+    /// passes a docs topic straight to <see cref="Open(string)"/> (spec 040: the Options pages,
+    /// the Format Styles window and SQL History do, through <see cref="HelpBinding"/>):
     /// <code>
-    /// F1HelpListener.Default.Register("akmlsql.dialog.smartrename",
-    ///     "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/smart-rename.md");
+    /// F1HelpListener.Default.Open("topics/sql-history");
     /// </code>
     /// </para>
     /// </summary>
@@ -100,17 +97,34 @@ namespace AkmlSql.Shell.Shared.Help
         // ── Open ──────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Open the documentation page for the given context key in the system
-        /// browser. No-ops when the key is unknown so that pressing F1 on a
-        /// not-yet-registered surface fails closed instead of crashing.
+        /// Spec 040 (T183) test hook: when set, <see cref="Open(string)"/> hands the key it was
+        /// given to this delegate instead of launching the browser. Tests set it and clear it in a
+        /// <c>finally</c>; production code never sets it.
+        /// </summary>
+        internal static Action<string>? OpenOverride { get; set; }
+
+        /// <summary>
+        /// Open the documentation page for the given key in the system browser. The key is
+        /// either a registered context key (<c>"akmlsql.dialog.smart-rename"</c>) or a docs
+        /// topic — a site slug with an optional anchor (<c>"topics/options#general"</c>), which
+        /// resolves against <see cref="F1HelpRegistrations.DocBase"/>. No-ops when the key is
+        /// unknown so that pressing F1 on a not-yet-registered surface fails closed instead of
+        /// crashing.
         /// </summary>
         public bool Open(string contextKey)
         {
-            var url = TryResolve(contextKey);
+            var url = TryResolve(contextKey) ?? F1HelpRegistrations.TopicUrl(contextKey);
             if (string.IsNullOrEmpty(url))
             {
                 Log.Debug("F1HelpListener: no help URL registered for context '{Context}'", contextKey);
                 return false;
+            }
+
+            var hook = OpenOverride;
+            if (hook != null)
+            {
+                hook(contextKey);
+                return true;
             }
 
             try

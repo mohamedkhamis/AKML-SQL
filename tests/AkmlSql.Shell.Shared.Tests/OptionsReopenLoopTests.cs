@@ -60,6 +60,7 @@ namespace AkmlSql.Shell.Shared.Tests
             public AppSettings Settings { get; }
             public string? ShownPage { get; private set; }
             public string? InitialAgentId { get; set; }
+            public string? InitialFocusLabel { get; set; }
             public bool ThemeChangeRequested { get; set; }
             public string? CurrentPageKey { get; set; }
             public AppSettings WorkingCopy => Settings;

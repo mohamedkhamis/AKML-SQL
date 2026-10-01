@@ -14,7 +14,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         public string Key     => "CompletionPolish";
         public string Display => "Suggestions › Tooltips";
-        public string Title   => "Tooltips & Object Definition";
+        public string Title   => "Tooltips";
+        public string HelpTopic => "topics/options#suggestions-tooltips";
         public string Help    => "Whether the definition panel (columns, details and script) appears beside the suggestions box when an object is selected.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

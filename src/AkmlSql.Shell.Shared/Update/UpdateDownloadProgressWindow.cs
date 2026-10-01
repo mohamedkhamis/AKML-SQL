@@ -7,6 +7,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Orientation = System.Windows.Controls.Orientation;
 
@@ -71,7 +73,8 @@ namespace AkmlSql.Shell.Shared.Update
             var chromeFg = (SolidColorBrush)registry[ThemeTokens.TextPrimary];
             var muted = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
 
-            Title = "Downloading update";
+            Title = WindowTitles.For("Downloading update");
+            WindowIcon.Apply(this);
             Width = 420;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

@@ -1,7 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using Constants = AkmlSql.Core.Constants;
+using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Ui
 {
@@ -31,7 +31,8 @@ namespace AkmlSql.Shell.Shared.Ui
 
         private void InitializeComponents()
         {
-            Text = Constants.ProductName + " - Formatting...";
+            Text = WindowTitles.For("Formatting…");
+            WindowIcon.Apply(this);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

@@ -32,8 +32,8 @@ The "Where / Shortcut" column tells you the menu path, Options pane, or keyboard
 | 07 | `07-SQL-Prompt-AI.md` | Prompt AI window, generate/explain/modify, fix, optimize, AI code completion, index analysis |
 | 08 | `08-Options-Settings-Reference.md` | Every Options pane and the granular settings on each |
 | 09 | `09-Editions-Licensing-Platform-Integrations.md` | Editions, licensing tiers, Command Palette, Bulk Actions, Redgate Platform, integrations, hosts |
-| 10 | `10-UI-Fidelity-Options-and-History.md` | UI fidelity of Options + SQL History (2026-07); superseded for those areas by file 11 |
-| 11 | `11-UI-UX-Plan-Options-History-Styles.md` | UI/UX comparison + gap plan for Options, SQL History and format style editing (2026-09-27) |
+| 10 | `10-UI-Fidelity-Options-and-History.md` | UI fidelity of Options + SQL History (2026-07); superseded for those areas by file 11, which spec 040 implemented |
+| 11 | `11-UI-UX-Plan-Options-History-Styles.md` | UI/UX comparison + gap plan for Options, SQL History and format style editing (2026-09-27); all 38 items built in spec 040 (status table at the top of the file) |
 
 ---
 

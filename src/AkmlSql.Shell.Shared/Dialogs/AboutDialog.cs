@@ -1,6 +1,8 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Dialogs
@@ -14,7 +16,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void InitializeComponents()
         {
-            Text = "About " + Constants.ProductName;
+            Text = WindowTitles.For("About");
+            WindowIcon.Apply(this);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

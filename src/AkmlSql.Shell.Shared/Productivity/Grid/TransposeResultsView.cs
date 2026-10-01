@@ -2,6 +2,8 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.Grid
@@ -32,7 +34,8 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
             _sourceGrid = sourceGrid;
             _currentRowIndex = rowIndex;
 
-            Text = $"Row Details - Row {rowIndex + 1}";
+            Text = WindowTitles.For($"Row details — row {rowIndex + 1}");
+            WindowIcon.Apply(this);
             Size = new Size(520, 480);
             MinimumSize = new Size(400, 300);
             StartPosition = FormStartPosition.CenterParent;
@@ -216,7 +219,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
             }
 
             _infoLabel.Text = $"Row {_currentRowIndex + 1} of {_sourceGrid.RowCount}";
-            Text = $"Row Details - Row {_currentRowIndex + 1}";
+            Text = WindowTitles.For($"Row details — row {_currentRowIndex + 1}");
         }
 
         private void NavigateRow(int delta)

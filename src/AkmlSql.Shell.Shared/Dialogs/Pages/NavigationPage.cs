@@ -13,8 +13,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class NavigationPage : IPageBuilder
     {
         public string Key     => "Navigation";
-        public string Display => "Editor › Navigation";
+        public string Display => "Navigation";
         public string Title   => "Navigation";
+        public string HelpTopic => "topics/options#navigation";
         public string Help    => "Go to Definition (F12), Peek Definition (Alt+F12), Find All References (Shift+F12) and Object Search (Ctrl+T) are always available from the AKML SQL menu.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

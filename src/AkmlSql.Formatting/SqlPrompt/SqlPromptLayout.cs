@@ -14,7 +14,11 @@ namespace AkmlSql.Formatting.SqlPrompt;
 /// </summary>
 internal static class SqlPromptLayout
 {
-    public static string Layout(TSqlScript script, IList<TSqlParserToken> tokens, List<NoformatRegion> noformat, SqlPromptStyle style)
+    /// <param name="applyCasing">
+    /// Spec 040 (STY-11) — false keeps every token's case as written (Format SQL "Apply casing" off).
+    /// </param>
+    public static string Layout(TSqlScript script, IList<TSqlParserToken> tokens, List<NoformatRegion> noformat,
+        SqlPromptStyle style, bool applyCasing = true)
     {
         var noFormatToken = new bool[tokens.Count];
         var cased = new string?[tokens.Count];
@@ -34,7 +38,7 @@ internal static class SqlPromptLayout
             });
         }
 
-        new CasingEngine().ApplyCasing(nodes, CasingProfile(style));
+        if (applyCasing) new CasingEngine().ApplyCasing(nodes, CasingProfile(style));
         foreach (var node in nodes) cased[node.TokenIndex] = node.FormattedText;
 
         var writer = new SqlWriter(tokens, cased, style);
@@ -43,7 +47,7 @@ internal static class SqlPromptLayout
     }
 
     /// <summary>The casing engine's settings for the four SQL Prompt casing options; everything else as written.</summary>
-    private static FormattingProfile CasingProfile(SqlPromptStyle style)
+    internal static FormattingProfile CasingProfile(SqlPromptStyle style)
     {
         var profile = new FormattingProfile();
         var c = profile.Casing;

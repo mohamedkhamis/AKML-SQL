@@ -1,5 +1,4 @@
 #nullable enable
-using System.Globalization;
 using System.Windows.Controls;
 using AkmlSql.Core.Config;
 
@@ -9,7 +8,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         public string Key     => "IntelliSense";
         public string Display => "Suggestions › Behavior";
-        public string Title   => "IntelliSense";
+        public string Title   => "Behavior";
+        public string HelpTopic => "topics/options#suggestions-behavior";
         public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, column/PK/FK details, popup Ctrl-transparency, FK-assisted JOIN and alias generation, commit keys, and snippets. Special-character handling lives on Inserted Code › Special characters; SQL-auth credentials on Connections & Memory.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -22,52 +22,53 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowAutoTrig, chkAutoTrig) = ctx.Rows.AddToggle(panel,
                 "Auto-trigger completions while typing",
-                "Show completion list automatically without Ctrl+Space");
+                "Show completion list automatically without Ctrl+Space", chkEnabled);
             ctx.RegisterSearch("Auto-trigger completions while typing", "Show completion list automatically without Ctrl+Space", "Toggle", rowAutoTrig);
 
             var (rowAfterDot, chkAfterDot) = ctx.Rows.AddToggle(panel,
                 "Trigger after dot",
-                "Auto-complete after typing '.' for table.column references");
+                "Auto-complete after typing '.' for table.column references", chkEnabled);
             ctx.RegisterSearch("Trigger after dot", "Auto-complete after typing '.' for table.column references", "Toggle", rowAfterDot);
 
             var (rowFuzzy, chkFuzzy) = ctx.Rows.AddToggle(panel,
                 "Enable fuzzy matching",
-                "Substring and approximate matching in addition to prefix");
+                "Substring and approximate matching in addition to prefix", chkEnabled);
             ctx.RegisterSearch("Enable fuzzy matching", "Substring and approximate matching in addition to prefix", "Toggle", rowFuzzy);
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Display");
 
-            var (rowMaxSugg, sldMaxSugg, lblMaxSugg) = ctx.Rows.AddSlider(panel,
-                "Maximum suggestions", 5, 200, 50,
-                "Maximum number of items shown in the completion list");
-            ctx.RegisterSearch("Maximum suggestions", "Maximum number of items shown in the completion list", "Slider", rowMaxSugg);
+            // Spec 040 (OPT-06): number fields, not sliders, for wide ranges.
+            var (rowMaxSugg, numMaxSugg) = ctx.Rows.AddNumber(panel,
+                "Maximum suggestions", 5, 200, 5, "items",
+                "Maximum number of items shown in the completion list", chkEnabled);
+            ctx.RegisterSearch("Maximum suggestions", "Maximum number of items shown in the completion list", "Number", rowMaxSugg);
 
-            var (rowTrigDelay, sldTrigDelay, lblTrigDelay) = ctx.Rows.AddSlider(panel,
-                "Trigger delay (ms)", 0, 2000, 100,
-                "Debounce delay before showing completions");
-            ctx.RegisterSearch("Trigger delay (ms)", "Debounce delay before showing completions", "Slider", rowTrigDelay);
+            var (rowTrigDelay, numTrigDelay) = ctx.Rows.AddNumber(panel,
+                "Trigger delay", 0, 2000, 50, "ms",
+                "Debounce delay before showing completions", chkEnabled);
+            ctx.RegisterSearch("Trigger delay", "Debounce delay before showing completions", "Number", rowTrigDelay);
 
             // Spec 040 (OPT-01): "Keyword casing" is hidden — nothing reads it; the saved value is kept.
 
             var (rowDataTypes, chkDataTypes) = ctx.Rows.AddToggle(panel,
                 "Show column data types",
-                "Display data type information in completion details");
+                "Display data type information in completion details", chkEnabled);
             ctx.RegisterSearch("Show column data types", "Display data type information in completion details", "Toggle", rowDataTypes);
 
             var (rowNullable, chkNullable) = ctx.Rows.AddToggle(panel,
                 "Show nullability info",
-                "Show NOT NULL / NULL status in completion details");
+                "Show NOT NULL / NULL status in completion details", chkEnabled);
             ctx.RegisterSearch("Show nullability info", "Show NOT NULL / NULL status in completion details", "Toggle", rowNullable);
 
             var (rowPkFk, chkPkFk) = ctx.Rows.AddToggle(panel,
                 "Show PK/FK indicators",
-                "Show primary key and foreign key badges");
+                "Show primary key and foreign key badges", chkEnabled);
             ctx.RegisterSearch("Show PK/FK indicators", "Show primary key and foreign key badges", "Toggle", rowPkFk);
 
             var (rowCtrlTransparent, chkCtrlTransparent) = ctx.Rows.AddToggle(panel,
                 "Make popups transparent when Ctrl is held",
-                "Hold Ctrl to see the code underneath the completion popup (SQL Prompt style)");
+                "Hold Ctrl to see the code underneath the completion popup", chkEnabled);
             ctx.RegisterSearch("Make popups transparent when Ctrl is held", "Hold Ctrl to see the code underneath the completion popup", "Toggle", rowCtrlTransparent);
 
             ctx.Rows.AddGroupSeparator(panel);
@@ -75,17 +76,17 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowJoin, chkJoin) = ctx.Rows.AddToggle(panel,
                 "JOIN clause assistance",
-                "Master switch for FK-assisted JOIN completion. When on: after typing 'JOIN', FK-related tables are suggested first with a full ON clause inserted; inside 'ON', ready-made FK equality predicates are suggested. Orthogonal to Tables Alias. Default: on.");
+                "Master switch for FK-assisted JOIN completion. When on: after typing 'JOIN', FK-related tables are suggested first with a full ON clause inserted; inside 'ON', ready-made FK equality predicates are suggested. Independent of Suggest table aliases. Default: on.", chkEnabled);
             ctx.RegisterSearch("JOIN clause assistance", "Master switch for FK-assisted JOIN completion", "Toggle", rowJoin);
 
             var (rowAlias, chkAlias) = ctx.Rows.AddToggle(panel,
-                "Tables Alias",
-                "When on, completion generates new aliases for inserted tables (e.g. 'Orders o ON o.CustomerId = c.Id'). When off, FK JOIN suggestions still fire but the target table is referenced by its bare name ('Orders ON Orders.CustomerId = c.Id'). Default: off.");
-            ctx.RegisterSearch("Tables Alias", "Generate new aliases for inserted tables in JOIN completions", "Toggle", rowAlias);
+                "Suggest table aliases",
+                "When on, completion generates new aliases for inserted tables (e.g. 'Orders o ON o.CustomerId = c.Id'). When off, FK JOIN suggestions still fire but the target table is referenced by its bare name ('Orders ON Orders.CustomerId = c.Id'). Default: off.", chkEnabled);
+            ctx.RegisterSearch("Suggest table aliases", "Generate new aliases for inserted tables in JOIN completions", "Toggle", rowAlias);
 
             var (rowDisableNative, chkDisableNative) = ctx.Rows.AddToggle(panel,
                 "Disable native SSMS IntelliSense",
-                "Recommended to avoid conflicts with AKML SQL IntelliSense");
+                "Recommended to avoid conflicts with AKML SQL IntelliSense", chkEnabled);
             ctx.RegisterSearch("Disable native SSMS IntelliSense", "Recommended to avoid conflicts with AKML SQL IntelliSense", "Toggle", rowDisableNative);
 
             // Spec 030 T080 (FR-043) — special-character handling (bracket / parenthesis /
@@ -97,24 +98,24 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowSpaceCommit, chkSpaceCommit) = ctx.Rows.AddToggle(panel,
                 "Commit with Space",
-                "Press Space to commit the highlighted completion item (SQL Prompt style). Off by default — most SSMS users expect Space to insert a literal space");
-            ctx.RegisterSearch("Commit with Space", "Press Space to commit the highlighted completion item (SQL Prompt style)", "Toggle", rowSpaceCommit);
+                "Press Space to commit the highlighted completion item. Off by default — most SSMS users expect Space to insert a literal space", chkEnabled);
+            ctx.RegisterSearch("Commit with Space", "Press Space to commit the highlighted completion item", "Toggle", rowSpaceCommit);
 
             var (rowDotCommit, chkDotCommit) = ctx.Rows.AddToggle(panel,
                 "Commit with Dot",
-                "Press '.' to commit the highlighted completion item and continue with a member access");
+                "Press '.' to commit the highlighted completion item and continue with a member access", chkEnabled);
             ctx.RegisterSearch("Commit with Dot", "Press '.' to commit the highlighted completion item and continue with a member access", "Toggle", rowDotCommit);
 
             var (rowSnippets, chkSnippets) = ctx.Rows.AddToggle(panel,
                 "Show snippets in the completion list",
-                "Include snippet shortcuts (sel, ssf, ins, …) in the completion popup");
+                "Include snippet shortcuts (sel, ssf, ins, …) in the completion popup", chkEnabled);
             ctx.RegisterSearch("Show snippets in the completion list", "Include snippet shortcuts (sel, ssf, ins, …) in the completion popup", "Toggle", rowSnippets);
 
             // SQL-authentication credential settings moved to the Connections & Memory page
             // (SQL Prompt's "Connections & memory" pane).
 
             return new IntelliSenseControls(chkEnabled, chkAutoTrig, chkAfterDot, chkFuzzy,
-                sldMaxSugg, lblMaxSugg, sldTrigDelay, lblTrigDelay,
+                numMaxSugg, numTrigDelay,
                 chkDataTypes, chkNullable, chkPkFk, chkCtrlTransparent,
                 chkJoin, chkAlias, chkDisableNative,
                 chkSpaceCommit, chkDotCommit, chkSnippets);
@@ -127,10 +128,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _autoTrigger;
         private readonly CheckBox _afterDot;
         private readonly CheckBox _fuzzyMatch;
-        private readonly Slider _maxSuggestions;
-        private readonly TextBlock _maxSuggestionsLabel;
-        private readonly Slider _triggerDelay;
-        private readonly TextBlock _triggerDelayLabel;
+        private readonly TextBox _maxSuggestions;
+        private readonly TextBox _triggerDelay;
         private readonly CheckBox _showDataTypes;
         private readonly CheckBox _showNullability;
         private readonly CheckBox _showPkFk;
@@ -143,7 +142,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _snippetsInCompletion;
 
         public IntelliSenseControls(CheckBox enabled, CheckBox autoTrig, CheckBox afterDot, CheckBox fuzzy,
-            Slider sldMaxSugg, TextBlock lblMaxSugg, Slider sldTrigDelay, TextBlock lblTrigDelay,
+            TextBox maxSuggestions, TextBox triggerDelay,
             CheckBox dataTypes, CheckBox nullable, CheckBox pkFk, CheckBox ctrlTransparentPopups,
             CheckBox join, CheckBox alias, CheckBox disableNative,
             CheckBox spaceCommits, CheckBox dotCommits, CheckBox snippetsInCompletion)
@@ -152,10 +151,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _autoTrigger = autoTrig;
             _afterDot = afterDot;
             _fuzzyMatch = fuzzy;
-            _maxSuggestions = sldMaxSugg;
-            _maxSuggestionsLabel = lblMaxSugg;
-            _triggerDelay = sldTrigDelay;
-            _triggerDelayLabel = lblTrigDelay;
+            _maxSuggestions = maxSuggestions;
+            _triggerDelay = triggerDelay;
             _showDataTypes = dataTypes;
             _showNullability = nullable;
             _showPkFk = pkFk;
@@ -185,10 +182,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _spaceCommits.IsChecked = i.SpaceCommits;
             _dotCommits.IsChecked = i.DotCommits;
             _snippetsInCompletion.IsChecked = i.SnippetsInCompletion;
-            _triggerDelay.Value = i.TriggerDelayMs;
-            _triggerDelayLabel.Text = i.TriggerDelayMs.ToString(CultureInfo.InvariantCulture);
-            _maxSuggestions.Value = i.MaxSuggestions;
-            _maxSuggestionsLabel.Text = i.MaxSuggestions.ToString(CultureInfo.InvariantCulture);
+            RowFactory.SetNumber(_triggerDelay, i.TriggerDelayMs);
+            RowFactory.SetNumber(_maxSuggestions, i.MaxSuggestions);
         }
 
         public void Save(AppSettings settings)
@@ -207,8 +202,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.IntelliSense.SpaceCommits = _spaceCommits.IsChecked == true;
             settings.IntelliSense.DotCommits = _dotCommits.IsChecked == true;
             settings.IntelliSense.SnippetsInCompletion = _snippetsInCompletion.IsChecked == true;
-            settings.IntelliSense.TriggerDelayMs = (int)_triggerDelay.Value;
-            settings.IntelliSense.MaxSuggestions = (int)_maxSuggestions.Value;
+            settings.IntelliSense.TriggerDelayMs = RowFactory.GetNumber(_triggerDelay);
+            settings.IntelliSense.MaxSuggestions = RowFactory.GetNumber(_maxSuggestions);
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

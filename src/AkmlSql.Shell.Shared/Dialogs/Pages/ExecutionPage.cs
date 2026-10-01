@@ -1,5 +1,4 @@
 #nullable enable
-using System.Globalization;
 using System.Windows.Controls;
 using AkmlSql.Core.Config;
 
@@ -10,6 +9,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Execution";
         public string Display => "Queries › Execution";
         public string Title   => "Execution";
+        public string HelpTopic => "topics/options#queries-execution";
         public string Help    => "Configure query execution behavior: toggle the status-bar execution timer, enable multi-database execution, and set how many seconds a query must run before a long-running notification appears.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -23,12 +23,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("Multi-database execution", "Enable multi-database execution mode", "Toggle", rowMulti);
 
             ctx.Rows.AddGroupHeader(panel, "Notifications");
-            var (rowSlider, sldThreshold, lblThreshold) = ctx.Rows.AddSlider(panel,
-                "Notification threshold", 5, 300, 30,
-                "Seconds before showing long-running query notification");
-            ctx.RegisterSearch("Notification threshold", "Seconds before showing long-running query notification", "Slider", rowSlider);
+            var (rowThreshold, numThreshold) = ctx.Rows.AddNumber(panel,
+                "Notification threshold", 5, 300, 5, "seconds",
+                "How long a query runs before the long-running query notification appears");
+            ctx.RegisterSearch("Notification threshold", "How long a query runs before the long-running query notification appears", "Number", rowThreshold);
 
-            return new ExecutionControls(chkTimer, chkMulti, sldThreshold, lblThreshold);
+            return new ExecutionControls(chkTimer, chkMulti, numThreshold);
         }
     }
 
@@ -36,15 +36,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         private readonly CheckBox _showTimer;
         private readonly CheckBox _multiDatabase;
-        private readonly Slider _notificationThreshold;
-        private readonly TextBlock _notificationLabel;
+        private readonly TextBox _notificationThreshold;
 
-        public ExecutionControls(CheckBox timer, CheckBox multi, Slider sld, TextBlock lbl)
+        public ExecutionControls(CheckBox timer, CheckBox multi, TextBox threshold)
         {
             _showTimer = timer;
             _multiDatabase = multi;
-            _notificationThreshold = sld;
-            _notificationLabel = lbl;
+            _notificationThreshold = threshold;
         }
 
         public void Load(AppSettings settings)
@@ -52,15 +50,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var ex = settings.ExecutionProductivity;
             _showTimer.IsChecked = ex.ShowExecutionTimer;
             _multiDatabase.IsChecked = ex.MultiDatabase;
-            _notificationThreshold.Value = ex.NotificationThreshold;
-            _notificationLabel.Text = ex.NotificationThreshold.ToString(CultureInfo.InvariantCulture);
+            RowFactory.SetNumber(_notificationThreshold, ex.NotificationThreshold);
         }
 
         public void Save(AppSettings settings)
         {
             settings.ExecutionProductivity.ShowExecutionTimer = _showTimer.IsChecked == true;
             settings.ExecutionProductivity.MultiDatabase = _multiDatabase.IsChecked == true;
-            settings.ExecutionProductivity.NotificationThreshold = (int)_notificationThreshold.Value;
+            settings.ExecutionProductivity.NotificationThreshold = RowFactory.GetNumber(_notificationThreshold);
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

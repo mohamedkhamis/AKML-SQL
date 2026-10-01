@@ -4,6 +4,7 @@ using System.ComponentModel.Design;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Dialogs;
@@ -72,7 +73,7 @@ namespace AkmlSql.Shell.Shared.Commands
 
                 using var progressForm = new Form
                 {
-                    Text = "Running Code Analysis...",
+                    Text = WindowTitles.For("Running code analysis…"),
                     Size = new System.Drawing.Size(380, 80),
                     FormBorderStyle = FormBorderStyle.FixedDialog,
                     StartPosition   = FormStartPosition.CenterParent,

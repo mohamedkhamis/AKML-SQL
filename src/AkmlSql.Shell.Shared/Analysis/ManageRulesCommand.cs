@@ -13,7 +13,8 @@ namespace AkmlSql.Shell.Shared.Analysis
 {
     /// <summary>
     /// Spec 030 T053 (FR-026) — "Manage Code Analysis Rules…" command. Loads the rule catalog from
-    /// the engine (<c>ListAnalysisRules</c>), shows <see cref="ManageRulesDialog"/>, and on OK writes
+    /// the engine (<c>ListAnalysisRules</c>), shows <see cref="ManageRulesDialog"/> (spec 040: a themed
+    /// WPF window, also opened from Options › Code analysis through <see cref="Open"/>), and on Save writes
     /// the per-rule deviations to <c>config.json codeAnalysis.ruleOverrides</c> and notifies the
     /// engine via <c>AnalysisSettingsChanged</c> (so live analysis and the dialog's next open reflect
     /// the change). Mirrors <see cref="Commands.OptionsCommand"/>.
@@ -39,6 +40,19 @@ namespace AkmlSql.Shell.Shared.Analysis
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            Open(owner: null);
+        }
+
+        /// <summary>
+        /// Spec 040 (T168) — the one open path for the Code analysis rules window, shared by the
+        /// menu / Command Palette command and Options › Code analysis › <b>Manage rules…</b>.
+        /// Loads the rules, shows the window over <paramref name="owner"/> (the SSMS main window
+        /// when null) and, on Save, writes the overrides and notifies the engine. Returns true when
+        /// the user saved.
+        /// </summary>
+        internal static bool Open(System.Windows.Window? owner)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
                 var client = EngineLifecycle.Manager?.Client;
@@ -46,7 +60,7 @@ namespace AkmlSql.Shell.Shared.Analysis
                 {
                     MessageBox.Show("The AKML SQL engine is not running yet — try again in a moment.",
                         Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    return false;
                 }
 
                 ListAnalysisRulesResponse? response = null;
@@ -62,7 +76,7 @@ namespace AkmlSql.Shell.Shared.Analysis
                 {
                     MessageBox.Show("Could not load the analysis rules: " + (response?.Error ?? "no response from the engine."),
                         Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    return false;
                 }
 
                 // The session-only suppressions live in engine memory, so they must be fetched
@@ -86,9 +100,10 @@ namespace AkmlSql.Shell.Shared.Analysis
                     Log.Warning(ex, "ManageRulesCommand: could not read session suppressions");
                 }
 
-                using var dialog = new ManageRulesDialog(response.Rules, sessionSuppressed);
-                if (dialog.ShowDialog() != DialogResult.OK)
-                    return;
+                var dialog = new ManageRulesDialog(response.Rules, sessionSuppressed);
+                dialog.AttachOwner(owner);
+                if (dialog.ShowDialog() != true)
+                    return false;
 
                 if (dialog.RestoreSessionSuppressions && client.IsConnected)
                 {
@@ -100,7 +115,7 @@ namespace AkmlSql.Shell.Shared.Analysis
                             timeoutMs: 5_000);
                     });
                     Log.Information("ManageRulesCommand: cleared {Count} session suppression(s)",
-                        sessionSuppressed.Length);
+                        dialog.RestoredSessionRules.Count);
                 }
 
                 var overrides = dialog.GetOverrides();
@@ -115,12 +130,14 @@ namespace AkmlSql.Shell.Shared.Analysis
                 {
                     _ = client.SendNotificationAsync(MessageTypes.AnalysisSettingsChanged, new { });
                 }
+                return true;
             }
             catch (Exception ex)
             {
-                Log.Error(ex, "ManageRulesCommand.Execute failed");
+                Log.Error(ex, "ManageRulesCommand.Open failed");
                 MessageBox.Show("Manage Rules failed: " + ex.Message,
                     Constants.ProductName, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
     }

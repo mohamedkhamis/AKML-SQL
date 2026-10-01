@@ -203,6 +203,7 @@ Full shapes are in [contracts/ipc.md](./contracts/ipc.md).
 | `FormatSelectionRequest` | 5 `FormatSqlActionsDto? Actions` | Same, for Format Selection |
 | `FormatSelectionResponse` | 7 `string? ProfileFallbackWarning` | Selection warns like Document |
 | `ProfileInfo` | 9 `string? Source` ("builtIn"/"user"/"team"), 10 `bool IsReadOnly` | Team styles |
+| `ProfileListResponse` | 1 `bool TeamFolderUnavailable` | The team folder couldn't be reached |
 | `ExecutionStatus` (enum) | `NotExecuted = 3` | Drafts |
 
 `FormatRequest.IncludeActions` (Key 4, never read) stays unread. Key 5 carries the typed

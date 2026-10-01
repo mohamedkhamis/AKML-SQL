@@ -134,7 +134,7 @@ public class AiProviderTestHandlerTests
 
         Assert.Contains("timed", msg, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("45", msg);
-        Assert.Contains("Timeout (seconds)", msg);
+        Assert.Contains("'Timeout'", msg);   // the Options label (spec 040 moved the unit out of it)
         Assert.Contains("Options", msg);
     }
 

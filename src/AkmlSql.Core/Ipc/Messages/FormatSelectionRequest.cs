@@ -19,5 +19,12 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public string? ProfileName { get; set; }
+
+        /// <summary>
+        /// Spec 040 (STY-11) — the interactive Format SQL actions. Null = use the style's own
+        /// format actions, as today.
+        /// </summary>
+        [Key(5)]
+        public FormatSqlActionsDto? Actions { get; set; }
     }
 }

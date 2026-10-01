@@ -40,12 +40,24 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         /// correctly under <see cref="FgPrimary"/> text in both themes.</summary>
         public SolidColorBrush SelectionTint { get; }
 
+        /// <summary>Spec 040 (OPT-05): label colour of a child option while its parent option is off.</summary>
+        public SolidColorBrush TextDisabled { get; }
+
+        /// <summary>Spec 040 (OPT-09): face of a primary (accent) button under the mouse —
+        /// <see cref="ThemeTokens.AccentPrimaryHover"/>.</summary>
+        public SolidColorBrush AccentHover { get; }
+
+        /// <summary>Spec 040 (OPT-09): face of a primary (accent) button while pressed —
+        /// <see cref="ThemeTokens.AccentPrimaryPressed"/>.</summary>
+        public SolidColorBrush AccentPressed { get; }
+
         private PageTheme(
             Color main, Color sidebar, Color panel, Color input, Color inputReadOnly,
             Color button, Color buttonHover, Color selected,
             Color border, Color comboBorder,
             Color fgPrimary, Color fgSecondary, Color fgAccent, Color fgWhite,
-            Color selectedText, Color sep, Color treeHover, Color caret, Color selectionTint)
+            Color selectedText, Color sep, Color treeHover, Color caret, Color selectionTint, Color textDisabled,
+            Color accentHover, Color accentPressed)
         {
             Main = Freeze(new SolidColorBrush(main));
             Sidebar = Freeze(new SolidColorBrush(sidebar));
@@ -67,10 +79,22 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             TreeHover = Freeze(new SolidColorBrush(treeHover));
             Caret = Freeze(new SolidColorBrush(caret));
             SelectionTint = Freeze(new SolidColorBrush(selectionTint));
+            TextDisabled = Freeze(new SolidColorBrush(textDisabled));
+            AccentHover = Freeze(new SolidColorBrush(accentHover));
+            AccentPressed = Freeze(new SolidColorBrush(accentPressed));
         }
 
         public static readonly PageTheme Dark = FromPalette(ThemePalette.Dark);
         public static readonly PageTheme Light = FromPalette(ThemePalette.Light);
+
+        /// <summary>
+        /// Spec 040 (OPT-09, T169) — the Options window under Windows high contrast. Built from
+        /// <see cref="ThemePalette.HighContrast"/>, which maps every token to a Windows system colour
+        /// (Window, WindowText, Highlight, GrayText …), so the dialog follows the active contrast
+        /// theme instead of painting the fixed Light or Dark values over it. A snapshot: the system
+        /// colours are read once, when the palette is built.
+        /// </summary>
+        public static readonly PageTheme HighContrast = FromPalette(ThemePalette.HighContrast);
 
         private static PageTheme FromPalette(ThemePalette p)
         {
@@ -94,7 +118,10 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 sep:           C(ThemeTokens.BorderSubtle),
                 treeHover:     C(ThemeTokens.SurfaceHover),
                 caret:         C(ThemeTokens.TextPrimary),
-                selectionTint: C(ThemeTokens.SurfaceSelection)
+                selectionTint: C(ThemeTokens.SurfaceSelection),
+                textDisabled:  C(ThemeTokens.TextDisabled),
+                accentHover:   C(ThemeTokens.AccentPrimaryHover),
+                accentPressed: C(ThemeTokens.AccentPrimaryPressed)
             );
         }
 

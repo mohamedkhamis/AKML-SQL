@@ -59,7 +59,7 @@ internal static class AiFailureTaxonomy
         {
             // Provider-side deadline elapsed (the caller's token was still live).
             return $"The AI provider did not respond within the timeout ({timeoutSeconds}s) — it timed out. " +
-                   "Increase 'Timeout (seconds)' under Options → AI Assistance, or retry when the provider is less loaded.";
+                   "Increase 'Timeout' under Options → AI Assistance, or retry when the provider is less loaded.";
         }
 
         if (ex is HttpRequestException || HasInnerHttpError(ex))

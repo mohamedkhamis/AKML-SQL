@@ -6,7 +6,9 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Update;
+using AkmlSql.Shell.Shared.Ui;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Orientation = System.Windows.Controls.Orientation;
 using Serilog;
@@ -65,7 +67,8 @@ namespace AkmlSql.Shell.Shared.Update
             var muted = (SolidColorBrush)registry[ThemeTokens.TextPlaceholder];
             var linkBrush = (SolidColorBrush)registry[ThemeTokens.TextLink];
 
-            Title = "Update available";
+            Title = WindowTitles.For("Update available");
+            WindowIcon.Apply(this);
             Width = 440;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

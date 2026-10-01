@@ -7,7 +7,8 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
     /// <summary>
     /// Base class for AKML-owned modal <see cref="Window"/> instances. Subclassing is preferred
     /// over manual <c>ThemeRegistry.Instance.AttachTo(this)</c> because it also handles the
-    /// DTE-derived owner HWND and the default Background/Foreground references.
+    /// DTE-derived owner HWND, the default Background/Foreground references and the AKML window
+    /// icon (<see cref="WindowIcon"/>). Titles come from <c>WindowTitles.For(name)</c>.
     ///
     /// Derived classes that need bespoke construction order (e.g., <c>SafetyWarningDialog</c>'s
     /// focus-on-Cancel discipline) may inherit <see cref="Window"/> directly and call
@@ -23,6 +24,9 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             this.SetResourceReference(ForegroundProperty, ThemeTokens.TextPrimary);
 
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+            // Spec 040 (T182) — the AKML icon, not the host's.
+            WindowIcon.Apply(this);
 
             Loaded += OnLoadedSetOwner;
         }

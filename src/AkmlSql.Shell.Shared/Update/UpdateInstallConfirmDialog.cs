@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
@@ -83,7 +85,8 @@ namespace AkmlSql.Shell.Shared.Update
             _cardBgBrush = (SolidColorBrush)registry[ThemeTokens.SurfaceElevated];
             _accentBrush = Freeze(new SolidColorBrush(AmberBorder));
 
-            Title = "Install update";
+            Title = WindowTitles.For("Install update");
+            WindowIcon.Apply(this);
             Width = 480;
             SizeToContent = SizeToContent.Height;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

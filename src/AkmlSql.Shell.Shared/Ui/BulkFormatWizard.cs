@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Ui
@@ -76,7 +77,8 @@ namespace AkmlSql.Shell.Shared.Ui
 
         private void InitializeComponents(string[] availableProfiles)
         {
-            Text = Constants.ProductName + " - Bulk Format";
+            Text = WindowTitles.For("Bulk format");
+            WindowIcon.Apply(this);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;

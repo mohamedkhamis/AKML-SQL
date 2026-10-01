@@ -1,5 +1,4 @@
 #nullable enable
-using System.Globalization;
 using System.Windows.Controls;
 using AkmlSql.Core.Config;
 
@@ -8,8 +7,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class SafetyPage : IPageBuilder
     {
         public string Key     => "Safety";
-        public string Display => "Queries › Execution Warnings";
-        public string Title   => "Execution Safety";
+        public string Display => "Suggestions › Warnings & highlighting";
+        public string Title   => "Warnings & highlighting";
+        public string HelpTopic => "topics/options#suggestions-warnings-highlighting";
         public string Help    => "Configure confirmation prompts and warnings for risky T-SQL execution, including production-server alerts, unguarded DELETE/UPDATE, DROP and TRUNCATE confirmations, and periodic open-transaction reminders.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -42,19 +42,19 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("TRUNCATE confirmation", "Require confirmation before executing TRUNCATE statements", "Toggle", rowTrunc);
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Transaction Reminder");
+            ctx.Rows.AddGroupHeader(panel, "Transaction reminder");
 
             var (rowTxRem, chkTxRem) = ctx.Rows.AddToggle(panel,
                 "Enable transaction reminder",
                 "Periodically remind about open transactions on production servers");
             ctx.RegisterSearch("Enable transaction reminder", "Periodically remind about open transactions on production servers", "Toggle", rowTxRem);
 
-            var (rowSlider, sldInterval, lblInterval) = ctx.Rows.AddSlider(panel,
-                "Reminder interval (seconds)", 30, 3600, 300,
-                "Time between transaction reminder notifications");
-            ctx.RegisterSearch("Reminder interval (seconds)", "Time between transaction reminder notifications", "Slider", rowSlider);
+            var (rowInterval, numInterval) = ctx.Rows.AddNumber(panel,
+                "Reminder interval", 30, 3600, 30, "seconds",
+                "Time between transaction reminder notifications", chkTxRem);
+            ctx.RegisterSearch("Reminder interval", "Time between transaction reminder notifications", "Number", rowInterval);
 
-            return new SafetyControls(chkProd, chkDel, chkUpd, chkDrop, chkTrunc, chkTxRem, sldInterval, lblInterval);
+            return new SafetyControls(chkProd, chkDel, chkUpd, chkDrop, chkTrunc, chkTxRem, numInterval);
         }
     }
 
@@ -66,11 +66,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _dropConfirm;
         private readonly CheckBox _truncateConfirm;
         private readonly CheckBox _txReminder;
-        private readonly Slider _txReminderInterval;
-        private readonly TextBlock _txReminderLabel;
+        private readonly TextBox _txReminderInterval;
 
         public SafetyControls(CheckBox prod, CheckBox del, CheckBox upd, CheckBox drop, CheckBox trunc,
-            CheckBox txRem, Slider sldInterval, TextBlock lblInterval)
+            CheckBox txRem, TextBox interval)
         {
             _prodWarning = prod;
             _deleteNoWhere = del;
@@ -78,8 +77,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _dropConfirm = drop;
             _truncateConfirm = trunc;
             _txReminder = txRem;
-            _txReminderInterval = sldInterval;
-            _txReminderLabel = lblInterval;
+            _txReminderInterval = interval;
         }
 
         public void Load(AppSettings settings)
@@ -91,8 +89,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _dropConfirm.IsChecked = sf.DropConfirmation;
             _truncateConfirm.IsChecked = sf.TruncateConfirmation;
             _txReminder.IsChecked = sf.TransactionReminder;
-            _txReminderInterval.Value = sf.TransactionReminderInterval;
-            _txReminderLabel.Text = sf.TransactionReminderInterval.ToString(CultureInfo.InvariantCulture);
+            RowFactory.SetNumber(_txReminderInterval, sf.TransactionReminderInterval);
         }
 
         public void Save(AppSettings settings)
@@ -103,7 +100,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.Safety.DropConfirmation = _dropConfirm.IsChecked == true;
             settings.Safety.TruncateConfirmation = _truncateConfirm.IsChecked == true;
             settings.Safety.TransactionReminder = _txReminder.IsChecked == true;
-            settings.Safety.TransactionReminderInterval = (int)_txReminderInterval.Value;
+            settings.Safety.TransactionReminderInterval = RowFactory.GetNumber(_txReminderInterval);
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

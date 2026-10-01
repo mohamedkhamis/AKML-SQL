@@ -14,12 +14,14 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
 using AkmlSql.Shell.Shared.Ui;
 using AkmlSql.Shell.Shared.Ui.SqlPreview;
 using AkmlSql.Shell.Shared.Ui.Theme;
+using Typography = AkmlSql.Shell.Shared.Ui.Theme.Typography;
 
 namespace AkmlSql.Shell.Shared.History
 {
@@ -91,7 +93,7 @@ namespace AkmlSql.Shell.Shared.History
             _viewModel.ReExecuteRequested += OnReExecuteRequested;
             _viewModel.CompareRequested += OnCompareRequested;
             _viewModel.ActivateDocument = ActivateOpenDocument;
-            _viewModel.PromptRename = current => ShowInputDialog("AKML SQL \u2013 Rename query", "Name:", current);
+            _viewModel.PromptRename = current => ShowInputDialog("Rename query", "Name:", current);
 
             BuildUi();
 
@@ -217,7 +219,7 @@ namespace AkmlSql.Shell.Shared.History
                 Background = Brushes.Transparent, // theme-independent: lets the parent Border's background show through
                 BorderThickness = new Thickness(0),
                 Padding = new Thickness(4, 6, 4, 6),
-                FontSize = 12,
+                FontSize = Typography.Body,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
@@ -236,7 +238,7 @@ namespace AkmlSql.Shell.Shared.History
                 IsHitTestVisible = false,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(6, 0, 0, 0),
-                FontSize = 12
+                FontSize = Typography.Body
             };
             placeholderText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
 
@@ -289,7 +291,7 @@ namespace AkmlSql.Shell.Shared.History
             _favoritesStarGlyph = new TextBlock
             {
                 Text = "\u2605",
-                FontSize = 14,
+                FontSize = Typography.H4,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center
             };
@@ -331,7 +333,7 @@ namespace AkmlSql.Shell.Shared.History
             iconStack.Children.Add(sourceButton);
 
             // Spec 040 (HIS-12): the window's own menu — Export and Clear history live here, not on a row.
-            var moreGlyph = new TextBlock { Text = "\u22EF", FontSize = 14, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var moreGlyph = new TextBlock { Text = "\u22EF", FontSize = Typography.H4, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
             moreGlyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             var moreButton = CreateToolbarIconButton(moreGlyph, "More actions", null);
             var moreMenu = new ContextMenu();
@@ -353,7 +355,7 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = "Recent queries",
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 12,
+                FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center
             };
             heading.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
@@ -425,7 +427,7 @@ namespace AkmlSql.Shell.Shared.History
         /// <summary>Spec 040 (HIS-07) — "?" beside the search box: every search form, with an example.</summary>
         private Button BuildSearchHelpButton()
         {
-            var glyph = new TextBlock { Text = "?", FontSize = 12, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var glyph = new TextBlock { Text = "?", FontSize = Typography.Body, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
             glyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             var button = new Button
             {
@@ -480,7 +482,7 @@ namespace AkmlSql.Shell.Shared.History
             var advanced = _viewModel.AdvancedSearch;
             var host = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
 
-            var toggle = new TextBlock { Text = "\u25B8 Advanced search", FontSize = 11, Cursor = Cursors.Hand, Focusable = true };
+            var toggle = new TextBlock { Text = "\u25B8 Advanced search", FontSize = Typography.Small, Cursor = Cursors.Hand, Focusable = true };
             toggle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
             AutomationProperties.SetName(toggle, "Advanced search");
             host.Children.Add(toggle);
@@ -500,7 +502,7 @@ namespace AkmlSql.Shell.Shared.History
 
             TextBlock Label(string text, int row)
             {
-                var t = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 8, 2) };
+                var t = new TextBlock { Text = text, FontSize = Typography.Small, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 2, 8, 2) };
                 t.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
                 Grid.SetRow(t, row);
                 body.Children.Add(t);
@@ -509,7 +511,7 @@ namespace AkmlSql.Shell.Shared.History
 
             // Period
             Label("Period", 0);
-            var period = new ComboBox { FontSize = 11, Margin = new Thickness(0, 2, 0, 2) };
+            var period = new ComboBox { FontSize = Typography.Small, Margin = new Thickness(0, 2, 0, 2) };
             foreach (var (_, label) in HistoryAdvancedSearch.Periods) period.Items.Add(label);
             ComboBoxTheming.Apply(period);
             AutomationProperties.SetName(period, "Period");
@@ -518,8 +520,8 @@ namespace AkmlSql.Shell.Shared.History
 
             // Custom dates
             var dates = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-            var from = new DatePicker { FontSize = 11, Width = 110 };
-            var to = new DatePicker { FontSize = 11, Width = 110, Margin = new Thickness(6, 0, 0, 0) };
+            var from = new DatePicker { FontSize = Typography.Small, Width = 110 };
+            var to = new DatePicker { FontSize = Typography.Small, Width = 110, Margin = new Thickness(6, 0, 0, 0) };
             dates.Children.Add(from); dates.Children.Add(to);
             AutomationProperties.SetName(from, "From");
             AutomationProperties.SetName(to, "To");
@@ -529,13 +531,13 @@ namespace AkmlSql.Shell.Shared.History
 
             // Server / Database
             Label("Server", 2);
-            var server = new ComboBox { FontSize = 11, Margin = new Thickness(0, 2, 0, 2) };
+            var server = new ComboBox { FontSize = Typography.Small, Margin = new Thickness(0, 2, 0, 2) };
             ComboBoxTheming.Apply(server);
             AutomationProperties.SetName(server, "Server");
             Grid.SetRow(server, 2); Grid.SetColumn(server, 1);
             body.Children.Add(server);
             Label("Database", 3);
-            var database = new ComboBox { FontSize = 11, Margin = new Thickness(0, 2, 0, 2) };
+            var database = new ComboBox { FontSize = Typography.Small, Margin = new Thickness(0, 2, 0, 2) };
             ComboBoxTheming.Apply(database);
             AutomationProperties.SetName(database, "Database");
             Grid.SetRow(database, 3); Grid.SetColumn(database, 1);
@@ -543,11 +545,11 @@ namespace AkmlSql.Shell.Shared.History
 
             // Starred / Open / Reset
             var flags = new DockPanel { Margin = new Thickness(0, 4, 0, 2) };
-            var starred = new CheckBox { Content = "Starred", FontSize = 11, Margin = new Thickness(0, 0, 12, 0) };
-            var openOnly = new CheckBox { Content = "Open", FontSize = 11 };
+            var starred = new CheckBox { Content = "Starred", FontSize = Typography.Small, Margin = new Thickness(0, 0, 12, 0) };
+            var openOnly = new CheckBox { Content = "Open", FontSize = Typography.Small };
             starred.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             openOnly.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            var reset = new Button { Content = "Reset", FontSize = 11, Padding = new Thickness(8, 1, 8, 1) };
+            var reset = new Button { Content = "Reset", FontSize = Typography.Small, Padding = new Thickness(8, 1, 8, 1) };
             DockPanel.SetDock(reset, Dock.Right);
             flags.Children.Add(reset);
             flags.Children.Add(starred);
@@ -640,12 +642,12 @@ namespace AkmlSql.Shell.Shared.History
                 panel.Children.Clear();
                 foreach (var chip in _viewModel.ActiveFilterChips)
                 {
-                    var text = new TextBlock { Text = chip.Label, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+                    var text = new TextBlock { Text = chip.Label, FontSize = Typography.Small, VerticalAlignment = VerticalAlignment.Center };
                     text.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
                     var remove = new Button
                     {
                         Content = "\u00D7",
-                        FontSize = 11,
+                        FontSize = Typography.Small,
                         Padding = new Thickness(4, 0, 2, 0),
                         BorderThickness = new Thickness(0),
                         Background = Brushes.Transparent,
@@ -1103,7 +1105,7 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = "History is unavailable \u2014 the AKML engine isn't connected.",
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 11,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center
             };
             text.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
@@ -1138,7 +1140,7 @@ namespace AkmlSql.Shell.Shared.History
             _emptyStateText = new TextBlock
             {
                 Text = "No queries found.",
-                FontSize = 12,
+                FontSize = Typography.Body,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap
@@ -1245,7 +1247,7 @@ namespace AkmlSql.Shell.Shared.History
             header.Bindings.Add(new Binding("ItemCount"));
             name.SetBinding(TextBlock.TextProperty, header);
             name.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
-            name.SetValue(TextBlock.FontSizeProperty, 10.5);
+            name.SetValue(TextBlock.FontSizeProperty, Typography.Small);
             name.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             name.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             name.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 0, 0, 0));
@@ -1333,12 +1335,15 @@ namespace AkmlSql.Shell.Shared.History
                 {
                     Converter = new FavoriteIconConverter()
                 });
-            starText.SetBinding(TextBlock.ForegroundProperty,
-                new Binding(nameof(HistoryEntryDto.IsFavorite))
-                {
-                    Converter = new FavoriteColorConverter()
-                });
-            starText.SetValue(TextBlock.FontSizeProperty, 14.0);
+            // Spec 040 (T185): the star's colour follows theme changes — resource references
+            // switched by a trigger, not a converter that copied the brush once.
+            var starStyle = new Style(typeof(TextBlock));
+            starStyle.Setters.Add(new Setter(TextBlock.ForegroundProperty, new DynamicResourceExtension(ThemeTokens.HistoryStarInactive)));
+            var starredTrigger = new DataTrigger { Binding = new Binding(nameof(HistoryEntryDto.IsFavorite)), Value = true };
+            starredTrigger.Setters.Add(new Setter(TextBlock.ForegroundProperty, new DynamicResourceExtension(ThemeTokens.HistoryStarActive)));
+            starStyle.Triggers.Add(starredTrigger);
+            starText.SetValue(FrameworkElement.StyleProperty, starStyle);
+            starText.SetValue(TextBlock.FontSizeProperty, Typography.H4);
             starButton.AppendChild(starText);
             outerDock.AppendChild(starButton);
 
@@ -1352,7 +1357,7 @@ namespace AkmlSql.Shell.Shared.History
             var overflowText = new FrameworkElementFactory(typeof(TextBlock));
             overflowText.SetValue(TextBlock.TextProperty, "\u22EE");
             overflowText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            overflowText.SetValue(TextBlock.FontSizeProperty, 14.0);
+            overflowText.SetValue(TextBlock.FontSizeProperty, Typography.H4);
             overflowButton.AppendChild(overflowText);
             outerDock.AppendChild(overflowButton);
 
@@ -1364,7 +1369,7 @@ namespace AkmlSql.Shell.Shared.History
             nameText.SetBinding(TextBlock.TextProperty,
                 new Binding { Converter = new QueryNameConverter() });
             nameText.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
-            nameText.SetValue(TextBlock.FontSizeProperty, 12.0);
+            nameText.SetValue(TextBlock.FontSizeProperty, Typography.Body);
             nameText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             nameText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             nameText.SetValue(TextBlock.MaxHeightProperty, 18.0);
@@ -1386,7 +1391,7 @@ namespace AkmlSql.Shell.Shared.History
             badge.SetBinding(Border.BackgroundProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Background));
             badge.SetBinding(VisibilityProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Visibility));
             var badgeText = new FrameworkElementFactory(typeof(TextBlock));
-            badgeText.SetValue(TextBlock.FontSizeProperty, 9.5);
+            badgeText.SetValue(TextBlock.FontSizeProperty, Typography.Small);
             badgeText.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
             badgeText.SetBinding(TextBlock.TextProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Label));
             badgeText.SetBinding(TextBlock.ForegroundProperty, EnvironmentBadgeBinding(EnvironmentBadgeConverter.Part.Foreground));
@@ -1403,7 +1408,7 @@ namespace AkmlSql.Shell.Shared.History
                     new Binding(nameof(HistoryEntryDto.Database))
                 }
             });
-            connText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            connText.SetValue(TextBlock.FontSizeProperty, Typography.Small);
             connText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             connText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             connText.SetValue(DockPanel.DockProperty, Dock.Right);
@@ -1425,7 +1430,7 @@ namespace AkmlSql.Shell.Shared.History
                 {
                     Converter = new RelativeTimeConverter()
                 });
-            timeText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            timeText.SetValue(TextBlock.FontSizeProperty, Typography.Small);
             timeText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             timeText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             timeText.SetValue(DockPanel.DockProperty, Dock.Left);
@@ -1433,7 +1438,7 @@ namespace AkmlSql.Shell.Shared.History
 
             var dotSep = new FrameworkElementFactory(typeof(TextBlock));
             dotSep.SetValue(TextBlock.TextProperty, " \u00B7 ");
-            dotSep.SetValue(TextBlock.FontSizeProperty, 10.0);
+            dotSep.SetValue(TextBlock.FontSizeProperty, Typography.Small);
             dotSep.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             dotSep.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             dotSep.SetValue(DockPanel.DockProperty, Dock.Left);
@@ -1442,7 +1447,7 @@ namespace AkmlSql.Shell.Shared.History
 
             var metaText = new FrameworkElementFactory(typeof(TextBlock));
             metaText.SetBinding(TextBlock.TextProperty, CreateMetaTextBinding());
-            metaText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            metaText.SetValue(TextBlock.FontSizeProperty, Typography.Small);
             metaText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             metaText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
             metaText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
@@ -1616,7 +1621,7 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = "HISTORY",
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 10,
+                FontSize = Typography.Small,
                 Padding = new Thickness(10, 8, 10, 6),
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
@@ -1655,7 +1660,7 @@ namespace AkmlSql.Shell.Shared.History
             _versionsEmptyText = new TextBlock
             {
                 Text = "No earlier versions.",
-                FontSize = 11,
+                FontSize = Typography.Small,
                 Margin = new Thickness(10, 4, 10, 4),
                 Visibility = Visibility.Collapsed
             };
@@ -1691,7 +1696,7 @@ namespace AkmlSql.Shell.Shared.History
 
             _codePreviewHeaderTimestamp = new TextBlock
             {
-                FontSize = 10.5,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center
             };
             _codePreviewHeaderTimestamp.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -1702,7 +1707,7 @@ namespace AkmlSql.Shell.Shared.History
             {
                 Text = "Preview",
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 12,
+                FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
@@ -1725,7 +1730,7 @@ namespace AkmlSql.Shell.Shared.History
                 Content = "Open",
                 Padding = new Thickness(16, 4, 16, 4),
                 Cursor = Cursors.Hand,
-                FontSize = 11.5,
+                FontSize = Typography.Small,
                 FontWeight = FontWeights.SemiBold,
                 BorderThickness = new Thickness(0),
                 FocusVisualStyle = FocusVisualStyles.HighStakes,
@@ -1741,7 +1746,7 @@ namespace AkmlSql.Shell.Shared.History
 
             _metadataVersionLabel = new TextBlock
             {
-                FontSize = 10.5,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(10, 0, 10, 0)
             };
@@ -1758,7 +1763,7 @@ namespace AkmlSql.Shell.Shared.History
             // ● server (Status.Success dot role)
             _metadataServerLabel = new TextBlock
             {
-                FontSize = 10.5,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center
             };
             _metadataServerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.StatusSuccess);
@@ -1768,7 +1773,7 @@ namespace AkmlSql.Shell.Shared.History
             var metaSeparator = new TextBlock
             {
                 Text = " · ",
-                FontSize = 10.5,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center
             };
             metaSeparator.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -1777,7 +1782,7 @@ namespace AkmlSql.Shell.Shared.History
             // Database name
             _metadataDatabaseLabel = new TextBlock
             {
-                FontSize = 10.5,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center
             };
             _metadataDatabaseLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -1800,7 +1805,7 @@ namespace AkmlSql.Shell.Shared.History
             _previewEmptyText = new TextBlock
             {
                 Text = "Select a query to see it here.",
-                FontSize = 12,
+                FontSize = Typography.Body,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
@@ -1902,7 +1907,7 @@ namespace AkmlSql.Shell.Shared.History
             // Total count
             _statusCountLabel = new TextBlock
             {
-                FontSize = 10.5,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center
             };
             _statusCountLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -2146,7 +2151,7 @@ namespace AkmlSql.Shell.Shared.History
                         {
                             Text = label,
                             FontWeight = isCurrent ? FontWeights.SemiBold : FontWeights.Normal,
-                            FontSize = 11.5
+                            FontSize = Typography.Small
                         };
                         versionLabel.SetResourceReference(TextBlock.ForegroundProperty,
                             isCurrent ? ThemeTokens.TextLink : ThemeTokens.TextSecondary);
@@ -2157,7 +2162,7 @@ namespace AkmlSql.Shell.Shared.History
                             var timeLabel = new TextBlock
                             {
                                 Text = timestampText,
-                                FontSize = 9.5,
+                                FontSize = Typography.Small,
                                 Margin = new Thickness(0, 1, 0, 0)
                             };
                             timeLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -2170,7 +2175,7 @@ namespace AkmlSql.Shell.Shared.History
                             var whereLabel = new TextBlock
                             {
                                 Text = where,
-                                FontSize = 9.5,
+                                FontSize = Typography.Small,
                                 TextTrimming = TextTrimming.CharacterEllipsis
                             };
                             whereLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
@@ -2237,16 +2242,17 @@ namespace AkmlSql.Shell.Shared.History
         /// <summary>
         /// Shows a simple WPF input dialog and returns the entered text, or null if cancelled.
         /// </summary>
-        private static string? ShowInputDialog(string title, string prompt, string defaultValue)
+        private static string? ShowInputDialog(string windowName, string prompt, string defaultValue)
         {
             var dialog = new Window
             {
-                Title = title,
+                Title = WindowTitles.For(windowName),
                 Width = 400,
                 Height = 170,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 ResizeMode = ResizeMode.NoResize
             };
+            WindowIcon.Apply(dialog);
             ThemeRegistry.Instance.AttachTo(dialog);
             dialog.SetResourceReference(Window.BackgroundProperty, ThemeTokens.SurfaceCanvas);
             dialog.SetResourceReference(Window.ForegroundProperty, ThemeTokens.TextPrimary);
@@ -2738,21 +2744,6 @@ namespace AkmlSql.Shell.Shared.History
             public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
             {
                 return value is true ? "\u2605" : "\u2606"; // filled star vs empty star
-            }
-
-            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                throw new NotSupportedException();
-            }
-        }
-
-        /// <summary>Converts IsFavorite bool to a theme-aware brush: Status.Warning when active, Text.Disabled otherwise.</summary>
-        private class FavoriteColorConverter : IValueConverter
-        {
-            public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-            {
-                var key = value is true ? ThemeTokens.StatusWarning : ThemeTokens.TextDisabled;
-                return ThemeRegistry.Instance.Resources[key];
             }
 
             public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
