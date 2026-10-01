@@ -151,6 +151,8 @@ namespace AkmlSql.Shell.Shared.History
                       || args.PropertyName == nameof(HistoryViewModel.IsDisconnected)
                       || args.PropertyName == nameof(HistoryViewModel.TotalCount))
                     UpdateEmptyState();
+                else if (args.PropertyName == nameof(HistoryViewModel.SelectedEntry))
+                    SyncListSelection();
             };
             _viewModel.Entries.CollectionChanged += (_, __) => UpdateEmptyState();
 
@@ -1037,6 +1039,9 @@ namespace AkmlSql.Shell.Shared.History
             VirtualizingPanel.SetIsVirtualizingWhenGrouping(_queryListView, true);
             VirtualizingPanel.SetScrollUnit(_queryListView, ScrollUnit.Item);
             ScrollViewer.SetCanContentScroll(_queryListView, true);
+            // Rows take the pane's width and trim, as in SQL Prompt: no sideways scrolling, and the
+            // time/runs text can no longer run into the server name.
+            ScrollViewer.SetHorizontalScrollBarVisibility(_queryListView, ScrollBarVisibility.Disabled);
 
             // Bind ItemsSource through a CollectionViewSource that groups by date bucket.
             var cvs = new CollectionViewSource { Source = _viewModel.Entries };
@@ -1263,6 +1268,12 @@ namespace AkmlSql.Shell.Shared.History
             var containerStyle = new Style(typeof(GroupItem));
             containerStyle.Setters.Add(new Setter(Control.TemplateProperty, containerTemplate));
 
+            // A screen reader announces the group as it is shown ("Today (12)"), not just "Today".
+            var groupName = new MultiBinding { StringFormat = "{0} ({1})" };
+            groupName.Bindings.Add(new Binding("Name"));
+            groupName.Bindings.Add(new Binding("ItemCount"));
+            containerStyle.Setters.Add(new Setter(AutomationProperties.NameProperty, groupName));
+
             return new GroupStyle
             {
                 ContainerStyle = containerStyle
@@ -1397,13 +1408,16 @@ namespace AkmlSql.Shell.Shared.History
             connText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             connText.SetValue(DockPanel.DockProperty, Dock.Right);
             connText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            connText.SetValue(FrameworkElement.MarginProperty, new Thickness(8, 0, 0, 0));
             line2.AppendChild(connText);
 
 
             // Left (fills): relative time + " \u00B7 " + "\u00D7N \u00B7 M versions" meta (HistoryRowDisplay.MetaFor;
             // separator + meta both hidden when the meta line is empty \u2014 see MetaVisibilityConverter).
-            var leftMeta = new FrameworkElementFactory(typeof(StackPanel));
-            leftMeta.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            // A DockPanel, not a StackPanel: the meta gets the width that is left and trims, where a
+            // StackPanel let it spill under the server name ("7 versions(local) \u00B7 Northwind").
+            var leftMeta = new FrameworkElementFactory(typeof(DockPanel));
+            leftMeta.SetValue(UIElement.ClipToBoundsProperty, true);
 
             var timeText = new FrameworkElementFactory(typeof(TextBlock));
             timeText.SetBinding(TextBlock.TextProperty,
@@ -1414,6 +1428,7 @@ namespace AkmlSql.Shell.Shared.History
             timeText.SetValue(TextBlock.FontSizeProperty, 10.0);
             timeText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             timeText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            timeText.SetValue(DockPanel.DockProperty, Dock.Left);
             leftMeta.AppendChild(timeText);
 
             var dotSep = new FrameworkElementFactory(typeof(TextBlock));
@@ -1421,6 +1436,7 @@ namespace AkmlSql.Shell.Shared.History
             dotSep.SetValue(TextBlock.FontSizeProperty, 10.0);
             dotSep.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             dotSep.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            dotSep.SetValue(DockPanel.DockProperty, Dock.Left);
             dotSep.SetBinding(VisibilityProperty, CreateMetaVisibilityBinding());
             leftMeta.AppendChild(dotSep);
 
@@ -1429,6 +1445,7 @@ namespace AkmlSql.Shell.Shared.History
             metaText.SetValue(TextBlock.FontSizeProperty, 10.0);
             metaText.SetResourceBinding(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             metaText.SetValue(TextBlock.FontStyleProperty, FontStyles.Italic);
+            metaText.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
             metaText.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             metaText.SetBinding(VisibilityProperty, CreateMetaVisibilityBinding());
             leftMeta.AppendChild(metaText);
@@ -1929,6 +1946,20 @@ namespace AkmlSql.Shell.Shared.History
 
             // Load version history for the selected entry
             LoadVersionHistory();
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-09): a new search selects its first row in the view model; select it in the
+        /// list too, or the row looks unselected and the preview keeps saying "Select a query".
+        /// Selecting it raises SelectionChanged, which fills the preview.
+        /// </summary>
+        private void SyncListSelection()
+        {
+            if (_queryListView == null) return;
+            var entry = _viewModel.SelectedEntry;
+            if (entry == null || _queryListView.SelectedItems.Contains(entry)) return;
+            _queryListView.SelectedItem = entry;
+            _queryListView.ScrollIntoView(entry);
         }
 
         /// <summary>

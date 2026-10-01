@@ -192,6 +192,21 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(new[] { "Export…", "Clear history…" }, h.Control.ToolbarMenuHeaders.ToArray());
         }
 
+        [StaFact]
+        public void The_list_selects_the_row_the_view_model_selects()
+        {
+            var h = Build();
+            var list = Descendants(h.Control).OfType<ListView>().Single(l => AutomationProperties.GetName(l) == "Queries");
+            Assert.Same(h.Entry, list.SelectedItem);
+
+            // A new search selects its first row in the view model (HIS-09); the list follows.
+            var next = new HistoryEntryDto { Id = 8, SqlText = "SELECT 8", TabTitle = "q8", SessionKey = "b", ExecutedAt = "2026-09-28T11:00:00.0000000Z" };
+            h.Vm.Entries.Add(next);
+            h.Vm.SelectedEntry = next;
+            Assert.Same(next, list.SelectedItem);
+            Assert.Same(next, h.Vm.SelectedEntry);
+        }
+
         private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
         {
             var stack = new Stack<DependencyObject>();
