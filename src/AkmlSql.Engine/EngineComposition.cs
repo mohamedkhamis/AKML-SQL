@@ -44,6 +44,8 @@ public sealed class EngineComposition
             SessionConnections = new Execution.SessionConnectionRegistry(),
         };
 
+        ctx.SchemaCache.ReloadMissing = (sessionId, database) => ReloadSessionCacheAsync(ctx, sessionId, database);
+
         var router = new RpcRouter();
         var retention = EngineHandlerRegistry.RegisterAllHandlers(router, ctx, handshakeHandler);
 
@@ -53,5 +55,27 @@ public sealed class EngineComposition
             Router = router,
             HistoryRetention = retention,
         };
+    }
+
+    /// <summary>
+    /// Loads an open session's own database cache again after <see cref="SchemaCacheManager.EvictLru"/>
+    /// dropped it — the same Phase A then Phase B a connection change runs. Nothing for a session
+    /// that is gone, or for another database than the session's.
+    /// </summary>
+    internal static async Task ReloadSessionCacheAsync(RpcContext ctx, string sessionId, string database)
+    {
+        var session = ctx.Sessions.GetSession(sessionId);
+        if (session == null || ctx.SchemaMetadata == null || string.IsNullOrEmpty(session.ConnectionString)
+            || !string.Equals(session.DatabaseName, database, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var cache = ctx.SchemaCache.GetOrCreateCache(sessionId, database);
+        if (cache.Phase != PopulationPhase.NotLoaded || cache.PermissionDenied) return;
+
+        Log.Information("Reloading the evicted schema cache for {Session}:{Db}", sessionId, database);
+        await ctx.SchemaMetadata.PopulatePhaseAAsync(cache, session.ConnectionString, CancellationToken.None);
+        ctx.SchemaCache.EvictLru();
+        if (cache.Phase == PopulationPhase.PhaseA && !cache.PermissionDenied)
+            await ctx.SchemaMetadata.PopulatePhaseBAsync(cache, session.ConnectionString, CancellationToken.None);
     }
 }

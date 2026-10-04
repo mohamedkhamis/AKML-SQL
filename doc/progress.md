@@ -1763,3 +1763,94 @@ outside VS fails once looking up IVsSettingsManager, the helper absorbs it); web
   item modified (`StyleListItem` raises change notifications); the space commit takes in an
   auto-closed `]`; parens are checked after the widened range; the "[" scan-back only crosses
   characters a bracketed name is made of (both editors).
+
+---
+
+## Spec 040 — SQL Prompt UI/UX parity: Options, SQL History, format styles (2026-09-28)
+
+Request: bring the SSMS 22 Options window, SQL History and format-style editing up to SQL Prompt's
+UI/UX, as analysed in `doc/_Prompt-Gap/11-UI-UX-Plan-Options-History-Styles.md` (38 work items:
+OPT-01..09, HIS-01..14, STY-01..11, X-01..04). Web edition out of scope. Spec:
+`specs/040-sqlprompt-ui-parity/spec.md`; verification record: `baseline.md` there.
+
+### What the investigation found
+
+The layouts already matched SQL Prompt; the screens did not tell the truth:
+
+- **Options**: about 40 controls changed nothing ("Maximum suggestions", "Trigger delay",
+  "Show nullability info", "Format on paste", …); the theme drop-down saved behind Cancel;
+  Restore Defaults wiped data the page doesn't show (AI agents, rule overrides).
+- **SQL History**: the preview stopped at 500 characters; the open/closed filter and dot never
+  changed (nothing recorded that a query was open); paging stopped before the end; Delete and
+  Favorite on a grouped row acted on the latest run only; a version snapshot left the search
+  index on the old text.
+- **Styles**: labels cut mid-word; the preview ignored the style's tab width; import did not
+  refresh the ACTIVE marker or the list.
+
+### What was built
+
+- **US1–US3 (P1)** — dead settings wired or hidden; Cancel means cancel; Restore Defaults keeps
+  hidden data; History preview complete, open state recorded (open/closed filters, `open:`),
+  paging to the end, group actions on the whole group, snapshot and search index in step; style
+  editor labels wrap, preview honours tab width, import/export keep the list and ACTIVE marker right.
+- **US4** — style option search, change markers and ↺ reset, Active Style menu (AKML SQL menu
+  and the SQL editor's context menu), Format feedback in the status bar.
+- **US5** — History like SQL Prompt's: search as you type with `name:`/`server:`/`open:`… and
+  Advanced search, date groups, star, keyboard-only use, versions with compare, restore of open
+  queries at start, drafts for never-run tabs.
+- **US6** — Options in SQL Prompt's tree and words, child options greyed under their master
+  switch, number fields, options in the Command Palette, a tab-colour environments grid.
+- **US7** — the AKML SQL menu built from `AkmlMenuTable`, `WindowTitles.For` titles, F1 help to
+  `akml.khamis.work/docs`, team style folder (read-only and unreachable cases), Format SQL actions
+  (layout, casing, semicolons, brackets, Expand wildcards, Qualify object names).
+
+### Verification
+
+- Final suites (2026-10-04): Shell 819/819; Engine 1,990/1,990; Formatting 1,515/1,515;
+  Site 877/877; IntelliSense 25/25;
+  Core 1,092 passed, 1 failed (`ProfileGetMessageTests…append_only`, red since spec 039);
+  format-parity goldens unchanged.
+- Quickstart scenarios 1–49 driven in SSMS 22 by a UI Automation runner against the deployed
+  build (Northwind only), results per scenario in `baseline.md` › Final verification.
+
+### Issues hit (found by the SSMS runs, fixed)
+
+- **SSMS raises `DocumentClosing` up to three times per tab close** (before the save prompt, then
+  twice as the tab goes away). The second and third calls found the session key gone and recorded
+  the executed query again as two "Not executed" drafts, and pushed Reopen Closed Tab entries
+  twice more. `RepeatedCloseFilter` (same document and text within 2 min) keeps the first.
+- **Tab-switch snapshot never fired on the usual run → edit → switch**: it compared the tab with
+  `_lastActiveDocumentPath`, which every run and switch sets to that very tab. It now snapshots
+  when focus leaves the document (`ExecutionCapture.IsSwitchAway`). An unchanged text is no longer
+  stored as a new version (the minute autosave added one every minute).
+- **The startup tab had no schema**: a connection found before the engine pipe was up was dropped
+  (`deferred send skipped`), and so was its text. `ConnectionWiringHelper.WhenEngineReadyAsync`
+  waits up to 10 s for both.
+- **An engine restart left every open tab without a session**: the shell restarts a crashed engine
+  but never told the new one about the open editors, so schema features stopped in all of them.
+  `EngineProcessManager.Restarted` now has `ConnectionWiringHelper` send each open editor's text
+  and connection again.
+- **Schema caches are per tab and evicted by refresh age**, so the first tab lost its cache once
+  ten more opened, and nothing reloaded it. Eviction now keeps the most recently *used* caches,
+  and a lookup that misses an open session's own database reloads it in the background
+  (`SchemaCacheManager.ReloadMissing`, one population per cache at a time).
+- **Enter in the Command Palette did nothing**: SSMS turns Enter in that window into an editor
+  RETURN command, which `CompletionController` swallowed to protect the document. It now hands
+  the key to the focused element (`FocusedKeyDelivery`). Options also rank before commands that
+  match only letter by letter ("retention" ran "Create Snippet from Selection").
+- **No format notice ever showed**: `FormatFailureNotifier` cast the `SVsShell` service to
+  `IServiceProvider` and threw. It uses `ServiceProvider.GlobalProvider` (as does Text to SQL).
+- **History keyboard**: Space (star) reloads the list and focus fell to the window; it returns to
+  the selected row. F2 reaches the pane before SSMS's own key handling (`PreProcessMessage`), and
+  a key pressed while the list reloads runs once it has loaded.
+- Message boxes of Format styles say `AKML SQL – Format styles` like the window.
+
+### Open
+
+See `specs/040-sqlprompt-ui-parity/tasks.md` › Deferred: commands with no handler stay off the
+AKML SQL menu; the VSCT menu is still parented to `IDM_VS_MENU_BAR` and invisible in SSMS 22;
+Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; "Record failed
+executions" and "Encrypt at rest" stay hidden; UI Automation walks only the first row of each
+group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors. Also: schema
+caches are still per tab (one cache per server and database would share them); the screenshot
+tour (T193) captures these windows but has not been run yet.

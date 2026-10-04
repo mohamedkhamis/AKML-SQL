@@ -52,12 +52,46 @@ namespace AkmlSql.Shell.Shared.History
                     commands.AddCommand(new MenuCommand(
                         (_, __) => F1HelpListener.Default.Open(HelpTopic),
                         new CommandID(VSConstants.GUID_VSStandardCommandSet97, (int)VSConstants.VSStd97CmdID.F1Help)));
+
+                    // Spec 040 (HIS-11): F2 arrives as the host's Rename command the same way, so
+                    // the list never saw the key and F2 renamed nothing.
+                    foreach (var rename in new[]
+                    {
+                        new CommandID(VSConstants.GUID_VSStandardCommandSet97, (int)VSConstants.VSStd97CmdID.Rename),
+                        new CommandID(VSConstants.VSStd2K, (int)VSConstants.VSStd2KCmdID.RENAME),
+                    })
+                    {
+                        commands.AddCommand(new MenuCommand((_, __) => RenameFromKeyboard(), rename));
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "HistoryToolWindow: F1 help command was not registered");
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-11): keys reach the pane here before the host turns them into commands.
+        /// F2 is one SSMS keeps for itself, so the list never saw it; with the list focused it
+        /// renames the selected query.
+        /// </summary>
+        protected override bool PreProcessMessage(ref System.Windows.Forms.Message m)
+        {
+            const int WM_KEYDOWN = 0x0100;
+            const int VK_F2 = 0x71;
+            if (m.Msg == WM_KEYDOWN && m.WParam.ToInt64() == VK_F2
+                && System.Windows.Input.Keyboard.Modifiers == System.Windows.Input.ModifierKeys.None
+                && Content is HistoryToolWindowControl control && control.RenameSelectedFromKeyboard())
+                return true;
+            return base.PreProcessMessage(ref m);
+        }
+
+        private void RenameFromKeyboard()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (Content is HistoryToolWindowControl control && !control.RenameSelectedFromKeyboard())
+                Log.Debug("HistoryToolWindow: Rename ignored (the query list does not have focus)");
         }
 
         /// <summary>

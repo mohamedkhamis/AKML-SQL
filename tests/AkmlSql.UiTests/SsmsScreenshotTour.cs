@@ -123,4 +123,71 @@ public sealed class SsmsScreenshotTour(ITestOutputHelper output)
             try { File.Delete(sqlFile); } catch { /* scratch file */ }
         }
     }
+
+    /// <summary>
+    /// Spec 040 (T193): the windows spec 040 reworked — the AKML SQL menu and its Active Style
+    /// submenu, Options in light and dark (Behavior, History, Color), SQL History with Advanced
+    /// search open, and the Format Styles window at its default size on the Lists page. The theme
+    /// the user had is put back at the end.
+    /// </summary>
+    [Fact]
+    public async Task Capture_spec_040_windows()
+    {
+        output.WriteLine("Waiting for an interactive desktop...");
+        Preconditions.WaitForInteractiveDesktop(timeoutSeconds: 900);
+        var (deployed, _, message) = Preconditions.CheckExtension();
+        output.WriteLine(message);
+        Assert.True(deployed, message);
+
+        Shot.ArtifactDirectory = Path.Combine(Path.GetTempPath(), "akml-ssms-tour");
+        Directory.CreateDirectory(Shot.ArtifactDirectory);
+        var sqlFile = Path.Combine(Path.GetTempPath(), "Northwind sample.sql");
+        await File.WriteAllTextAsync(sqlFile, TourSql);
+
+        var shots = new List<string>();
+        string? themeBefore = null;
+        try
+        {
+            using var app = SsmsApp.Launch(sqlFile, server: "(local)", database: "Northwind");
+            var window = app.MainWindow(timeoutSeconds: 240);
+            window.WaitUntilReady(w => w.IsConnected(), timeoutSeconds: 120, description: "the query window to attach to the server");
+            window.BringToFront();
+            foreach (var panel in new[] { "GitHub Copilot Chat", "Copilot" })
+                if (window.CloseToolWindow(panel)) break;
+            var tour = new Tour040(window, app.ProcessId);
+
+            // The AKML SQL menu, then Active Style ▸.
+            shots.Add(tour.MenuShot());
+
+            // Options in light and dark.
+            themeBefore = tour.Theme();
+            foreach (var theme in new[] { "Light", "Dark" })
+                shots.AddRange(tour.OptionsShots(theme));
+
+            // SQL History with Advanced search open.
+            shots.Add(tour.HistoryShot());
+
+            // Format Styles at its default size, on Lists.
+            shots.Add(tour.StylesShot());
+
+            foreach (var shot in shots)
+            {
+                output.WriteLine($"Captured {shot}");
+                Assert.False(Shot.LooksBlank(shot), $"{shot} captured blank.");
+            }
+
+            // Whatever is on screen must be sample data.
+            var text = window.EditorText();
+            foreach (var forbidden in new[] { "aqmar", "martyrs", "Toledo" })
+                Assert.DoesNotContain(forbidden, text, StringComparison.OrdinalIgnoreCase);
+
+            if (themeBefore != null) tour.SetTheme(themeBefore);
+            themeBefore = null;
+        }
+        finally
+        {
+            if (themeBefore != null) output.WriteLine($"Put the AKML SQL theme back to '{themeBefore}' by hand (Options › General).");
+            try { File.Delete(sqlFile); } catch { /* scratch file */ }
+        }
+    }
 }

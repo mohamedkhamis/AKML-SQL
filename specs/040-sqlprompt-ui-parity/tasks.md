@@ -281,7 +281,7 @@ It covers gap items OPT-01, OPT-02 and OPT-03.
 - [X] T046 [P] [US1] Fix stale descriptions:
   - `ConnectionScopePage.cs`: the linked-server description saying it "currently has no effect". It works now; describe what it does.
   - Remove "(Phase B)" / "Phase A and Phase B" jargon from any remaining Options description (search `Dialogs/Pages`).
-- [ ] T047 [US1] Build (MSBuild), then run the Shell, Engine and IntelliSense test suites, `CorpusGateTests` (the pass rate must not drop) and the format-parity goldens. Run quickstart.md scenarios 1–10 manually in SSMS 22 and record the results in `specs/040-sqlprompt-ui-parity/baseline.md` under "US1 verification".
+- [X] T047 [US1] Build (MSBuild), then run the Shell, Engine and IntelliSense test suites, `CorpusGateTests` (the pass rate must not drop) and the format-parity goldens. Run quickstart.md scenarios 1–10 manually in SSMS 22 and record the results in `specs/040-sqlprompt-ui-parity/baseline.md` under "US1 verification".
 
 **Checkpoint**: Options is honest and Cancel-safe. US1 can ship alone.
 
@@ -443,7 +443,7 @@ It covers gap items HIS-01 to HIS-06.
   - rename "Enable deduplication" to **Group repeated runs of the same query**, with the description "Show one row per query tab, with its runs and versions inside.";
   - add "Takes effect after SSMS restarts" to the descriptions of Enable SQL history recording, Retention, Max entries and Disable automatic history trimming.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
-- [ ] T074 [US2] Build, then run the Core, Engine and Shell suites, plus `tests/AkmlSql.Web.Tests` History tests: `WebHistoryLogicTests` must be unchanged. Run quickstart.md scenarios 11–17 and record the results in `baseline.md` under "US2 verification".
+- [X] T074 [US2] Build, then run the Core, Engine and Shell suites, plus `tests/AkmlSql.Web.Tests` History tests: `WebHistoryLogicTests` must be unchanged. Run quickstart.md scenarios 11–17 and record the results in `baseline.md` under "US2 verification".
 
 **Checkpoint**: History is trustworthy. US2 works with or without US1.
 
@@ -499,7 +499,7 @@ It covers gap items STY-01 to STY-03.
   - Yes → `await SaveSelectedStyleAsync()`, then export.
   - No → export the saved file.
   - Cancel → stop.
-- [ ] T083 [US3] Build, then run the Shell suite. Run quickstart.md scenarios 18–21, and capture the style editor at its default size (Northwind) with `tests/AkmlSql.UiTests` or manually. Record the results in `baseline.md` under "US3 verification".
+- [X] T083 [US3] Build, then run the Shell suite. Run quickstart.md scenarios 18–21, and capture the style editor at its default size (Northwind) with `tests/AkmlSql.UiTests` or manually. Record the results in `baseline.md` under "US3 verification".
 
 **Checkpoint**: all P1 stories are done. **Stop and review before starting P2** (FR-071).
 
@@ -643,7 +643,7 @@ It covers gap items STY-04 to STY-09.
   - Add an "Active Style" `msoControlPopup` whose controls are the 30 slots plus "Edit Styles…" (`dte.Commands.Item(guid, id).AddControl`).
   - Find SSMS's query-editor context command bar by enumerating `dte.CommandBars` names that contain "SQL" and "Context", or equal "Code Window". Log every candidate name at Debug level and pick the first match. Add the same popup and a "Format Document" control to it.
   - When nothing matches, log `Active Style: no editor context menu found` at Information level and continue (quickstart scenario 26 may be waived).
-- [ ] T111 [US4] Build, then run the Core, Engine and Shell suites. Run quickstart.md scenarios 22–28 and record the results in `baseline.md` under "US4 verification", including which context bar name was found in T110.
+- [X] T111 [US4] Build, then run the Core, Engine and Shell suites. Run quickstart.md scenarios 22–28 and record the results in `baseline.md` under "US4 verification", including which context bar name was found in T110.
 
 **Checkpoint**: style editing matches SQL Prompt's patterns.
 
@@ -810,7 +810,7 @@ It covers gap items HIS-07 to HIS-14.
   - Update or remove any tests that referenced the deleted classes.
   - **Done (2026-09-29):** the three shell files were not even in the projitems (never compiled). Nothing in `src/` (Web, Engine, shell) sent `SessionSave`/`SessionRestore`/`SessionDelete` (50–52), so the engine's `Sessions/SessionRequestHandler.cs` and `SessionStorage.cs`, their registration in `EngineHandlerRegistry`, and the seven Core `Session*Request/Response` + `RecoverableSessionDto` messages were deleted too. The constants 50–52 are removed and the numbers marked reserved. Two engine tests had an unused `using AkmlSql.Engine.Sessions;`, now removed.
   - **Implementation notes for US5 (T135–T146):** restore on start needed each entry's name, server, database and session key, so `HistoryActions.GetEntries = 13` and `HistoryActionResponse.Entries` (Key 12) were added; version rows carry `Server`/`Database` (`HistoryVersionDto` Keys 3–4) for "server · environment". The open-in-new-tab code moved to `HistoryQueryOpener` (shared by Open query, Re-execute, restore on start and the Ctrl+Shift+T fallback). "Remove queries older than this…" formats the time with `HistoryTimeFormat.Absolute` (per T140) rather than the contract's `d MMM yyyy HH:mm` placeholder. Rename is refused while the query is open with "'‹name›' is open in a tab. Close it to rename the query."
-- [ ] T148 [US5] Build, then run the Core, Engine, Shell and Web.Tests (History) suites. Run quickstart.md scenarios 29–37 and record the results in `baseline.md` under "US5 verification".
+- [X] T148 [US5] Build, then run the Core, Engine, Shell and Web.Tests (History) suites. Run quickstart.md scenarios 29–37 and record the results in `baseline.md` under "US5 verification".
 
 **Checkpoint**: SQL History matches SQL Prompt's patterns. **Stop and review before P3.**
 
@@ -961,7 +961,7 @@ It covers gap items OPT-04 to OPT-09.
   - `SettingsWindow.ResolvePageTheme` (T022) returns `PageTheme.HighContrast` when `SystemParameters.HighContrast` is on (or the host variant is HighContrast), whatever the saved theme;
   - the other AKML windows already follow `ThemeRegistry`'s high-contrast palette; check them in the screenshot tour (T193) with Windows high contrast on;
   - tested by T157.
-- [ ] T170 [US6] Build, then run the Core and Shell suites. Run quickstart.md scenarios 38–43, including a dark-theme pass through every Options sub-window, and record the results in `baseline.md` under "US6 verification".
+- [X] T170 [US6] Build, then run the Core and Shell suites. Run quickstart.md scenarios 38–43, including a dark-theme pass through every Options sub-window, and record the results in `baseline.md` under "US6 verification".
 
 **Checkpoint**: Options matches SQL Prompt's arrangement.
 
@@ -1096,7 +1096,7 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
   - `src/AkmlSql.Shell.Shared/Formatting/FormatDocumentCommand.cs` (~:86) and `FormatSelectionCommand.cs`: send `Actions = FormatSqlActionsMapper.ToDto(settings.Formatter.FormatSqlActions)`, and the **real** editor session id (the `RefactorCommandHelper.TryGetActiveEditor()` pattern) instead of a random GUID.
   - `src/AkmlSql.Shell.Shared/Dialogs/Pages/FormattingPage.cs`: add a group headed `When you run Format SQL, AKML SQL will:` with Apply layout, Apply casing, Semicolons (Insert / Remove / Leave), Square brackets (Add / Remove / Leave), Expand wildcards and Qualify object names.
   - Update the allow-list in `tests/AkmlSql.Shell.Shared.Tests/OptionsLiveSettingsTests.cs` (T010) in the same change, so the US1 test gate stays green.
-- [ ] T191 [US7] Build, then run the Core, Engine, Formatting, Site and Shell suites, plus the format-parity goldens (they must be unchanged). Run quickstart.md scenarios 44–49 and record the results in `baseline.md` under "US7 verification".
+- [X] T191 [US7] Build, then run the Core, Engine, Formatting, Site and Shell suites, plus the format-parity goldens (they must be unchanged). Run quickstart.md scenarios 44–49 and record the results in `baseline.md` under "US7 verification".
 
 **Checkpoint**: all 38 gap-plan items are delivered.
 
@@ -1112,7 +1112,7 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
   - the Format Styles window at its default size on the Lists page.
 
   Keep Northwind only, and keep the forbidden-words assertion. Run it against the deployed build (quickstart §0 deploy).
-- [ ] T194 [P] Update `doc/progress.md`: append a `## Spec 040 — SQL Prompt UI/UX parity: Options, SQL History, format styles (2026-09-28)` section in the existing format ("What the investigation found", "What was built", "Verification" with pass counts, "Issues hit", "Open").
+- [X] T194 [P] Update `doc/progress.md`: append a `## Spec 040 — SQL Prompt UI/UX parity: Options, SQL History, format styles (2026-09-28)` section in the existing format ("What the investigation found", "What was built", "Verification" with pass counts, "Issues hit", "Open").
 - [X] T195 [P] Update `CLAUDE.md`:
   - "Latest merged work": add a spec 040 bullet;
   - "Open follow-ups": list the items in T196;
@@ -1127,7 +1127,7 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
   - Record failed executions and Encrypt at rest (hidden);
   - the editor context menu, if scenario 26 was waived.
 - [X] T197 [P] Update `doc/_Prompt-Gap/11-UI-UX-Plan-Options-History-Styles.md`: add an "Implementation status (spec 040)" note at the top mapping each OPT/HIS/STY/X item to done or deferred, with the task ids. Refresh the file 10/11 lines in `doc/_Prompt-Gap/00-INDEX-and-Questions.md`.
-- [ ] T198 Run quickstart.md end to end (scenarios 1–49) on the deployed build. Record pass, fail or waived (with a reason) for each scenario in `specs/040-sqlprompt-ui-parity/baseline.md` under "Final verification". Restore the developer's settings and history from the T003 backup if a scenario damaged them.
+- [X] T198 Run quickstart.md end to end (scenarios 1–49) on the deployed build. Record pass, fail or waived (with a reason) for each scenario in `specs/040-sqlprompt-ui-parity/baseline.md` under "Final verification". Restore the developer's settings and history from the T003 backup if a scenario damaged them.
 
 ---
 

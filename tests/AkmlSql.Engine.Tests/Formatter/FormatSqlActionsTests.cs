@@ -316,6 +316,27 @@ public sealed class FormatSqlActionsTests : IDisposable
         Assert.Contains("SELECT", r.FormattedText);   // the expanded statement is still formatted
     }
 
+    [Theory]
+    [InlineData("USE Northwind\r\nSELECT * FROM dbo.Products")]
+    [InlineData("USE Northwind\r\nGO\r\nSELECT * FROM dbo.Products")]
+    [InlineData("SELECT 1\r\nSELECT * FROM dbo.Products")]
+    public void Expand_wildcards_expands_a_star_after_other_statements(string text)
+    {
+        var (schemaCache, sessions) = SchemaFixture();
+
+        var r = _handler.HandleFormat(new FormatRequest
+        {
+            SessionId = SessionId,
+            Text = text,
+            ProfileName = Khamis,
+            Actions = new FormatSqlActionsDto { ExpandWildcards = true },
+        }, schemaCache, sessions);
+
+        Assert.True(r.Success);
+        Assert.DoesNotContain("*", r.FormattedText);
+        Assert.Contains("ProductName", r.FormattedText);
+    }
+
     [Fact]
     public void Unticked_expand_wildcards_leaves_the_star()
     {

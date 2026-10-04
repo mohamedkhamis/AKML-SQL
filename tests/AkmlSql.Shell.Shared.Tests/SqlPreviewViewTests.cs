@@ -31,6 +31,24 @@ namespace AkmlSql.Shell.Shared.Tests
             => Assert.Equal("ab  c\r\n    d\nx   y", SqlPreviewView.ExpandTabs("ab\tc\r\n\td\nx\ty", 4));
 
         [StaFact]
+        public void The_page_is_wide_enough_that_the_longest_line_never_wraps()
+        {
+            // A line just under the old page width wrapped its last word in SSMS (glyphs on whole
+            // pixels) and the gutter numbers stopped lining up with the lines.
+            const string longest = "WHERE o.OrderDate >= '19970101' AND c.Country IN ('Germany', 'France', 'UK')";
+            var view = new SqlPreviewView { Text = "SELECT 1\n" + longest + "\nORDER BY 1" };
+
+            var document = (FlowDocument)typeof(SqlPreviewView)
+                .GetField("_document", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(view)!;
+            var ideal = new FormattedText(longest, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface(AkmlSql.Shell.Shared.Ui.Theme.Typography.MonoFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+                AkmlSql.Shell.Shared.Ui.Theme.Typography.Body, Brushes.Black, 1.0).WidthIncludingTrailingWhitespace;
+
+            // a clear margin over the measured width (SSMS drew characters ~12% wider)
+            Assert.True(document.PageWidth >= ideal * 1.15, $"page {document.PageWidth} for a line {ideal} wide");
+        }
+
+        [StaFact]
         public void Tokens_are_coloured_from_the_live_theme_tokens()
         {
             var view = new SqlPreviewView { Text = "SELECT 'x' -- note" };

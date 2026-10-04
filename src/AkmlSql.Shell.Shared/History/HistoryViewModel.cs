@@ -484,7 +484,17 @@ namespace AkmlSql.Shell.Shared.History
                 return false;
             }
 
-            var newName = PromptRename(current)?.Trim();
+            string? newName;
+            try
+            {
+                newName = PromptRename(current)?.Trim();
+            }
+            catch (Exception ex)
+            {
+                // the command runs this fire-and-forget: say so, or a failed prompt is invisible
+                Log.Warning(ex, "HistoryViewModel: the rename prompt failed");
+                return false;
+            }
             if (string.IsNullOrEmpty(newName) || newName == current || !_rpc.IsConnected) return false;
 
             try

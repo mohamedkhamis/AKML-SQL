@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\WildcardExpansionPopup.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AutoClosePairs.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\FocusedKeyDelivery.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\KeyboardHook.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionTriggerPolicy.cs" />
@@ -214,6 +215,7 @@
     <!-- Phase 7 US6 — Restore Recently Closed Tabs -->
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\ClosedTabStack.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabCloseMonitor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\RepeatedCloseFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RestoreClosedTabCommand.cs" />
     <!-- Phase 7 US7 — Execution Safety Warnings -->
     <Compile Include="$(MSBuildThisFileDirectory)Safety\SafetyWarningDialog.cs" />

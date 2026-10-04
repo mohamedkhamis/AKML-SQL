@@ -175,6 +175,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                ?? VSConstants.S_OK;
                     }
 
+                    // Enter belongs to the element that has focus (the Command Palette's search box
+                    // or list, spec 040 scenario 41): hand it over as the key it was.
+                    if (routedCmd == VSConstants.VSStd2KCmdID.RETURN
+                        && System.Windows.Input.Keyboard.FocusedElement is System.Windows.UIElement focused
+                        && FocusedKeyDelivery.Deliver(focused, System.Windows.Input.Key.Enter))
+                    {
+                        Log.Debug("CompletionController: RETURN without content focus handed to the focused {Focused}",
+                            focused.GetType().Name);
+                        return VSConstants.S_OK;
+                    }
+
                     Log.Debug(
                         "CompletionController: swallowing {Cmd} without content focus (focused={Focused}) — protecting the document",
                         routedCmd,

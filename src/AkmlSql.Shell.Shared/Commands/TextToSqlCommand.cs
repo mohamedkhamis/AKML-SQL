@@ -339,7 +339,7 @@ namespace AkmlSql.Shell.Shared.Commands
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             VsShellUtilities.ShowMessageBox(
-                (IServiceProvider)Package.GetGlobalService(typeof(SVsShell))
+                ServiceProvider.GlobalProvider
                     ?? throw new InvalidOperationException("Shell service not available"),
                 message,
                 title,

@@ -41,6 +41,9 @@ namespace AkmlSql.Shell.Shared.History
         private static string? _lastActiveDocumentPath;
         private static string? _lastRecordedContentHash;
 
+        // SSMS raises DocumentClosing up to three times for one tab close
+        private static readonly Tabs.RepeatedCloseFilter CloseRepeats = new Tabs.RepeatedCloseFilter();
+
         private const string QueryExecuteCommandName = "Query.Execute";
 
         // Cached Query.Execute command GUID and ID — avoids resolving every DTE command
@@ -362,6 +365,17 @@ namespace AkmlSql.Shell.Shared.History
                 ThreadHelper.ThrowIfNotOnUIThread();
                 if (document == null) return;
 
+                var textDoc = document.Object("TextDocument") as TextDocument;
+                var content = textDoc?.StartPoint.CreateEditPoint().GetText(textDoc.EndPoint);
+
+                // SSMS reports one tab close up to three times; by the second the session key is
+                // gone, so acting on it again would record the query as a new "Not executed" draft.
+                if (CloseRepeats.IsRepeat(document.FullName, content, DateTime.UtcNow))
+                {
+                    Log.Debug("ExecutionCapture: ignoring a repeated close event for '{Source}'", document.FullName);
+                    return;
+                }
+
                 // Spec 040 (HIS-02): read the key BEFORE forgetting it, to mark the query closed
                 // (unless SSMS is shutting down — see ShuttingDown).
                 DocumentSessionKeys.TryGet(document.FullName, out var closingKey);
@@ -371,13 +385,7 @@ namespace AkmlSql.Shell.Shared.History
                 // so reopening the same file starts a brand-new session.
                 DocumentSessionKeys.Forget(document.FullName);
 
-                var textDoc = document.Object("TextDocument") as TextDocument;
-                if (textDoc == null) return;
-
-                var editPoint = textDoc.StartPoint.CreateEditPoint();
-                var content = editPoint.GetText(textDoc.EndPoint);
-
-                if (string.IsNullOrWhiteSpace(content)) return;
+                if (textDoc == null || content == null || string.IsNullOrWhiteSpace(content)) return;
 
                 // Key on FullName (history.source), not Name/tab_title: TabTitle is sent only for a
                 // saved document (see OnAfterCommandExecute), so an unsaved scratch tab's tab_title
@@ -547,32 +555,24 @@ namespace AkmlSql.Shell.Shared.History
                     return;
                 }
 
-                // Skip if this is the same document we last recorded (avoid duplicate snapshots)
                 var docPath = lostDoc.FullName;
-                if (string.Equals(docPath, _lastActiveDocumentPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    // Same document — only record if we haven't already
-                    // Update tracking to the new active document
-                    try
-                    {
-                        _lastActiveDocumentPath = gotFocus?.Document?.FullName;
-                    }
-                    catch
-                    {
-                        _lastActiveDocumentPath = null;
-                    }
-                    return;
-                }
-
-                // Update tracking
+                string? gainedPath = null;
                 try
                 {
-                    _lastActiveDocumentPath = gotFocus?.Document?.FullName;
+                    gainedPath = gotFocus?.Document?.FullName;
                 }
                 catch
                 {
-                    _lastActiveDocumentPath = null;
+                    // a tool window has no document
                 }
+
+                // Keep the "last active document" fresh for OnDocumentSaved's rename detection.
+                _lastActiveDocumentPath = gainedPath;
+
+                // Spec 040 (HIS-05): a switch away from the tab snapshots its edited text, so History
+                // shows and finds it. (This used to compare with _lastActiveDocumentPath — which every
+                // run and switch sets to the active tab — and so skipped exactly these switches.)
+                if (!IsSwitchAway(docPath, gainedPath)) return;
 
                 var textDoc = lostDoc.Object("TextDocument") as TextDocument;
                 if (textDoc == null) return;
@@ -604,6 +604,14 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         // ----- Helpers -----
+
+        /// <summary>
+        /// Whether focus moving from <paramref name="lostPath"/>'s window to one showing
+        /// <paramref name="gainedPath"/> leaves that document (a tool window shows none); moving
+        /// between two windows of the same document does not.
+        /// </summary>
+        internal static bool IsSwitchAway(string? lostPath, string? gainedPath) =>
+            !string.IsNullOrEmpty(lostPath) && !string.Equals(lostPath, gainedPath, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// Finding 6 (PR #249 review): is this document saved to disk? Answered entirely from DTE

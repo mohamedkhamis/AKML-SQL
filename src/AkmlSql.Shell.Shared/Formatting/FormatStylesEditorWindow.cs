@@ -1021,7 +1021,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var result = MessageBox.Show(
                 this,
                 message,
-                "AKML SQL — Format Styles",
+                AkmlSql.Core.Config.WindowTitles.For("Format styles"),
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
@@ -1175,7 +1175,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var confirm = MessageBox.Show(
                 this,
                 $"Delete style '{current}'? This cannot be undone.",
-                "AKML SQL — Format Styles",
+                AkmlSql.Core.Config.WindowTitles.For("Format styles"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
@@ -1228,7 +1228,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var confirm = MessageBox.Show(
                 this,
                 $"Reset '{current}' to the built-in style?\n\nYour saved changes to it will be discarded. This cannot be undone.",
-                "AKML SQL — Format Styles",
+                AkmlSql.Core.Config.WindowTitles.For("Format styles"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);

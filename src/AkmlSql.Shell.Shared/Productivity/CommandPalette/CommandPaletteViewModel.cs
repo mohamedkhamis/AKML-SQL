@@ -137,11 +137,13 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
         /// </summary>
         public void ExecuteSelected()
         {
-            if (SelectedIndex < 0 || SelectedIndex >= FilteredCommands.Count)
+            // Enter acts on the first result when nothing is highlighted, as in any palette.
+            var index = SelectedIndex >= 0 && SelectedIndex < FilteredCommands.Count ? SelectedIndex
+                : FilteredCommands.Count > 0 ? 0 : -1;
+            if (index < 0)
                 return;
 
-            var entry = FilteredCommands[SelectedIndex];
-            ExecuteCommand(entry);
+            ExecuteCommand(FilteredCommands[index]);
         }
 
         /// <summary>
@@ -285,20 +287,27 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                     .Select(r => r.Entry)
                     .ToList();
 
+                // Spec 040 (OPT-07, FR-053): the Options category, once the query has at least two
+                // characters — after the commands whose name or group holds the query, but before
+                // those that only match letter by letter ("retention" is not "Create snippet from
+                // selection"), so Enter opens the option the user typed the name of.
+                var query = (_searchText ?? string.Empty).Trim();
+                bool Holds(CommandEntry e) =>
+                    e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                    || e.Category.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+
                 FilteredCommands.Clear();
-                foreach (var entry in ranked)
-                {
+                foreach (var entry in ranked.Where(Holds))
                     FilteredCommands.Add(entry);
-                }
-
-                // Spec 040 (OPT-07, FR-053): the Options category, after the commands, once the
-                // query has at least two characters.
                 foreach (var option in MatchOptions(_searchText))
-                {
                     FilteredCommands.Add(option);
-                }
+                foreach (var entry in ranked.Where(e => !Holds(e)))
+                    FilteredCommands.Add(entry);
 
-                // Reset selection to first item
+                // Reset selection to the first item — announced even when the index is unchanged:
+                // clearing the list drops the list box's selection, and in SSMS the list could show
+                // no highlighted row while the view model still said 0 (spec 040 scenario 41).
+                _selectedIndex = int.MinValue;
                 SelectedIndex = FilteredCommands.Count > 0 ? 0 : -1;
 
                 // Spec 030 T086 — fire a debounced DB-object search that appends matches when they return.

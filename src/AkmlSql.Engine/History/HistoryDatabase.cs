@@ -2269,8 +2269,18 @@ public sealed class HistoryDatabase : IDisposable
         if (result == null) return false;
 
         var historyId = Convert.ToInt64(result);
-        var now = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
         var hash = ComputeContentHash(sqlText);
+
+        // The text the query already has is not a new version: the autosave and every tab switch
+        // snapshot the same unchanged text again and again.
+        await using (var currentCmd = new SqliteCommand("SELECT sql_text FROM history WHERE id = @id", conn))
+        {
+            currentCmd.Parameters.AddWithValue("@id", historyId);
+            if (await currentCmd.ExecuteScalarAsync() is string current && string.Equals(current, sqlText, StringComparison.Ordinal))
+                return true;
+        }
+
+        var now = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
         await using var insertCmd = new SqliteCommand(@"
             INSERT INTO history_versions (history_id, sql_text, saved_at, content_hash)
             VALUES (@historyId, @sqlText, @savedAt, @hash);", conn);

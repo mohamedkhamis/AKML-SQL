@@ -98,6 +98,25 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void F2_while_the_list_reloads_renames_once_it_has_loaded()
+        {
+            // F2 right after Space (which reloads the list) was dropped without a word.
+            var h = Build(open: false);
+            h.Vm.IsLoading = true;
+
+            Assert.True(h.Control.HandleListKey(Key.F2, ModifierKeys.None));
+            Assert.Null(h.RenamePrompt);
+
+            h.Vm.IsLoading = false;
+            Assert.Equal("q7", h.RenamePrompt);
+            Assert.Single(h.Actions(HistoryActions.Rename));
+
+            h.Vm.IsLoading = true;
+            h.Vm.IsLoading = false;   // once only
+            Assert.Single(h.Actions(HistoryActions.Rename));
+        }
+
+        [StaFact]
         public void F2_is_refused_while_the_query_is_open()
         {
             var h = Build(open: true);
@@ -190,6 +209,27 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.All(items, i => Assert.Same(h.Entry, i.CommandParameter));
 
             Assert.Equal(new[] { "Export…", "Clear history…" }, h.Control.ToolbarMenuHeaders.ToArray());
+        }
+
+        [StaFact]
+        public void Focus_goes_back_to_the_list_only_when_a_refresh_dropped_it()
+        {
+            // Space (star) refreshed the list, the focused row went, focus fell to the window and
+            // the next key (F2) did nothing. Focus that moved somewhere the user chose stays there.
+            var history = new Border();
+            var search = new TextBox();
+            var host = new Grid();
+            host.Children.Add(history);
+            var editor = new TextBox();
+            var panel = new StackPanel();
+            panel.Children.Add(search);
+            history.Child = panel;
+
+            Assert.True(HistoryToolWindowControl.FocusFellBack(null, history));
+            Assert.True(HistoryToolWindowControl.FocusFellBack(history, history));
+            Assert.True(HistoryToolWindowControl.FocusFellBack(host, history));
+            Assert.False(HistoryToolWindowControl.FocusFellBack(search, history));
+            Assert.False(HistoryToolWindowControl.FocusFellBack(editor, history));
         }
 
         [StaFact]

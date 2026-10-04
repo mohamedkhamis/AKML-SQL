@@ -35,6 +35,20 @@ public sealed class HistorySnapshotSearchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Unchanged_text_adds_no_version()
+    {
+        // The autosave and each tab switch snapshot the open text; when it has not changed since
+        // the run (or the last snapshot) there is nothing new to keep.
+        var id = await _db.RunAsync("SELECT 1", "tab-A", Source);
+
+        Assert.True(await _db.Database.SaveVersionBySourceAsync(Source, "SELECT 1"));
+        Assert.True(await _db.Database.SaveVersionBySourceAsync(Source, "SELECT 2"));
+        Assert.True(await _db.Database.SaveVersionBySourceAsync(Source, "SELECT 2"));
+
+        Assert.Equal(1L, (long)(await _db.ScalarAsync($"SELECT COUNT(*) FROM history_versions WHERE history_id = {id}"))!);
+    }
+
+    [Fact]
     public async Task Snapshot_keeps_the_timestamp_format_and_the_hash_in_step()
     {
         var id = await _db.RunAsync("SELECT 1", "tab-A", Source);

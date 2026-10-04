@@ -63,6 +63,16 @@ namespace AkmlSql.Shell.Shared.Tabs
 
             lock (_lock)
             {
+                // SSMS reports one tab close up to three times; keep a single entry for it.
+                var top = _entries.First?.Value;
+                if (top != null && RepeatedCloseFilter.IsSameClose(top.FilePath, top.Content, top.ClosedAt,
+                        entry.FilePath, entry.Content, entry.ClosedAt))
+                {
+                    Log.Debug("ClosedTabStack: '{Title}' is already on top; repeated close ignored",
+                        entry.TabTitle ?? "(untitled)");
+                    return;
+                }
+
                 // Evict the oldest entry if we're at capacity
                 while (_entries.Count >= _maxCapacity)
                 {

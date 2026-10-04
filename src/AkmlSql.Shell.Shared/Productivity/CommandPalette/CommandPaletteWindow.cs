@@ -233,6 +233,9 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             style.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Sm, 6, Spacing.Sm, 6)));
             style.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
             style.Setters.Add(new Setter(Control.FocusVisualStyleProperty, FocusVisualStyles.HighStakes));
+            // A screen reader announces the entry's name ("Suggestions › Behavior › Show nullability
+            // info"), not the item's type name.
+            style.Setters.Add(new Setter(System.Windows.Automation.AutomationProperties.NameProperty, new Binding("Name")));
 
             // Selected state: strong-accent fill with on-accent text.
             var selectedTrigger = new Trigger
@@ -419,6 +422,12 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             if (e.Key == Key.Escape)
             {
                 _viewModel?.RequestClose();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && _viewModel != null)
+            {
+                // The search box handles its own Enter; this is Enter on a clicked row.
+                _viewModel.ExecuteSelected();
                 e.Handled = true;
             }
         }

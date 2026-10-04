@@ -421,6 +421,37 @@ namespace AkmlSql.Shell.Shared.History
             if (command == null) return false;
 
             if (command.CanExecute(entry)) command.Execute(entry);
+            else if (_viewModel.IsLoading) RunWhenLoaded(command);
+            return true;
+        }
+
+        /// <summary>
+        /// A key pressed while the list reloads (Space just starred a row, say) runs once the load
+        /// ends, on the row then selected — it used to be dropped without a word.
+        /// </summary>
+        private void RunWhenLoaded(ICommand command)
+        {
+            PropertyChangedEventHandler? handler = null;
+            handler = (_, e) =>
+            {
+                if (e.PropertyName != nameof(HistoryViewModel.IsLoading) || _viewModel.IsLoading) return;
+                _viewModel.PropertyChanged -= handler;
+                var current = _viewModel.SelectedEntry;
+                if (current != null && command.CanExecute(current)) command.Execute(current);
+            };
+            _viewModel.PropertyChanged += handler;
+        }
+
+        /// <summary>
+        /// F2 from the host's Rename command (SSMS turns the key into it before the list sees it):
+        /// renames the selected query when the list has focus. True when handled.
+        /// </summary>
+        internal bool RenameSelectedFromKeyboard()
+        {
+            if (_queryListView == null || !_queryListView.IsKeyboardFocusWithin || _viewModel.SelectedEntry == null) return false;
+            // Posted: this runs inside the host's key filtering, where the rename dialog's modal
+            // loop can't start.
+            Dispatcher.BeginInvoke(new Action(() => HandleListKey(Key.F2, ModifierKeys.None)));
             return true;
         }
 
@@ -1071,6 +1102,14 @@ namespace AkmlSql.Shell.Shared.History
             {
                 if (Keyboard.FocusedElement is TextBox) return; // not while typing in the list (none today)
                 if (HandleListKey(e.Key, Keyboard.Modifiers)) e.Handled = true;
+            };
+            // Spec 040 (HIS-11): starring or removing with the keyboard refreshes the list, which
+            // takes the focused row away and drops focus onto the window, so the next key (F2,
+            // Delete…) went nowhere. Focus goes back to the selected row once the new rows are in.
+            _queryListView.IsKeyboardFocusWithinChanged += (_, e) =>
+            {
+                if ((bool)e.NewValue || !FocusFellBack(Keyboard.FocusedElement as DependencyObject, this)) return;
+                Dispatcher.BeginInvoke(new Action(RestoreListFocus), System.Windows.Threading.DispatcherPriority.ContextIdle);
             };
             KeyboardNavigation.SetTabIndex(_queryListView, 2);
             AutomationProperties.SetName(_queryListView, "Queries");
@@ -1958,6 +1997,40 @@ namespace AkmlSql.Shell.Shared.History
         /// list too, or the row looks unselected and the preview keeps saying "Select a query".
         /// Selecting it raises SelectionChanged, which fills the preview.
         /// </summary>
+        /// <summary>
+        /// True when keyboard focus fell back to nothing, to <paramref name="control"/> or to one of
+        /// its ancestors — what happens when the focused row is removed — rather than going to
+        /// something the user chose (the search box, the editor).
+        /// </summary>
+        internal static bool FocusFellBack(DependencyObject? focused, DependencyObject control) =>
+            focused == null
+            || ReferenceEquals(focused, control)
+            || (focused is Visual ancestor && control is Visual visual && ancestor.IsAncestorOf(visual));
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
+
+        /// <summary>
+        /// Whether Windows focus is still in this window — after a click on Object Explorer or the
+        /// results grid (not WPF) WPF's focused element is null too, and focus must not be taken back.
+        /// </summary>
+        private bool WindowHasFocus() =>
+            PresentationSource.FromVisual(this) is System.Windows.Interop.HwndSource source && GetFocus() == source.Handle;
+
+        /// <summary>Puts keyboard focus back on the selected row (or the list) after a refresh took it away.</summary>
+        private void RestoreListFocus()
+        {
+            if (_queryListView == null || !FocusFellBack(Keyboard.FocusedElement as DependencyObject, this) || !WindowHasFocus()) return;
+            var item = _queryListView.SelectedItem;
+            if (item != null)
+            {
+                _queryListView.ScrollIntoView(item);
+                _queryListView.UpdateLayout();
+                if (_queryListView.ItemContainerGenerator.ContainerFromItem(item) is ListViewItem row && row.Focus()) return;
+            }
+            _queryListView.Focus();
+        }
+
         private void SyncListSelection()
         {
             if (_queryListView == null) return;

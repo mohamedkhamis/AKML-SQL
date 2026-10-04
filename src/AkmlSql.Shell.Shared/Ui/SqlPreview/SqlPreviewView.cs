@@ -32,6 +32,12 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
         private static readonly IReadOnlyCollection<int> NoLines = new int[0];
         private static readonly double LineHeight = Math.Round(Typography.Body * 1.4);
 
+        /// <summary>Extra page width beyond the longest line: the caret and the text box's padding.</summary>
+        private const double PageSlack = 12;
+
+        /// <summary>How much wider than measured the page is, so the longest line never wraps.</summary>
+        private const double PageMargin = 1.15;
+
         private readonly ScrollViewer _scroll;
         private readonly TextBlock _gutter;
         private readonly RichTextBox _box;
@@ -347,8 +353,12 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
             if (truncated) numbers.Append('\n');
             _gutter.Text = numbers.ToString();
 
-            // No wrapping: the page is as wide as the longest line, so the outer viewer scrolls.
-            _document.PageWidth = Math.Max(64, longest * CharWidth() + Spacing.Lg);
+            // No wrapping: the page is as wide as the longest line, so the outer viewer scrolls. The
+            // longest line is measured as SSMS draws it (its text formatting mode, its font) with a
+            // margin: in SSMS a character came out ~12% wider than "M" measured here, so the last
+            // word of the longest line wrapped and the gutter's numbers no longer lined up.
+            _document.PageWidth = Math.Max(64, Math.Max(LineWidth(LongestLine(body)), longest * Math.Ceiling(CharWidth())) * PageMargin
+                                               + Spacing.Lg + PageSlack);
 
             ApplyLineHighlights();
         }
@@ -400,6 +410,30 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
             var brush = new SolidColorBrush(color) { Opacity = LineTintOpacity };
             brush.Freeze();
             return brush;
+        }
+
+        /// <summary>The longest line of <paramref name="text"/> (by characters, tabs already expanded).</summary>
+        internal static string LongestLine(string text)
+        {
+            string longest = string.Empty;
+            foreach (var line in text.Split('\n'))
+            {
+                var l = line.Replace("\r", string.Empty);
+                if (l.Length > longest.Length) longest = l;
+            }
+            return longest;
+        }
+
+        /// <summary>The width <paramref name="line"/> takes in this control's font and text formatting mode.</summary>
+        private double LineWidth(string line)
+        {
+            if (line.Length == 0) return 0;
+            double pixelsPerDip = 1.0;
+            try { pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip; } catch (Exception) { }
+            var formatted = new FormattedText(line, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                new Typeface(Typography.MonoFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+                Typography.Body, Brushes.Black, null, TextOptions.GetTextFormattingMode(this), pixelsPerDip);
+            return formatted.WidthIncludingTrailingWhitespace;
         }
 
         private double CharWidth()

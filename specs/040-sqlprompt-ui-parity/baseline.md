@@ -171,7 +171,102 @@ chain is waiting: it closes the runner's own SSMS, deploys this build (SSMS only
 kept in `Documents\AKML SQL backups\spec-040-deploy-20260928`), runs scenarios 1, 6, 7, 9–17 and
 29–37 with a Format Styles probe, switches SSMS IntelliSense back on, closes SSMS and restores the
 original `config.json` and History database. Results land in the scratchpad's
-`verifyesults.txt`; they will be recorded here.
+`verify\results.txt`; they will be recorded here.
 
 **Deviations from tasks.md:** see the notes under T147 (the `GetEntries` action, version
 server/database, `HistoryQueryOpener`, the remove-older date format, the rename refusal text).
+
+## Final verification (T170, T191, T198, 2026-10-04)
+
+**Build.** `040-sqlprompt-ui-parity` at `45a8c63` plus the working tree (the fixes below), deployed
+into SSMS 22 only with the private engine (`deploy-ssms.ps1`; the originals stay in
+`Documents\AKML SQL backups\spec-040-deploy-20260928`, and each run restores `config.json` and the
+History database afterwards).
+
+| Suite | Passed | Failed | Skipped | Notes |
+|---|---|---|---|---|
+| AkmlSql.Shell.Shared.Tests | 819 | 0 | 0 | Release |
+| AkmlSql.Engine.Tests | 1,990 | 0 | 0 | |
+| AkmlSql.Core.Tests | 1,092 | 1 | 3 | the same pre-existing red (`ProfileGetMessageTests…append_only`) |
+| AkmlSql.Formatting.Tests | 1,515 | 0 | 0 | format-parity goldens unchanged |
+| AkmlSql.IntelliSense.Tests | 25 | 0 | 0 | |
+| AkmlSql.Site.Tests | 877 | 0 | 0 | |
+
+**Quickstart scenarios 1–49** were driven in SSMS 22 by a UI Automation runner (Northwind only).
+Each result is the last run on this build or, for scenarios the later fixes cannot reach, the
+morning's full run. A regression pass on the final build (2, 3, 4, 5, 6, 12, 14, 16, 29, 35, 38,
+39, 44, 45) was all green.
+
+| # | Scenario | Result | Notes |
+|---|---|---|---|
+| 1 | Settings that do nothing are gone | Pass | 29 pages walked, no dead rows |
+| 2 | Maximum suggestions | Pass | 10 → 10 objects, 50 → 30 (all there are) |
+| 3 | Trigger delay | Pass | list after 1.37 s with a 1 s delay; Ctrl+Space at once |
+| 4 | Fuzzy matching | Pass | |
+| 5 | Detail text | Pass | |
+| 6 | Error List | Pass | |
+| 7 | Restore defaults keeps hidden data | Pass | rule override kept |
+| 8 | AI reset warns | Pass | |
+| 9 | Cancel means Cancel | Pass | |
+| 10 | System theme | Pass | SSMS runs its light theme here; the dark case was not seen |
+| 11 | Full preview | Pass | |
+| 12 | Open state | Pass | |
+| 13 | Scroll to the end | Pass | |
+| 14 | Grouped delete | Pass | after the repeated-close fix |
+| 15 | Grouped star | Pass | |
+| 16 | Search after snapshot | Pass | after the tab-switch snapshot fix |
+| 17 | History settings | Pass | |
+| 18 | Labels | Pass | |
+| 19 | Tab-true preview | Check | screenshots `s19-*`: lines line up |
+| 20 | Import | Pass | |
+| 21 | Export with unsaved edits | Pass | |
+| 22 | Option search | Pass | |
+| 23 | Change markers | Pass | this morning's run; its re-run is queued (it needs the style S20 imports in the same run) |
+| 24 | Coloured preview | Check | screenshot `s24-light-preview` |
+| 25 | Active Style menu | Pass | |
+| 26 | Editor context menu | Pass | screenshot `s26-context-menu` shows Format Document and Active Style ▸ (the last run read the menu before SSMS added them; the runner now reads it again, re-run queued) |
+| 27 | List actions | Pass | |
+| 28 | Format feedback | Pass | after the notice fix |
+| 29 | Search as you type | Pass | |
+| 30 | Advanced search | Pass | |
+| 31 | Rows | Pass | |
+| 32 | Versions | Pass | |
+| 33 | Keyboard only | Pass | after the F2 and focus fixes |
+| 34 | Row menu | Pass | |
+| 35 | Live refresh | Pass | |
+| 36 | Disconnected | Pass | |
+| 37 | Restore | Pass | |
+| 38 | Tree | Pass | |
+| 39 | Child options | Pass | |
+| 40 | Numbers | Pass | |
+| 41 | Palette options | Pass | after the Enter and ranking fixes |
+| 42 | Tab colours | Check | the rule is added and selected; choosing Production, reordering, the red tab and the Safety prompt are a manual check (screenshots `s42-*`) |
+| 43 | Dark theme | Check | screenshots `s43-dark-*` |
+| 44 | Menu | Pass | |
+| 45 | Titles | Pass | |
+| 46 | F1 | Waived | F1 opens the default browser; routing is covered by `HelpRoutingTests` and `F1SlugTests` |
+| 47 | Screen reader | Pass | every History button named; listening with Narrator is manual |
+| 48 | Team styles | Pass | |
+| 49 | Format SQL actions | Pass | after the startup-session and cache fixes; run after 36 (engine killed) it failed, which found the restart bug below; that re-run is queued |
+
+**Found and fixed while verifying** (details in `doc/progress.md` › Spec 040 › Issues hit):
+
+- SSMS raises `DocumentClosing` up to three times per tab close; the repeats recorded an executed
+  query again as "Not executed" drafts and doubled Reopen Closed Tab entries
+  (`RepeatedCloseFilter`).
+- The tab-switch snapshot never ran on run → edit → switch; an unchanged text is no longer a new
+  version.
+- A tab open at SSMS start had no schema session (its connection was dropped while the engine
+  started); evicted schema caches were never reloaded, and eviction ignored use.
+- Enter in the Command Palette was swallowed by the editor's command handler; options now rank
+  before letter-by-letter command matches.
+- No Format notice ever showed (`FormatFailureNotifier` cast `SVsShell` to `IServiceProvider`).
+- History keyboard: focus returns to the selected row after Space; F2 reaches the list through the
+  pane's `PreProcessMessage`; a key pressed while the list reloads runs afterwards.
+- An engine restart (crash, or scenario 36 killing it) left every open tab without a session in
+  the new engine; the shell now sends each open editor's text and connection again.
+- Format styles message boxes are titled `AKML SQL – Format styles`.
+
+**Queued, not yet run:** the re-runs named above and the extended screenshot tour (T193,
+`SsmsScreenshotTour.Capture_spec_040_windows`). The runner drives SSMS only on a visible, idle
+desktop, and the Remote Desktop window has been minimised since 14:57.

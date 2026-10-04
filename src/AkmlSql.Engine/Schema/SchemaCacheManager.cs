@@ -27,7 +27,16 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     private readonly ChangeDetector _changeDetector = new();
     private Timer? _periodicRefreshTimer;
     private readonly ConcurrentDictionary<string, string> _connectionStrings = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _populating = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+
+    /// <summary>
+    /// Run in the background when <see cref="GetCache"/> finds no cache, at most once at a time per
+    /// cache: the engine sets it to load an open tab's evicted cache again. Caches are per tab and
+    /// the shell never says a tab closed, so <see cref="EvictLru"/> can drop the cache of a tab that
+    /// is still open; without this it stayed without a schema for the rest of its life.
+    /// </summary>
+    public Func<string, string, Task>? ReloadMissing { get; set; }
 
     /// <summary>
     /// JSON serializer options for disk cache persistence (T076).
@@ -53,16 +62,42 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     public DatabaseCache GetOrCreateCache(string serverName, string databaseName)
     {
         var key = BuildCacheKey(serverName, databaseName);
-        return _caches.GetOrAdd(key, k => new DatabaseCache { CacheKey = k });
+        var cache = _caches.GetOrAdd(key, k => new DatabaseCache { CacheKey = k });
+        cache.LastUsedUtc = DateTime.UtcNow;
+        return cache;
     }
 
     /// <summary>Returns the cache for the given server/database, or <c>null</c> if it has not been created yet.</summary>
     public DatabaseCache? GetCache(string serverName, string databaseName)
     {
         var key = BuildCacheKey(serverName, databaseName);
-        _caches.TryGetValue(key, out var cache);
-        return cache;
+        if (_caches.TryGetValue(key, out var cache))
+        {
+            cache.LastUsedUtc = DateTime.UtcNow;
+            return cache;
+        }
+
+        var reload = ReloadMissing;
+        if (reload != null && TryClaimPopulation(key))
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await reload(serverName, databaseName).ConfigureAwait(false); }
+                catch (Exception ex) { Log.Warning(ex, "Reloading the schema cache for {Key} failed", key); }
+                finally { ReleasePopulation(key); }
+            });
+        }
+        return null;
     }
+
+    /// <summary>
+    /// Claims the right to populate the cache <paramref name="cacheKey"/>; false while another
+    /// population of it runs. Pair with <see cref="ReleasePopulation"/>.
+    /// </summary>
+    public bool TryClaimPopulation(string cacheKey) => _populating.TryAdd(cacheKey, 0);
+
+    /// <summary>Ends a population claimed with <see cref="TryClaimPopulation"/>.</summary>
+    public void ReleasePopulation(string cacheKey) => _populating.TryRemove(cacheKey, out _);
 
     /// <summary>
     /// Registers a connection string for a cache key, used by periodic refresh (T079).
@@ -73,8 +108,10 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     }
 
     /// <summary>
-    /// Removes the least-recently-used caches until the count is at or below <c>maxDatabases</c>.
-    /// Called automatically by <see cref="GetOrCreateCache"/> after adding a new entry.
+    /// Removes the least-recently-used caches until the count is at or below <c>maxDatabases</c>:
+    /// those whose last lookup or refresh, whichever is later, is oldest. Caches are per editor
+    /// session, so ordering by refresh alone evicted the first tab's schema once ten more tabs
+    /// opened, however much it was still used. Called after each Phase A population.
     /// </summary>
     public void EvictLru()
     {
@@ -84,7 +121,7 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
         }
 
         var oldest = _caches.Values
-            .OrderBy(c => c.LastFullRefresh)
+            .OrderBy(c => c.LastUsedUtc > c.LastFullRefresh ? c.LastUsedUtc : c.LastFullRefresh)
             .Take(_caches.Count - maxDatabases)
             .ToList();
 
