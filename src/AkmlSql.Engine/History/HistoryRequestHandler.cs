@@ -114,7 +114,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 IsOpen = searchRequest.IsOpen,
                 NameFilter = searchRequest.NameFilter,
                 CamelCaseTokens = searchRequest.CamelCaseTokens,
-                PathFilter = searchRequest.PathFilter
+                PathFilter = searchRequest.PathFilter,
+                SqlOnly = searchRequest.SqlOnly
             };
 
             // Parse ISO 8601 date strings to DateTime
@@ -132,7 +133,7 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 filter.DateTo = dateTo;
             }
 
-            var (entries, totalCount) = await _database.SearchAsync(filter);
+            var (entries, totalCount, hasMore) = await _database.SearchPageAsync(filter);
 
             Log.Debug("History search: {Count} results returned (total={Total}), SearchText={Search}, Server={Server}",
                 entries.Count, totalCount, searchRequest.SearchText, searchRequest.Server);
@@ -141,7 +142,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
             {
                 Success = true,
                 Entries = entries.ToArray(),
-                TotalCount = totalCount
+                TotalCount = totalCount,
+                HasMore = hasMore,
             });
         }
         catch (Exception ex)

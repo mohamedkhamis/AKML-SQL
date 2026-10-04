@@ -68,7 +68,7 @@ namespace AkmlSql.Core.Tests.Config
             var s = new IntelliSenseSettings();
             Assert.True(s.Enabled);
             Assert.True(s.AutoTrigger);
-            Assert.Equal(100, s.TriggerDelayMs);
+            Assert.Equal(0, s.TriggerDelayMs);
             Assert.True(s.AfterDot);
             Assert.Equal(50, s.MaxSuggestions);
             Assert.True(s.FuzzyMatch);

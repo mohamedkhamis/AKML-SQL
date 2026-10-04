@@ -73,6 +73,22 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [Fact]
+        public async Task A_query_reopened_from_history_is_marked_open_before_the_next_press()
+        {
+            // It stayed "closed", so pressing Ctrl+Shift+T again reopened the same query.
+            var run = Build(new ClosedTabStack(),
+                new HistoryEntryDto { Id = 9, TabTitle = "Monthly totals", SqlText = "SELECT …", SessionKey = "k9" });
+
+            Assert.True(await run.Restorer.RestoreAsync());
+
+            var open = Assert.Single(run.Fake.Requests.Select(r => r.Payload).OfType<HistoryActionRequest>(),
+                a => a.Action == HistoryActions.SetOpenStatus);
+            Assert.True(open.IsOpen);
+            Assert.Equal("k9", open.SessionKey);
+            Assert.Equal(System.Diagnostics.Process.GetCurrentProcess().Id, open.OwnerPid);
+        }
+
+        [Fact]
         public async Task With_nothing_closed_anywhere_nothing_opens()
         {
             var run = Build(new ClosedTabStack());

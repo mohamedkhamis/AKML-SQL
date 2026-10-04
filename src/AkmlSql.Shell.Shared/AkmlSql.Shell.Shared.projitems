@@ -187,6 +187,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\FindInvalidObjectsDialog.cs" />
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\ShutdownState.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\PendingCloses.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DocumentSessionKeys.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\OpenStateReporter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DraftCapturePolicy.cs" />

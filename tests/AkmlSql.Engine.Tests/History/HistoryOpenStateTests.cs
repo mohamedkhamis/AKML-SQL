@@ -65,6 +65,49 @@ public sealed class HistoryOpenStateTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_dead_shells_pid_reused_by_another_program_does_not_keep_its_queries_open()
+    {
+        // SSMS 4120 crashed with the query open; after a reboot another program got PID 4120.
+        var starts = new System.Collections.Generic.Dictionary<int, long?> { [4120] = 1000, [500] = 9000 };
+        _db.Database.ProcessStartTicks = pid => starts.TryGetValue(pid, out var t) ? t : null;
+        var run = await _db.RunAsync("SELECT 1", "tab-crash");
+        await _db.Database.SetOpenStatusBySessionAsync("tab-crash", true, 4120);
+        starts[4120] = 2000;
+
+        var restorable = await _db.Database.ReconcileOpenAsync(500, Array.Empty<string>());
+
+        Assert.Equal(new[] { run }, restorable);
+        Assert.Equal(0, await _db.CountAsync("SELECT COUNT(*) FROM history WHERE is_open = 1"));
+    }
+
+    [Fact]
+    public async Task A_new_ssms_given_a_dead_ones_pid_offers_its_queries_for_restore()
+    {
+        // The new SSMS itself got PID 4120: step 1 used to close the old one's rows as its own.
+        var starts = new System.Collections.Generic.Dictionary<int, long?> { [4120] = 1000 };
+        _db.Database.ProcessStartTicks = pid => starts.TryGetValue(pid, out var t) ? t : null;
+        var run = await _db.RunAsync("SELECT 1", "tab-old");
+        await _db.Database.SetOpenStatusBySessionAsync("tab-old", true, 4120);
+        starts[4120] = 2000;
+
+        var restorable = await _db.Database.ReconcileOpenAsync(4120, Array.Empty<string>());
+
+        Assert.Equal(new[] { run }, restorable);
+    }
+
+    [Fact]
+    public async Task The_same_process_is_still_the_owner()
+    {
+        var starts = new System.Collections.Generic.Dictionary<int, long?> { [4120] = 1000, [500] = 9000 };
+        _db.Database.ProcessStartTicks = pid => starts.TryGetValue(pid, out var t) ? t : null;
+        await _db.RunAsync("SELECT 1", "tab-live");
+        await _db.Database.SetOpenStatusBySessionAsync("tab-live", true, 4120);
+
+        Assert.Empty(await _db.Database.ReconcileOpenAsync(500, Array.Empty<string>()));
+        Assert.Equal(1, await _db.CountAsync("SELECT COUNT(*) FROM history WHERE is_open = 1 AND open_pid_started = 1000"));
+    }
+
+    [Fact]
     public async Task Reconcile_leaves_live_shells_and_web_rows_alone()
     {
         await _db.RunAsync("SELECT live", "tab-live");

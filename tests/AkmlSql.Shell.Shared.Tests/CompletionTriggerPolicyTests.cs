@@ -27,11 +27,16 @@ namespace AkmlSql.Shell.Shared.Tests
             => Assert.Equal(TriggerDecision.None, CompletionTriggerPolicy.Decide('.', false, Settings(afterDot: false)));
 
         [Fact]
-        public void Dot_follows_the_delay_when_trigger_after_dot_is_on()
+        public void Dot_is_immediate_whatever_the_delay()
         {
-            Assert.Equal(TriggerDecision.Delayed(100), CompletionTriggerPolicy.Decide('.', false, Settings(afterDot: true)));
+            // The columns after a dot are what was asked for; the delay is for letters.
+            Assert.Equal(TriggerDecision.Immediate, CompletionTriggerPolicy.Decide('.', false, Settings(delay: 1000)));
             Assert.Equal(TriggerDecision.Immediate, CompletionTriggerPolicy.Decide('.', false, Settings(delay: 0)));
         }
+
+        [Fact]
+        public void The_default_is_immediate()
+            => Assert.Equal(TriggerDecision.Immediate, CompletionTriggerPolicy.Decide('a', false, new IntelliSenseSettings()));
 
         [Fact]
         public void Ctrl_space_is_always_immediate()

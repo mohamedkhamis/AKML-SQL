@@ -234,10 +234,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         internal const string ActionsHeader = "When you run Format SQL, AKML SQL will:";
 
         /// <summary>Dropdown order; index ↔ the config word.</summary>
-        private static readonly string[] SemicolonWords = { FormatSqlActions.Insert, FormatSqlActions.Remove, FormatSqlActions.Leave };
-        private static readonly string[] SemicolonItems = { "Insert", "Remove", "Leave as written" };
-        private static readonly string[] BracketWords = { FormatSqlActions.Add, FormatSqlActions.Remove, FormatSqlActions.Leave };
-        private static readonly string[] BracketItems = { "Add", "Remove", "Leave as written" };
+        // "As the style says" first and the default: a style that inserts semicolons or adds
+        // brackets keeps doing so unless the user picks otherwise here.
+        private static readonly string[] SemicolonWords = { FormatSqlActions.Style, FormatSqlActions.Insert, FormatSqlActions.Remove, FormatSqlActions.Leave };
+        private static readonly string[] SemicolonItems = { "As the style says", "Insert", "Remove", "Leave as written" };
+        private static readonly string[] BracketWords = { FormatSqlActions.Style, FormatSqlActions.Add, FormatSqlActions.Remove, FormatSqlActions.Leave };
+        private static readonly string[] BracketItems = { "As the style says", "Add", "Remove", "Leave as written" };
 
         /// <summary>Semantic "invalid" red, the same in every theme (RowFactory's number fields use it too).</summary>
         private static readonly System.Windows.Media.SolidColorBrush InvalidBrush =
@@ -365,13 +367,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 1 => IndexOf(SemicolonWords, FormatSqlActions.Insert),
                 2 => IndexOf(SemicolonWords, FormatSqlActions.Remove),
-                _ => IndexOf(SemicolonWords, FormatSqlActions.Leave),
+                0 => IndexOf(SemicolonWords, FormatSqlActions.Leave),
+                _ => IndexOf(SemicolonWords, FormatSqlActions.Style),
             };
             _squareBrackets.SelectedIndex = FormatSqlActionsMapper.SquareBracketsCode(a.SquareBrackets) switch
             {
                 1 => IndexOf(BracketWords, FormatSqlActions.Add),
                 2 => IndexOf(BracketWords, FormatSqlActions.Remove),
-                _ => IndexOf(BracketWords, FormatSqlActions.Leave),
+                0 => IndexOf(BracketWords, FormatSqlActions.Leave),
+                _ => IndexOf(BracketWords, FormatSqlActions.Style),
             };
             _expandWildcards.IsChecked = a.ExpandWildcards;
             _qualifyObjectNames.IsChecked = a.QualifyObjectNames;
@@ -449,7 +453,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private static int IndexOf(string[] words, string word) => Math.Max(0, Array.IndexOf(words, word));
 
         private static string WordAt(string[] words, int index) =>
-            index >= 0 && index < words.Length ? words[index] : FormatSqlActions.Leave;
+            index >= 0 && index < words.Length ? words[index] : FormatSqlActions.Style;
 
         private sealed class Win32Owner : System.Windows.Forms.IWin32Window
         {

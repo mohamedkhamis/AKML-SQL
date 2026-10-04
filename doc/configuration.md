@@ -27,7 +27,7 @@ It is created automatically on first run with all defaults. The file is written 
   "intelliSense": {
     "enabled": true,
     "autoTrigger": true,
-    "triggerDelayMs": 100,
+    "triggerDelayMs": 0,
     "afterDot": true,
     "maxSuggestions": 50,
     "fuzzyMatch": true,
@@ -120,7 +120,8 @@ It is created automatically on first run with all defaults. The file is written 
 |-----|------|---------|-------------|
 | `enabled` | bool | true | Master switch for all IntelliSense features |
 | `autoTrigger` | bool | true | Show completion list automatically while typing |
-| `triggerDelayMs` | int | 100 | Debounce delay before triggering auto-completion |
+| `triggerDelayMs` | int | 0 | Milliseconds after the last keystroke before typing opens the suggestions; 0 opens them at once. A dot always opens them at once |
+| `triggerDelayVersion` | int? | (written on first load) | Spec 040 marker: a config without it had the old, never-used default 100, which becomes 0 once |
 | `afterDot` | bool | true | Auto-trigger after typing `.` (table.column completion) |
 | `maxSuggestions` | int | 50 | Maximum items in the completion list |
 | `fuzzyMatch` | bool | true | Enable fuzzy/substring matching (not just prefix) |
@@ -173,8 +174,8 @@ It is created automatically on first run with all defaults. The file is written 
 |-----|------|---------|-------------|
 | `applyLayout` | bool | true | Lay out line breaks and indentation |
 | `applyCasing` | bool | true | Change keyword, function and data type case |
-| `semicolons` | string | "leave" | `insert`, `remove` or `leave` statement-terminating semicolons |
-| `squareBrackets` | string | "leave" | `add`, `remove` or `leave` square brackets around names |
+| `semicolons` | string | "style" | `style` (the active style's own setting), `insert`, `remove` or `leave` statement-terminating semicolons |
+| `squareBrackets` | string | "style" | `style` (the active style's own setting), `add`, `remove` or `leave` square brackets around names. Only names (objects, columns, aliases, types) are bracketed, never keywords or built-in functions; a result that would not parse is not applied |
 | `expandWildcards` | bool | false | Replace `SELECT *` with the column list (needs a connection) |
 | `qualifyObjectNames` | bool | false | Add the schema to table names (needs a connection) |
 

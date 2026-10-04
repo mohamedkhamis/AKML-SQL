@@ -43,8 +43,8 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
     /// <item>A dot needs "Trigger after dot".</item>
     /// <item>Only identifier characters trigger, plus the caller's keyword contexts (a space after
     ///   FROM, JOIN, GROUP BY …), flagged with <c>contextTrigger</c>.</item>
-    /// <item>"Trigger delay (ms)" 0 means immediate; otherwise the box opens that long after the
-    ///   last keystroke.</item>
+    /// <item>"Trigger delay (ms)" 0 (the default) means immediate; otherwise the box opens that
+    ///   long after the last keystroke. A dot is always immediate: the columns are what was asked for.</item>
     /// </list>
     /// </summary>
     internal static class CompletionTriggerPolicy
@@ -58,7 +58,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             {
                 if (typed == '.')
                 {
-                    if (!s.AfterDot) return TriggerDecision.None;
+                    return s.AfterDot ? TriggerDecision.Immediate : TriggerDecision.None;
                 }
                 else if (!IsIdentifierStart(typed))
                 {

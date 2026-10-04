@@ -27,5 +27,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Error message if the search failed; null on success.</summary>
         [Key(3)]
         public string? Error { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-03): more rows follow this page. A search filtered in memory (CamelCase
+        /// initials) returns short pages, so the page size alone can't tell. Null from an engine
+        /// that predates it. Appended key.
+        /// </summary>
+        [Key(4)]
+        public bool? HasMore { get; set; }
     }
 }

@@ -56,6 +56,21 @@ public class TeamStyleFolderTests : IDisposable
     }
 
     [Fact]
+    public void Name_lookups_reuse_a_recent_scan_of_the_team_folder()
+    {
+        // Every format request looks its style up; each one used to list the share first.
+        Write(_teamDir, "team-style", "Team Style");
+        var manager = Manager(_teamDir);
+
+        Assert.True(manager.TryReadRaw("Team Style", out _, out _, out var source));
+        manager.TryReadRaw("Team Style", out _, out _, out _);
+        manager.TryReadRaw("No Such Style", out _, out _, out _);
+
+        Assert.Equal(ProfileManager.SourceTeam, source);
+        Assert.Equal(1, manager.TeamScanCount);
+    }
+
+    [Fact]
     public void A_style_in_the_team_folder_is_listed_as_a_team_style()
     {
         Write(_builtInDir, "default", "Default");
@@ -211,11 +226,16 @@ public class TeamStyleFolderTests : IDisposable
     {
         Write(_builtInDir, "khamis-style", "Khamis Style", "UPPERCASE");
         var manager = Manager(_teamDir);
+        var now = DateTime.UtcNow;
+        manager.TeamClock = () => now;
         Assert.Equal("UPPERCASE", manager.Load("Khamis Style").Casing.ReservedKeywords);   // memoised: built-in
 
         Write(_teamDir, "house", "Khamis Style", "lowercase");
         Directory.SetLastWriteTimeUtc(_teamDir, DateTime.UtcNow.AddMinutes(1));   // coarse clocks
 
+        // Within the snapshot window the last scan answers; after it, the new style is seen.
+        Assert.Equal("UPPERCASE", manager.Load("Khamis Style").Casing.ReservedKeywords);
+        now += ProfileManager.TeamSnapshotTtl;
         Assert.Equal("lowercase", manager.Load("Khamis Style").Casing.ReservedKeywords);
     }
 

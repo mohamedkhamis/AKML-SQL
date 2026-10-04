@@ -62,7 +62,13 @@ namespace AkmlSql.Shell.Shared.History
                 // adds to the same history row — unless another open tab already holds that session.
                 if (!string.IsNullOrEmpty(sessionKey) && activeDoc != null)
                 {
-                    try { DocumentSessionKeys.Adopt(activeDoc.FullName, sessionKey!); }
+                    try
+                    {
+                        // The tab was activated before it took the session, so nothing marked the
+                        // query open: it stayed "closed", and the next Ctrl+Shift+T reopened it again.
+                        if (DocumentSessionKeys.Adopt(activeDoc.FullName, sessionKey!))
+                            ExecutionCapture.MarkOpen(sessionKey!);
+                    }
                     catch (Exception adoptEx) { Serilog.Log.Debug(adoptEx, "History: session adoption skipped"); }
                 }
 

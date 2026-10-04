@@ -51,6 +51,26 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [Fact]
+        public async Task A_short_page_the_engine_says_is_not_the_last_keeps_More()
+        {
+            // A CamelCase search ("PC") is filtered in memory: 37 of 100 rows survive, more follow.
+            var rpc = new FakeRpcClientAccessor();
+            rpc.Respond<HistorySearchRequest>(MessageTypes.HistorySearch, req => new HistorySearchResponse
+            {
+                Success = true,
+                TotalCount = 300,
+                HasMore = true,
+                Entries = Enumerable.Range(0, 37).Select(i => new HistoryEntryDto { Id = i + 1, SqlText = "SELECT ProductCategory" }).ToArray(),
+            });
+            var vm = Model(rpc);
+
+            await vm.RunSearchAsync(resetOffset: true);
+
+            Assert.Equal(37, vm.Entries.Count);
+            Assert.True(vm.HasMoreEntries);
+        }
+
+        [Fact]
         public async Task A_short_page_ends_paging()
         {
             var vm = Model(ServerWith(40));

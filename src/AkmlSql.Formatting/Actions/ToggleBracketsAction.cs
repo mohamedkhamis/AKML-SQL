@@ -65,6 +65,16 @@ public class ToggleBracketsAction : IFormatAction
             // Collect replacements in reverse order
             var replacements = new List<(int Offset, int Length, string NewText)>();
 
+            // Only names the syntax says are names: the lexer calls NOCOUNT, max, DATEADD, the
+            // date part "day" and NOLOCK identifiers too, and SQL Server rejects them bracketed.
+            HashSet<int>? names = null;
+            if (addBrackets)
+            {
+                var visitor = new BracketableNames();
+                script.Accept(visitor);
+                names = visitor.Offsets;
+            }
+
             foreach (var t in tokens)
             {
                 if (t.TokenType == TSqlTokenType.EndOfFile) break;
@@ -74,8 +84,8 @@ public class ToggleBracketsAction : IFormatAction
 
                 if (addBrackets)
                 {
-                    // Add brackets to plain identifiers
-                    if (t.TokenType == TSqlTokenType.Identifier)
+                    // Add brackets to plain identifiers that name something
+                    if (t.TokenType == TSqlTokenType.Identifier && names!.Contains(t.Offset))
                     {
                         replacements.Add((t.Offset, t.Text.Length, $"[{t.Text}]"));
                     }
@@ -137,6 +147,68 @@ public class ToggleBracketsAction : IFormatAction
                 ElapsedMs = sw.ElapsedMilliseconds,
                 Diagnostics = [new FormatDiagnostic { Severity = DiagnosticSeverity.Error, Message = ex.Message }]
             };
+        }
+    }
+
+    /// <summary>
+    /// The start offsets of the unquoted identifiers that name something — objects and types
+    /// (<see cref="SchemaObjectName"/>), columns, table and column aliases, CTEs and their
+    /// columns, column definitions. Not built-in function names (a <see cref="FunctionCall"/>'s
+    /// name), nor the date part of DATEADD / DATEDIFF / DATEPART …, which are keywords to SQL Server.
+    /// </summary>
+    private sealed class BracketableNames : TSqlFragmentVisitor
+    {
+        private static readonly HashSet<string> DatePartFunctions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "DATEADD", "DATEDIFF", "DATEDIFF_BIG", "DATEPART", "DATENAME", "DATETRUNC", "DATE_BUCKET",
+        };
+
+        private readonly HashSet<int> _datePart = new();
+        private readonly HashSet<int> _offsets = new();
+
+        public HashSet<int> Offsets
+        {
+            get
+            {
+                var result = new HashSet<int>(_offsets);
+                result.ExceptWith(_datePart);
+                return result;
+            }
+        }
+
+        private void Add(Identifier? id)
+        {
+            if (id != null && id.QuoteType == QuoteType.NotQuoted) _offsets.Add(id.StartOffset);
+        }
+
+        public override void Visit(SchemaObjectName node)
+        {
+            foreach (var id in node.Identifiers) Add(id);
+        }
+
+        public override void Visit(ColumnReferenceExpression node)
+        {
+            if (node.MultiPartIdentifier == null) return;
+            foreach (var id in node.MultiPartIdentifier.Identifiers) Add(id);
+        }
+
+        public override void Visit(TableReferenceWithAlias node) => Add(node.Alias);
+
+        public override void Visit(SelectScalarExpression node) => Add(node.ColumnName?.Identifier);
+
+        public override void Visit(ColumnDefinition node) => Add(node.ColumnIdentifier);
+
+        public override void Visit(CommonTableExpression node)
+        {
+            Add(node.ExpressionName);
+            foreach (var column in node.Columns) Add(column);
+        }
+
+        public override void Visit(FunctionCall node)
+        {
+            if (!DatePartFunctions.Contains(node.FunctionName?.Value ?? string.Empty)) return;
+            if (node.Parameters.Count > 0 && node.Parameters[0] is ColumnReferenceExpression part && part.MultiPartIdentifier != null)
+                foreach (var id in part.MultiPartIdentifier.Identifiers) _datePart.Add(id.StartOffset);
         }
     }
 

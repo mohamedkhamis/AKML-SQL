@@ -147,6 +147,8 @@ namespace AkmlSql.Shell.Shared.Commands
 
         public bool CanRestore => _stack.Count > 0 || _rpc.IsConnected;
 
+        private static readonly int CurrentPid = System.Diagnostics.Process.GetCurrentProcess().Id;
+
         /// <summary>Reopens one tab; false when there was nothing to reopen.</summary>
         public async Task<bool> RestoreAsync()
         {
@@ -178,6 +180,22 @@ namespace AkmlSql.Shell.Shared.Commands
             if (full?.Success == true && full.FullSqlText != null) newest.SqlText = full.FullSqlText;
 
             OpenFromHistory(newest);
+
+            // Open now — awaited, so a second Ctrl+Shift+T finds the next closed query, not this one again.
+            if (!string.IsNullOrEmpty(newest.SessionKey)
+                && OpenStateReporter.OnActivated(newest.SessionKey, CurrentPid) is { } open)
+            {
+                try
+                {
+                    await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                        MessageTypes.HistoryAction, open, timeoutMs: 5000);
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Debug(ex, "Reopen closed tab: could not mark '{Name}' open", newest.TabTitle);
+                }
+            }
+
             Notify($"Restored '{HistoryRowDisplay.DisplayNameFor(newest)}' from SQL History.");
             return true;
         }

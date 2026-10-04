@@ -229,6 +229,30 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void A_renamed_environment_keeps_its_safety_protection()
+        {
+            // Safety keys on the environment name: renaming PRODUCTION used to drop the
+            // type-the-server-name confirmation and the production checks without a word.
+            var settings = Migrated();
+            var (controls, _) = Build(settings);
+            var environments = controls.Rules.Environments.Select(e => e.Clone()).ToList();
+            environments[0].Name = "Live";
+            controls.Rules.ApplyEnvironmentEdit(new EnvironmentEditResult(environments,
+                new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase) { ["PRODUCTION"] = "Live" }, gradientColors: false));
+            environments = controls.Rules.Environments.Select(e => e.Clone()).ToList();
+            environments[0].Name = "Main";
+            controls.Rules.ApplyEnvironmentEdit(new EnvironmentEditResult(environments,
+                new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase) { ["Live"] = "Main" }, gradientColors: false));
+
+            controls.Save(settings);
+
+            Assert.Equal("Main", settings.Tabs.ColoringRules[0].Label);
+            Assert.Equal(EnvironmentSafety.TypeServerName, settings.Safety.EnvironmentSeverity["Main"]);
+            Assert.DoesNotContain(settings.Safety.EnvironmentSeverity.Keys, k => k == "PRODUCTION" || k == "Live");
+            Assert.True(EnvironmentSafety.IsProduction(settings.Tabs.ColoringRules[0].Label, settings.Safety.EnvironmentSeverity));
+        }
+
+        [StaFact]
         public void The_grid_and_gradient_follow_Enable_tab_coloring()
         {
             var settings = Migrated();

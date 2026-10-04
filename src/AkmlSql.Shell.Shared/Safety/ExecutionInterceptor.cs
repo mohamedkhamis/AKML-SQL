@@ -255,8 +255,10 @@ namespace AkmlSql.Shell.Shared.Safety
                     matchedEnvRule = EnvironmentDetector.Match(serverName, databaseName);
                     if (matchedEnvRule != null)
                     {
-                        isProductionServer = matchedEnvRule.Label.IndexOf(
-                            "PROD", StringComparison.OrdinalIgnoreCase) >= 0;
+                        // PROD in the name, or the environment's severity asks for the server
+                        // name: production renamed "Live" stays production.
+                        isProductionServer = AkmlSql.Core.Models.Tabs.EnvironmentSafety.IsProduction(
+                            matchedEnvRule.Label, cachedSafety?.EnvironmentSeverity);
                     }
                 }
                 catch (Exception ex)

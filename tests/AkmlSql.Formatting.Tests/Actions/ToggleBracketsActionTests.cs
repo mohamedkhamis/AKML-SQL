@@ -44,6 +44,34 @@ public class ToggleBracketsActionTests
         Assert.True(result.WasModified);
     }
 
+    [Fact]
+    public void Add_brackets_leaves_keywords_and_built_in_names_alone()
+    {
+        // The lexer calls NOCOUNT, max, DATEADD, the date part and NOLOCK identifiers too;
+        // bracketed, SQL Server rejects every one of them.
+        const string sql = "SET NOCOUNT ON; DECLARE @x varchar(max); "
+                           + "SELECT DATEADD(day, 1, GETDATE()) AS Tomorrow, o.OrderID FROM dbo.Orders AS o WITH (NOLOCK)";
+
+        var result = new ToggleBracketsAction(addBrackets: true).Execute(sql, new FormattingProfile());
+
+        Assert.True(result.Success);
+        var text = result.FormattedText;
+        Assert.Contains("SET NOCOUNT ON", text);
+        Assert.Contains("(max)", text);
+        Assert.Contains("DATEADD(day,", text);
+        Assert.Contains("GETDATE()", text);
+        Assert.Contains("WITH (NOLOCK)", text);
+        Assert.Contains("[dbo].[Orders] AS [o]", text);
+        Assert.Contains("[o].[OrderID]", text);
+        Assert.Contains("AS [Tomorrow]", text);
+        Assert.Contains("[varchar](max)", text);
+
+        var parser = new Microsoft.SqlServer.TransactSql.ScriptDom.TSql170Parser(true);
+        using var reader = new System.IO.StringReader(text);
+        parser.Parse(reader, out var errors);
+        Assert.Empty(errors);
+    }
+
     // ── Remove brackets ───────────────────────────────────────────────────
 
     [Fact]

@@ -43,6 +43,7 @@ namespace AkmlSql.Shell.Shared.History
         // rows than the total — the old rule added the offset to the already-accumulated list,
         // so it counted every earlier page twice and stopped after page two.
         private int _lastPageCount;
+        private bool? _hasMore;
 
         // Spec 040 (HIS-01): full text per entry for the preview, cleared on every refresh.
         private readonly Dictionary<long, string> _previewCache = new Dictionary<long, string>();
@@ -101,7 +102,7 @@ namespace AkmlSql.Shell.Shared.History
             // command parameter; without one, the selected entry.
             ToggleFavoriteCommand = new RelayCommand(p => ExecuteToggleFavoriteAsync(p as HistoryEntryDto ?? SelectedEntry),
                 p => !IsLoading && (p is HistoryEntryDto || SelectedEntry != null));
-            DeleteCommand = new RelayCommand(p => ExecuteDeleteAsync(p as HistoryEntryDto ?? SelectedEntry),
+            DeleteCommand = new RelayCommand(p => ExecuteDeleteAsync(DeleteTargets(p as HistoryEntryDto)),
                 p => !IsLoading && (p is HistoryEntryDto || SelectedEntry != null));
             RemoveOlderThanCommand = new RelayCommand(p => ExecuteRemoveOlderThanAsync(p as HistoryEntryDto ?? SelectedEntry),
                 p => !IsLoading && (p is HistoryEntryDto || SelectedEntry != null));
@@ -640,7 +641,11 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         /// <summary>Whether there are more entries available beyond the loaded ones.</summary>
-        public bool HasMoreEntries => _lastPageCount == PageSize && Entries.Count < TotalCount;
+        /// <remarks>
+        /// The engine says (<see cref="HistorySearchResponse.HasMore"/>): a CamelCase search is
+        /// filtered in memory, so its pages come back short while more matches follow.
+        /// </remarks>
+        public bool HasMoreEntries => _hasMore ?? (_lastPageCount == PageSize && Entries.Count < TotalCount);
 
         /// <summary>Spec 040 test seam: where settings come from (grouping on/off). Production reads config.</summary>
         internal Func<Core.Config.AppSettings> SettingsProvider { get; set; } = Core.Config.ConfigManager.Load;
@@ -934,7 +939,9 @@ namespace AkmlSql.Shell.Shared.History
                     IsOpen = effectiveIsOpen,
                     NameFilter = effectiveNameFilter,
                     CamelCaseTokens = parsed.CamelCaseTokens?.ToArray(),
-                    PathFilter = parsed.PathFilter
+                    PathFilter = parsed.PathFilter,
+                    // sql: means the SQL text only, as its help says.
+                    SqlOnly = parsed.HasPrefixes && !string.IsNullOrWhiteSpace(parsed.SqlFilter),
                 };
 
                 var response = await _rpc.SendRequestAsync<HistorySearchResponse, HistorySearchRequest>(
@@ -954,6 +961,7 @@ namespace AkmlSql.Shell.Shared.History
                     }
 
                     _lastPageCount = page.Length;
+                    _hasMore = response.HasMore;
                     TotalCount = response.TotalCount;
                     OnPropertyChanged(nameof(HasMoreEntries));
                     OnPropertyChanged(nameof(StarredCount));
@@ -1263,11 +1271,25 @@ namespace AkmlSql.Shell.Shared.History
             }
         }
 
-        private async void ExecuteDeleteAsync(HistoryEntryDto? entry)
+        /// <summary>
+        /// What Delete removes: every selected row when several are selected and the command comes
+        /// from the keyboard or from one of them; otherwise the row it was invoked on (a row's own
+        /// menu acts on its own row, HIS-04).
+        /// </summary>
+        internal IReadOnlyList<HistoryEntryDto> DeleteTargets(HistoryEntryDto? row)
+        {
+            var selected = SelectedEntries.ToList();
+            if (row == null)
+                return selected.Count > 0 ? selected
+                    : SelectedEntry != null ? new[] { SelectedEntry } : Array.Empty<HistoryEntryDto>();
+            return selected.Count > 1 && selected.Contains(row) ? selected : new[] { row };
+        }
+
+        private async void ExecuteDeleteAsync(IReadOnlyList<HistoryEntryDto> entries)
         {
             try
             {
-                if (entry != null) await DeleteEntryAsync(entry);
+                if (entries.Count > 0) await DeleteEntriesAsync(entries);
             }
             catch (Exception ex)
             {
@@ -1280,10 +1302,17 @@ namespace AkmlSql.Shell.Shared.History
         /// that is the whole grouped query — every run, its versions and its session — so nothing
         /// of it reappears on the next refresh.
         /// </summary>
-        internal async Task DeleteEntryAsync(HistoryEntryDto entry)
+        internal Task DeleteEntryAsync(HistoryEntryDto entry) =>
+            entry == null ? Task.CompletedTask : DeleteEntriesAsync(new[] { entry });
+
+        /// <summary>Removes <paramref name="entries"/> (each with its group's runs) after asking once.</summary>
+        internal async Task DeleteEntriesAsync(IReadOnlyList<HistoryEntryDto> entries)
         {
-            if (entry == null || !_rpc.IsConnected) return;
-            if (!ConfirmPrompt($"Remove '{HistoryRowDisplay.DisplayNameFor(entry)}' and its history?")) return;
+            if (entries == null || entries.Count == 0 || !_rpc.IsConnected) return;
+            var question = entries.Count == 1
+                ? $"Remove '{HistoryRowDisplay.DisplayNameFor(entries[0])}' and its history?"
+                : $"Remove {entries.Count} queries and their history?";
+            if (!ConfirmPrompt(question)) return;
 
             IsLoading = true;
             try
@@ -1293,7 +1322,7 @@ namespace AkmlSql.Shell.Shared.History
                     new HistoryActionRequest
                     {
                         Action = HistoryActions.Delete,
-                        EntryIds = new[] { entry.Id },
+                        EntryIds = entries.Select(e => e.Id).ToArray(),
                         GroupScope = GroupingOn() ? true : (bool?)null,
                     },
                     timeoutMs: 10000);

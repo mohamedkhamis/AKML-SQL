@@ -98,6 +98,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.Tabs.ColoringEnabled = _coloringEnabled.IsChecked == true;
             settings.Tabs.GradientColors = _gradientColors.IsChecked == true;
             Rules.Save(settings.Tabs);
+            // Safety keys on the environment name: a renamed environment keeps its protection.
+            if (settings.Safety?.EnvironmentSeverity != null)
+                EnvironmentSafety.FollowRenames(settings.Safety.EnvironmentSeverity, Rules.Renames);
             settings.Tabs.CustomWindowTitle = _customWindowTitle.Text ?? string.Empty;
         }
 
@@ -141,9 +144,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly TextBlock _description;
         private readonly TextBlock _hint;
         private List<TabEnvironment> _environments = new List<TabEnvironment>();
+        // Name an environment had when the page loaded → its name now, across every Edit
+        // environments in this visit: Safety's severity follows these on save.
+        private readonly Dictionary<string, string> _renames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         internal ObservableCollection<ColorRuleRow> Rows { get; } = new ObservableCollection<ColorRuleRow>();
         internal IReadOnlyList<TabEnvironment> Environments => _environments;
+
+        /// <summary>Each environment renamed since the page loaded: its name then → its name now.</summary>
+        internal IReadOnlyDictionary<string, string> Renames => _renames;
         internal IReadOnlyList<string> EnvironmentNames => _environmentNames;
 
         internal StackPanel Root { get; }
@@ -237,6 +246,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// </summary>
         internal void Load(TabSettings tabs)
         {
+            _renames.Clear();
             var copy = new TabSettings
             {
                 ColoringRules = (tabs.ColoringRules ?? new List<ColoringRule>()).Where(r => r != null).Select(ColorRuleRow.Copy).ToList(),
@@ -337,6 +347,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// an empty row can be: the dialog refuses to delete one that rules use) moves to the first.</summary>
         internal void ApplyEnvironmentEdit(EnvironmentEditResult result)
         {
+            foreach (var rename in result.Renames)
+            {
+                var from = rename.Key.Trim();
+                var to = (rename.Value ?? string.Empty).Trim();
+                var earlier = _renames.FirstOrDefault(r => string.Equals(r.Value, from, StringComparison.OrdinalIgnoreCase));
+                if (earlier.Key != null) _renames[earlier.Key] = to;
+                else _renames[from] = to;
+            }
+
             Render(() =>
             {
                 foreach (var row in Rows)

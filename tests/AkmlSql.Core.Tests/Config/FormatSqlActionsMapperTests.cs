@@ -22,8 +22,9 @@ public class FormatSqlActionsMapperTests
     [InlineData("remove", 2)]
     [InlineData("Insert", 1)]     // hand-edited config: case does not matter
     [InlineData("REMOVE", 2)]
-    [InlineData("", 0)]           // anything unknown leaves semicolons alone
-    [InlineData("sometimes", 0)]
+    [InlineData("style", 3)]
+    [InlineData("", 3)]           // anything unknown: as the style says (the default)
+    [InlineData("sometimes", 3)]
     public void Semicolons_map_to_0_leave_1_insert_2_remove(string value, int expected)
     {
         var dto = FormatSqlActionsMapper.ToDto(new FormatSqlActions { Semicolons = value });
@@ -35,8 +36,9 @@ public class FormatSqlActionsMapperTests
     [InlineData("add", 1)]
     [InlineData("remove", 2)]
     [InlineData("Add", 1)]
-    [InlineData("", 0)]
-    [InlineData("insert", 0)]     // "insert" is a semicolons word, not a brackets one
+    [InlineData("style", 3)]
+    [InlineData("", 3)]
+    [InlineData("insert", 3)]     // "insert" is a semicolons word, not a brackets one
     public void Square_brackets_map_to_0_leave_1_add_2_remove(string value, int expected)
     {
         var dto = FormatSqlActionsMapper.ToDto(new FormatSqlActions { SquareBrackets = value });
@@ -44,11 +46,16 @@ public class FormatSqlActionsMapperTests
     }
 
     [Fact]
-    public void A_null_semicolons_or_brackets_value_is_leave()
+    public void A_null_or_default_semicolons_or_brackets_value_is_as_the_style_says()
     {
-        var dto = FormatSqlActionsMapper.ToDto(new FormatSqlActions { Semicolons = null!, SquareBrackets = null! });
-        Assert.Equal(0, dto.Semicolons);
-        Assert.Equal(0, dto.SquareBrackets);
+        // A style that inserts semicolons or adds brackets keeps doing so on Format SQL; an explicit
+        // "leave" used to be sent for everyone and silently turned those off.
+        var fromNull = FormatSqlActionsMapper.ToDto(new FormatSqlActions { Semicolons = null!, SquareBrackets = null! });
+        var fromDefaults = FormatSqlActionsMapper.ToDto(new FormatSqlActions());
+        Assert.Equal(FormatSqlActionsDto.UseStyle, fromNull.Semicolons);
+        Assert.Equal(FormatSqlActionsDto.UseStyle, fromNull.SquareBrackets);
+        Assert.Equal(FormatSqlActionsDto.UseStyle, fromDefaults.Semicolons);
+        Assert.Equal(FormatSqlActionsDto.UseStyle, fromDefaults.SquareBrackets);
     }
 
     [Theory]
@@ -109,20 +116,17 @@ public class FormatSqlActionsMapperTests
         Assert.Equal(Common("expandWildcards"), dto.ExpandWildcards);
         Assert.Equal(Common("qualifyObjectNames"), dto.QualifyObjectNames);
 
-        var semicolons = Common("insertSemicolons") ? 1 : Common("removeSemicolons") ? 2 : 0;
-        Assert.Equal(semicolons, dto.Semicolons);
-
-        // A style can only ask to ADD brackets; false has always meant "leave them".
-        var brackets = Common("addSquareBrackets") ? 1 : 0;
-        Assert.Equal(brackets, dto.SquareBrackets);
+        // Semicolons and brackets are left to each style's own setting, whatever it is.
+        Assert.Equal(FormatSqlActionsDto.UseStyle, dto.Semicolons);
+        Assert.Equal(FormatSqlActionsDto.UseStyle, dto.SquareBrackets);
     }
 
     [Fact]
     public void The_defaults_are_written_with_the_documented_words()
     {
         var defaults = new FormatSqlActions();
-        Assert.Equal("leave", defaults.Semicolons);
-        Assert.Equal("leave", defaults.SquareBrackets);
+        Assert.Equal("style", defaults.Semicolons);
+        Assert.Equal("style", defaults.SquareBrackets);
         Assert.True(defaults.ApplyLayout);
         Assert.True(defaults.ApplyCasing);
         Assert.False(defaults.ExpandWildcards);
@@ -165,7 +169,7 @@ public class FormatSqlActionsMapperTests
         Assert.Equal("Default", back.Formatter.ActiveProfile);
         Assert.Equal(string.Empty, back.Formatter.TeamStyleFolder);
         Assert.NotNull(back.Formatter.FormatSqlActions);
-        Assert.Equal("leave", back.Formatter.FormatSqlActions.Semicolons);
+        Assert.Equal("style", back.Formatter.FormatSqlActions.Semicolons);
     }
 
     private static List<JsonElement> BuiltInFormatActions()

@@ -71,5 +71,12 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(13)]
         public string? PathFilter { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-07): <see cref="SearchText"/> came from <c>sql:</c> — match the SQL text
+        /// only, not the name, path, server or database. Appended key.
+        /// </summary>
+        [Key(14)]
+        public bool SqlOnly { get; set; }
     }
 }

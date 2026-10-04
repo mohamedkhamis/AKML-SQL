@@ -297,8 +297,19 @@ namespace AkmlSql.Core.Config
         public bool Enabled { get; set; } = true;
         /// <summary>Show completion list automatically while typing (no Ctrl+Space required).</summary>
         public bool AutoTrigger { get; set; } = true;
-        /// <summary>Debounce delay in milliseconds before triggering auto-completion.</summary>
-        public int TriggerDelayMs { get; set; } = 100;
+        /// <summary>
+        /// Milliseconds after the last keystroke before typing opens the suggestions; 0 (the
+        /// default) opens them at once. A dot always opens them at once.
+        /// </summary>
+        public int TriggerDelayMs { get; set; }
+
+        /// <summary>
+        /// Spec 040: 1 once <see cref="TriggerDelayMs"/> has been through the move to a delay that
+        /// works. Null in a config written before: its 100 was the old default of a setting nothing
+        /// read, and becomes 0 (see <c>ConfigManager</c>).
+        /// </summary>
+        [JsonPropertyName("triggerDelayVersion")]
+        public int? TriggerDelayVersion { get; set; }
         /// <summary>Auto-trigger after typing <c>.</c> for table.column completion.</summary>
         public bool AfterDot { get; set; } = true;
         /// <summary>Maximum number of items in the completion list.</summary>
@@ -643,6 +654,8 @@ namespace AkmlSql.Core.Config
     public class FormatSqlActions
     {
         public const string Leave = "leave";
+        /// <summary>The style's own setting decides (its insert/remove semicolons, add brackets).</summary>
+        public const string Style = "style";
         public const string Insert = "insert";
         public const string Add = "add";
         public const string Remove = "remove";
@@ -654,13 +667,16 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("applyCasing")]
         public bool ApplyCasing { get; set; } = true;
 
-        /// <summary><c>"insert"</c>, <c>"remove"</c> or <c>"leave"</c>.</summary>
+        /// <summary>
+        /// <c>"style"</c> (the default: the style's own setting), <c>"insert"</c>, <c>"remove"</c>
+        /// or <c>"leave"</c>.
+        /// </summary>
         [JsonPropertyName("semicolons")]
-        public string Semicolons { get; set; } = Leave;
+        public string Semicolons { get; set; } = Style;
 
-        /// <summary><c>"add"</c>, <c>"remove"</c> or <c>"leave"</c>.</summary>
+        /// <summary><c>"style"</c> (the default), <c>"add"</c>, <c>"remove"</c> or <c>"leave"</c>.</summary>
         [JsonPropertyName("squareBrackets")]
-        public string SquareBrackets { get; set; } = Leave;
+        public string SquareBrackets { get; set; } = Style;
 
         /// <summary>Expands <c>SELECT *</c> from the connected database's columns.</summary>
         [JsonPropertyName("expandWildcards")]

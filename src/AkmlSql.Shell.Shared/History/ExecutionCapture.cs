@@ -41,8 +41,9 @@ namespace AkmlSql.Shell.Shared.History
         private static string? _lastActiveDocumentPath;
         private static string? _lastRecordedContentHash;
 
-        // SSMS raises DocumentClosing up to three times for one tab close
-        private static readonly Tabs.RepeatedCloseFilter CloseRepeats = new Tabs.RepeatedCloseFilter();
+        // Tab closes waiting for their tab to go (see PendingCloses) and the check that finds them gone.
+        private static readonly PendingCloses Closes = new PendingCloses();
+        private static System.Windows.Threading.DispatcherTimer? _closeTimer;
 
         private const string QueryExecuteCommandName = "Query.Execute";
 
@@ -50,12 +51,20 @@ namespace AkmlSql.Shell.Shared.History
         private static string? _queryExecuteGuid;
         private static int _queryExecuteId;
 
+        private static readonly ShutdownState Shutting = new ShutdownState();
+
         /// <summary>
-        /// Spec 040 (HIS-02): set by the package when SSMS starts shutting down, before its
-        /// documents close. Tabs closed by shutdown are NOT marked closed in History, so the
-        /// queries open at exit can be offered for restore on the next start.
+        /// Spec 040 (HIS-02): SSMS is shutting down, before its documents close. Tabs closed by
+        /// shutdown are NOT marked closed in History, so the queries open at exit can be offered
+        /// for restore on the next start. See <see cref="ShutdownState"/>.
         /// </summary>
-        public static volatile bool ShuttingDown;
+        public static bool ShuttingDown => Shutting.IsShuttingDown(DateTime.UtcNow);
+
+        /// <summary>The package's QueryClose: SSMS asks to close, and may yet be cancelled.</summary>
+        public static void CloseQueried() => Shutting.CloseQueried(DateTime.UtcNow);
+
+        /// <summary>Shutdown has begun (DTE OnBeginShutdown, package dispose).</summary>
+        public static void ShutdownBegun() => Shutting.Begin();
 
         /// <summary>
         /// Spec 040 (T133, HIS-09) — raised after a run or draft reaches History (with its entry id,
@@ -144,6 +153,7 @@ namespace AkmlSql.Shell.Shared.History
                 // Hook DocumentSaved so a Save/Save-As rename doesn't split one tab's session
                 // (see OnDocumentSaved for how the old→new migration is correlated).
                 _documentEvents.DocumentSaved += OnDocumentSaved;
+                _documentEvents.DocumentOpened += OnDocumentOpened;
 
                 // Hook WindowActivated to record the previous tab's SQL on focus change
                 _windowEvents = _dte.Events.WindowEvents;
@@ -154,7 +164,7 @@ namespace AkmlSql.Shell.Shared.History
                 _dteEvents = _dte.Events.DTEEvents;
                 _dteEvents.OnBeginShutdown += () =>
                 {
-                    ShuttingDown = true;
+                    Shutting.Begin();
                     _autosaveTimer?.Stop();
                 };
 
@@ -201,6 +211,8 @@ namespace AkmlSql.Shell.Shared.History
                 {
                     _documentEvents.DocumentClosing -= OnDocumentClosing;
                     _documentEvents.DocumentSaved -= OnDocumentSaved;
+                    _documentEvents.DocumentOpened -= OnDocumentOpened;
+                    _closeTimer?.Stop();
                     _documentEvents = null;
                 }
 
@@ -248,6 +260,9 @@ namespace AkmlSql.Shell.Shared.History
         /// connection info, and duration, then sends a history record via
         /// <see cref="OnExecutionCompleted"/>.
         /// </summary>
+        /// <summary>A document opened: SSMS is not shutting down (a close request was cancelled).</summary>
+        private static void OnDocumentOpened(Document document) => Shutting.StillRunning();
+
         private static void OnAfterCommandExecute(
             string guid, int id, object customIn, object customOut)
         {
@@ -258,6 +273,9 @@ namespace AkmlSql.Shell.Shared.History
 
                 if (!IsQueryExecuteCommand(guid, id))
                     return;
+
+                // A query ran: SSMS is not shutting down, whatever a cancelled close request said.
+                Shutting.StillRunning();
 
                 // Compute duration from the BeforeExecute timestamp
                 long durationMs = 0;
@@ -319,6 +337,9 @@ namespace AkmlSql.Shell.Shared.History
                         // between the last execute and the save.
                         _lastActiveDocumentPath = source;
 
+                        // It ran: a close of it the user cancelled at the save prompt is over.
+                        Closes.Cancel(source);
+
                         tabTitle = IsSavedToDisk(activeDoc.Path) ? activeDoc.Name : null;
                     }
                 }
@@ -364,54 +385,121 @@ namespace AkmlSql.Shell.Shared.History
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
                 if (document == null) return;
+                var name = document.FullName;
+                if (string.IsNullOrEmpty(name)) return;
 
                 var textDoc = document.Object("TextDocument") as TextDocument;
                 var content = textDoc?.StartPoint.CreateEditPoint().GetText(textDoc.EndPoint);
 
-                // SSMS reports one tab close up to three times; by the second the session key is
-                // gone, so acting on it again would record the query as a new "Not executed" draft.
-                if (CloseRepeats.IsRepeat(document.FullName, content, DateTime.UtcNow))
+                // SSMS reports one close up to three times — first before the "save changes?"
+                // prompt the user can Cancel — so the close waits (PendingCloses) until the tab has
+                // gone. Each report refreshes the text: the last ones come just before it goes.
+                var started = Closes.Begin(name, DateTime.UtcNow, out var close);
+                if (!string.IsNullOrEmpty(content)) close.Content = content;
+                if (!started)
                 {
-                    Log.Debug("ExecutionCapture: ignoring a repeated close event for '{Source}'", document.FullName);
+                    Log.Debug("ExecutionCapture: close of '{Source}' reported again", name);
                     return;
                 }
 
-                // Spec 040 (HIS-02): read the key BEFORE forgetting it, to mark the query closed
-                // (unless SSMS is shutting down — see ShuttingDown).
-                DocumentSessionKeys.TryGet(document.FullName, out var closingKey);
-                SendOpenState(OpenStateReporter.OnClosing(closingKey, CurrentPid, ShuttingDown));
+                // Spec 040 (HIS-02): the query's session as the close starts; its key is released
+                // only once the tab has gone (a cancelled close keeps it).
+                DocumentSessionKeys.TryGet(name, out var key);
+                close.SessionKey = string.IsNullOrEmpty(key) ? null : key;
+                close.TabTitle = SafeName(document);
+                close.Connection = ActiveConnectionIfActive(document);
 
-                // The document is closing regardless of what follows — release its session key now
-                // so reopening the same file starts a brand-new session.
-                DocumentSessionKeys.Forget(document.FullName);
-
-                if (textDoc == null || content == null || string.IsNullOrWhiteSpace(content)) return;
-
-                // Key on FullName (history.source), not Name/tab_title: TabTitle is sent only for a
-                // saved document (see OnAfterCommandExecute), so an unsaved scratch tab's tab_title
-                // is NULL and a lookup keyed on it would never find the row to snapshot against.
-                var source = document.FullName;
-                if (string.IsNullOrEmpty(source)) return;
-
-                // Spec 040 (HIS-14): a query tab that never ran has no History row to add a version
-                // to — keep its text as a draft instead ("Not executed"), findable after it closes.
-                // While SSMS shuts down the draft stays open, so the next start offers to restore it.
-                if (DraftCapturePolicy.ShouldCaptureDraft(source, content, !string.IsNullOrEmpty(closingKey)))
+                if (ShuttingDown)
                 {
-                    Log.Debug("ExecutionCapture: recording a draft on close for '{Source}'", source);
-                    SendDraft(source, SafeName(document), content, Guid.NewGuid().ToString("N"), ActiveConnectionIfActive(document),
-                        markOpen: ShuttingDown);
+                    // SSMS may be gone before a timer runs: act now (no prompt can cancel a close
+                    // that shutdown has begun). Its repeats are still recognised.
+                    close.Done = true;
+                    FinishClose(close);
                     return;
                 }
 
-                Log.Debug("ExecutionCapture: saving version snapshot on close for '{Source}'", source);
-
-                SaveVersionSnapshot(source, content, closingKey);
+                StartCloseTimer();
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "ExecutionCapture: error capturing document close snapshot");
             }
+        }
+
+        private static void StartCloseTimer()
+        {
+            if (_closeTimer == null)
+            {
+                _closeTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+                {
+                    Interval = TimeSpan.FromMilliseconds(400),
+                };
+                _closeTimer.Tick += (_, __) => OnCloseTimer();
+            }
+            if (!_closeTimer.IsEnabled) _closeTimer.Start();
+        }
+
+        /// <summary>Acts on the pending closes whose tab has gone; stops when none is pending.</summary>
+        private static void OnCloseTimer()
+        {
+            try
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                var open = OpenDocumentNames();
+                foreach (var close in Closes.TakeFinished(open.Contains, DateTime.UtcNow))
+                    FinishClose(close);
+                if (!Closes.Any) _closeTimer?.Stop();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ExecutionCapture: pending close check failed");
+            }
+        }
+
+        private static System.Collections.Generic.HashSet<string> OpenDocumentNames()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var names = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (_dte == null) return names;
+            foreach (Document doc in _dte.Documents)
+            {
+                try { names.Add(doc.FullName); }
+                catch { /* a document going mid-enumeration */ }
+            }
+            return names;
+        }
+
+        /// <summary>
+        /// The tab has gone: mark its query closed (unless SSMS is shutting down — see
+        /// <see cref="ShuttingDown"/>), release its session so reopening the file starts a new one,
+        /// and keep its text — as a version of the query, or as a draft if it never ran.
+        /// </summary>
+        private static void FinishClose(PendingCloses.Close close)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            SendOpenState(OpenStateReporter.OnClosing(close.SessionKey, CurrentPid, ShuttingDown));
+
+            // Not a key a reopened tab of the same file has taken since.
+            if (DocumentSessionKeys.TryGet(close.Name, out var current)
+                && string.Equals(current, close.SessionKey, StringComparison.Ordinal))
+                DocumentSessionKeys.Forget(close.Name);
+
+            var content = close.Content;
+            if (content == null || string.IsNullOrWhiteSpace(content)) return;
+
+            // Spec 040 (HIS-14): a query tab that never ran has no History row to add a version
+            // to — keep its text as a draft instead ("Not executed"), findable after it closes.
+            // While SSMS shuts down the draft stays open, so the next start offers to restore it.
+            if (DraftCapturePolicy.ShouldCaptureDraft(close.Name, content, close.SessionKey != null))
+            {
+                Log.Debug("ExecutionCapture: recording a draft on close for '{Source}'", close.Name);
+                SendDraft(close.Name, close.TabTitle, content, Guid.NewGuid().ToString("N"), close.Connection,
+                    markOpen: ShuttingDown);
+                return;
+            }
+
+            Log.Debug("ExecutionCapture: saving version snapshot on close for '{Source}'", close.Name);
+            SaveVersionSnapshot(close.Name, content, close.SessionKey);
         }
 
         /// <summary>
@@ -710,6 +798,15 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         private static void SaveVersionSnapshot(string source, string sqlText, string? sessionKey = null)
         {
+            // A tab without a History session has no row to version. Without the key the engine
+            // matches by path alone — and SSMS numbers SQLQueryN.sql from 1 again every start, so
+            // that can be another day's query, whose text and time it would overwrite.
+            if (string.IsNullOrEmpty(sessionKey))
+            {
+                Log.Debug("ExecutionCapture: no History session for '{Source}'; no version saved", source);
+                return;
+            }
+
             Task.Run(async () =>
             {
                 try
@@ -833,7 +930,9 @@ namespace AkmlSql.Shell.Shared.History
         private static void AutosaveTick()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (ShuttingDown || _dte == null || !_enabled) { _autosaveTimer?.Stop(); return; }
+            if (_dte == null || !_enabled) { _autosaveTimer?.Stop(); return; }
+            // Skip, don't stop: a close request the user cancels must not end the autosave.
+            if (ShuttingDown) return;
             if (!CaptureSettings().Tabs.SessionRecovery) return;
 
             try
@@ -879,6 +978,13 @@ namespace AkmlSql.Shell.Shared.History
         /// Sends an open/closed request from <see cref="OpenStateReporter"/> (null = nothing to send)
         /// on a background task. Failures are logged, never thrown into the UI thread.
         /// </summary>
+        /// <summary>
+        /// Spec 040 (HIS-02): a tab of this SSMS now holds the query <paramref name="sessionKey"/>
+        /// (reopened from History or restored at start) — it is open.
+        /// </summary>
+        internal static void MarkOpen(string sessionKey) =>
+            SendOpenState(OpenStateReporter.OnActivated(sessionKey, CurrentPid));
+
         private static void SendOpenState(HistoryActionRequest? request)
         {
             if (request == null || !_enabled) return;

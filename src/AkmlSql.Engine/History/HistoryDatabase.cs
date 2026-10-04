@@ -229,6 +229,9 @@ public sealed class HistoryDatabase : IDisposable
         // open_pid: the shell process whose editor holds the query open. NULL for web rows and
         // for rows no shell has claimed. Added with the same duplicate-column guard as v1/v2.
         await AddColumnIfMissingAsync(conn, "ALTER TABLE history ADD COLUMN open_pid INTEGER NULL;");
+        // open_pid_started: that process's start time (UTC ticks). A PID alone is reused — by
+        // another program after a reboot, or by the next SSMS itself.
+        await AddColumnIfMissingAsync(conn, "ALTER TABLE history ADD COLUMN open_pid_started INTEGER NULL;");
         // content_hash on snapshots, so a grouped row's version count can include them (the
         // Versions panel lists runs AND snapshots, de-duplicated by content).
         await AddColumnIfMissingAsync(conn, "ALTER TABLE history_versions ADD COLUMN content_hash TEXT NULL;");
@@ -801,6 +804,9 @@ public sealed class HistoryDatabase : IDisposable
 
         try
         {
+            // The star is the query's (the session's): a new run of a starred query is starred
+            // too — read before the drafts are absorbed, so a starred draft's star carries over.
+            // Unstarred, it fell to "Clear history (except starred)" and the retention purge.
             const string sql = @"
                 INSERT INTO history (
                     sql_text, truncated, server, database_name, username,
@@ -809,7 +815,10 @@ public sealed class HistoryDatabase : IDisposable
                 ) VALUES (
                     @sqlText, @truncated, @server, @database, @username,
                     @executedAt, @durationMs, @rowCount, @status, @errorMsg,
-                    @source, @tabTitle, @contentHash, 0, @sessionId
+                    @source, @tabTitle, @contentHash,
+                    CASE WHEN @sessionId IS NULL THEN 0
+                         ELSE COALESCE((SELECT MAX(is_favorite) FROM history WHERE session_id = @sessionId), 0) END,
+                    @sessionId
                 );
                 SELECT last_insert_rowid();";
 
@@ -993,6 +1002,16 @@ public sealed class HistoryDatabase : IDisposable
     /// </summary>
     public async Task<(List<HistoryEntryDto> Entries, int TotalCount)> SearchAsync(HistoryFilter filter)
     {
+        var page = await SearchPageAsync(filter);
+        return (page.Entries, page.TotalCount);
+    }
+
+    /// <summary>
+    /// As <see cref="SearchAsync"/>, and whether more rows follow this page — decided before the
+    /// in-memory CamelCase filter, which can leave a page short although more matches follow.
+    /// </summary>
+    public async Task<(List<HistoryEntryDto> Entries, int TotalCount, bool HasMore)> SearchPageAsync(HistoryFilter filter)
+    {
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
@@ -1007,7 +1026,7 @@ public sealed class HistoryDatabase : IDisposable
         // when FTS5 rejects the query — with LIKE on the SQL instead.
         string? searchClauseFts = null, searchClauseLike = null;
         if (!string.IsNullOrWhiteSpace(filter.SearchText))
-            (searchClauseFts, searchClauseLike) = BuildSearchClauses(filter.SearchText!, parameters);
+            (searchClauseFts, searchClauseLike) = BuildSearchClauses(filter.SearchText!, filter.SqlOnly, parameters);
         if (searchClauseFts != null) whereClauses.Add(searchClauseFts);
 
         if (!string.IsNullOrEmpty(filter.PathFilter))
@@ -1305,6 +1324,9 @@ public sealed class HistoryDatabase : IDisposable
         if (totalCount < 0)
             totalCount = filter.Offset == 0 ? 0 : await CountAsync();
 
+        // Rows left after this page, counted before the post-filter below shortens it.
+        var hasMore = entries.Count == filter.Limit && filter.Offset + entries.Count < totalCount;
+
         // Apply CamelCase post-filtering in memory if CamelCaseTokens are provided.
         // This filters results to only entries whose sql_text contains words matching
         // ALL CamelCase tokens at CamelCase/underscore boundaries.
@@ -1324,7 +1346,7 @@ public sealed class HistoryDatabase : IDisposable
         Log.Debug("History search completed: {Count} entries returned, {Total} total matches",
             entries.Count, totalCount);
 
-        return (entries, totalCount);
+        return (entries, totalCount, hasMore);
     }
 
     /// <summary>Most values the filter menu lists per column.</summary>
@@ -1700,15 +1722,35 @@ public sealed class HistoryDatabase : IDisposable
     {
         if (string.IsNullOrEmpty(sessionKey)) return;
 
+        var started = isOpen ? ProcessStartTicks(ownerPid) : null;
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         await using var cmd = new SqliteCommand(@"
-            UPDATE history SET is_open = @open, open_pid = @pid
+            UPDATE history SET is_open = @open, open_pid = @pid, open_pid_started = @started
              WHERE session_id = (SELECT id FROM query_sessions WHERE session_key = @key);", conn);
         cmd.Parameters.AddWithValue("@open", isOpen ? 1 : 0);
         cmd.Parameters.AddWithValue("@pid", isOpen ? ownerPid : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@started", (object?)started ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@key", sessionKey);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// The start time (UTC ticks) of the process <c>pid</c>, or null when none is running. With
+    /// the PID it identifies a shell: PIDs are reused. Replaceable for tests.
+    /// </summary>
+    internal Func<int, long?> ProcessStartTicks { get; set; } = DefaultProcessStartTicks;
+
+    private static long? DefaultProcessStartTicks(int pid)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(pid);
+            return p.HasExited ? null : p.StartTime.ToUniversalTime().Ticks;
+        }
+        catch (ArgumentException) { return null; }
+        catch (InvalidOperationException) { return null; }
+        catch (System.ComponentModel.Win32Exception) { return null; }
     }
 
     /// <summary>
@@ -1726,6 +1768,14 @@ public sealed class HistoryDatabase : IDisposable
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
+        // This shell's rows: its PID and its start time. A row with the PID but another start time
+        // is a dead SSMS's whose PID this one was given. (No start time stored: rows from before
+        // it was recorded, matched by PID as they always were.)
+        var ownStarted = ProcessStartTicks(ownerPid);
+        var ownRows = ownStarted == null
+            ? "open_pid = @pid"
+            : "open_pid = @pid AND (open_pid_started IS NULL OR open_pid_started = @ownStarted)";
+
         // 1. This shell's own rows whose document is no longer open.
         await using (var mine = new SqliteCommand { Connection = conn })
         {
@@ -1738,25 +1788,31 @@ public sealed class HistoryDatabase : IDisposable
             var stillOpen = keyParams.Count == 0
                 ? ""
                 : $" AND (session_id IS NULL OR session_id NOT IN (SELECT id FROM query_sessions WHERE session_key IN ({string.Join(", ", keyParams)})))";
-            mine.CommandText = $"UPDATE history SET is_open = 0, open_pid = NULL WHERE open_pid = @pid{stillOpen};";
+            mine.CommandText = $"UPDATE history SET is_open = 0, open_pid = NULL, open_pid_started = NULL WHERE ({ownRows}){stillOpen};";
             mine.Parameters.AddWithValue("@pid", ownerPid);
+            if (ownStarted != null) mine.Parameters.AddWithValue("@ownStarted", ownStarted.Value);
             await mine.ExecuteNonQueryAsync();
         }
 
-        // 2. Rows owned by shells that are gone.
-        var owners = new List<int>();
+        // 2. Rows owned by shells that are gone: no process with that PID, or one started at
+        //    another time (the PID was reused).
+        var owners = new List<(int Pid, long? Started)>();
         await using (var cmd = new SqliteCommand(
-            "SELECT DISTINCT open_pid FROM history WHERE is_open = 1 AND open_pid IS NOT NULL AND open_pid <> @pid;", conn))
+            $"SELECT DISTINCT open_pid, open_pid_started FROM history WHERE is_open = 1 AND open_pid IS NOT NULL AND NOT ({ownRows});", conn))
         {
             cmd.Parameters.AddWithValue("@pid", ownerPid);
+            if (ownStarted != null) cmd.Parameters.AddWithValue("@ownStarted", ownStarted.Value);
             await using var r = await cmd.ExecuteReaderAsync();
-            while (await r.ReadAsync()) owners.Add(r.GetInt32(0));
+            while (await r.ReadAsync()) owners.Add((r.GetInt32(0), r.IsDBNull(1) ? null : r.GetInt64(1)));
         }
 
-        var dead = owners.Where(pid => !IsProcessRunning(pid)).ToList();
+        var dead = owners.Where(o => ProcessStartTicks(o.Pid) is not { } actual || (o.Started != null && o.Started != actual)).ToList();
         if (dead.Count == 0) return Array.Empty<long>();
 
-        var deadList = string.Join(", ", dead.Select(p => p.ToString(CultureInfo.InvariantCulture)));
+        // (open_pid, open_pid_started) pairs as SQL; IS matches a NULL start time too.
+        string DeadOwners(string alias) => string.Join(" OR ", dead.Select(o =>
+            $"({alias}open_pid = {o.Pid.ToString(CultureInfo.InvariantCulture)} AND {alias}open_pid_started IS "
+            + (o.Started?.ToString(CultureInfo.InvariantCulture) ?? "NULL") + ")"));
         const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash)";
 
         var restorable = new List<long>();
@@ -1765,7 +1821,7 @@ public sealed class HistoryDatabase : IDisposable
                 SELECT h.id, h.executed_at,
                        ROW_NUMBER() OVER (PARTITION BY {GroupKey} ORDER BY h.executed_at DESC, h.id DESC) AS rn
                   FROM history h
-                 WHERE {GroupKey} IN (SELECT {GroupKey} FROM history h WHERE h.is_open = 1 AND h.open_pid IN ({deadList}))
+                 WHERE {GroupKey} IN (SELECT {GroupKey} FROM history h WHERE h.is_open = 1 AND ({DeadOwners("h.")}))
             ) WHERE rn = 1
             ORDER BY executed_at DESC, id DESC;", conn))
         await using (var r = await cmd.ExecuteReaderAsync())
@@ -1774,24 +1830,13 @@ public sealed class HistoryDatabase : IDisposable
         }
 
         await using (var close = new SqliteCommand(
-            $"UPDATE history SET is_open = 0, open_pid = NULL WHERE open_pid IN ({deadList});", conn))
+            $"UPDATE history SET is_open = 0, open_pid = NULL, open_pid_started = NULL WHERE {DeadOwners(string.Empty)};", conn))
         {
             await close.ExecuteNonQueryAsync();
         }
 
         Log.Information("History: reconciled open state — {Count} queries were open when their SSMS closed", restorable.Count);
         return restorable.ToArray();
-    }
-
-    private static bool IsProcessRunning(int pid)
-    {
-        try
-        {
-            using var p = System.Diagnostics.Process.GetProcessById(pid);
-            return !p.HasExited;
-        }
-        catch (ArgumentException) { return false; }
-        catch (InvalidOperationException) { return false; }
     }
 
     /// <summary>
@@ -2259,7 +2304,9 @@ public sealed class HistoryDatabase : IDisposable
             bySession.Parameters.AddWithValue("@key", sessionKey);
             result = await bySession.ExecuteScalarAsync();
         }
-        if (result == null && !string.IsNullOrEmpty(source))
+        // Only a caller that names no session falls back to the path: with a session named, a
+        // path match can be another session's row (SQLQueryN.sql repeats across SSMS starts).
+        if (result == null && string.IsNullOrEmpty(sessionKey) && !string.IsNullOrEmpty(source))
         {
             await using var findCmd = new SqliteCommand(
                 "SELECT id FROM history WHERE source = @source ORDER BY id DESC LIMIT 1", conn);
@@ -2378,9 +2425,11 @@ public sealed class HistoryDatabase : IDisposable
     /// Spec 040 (HIS-07, data-model §2.4) — the free-text clause, with the full-text index and as a
     /// LIKE-only fallback. Plain words: every word must match the SQL (full-text phrase) or the name,
     /// source, server or database. A query using FTS5 syntax (OR, NOT, quotes, *) keeps it: the
-    /// whole query must match the SQL, or every word must match the metadata.
+    /// whole query must match the SQL, or every word must match the metadata. With
+    /// <paramref name="sqlOnly"/> (<c>sql:</c>) only the SQL counts. A word with no letters or
+    /// digits (<c>=</c>, <c>&lt;&gt;</c>) is no full-text token — it is matched in the SQL as written.
     /// </summary>
-    private static (string? Fts, string? Like) BuildSearchClauses(string searchText, List<SqliteParameter> parameters)
+    private static (string? Fts, string? Like) BuildSearchClauses(string searchText, bool sqlOnly, List<SqliteParameter> parameters)
     {
         var terms = AkmlSql.Core.Text.HistorySearchTerms.Extract(searchText);
         var metadata = new List<string>();
@@ -2395,22 +2444,30 @@ public sealed class HistoryDatabase : IDisposable
         }
         if (terms.Count == 0) return (null, null);
 
-        var like = "(" + string.Join(" AND ", metadata.Select((m, i) => $"({sqlLike[i]} OR {m})")) + ")";
+        string OrMetadata(string sql, int i) => sqlOnly ? $"({sql})" : $"({sql} OR {metadata[i]})";
+
+        var like = "(" + string.Join(" AND ", sqlLike.Select((s, i) => OrMetadata(s, i))) + ")";
 
         if (UsesFtsSyntax(searchText))
         {
             var sanitized = SanitizeFts5Query(searchText);
             if (string.IsNullOrWhiteSpace(sanitized)) return (like, like);
             parameters.Add(new SqliteParameter("@fts0", sanitized));
-            var fts = $"(h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts0) OR ({string.Join(" AND ", metadata)}))";
+            const string match = "h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts0)";
+            var fts = sqlOnly ? $"({match})" : $"({match} OR ({string.Join(" AND ", metadata)}))";
             return (fts, like);
         }
 
         var perTerm = new List<string>();
         for (var i = 0; i < terms.Count; i++)
         {
+            if (!terms[i].Any(char.IsLetterOrDigit))
+            {
+                perTerm.Add(OrMetadata(sqlLike[i], i));
+                continue;
+            }
             parameters.Add(new SqliteParameter("@fts" + i, "\"" + terms[i].Replace("\"", "") + "\""));
-            perTerm.Add($"(h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts{i}) OR {metadata[i]})");
+            perTerm.Add(OrMetadata($"h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts{i})", i));
         }
         return ("(" + string.Join(" AND ", perTerm) + ")", like);
     }

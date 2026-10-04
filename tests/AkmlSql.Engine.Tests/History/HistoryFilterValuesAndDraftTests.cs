@@ -81,6 +81,32 @@ public class HistoryFilterValuesAndDraftTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_starred_draft_stays_starred_once_it_has_run()
+    {
+        // The run absorbs the draft row; the star used to go with it.
+        var draft = await Draft("SELECT ProductName FROM dbo.Products;", "tab-1");
+        Assert.True(await _db.Database.ToggleFavoriteGroupAsync(draft));
+
+        var run = await _db.RunAsync("SELECT ProductName FROM dbo.Products;", "tab-1");
+
+        Assert.Equal(1L, await _db.CountAsync($"SELECT is_favorite FROM history WHERE id = {run}"));
+    }
+
+    [Fact]
+    public async Task Another_run_of_a_starred_query_is_starred_too()
+    {
+        // Unstarred, the newest runs fell to "Clear history (except starred)" and retention.
+        var first = await _db.RunAsync("SELECT 1;", "tab-1");
+        Assert.True(await _db.Database.ToggleFavoriteGroupAsync(first));
+
+        var second = await _db.RunAsync("SELECT 2;", "tab-1");
+        var elsewhere = await _db.RunAsync("SELECT 3;", "tab-2");
+
+        Assert.Equal(1L, await _db.CountAsync($"SELECT is_favorite FROM history WHERE id = {second}"));
+        Assert.Equal(0L, await _db.CountAsync($"SELECT is_favorite FROM history WHERE id = {elsewhere}"));
+    }
+
+    [Fact]
     public async Task A_run_in_another_session_leaves_the_draft_alone()
     {
         await Draft("SELECT 1;", "tab-1");

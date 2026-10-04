@@ -365,6 +365,7 @@ public class FormatterPipeline
             if (validationPassed)
             {
                 var actions = profile.FormatActions;
+                var beforeActions = formatted;
 
                 // Insert wins when a style sets both (declaration order, as before).
                 var semicolons = options.Semicolons
@@ -394,6 +395,18 @@ public class FormatterPipeline
                     var r = new ToggleBracketsAction(addBrackets: brackets == BracketAction.Add).Execute(formatted, profile);
                     if (r.Success) formatted = r.FormattedText;
                 }
+
+                // The same promise as the stages before: SQL that no longer parses never leaves
+                // here. The actions edit tokens without a later validation pass.
+                if (!string.Equals(formatted, beforeActions, StringComparison.Ordinal) && !Parses(formatted))
+                {
+                    formatted = beforeActions;
+                    diagnostics.Add(new FormatDiagnostic
+                    {
+                        Severity = DiagnosticSeverity.Warning,
+                        Message = "The semicolon and square-bracket actions were not applied: the result would not parse.",
+                    });
+                }
             }
 
             sw.Stop();
@@ -418,5 +431,14 @@ public class FormatterPipeline
                 Diagnostics = [new FormatDiagnostic { Severity = DiagnosticSeverity.Error, Message = ex.Message }]
             };
         }
+    }
+
+    /// <summary>True when <paramref name="sql"/> parses without errors.</summary>
+    private static bool Parses(string sql)
+    {
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        using var reader = new StringReader(sql);
+        parser.Parse(reader, out var errors);
+        return errors.Count == 0;
     }
 }

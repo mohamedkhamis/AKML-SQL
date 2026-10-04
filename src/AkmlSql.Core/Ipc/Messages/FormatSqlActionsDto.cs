@@ -24,6 +24,12 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary><see cref="Semicolons"/> / <see cref="SquareBrackets"/>: remove them.</summary>
         public const int Remove = 2;
 
+        /// <summary>
+        /// <see cref="Semicolons"/> / <see cref="SquareBrackets"/>: as the style's own format actions
+        /// say. An engine that predates the code reads it as leave.
+        /// </summary>
+        public const int UseStyle = 3;
+
         /// <summary>False keeps the original whitespace; only the actions below run.</summary>
         [Key(0)]
         public bool ApplyLayout { get; set; } = true;
@@ -31,11 +37,11 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(1)]
         public bool ApplyCasing { get; set; } = true;
 
-        /// <summary>0 leave, 1 insert, 2 remove.</summary>
+        /// <summary>0 leave, 1 insert, 2 remove, 3 as the style says.</summary>
         [Key(2)]
         public int Semicolons { get; set; }
 
-        /// <summary>0 leave, 1 add, 2 remove.</summary>
+        /// <summary>0 leave, 1 add, 2 remove, 3 as the style says.</summary>
         [Key(3)]
         public int SquareBrackets { get; set; }
 

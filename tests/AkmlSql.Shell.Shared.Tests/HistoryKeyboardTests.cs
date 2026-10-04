@@ -98,6 +98,37 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void Delete_removes_every_selected_query_after_asking_once()
+        {
+            // Ctrl-clicking ten rows and pressing Delete removed only the focused one.
+            var h = Build();
+            var second = new HistoryEntryDto { Id = 8, SqlText = "SELECT 8", TabTitle = "q8", SessionKey = "b", ExecutedAt = "2026-09-28T10:00:00.0000000Z" };
+            var third = new HistoryEntryDto { Id = 9, SqlText = "SELECT 9", TabTitle = "q9", SessionKey = "c", ExecutedAt = "2026-09-28T10:00:00.0000000Z" };
+            h.Vm.Entries.Add(second);
+            h.Vm.Entries.Add(third);
+            h.Vm.UpdateSelectedEntries(new System.Collections.ArrayList { h.Entry, second, third });
+            string? question = null;
+            h.Vm.ConfirmPrompt = q => { question = q; return true; };
+
+            Assert.True(h.Control.HandleListKey(Key.Delete, ModifierKeys.None));
+
+            Assert.Equal("Remove 3 queries and their history?", question);
+            Assert.Equal(new long[] { 7, 8, 9 }, Assert.Single(h.Actions(HistoryActions.Delete)).EntryIds.OrderBy(i => i));
+        }
+
+        [StaFact]
+        public void A_rows_own_menu_on_an_unselected_row_removes_only_that_row()
+        {
+            var h = Build();
+            var second = new HistoryEntryDto { Id = 8, SqlText = "SELECT 8", TabTitle = "q8", SessionKey = "b", ExecutedAt = "2026-09-28T10:00:00.0000000Z" };
+            var other = new HistoryEntryDto { Id = 9, SqlText = "SELECT 9", TabTitle = "q9", SessionKey = "c", ExecutedAt = "2026-09-28T10:00:00.0000000Z" };
+            h.Vm.UpdateSelectedEntries(new System.Collections.ArrayList { h.Entry, second });
+
+            Assert.Equal(new[] { other }, h.Vm.DeleteTargets(other));
+            Assert.Equal(new[] { h.Entry, second }, h.Vm.DeleteTargets(second));
+        }
+
+        [StaFact]
         public void F2_while_the_list_reloads_renames_once_it_has_loaded()
         {
             // F2 right after Space (which reloads the list) was dropped without a word.

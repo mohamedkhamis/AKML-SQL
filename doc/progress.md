@@ -1846,6 +1846,30 @@ The layouts already matched SQL Prompt; the screens did not tell the truth:
   a key pressed while the list reloads runs once it has loaded.
 - Message boxes of Format styles say `AKML SQL – Format styles` like the window.
 
+### PR #254 review (15 findings, all fixed)
+
+- **History** — a tab-switch snapshot needs the tab's own session (no session: nothing saved;
+  the engine no longer falls back to "newest row with this path", which on SSMS's repeating
+  `SQLQueryN.sql` names was another day's query). A tab close waits for the tab to go
+  (`PendingCloses`): Cancel at "save changes?" no longer marks it closed or records a draft,
+  interleaved closes each count once, a re-close is a new close. A cancelled exit no longer leaves
+  History "shutting down" (`ShutdownState`: QueryClose is tentative). New runs of a starred query
+  (and a starred draft that runs) stay starred. Reopened queries are marked open. Open-state
+  owners are a PID *and* its start time (reused PIDs). Delete acts on every selected row.
+  `sql:` searches SQL text only; `=`-like words match as written. A CamelCase search's short
+  pages still offer More (`HistorySearchResponse.HasMore`, key 4).
+- **Safety** — renaming an environment carries its severity to the new name, and an environment
+  that asks for the server name counts as production whatever it is called (`EnvironmentSafety`).
+- **Formatting** — Expand wildcards brackets names that need it, and schema actions whose result
+  would not parse are not applied. "Add square brackets" brackets names only (objects, columns,
+  aliases, types — not `NOCOUNT`, `max`, `DATEADD`, date parts or hints), and Stage 8 output that
+  would not parse is not applied. Format SQL actions default to "As the style says"
+  (`FormatSqlActionsDto.UseStyle`), so a style's own semicolons and brackets apply again.
+- **Completion** — "Trigger delay" defaults to 0 (a config's untouched 100 is moved once,
+  `triggerDelayVersion`); a dot is always immediate.
+- **Team styles** — a team folder scan answers lookups for 5 s (`TeamSnapshotTtl`), not one
+  listing of the share per format request.
+
 ### Open
 
 See `specs/040-sqlprompt-ui-parity/tasks.md` › Deferred: commands with no handler stay off the

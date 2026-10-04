@@ -338,6 +338,47 @@ public sealed class FormatSqlActionsTests : IDisposable
     }
 
     [Fact]
+    public void Expanded_columns_that_need_brackets_get_them()
+    {
+        // Raw names made SQL that does not parse, and it was written into the editor anyway.
+        var (schemaCache, sessions) = SchemaFixture();
+        var products = schemaCache.GetCache(SessionId, "Northwind")!.FindObject("dbo", "Products")!;
+        products.Columns.Add(new Column { ColumnId = 4, ColumnName = "Order Date", TypeName = "datetime" });
+        products.Columns.Add(new Column { ColumnId = 5, ColumnName = "Order", TypeName = "int" });
+
+        var r = _handler.HandleFormat(new FormatRequest
+        {
+            SessionId = SessionId,
+            Text = "select * from dbo.Products",
+            ProfileName = Khamis,
+            Actions = new FormatSqlActionsDto { ExpandWildcards = true },
+        }, schemaCache, sessions);
+
+        Assert.True(r.Success);
+        Assert.DoesNotContain("*", r.FormattedText);
+        Assert.Contains("[Order Date]", r.FormattedText);
+        Assert.Contains("[Order]", r.FormattedText);
+        new AkmlSql.Engine.Parser.TsqlParserService().Parse(r.FormattedText, out var errors);
+        Assert.Empty(errors);
+    }
+
+    [Theory]
+    [InlineData(FormatSqlActionsDto.UseStyle, true)]
+    [InlineData(FormatSqlActionsDto.Leave, false)]
+    public void As_the_style_says_lets_the_styles_own_semicolons_apply(int semicolons, bool expectSemicolon)
+    {
+        // A style that inserts semicolons stopped getting them on Format SQL: the shell always sent
+        // an explicit "leave". The default is now "as the style says".
+        var profile = new FormattingProfile { FormatActions = { InsertSemicolons = true } };
+        var options = FormatRequestHandler.ToPipelineOptions(new FormatSqlActionsDto { Semicolons = semicolons });
+
+        var r = new AkmlSql.Formatting.Pipeline.FormatterPipeline().Format("SELECT 1", profile, options);
+
+        Assert.True(r.Success);
+        Assert.Equal(expectSemicolon, r.FormattedText.TrimEnd().EndsWith(";"));
+    }
+
+    [Fact]
     public void Unticked_expand_wildcards_leaves_the_star()
     {
         var (schemaCache, sessions) = SchemaFixture();

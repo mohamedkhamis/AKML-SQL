@@ -136,16 +136,19 @@ public class FormatRequestHandler(ProfileManager profileManager)
             {
                 ApplyLayout = actions.ApplyLayout,
                 ApplyCasing = actions.ApplyCasing,
+                // UseStyle: no override — the style's own format actions decide.
                 Semicolons = actions.Semicolons switch
                 {
                     FormatSqlActionsDto.Insert => SemicolonAction.Insert,
                     FormatSqlActionsDto.Remove => SemicolonAction.Remove,
+                    FormatSqlActionsDto.UseStyle => null,
                     _ => SemicolonAction.Leave,
                 },
                 SquareBrackets = actions.SquareBrackets switch
                 {
                     FormatSqlActionsDto.Add => BracketAction.Add,
                     FormatSqlActionsDto.Remove => BracketAction.Remove,
+                    FormatSqlActionsDto.UseStyle => null,
                     _ => BracketAction.Leave,
                 },
             };
@@ -194,7 +197,24 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     diagnostics.Add(new FormatDiagnosticInfo { Severity = (int)DiagnosticSeverity.Warning, Message = warning });
         }
 
-        if (!string.Equals(current, text, StringComparison.Ordinal) && (options?.ApplyLayout ?? true))
+        if (string.Equals(current, text, StringComparison.Ordinal)) return text;
+
+        // The formatter's promise holds here too: SQL that no longer parses never reaches the
+        // editor. The operations write raw text, so check it before laying it out again.
+        parser.Parse(current, out var errors);
+        if (errors != null && errors.Count > 0)
+        {
+            Log.Warning("Format SQL actions produced SQL that does not parse ({Error}); the formatted text is kept without them",
+                errors[0].Message);
+            diagnostics?.Add(new FormatDiagnosticInfo
+            {
+                Severity = (int)DiagnosticSeverity.Warning,
+                Message = "Expand wildcards / Qualify object names were not applied: the result would not parse.",
+            });
+            return text;
+        }
+
+        if (options?.ApplyLayout ?? true)
         {
             var again = _pipeline.Format(current, profile, options);
             if (again.Success && again.ValidationPassed) current = again.FormattedText;

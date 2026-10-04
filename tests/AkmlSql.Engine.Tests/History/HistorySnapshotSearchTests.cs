@@ -35,6 +35,49 @@ public sealed class HistorySnapshotSearchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Sql_prefix_searches_the_sql_text_only()
+    {
+        // "sql:orders" (help: "Only the SQL text") also found a query saved as orders.sql.
+        await _db.RunAsync("SELECT 1", "by-path", source: @"C:\Reports\orders.sql");
+        await _db.RunAsync("SELECT * FROM dbo.Orders", "by-sql");
+
+        var (sqlOnly, _) = await _db.Database.SearchAsync(new HistoryFilter { SearchText = "orders", SqlOnly = true, Deduplicate = true, Limit = 100 });
+        var (anywhere, _) = await _db.Database.SearchAsync(new HistoryFilter { SearchText = "orders", Deduplicate = true, Limit = 100 });
+
+        Assert.Equal(new[] { "by-sql" }, sqlOnly.Select(e => e.SessionKey).ToArray());
+        Assert.Equal(2, anywhere.Count);
+    }
+
+    [Fact]
+    public async Task A_word_with_no_letters_or_digits_is_matched_as_written()
+    {
+        // "=" became a full-text phrase that matches nothing, so "id = 5" found nothing.
+        await _db.RunAsync("SELECT * FROM dbo.Orders WHERE id = 5", "eq");
+        await _db.RunAsync("SELECT * FROM dbo.Orders WHERE id > 5", "gt");
+
+        var (found, _) = await _db.Database.SearchAsync(new HistoryFilter { SearchText = "id = 5", Deduplicate = true, Limit = 100 });
+
+        Assert.Equal(new[] { "eq" }, found.Select(e => e.SessionKey).ToArray());
+    }
+
+    [Fact]
+    public async Task A_page_shortened_by_the_camelcase_filter_still_says_more_follow()
+    {
+        // 120 runs, every other one matching "PC": the first page of 100 keeps about 50.
+        for (var i = 0; i < 120; i++)
+            await _db.RunAsync(i % 2 == 0 ? $"SELECT ProductCategory_{i}" : $"SELECT other_{i}", "s" + i);
+        var filter = new HistoryFilter { CamelCaseTokens = new[] { "PC" }, Deduplicate = true, Limit = 100 };
+
+        var first = await _db.Database.SearchPageAsync(filter);
+        filter.Offset = 100;
+        var last = await _db.Database.SearchPageAsync(filter);
+
+        Assert.True(first.Entries.Count < 100);
+        Assert.True(first.HasMore);
+        Assert.False(last.HasMore);
+    }
+
+    [Fact]
     public async Task Unchanged_text_adds_no_version()
     {
         // The autosave and each tab switch snapshot the open text; when it has not changed since
@@ -82,5 +125,18 @@ public sealed class HistorySnapshotSearchTests : IAsyncLifetime
         Assert.True(await _db.Database.SaveVersionBySourceAsync(Source, "SELECT mine edited", sessionKey: "tab-A"));
 
         Assert.Equal("SELECT mine edited", (string)(await _db.ScalarAsync($"SELECT sql_text FROM history WHERE id = {mine}"))!);
+    }
+
+    [Fact]
+    public async Task A_session_with_no_rows_does_not_take_over_another_sessions_row_on_the_same_path()
+    {
+        // SSMS numbers SQLQueryN.sql from 1 again every start: yesterday's SQLQuery1.sql is not
+        // today's, and a never-run tab's text must not overwrite it.
+        var yesterday = await _db.RunAsync("SELECT * FROM Orders", "yesterday", Source);
+
+        Assert.False(await _db.Database.SaveVersionBySourceAsync(Source, "DELETE FROM Staging", sessionKey: "today-never-run"));
+
+        Assert.Equal("SELECT * FROM Orders", (string)(await _db.ScalarAsync($"SELECT sql_text FROM history WHERE id = {yesterday}"))!);
+        Assert.Equal(0L, (long)(await _db.ScalarAsync($"SELECT COUNT(*) FROM history_versions WHERE history_id = {yesterday}"))!);
     }
 }

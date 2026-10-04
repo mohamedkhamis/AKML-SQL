@@ -48,6 +48,9 @@ namespace AkmlSql.Core.Models.History
         /// <summary>Spec 040 (HIS-07): entries whose source (file path or tab) contains this text.</summary>
         public string? PathFilter { get; set; }
 
+        /// <summary>Spec 040 (HIS-07): <see cref="SearchText"/> matches the SQL text only (<c>sql:</c>).</summary>
+        public bool SqlOnly { get; set; }
+
         /// <summary>
         /// Filter by the entry's display name — the query session's name, falling back to the row's
         /// own tab_title only when it has no session. Uses LIKE '%value%' matching. Null for no name

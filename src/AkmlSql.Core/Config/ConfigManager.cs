@@ -36,6 +36,7 @@ namespace AkmlSql.Core.Config
                     Log.Information("No config file found at {Path}, creating defaults", path);
                     var defaults = new AppSettings();
                     MigrateTabEnvironments(defaults);
+                    MigrateTriggerDelay(defaults);
                     Save(defaults);
                     return defaults;
                 }
@@ -44,6 +45,7 @@ namespace AkmlSql.Core.Config
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
                 AiAgentResolver.Normalize(settings.Ai);
                 MigrateTabEnvironments(settings);
+                MigrateTriggerDelay(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -71,6 +73,7 @@ namespace AkmlSql.Core.Config
                     Log.Warning("Config file not found at {Path}, using defaults", path);
                     var defaults = new AppSettings();
                     MigrateTabEnvironments(defaults);
+                    MigrateTriggerDelay(defaults);
                     return defaults;
                 }
 
@@ -78,6 +81,7 @@ namespace AkmlSql.Core.Config
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
                 AiAgentResolver.Normalize(settings.Ai);
                 MigrateTabEnvironments(settings);
+                MigrateTriggerDelay(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -93,6 +97,20 @@ namespace AkmlSql.Core.Config
         /// logged and leaves the settings as read, so a migration bug can never cost the user the
         /// rest of their configuration.
         /// </summary>
+        /// <summary>
+        /// Spec 040 (OPT-01) — "Trigger delay" did nothing before spec 040 and every config carries
+        /// its old default, 100. Honoured as written it would delay every suggestion, so a config
+        /// that has not been through this yet gets 0 (at once, as before) for that value; any other
+        /// value was chosen and is kept. Once only: in memory, persisted by the next save.
+        /// </summary>
+        internal static void MigrateTriggerDelay(AppSettings settings)
+        {
+            var intelliSense = settings?.IntelliSense;
+            if (intelliSense == null || intelliSense.TriggerDelayVersion != null) return;
+            if (intelliSense.TriggerDelayMs == 100) intelliSense.TriggerDelayMs = 0;
+            intelliSense.TriggerDelayVersion = 1;
+        }
+
         private static void MigrateTabEnvironments(AppSettings settings)
         {
             try

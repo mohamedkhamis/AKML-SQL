@@ -1013,18 +1013,19 @@ namespace AkmlSql.Ssms22
         }
 
         /// <summary>
-        /// Spec 040 (HIS-02): SSMS is about to close. Mark it first, so the tabs shutdown closes stay
-        /// open in History and can be offered for restore on the next start.
+        /// Spec 040 (HIS-02): SSMS asks to close. Mark it first, so the tabs shutdown closes stay
+        /// open in History and can be offered for restore on the next start — tentatively: the
+        /// user can still cancel at a "save changes?" prompt (see <c>ShutdownState</c>).
         /// </summary>
         protected override int QueryClose(out bool canClose)
         {
-            ExecutionCapture.ShuttingDown = true;
+            ExecutionCapture.CloseQueried();
             return base.QueryClose(out canClose);
         }
 
         protected override void Dispose(bool disposing)
         {
-            ExecutionCapture.ShuttingDown = true;
+            ExecutionCapture.ShutdownBegun();
             if (disposing)
             {
                 TransactionMonitor.Shutdown();

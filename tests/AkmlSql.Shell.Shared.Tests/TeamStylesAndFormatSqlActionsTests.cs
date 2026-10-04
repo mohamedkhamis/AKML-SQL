@@ -190,18 +190,18 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void The_defaults_leave_semicolons_and_brackets_as_written()
+        public void The_defaults_leave_semicolons_and_brackets_to_the_style()
         {
             var (dialog, rows) = BuildRows(new AppSettings());
 
-            Assert.Equal("Leave as written", rows.Semicolons.SelectedItem);
-            Assert.Equal("Leave as written", rows.SquareBrackets.SelectedItem);
+            Assert.Equal("As the style says", rows.Semicolons.SelectedItem);
+            Assert.Equal("As the style says", rows.SquareBrackets.SelectedItem);
             Assert.True(rows.ApplyLayout.IsChecked);
             Assert.True(rows.ApplyCasing.IsChecked);
 
             var saved = dialog.GetSettings();
-            Assert.Equal("leave", saved.Formatter.FormatSqlActions.Semicolons);
-            Assert.Equal("leave", saved.Formatter.FormatSqlActions.SquareBrackets);
+            Assert.Equal("style", saved.Formatter.FormatSqlActions.Semicolons);
+            Assert.Equal("style", saved.Formatter.FormatSqlActions.SquareBrackets);
             Assert.Equal(string.Empty, saved.Formatter.TeamStyleFolder);
         }
 

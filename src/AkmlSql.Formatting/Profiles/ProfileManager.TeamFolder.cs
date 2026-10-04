@@ -42,6 +42,20 @@ public partial class ProfileManager
     /// <summary>How long a write-probe result is trusted.</summary>
     private static readonly TimeSpan WritableProbeTtl = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// How long a scan of the team folder answers name lookups. Every format request and preview
+    /// looks its style up; without this each one listed (and statted) the folder — a network share,
+    /// usually — before reaching the built-ins. Writes made here clear it at once.
+    /// </summary>
+    internal static readonly TimeSpan TeamSnapshotTtl = TimeSpan.FromSeconds(5);
+
+    /// <summary>Test seam: the clock <see cref="TeamSnapshotTtl"/> is measured on.</summary>
+    internal Func<DateTime> TeamClock { get; set; } = () => DateTime.UtcNow;
+
+    /// <summary>Test seam: how many times the team folder has been scanned.</summary>
+    internal int TeamScanCount => Volatile.Read(ref _teamScanCount);
+    private int _teamScanCount;
+
     /// <summary>The engine's refusal for a write to a read-only team style (contracts/ipc.md).</summary>
     public static string TeamReadOnlyMessage(string name) =>
         $"'{name}' is a team style and can't be changed here — copy it to edit.";
@@ -84,7 +98,11 @@ public partial class ProfileManager
     private const string SqlPromptStyleExtension = ".json";
 
     /// <summary>The team folder as last scanned.</summary>
-    private sealed record TeamSnapshot(string Folder, IReadOnlyList<TeamEntry> Entries, bool? Writable, DateTime WritableCheckedUtc);
+    private sealed record TeamSnapshot(string Folder, IReadOnlyList<TeamEntry> Entries, bool? Writable, DateTime WritableCheckedUtc)
+    {
+        /// <summary>When the folder was read (<see cref="TeamClock"/>).</summary>
+        public DateTime ScannedUtc { get; init; }
+    }
 
     private static bool IsReadOnly(TeamEntry entry, TeamSnapshot snapshot) =>
         entry.FileReadOnly || snapshot.Writable != true;
@@ -140,6 +158,11 @@ public partial class ProfileManager
         var needProbe = probeWrite
                         && (previous?.Writable == null || DateTime.UtcNow - previous.WritableCheckedUtc > WritableProbeTtl);
 
+        // A recent scan answers: no listing of the share per format request.
+        if (previous != null && !needProbe && TeamClock() - previous.ScannedUtc < TeamSnapshotTtl)
+            return previous;
+
+        Interlocked.Increment(ref _teamScanCount);
         var started = DateTime.UtcNow;
         var scan = Task.Run(() => ScanTeamFolder(folder, previous, needProbe));
         TeamSnapshot? fresh = null;
@@ -161,6 +184,7 @@ public partial class ProfileManager
         {
             if (fresh != null)
             {
+                fresh = fresh with { ScannedUtc = TeamClock() };
                 _teamSnapshot = fresh;
                 if (string.Equals(_unreachablePath, folder, StringComparison.OrdinalIgnoreCase)) _unreachablePath = null;
                 return fresh;
