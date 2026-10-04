@@ -1811,7 +1811,8 @@ The layouts already matched SQL Prompt; the screens did not tell the truth:
   Core 1,092 passed, 1 failed (`ProfileGetMessageTests…append_only`, red since spec 039);
   format-parity goldens unchanged.
 - Quickstart scenarios 1–49 driven in SSMS 22 by a UI Automation runner against the deployed
-  build (Northwind only), results per scenario in `baseline.md` › Final verification.
+  build (Northwind only), results per scenario in `baseline.md` › Final verification. The
+  screenshot tour (`SsmsScreenshotTour.Capture_spec_040_windows`, T193) passes.
 
 ### Issues hit (found by the SSMS runs, fixed)
 
@@ -1852,5 +1853,4 @@ AKML SQL menu; the VSCT menu is still parented to `IDM_VS_MENU_BAR` and invisibl
 Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; "Record failed
 executions" and "Encrypt at rest" stay hidden; UI Automation walks only the first row of each
 group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors. Also: schema
-caches are still per tab (one cache per server and database would share them); the screenshot
-tour (T193) captures these windows but has not been run yet.
+caches are still per tab (one cache per server and database would share them).

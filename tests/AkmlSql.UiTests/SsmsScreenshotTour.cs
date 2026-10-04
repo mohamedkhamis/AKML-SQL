@@ -155,6 +155,7 @@ public sealed class SsmsScreenshotTour(ITestOutputHelper output)
             foreach (var panel in new[] { "GitHub Copilot Chat", "Copilot" })
                 if (window.CloseToolWindow(panel)) break;
             var tour = new Tour040(window, app.ProcessId);
+            tour.Prepare();
 
             // The AKML SQL menu, then Active Style ▸.
             shots.Add(tour.MenuShot());

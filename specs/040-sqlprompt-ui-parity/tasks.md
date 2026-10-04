@@ -1105,7 +1105,7 @@ It covers gap items X-01 to X-04, STY-10 and STY-11.
 ## Phase 10: Polish and cross-cutting concerns
 
 - [X] T192 Run a full solution build (restore + build, MSBuild), then every suite from T002. Compare with `baseline.md`: new failures are regressions to fix. Confirm the `CorpusGateTests` pass rate hasn't dropped and the format-parity goldens are unchanged.
-- [ ] T193 [P] Extend `tests/AkmlSql.UiTests/SsmsScreenshotTour.cs`. Add captures of:
+- [X] T193 [P] Extend `tests/AkmlSql.UiTests/SsmsScreenshotTour.cs`. Add captures of:
   - the AKML SQL menu expanded, and the Active Style ▸ submenu;
   - Options in light and dark (the Behavior, History and Color pages);
   - SQL History with Advanced search open;

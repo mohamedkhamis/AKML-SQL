@@ -16,6 +16,24 @@ internal sealed class Tour040(SsmsWindow window, int processId)
     private const string OptionsTitle = "AKML SQL – Options";
     private const string StylesTitle = "AKML SQL – Format styles";
 
+    /// <summary>
+    /// Waits for the AKML SQL menu (the package adds it a while after SSMS shows its window) and
+    /// answers SQL History's start-up "Restore queries" prompt with "Not now" if it is up.
+    /// </summary>
+    public void Prepare()
+    {
+        window.TopLevelMenu("AKML SQL", 180);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            var prompt = FindWindow("Restore queries", ControlType.Window);
+            var notNow = prompt?.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+                .FirstOrDefault(b => string.Equals((b.Name ?? "").Trim(), "Not now", StringComparison.OrdinalIgnoreCase));
+            if (notNow != null) { Click(notNow); Thread.Sleep(1000); return; }
+            Thread.Sleep(500);
+        }
+    }
+
     public string MenuShot()
     {
         var menu = window.TopLevelMenu("AKML SQL", 60);
@@ -88,7 +106,7 @@ internal sealed class Tour040(SsmsWindow window, int processId)
 
     public string StylesShot()
     {
-        AkmlMenu("Formatting", "Format Styles");
+        AkmlMenu("Formatting", "Edit Formatting Styles");
         var styles = WaitWindow(StylesTitle, 30);
         Thread.Sleep(3000);
         var lists = Find(() => styles.FindAllDescendants(cf => cf.ByControlType(ControlType.TreeItem))

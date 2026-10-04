@@ -221,10 +221,10 @@ morning's full run. A regression pass on the final build (2, 3, 4, 5, 6, 12, 14,
 | 20 | Import | Pass | |
 | 21 | Export with unsaved edits | Pass | |
 | 22 | Option search | Pass | |
-| 23 | Change markers | Pass | this morning's run; its re-run is queued (it needs the style S20 imports in the same run) |
+| 23 | Change markers | Pass | |
 | 24 | Coloured preview | Check | screenshot `s24-light-preview` |
 | 25 | Active Style menu | Pass | |
-| 26 | Editor context menu | Pass | screenshot `s26-context-menu` shows Format Document and Active Style ▸ (the last run read the menu before SSMS added them; the runner now reads it again, re-run queued) |
+| 26 | Editor context menu | Pass | Format Document and Active Style ▸ in "SQL Files Editor Context" (an earlier run read the menu before SSMS had added them) |
 | 27 | List actions | Pass | |
 | 28 | Format feedback | Pass | after the notice fix |
 | 29 | Search as you type | Pass | |
@@ -247,7 +247,7 @@ morning's full run. A regression pass on the final build (2, 3, 4, 5, 6, 12, 14,
 | 46 | F1 | Waived | F1 opens the default browser; routing is covered by `HelpRoutingTests` and `F1SlugTests` |
 | 47 | Screen reader | Pass | every History button named; listening with Narrator is manual |
 | 48 | Team styles | Pass | |
-| 49 | Format SQL actions | Pass | after the startup-session and cache fixes; run after 36 (engine killed) it failed, which found the restart bug below; that re-run is queued |
+| 49 | Format SQL actions | Pass | after the startup-session and cache fixes; also right after 36 kills the engine ("Engine restarted: sent 1 open editor(s) again") |
 
 **Found and fixed while verifying** (details in `doc/progress.md` › Spec 040 › Issues hit):
 
@@ -267,6 +267,9 @@ morning's full run. A regression pass on the final build (2, 3, 4, 5, 6, 12, 14,
   the new engine; the shell now sends each open editor's text and connection again.
 - Format styles message boxes are titled `AKML SQL – Format styles`.
 
-**Queued, not yet run:** the re-runs named above and the extended screenshot tour (T193,
-`SsmsScreenshotTour.Capture_spec_040_windows`). The runner drives SSMS only on a visible, idle
-desktop, and the Remote Desktop window has been minimised since 14:57.
+**Screenshot tour (T193):** `SsmsScreenshotTour.Capture_spec_040_windows` passed on the
+deployed build (2026-10-04 15:53): the AKML SQL menu with Active Style ▸, Options › Behavior,
+History and Color in light and dark, SQL History with Advanced search open, and Format Styles on
+Lists — nine images in `%TEMP%\akml-ssms-tour\spec040-*.png`, Northwind only, none blank. The
+theme it changes is put back; `config.json`, History and the styles folder were restored after the
+runs (the imported test styles and their `.source.json` files removed).
