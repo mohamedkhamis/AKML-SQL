@@ -135,13 +135,14 @@ DisableProgramGroupPage=yes
 SetupLogging=yes
 ; The akmlsql-update: URL scheme ([Registry]) -- tell Explorer about it.
 ChangesAssociations=yes
-; icon.ico is the original AKML logo. The banner files are that AKML logo (from the 256px
-; icon artwork) rendered square at 100/125/150/200% (55/69/82/110 px): WizardSmallImageFile
-; is drawn in a square area and keeps its aspect ratio. The sidebar is the new design
-; (TURN 6a welcome panel) with 125/150/200% variants. Inno picks the variant matching the DPI.
+; Art from the "AKML SQL Icon" design. icon.ico is 5a (the hexagon glyph, no text, so it stays
+; legible at 16/32 px) in 16-256 px; Resources\akml.ico in AkmlSql.Shell.Shared is the same file.
+; The sidebar is 6a (welcome panel). The header image is 6b's hexagon mark: Inno draws it in a
+; square slot (58/77/97/116/124/143/159 px at 100-250% DPI, transparent PNGs), and 6b's gold rule
+; under the header is drawn by AddHeaderRule ([Code]). Inno picks the variant matching the DPI.
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
-WizardSmallImageFile=assets\banner.bmp,assets\banner-125.bmp,assets\banner-150.bmp,assets\banner-200.bmp
+WizardSmallImageFile=assets\header-58.png,assets\header-77.png,assets\header-97.png,assets\header-116.png,assets\header-124.png,assets\header-143.png,assets\header-159.png
 ; Windows 11 look that follows the system's light/dark setting; no bevel lines.
 WizardStyle=modern dynamic windows11 hidebevels
 WizardSizePercent=120
@@ -623,8 +624,25 @@ end;
 
 // --- Wizard Initialization ---
 
+// Design 6b: a gold rule along the bottom of the page header. Style elements off, so the dark
+// theme keeps its color.
+procedure AddHeaderRule;
+var
+  Rule: TPanel;
+begin
+  Rule := TPanel.Create(WizardForm);
+  Rule.Parent := WizardForm.MainPanel;
+  Rule.BevelOuter := bvNone;
+  Rule.ParentBackground := False;
+  Rule.StyleElements := [];
+  Rule.Color := $0098D5;  // #D59800
+  Rule.SetBounds(0, WizardForm.MainPanel.ClientHeight - ScaleY(2), WizardForm.MainPanel.ClientWidth, ScaleY(2));
+  Rule.Anchors := [akLeft, akRight, akBottom];
+end;
+
 procedure InitializeWizard;
 begin
+  AddHeaderRule;
   // Run environment scan
   RunFullScan;
 
