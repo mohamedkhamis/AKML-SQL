@@ -36,7 +36,34 @@ public class HistoryUs5ContractTests
     {
         var request = new HistorySearchRequest { PathFilter = "Reports" };
         Assert.Equal("Reports", RoundTrip(request).PathFilter);
-        Assert.Equal(14, MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(request)).Length);
+        // Its position, not the array's length: later keys are appended after it.
+        Assert.Equal("Reports", MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(request))[13]);
+    }
+
+    [Fact]
+    public void Search_request_sql_only_is_key_14_and_an_older_request_searches_everything()
+    {
+        // PR #254 review: "sql:" searches the SQL text only.
+        var request = new HistorySearchRequest { SearchText = "orders", SqlOnly = true };
+        var fields = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(request));
+        Assert.True(RoundTrip(request).SqlOnly);
+        Assert.Equal(true, fields[14]);
+
+        var legacy = MessagePackSerializer.Serialize(fields[..14]);
+        Assert.False(MessagePackSerializer.Deserialize<HistorySearchRequest>(legacy).SqlOnly);
+    }
+
+    [Fact]
+    public void Search_response_has_more_is_key_4_and_an_older_engine_leaves_it_unset()
+    {
+        // PR #254 review: the engine says whether more rows follow (an in-memory filter can shorten a page).
+        var response = new HistorySearchResponse { Success = true, TotalCount = 300, HasMore = true };
+        var fields = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(response));
+        Assert.True(RoundTrip(response).HasMore);
+        Assert.Equal(true, fields[4]);
+
+        var legacy = MessagePackSerializer.Serialize(fields[..4]);
+        Assert.Null(MessagePackSerializer.Deserialize<HistorySearchResponse>(legacy).HasMore);
     }
 
     [Fact]
