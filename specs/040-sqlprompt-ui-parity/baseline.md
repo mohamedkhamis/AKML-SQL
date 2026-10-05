@@ -295,6 +295,21 @@ shows the styles listed under "Team styles unavailable", and it passes on other 
   looked for "No" and fell back to typing, so a close sometimes stayed on the prompt. Before the
   review fix a close counted at SSMS's first report, which hid this. The runner now answers with
   the access key and waits until the tab has gone.
-- **Open (not part of the review):** Shift+Down does not extend the selection in the History list
-  (Ctrl+click does); a History refresh — a run, a draft or a closed tab — keeps one selected row of
-  several; search matches whole words of the SQL (`r3m01` does not find `r3m01a`).
+- **Seen there too, not part of the review:** a History refresh — a run, a draft or a closed
+  tab — kept one selected row of several, and search matched whole words of the SQL only (`r3m01`
+  did not find `r3m01a`). Both fixed in e1f9746 and verified below. Shift+Down looked broken
+  too; it was the runner (see R3).
+
+**History follow-ups in SSMS (2026-10-05, build e1f9746):**
+
+| # | Checks | Result |
+|---|--------|--------|
+| R3 | Ctrl+click three rows, Delete: one prompt for 3, all gone | Pass |
+| R5 | Two rows selected; a query run in another tab refreshes History; both stay selected and Delete asks "Remove 2 queries…" | Pass |
+| R6 | A word typed part-way finds the query (`r6m…` finds `r6m…abc`, also with `sql:`; `dbo.Prod` finds dbo.Products) | Pass |
+| — | 2 (R2), 14, 16, 29, 33, 35 again | Pass |
+
+Shift+Down: from one selected row, Shift+Down twice selects three rows when sent as a keyboard
+sends it, and Shift+click selects three. The runner's Shift+Down selected one: with NumLock on,
+its Down went out without the extended-key flag, Windows read it as Shift+numpad 2 and dropped
+the Shift. Not a product issue.

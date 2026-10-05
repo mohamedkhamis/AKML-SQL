@@ -1877,8 +1877,8 @@ The layouts already matched SQL Prompt; the screens did not tell the truth:
   tab) kept only the first of several selected rows: the view model keeps them all (by id, else
   by session) and the list selects them again (`SelectionRestored`). Search matched only whole
   words of the SQL; a word now matches the start of one (`"term"*` full-text prefix), so a word
-  typed part-way finds the query. Shift+Down in the History list: being checked (it may be the
-  test runner's key, not the list).
+  typed part-way finds the query. Shift+Down in the History list works; the UI test runner's
+  Shift+Down was read as Shift+numpad 2 (NumLock on) and lost its Shift.
 
 ### Open
 
