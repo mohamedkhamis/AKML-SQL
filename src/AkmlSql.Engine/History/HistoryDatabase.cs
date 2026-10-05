@@ -1597,38 +1597,51 @@ public sealed class HistoryDatabase : IDisposable
     /// Deletes a whole grouped query in one transaction: its snapshots, its runs, then its query
     /// session. Returns the number of runs deleted (0 when the entry does not exist).
     /// </summary>
-    public async Task<int> DeleteGroupAsync(long entryId)
+    public Task<int> DeleteGroupAsync(long entryId) => DeleteGroupsAsync(new[] { entryId });
+
+    /// <summary>
+    /// Deletes the grouped query of each of <paramref name="entryIds"/> — every run, their versions
+    /// and the session — in one transaction (spec 040: Delete on several selected rows). Ids of
+    /// the same query, or of one already gone, count once. Returns the number of runs deleted.
+    /// </summary>
+    public async Task<int> DeleteGroupsAsync(IReadOnlyList<long> entryIds)
     {
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
         await using var tx = conn.BeginTransaction(deferred: false);
 
-        var group = await ResolveGroupAsync(conn, entryId, tx);
-        if (group == null) return 0;
-
-        await using (var versions = new SqliteCommand { Connection = conn, Transaction = tx })
+        var deleted = 0;
+        foreach (var entryId in entryIds.Distinct())
         {
-            versions.CommandText =
-                $"DELETE FROM history_versions WHERE history_id IN (SELECT h.id FROM history h WHERE {GroupPredicate(group.Value, versions)});";
-            await versions.ExecuteNonQueryAsync();
-        }
+            var group = await ResolveGroupAsync(conn, entryId, tx);
+            if (group == null) continue;
 
-        int deleted;
-        await using (var rows = new SqliteCommand { Connection = conn, Transaction = tx })
-        {
-            rows.CommandText = $"DELETE FROM history AS h WHERE {GroupPredicate(group.Value, rows)};";
-            deleted = await rows.ExecuteNonQueryAsync();
-        }
+            await using (var versions = new SqliteCommand { Connection = conn, Transaction = tx })
+            {
+                versions.CommandText =
+                    $"DELETE FROM history_versions WHERE history_id IN (SELECT h.id FROM history h WHERE {GroupPredicate(group.Value, versions)});";
+                await versions.ExecuteNonQueryAsync();
+            }
 
-        if (group.Value.SessionId.HasValue)
-        {
-            await using var session = new SqliteCommand("DELETE FROM query_sessions WHERE id = @sid;", conn, tx);
-            session.Parameters.AddWithValue("@sid", group.Value.SessionId.Value);
-            await session.ExecuteNonQueryAsync();
+            int runs;
+            await using (var rows = new SqliteCommand { Connection = conn, Transaction = tx })
+            {
+                rows.CommandText = $"DELETE FROM history AS h WHERE {GroupPredicate(group.Value, rows)};";
+                runs = await rows.ExecuteNonQueryAsync();
+            }
+
+            if (group.Value.SessionId.HasValue)
+            {
+                await using var session = new SqliteCommand("DELETE FROM query_sessions WHERE id = @sid;", conn, tx);
+                session.Parameters.AddWithValue("@sid", group.Value.SessionId.Value);
+                await session.ExecuteNonQueryAsync();
+            }
+
+            deleted += runs;
+            Log.Information("History: deleted grouped query of entry {Id} ({Count} runs)", entryId, runs);
         }
 
         await tx.CommitAsync();
-        Log.Information("History: deleted grouped query of entry {Id} ({Count} runs)", entryId, deleted);
         return deleted;
     }
 

@@ -1869,6 +1869,10 @@ The layouts already matched SQL Prompt; the screens did not tell the truth:
   `triggerDelayVersion`); a dot is always immediate.
 - **Team styles** — a team folder scan answers lookups for 5 s (`TeamSnapshotTtl`), not one
   listing of the share per format request.
+- **Found in SSMS verifying the fixes** — with grouped History the engine deleted only the first
+  of several selected queries (the handler passed `EntryIds[0]` to the group delete);
+  `HistoryDatabase.DeleteGroupsAsync` deletes each one's group in one transaction. Runs:
+  `specs/040-sqlprompt-ui-parity/baseline.md`.
 
 ### Open
 

@@ -265,9 +265,10 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         });
                     }
 
-                    // Spec 040 (HIS-04): GroupScope deletes the whole grouped query of EntryIds[0].
+                    // Spec 040 (HIS-04): GroupScope deletes the whole grouped query of each id
+                    // (several when the user selected several rows).
                     var deletedCount = actionRequest.GroupScope == true
-                        ? await _database.DeleteGroupAsync(actionRequest.EntryIds[0])
+                        ? await _database.DeleteGroupsAsync(actionRequest.EntryIds)
                         : await _database.DeleteEntriesAsync(actionRequest.EntryIds);
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {

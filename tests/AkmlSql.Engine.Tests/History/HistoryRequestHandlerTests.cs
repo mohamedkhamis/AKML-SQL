@@ -56,6 +56,29 @@ public sealed class HistoryRequestHandlerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Group_delete_of_several_selected_rows_removes_every_one()
+    {
+        // Delete on three selected rows sends their three ids; each row's whole query goes.
+        var c1 = await _db.RunAsync("SELECT third", "tab-C");
+        var r = await SendAsync(new HistoryActionRequest { Action = HistoryActions.Delete, EntryIds = new[] { _a3, _b1, c1 }, GroupScope = true });
+
+        Assert.True(r.Success);
+        Assert.Equal(5, r.DeletedCount);
+        Assert.Equal(0, await _db.CountAsync("SELECT COUNT(*) FROM history"));
+        Assert.Equal(0, await _db.CountAsync("SELECT COUNT(*) FROM query_sessions"));
+    }
+
+    [Fact]
+    public async Task Two_ids_of_one_query_delete_it_once()
+    {
+        var r = await SendAsync(new HistoryActionRequest { Action = HistoryActions.Delete, EntryIds = new[] { _a1, _a3 }, GroupScope = true });
+
+        Assert.True(r.Success);
+        Assert.Equal(3, r.DeletedCount);
+        Assert.Equal(1, await _db.CountAsync("SELECT COUNT(*) FROM history"));
+    }
+
+    [Fact]
     public async Task Per_id_delete_is_unchanged_and_now_reports_the_count()
     {
         var r = await SendAsync(new HistoryActionRequest { Action = HistoryActions.Delete, EntryIds = new[] { _a2, _b1 } });

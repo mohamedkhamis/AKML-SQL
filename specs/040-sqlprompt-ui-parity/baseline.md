@@ -273,3 +273,28 @@ History and Color in light and dark, SQL History with Advanced search open, and 
 Lists — nine images in `%TEMP%\akml-ssms-tour\spec040-*.png`, Northwind only, none blank. The
 theme it changes is put back; `config.json`, History and the styles folder were restored after the
 runs (the imported test styles and their `.source.json` files removed).
+
+**PR #254 review fixes in SSMS (2026-10-05, build f1903b3 + the engine fix below):** the
+scenarios the fixes touch were run again, plus four new ones:
+
+| # | Checks | Result |
+|---|--------|--------|
+| R1 | Cancel at "save changes?" keeps the tab open and records nothing closed; the real close records one closed draft, listed under closed as "Not executed" | Pass |
+| R2 | F2 rename; `sql:` searches the SQL only (the new name is not found by `sql:`); `=` matches as written, `<>` finds nothing | Pass |
+| R3 | Ctrl+click three rows, Delete: one prompt "Remove 3 queries and their history?", all three gone from the list and the database | Pass after the engine fix |
+| R4 | Renaming PRODUCTION to "Live" moves its "type the server name" severity to Live; renaming it back moves it back | Pass |
+
+Also passing (f1903b3): 2–5, 12, 14–16, 20, 21, 23, 25, 27–29, 32–35, 37, 41, 48, 49 (42
+stays a check). 48 failed once on reading the style list through UI Automation; its screenshot
+shows the styles listed under "Team styles unavailable", and it passes on other runs.
+
+- **Found and fixed:** with grouped History (the default) the engine deleted only the first
+  selected query — the handler passed `EntryIds[0]` to the group delete. `DeleteGroupsAsync`
+  deletes every selected query's group in one transaction (tests in `HistoryRequestHandlerTests`).
+- **Runner, not product:** SSMS 22's save prompt says Save / Don't Save / Cancel. The runner
+  looked for "No" and fell back to typing, so a close sometimes stayed on the prompt. Before the
+  review fix a close counted at SSMS's first report, which hid this. The runner now answers with
+  the access key and waits until the tab has gone.
+- **Open (not part of the review):** Shift+Down does not extend the selection in the History list
+  (Ctrl+click does); a History refresh — a run, a draft or a closed tab — keeps one selected row of
+  several; search matches whole words of the SQL (`r3m01` does not find `r3m01a`).
