@@ -96,3 +96,6 @@ desktop.ini
 
 # LinkedIn post images (screenshots for posts; not part of the product)
 /LinkedIn/
+src/AkmlSql.Site/wwwroot/docs-metadata.json
+src/AkmlSql.Site/wwwroot/releases.json
+src/AkmlSql.Site/wwwroot/update-manifest.json
