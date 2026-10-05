@@ -2479,7 +2479,9 @@ public sealed class HistoryDatabase : IDisposable
                 perTerm.Add(OrMetadata(sqlLike[i], i));
                 continue;
             }
-            parameters.Add(new SqliteParameter("@fts" + i, "\"" + terms[i].Replace("\"", "") + "\""));
+            // A prefix phrase: "Produ" finds Products, so a word typed part-way already matches
+            // (search runs as the user types). The * applies to the phrase's last token.
+            parameters.Add(new SqliteParameter("@fts" + i, "\"" + terms[i].Replace("\"", "") + "\"*"));
             perTerm.Add(OrMetadata($"h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts{i})", i));
         }
         return ("(" + string.Join(" AND ", perTerm) + ")", like);

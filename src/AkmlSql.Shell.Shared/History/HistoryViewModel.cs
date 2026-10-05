@@ -69,6 +69,12 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         internal event Action<string, string?, string?>? ReExecuteRequested;
 
+        /// <summary>
+        /// Raised after a refresh found several of the rows that were selected before it: the list
+        /// selects them all again (a refresh rebuilds the rows, which clears the list's selection).
+        /// </summary>
+        internal event Action<IReadOnlyList<HistoryEntryDto>>? SelectionRestored;
+
         public HistoryViewModel() : this(EngineRpcClientAccessor.Instance) { }
 
         /// <summary>Spec 040: the engine client is injectable so paging and row actions are testable.</summary>
@@ -245,17 +251,26 @@ namespace AkmlSql.Shell.Shared.History
             });
         }
 
-        /// <summary>Re-queries the first page, keeping the selected query (by id, else by its session).</summary>
+        /// <summary>Re-queries the first page, keeping the selected queries (by id, else by their session).</summary>
         internal Task HandleHistoryRecordedAsync() => RefreshKeepingSelectionAsync();
 
-        private HistoryEntryDto? _keepSelection;
+        private IReadOnlyList<HistoryEntryDto>? _keepSelection;
 
         internal async Task RefreshKeepingSelectionAsync()
         {
-            _keepSelection = SelectedEntry;
+            // Every selected row, not just the first: a run in another tab, a draft or a closed tab
+            // refreshes History, and the rows picked for Delete or Compare must stay picked.
+            _keepSelection = SelectedEntries.Count > 1 ? SelectedEntries.ToList()
+                : SelectedEntry != null ? new[] { SelectedEntry }
+                : null;
             try { await SearchInternalAsync(resetOffset: true); }
             finally { _keepSelection = null; }
         }
+
+        /// <summary>The refreshed row for <paramref name="kept"/>: the same id, else the same session.</summary>
+        private HistoryEntryDto? Refreshed(HistoryEntryDto kept) =>
+            Entries.FirstOrDefault(e => e.Id == kept.Id)
+            ?? (string.IsNullOrEmpty(kept.SessionKey) ? null : Entries.FirstOrDefault(e => e.SessionKey == kept.SessionKey));
 
         /// <summary>The Advanced search filters, applied: they become the search's filters, then it runs.</summary>
         internal async Task ApplyAdvancedSearchAsync()
@@ -967,15 +982,18 @@ namespace AkmlSql.Shell.Shared.History
                     OnPropertyChanged(nameof(StarredCount));
 
                     // Spec 040 (HIS-09): a new search selects its first row; a refresh keeps the
-                    // selected query (by id, or by its session when a new run replaced the row).
+                    // selected queries (by id, or by their session when a new run replaced a row).
                     if (resetOffset)
                     {
-                        var keep = _keepSelection;
-                        SelectedEntry = keep == null
-                            ? Entries.FirstOrDefault()
-                            : Entries.FirstOrDefault(e => e.Id == keep.Id)
-                              ?? (string.IsNullOrEmpty(keep.SessionKey) ? null : Entries.FirstOrDefault(e => e.SessionKey == keep.SessionKey))
-                              ?? Entries.FirstOrDefault();
+                        var kept = (_keepSelection ?? Array.Empty<HistoryEntryDto>())
+                            .Select(Refreshed).Where(e => e != null).Select(e => e!).Distinct().ToList();
+                        SelectedEntry = kept.FirstOrDefault() ?? Entries.FirstOrDefault();
+                        if (kept.Count > 1)
+                        {
+                            SelectedEntries.Clear();
+                            foreach (var entry in kept) SelectedEntries.Add(entry);
+                            SelectionRestored?.Invoke(kept);
+                        }
                     }
                 }
                 else

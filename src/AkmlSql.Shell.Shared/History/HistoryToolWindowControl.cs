@@ -92,6 +92,7 @@ namespace AkmlSql.Shell.Shared.History
             _viewModel.OpenInNewTabRequested += OnOpenInNewTabRequested;
             _viewModel.ReExecuteRequested += OnReExecuteRequested;
             _viewModel.CompareRequested += OnCompareRequested;
+            _viewModel.SelectionRestored += OnSelectionRestored;
             _viewModel.ActivateDocument = ActivateOpenDocument;
             _viewModel.PromptRename = current => ShowInputDialog("Rename query", "Name:", current);
 
@@ -2029,6 +2030,14 @@ namespace AkmlSql.Shell.Shared.History
                 if (_queryListView.ItemContainerGenerator.ContainerFromItem(item) is ListViewItem row && row.Focus()) return;
             }
             _queryListView.Focus();
+        }
+
+        /// <summary>A refresh kept several selected queries: select them all again in the list.</summary>
+        private void OnSelectionRestored(IReadOnlyList<HistoryEntryDto> entries)
+        {
+            if (_queryListView == null) return;
+            foreach (var entry in entries)
+                if (!_queryListView.SelectedItems.Contains(entry)) _queryListView.SelectedItems.Add(entry);
         }
 
         private void SyncListSelection()

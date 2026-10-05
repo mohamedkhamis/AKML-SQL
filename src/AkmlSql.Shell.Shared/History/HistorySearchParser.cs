@@ -27,7 +27,7 @@ namespace AkmlSql.Shell.Shared.History
         /// </summary>
         internal static readonly IReadOnlyList<(string Syntax, string Meaning)> HelpRows = new[]
         {
-            ("orders customer", "Queries containing every word, in their SQL, name, file path, server or database"),
+            ("orders cust", "Queries containing every word (the start of a word is enough: cust finds Customers), in their SQL, name, file path, server or database"),
             ("\"order details\"", "An exact phrase"),
             ("cust*", "Words starting with \"cust\""),
             ("orders OR invoices", "Either word"),

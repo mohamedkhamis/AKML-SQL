@@ -49,6 +49,20 @@ public sealed class HistorySnapshotSearchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_word_typed_part_way_finds_the_query()
+    {
+        // Search runs as the user types: "Produ" (and "dbo.Prod") must already find dbo.Products.
+        await _db.RunAsync("SELECT ProductName FROM dbo.Products", "products");
+        await _db.RunAsync("SELECT 1 AS other", "other");
+
+        var (partWord, _) = await _db.Database.SearchAsync(new HistoryFilter { SearchText = "Produ", Deduplicate = true, Limit = 100 });
+        var (qualified, _) = await _db.Database.SearchAsync(new HistoryFilter { SearchText = "dbo.Prod", SqlOnly = true, Deduplicate = true, Limit = 100 });
+
+        Assert.Equal(new[] { "products" }, partWord.Select(e => e.SessionKey).ToArray());
+        Assert.Equal(new[] { "products" }, qualified.Select(e => e.SessionKey).ToArray());
+    }
+
+    [Fact]
     public async Task A_word_with_no_letters_or_digits_is_matched_as_written()
     {
         // "=" became a full-text phrase that matches nothing, so "id = 5" found nothing.

@@ -26,7 +26,7 @@ Click **?** beside the search box for the search syntax:
 
 | Search | Finds |
 |---|---|
-| `orders customer` | Queries containing every word |
+| `orders cust` | Queries containing every word — the start of a word is enough (`cust` finds Customers) |
 | `"order details"` | An exact phrase |
 | `cust*` | Words starting with "cust" |
 | `orders OR invoices` | Either word |
