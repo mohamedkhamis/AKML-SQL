@@ -11,14 +11,14 @@ namespace AkmlSql.Site.Tests.Components;
 public sealed class FeaturesPageTests
 {
     [Fact]
-    public void MediaRows_RenderThreeSections_WithAlternatingLayout()
+    public void MediaRows_ShowTheSelectedSsmsFeatures_WithAlternatingLayout()
     {
         using var ctx = new BunitContext();
 
         var cut = ctx.Render<Features>();
 
         var rows = cut.FindAll(".media-row");
-        Assert.Equal(3, rows.Count);
+        Assert.Equal(7, rows.Count);
         // At least one row flips text/media (CSS reorders via .media-row-flip).
         Assert.NotEmpty(cut.FindAll(".media-row.media-row-flip"));
     }
@@ -33,7 +33,7 @@ public sealed class FeaturesPageTests
         var cut = ctx.Render<Features>();
 
         var images = cut.FindAll(".media-row .screenshot-frame img");
-        Assert.Equal(3, images.Count);
+        Assert.Equal(14, images.Count);
         foreach (var img in images)
         {
             Assert.Equal("lazy", img.GetAttribute("loading"));
@@ -41,6 +41,16 @@ public sealed class FeaturesPageTests
             Assert.False(string.IsNullOrWhiteSpace(img.GetAttribute("height")));
             Assert.False(string.IsNullOrWhiteSpace(img.GetAttribute("alt")));
             Assert.StartsWith("img/screenshots/", img.GetAttribute("src"));
+            Assert.EndsWith("-crop.png", img.GetAttribute("src"));
+        }
+
+        foreach (var frame in cut.FindAll(".media-row .screenshot-frame"))
+        {
+            var dark = frame.QuerySelector(".screenshot-dark img")!;
+            var light = frame.QuerySelector(".screenshot-light img")!;
+            Assert.Equal(dark.GetAttribute("src")!.Replace("/dark/", "/light/"), light.GetAttribute("src"));
+            Assert.Equal(dark.GetAttribute("width"), light.GetAttribute("width"));
+            Assert.Equal(dark.GetAttribute("height"), light.GetAttribute("height"));
         }
     }
 

@@ -78,11 +78,19 @@ public sealed class HomePageTests
 
         var cut = ctx.Render<Home>();
 
-        var img = cut.Find(".hero-visual .screenshot-frame img");
-        Assert.Equal("1920", img.GetAttribute("width"));
-        Assert.Equal("889", img.GetAttribute("height"));
-        Assert.StartsWith("img/screenshots/", img.GetAttribute("src"));
-        Assert.False(string.IsNullOrWhiteSpace(img.GetAttribute("alt")));
+        var images = cut.FindAll(".hero-visual .screenshot-frame img");
+        Assert.Equal(2, images.Count);
+        foreach (var theme in new[] { "dark", "light" })
+        {
+            var link = cut.Find($".hero-visual .screenshot-{theme}");
+            var img = link.QuerySelector("img")!;
+            Assert.Equal("1046", img.GetAttribute("width"));
+            Assert.Equal("673", img.GetAttribute("height"));
+            Assert.Equal($"img/screenshots/{theme}/02-format-styles-crop.png", img.GetAttribute("src"));
+            Assert.Equal(img.GetAttribute("src"), link.GetAttribute("href"));
+            Assert.Equal("high", img.GetAttribute("fetchpriority"));
+            Assert.Contains("SSMS 22", img.GetAttribute("alt"));
+        }
     }
 
     [Fact]

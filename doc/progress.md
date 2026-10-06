@@ -1888,3 +1888,25 @@ Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; "Recor
 executions" and "Encrypt at rest" stay hidden; UI Automation walks only the first row of each
 group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors. Also: schema
 caches are still per tab (one cache per server and database would share them).
+
+## 2026-10-06 — Product site screenshot refresh
+
+- Home now shows the SSMS Format styles window. Features showcases JOIN suggestions,
+  wildcard column selection, Format styles, SQL History, Options, the command palette
+  and execution warnings. The fourteen PNGs are unchanged dark/light pairs from the
+  owner's screenshot folder, using only the supplied `*-crop.png` files.
+- `ProductScreenshot` renders theme-matched images, descriptive captions/alt text and
+  full-size links. Explicit dimensions preserve layout; Features images load lazily.
+  Phones show the complete crop. High contrast uses the supplied dark capture.
+- Fixed the theme reset exposed during browser verification: enhanced navigation
+  replaced the theme attribute and stylesheet and hid the picker. `theme-toggle.js`
+  restores the active theme and picker after the patch, including without storage,
+  and does not persist an OS default merely because the visitor navigated.
+- Validation: 877 Site unit/component tests passed; full solution Release MSBuild
+  and theme CSS drift check passed (existing build warnings). Local Chromium verified
+  1440/390/320 px layouts, all three themes, reload and enhanced navigation, original
+  image ratios, full-size links, OS defaults, disabled storage and no-JavaScript
+  fallback. All fourteen asset hashes match the supplied crops. The existing deployed
+  E2E theme test was extended and compiled; browser execution used an isolated local
+  preview database, not the live site. Artifacts: `artifacts/site-screenshot-review/`.
+  No deployment was performed.

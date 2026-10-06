@@ -4,7 +4,7 @@
 
 @* Spec 034 T014 (US1): landing page per contracts/site-routes.md (FR-001). Site redesign:
    full-bleed hero (gradient mesh + grid backdrop, display headline with gradient accent,
-   dual CTA, product screenshot in a browser-chrome frame), icon feature cards, CTA banner.
+   dual CTA, theme-matched SSMS screenshot), icon feature cards, CTA banner.
    SC-001: /download is one click from here. Static SSR only. *@
 
 <PageTitle>AKML SQL — AI-powered SQL development assistance</PageTitle>
@@ -41,16 +41,10 @@
             <a class="btn btn-secondary" href="/docs">Browse documentation</a>
         </p>
         <div class="hero-visual">
-            <figure class="screenshot-frame hero-screenshot">
-                <figcaption class="screenshot-chrome" aria-hidden="true">
-                    <span class="chrome-dot chrome-dot-close"></span>
-                    <span class="chrome-dot chrome-dot-minimize"></span>
-                    <span class="chrome-dot chrome-dot-maximize"></span>
-                    <span class="chrome-title">AKML SQL — web edition</span>
-                </figcaption>
-                <img src="img/screenshots/query-results.png" width="1920" height="889" fetchpriority="high"
-                     alt="The AKML SQL web editor with a syntax-highlighted Northwind query, schema tree, problems panel, and a live result grid." />
-            </figure>
+            <ProductScreenshot Name="02-format-styles" Width="1046" Height="673" Priority="true"
+                               Class="hero-screenshot"
+                               Caption="Format styles in SSMS 22 — your options, with a live SQL preview"
+                               Alt="AKML SQL Format styles in SSMS 22, with Khamis Style selected, JOIN layout options and a live SQL preview." />
         </div>
     </div>
 </section>

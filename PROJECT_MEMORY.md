@@ -1,7 +1,8 @@
 # AKML SQL project memory
 
 Last reviewed: **2026-10-05**, Africa/Cairo. Prepared at the owner's request before
-web engine enhancements and SSMS screen fixes.
+web engine enhancements and SSMS screen fixes. Latest implementation follow-up:
+**2026-10-06**, section 11.
 
 This is a navigation and engineering reference. The review surveyed the solution,
 documentation/spec inventory, build scripts and tests; read the development
@@ -9,7 +10,8 @@ guidance, architecture and current feature designs; and traced representative
 web, engine and SSMS source paths. It was not a line-by-line audit of every file.
 No application build, test suite, deployment, database operation, or live UI
 verification was performed during this orientation. Test results below are
-explicitly attributed to existing repository records.
+explicitly attributed to existing repository records in the orientation sections;
+section 11 records later implementation and verification.
 
 ## 1. Snapshot and working context
 
@@ -435,3 +437,31 @@ Documentation cautions:
 For the next request: inspect Git status and the relevant current files, use this
 map to choose the correct layer, preserve existing behavior outside the requested
 change, and verify the affected path with its established tests and UI checks.
+
+## 11. Follow-up: product site screenshots (2026-10-06)
+
+- Home and Features now use selected SSMS crops from the owner's
+  `C:\Users\Administrator\Documents\AKML SQL screenshots` folder, copied unchanged to
+  `src/AkmlSql.Site/wwwroot/img/screenshots/{dark,light}/`. Selected names: 01 SQL
+  History, 02 Format styles, 03 wildcard picker, 05 JOIN suggestions, 10 command
+  palette, 11 Options, 12 execution warning. Only `*-crop.png` files are used.
+- [ProductScreenshot.razor](src/AkmlSql.Site/Components/ProductScreenshot.razor)
+  centralizes the paired images, native dimensions, captions, alt text and full-size
+  links. Home uses Format styles; Features has seven alternating media rows.
+  `site.css` follows `html[data-akml-theme]`: light shows light, dark/high contrast
+  show dark. High contrast has no supplied capture. Mobile keeps the whole crop.
+- Browser verification exposed an existing enhanced-navigation issue: SSR patches
+  reset the html theme attribute, stylesheet and picker visibility to defaults.
+  `theme-toggle.js` now retains the active theme in memory and restores it on
+  Blazor's `enhancedload`, including when storage is unavailable. Navigation does
+  not turn an OS-derived default into a saved preference. Its deployed E2E test
+  now covers navigation and matching screenshot visibility as well as reload.
+- Verified: all 877 Site unit/component tests passed; full solution Release build
+  with VS MSBuild passed (existing warnings); theme generation drift check passed.
+  Local Chromium checked Home/Features at 1440, 390 and 320 px, all three themes,
+  reload/navigation, full-size links, complete image ratios, OS defaults, unavailable
+  storage and no-JavaScript fallback. All 14 copied images match source hashes.
+  The local preview used a separate analytics database. Browser artifacts and its
+  temporary verification script are in ignored `artifacts/site-screenshot-review/`.
+  This work updated source only: no deployment was performed, and the
+  deployed-site E2E suite was not run against the live installation.

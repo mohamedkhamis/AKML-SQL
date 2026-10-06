@@ -483,7 +483,7 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
 
 /* --- Hero (Home) --------------------------------------------------------------
    Full-bleed section: layered radial gradient mesh + masked grid backdrop (pure CSS,
-   token-tinted), centered display copy, product screenshot in a browser-chrome frame. */
+   token-tinted), centered display copy, theme-matched SSMS product screenshot. */
 
 .hero {
     position: relative;
@@ -570,7 +570,6 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
 /* Slight perspective tilt + gentle float (motion gated below). */
 .hero-screenshot {
     max-width: 1060px;
-    margin-inline: auto;
     transform: perspective(1600px) rotateX(3deg);
     transform-origin: 50% 0;
 }
@@ -586,8 +585,7 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
 }
 
 /* --- Screenshot frames (hero + media sections) --------------------------------
-   Browser-chrome look: title bar with traffic-light dots, token-colored; the screenshot
-   itself is an <img> with explicit width/height. */
+   Native SSMS crops keep their own window chrome and explicit image dimensions. */
 
 .screenshot-frame {
     margin: 0;
@@ -600,43 +598,48 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
         0 6px 24px color-mix(in srgb, var(--akml-text-primary) 10%, transparent);
 }
 
-.screenshot-chrome {
+.screenshot-frame.hero-screenshot {
+    margin-inline: auto;
+}
+
+.screenshot-caption {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 8px 12px;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    padding: 0.8rem 1rem;
     background-color: var(--akml-surface-elevated);
-    border-bottom: 1px solid var(--akml-border-subtle);
-}
-
-.chrome-dot {
-    width: 9px;
-    height: 9px;
-    flex: none;
-    border-radius: 50%;
-}
-
-/* Semantic status tokens double as the classic window-control colors. */
-.chrome-dot-close {
-    background-color: var(--akml-status-danger);
-}
-
-.chrome-dot-minimize {
-    background-color: var(--akml-status-warning);
-}
-
-.chrome-dot-maximize {
-    background-color: var(--akml-status-success);
-}
-
-.chrome-title {
-    margin-inline-start: 6px;
-    overflow: hidden;
+    border-top: 1px solid var(--akml-border-subtle);
     color: var(--akml-text-secondary);
-    font-family: var(--f-mono);
-    font-size: 0.72rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.screenshot-hint {
+    color: var(--akml-text-link);
+}
+
+.screenshot-variant {
+    display: block;
+    cursor: zoom-in;
+}
+
+.screenshot-variant:focus-visible {
+    outline: 3px solid var(--akml-border-focus);
+    outline-offset: -3px;
+}
+
+/* The boot script sets this attribute before first paint; the theme picker updates it.
+   Dark is also the fallback for no JavaScript and the site's high-contrast theme. */
+.screenshot-light,
+html[data-akml-theme="light"] .screenshot-dark {
+    display: none;
+}
+
+html[data-akml-theme="light"] .screenshot-light {
+    display: block;
 }
 
 .screenshot-frame img {
@@ -1540,11 +1543,8 @@ html[data-akml-theme="light"] .card:hover {
         padding-inline: var(--akml-scalar-spacing-m);
     }
 
-    /* UI-003: the full 1920px editor screenshot IS too busy at phone width, but hiding it
-       meant phone visitors -- often the largest share of first-touch traffic -- never saw the
-       product at all. Instead, crop to the left portion of the shot (the editor and schema
-       tree, where the product reads) and let it fill the frame. The image is unchanged; only
-       the viewport onto it is. */
+    /* Supplied screenshots are already cropped. Keep the complete screen visible on phones;
+       the image link opens the original crop for reading smaller option labels. */
     .hero-visual {
         margin-top: var(--s-6);
     }
@@ -1552,16 +1552,6 @@ html[data-akml-theme="light"] .card:hover {
     .hero-screenshot {
         transform: none;
         animation: none;
-    }
-
-    /* Crop via object-fit, NOT by making the image wider than its box: a >100% width escapes
-       the frame and gives the whole PAGE a horizontal scrollbar (SC-003). Covering a 4:3 box
-       with a 2.16:1 source crops the sides and keeps the editor pane, at 100% width. */
-    .hero-screenshot img {
-        width: 100%;
-        aspect-ratio: 4 / 3;
-        object-fit: cover;
-        object-position: left center;
     }
 
     /* Release facts stack at phone width so long labels never squeeze the values. */

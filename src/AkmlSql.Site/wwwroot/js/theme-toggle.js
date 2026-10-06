@@ -20,6 +20,9 @@
     var BUTTON_ID = 'theme-toggle';
     // Same allowlist the boot script enforces -- anything else falls back to dark.
     var THEME_RE = /^(dark|light|high-contrast)$/;
+    // Enhanced navigation replaces the server-rendered html attributes with their defaults.
+    // Keep the active choice in memory too, including when localStorage is unavailable.
+    var selectedTheme = currentTheme();
 
     function currentTheme() {
         var theme = document.documentElement.getAttribute('data-akml-theme') || 'dark';
@@ -54,16 +57,20 @@
         return 'Dark';
     }
 
-    function apply(theme) {
+    function apply(theme, persist) {
         if (!THEME_RE.test(theme)) { theme = 'dark'; }
+        selectedTheme = theme;
 
         var link = document.getElementById('akml-theme-css');
         if (link) { link.href = 'css/themes/' + theme + '.css'; }
 
         document.documentElement.setAttribute('data-akml-theme', theme);
-        try { localStorage.setItem(KEY, theme); } catch (e) { }
+        if (persist !== false) {
+            try { localStorage.setItem(KEY, theme); } catch (e) { }
+        }
 
         syncState();
+        document.documentElement.classList.add('js-theme-toggle');
     }
 
     document.addEventListener('click', function (event) {
@@ -106,7 +113,13 @@
         }
     });
 
-    syncState();
-    // The control is now functional -- reveal it (CSS hides the inert no-JS version).
-    document.documentElement.classList.add('js-theme-toggle');
+    apply(selectedTheme, false);
+    if (window.Blazor && window.Blazor.addEventListener) {
+        window.Blazor.addEventListener('enhancedload', function () {
+            // Restore the stylesheet, screenshot variant and accessible picker state together.
+            // Merely navigating must not save an OS-derived default as an explicit preference.
+            apply(selectedTheme, false);
+            closeMenu();
+        });
+    }
 })();

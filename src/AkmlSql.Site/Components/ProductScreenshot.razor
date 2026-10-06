@@ -1,0 +1,31 @@
+@* Follow the site's selected theme, including saved preferences and enhanced navigation.
+   CSS hides the inactive link from both the layout and the accessibility tree. High contrast
+   uses the dark capture because the supplied set has no high-contrast variant. *@
+<figure class="screenshot-frame @Class">
+    <a class="screenshot-variant screenshot-dark" href="@ImagePath("dark")" target="_blank" rel="noopener"
+       aria-label="@(Caption + " — view full-size screenshot (opens in a new tab)")">
+        <img src="@ImagePath("dark")" width="@Width" height="@Height" alt="@Alt"
+             loading="@(Priority ? "eager" : "lazy")" fetchpriority="@(Priority ? "high" : "auto")" />
+    </a>
+    <a class="screenshot-variant screenshot-light" href="@ImagePath("light")" target="_blank" rel="noopener"
+       aria-label="@(Caption + " — view full-size screenshot (opens in a new tab)")">
+        <img src="@ImagePath("light")" width="@Width" height="@Height" alt="@Alt"
+             loading="@(Priority ? "eager" : "lazy")" fetchpriority="@(Priority ? "high" : "auto")" />
+    </a>
+    <figcaption class="screenshot-caption">
+        <span>@Caption</span>
+        <span class="screenshot-hint">Click image to enlarge <span aria-hidden="true">↗</span></span>
+    </figcaption>
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+    [Parameter, EditorRequired] public string Alt { get; set; } = "";
+    [Parameter, EditorRequired] public string Caption { get; set; } = "";
+    [Parameter, EditorRequired] public int Width { get; set; }
+    [Parameter, EditorRequired] public int Height { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool Priority { get; set; }
+
+    private string ImagePath(string theme) => $"img/screenshots/{theme}/{Name}-crop.png";
+}
