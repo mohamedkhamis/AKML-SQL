@@ -1,3 +1,5 @@
+using System.Linq;
+using AkmlSql.Shell.Shared.Dialogs.Pages;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -158,8 +160,8 @@ namespace AkmlSql.Shell.Shared.Tests
             // Phase 1 has exactly 15 leaves (Behavior, Database, Styles, Productivity, Navigation,
             // Refactoring, History, Execution Warnings, Query Results, Execution, Color,
             // Code Analysis, Snippets, AI Assistance, Main).
-            Assert.True(leafItems.Count >= 14,
-                $"Expected at least 14 leaf pages, found {leafItems.Count}");
+            Assert.True(leafItems.Count >= 12,
+                $"Expected at least 12 leaf pages, found {leafItems.Count}");
 
             // For each leaf: select it (synchronous), pump dispatcher, assert "Restore Defaults" exists
             foreach (var leaf in leafItems)
@@ -245,10 +247,13 @@ namespace AkmlSql.Shell.Shared.Tests
             var pageControls = (IDictionary)controlsField!.GetValue(dialog)!;
 
             Assert.True(pageBuilders.Count > 0, "Expected at least one registered IPageBuilder");
-            Assert.Equal(pageBuilders.Count, pageControls.Count);
+            // A combined page registers its sections' controls (each under its own key), not its own.
+            var combined = pageBuilders.Values.OfType<CombinedPage>().Count();
+            Assert.Equal(pageBuilders.Count - combined, pageControls.Count);
 
             foreach (DictionaryEntry entry in pageBuilders)
             {
+                if (entry.Value is CombinedPage) continue;
                 var key = (string)entry.Key;
                 Assert.True(
                     pageControls.Contains(key),

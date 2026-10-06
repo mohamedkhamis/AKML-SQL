@@ -7,8 +7,8 @@ namespace AkmlSql.Site.Analytics;
 /// Spec 038 US3: the download-centric and per-individual queries behind the portal.
 /// <para>
 /// Kept in a partial beside the main store rather than inside it: <c>AnalyticsStore.cs</c> is
-/// already ~900 lines, and these queries are a distinct concern — reporting, not recording. They
-/// share the same connection and lock, so they observe exactly what has been written.
+/// already large, and these queries are a distinct concern — reporting, not recording. Each
+/// report reads a consistent snapshot without holding the ingestion connection's lock.
 /// </para>
 /// </summary>
 public sealed partial class AnalyticsStore
@@ -31,11 +31,16 @@ public sealed partial class AnalyticsStore
     /// <summary>Downloads by country for <paramref name="window"/>.</summary>
     public IReadOnlyList<DownloadCountryRow> GetDownloadsByCountry(ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetDownloadsByCountry(window);
+        }
         ArgumentNullException.ThrowIfNull(window);
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             command.CommandText =
                 "SELECT country, country_code, COUNT(*) AS c FROM downloads " +
                 $"WHERE {InWindow} AND {RealDownloadOnly} " +
@@ -78,11 +83,16 @@ public sealed partial class AnalyticsStore
     /// <summary>Downloads by release version for <paramref name="window"/>.</summary>
     public IReadOnlyList<DownloadVersionRow> GetDownloadsByVersion(ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetDownloadsByVersion(window);
+        }
         ArgumentNullException.ThrowIfNull(window);
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             command.CommandText =
                 "SELECT release_version, file, COUNT(*) AS c FROM downloads " +
                 $"WHERE {InWindow} AND {RealDownloadOnly} " +
@@ -126,13 +136,18 @@ public sealed partial class AnalyticsStore
     /// <summary>Coverage for <paramref name="window"/>.</summary>
     public CoverageSummary GetCoverage(ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetCoverage(window);
+        }
         ArgumentNullException.ThrowIfNull(window);
 
         lock (_gate)
         {
             long attributed = 0, unattributed = 0, automated = 0;
 
-            using (var command = _connection.CreateCommand())
+            using (var command = CreateCommand())
             {
                 command.CommandText =
                     "SELECT " +
@@ -153,7 +168,7 @@ public sealed partial class AnalyticsStore
 
             long distinct = 0, returning = 0;
 
-            using (var command = _connection.CreateCommand())
+            using (var command = CreateCommand())
             {
                 // "Returning" means first seen BEFORE the window opened — the only honest reading,
                 // and the one cross-day cookie identity made possible (FR-022a).
@@ -203,12 +218,17 @@ public sealed partial class AnalyticsStore
     /// <summary>The people list for <paramref name="window"/>.</summary>
     public IReadOnlyList<IndividualRow> GetIndividuals(IndividualFilter filter, ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetIndividuals(filter, window);
+        }
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(window);
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             command.CommandText = BuildIndividualsSql(filter, paged: true);
             BindIndividualsParameters(command, filter, window);
 
@@ -230,12 +250,17 @@ public sealed partial class AnalyticsStore
     /// <summary>Total individuals matching the filter in <paramref name="window"/>.</summary>
     public long CountIndividuals(IndividualFilter filter, ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.CountIndividuals(filter, window);
+        }
         ArgumentNullException.ThrowIfNull(filter);
         ArgumentNullException.ThrowIfNull(window);
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             command.CommandText = "SELECT COUNT(*) FROM (" + BuildIndividualsSql(filter, paged: false) + ");";
             BindIndividualsParameters(command, filter, window, includePaging: false);
 
@@ -254,6 +279,11 @@ public sealed partial class AnalyticsStore
     /// <summary>One individual's activity within <paramref name="window"/>.</summary>
     public IndividualDetail? GetIndividual(string visitorId, ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetIndividual(visitorId, window);
+        }
         ArgumentNullException.ThrowIfNull(window);
         if (string.IsNullOrWhiteSpace(visitorId))
         {
@@ -266,7 +296,7 @@ public sealed partial class AnalyticsStore
         {
             IndividualRow? summary = null;
 
-            using (var command = _connection.CreateCommand())
+            using (var command = CreateCommand())
             {
                 command.CommandText = BuildIndividualsSql(filter, paged: false, singleVisitor: true);
                 BindWindow(command, window);
@@ -284,7 +314,7 @@ public sealed partial class AnalyticsStore
                 return null;
             }
 
-            using var activityCommand = _connection.CreateCommand();
+            using var activityCommand = CreateCommand();
             activityCommand.CommandText =
                 "SELECT utc, 'visit' AS kind, path AS target, NULL AS release_version, referrer_url, utm_campaign " +
                 $"FROM visits WHERE visitor_id = $visitorId AND {InWindow} " +
@@ -312,6 +342,40 @@ public sealed partial class AnalyticsStore
 
             return new IndividualDetail(summary, activity);
         }
+    }
+
+    /// <summary>All filtered rows from one snapshot, streamed without a silent row cap.</summary>
+    public IEnumerable<IndividualRow> EnumerateIndividuals(IndividualFilter filter, ReportWindow window)
+    {
+        using var snapshot = OpenReadSnapshot();
+        using var command = snapshot.CreateCommand();
+        command.CommandText = BuildIndividualsSql(filter, paged: false);
+        BindIndividualsParameters(command, filter, window, includePaging: false);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) yield return ReadIndividualRow(reader);
+    }
+
+    public long CountReturningIndividuals(IndividualFilter filter, ReportWindow window)
+    {
+        using var snapshot = OpenReadSnapshot();
+        using var command = snapshot.CreateCommand();
+        command.CommandText = "SELECT COALESCE(SUM(is_returning),0) FROM (" + BuildIndividualsSql(filter, false) + ");";
+        BindIndividualsParameters(command, filter, window, includePaging: false);
+        return (long)command.ExecuteScalar()!;
+    }
+
+    public IReadOnlyList<(string Code, string Name)> GetPeopleCountries(ReportWindow window)
+    {
+        using var snapshot = OpenReadSnapshot();
+        using var command = snapshot.CreateCommand();
+        command.CommandText = "SELECT country_code, MAX(country) FROM (" +
+            BuildIndividualsSql(new IndividualFilter(window.Range.Days), false) +
+            ") WHERE country_code IS NOT NULL GROUP BY country_code ORDER BY MAX(country), country_code;";
+        BindWindow(command, window);
+        using var reader = command.ExecuteReader();
+        var rows = new List<(string, string)>();
+        while (reader.Read()) rows.Add((reader.GetString(0), reader.IsDBNull(1) ? reader.GetString(0) : reader.GetString(1)));
+        return rows;
     }
 
     // --- helpers -----------------------------------------------------------
@@ -353,52 +417,28 @@ public sealed partial class AnalyticsStore
     /// </remarks>
     private static string BuildIndividualsSql(IndividualFilter filter, bool paged, bool singleVisitor = false)
     {
-        var sql =
-            "SELECT e.visitor_id, MIN(f.first_utc), MAX(e.utc), " +
-            "  MAX(e.country), MAX(e.country_code), MAX(e.ip), MAX(e.ip_prefix), " +
-            "  MAX(e.device), MAX(e.os_family), MAX(e.ua_family), " +
-            "  SUM(CASE WHEN e.kind = 'visit' THEN 1 ELSE 0 END), " +
-            "  SUM(CASE WHEN e.kind = 'download' THEN 1 ELSE 0 END), " +
-            "  MAX(CASE WHEN f.first_utc < $from THEN 1 ELSE 0 END) " +
-            "FROM (" +
-            "  SELECT visitor_id, utc, day, country, country_code, ip, ip_prefix, device, os_family, ua_family, 'visit' AS kind " +
-            $"  FROM visits WHERE visitor_id IS NOT NULL AND {PeopleHumanOnly} " +
-            "  UNION ALL " +
-            "  SELECT visitor_id, utc, day, country, country_code, ip, ip_prefix, device, os_family, ua_family, 'download' AS kind " +
-            "  FROM downloads WHERE visitor_id IS NOT NULL " +
-            ") e " +
-            "JOIN (" +
-            "  SELECT visitor_id, MIN(utc) AS first_utc FROM (" +
-            $"    SELECT visitor_id, utc FROM visits WHERE visitor_id IS NOT NULL AND {PeopleHumanOnly} " +
-            "    UNION ALL " +
-            "    SELECT visitor_id, utc FROM downloads WHERE visitor_id IS NOT NULL" +
-            "  ) GROUP BY visitor_id" +
-            ") f ON f.visitor_id = e.visitor_id ";
-
-        sql += singleVisitor
-            ? $"WHERE e.visitor_id = $visitorId AND {InWindowAs("e")} "
-            : $"WHERE {InWindowAs("e")} ";
-
-        if (!singleVisitor && filter.CountryCode is not null)
+        // Country filters apply to the latest known country, never a subset of a person's events.
+        const string fields = "visitor_id, utc, day, id, country, country_code, ip, ip_prefix, device, os_family, ua_family";
+        var sql = $"WITH events AS (SELECT {fields}, 0 AS kind FROM visits WHERE visitor_id IS NOT NULL AND {PeopleHumanOnly} " +
+            $"UNION ALL SELECT {fields}, 1 AS kind FROM downloads WHERE visitor_id IS NOT NULL), " +
+            $"window_events AS (SELECT * FROM events WHERE {InWindow}), people AS (" +
+            "SELECT e.visitor_id, (SELECT MIN(f.utc) FROM events f WHERE f.visitor_id=e.visitor_id) AS first_seen, MAX(e.utc) AS last_seen, ";
+        foreach (var field in new[] { "country", "country_code", "ip", "ip_prefix", "device", "os_family", "ua_family" })
         {
-            sql += "AND e.country_code = $countryCode ";
+            sql += $"(SELECT d.{field} FROM window_events d WHERE d.visitor_id=e.visitor_id AND d.{field} IS NOT NULL " +
+                $"ORDER BY d.utc DESC, d.kind DESC, d.id DESC LIMIT 1) AS {field}, ";
         }
-
-        sql += "GROUP BY e.visitor_id ";
-
+        sql += "SUM(CASE WHEN e.kind=0 THEN 1 ELSE 0 END) AS visits, " +
+            "SUM(CASE WHEN e.kind=1 THEN 1 ELSE 0 END) AS downloads, " +
+            "(SELECT MIN(f.utc) FROM events f WHERE f.visitor_id=e.visitor_id) < $from AS is_returning " +
+            "FROM window_events e ";
+        if (singleVisitor) sql += "WHERE e.visitor_id=$visitorId ";
+        sql += "GROUP BY e.visitor_id) SELECT * FROM people WHERE 1=1 ";
+        if (!singleVisitor && filter.CountryCode is not null) sql += "AND country_code=$countryCode ";
         if (!singleVisitor && filter.Downloaded is not null)
-        {
-            sql += filter.Downloaded.Value
-                ? "HAVING SUM(CASE WHEN e.kind = 'download' THEN 1 ELSE 0 END) > 0 "
-                : "HAVING SUM(CASE WHEN e.kind = 'download' THEN 1 ELSE 0 END) = 0 ";
-        }
-
-        sql += "ORDER BY MAX(e.utc) DESC ";
-
-        if (paged)
-        {
-            sql += "LIMIT $limit OFFSET $offset";
-        }
+            sql += filter.Downloaded.Value ? "AND downloads>0 " : "AND downloads=0 ";
+        sql += "ORDER BY last_seen DESC, visitor_id ";
+        if (paged) sql += "LIMIT $limit OFFSET $offset";
 
         return sql;
     }
@@ -416,7 +456,7 @@ public sealed partial class AnalyticsStore
         if (includePaging)
         {
             command.Parameters.AddWithValue("$limit", Math.Clamp(filter.PageSize, 1, 500));
-            command.Parameters.AddWithValue("$offset", Math.Max(0, filter.Page) * Math.Clamp(filter.PageSize, 1, 500));
+            command.Parameters.AddWithValue("$offset", (long)Math.Max(0, filter.Page) * Math.Clamp(filter.PageSize, 1, 500));
         }
     }
 

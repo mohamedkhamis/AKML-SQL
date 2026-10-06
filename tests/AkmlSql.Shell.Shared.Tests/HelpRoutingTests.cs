@@ -28,31 +28,36 @@ namespace AkmlSql.Shell.Shared.Tests
     {
         public HelpRoutingTests() : base("akmlsql-helprouting-test-") { }
 
-        /// <summary>contracts/ui.md §1: page key → F1 topic.</summary>
+        /// <summary>Page key → F1 topic: a page's own heading, a section's heading under its page.</summary>
         private static readonly Dictionary<string, string> ContractTopics = new()
         {
             ["General"] = "topics/options#general",
-            ["IntelliSense"] = "topics/options#suggestions-behavior",
-            ["SuggestionTypes"] = "topics/options#suggestions-types-of-suggestion",
-            ["CompletionPolish"] = "topics/options#suggestions-tooltips",
-            ["ConnectionScope"] = "topics/options#suggestions-connections",
-            ["JoinOptions"] = "topics/options#suggestions-join-conditions",
-            ["Snippets"] = "topics/options#suggestions-snippets",
+            ["SuggestionsBehavior"] = "topics/options#suggestions-behavior",
+            ["IntelliSense"] = "topics/options#completion",
+            ["CompletionPolish"] = "topics/options#tooltips",
+            ["JoinOptions"] = "topics/options#join-conditions",
+            ["SuggestionsLists"] = "topics/options#suggestions-lists-connections",
+            ["SuggestionTypes"] = "topics/options#types-of-suggestion",
+            ["ConnectionScope"] = "topics/options#connections",
+            ["ConnectionsMemory"] = "topics/options#sql-server-auth-connections",
+            ["Snippets"] = "topics/options#snippets",
             ["Safety"] = "topics/options#suggestions-warnings-highlighting",
-            ["InsertOptions"] = "topics/options#inserted-code-objects-statements",
-            ["Qualification"] = "topics/options#inserted-code-qualification",
-            ["Aliases"] = "topics/options#inserted-code-aliases",
-            ["SpecialCharacters"] = "topics/options#inserted-code-special-characters",
-            ["Formatting"] = "topics/options#format-styles",
-            ["Navigation"] = "topics/options#navigation",
-            ["Grid"] = "topics/options#queries-query-results",
+            ["InsertedCode"] = "topics/options#inserted-code",
+            ["InsertOptions"] = "topics/options#objects-statements",
+            ["Qualification"] = "topics/options#qualification",
+            ["Aliases"] = "topics/options#aliases",
+            ["SpecialCharacters"] = "topics/options#special-characters",
+            ["Formatting"] = "topics/options#format",
+            ["ResultsExecution"] = "topics/options#queries-results-execution",
+            ["Grid"] = "topics/options#query-results",
+            ["Execution"] = "topics/options#execution",
             ["History"] = "topics/options#queries-history",
             ["Tabs & UI"] = "topics/options#queries-color",
-            ["Execution"] = "topics/options#queries-execution",
-            ["Editor"] = "topics/options#editor-productivity",
-            ["Refactoring"] = "topics/options#editor-refactoring",
+            ["EditorAll"] = "topics/options#editor",
+            ["Editor"] = "topics/options#productivity",
+            ["Refactoring"] = "topics/options#refactoring",
+            ["Navigation"] = "topics/options#navigation",
             ["Code Analysis"] = "topics/options#code-analysis",
-            ["ConnectionsMemory"] = "topics/options#connections-memory",
             ["AI Assistance"] = "topics/options#ai-assistance",
         };
 
@@ -78,9 +83,11 @@ namespace AkmlSql.Shell.Shared.Tests
             {
                 foreach (var pair in builders)
                 {
+                    // A section's key selects the page that shows it; F1 opens that page's topic.
                     Assert.True((bool)select.Invoke(dialog, new object[] { pair.Key })!, $"no tree leaf for '{pair.Key}'");
-                    Assert.Equal(pair.Key, dialog.CurrentPageKey);
-                    Assert.Equal(pair.Value.HelpTopic, dialog.CurrentHelpTopic);
+                    var shown = dialog.ShownPageKey(pair.Key);
+                    Assert.Equal(shown, dialog.CurrentPageKey);
+                    Assert.Equal(builders[shown].HelpTopic, dialog.CurrentHelpTopic);
                 }
             }
             finally

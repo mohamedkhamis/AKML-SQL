@@ -7,13 +7,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class ExecutionPage : IPageBuilder
     {
         public string Key     => "Execution";
-        public string Display => "Queries › Execution";
+        public string Display => "Queries › Results & execution › Execution";
         public string Title   => "Execution";
-        public string HelpTopic => "topics/options#queries-execution";
+        public string HelpTopic => "topics/options#execution";
         public string Help    => "Configure query execution behavior: toggle the status-bar execution timer, enable multi-database execution, and set how many seconds a query must run before a long-running notification appears.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
+            ctx.Rows.AddGroupHeader(panel, "Execution");
             var (rowTimer, chkTimer) = ctx.Rows.AddToggle(panel,
                 "Execution timer", "Show execution timer in status bar");
             ctx.RegisterSearch("Execution timer", "Show execution timer in status bar", "Toggle", rowTimer);

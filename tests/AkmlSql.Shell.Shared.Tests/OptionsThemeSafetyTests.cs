@@ -111,7 +111,7 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.True(dialog.ThemeChangeRequested);
             Assert.False(dialog.WorkingCopy.IntelliSense.ShowNullability);
             Assert.Equal("light", dialog.WorkingCopy.Theme);
-            Assert.Equal("IntelliSense", dialog.CurrentPageKey);
+            Assert.Equal("SuggestionsBehavior", dialog.CurrentPageKey); // the page showing IntelliSense
             Assert.Equal(new[] { "light" }, _themeCalls); // live preview only; nothing saved
             Assert.Equal(before, ConfigBytes());
         }

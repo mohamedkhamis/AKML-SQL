@@ -109,9 +109,10 @@ namespace AkmlSql.Shell.Shared.Tests
             var dialog = new SettingsWindow(settings);
             _ = dialog.TestBuildWindowForRenderTest();
 
-            var tooltips = dialog.ResetConfirmationText("CompletionPolish");
-            Assert.StartsWith("Reset the settings on Suggestions › Tooltips?", tooltips);
-            Assert.DoesNotContain("CompletionPolish", tooltips);
+            // The tree leaf's key — a combined page's, so its sections' settings all go with it.
+            var behavior = dialog.ResetConfirmationText("SuggestionsBehavior");
+            Assert.StartsWith("Reset the settings on Suggestions › Behavior?", behavior);
+            Assert.DoesNotContain("SuggestionsBehavior", behavior);
 
             Assert.Contains("2 AI agents", dialog.ResetConfirmationText("AI Assistance"));
             Assert.Contains("default environments", dialog.ResetConfirmationText("Tabs & UI"));

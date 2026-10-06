@@ -17,8 +17,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Qualification";
         public string Display => "Inserted code › Qualification";
         public string Title   => "Qualification";
-        public string HelpTopic => "topics/options#inserted-code-qualification";
-        public string Help    => "Controls whether object names inserted from the suggestions box carry their schema prefix. Bracket-identifier policy lives on Inserted Code › Special characters.";
+        public string HelpTopic => "topics/options#qualification";
+        public string Help    => "Controls whether object names inserted from the suggestions box carry their schema prefix. Bracket-identifier policy is under Special characters, on the same page.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {

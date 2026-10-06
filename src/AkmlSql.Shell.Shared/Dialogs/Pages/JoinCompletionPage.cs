@@ -17,14 +17,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class JoinCompletionPage : IPageBuilder
     {
         public string Key     => "JoinOptions";
-        public string Display => "Suggestions › Join conditions";
+        public string Display => "Suggestions › Behavior › Join conditions";
         public string Title   => "Join conditions";
-        public string HelpTopic => "topics/options#suggestions-join-conditions";
+        public string HelpTopic => "topics/options#join-conditions";
         public string Help    => "Controls how JOIN completion suggests ON conditions, including whether to fall back to matching column names when no foreign key links the two tables.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "FK fallback");
+            ctx.Rows.AddGroupHeader(panel, "Join conditions");
 
             var (rowMatch, chkMatch) = ctx.Rows.AddToggle(panel,
                 "Use matching column names when no FK exists",

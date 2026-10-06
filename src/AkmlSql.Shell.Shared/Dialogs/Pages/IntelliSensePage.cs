@@ -7,9 +7,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class IntelliSensePage : IPageBuilder
     {
         public string Key     => "IntelliSense";
-        public string Display => "Suggestions › Behavior";
-        public string Title   => "Behavior";
-        public string HelpTopic => "topics/options#suggestions-behavior";
+        public string Display => "Suggestions › Behavior › Completion";
+        public string Title   => "Completion";
+        public string HelpTopic => "topics/options#completion";
         public string Help    => "Controls AKML SQL completion behavior — auto-triggering, fuzzy matching, suggestion count and trigger delay, column/PK/FK details, popup Ctrl-transparency, FK-assisted JOIN and alias generation, commit keys, and snippets. Special-character handling lives on Inserted Code › Special characters; SQL-auth credentials on Connections & Memory.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

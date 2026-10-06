@@ -117,7 +117,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
         /// <summary>
         /// SQL Prompt-parity header: the band shows the page's full breadcrumb (its Display),
-        /// e.g. "Inserted code › Special characters" — not the short page Title.
+        /// e.g. "Suggestions › Lists & connections" — not the short page Title.
         /// </summary>
         [StaFact]
         public void PageHeader_ShowsBreadcrumbDisplay_ForSpecialCharactersPage()
@@ -128,7 +128,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
             // The page enters the window's logical tree only once its nav leaf is selected.
             var leaf = LogicalTree.Descendants<TreeViewItem>(window)
-                .FirstOrDefault(item => (item.Tag as string) == "SpecialCharacters");
+                .FirstOrDefault(item => (item.Tag as string) == "SuggestionsLists");
             Assert.NotNull(leaf);
             leaf!.IsSelected = true;
             Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.Render);
@@ -136,7 +136,7 @@ namespace AkmlSql.Shell.Shared.Tests
             bool found = false;
             foreach (var tb in LogicalTree.Descendants<TextBlock>(window))
             {
-                if (tb.Text == "Inserted code › Special characters")
+                if (tb.Text == "Suggestions › Lists & connections")
                 {
                     found = true;
                     break;

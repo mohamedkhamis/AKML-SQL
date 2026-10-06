@@ -192,6 +192,8 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             // Ensure theme resources are merged so SetResourceReference resolves.
             ThemeRegistry.Instance.AttachTo(this);
+            // Themed check boxes, radio buttons and scroll bars for the whole window.
+            FormatStylesChrome.ApplyImplicitStyles(this);
 
             BuildUi();
             DataContext = _viewModel;
@@ -274,7 +276,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Text = "No style selected",
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.H4,
+                FontSize = Typography.H3,
                 FontWeight = Typography.WeightSemiBold,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
@@ -289,9 +291,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            _headerBuiltInChip = MakeHeaderChip("Built-in", accent: false, out _headerBuiltInChipText);
-            _headerDirtyChip = MakeHeaderChip("Unsaved changes", accent: true, out _);
-            _headerActiveChip = MakeHeaderChip("Active: —", accent: true, out _headerActiveChipText);
+            _headerBuiltInChip = MakeHeaderChip("Built-in", ChipKind.Neutral, out _headerBuiltInChipText);
+            _headerDirtyChip = MakeHeaderChip("Unsaved changes", ChipKind.Warning, out _);
+            _headerActiveChip = MakeHeaderChip("Active: —", ChipKind.Accent, out _headerActiveChipText);
             _headerActiveChip.ToolTip = "The style Format SQL uses";
             chips.Children.Add(_headerBuiltInChip);
             chips.Children.Add(_headerDirtyChip);
@@ -347,7 +349,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Text = string.Empty,
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.Body,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(Spacing.Md, 0, Spacing.Md, 0),
@@ -363,7 +365,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _saveBtn = new Button
             {
                 Content = "Save",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 IsEnabled = false,
@@ -371,6 +373,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 ToolTip = "Select a style first",   // replaced by UpdateSaveButtonState once one loads
             };
+            ThemedButton.ApplyPrimary(_saveBtn);
             _saveBtn.Click += async (_, _) =>
             {
                 try
@@ -392,7 +395,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _revertButton = new Button
             {
                 Content = "Revert",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 Visibility = Visibility.Collapsed,
@@ -400,6 +403,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 ToolTip = "Discard the unsaved changes and go back to the saved values.",
             };
+            ThemedButton.ApplySecondary(_revertButton);
             _revertButton.Click += (_, _) =>
             {
                 try
@@ -419,7 +423,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _resetButton = new Button
             {
                 Content = "Reset to built-in",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 Visibility = Visibility.Collapsed,
@@ -427,6 +431,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 ToolTip = "Discard your saved changes to this built-in style and restore the original.",
             };
+            ThemedButton.ApplySecondary(_resetButton);
             _resetButton.Click += async (_, _) =>
             {
                 try { await OnResetStyleAsync(); }
@@ -437,12 +442,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             var closeBtn = new Button
             {
                 Content = "Close",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 IsCancel = true,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
             };
+            ThemedButton.ApplySecondary(closeBtn);
             closeBtn.Click += (_, _) => Close();
             footerButtons.Children.Add(closeBtn);
 
@@ -490,12 +496,6 @@ namespace AkmlSql.Shell.Shared.Formatting
         // -----------------------------------------------------------------
         private FrameworkElement BuildLeftPanel()
         {
-            var res = ThemeRegistry.Instance.Resources;
-            var accentBrush = res[ThemeTokens.AccentPrimary] as System.Windows.Media.Brush;
-            var selectionBrush = res[ThemeTokens.SurfaceSelection] as System.Windows.Media.Brush;
-            var selectionStrongBrush = res[ThemeTokens.SurfaceSelectionStrong] as System.Windows.Media.Brush;
-            var textPrimaryBrush = res[ThemeTokens.TextPrimary] as System.Windows.Media.Brush;
-
             var panel = new Grid { Margin = new Thickness(Spacing.Sm) };
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // list
@@ -516,28 +516,10 @@ namespace AkmlSql.Shell.Shared.Formatting
             _styleList.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             ScrollViewer.SetHorizontalScrollBarVisibility(_styleList, ScrollBarVisibility.Disabled);
 
-            // Themed selection colours; the active style additionally gets an accent-tinted card via
-            // the container style below (SQL Prompt: active = tinted card + accent border + ✔).
-            if (selectionStrongBrush != null) _styleList.Resources[SystemColors.HighlightBrushKey] = selectionStrongBrush;
-            if (textPrimaryBrush != null) _styleList.Resources[SystemColors.HighlightTextBrushKey] = textPrimaryBrush;
-            if (selectionBrush != null) _styleList.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = selectionBrush;
-            if (textPrimaryBrush != null) _styleList.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = textPrimaryBrush;
-
-            var itemStyle = new Style(typeof(ListBoxItem));
-            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs)));
-            itemStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 1)));
-            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
-            itemStyle.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
-            itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
-            var activeTrigger = new System.Windows.DataTrigger
-            {
-                Binding = new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)),
-                Value = true,
-            };
-            if (selectionBrush != null) activeTrigger.Setters.Add(new Setter(Control.BackgroundProperty, selectionBrush));
-            if (accentBrush != null) activeTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, accentBrush));
-            itemStyle.Triggers.Add(activeTrigger);
-            _styleList.ItemContainerStyle = itemStyle;
+            // Rows share the option tree's look: a rounded tint and an accent bar on the selected
+            // style. The active style is marked by its ACTIVE pill alone — a second tint for
+            // "active" beside the one for "selected" made the two hard to tell apart.
+            _styleList.ItemContainerStyle = FormatStylesChrome.ListItemStyle();
 
             // Spec 033 (T036) — sectioned list: "YOUR STYLES" first, then "BUILT-IN STYLES",
             // names A→Z within each; group headers via a code-built template (upper-cased).
@@ -556,9 +538,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             headerFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
             headerFactory.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
             headerFactory.SetValue(TextBlock.FontSizeProperty, (double)Typography.Small);
-            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 8, 2, 3));
-            if (res[ThemeTokens.TextSecondary] is System.Windows.Media.Brush secBrush)
-                headerFactory.SetValue(TextBlock.ForegroundProperty, secBrush);
+            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(Spacing.Sm + 2, Spacing.Md, 2, Spacing.Xs));
+            headerFactory.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             groupHeaderTemplate.VisualTree = headerFactory;
             _styleList.GroupStyle.Add(new GroupStyle { HeaderTemplate = groupHeaderTemplate });
 
@@ -636,13 +617,14 @@ namespace AkmlSql.Shell.Shared.Formatting
             _setActiveButton = new Button
             {
                 Content = "Set as active style",
-                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
-                Margin = new Thickness(0, 0, 0, Spacing.Xs),
+                Padding = FooterButtonPadding,
+                Margin = new Thickness(0, Spacing.Xs, 0, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 IsEnabled = false,   // enabled by OnStyleSelectionChangedAsync for a non-active row
                 ToolTip = "Make the selected style the one Format SQL uses",
             };
+            ThemedButton.ApplySecondary(_setActiveButton);
             _setActiveButton.Click += async (_, _) =>
             {
                 try { await OnSetActiveAsync(); }
@@ -650,19 +632,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             listFooter.Children.Add(_setActiveButton);
 
-            listFooter.Children.Add(MakeAccentCtaButton("+ New Style", OnNewStyleAsync));
+            listFooter.Children.Add(MakeAccentCtaButton("+ New style", OnNewStyleAsync));
             Grid.SetRow(listFooter, 2);
             panel.Children.Add(listFooter);
 
             return MakePaneCard(0, panel);
         }
 
+        /// <summary>How a header chip reads: context, unsaved work, or the style Format SQL uses.</summary>
+        private enum ChipKind { Neutral, Warning, Accent }
+
+        /// <summary>One padding, so every footer and list button has the same height.</summary>
+        private static readonly Thickness FooterButtonPadding = new Thickness(Spacing.Md + 2, 5, Spacing.Md + 2, 5);
+
         /// <summary>
-        /// A compact header status chip. <paramref name="accent"/> chips carry the accent token
-        /// (state the user must notice: unsaved work, which style is active); neutral chips use the
-        /// muted token (context only). Starts collapsed — <see cref="UpdateHeaderState"/> shows it.
+        /// A rounded header status pill. A neutral pill is context ("Built-in"); the warning pill
+        /// leads with an amber dot (unsaved work); the accent pill names the active style in the
+        /// link colour on the selection tint. Starts collapsed — <see cref="UpdateHeaderState"/>
+        /// shows it.
         /// </summary>
-        private Border MakeHeaderChip(string text, bool accent, out TextBlock label)
+        private Border MakeHeaderChip(string text, ChipKind kind, out TextBlock label)
         {
             label = new TextBlock
             {
@@ -672,21 +661,44 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontWeight = Typography.WeightSemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            var highContrast = FormatStylesChrome.IsHighContrast;
             label.SetResourceReference(TextBlock.ForegroundProperty,
-                accent ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
+                highContrast || kind == ChipKind.Warning ? ThemeTokens.TextPrimary
+                : kind == ChipKind.Accent ? ThemeTokens.TextLink
+                : ThemeTokens.TextSecondary);
+
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            if (kind == ChipKind.Warning)
+            {
+                var dot = new TextBlock
+                {
+                    Text = "\u25CF",
+                    FontSize = 9,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 5, 0),
+                };
+                dot.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.StatusWarning);
+                content.Children.Add(dot);
+            }
+            content.Children.Add(label);
 
             var chip = new Border
             {
-                Child = label,
-                CornerRadius = new CornerRadius(2),
+                Child = content,
+                CornerRadius = new CornerRadius(10),
                 BorderThickness = new Thickness(1),
-                Padding = new Thickness(Spacing.Xs, 1, Spacing.Xs, 1),
-                Margin = new Thickness(Spacing.Xs, 0, 0, 0),
+                Padding = new Thickness(Spacing.Sm + 1, 2, Spacing.Sm + 1, 3),
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Visibility = Visibility.Collapsed,
             };
+            // (High Contrast: the tints are the system highlight, so the pill is outlined instead.)
+            chip.SetResourceReference(Border.BackgroundProperty,
+                highContrast ? ThemeTokens.SurfacePanel
+                : kind == ChipKind.Accent ? ThemeTokens.SurfaceSelection : ThemeTokens.SurfaceHover);
             chip.SetResourceReference(Border.BorderBrushProperty,
-                accent ? ThemeTokens.AccentPrimary : ThemeTokens.BorderSubtle);
+                highContrast ? ThemeTokens.BorderDefault
+                : kind == ChipKind.Accent ? ThemeTokens.SurfaceSelection : ThemeTokens.BorderSubtle);
             return chip;
         }
 
@@ -746,7 +758,14 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (_stylesHeader != null)
             {
                 var count = _viewModel.Profiles.Count;
-                _stylesHeader.Text = count > 0 ? $"STYLES · {count}" : "STYLES";
+                _stylesHeader.Inlines.Clear();
+                _stylesHeader.Inlines.Add(new System.Windows.Documents.Run("STYLES"));
+                if (count > 0)
+                {
+                    var countRun = new System.Windows.Documents.Run("  " + count);
+                    countRun.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, ThemeTokens.TextDisabled);
+                    _stylesHeader.Inlines.Add(countRun);
+                }
             }
         }
 
@@ -771,11 +790,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             var btn = new Button
             {
                 Content = content,
-                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
+                Padding = FooterButtonPadding,
+                MinWidth = 76,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
             };
+            ThemedButton.ApplySecondary(btn);
             // async-void click handler is the WPF event idiom; guarded so a faulted task can't crash the host.
             btn.Click += async (_, _) =>
             {
@@ -785,53 +806,32 @@ namespace AkmlSql.Shell.Shared.Formatting
             return btn;
         }
 
-        /// <summary>Outlined accent call-to-action ("+ New Style") — Border-based so the accent
-        /// border/text survive the host's default button chrome.</summary>
-        private FrameworkElement MakeAccentCtaButton(string content, Func<System.Threading.Tasks.Task> onClick)
+        /// <summary>
+        /// Outlined accent call-to-action ("+ New style"): a real button — keyboard, screen readers
+        /// and UI Automation reach it by name — on the shared themed template, with the accent for
+        /// its border and the link colour for its text.
+        /// </summary>
+        private Button MakeAccentCtaButton(string content, Func<System.Threading.Tasks.Task> onClick)
         {
-            var border = new Border
+            var btn = new Button
             {
-                CornerRadius = new CornerRadius(4),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(Spacing.Sm, Spacing.Xs + 1, Spacing.Sm, Spacing.Xs + 1),
-                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Xs, Spacing.Xs),
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Background = System.Windows.Media.Brushes.Transparent,
-                Focusable = true, // keyboard-reachable — this is the only path to "New style"
-            };
-            border.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
-            var label = new TextBlock
-            {
-                Text = content,
+                Content = content,
+                Padding = FooterButtonPadding,
+                Margin = new Thickness(0, Spacing.Sm, 0, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 FontWeight = Typography.WeightSemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                Cursor = System.Windows.Input.Cursors.Hand,
             };
-            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
-            border.Child = label;
-
-            async System.Threading.Tasks.Task Invoke()
+            ThemedButton.ApplySecondary(btn);
+            btn.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            btn.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextLink);
+            btn.Click += async (_, _) =>
             {
                 try { await onClick(); }
                 catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: action '{Action}' failed", content); SetStatus(ex.Message); }
-            }
-            void Tint() => border.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceSelection);
-            void Clear() => border.Background = System.Windows.Media.Brushes.Transparent;
-            border.MouseEnter += (_, _) => Tint();
-            border.MouseLeave += (_, _) => { if (!border.IsKeyboardFocused) Clear(); };
-            border.GotKeyboardFocus += (_, _) => Tint();      // visible focus state
-            border.LostKeyboardFocus += (_, _) => Clear();
-            border.MouseLeftButtonUp += async (_, _) => await Invoke();
-            border.KeyDown += async (_, e) =>
-            {
-                if (e.Key is System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space)
-                {
-                    e.Handled = true;
-                    await Invoke();
-                }
             };
-            return border;
+            return btn;
         }
 
         /// <summary>The row's ⋮ glyph opens the shared style context menu against its own row.</summary>
@@ -981,6 +981,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             _teamUnavailableRow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        /// <summary>The hint over a built-in style's options.</summary>
+        private const string BuiltInHint = "Built-in style: your edits are saved as your own copy, and the original is kept.";
+
         private void UpdateReadOnlyState()
         {
             // The settings form is disabled only for a read-only team style (spec 040, STY-10) —
@@ -999,15 +1002,15 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (_builtInHintText != null)
                 {
                     var text = _viewModel.IsSelectedCustomized
-                        ? "This is your edited version of a built-in style. The original is still there — Reset to built-in restores it."
+                        ? "Your edited copy of a built-in style. Reset to built-in restores the original."
                         : _viewModel.IsSelectedBuiltIn
-                            ? "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time."
+                            ? BuiltInHint
                             : string.Empty;
                     if (_viewModel.IsSelectedClassic && !_viewModel.IsSelectedReadOnly)
                         text = (text.Length > 0 ? text + " " : string.Empty)
-                               + "This style is written in AKML's own model; it is shown in SQL Prompt's terms, and saving makes it a SQL Prompt style, formatted as the preview shows.";
+                               + "Written in AKML's own model and shown in SQL Prompt's terms; saving makes it a SQL Prompt style, formatted as the preview shows.";
                     if (_viewModel.IsSelectedReadOnly)   // spec 040 (T187)
-                        text = "This team style is read-only — its folder can't be written to. Copy it to make a style of your own you can edit.";
+                        text = "Read-only team style — its folder can't be written to. Copy it to edit a style of your own.";
                     _builtInHintText.Text = text;
                 }
             }
@@ -1634,80 +1637,136 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private DataTemplate BuildStyleListItemTemplate()
         {
-            // Row:  [✔ active] Name [Kind] .......... [⋮]
-            // The ✔ marks the active style (accent-coloured); the ⋮ (docked right) opens the
-            // shared per-style context menu against its own row. Uses WPF's built-in
-            // BooleanToVisibilityConverter — no resources needed.
+            // Row:  Name ................ [Modified] [ACTIVE]  ⋮
+            // The badges sit in one right-hand column, so every row's ACTIVE pill and ⋮ line up.
+            // "Built-in" / "Team" is not repeated on each row — the section header above says it;
+            // only what the section can't tell you gets a badge (Modified, Read-only). The row's
+            // tooltip still gives the full kind.
+            // Under High Contrast the selected row is the system highlight: the badges and ⋮ then
+            // take the row's own text colour, and ACTIVE is outlined rather than filled.
+            var highContrast = FormatStylesChrome.IsHighContrast;
             var boolToVis = new System.Windows.Controls.BooleanToVisibilityConverter();
-            var accent = ThemeRegistry.Instance.Resources[ThemeTokens.AccentPrimary];
 
             var template = new DataTemplate(typeof(StyleListItem));
 
-            var dock = new FrameworkElementFactory(typeof(DockPanel));
-            dock.SetValue(DockPanel.LastChildFillProperty, true);
-            dock.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 2, 0, 2));
-
-            var menuGlyph = new FrameworkElementFactory(typeof(TextBlock));
-            menuGlyph.SetValue(TextBlock.TextProperty, "⋮");
-            menuGlyph.SetValue(DockPanel.DockProperty, Dock.Right);
-            menuGlyph.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            menuGlyph.SetValue(TextBlock.FontSizeProperty, (double)Typography.H4);
-            menuGlyph.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 4, 0));
-            menuGlyph.SetValue(UIElement.OpacityProperty, 0.6);
-            menuGlyph.SetValue(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand);
-            menuGlyph.SetValue(FrameworkElement.ToolTipProperty, "Style actions");
-            // Spec 040 (T185): screen readers announce the glyph by name, not as "⋮".
-            menuGlyph.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Style actions");
-            menuGlyph.AddHandler(UIElement.MouseLeftButtonUpEvent,
-                new System.Windows.Input.MouseButtonEventHandler(OnRowMenuGlyphClick));
-            dock.AppendChild(menuGlyph);
-
-            var stack = new FrameworkElementFactory(typeof(StackPanel));
-            stack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            var grid = new FrameworkElementFactory(typeof(Grid));
+            grid.SetValue(FrameworkElement.MinHeightProperty, 22.0);
+            grid.SetBinding(FrameworkElement.ToolTipProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
+            var nameCol = new FrameworkElementFactory(typeof(ColumnDefinition));
+            nameCol.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+            var badgeCol = new FrameworkElementFactory(typeof(ColumnDefinition));
+            badgeCol.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
+            var menuCol = new FrameworkElementFactory(typeof(ColumnDefinition));
+            menuCol.SetValue(ColumnDefinition.WidthProperty, new GridLength(20));
+            grid.AppendChild(nameCol);
+            grid.AppendChild(badgeCol);
+            grid.AppendChild(menuCol);
 
             var name = new FrameworkElementFactory(typeof(TextBlock));
             name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Name)));
             name.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
             name.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-            stack.AppendChild(name);
+            grid.AppendChild(name);
 
-            // The active style reads as an explicit "ACTIVE" pill rather than the previous bare "✔ "
-            // prefix. A lone check glyph was easy to miss and gave no hint that it means "this is the
-            // style Format SQL will use" — the exact confusion behind "selecting a style doesn't mark
-            // it" (selecting only highlights a row; activating is a separate action).
+            var badges = new FrameworkElementFactory(typeof(StackPanel));
+            badges.SetValue(Grid.ColumnProperty, 1);
+            badges.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            badges.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            // "Modified" / "Read-only": an outlined, muted pill.
+            var kindBadge = new FrameworkElementFactory(typeof(Border));
+            kindBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            kindBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            kindBadge.SetValue(Border.PaddingProperty, new Thickness(6, 0, 6, 1));
+            kindBadge.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
+            kindBadge.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            kindBadge.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind))
+            {
+                Converter = KindBadgeConverter.Instance,
+                ConverterParameter = KindBadgeConverter.VisibilityParameter,
+            });
+            var kindText = new FrameworkElementFactory(typeof(TextBlock));
+            kindText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)) { Converter = KindBadgeConverter.Instance });
+            kindText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            if (!highContrast) kindText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            kindBadge.AppendChild(kindText);
+            badges.AppendChild(kindBadge);
+
+            // The active style reads as an explicit, filled "ACTIVE" pill: a bare check glyph was
+            // easy to miss and gave no hint that it means "Format SQL uses this style" — the
+            // confusion behind "selecting a style doesn't mark it" (selecting only highlights a
+            // row; activating is a separate action).
             var activeBadge = new FrameworkElementFactory(typeof(Border));
-            activeBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
-            activeBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-            activeBadge.SetValue(Control.PaddingProperty, new Thickness(4, 0, 4, 0));
+            activeBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            activeBadge.SetValue(Border.PaddingProperty, new Thickness(6, 1, 6, 1));
             activeBadge.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
-            activeBadge.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             activeBadge.SetValue(FrameworkElement.ToolTipProperty, "Format SQL uses this style");
-            if (accent is System.Windows.Media.Brush accentBorder)
-                activeBadge.SetValue(Border.BorderBrushProperty, accentBorder);
+            if (highContrast)
+            {
+                activeBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+                activeBadge.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            }
+            else
+            {
+                activeBadge.SetResourceReference(Border.BackgroundProperty, ThemeTokens.AccentPrimary);
+            }
             activeBadge.SetBinding(UIElement.VisibilityProperty,
                 new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)) { Converter = boolToVis });
-
             var activeText = new FrameworkElementFactory(typeof(TextBlock));
             activeText.SetValue(TextBlock.TextProperty, "ACTIVE");
-            activeText.SetValue(TextBlock.FontSizeProperty, 9.0);
+            activeText.SetValue(TextBlock.FontSizeProperty, 9.5);
             activeText.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
-            activeText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            if (accent is System.Windows.Media.Brush accentFg)
-                activeText.SetValue(TextBlock.ForegroundProperty, accentFg);
+            if (!highContrast) activeText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextOnAccent);
             activeBadge.AppendChild(activeText);
-            stack.AppendChild(activeBadge);
+            badges.AppendChild(activeBadge);
+            grid.AppendChild(badges);
 
-            var kind = new FrameworkElementFactory(typeof(TextBlock));
-            kind.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
-            kind.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 1, 0, 0));
-            kind.SetValue(UIElement.OpacityProperty, 0.55);
-            kind.SetValue(TextBlock.FontSizeProperty, 10.0);
-            kind.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            stack.AppendChild(kind);
+            // ⋮ opens the shared per-style context menu against its own row.
+            var menuGlyph = new FrameworkElementFactory(typeof(TextBlock));
+            menuGlyph.SetValue(Grid.ColumnProperty, 2);
+            menuGlyph.SetValue(TextBlock.TextProperty, "⋮");
+            menuGlyph.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            menuGlyph.SetValue(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            menuGlyph.SetValue(TextBlock.FontSizeProperty, (double)Typography.H4);
+            menuGlyph.SetValue(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand);
+            menuGlyph.SetValue(FrameworkElement.ToolTipProperty, "Style actions");
+            if (!highContrast) menuGlyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            // Spec 040 (T185): screen readers announce the glyph by name, not as "⋮".
+            menuGlyph.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Style actions");
+            menuGlyph.AddHandler(UIElement.MouseLeftButtonUpEvent,
+                new System.Windows.Input.MouseButtonEventHandler(OnRowMenuGlyphClick));
+            grid.AppendChild(menuGlyph);
 
-            dock.AppendChild(stack);
-            template.VisualTree = dock;
+            template.VisualTree = grid;
             return template;
+        }
+
+        /// <summary>
+        /// The style list's kind badge: only what the row's section header doesn't already say —
+        /// "Modified" for an edited built-in, "Read-only" for a team style that can't be written.
+        /// With <see cref="VisibilityParameter"/> it answers whether the badge shows at all.
+        /// </summary>
+        private sealed class KindBadgeConverter : System.Windows.Data.IValueConverter
+        {
+            internal static readonly KindBadgeConverter Instance = new KindBadgeConverter();
+            internal const string VisibilityParameter = "visibility";
+
+            internal static string Badge(string? kind) =>
+                kind == null ? string.Empty
+                : kind.EndsWith("modified", StringComparison.Ordinal) ? "Modified"
+                : kind.EndsWith("read-only", StringComparison.Ordinal) ? "Read-only"
+                : string.Empty;
+
+            public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            {
+                var badge = Badge(value as string);
+                return Equals(parameter, VisibilityParameter)
+                    ? (badge.Length == 0 ? Visibility.Collapsed : Visibility.Visible)
+                    : badge;
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => throw new NotSupportedException();
         }
 
         /// <summary>Upper-cases the style-list section label ("Your styles" → "YOUR STYLES").</summary>
@@ -1724,8 +1783,6 @@ namespace AkmlSql.Shell.Shared.Formatting
         // -----------------------------------------------------------------
         private FrameworkElement BuildMiddlePanel()
         {
-            var res = ThemeRegistry.Instance.Resources;
-
             var panel = new Grid { Margin = new Thickness(Spacing.Sm) };
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1749,18 +1806,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             _settingsTree.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             ScrollViewer.SetHorizontalScrollBarVisibility(_settingsTree, ScrollBarVisibility.Disabled);
 
-            // Themed selection: the selected group leaf gets an accent bar + on-accent text
-            // (SQL Prompt look). Groups are the selectable leaves; categories only expand.
-            if (res[ThemeTokens.AccentPrimary] is System.Windows.Media.Brush accent)
-            {
-                _settingsTree.Resources[SystemColors.HighlightBrushKey] = accent;
-                _settingsTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = accent;
-            }
-            if (res[ThemeTokens.TextOnAccent] is System.Windows.Media.Brush onAccent)
-            {
-                _settingsTree.Resources[SystemColors.HighlightTextBrushKey] = onAccent;
-                _settingsTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = onAccent;
-            }
+            // Chevrons on the categories; the selected page gets a soft rounded tint and an accent
+            // bar instead of the stock solid highlight block. Implicit, so it reaches every depth.
+            _settingsTree.Resources[typeof(TreeViewItem)] = FormatStylesChrome.TreeItemStyle();
             Grid.SetRow(_settingsTree, 2);
             panel.Children.Add(_settingsTree);
 
@@ -1775,29 +1823,60 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         private FrameworkElement BuildSearchBox()
         {
-            var host = new Grid { Margin = new Thickness(Spacing.Xs, 0, Spacing.Xs, Spacing.Sm) };
+            // A rounded field with a search glyph; its border turns the focus colour while typing.
+            var frame = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(Spacing.Xs, 0, Spacing.Xs, Spacing.Sm),
+                SnapsToDevicePixels = true,
+            };
+            frame.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
+            frame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+
+            var host = new Grid();
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var glyph = new TextBlock
+            {
+                Text = FormatStylesChrome.SearchGlyph,
+                FontFamily = FormatStylesChrome.IconFont,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                IsHitTestVisible = false,
+            };
+            glyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
+            host.Children.Add(glyph);
+
             _searchBox = new TextBox
             {
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
-                Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new Thickness(Spacing.Xs + 2, 5, Spacing.Sm, 5),
                 ToolTip = "Search option names, descriptions and choices (Ctrl+F)",
             };
             System.Windows.Automation.AutomationProperties.SetName(_searchBox, "Search for options");
-            _searchBox.SetResourceReference(Control.BackgroundProperty, ThemeTokens.SurfaceInput);
             _searchBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            _searchBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
+            _searchBox.SetResourceReference(TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
+            _searchBox.GotKeyboardFocus += (_, _) => frame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderFocus);
+            _searchBox.LostKeyboardFocus += (_, _) => frame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            Grid.SetColumn(_searchBox, 1);
 
             _searchPlaceholder = new TextBlock
             {
                 Text = "Search for options…",
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
-                Margin = new Thickness(Spacing.Sm + 2, 0, 0, 0),
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false,
             };
             _searchPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
+            Grid.SetColumn(_searchPlaceholder, 1);
 
             _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
             _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); ApplySearch(); };
@@ -1827,7 +1906,8 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             host.Children.Add(_searchBox);
             host.Children.Add(_searchPlaceholder);
-            return host;
+            frame.Child = host;
+            return frame;
         }
 
         private void FocusSearch()
@@ -1853,7 +1933,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 leaf.Visibility = visible.Contains(entry.Key) ? Visibility.Visible : Visibility.Collapsed;
                 if (result.Counts.TryGetValue(entry.Key, out var count))
                 {
-                    matches.Text = $"  ({count})";
+                    matches.Text = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     matches.Visibility = Visibility.Visible;
                 }
                 else
@@ -1901,9 +1981,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             foreach (var entry in _groupLeaves)
             {
                 var changed = _viewModel.ChangedCount(entry.Key);
-                entry.Value.Changed.Text = changed > 0 ? $"  \u25CF {changed}" : string.Empty;
+                entry.Value.Changed.Text = changed > 0 ? changed.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
                 entry.Value.Changed.Visibility = changed > 0 ? Visibility.Visible : Visibility.Collapsed;
-                entry.Value.Changed.ToolTip = changed > 0
+                ((FrameworkElement)entry.Value.Changed.Parent).ToolTip = changed > 0
                     ? $"{changed} option{(changed == 1 ? "" : "s")} on this page differ from SQL Prompt's default"
                     : null;
             }
@@ -1964,12 +2044,12 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Text = "Select a category",
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.BodyStrong,
+                FontSize = Typography.H4,
                 FontWeight = Typography.WeightSemiBold,
-                Margin = new Thickness(0, Spacing.Xs, 0, Spacing.Sm),
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, 0, Spacing.Sm),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
-            _breadcrumbText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
+            _breadcrumbText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             Grid.SetRow(_breadcrumbText, 0);
             formGrid.Children.Add(_breadcrumbText);
 
@@ -1978,22 +2058,30 @@ namespace AkmlSql.Shell.Shared.Formatting
             _builtInHint = new Border
             {
                 Visibility = Visibility.Collapsed,
-                Padding = new Thickness(Spacing.Sm),
-                Margin = new Thickness(0, 0, 0, Spacing.Sm),
-                CornerRadius = new CornerRadius(3),
-                BorderThickness = new Thickness(1),
+                Margin = new Thickness(Spacing.Xs, 0, 0, Spacing.Sm),
             };
-            _builtInHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover);
-            _builtInHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            var hintInfo = new TextBlock
+            {
+                Text = FormatStylesChrome.InfoGlyph,
+                FontFamily = FormatStylesChrome.IconFont,
+                FontSize = 12,
+                Margin = new Thickness(0, 1, Spacing.Sm - 2, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            hintInfo.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
             _builtInHintText = new TextBlock
             {
-                Text = "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time.",
+                Text = BuiltInHint,
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
             };
             _builtInHintText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            _builtInHint.Child = _builtInHintText;
+            var hintRow = new DockPanel();
+            DockPanel.SetDock(hintInfo, Dock.Left);
+            hintRow.Children.Add(hintInfo);
+            hintRow.Children.Add(_builtInHintText);
+            _builtInHint.Child = hintRow;
             Grid.SetRow(_builtInHint, 1);
             formGrid.Children.Add(_builtInHint);
 
@@ -2045,7 +2133,6 @@ namespace AkmlSql.Shell.Shared.Formatting
             previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source controls
             previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // warning bar
             previewGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // preview text
-            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // caption
 
             // Header: LIVE PREVIEW (left) + preview-source controls (right).
             var previewHeader = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Xs) };
@@ -2195,7 +2282,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 ShowLineNumbers = true,
                 TabSize = _viewModel.PreviewTabSize,
-                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Xs, Spacing.Xs),
+                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Xs, Spacing.Sm),
                 Text = "-- The live preview appears once the schema loads and a style is selected.",
             };
             Grid.SetRow(_previewView, 2);
@@ -2218,17 +2305,6 @@ namespace AkmlSql.Shell.Shared.Formatting
             _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             Grid.SetRow(_previewTextBox, 2);
             previewGrid.Children.Add(_previewTextBox);
-
-            var caption = new TextBlock
-            {
-                Text = "Preview updates as you change settings.",
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Sm),
-            };
-            caption.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            Grid.SetRow(caption, 3);
-            previewGrid.Children.Add(caption);
 
             previewCard.Child = previewGrid;
             Grid.SetRow(previewCard, 2);
@@ -2266,6 +2342,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                             Header = category.DisplayName,
                             IsExpanded = true,
                             FontWeight = Typography.WeightSemiBold,
+                            Padding = new Thickness(Spacing.Xs, 0, Spacing.Sm, 0),
                         };
                         categoryNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
                         foreach (var group in category.Groups)
@@ -2303,20 +2380,30 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// group's whole settings list as a form on the right, under a "Category › Group" title.</summary>
         private TreeViewItem BuildGroupLeaf(FormatStylesSchemaModel.Group group, string? categoryDisplay)
         {
-            // Header: the page name, "● N" options changed from the default, and "(N)" search matches.
-            // The badges inherit the leaf's foreground, so they stay readable on the selected accent.
-            var changed = new TextBlock { FontSize = Typography.Small, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.8, Visibility = Visibility.Collapsed };
-            var matches = new TextBlock { FontSize = Typography.Small, FontWeight = Typography.WeightSemiBold, VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
+            // Header: the page name, then two small pills — how many of its options differ from
+            // the default (muted) and, while searching, how many match (accent). Each pill shows
+            // and hides with its number, which UpdateLeafBadges / ApplySearch set.
+            var changed = new TextBlock { FontSize = 10.5, FontWeight = Typography.WeightSemiBold, Visibility = Visibility.Collapsed };
+            var matches = new TextBlock { FontSize = 10.5, FontWeight = Typography.WeightSemiBold, Visibility = Visibility.Collapsed };
+            var changedPill = FormatStylesChrome.Pill(changed, ThemeTokens.SurfaceElevated, null, ThemeTokens.TextSecondary);
+            var matchesPill = FormatStylesChrome.Pill(matches, ThemeTokens.AccentPrimary, null, ThemeTokens.TextOnAccent);
+            foreach (var (pill, text) in new[] { (changedPill, changed), (matchesPill, matches) })
+            {
+                pill.Margin = new Thickness(Spacing.Sm, 0, 0, 0);
+                pill.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding(nameof(Visibility)) { Source = text });
+            }
             var header = new StackPanel { Orientation = Orientation.Horizontal };
             header.Children.Add(new TextBlock { Text = group.DisplayName, VerticalAlignment = VerticalAlignment.Center });
-            header.Children.Add(changed);
-            header.Children.Add(matches);
+            header.Children.Add(changedPill);
+            header.Children.Add(matchesPill);
 
             var leaf = new TreeViewItem
             {
                 Header = header,
                 FontWeight = FontWeights.Normal, // counteract the inherited semi-bold category weight
                 Tag = group,
+                // Under a category the name lines up with the category's (past its chevron).
+                Padding = new Thickness(categoryDisplay != null ? Spacing.Xs + 20 : Spacing.Sm, 0, Spacing.Sm, 0),
             };
             System.Windows.Automation.AutomationProperties.SetName(leaf, group.DisplayName);
             _groupLeaves[group.Id] = (leaf, changed, matches, categoryDisplay);
@@ -2374,9 +2461,17 @@ namespace AkmlSql.Shell.Shared.Formatting
             _viewModel.PageSample = group.Sample;
 
             if (_breadcrumbText != null)
-                _breadcrumbText.Text = categoryDisplay != null
-                    ? $"{categoryDisplay}  ›  {group.DisplayName}"
-                    : group.DisplayName;
+            {
+                // "Clauses › Join": the category muted, the page itself in the heading weight.
+                _breadcrumbText.Inlines.Clear();
+                if (categoryDisplay != null)
+                {
+                    var trail = new System.Windows.Documents.Run(categoryDisplay + "  ›  ") { FontWeight = FontWeights.Normal };
+                    trail.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, ThemeTokens.TextSecondary);
+                    _breadcrumbText.Inlines.Add(trail);
+                }
+                _breadcrumbText.Inlines.Add(new System.Windows.Documents.Run(group.DisplayName));
+            }
 
             _settingControlsHost.Children.Clear();
             _gatedRows.Clear();
@@ -2404,20 +2499,34 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (setting.Subgroup != null && setting.Subgroup != subgroup)
                 {
                     subgroup = setting.Subgroup;
-                    var heading = new TextBlock
-                    {
-                        Text = subgroup.ToUpperInvariant(),
-                        FontFamily = Typography.UiFont,
-                        FontSize = Typography.Small,
-                        FontWeight = Typography.WeightSemiBold,
-                        Margin = new Thickness(Spacing.Sm, index == 0 ? 0 : Spacing.Md, 0, Spacing.Xs),
-                    };
-                    heading.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-                    _settingControlsHost.Children.Add(heading);
+                    _settingControlsHost.Children.Add(SubgroupHeading(subgroup, first: index == 0));
                 }
                 _settingControlsHost.Children.Add(BuildSettingRow(setting, index++));
             }
             UpdateLeafBadges();
+        }
+
+        /// <summary>A page's small section heading ("JOIN", "ON") with a hairline running to the right edge.</summary>
+        private static Grid SubgroupHeading(string text, bool first)
+        {
+            var heading = new Grid { Margin = new Thickness(Spacing.Sm, first ? 0 : Spacing.Md, Spacing.Sm, Spacing.Xs) };
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var label = new TextBlock
+            {
+                Text = text.ToUpperInvariant(),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            var rule = new System.Windows.Shapes.Rectangle { Height = 1, Margin = new Thickness(Spacing.Sm, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, SnapsToDevicePixels = true };
+            rule.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, ThemeTokens.BorderSubtle);
+            Grid.SetColumn(rule, 1);
+            heading.Children.Add(label);
+            heading.Children.Add(rule);
+            return heading;
         }
 
         /// <summary>
@@ -2444,7 +2553,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (!string.Equals(row.Setting.EnabledWhenId, changed.Id, StringComparison.Ordinal)) continue;
                 var open = IsGateOpen(row.Setting);
                 row.Control.IsEnabled = open;
-                row.Label.SetResourceReference(TextBlock.ForegroundProperty, open ? ThemeTokens.TextSecondary : ThemeTokens.TextDisabled);
+                row.Label.SetResourceReference(TextBlock.ForegroundProperty, open ? ThemeTokens.TextPrimary : ThemeTokens.TextDisabled);
                 row.Label.ToolTip = RowTooltip(row.Setting, open);
                 row.Hint.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
             }
@@ -2454,9 +2563,10 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// One form row. An on/off option is a checkbox whose own content is its label, across the
         /// whole row, so clicking the words toggles it (as in SQL Prompt). Any other option has its
         /// label on the left — in a column the page's rows share, at least 200 px and at most 45% of
-        /// the page — and its control on the right. Labels wrap instead of being cut off (spec 040
-        /// STY-01, FR-020); the tooltip repeats the label and adds the description. Alternate rows
-        /// get a subtle zebra tint.
+        /// the page — and its control on the right, left-aligned in a column at most 280 px wide.
+        /// Labels wrap instead of being cut off (spec 040 STY-01, FR-020); the tooltip repeats the
+        /// label and adds the description. Every row ends in the same fixed column for its ↺, so
+        /// the controls and reset buttons line up down the page; a row tints under the mouse.
         /// </summary>
         private FrameworkElement BuildSettingRow(FormatSettingNode setting, int index)
         {
@@ -2469,15 +2579,21 @@ namespace AkmlSql.Shell.Shared.Formatting
             // an option another option turns on is indented under it.
             var rowBorder = new Border
             {
-                Padding = new Thickness(Spacing.Sm, Spacing.Xs + 1, Spacing.Sm, Spacing.Xs + 1),
-                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(Spacing.Sm, 5, Spacing.Xs, 5),
+                CornerRadius = new CornerRadius(4),
                 Tag = setting.Id,
-                Margin = new Thickness(setting.EnabledWhenId != null ? Spacing.Lg : 0, 0, 0, 0),
+                Margin = new Thickness(setting.EnabledWhenId != null ? Spacing.Lg : 0, 0, 0, 1),
+                Background = System.Windows.Media.Brushes.Transparent,
             };
-            if (_searchMatches.Contains(setting.Id))
-                rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceSelection); // search match
-            else if (index % 2 == 1)
-                rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceCanvas); // zebra
+            var isMatch = _searchMatches.Contains(setting.Id);
+            void Rest()
+            {
+                if (isMatch) rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceSelection); // search match
+                else rowBorder.Background = System.Windows.Media.Brushes.Transparent;
+            }
+            Rest();
+            rowBorder.MouseEnter += (_, _) => { if (!isMatch) rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover); };
+            rowBorder.MouseLeave += (_, _) => Rest();
 
             var label = new TextBlock
             {
@@ -2490,7 +2606,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 TextTrimming = TextTrimming.None,
                 ToolTip = RowTooltip(setting, gateOpen),
             };
-            label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextSecondary);
+            label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextPrimary);
 
             // Wired whenever the option is supported: a closed gate only disables the control, so
             // RefreshIfGate can turn it back on without rebuilding the row.
@@ -2504,15 +2620,18 @@ namespace AkmlSql.Shell.Shared.Formatting
             var reset = new Button
             {
                 Content = "\u21BA",
-                Padding = new Thickness(Spacing.Xs, 0, Spacing.Xs, 0),
-                Margin = new Thickness(Spacing.Xs, 0, 0, 0),
-                MinWidth = 22,
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                FontSize = Typography.Body,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
                 ToolTip = $"Back to SQL Prompt's default ({DefaultLabel(setting)})",
                 Visibility = Visibility.Collapsed,
                 IsEnabled = !unsupported,
             };
+            FormatStylesChrome.ApplyIconButton(reset);
             System.Windows.Automation.AutomationProperties.SetName(reset, $"Reset {setting.DisplayName} to SQL Prompt's default");
             reset.Click += (_, _) =>
             {
@@ -2528,7 +2647,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 checkBox.Content = label;
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
                 Grid.SetColumn(checkBox, 0);
                 row.Children.Add(checkBox);
                 if (badge != null)
@@ -2544,7 +2663,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "lbl", MinWidth = 200 });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
                 Grid.SetColumn(reset, 2);
                 row.Children.Add(reset);
 
@@ -2573,11 +2692,14 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Grid.SetColumn(labelCell, 0);
                 row.Children.Add(labelCell);
 
-                // Each control sets its own horizontal alignment (combos/text boxes stretch to fill
-                // the column up to MaxWidth); the row only caps and centres them.
-                control.MaxWidth = 280;
-                Grid.SetColumn(control, 1);
-                row.Children.Add(control);
+                // The control fills a cell at most 280 px wide that starts at the column's left edge,
+                // so every control on the page begins at the same x. (A capped Stretch control
+                // would be centred in the column instead.)
+                var cell = new Grid();
+                cell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 280 });
+                cell.Children.Add(control);
+                Grid.SetColumn(cell, 1);
+                row.Children.Add(cell);
             }
 
             // Spec 040 (T103, STY-07): the note, and why a dependent option is disabled, read under
@@ -2594,6 +2716,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             rowBorder.Child = body;
             return rowBorder;
         }
+
+        /// <summary>The ↺ column every row ends in, shown or not, so controls end at one edge.</summary>
+        private const double ResetColumnWidth = 30;
 
         private static TextBlock RowNote(string text)
         {
@@ -2676,11 +2801,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Content = glyph,
                 FontSize = 7,
                 Width = 18,
-                Height = 12,
+                Height = 13,
                 Padding = new Thickness(0),
                 Focusable = false,
                 ToolTip = name,
             };
+            FormatStylesChrome.ApplyIconButton(button);
             System.Windows.Automation.AutomationProperties.SetName(button, name);
             return button;
         }

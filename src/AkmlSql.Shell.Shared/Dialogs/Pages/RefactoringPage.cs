@@ -14,7 +14,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "Refactoring";
         public string Display => "Editor › Refactoring";
         public string Title   => "Refactoring";
-        public string HelpTopic => "topics/options#editor-refactoring";
+        public string HelpTopic => "topics/options#refactoring";
         public string Help    => "Controls Safe Rename: whether occurrences inside comments are renamed too.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

@@ -15,9 +15,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class FormattingPage : IPageBuilder
     {
         public string Key     => "Formatting";
-        public string Display => "Format › Styles";
-        public string Title   => "Styles";
-        public string HelpTopic => "topics/options#format-styles";
+        public string Display => "Format";
+        public string Title   => "Format";
+        public string HelpTopic => "topics/options#format";
         public string Help    => "Choose the active formatting style, open the Edit Formatting Styles window to change how styles lay out SQL, turn the formatter on or off, and choose whether Bulk Format makes backups.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

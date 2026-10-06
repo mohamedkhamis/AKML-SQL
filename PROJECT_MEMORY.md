@@ -465,3 +465,42 @@ change, and verify the affected path with its established tests and UI checks.
   temporary verification script are in ignored `artifacts/site-screenshot-review/`.
   This work updated source only: no deployment was performed, and the
   deployed-site E2E suite was not run against the live installation.
+
+## 2026-10-06 — Site admin and security audit checkpoint
+
+- Reports: [admin functional/data review](reports/site-audit-2026-10-06/01-admin-functional-review.md)
+  and [production security audit](reports/site-audit-2026-10-06/02-production-security-audit.md).
+  Keep these in `reports/`, outside the public `doc/` ingestion tree.
+- Reviewed deployed IIS settings and read-only production aggregates; the deployed
+  Site assembly matched the Release build. Authenticated/mutating checks used an
+  isolated copy of the published application, synthetic data and loopback SMTP.
+  All 877 existing Site tests passed. This does not certify authenticated
+  production behavior or the later download acceptance suite.
+- Do not trust the comments claiming empty forwarded-header proxy lists ignore
+  headers: both lists are cleared, which trusts arbitrary senders. The local
+  published app reproduced IP spoofing and throttle bypass; production uses the
+  same empty configuration. The report also records legacy TLS acceptance,
+  analytics file ACL exposure, CSV formula handling, intake and privacy gaps.
+- The owner explicitly requested a stop after Task 2. No application/security
+  fix or deployment was made. Task 3's GitHub download investigation/fix and
+  browser acceptance tests remain pending approval.
+
+## 2026-10-06 — Admin fixes and collection health follow-up
+
+- The owner subsequently approved F01–F10 and collection health first, including
+  retention/error handling overlaps with the security audit. See
+  [implementation and verification](reports/site-audit-2026-10-06/03-admin-implementation.md)
+  and [spec follow-up](specs/038-site-downloads-admin-portal/admin-review-follow-up.md).
+- People now uses latest known dimensions and matching filters/counts; full CSV
+  exports have no 500-person cap. Feedback/errors have paging/search/exports;
+  Insights has aggregate CSV. Numeric settings reject invalid input.
+- Analytics reports use independent read-only SQLite snapshots. Settings shows
+  process-lifetime queue delivery/loss/lag and maintenance status/current backlog.
+  Maintenance runs at startup, hourly and after retention changes, retrying failures.
+  Non-GET/API error responses no longer re-enter Razor status/form handling.
+- Verified 890 Site tests, full solution Release build, theme drift gate and 12
+  isolated local HTTPS Chromium check groups (including desktop/mobile widths).
+  No deployment or Git mutation performed by this agent. Queue delivery remains
+  best-effort; counters reset on restart. Broader security remediation, new desktop
+  telemetry and Task 3 download work remain pending. Audit reports are historical
+  baselines, not current source status; consult the implementation report too.

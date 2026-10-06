@@ -23,8 +23,9 @@
         Errors reported by the desktop product for @_range.Phrase.
     </p>
     <p class="admin-privacy">
-        <strong>Privacy:</strong> reports are anonymous — a random client-generated install id, the
-        product version and the host process. No IP addresses, no machine names, no user identity.
+        <strong>Privacy:</strong> reports carry a persistent random installation identifier,
+        product version and host process. Message and exception text can contain sensitive
+        details; handle these reports and exports accordingly.
     </p>
 </header>
 
@@ -59,14 +60,32 @@
     </ul>
 </nav>
 
+<form method="get" action="/admin/errors" class="admin-toolbar">
+    <input type="hidden" name="days" value="@_range.Key" />
+    <input type="hidden" name="level" value="@_level" />
+    <label for="error-search">Message or exception</label>
+    <input class="admin-input" id="error-search" name="q" value="@_search" maxlength="200" />
+    <label for="error-version">Product version</label>
+    <input class="admin-input" id="error-version" name="version" value="@_version" maxlength="64" />
+    <button type="submit" class="btn btn-secondary">Apply</button>
+    <a href="@($"/admin/errors.csv?{Filters}")" download>Export all matching errors</a>
+</form>
+<nav class="admin-toolbar" aria-label="Error pages">
+    @if (_page > 0) { <a href="@PageUrl(_page - 1)">← Previous</a> }
+    <span>Page @(_page + 1) of @Math.Max(1, (_total + RecentLimit - 1) / RecentLimit)</span>
+    @if (((long)_page + 1) * RecentLimit < _total) { <a href="@PageUrl(_page + 1)">Next →</a> }
+</nav>
+<p class="admin-choice-hint">Headline and severity totals cover the whole window. Filters below apply to the matching event list.
+    Reporting installs count only installations that sent errors; they are not active-install totals.</p>
+
 <section class="admin-stats" aria-label="Key metrics">
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.TotalWindow</p>
-        <p class="admin-stat-label">Errors · @_range.Label</p>
+        <p class="admin-stat-label">Errors · whole window</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@_summary.DistinctInstallsWindow</p>
-        <p class="admin-stat-label">Installs · @_range.Label</p>
+        <p class="admin-stat-label">Reporting installs · whole window</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@(_summary.ByLevel.FirstOrDefault()?.Key ?? "—")</p>
@@ -75,15 +94,15 @@
 </section>
 
 <div class="admin-tables">
-    <MetricTable Id="levels" Heading="By severity level" KeyHeader="Level" CountHeader="Errors"
+    <MetricTable Id="levels" Heading="By severity level · whole window" KeyHeader="Level" CountHeader="Errors"
                  Rows="_summary.ByLevel" Total="_summary.ByLevel.Sum(r => r.Count)"
                  Empty="No client errors recorded in this window." />
 
     <section class="admin-panel" aria-labelledby="recent-heading">
-        <h2 id="recent-heading">Recent errors</h2>
-        @if (_summary.Recent.Count == 0)
+        <h2 id="recent-heading">Recent errors · @_total matching</h2>
+        @if (_rows.Count == 0)
         {
-            <p class="admin-empty">No client errors recorded in this window.</p>
+            <p class="admin-empty">No client errors match these filters in this window.</p>
         }
         else
         {
@@ -100,7 +119,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _summary.Recent)
+                        @foreach (var row in _rows)
                         {
                             <tr>
                                 <td>@row.Utc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)</td>
@@ -127,11 +146,20 @@
 
 @code {
     /// <summary>Cap on the recent-events table — the newest rows are what a triage session reads.</summary>
-    private const int RecentLimit = 200;
+    private const int RecentLimit = AdminPaging.PageSize;
 
     private ClientErrorsSummary _summary = null!;
     private ReportRange _range = ReportRange.Default;
     private string? _level;
+    private string? _search, _version;
+    private long _total;
+    private int _page;
+    private IReadOnlyList<ClientErrorRow> _rows = [];
+    [SupplyParameterFromQuery(Name = "q")] public string? SearchQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "version")] public string? VersionQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public string? PageQuery { get; set; }
+    private string Filters => $"days={_range.Key}&level={_level}&version={Uri.EscapeDataString(_version ?? "")}&q={Uri.EscapeDataString(_search ?? "")}";
+    private string PageUrl(int page) => $"/admin/errors?{Filters}&page={page}";
 
     /// <summary>
     /// Reporting range from <c>?days=</c>; bound as a STRING (a value Blazor's query binder
@@ -154,13 +182,18 @@
     {
         _range = AdminDashboardOptions.ResolveRange(Days);
         _level = ClientErrorLevelNormalization.Normalize(Level);
-        _summary = Store.GetClientErrorsSummary(Store.ResolveWindow(_range), _level, RecentLimit);
+        _search = AdminPaging.Search(SearchQuery);
+        _version = AdminPaging.Search(VersionQuery);
+        var window = Store.ResolveWindow(_range);
+        _summary = Store.GetClientErrorsSummary(window, _level, RecentLimit);
+        _total = Store.CountClientErrors(window, _level, _version, _search);
+        _page = AdminPaging.Clamp(PageQuery, _total);
+        _rows = Store.GetClientErrorPage(window, _level, _version, _search, _page, RecentLimit);
     }
 
     /// <summary>Level-switch link preserving the selected window; null clears the filter.</summary>
-    private string LevelUrl(string? level) => level is null
-        ? $"/admin/errors?days={_range.Key}"
-        : $"/admin/errors?days={_range.Key}&level={level}";
+    private string LevelUrl(string? level) =>
+        $"/admin/errors?days={_range.Key}&level={level}&version={Uri.EscapeDataString(_version ?? "")}&q={Uri.EscapeDataString(_search ?? "")}";
 
     /// <summary>First 8 characters of the install id — enough to correlate rows, short enough to read.</summary>
     private static string ShortInstall(string? installId) =>

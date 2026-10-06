@@ -168,7 +168,7 @@ It is created automatically on first run with all defaults. The file is written 
 | `teamStyleFolder` | string | "" | A shared folder of team formatting styles (local or UNC path; empty = off). Its styles are listed under TEAM STYLES and are read-only when the folder can't be written to. A folder that can't be reached is skipped after 2 seconds. |
 | `formatSqlActions` | object | (below) | What Format Document and Format Selection do, whatever the style says |
 
-`formatSqlActions` (Options › Format › Styles › *When you run Format SQL, AKML SQL will:*):
+`formatSqlActions` (Options › Format › *When you run Format SQL, AKML SQL will:*):
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

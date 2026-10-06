@@ -18,7 +18,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public string Key     => "SpecialCharacters";
         public string Display => "Inserted code › Special characters";
         public string Title   => "Special characters";
-        public string HelpTopic => "topics/options#inserted-code-special-characters";
+        public string HelpTopic => "topics/options#special-characters";
         public string Help    => "Controls the special characters AKML SQL inserts as you type and complete: when identifiers are wrapped in [square brackets], whether parentheses are added after a function is committed, and whether typing an opening bracket, brace, or quote inserts its matching closing character.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

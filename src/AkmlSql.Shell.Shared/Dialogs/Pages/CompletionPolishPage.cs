@@ -13,9 +13,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class CompletionPolishPage : IPageBuilder
     {
         public string Key     => "CompletionPolish";
-        public string Display => "Suggestions › Tooltips";
+        public string Display => "Suggestions › Behavior › Tooltips";
         public string Title   => "Tooltips";
-        public string HelpTopic => "topics/options#suggestions-tooltips";
+        public string HelpTopic => "topics/options#tooltips";
         public string Help    => "Whether the definition panel (columns, details and script) appears beside the suggestions box when an object is selected.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

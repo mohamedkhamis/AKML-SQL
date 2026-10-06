@@ -15,16 +15,20 @@ namespace AkmlSql.Site.Analytics;
 /// </para>
 /// <para>
 /// Everything runs on a background task after start, wrapped so a maintenance failure can never take
-/// the site down: the worst outcome of a failed prune is some old rows surviving another day.
+/// the site down. Runs hourly and after retention changes; failures retry after one minute.
 /// </para>
 /// </summary>
-public sealed class MaintenanceHostedService : IHostedService
+public sealed class MaintenanceHostedService : BackgroundService
 {
     private readonly AnalyticsStore _store;
     private readonly SiteSettingsStore _settings;
     private readonly AnalyticsOptions _options;
     private readonly string? _siteHost;
     private readonly ILogger<MaintenanceHostedService> _logger;
+    private readonly SemaphoreSlim _requested = new(0, 1);
+    private readonly SemaphoreSlim _pass = new(1, 1);
+    private MaintenanceSnapshot _snapshot = new();
+    public MaintenanceSnapshot Snapshot => Volatile.Read(ref _snapshot);
 
     public MaintenanceHostedService(
         AnalyticsStore store,
@@ -37,36 +41,60 @@ public sealed class MaintenanceHostedService : IHostedService
         _settings = settings;
         _options = options.Value;
         _logger = logger;
+        _settings.RetentionChanged += RequestRun;
 
         _siteHost = Uri.TryCreate(site.Value.BaseUrl, UriKind.Absolute, out var canonical)
             ? canonical.Host
             : null;
     }
 
-    /// <summary>Kicks the maintenance pass onto a background task and returns immediately.</summary>
-    public Task StartAsync(CancellationToken cancellationToken)
+    public void RequestRun()
     {
-        _ = Task.Run(() => RunAsync(cancellationToken), cancellationToken);
-        return Task.CompletedTask;
+        try { _requested.Release(); }
+        catch (SemaphoreFullException) { /* A pass is already requested. */ }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public long? GetIdentifiableBacklog()
+    {
+        try { return _store.CountIdentifiableBacklog(_settings.Current.IdentifiableRetentionDays, DateTimeOffset.UtcNow); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not measure identifiable retention backlog.");
+            return null;
+        }
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await RunAsync(stoppingToken);
+            await _requested.WaitAsync(Snapshot.Failed ? TimeSpan.FromMinutes(1) : TimeSpan.FromHours(1), stoppingToken);
+        }
+    }
+
+    public override void Dispose()
+    {
+        _settings.RetentionChanged -= RequestRun;
+        base.Dispose();
+    }
 
     /// <summary>
     /// One maintenance pass. Public so a test can run it deterministically rather than racing a
     /// background task.
     /// </summary>
-    public Task RunAsync(CancellationToken cancellationToken = default)
+    public async Task RunAsync(CancellationToken cancellationToken = default)
     {
+        await _pass.WaitAsync(cancellationToken);
+        _snapshot = Snapshot with { LastAttemptUtc = DateTimeOffset.UtcNow, Running = true };
         try
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                return Task.CompletedTask;
+                return;
             }
 
-            // ADM-004: retention prune. Once per boot rather than on a timer — the tables gain a few
-            // thousand rows a day at most, so a prune per deploy or recycle is ample.
+            // The same pass runs hourly and promptly after a retention-setting change.
             var prunedRows = _store.Prune(_options.RetentionDays);
             if (prunedRows > 0)
             {
@@ -88,8 +116,7 @@ public sealed class MaintenanceHostedService : IHostedService
             }
 
             // Spec 038 T076 (US3): erase identifiable detail past the owner's retention setting.
-            // Runs BEFORE the prune above would ever reach these rows, and nulls the two columns
-            // rather than deleting the row, so country and version totals for old periods still
+            // Nulls the two columns on retained rows, so country and version totals still
             // reconcile after the personal detail is gone (SC-008).
             var deIdentified = _store.DeIdentify(_settings.Current.IdentifiableRetentionDays);
             if (deIdentified > 0)
@@ -98,14 +125,19 @@ public sealed class MaintenanceHostedService : IHostedService
                     "Analytics retention: de-identified {Rows} row(s) older than {Days} days.",
                     deIdentified, _settings.Current.IdentifiableRetentionDays);
             }
+            _snapshot = Snapshot with { LastSuccessUtc = DateTimeOffset.UtcNow, Failed = false,
+                Pruned = prunedRows, DeIdentified = deIdentified, ReferrersCorrected = correctedReferrers };
         }
         catch (Exception ex)
         {
-            // Maintenance must never take the site down. The worst outcome of a failure here is that
-            // some old rows survive until the next recycle.
+            // Keep serving requests, surface the failure and retry in one minute.
             _logger.LogError(ex, "Analytics maintenance pass failed; the site is unaffected.");
+            _snapshot = Snapshot with { Failed = true };
         }
-
-        return Task.CompletedTask;
+        finally
+        {
+            _snapshot = Snapshot with { Running = false };
+            _pass.Release();
+        }
     }
 }

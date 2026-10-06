@@ -18,6 +18,7 @@ public sealed class FeedbackStore : IDisposable
 {
     private readonly SqliteConnection _connection;
     private readonly object _gate = new();
+    private readonly string _databasePath;
 
     public FeedbackStore(AnalyticsOptions options)
         : this(AnalyticsStore.ResolveDatabasePath(options?.DatabasePath))
@@ -26,6 +27,7 @@ public sealed class FeedbackStore : IDisposable
 
     public FeedbackStore(string databasePath)
     {
+        _databasePath = databasePath;
         var directory = Path.GetDirectoryName(databasePath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -95,16 +97,18 @@ public sealed class FeedbackStore : IDisposable
     }
 
     /// <summary>Messages newest first. <paramref name="handled"/> null = all.</summary>
-    public IReadOnlyList<FeedbackItem> List(bool? handled, int limit = 200)
+    public IReadOnlyList<FeedbackItem> List(bool? handled, int limit = 200, long offset = 0, string? search = null)
     {
         lock (_gate)
         {
             using var command = _connection.CreateCommand();
             command.CommandText =
                 "SELECT id, received_utc, category, message, email, page, country, browser, handled, handled_utc " +
-                "FROM feedback WHERE ($handled IS NULL OR handled = $handled) ORDER BY id DESC LIMIT $limit;";
+                "FROM feedback WHERE " + Filter + " ORDER BY id DESC LIMIT $limit OFFSET $offset;";
             command.Parameters.AddWithValue("$handled", handled is null ? DBNull.Value : handled.Value ? 1 : 0);
             command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 1_000));
+            command.Parameters.AddWithValue("$offset", Math.Max(0, offset));
+            command.Parameters.AddWithValue("$search", search ?? "");
 
             var items = new List<FeedbackItem>();
             using var reader = command.ExecuteReader();
@@ -115,6 +119,35 @@ public sealed class FeedbackStore : IDisposable
 
             return items;
         }
+    }
+
+    private const string Filter = "($handled IS NULL OR handled=$handled) AND " +
+        "($search='' OR instr(lower(message || ' ' || COALESCE(email,'') || ' ' || category), lower($search))>0)";
+
+    public long Count(bool? handled, string? search = null)
+    {
+        lock (_gate)
+        {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM feedback WHERE " + Filter;
+            command.Parameters.AddWithValue("$handled", handled is null ? DBNull.Value : handled.Value ? 1 : 0);
+            command.Parameters.AddWithValue("$search", search ?? "");
+            return (long)command.ExecuteScalar()!;
+        }
+    }
+
+    public IEnumerable<FeedbackItem> Enumerate(bool? handled, string? search)
+    {
+        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        { DataSource = _databasePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, received_utc, category, message, email, page, country, browser, handled, handled_utc " +
+            "FROM feedback WHERE " + Filter + " ORDER BY id DESC";
+        command.Parameters.AddWithValue("$handled", handled is null ? DBNull.Value : handled.Value ? 1 : 0);
+        command.Parameters.AddWithValue("$search", search ?? "");
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) yield return Read(reader);
     }
 
     /// <summary>Counts for the inbox tabs.</summary>

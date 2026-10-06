@@ -33,6 +33,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Help\HelpBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatRequestDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesChrome.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleCache.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleMenuCommands.cs" />
@@ -54,6 +55,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\PageTheme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CombinedPages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\RowFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SnippetsPage.cs" />

@@ -28,20 +28,20 @@
 
 <section class="admin-stats" aria-label="Coverage">
     <div class="admin-stat">
-        <p class="admin-stat-value">@_coverage.DistinctIndividuals.ToString("N0", CultureInfo.InvariantCulture)</p>
-        <p class="admin-stat-label">Individuals</p>
+        <p class="admin-stat-value">@_total.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Matching individuals</p>
     </div>
     <div class="admin-stat">
-        <p class="admin-stat-value">@_coverage.ReturningIndividuals.ToString("N0", CultureInfo.InvariantCulture)</p>
-        <p class="admin-stat-label">Returning</p>
+        <p class="admin-stat-value">@_returning.ToString("N0", CultureInfo.InvariantCulture)</p>
+        <p class="admin-stat-label">Matching returning individuals</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@_coverage.UnattributedSharePercent.ToString("0.#", CultureInfo.InvariantCulture)%</p>
-        <p class="admin-stat-label">Unattributed</p>
+        <p class="admin-stat-label">Unattributed · whole window</p>
     </div>
     <div class="admin-stat">
         <p class="admin-stat-value">@_coverage.AutomatedVisits.ToString("N0", CultureInfo.InvariantCulture)</p>
-        <p class="admin-stat-label">Automated visits</p>
+        <p class="admin-stat-label">Automated visits · whole window</p>
     </div>
 </section>
 
@@ -77,7 +77,7 @@
     </select>
 
     <button type="submit" class="btn btn-secondary">Apply</button>
-    <a class="admin-export" href="@ExportUrl" download>Export CSV</a>
+    <a class="admin-export" href="@ExportUrl" download>Export all matching people</a>
 </form>
 
 <section class="admin-panel" aria-labelledby="people-heading">
@@ -167,10 +167,7 @@
     /// <summary>The range resolved once per request, so every figure describes the same instant.</summary>
     private ReportWindow _window = default!;
 
-    private int Page =>
-        int.TryParse(PageQuery, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
-            ? parsed
-            : 0;
+    private int Page { get; set; }
 
     private bool? Downloaded => DownloadedQuery switch
     {
@@ -182,6 +179,7 @@
     private IReadOnlyList<IndividualRow> _rows = [];
     private CoverageSummary _coverage = new(0, 0, 0, 0, 0, 0);
     private long _total;
+    private long _returning;
     private IReadOnlyList<(string Code, string Name)> _countryOptions = [];
 
     private string Filters =>
@@ -202,13 +200,12 @@
             Page,
             Individuals.DefaultPageSize);
 
-        _rows = Store.GetIndividuals(filter, _window);
         _total = Store.CountIndividuals(filter, _window);
+        Page = AdminPaging.Clamp(PageQuery, _total);
+        _rows = Store.GetIndividuals(filter with { Page = Page }, _window);
         _coverage = Store.GetCoverage(_window);
 
-        _countryOptions = Store.GetDownloadsByCountry(_window)
-            .Where(c => c.CountryCode is not null)
-            .Select(c => (c.CountryCode!, c.Label))
-            .ToList();
+        _returning = Store.CountReturningIndividuals(filter, _window);
+        _countryOptions = Store.GetPeopleCountries(_window);
     }
 }

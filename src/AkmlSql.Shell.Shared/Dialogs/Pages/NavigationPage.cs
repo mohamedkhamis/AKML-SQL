@@ -13,14 +13,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class NavigationPage : IPageBuilder
     {
         public string Key     => "Navigation";
-        public string Display => "Navigation";
+        public string Display => "Editor › Navigation";
         public string Title   => "Navigation";
         public string HelpTopic => "topics/options#navigation";
         public string Help    => "Go to Definition (F12), Peek Definition (Alt+F12), Find All References (Shift+F12) and Object Search (Ctrl+T) are always available from the AKML SQL menu.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddInfoRow(panel, "Navigation commands", "Navigation commands are in AKML SQL › Navigate.");
+            ctx.Rows.AddGroupHeader(panel, "Navigation");
+            ctx.Rows.AddInfoRow(panel, "Navigation commands",
+                "Go to Definition (F12), Peek Definition (Alt+F12), Find All References (Shift+F12) and Object Search (Ctrl+T), in AKML SQL › Navigate.");
             return new NavigationControls();
         }
     }

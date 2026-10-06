@@ -894,3 +894,17 @@ Each increment is deployable and adds value without breaking the previous one.
   T051 ships. Do not defer them past the deploy.
 - **Never commit.** Deliver uncommitted and wait for explicit instruction (constitution IV).
 - Stop at any checkpoint to validate a story independently.
+
+## Owner-approved admin review follow-up — 2026-10-06
+
+- [x] Implement F01–F10 and collection health from the admin review, including
+  latest People dimensions, truthful filters/counts, full exports, inbox/error
+  paging/search, validation, recurring retention and observable queue delivery.
+- [x] Validate 890 Site tests, full solution Release build, theme drift gate and
+  isolated Production-mode HTTPS browser checks at desktop/mobile widths.
+- [x] Record behavior, evidence and remaining limitations in
+  [admin-review-follow-up.md](admin-review-follow-up.md) and the
+  [implementation report](../../reports/site-audit-2026-10-06/03-admin-implementation.md).
+
+New desktop telemetry, broader security remediation, download-button work and
+deployment are outside this approved increment.

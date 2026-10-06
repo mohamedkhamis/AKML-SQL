@@ -359,6 +359,10 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
             // word of the longest line wrapped and the gutter's numbers no longer lined up.
             _document.PageWidth = Math.Max(64, Math.Max(LineWidth(LongestLine(body)), longest * Math.Ceiling(CharWidth())) * PageMargin
                                                + Spacing.Lg + PageSlack);
+            // A RichTextBox doesn't ask for its document's width when measured, so without this the
+            // text box was only as wide as the visible area: the outer viewer never scrolled
+            // sideways and the end of a long line was simply cut off.
+            _box.MinWidth = _document.PageWidth;
 
             ApplyLineHighlights();
         }

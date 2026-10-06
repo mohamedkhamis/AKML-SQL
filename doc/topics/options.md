@@ -6,7 +6,7 @@ Every AKML SQL setting lives in one Options window. This page walks through it p
 
 Open it from the **AKML SQL** menu -> **Options…**.
 
-- **Pages.** The tree on the left groups the pages the way SQL Prompt does: General, Suggestions, Inserted code, Format, Navigation, Queries, Editor, then Code analysis, Connections & memory and AI assistance. The band at the top of each page shows where you are, for example **Suggestions › Behavior**.
+- **Pages.** The tree on the left has twelve pages: General; Suggestions (Behavior, Lists & connections, Warnings & highlighting); Inserted code; Format; Queries (Results & execution, History, Color); Editor; Code analysis; and AI assistance. A page is divided into titled sections. The band at the top of each page shows where you are, for example **Suggestions › Behavior**.
 - **Find a setting.** Type in **Search options…** (or press **Ctrl+E** or **Ctrl+F**) and pick a result. The window jumps to that setting and highlights it.
 - **What's on this page?** The **?** button in the page band shows a short description of the page.
 - **Help.** Press **F1** to open the section of this page that describes the page you are on.
@@ -30,6 +30,8 @@ A setting that depends on another one is indented under it, and is greyed out wh
 
 How the suggestion list behaves while you type.
 
+### Completion
+
 - **Enable IntelliSense** — turns AKML SQL suggestions on or off. Everything else on this page depends on it.
 - **Auto-trigger completions while typing** — show suggestions as you type. When off, press **Ctrl+Space** to ask for them.
 - **Trigger after dot** — show suggestions after you type a `.`, for example after a table alias.
@@ -44,29 +46,38 @@ How the suggestion list behaves while you type.
 - **Commit with Space** and **Commit with Dot** — let Space or `.` accept the highlighted suggestion, as well as Tab and Enter.
 - **Show snippets in the completion list** — include snippet shortcuts (such as `ssf`) in the list.
 
-## Suggestions › Types of suggestion
+### Tooltips
+
+- **Show the object definition box** — when a table, view or procedure is highlighted in the list, show its columns, details and script beside the list.
+
+### Join conditions
+
+- **Use matching column names when no FK exists** — when two tables have no foreign key between them but share a column name (for example both have `CustomerId`), suggest joining on that column. When off, join conditions are only suggested from foreign keys. Join suggestions themselves are turned on or off with **JOIN clause assistance**, above.
+
+## Suggestions › Lists & connections
+
+What the suggestion list offers, which databases and connections it draws on, and snippets.
+
+### Types of suggestion
 
 - **List system objects** — include system procedures and functions (`sp_…`, `sys.…`).
 - **Show keywords in suggestions** — include SQL keywords such as `SELECT` and `FROM`.
 - **Suggest columns from** — only the tables your query refers to, or all tables in the database.
 
-## Suggestions › Tooltips
-
-- **Show the object definition box** — when a table, view or procedure is highlighted in the list, show its columns, details and script beside the list.
-
-## Suggestions › Connections
+### Connections
 
 - **Limit databases to** — a comma-separated list of databases to suggest objects from. Leave empty for the connected database.
 - **Limit schemas to** — a comma-separated list of schemas to suggest objects from. Leave empty for all schemas.
 - **Include linked-server objects in suggestions** — suggest the server's linked servers after `FROM` and `JOIN`, so you can write four-part names.
 
-## Suggestions › Join conditions
+### SQL Server-auth connections
 
-- **Use matching column names when no FK exists** — when two tables have no foreign key between them but share a column name (for example both have `CustomerId`), suggest joining on that column. When off, join conditions are only suggested from foreign keys.
+- **Use SQL Server-auth credentials for IntelliSense** — for windows connected with SQL Server authentication, reuse the password SSMS already has (or one you saved) so suggestions work without asking. When off, those windows get no schema suggestions. Windows and Microsoft Entra ID (Azure AD) connections are not affected.
+- **Saved SQL passwords** — **Manage…** lists the passwords AKML SQL has saved (encrypted for your Windows account) and lets you remove them.
 
-Join suggestions themselves are turned on or off on **Suggestions › Behavior**.
+See [Connecting to SQL Server](connecting.md).
 
-## Suggestions › Snippets
+### Snippets
 
 - **Enable snippets** — turns snippet expansion on or off.
 - **Format after expansion** — format the inserted code with your active style after a snippet expands.
@@ -84,19 +95,21 @@ Warnings before you run something risky.
 - **Enable transaction reminder** — remind you, on production servers, that a transaction is still open.
 - **Reminder interval** — how often the reminder appears, in seconds.
 
-## Inserted code › Objects & statements
+## Inserted code
 
-What gets written for you when you complete a statement.
+What gets written for you when you complete a statement or insert an object from the list.
+
+### Objects & statements
 
 - **Insert column names** — when you complete `INSERT INTO` a table, add its column list.
 - **Insert default values as comments** — add each column's default value as a comment beside it.
 - **Convert positional parameters to named** — when you complete `EXEC` a procedure, write each argument with its parameter name (`@id = 1`).
 
-## Inserted code › Qualification
+### Qualification
 
 - **Qualify object names with schema** — when a table or other object is inserted from the list: always add its schema (`dbo.Orders`), add it only when it isn't your default schema, or never add it.
 
-## Inserted code › Aliases
+### Aliases
 
 These apply when **Suggest table aliases** is on (**Suggestions › Behavior**).
 
@@ -104,13 +117,13 @@ These apply when **Suggest table aliases** is on (**Suggestions › Behavior**).
 - **Custom alias map** — always use a given alias for an object. One per line, as `object = alias`, for example `Customers = c`.
 - **Prefixes to ignore** — prefixes to drop before an alias is made, one per line (with `tbl_`, `tbl_Orders` gets the alias `o`).
 
-## Inserted code › Special characters
+### Special characters
 
 - **Bracket identifiers** — when to put inserted names in `[square brackets]`: always, only when needed (reserved words, spaces), or never.
 - **Add parentheses ( ) when inserting a function or data type** — add `()` after an inserted function or a data type that takes a size.
 - **Automatically insert the corresponding closing character** — when you type an opening character, add the closing one after the cursor. Choose which characters: single quote `'`, double quote `"`, comment `/* */`, parenthesis `( )` and square bracket `[ ]`.
 
-## Format › Styles
+## Format
 
 - **Enable SQL formatter** — turns Format SQL on or off.
 - **Active style** — the formatting style Format SQL uses. You can also switch it from the **AKML SQL** menu -> **Active Style**.
@@ -122,16 +135,20 @@ These apply when **Suggest table aliases** is on (**Suggestions › Behavior**).
 
 See [Formatting SQL](formatting.md) for styles, the Format Styles window and these actions.
 
-## Navigation
+## Queries › Results & execution
 
-Go to Definition (**F12**), Peek Definition (**Alt+F12**), Find All References (**Shift+F12**) and Object Search (**Ctrl+T**) are always on. They are on the **AKML SQL** menu -> **Navigate**. This page has no settings.
-
-## Queries › Query results
+### Query results
 
 - **Aggregate statistics** — show the sum, average, count, minimum and maximum of the selected grid cells.
 - **Highlight NULL cells** — make `NULL` values stand out in the results grid.
 - **Row numbers** — show a row-number column.
 - **Save 15+ digit numbers as text** — when you export to Excel, save long numbers as text so Excel doesn't round them.
+
+### Execution
+
+- **Execution timer** — show how long the current query has been running in the status bar.
+- **Multi-database execution** — allow running one query against several databases.
+- **Notification threshold** — how long a query must run, in seconds, before AKML SQL shows a long-running query notification.
 
 ## Queries › History
 
@@ -165,24 +182,24 @@ Color each query tab by the environment of its server and database, so you alway
 
 Settings for restoring queries on start are on **Queries › History**.
 
-## Queries › Execution
+## Editor
 
-- **Execution timer** — show how long the current query has been running in the status bar.
-- **Multi-database execution** — allow running one query against several databases.
-- **Notification threshold** — how long a query must run, in seconds, before AKML SQL shows a long-running query notification.
-
-## Editor › Productivity
+### Productivity
 
 - **Highlight occurrences** — highlight every use of the name under the cursor.
 - **Bracket matching** — highlight the matching `BEGIN`/`END` or parenthesis.
 - **Sticky scroll** — keep the start of the current block (procedure, `BEGIN`, and so on) visible at the top while you scroll.
 - **Code minimap** — show a small overview of the whole script beside the editor.
 
-## Editor › Refactoring
+### Refactoring
 
 - **Include comments in rename scope** — when you rename something with Smart Rename, also rename it inside comments.
 
 See [Refactoring](refactoring.md).
+
+### Navigation
+
+Go to Definition (**F12**), Peek Definition (**Alt+F12**), Find All References (**Shift+F12**) and Object Search (**Ctrl+T**) are always on. They are on the **AKML SQL** menu -> **Navigate**. There are no settings for them.
 
 ## Code analysis
 
@@ -192,13 +209,6 @@ See [Refactoring](refactoring.md).
 - **Rules** — **Manage rules…** opens a window where you turn each rule on or off and set how serious it is.
 
 You can also turn a rule off for one line, one script, the current session or everywhere — from the warning in the margin, or with a comment in your script. See [Static Code Analysis](static-analysis.md).
-
-## Connections & memory
-
-- **Use SQL Server-auth credentials for IntelliSense** — for windows connected with SQL Server authentication, reuse the password SSMS already has (or one you saved) so suggestions work without asking. When off, those windows get no schema suggestions. Windows and Microsoft Entra ID (Azure AD) connections are not affected.
-- **Saved SQL passwords** — **Manage…** lists the passwords AKML SQL has saved (encrypted for your Windows account) and lets you remove them.
-
-See [Connecting to SQL Server](connecting.md).
 
 ## AI assistance
 

@@ -14,7 +14,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
         [Fact]
         public void A_status_message_when_the_formatter_is_off()
-            => Assert.Equal("AKML SQL formatting is off — turn it on in Options › Format › Styles.",
+            => Assert.Equal("AKML SQL formatting is off — turn it on in Options › Format.",
                 FormatActionHelper.FormatterDisabledMessage(new FormatterSettings { Enabled = false }));
     }
 }

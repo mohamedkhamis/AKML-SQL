@@ -7,13 +7,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class GridPage : IPageBuilder
     {
         public string Key     => "Grid";
-        public string Display => "Queries › Query results";
+        public string Display => "Queries › Results & execution › Query results";
         public string Title   => "Query results";
-        public string HelpTopic => "topics/options#queries-query-results";
+        public string HelpTopic => "topics/options#query-results";
         public string Help    => "Controls how query results appear in the grid, including aggregate statistics, NULL highlighting and row numbers. Also sets whether 15+ digit numbers are exported to Excel as text to avoid rounding.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
+            ctx.Rows.AddGroupHeader(panel, "Results grid");
             var (rowAgg, chkAgg) = ctx.Rows.AddToggle(panel,
                 "Aggregate statistics",
                 "Show Sum, Avg, Count, Min, Max for selected cells");

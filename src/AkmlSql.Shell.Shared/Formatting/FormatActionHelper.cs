@@ -14,11 +14,11 @@ namespace AkmlSql.Shell.Shared.Formatting
     internal static class FormatActionHelper
     {
         /// <summary>
-        /// Spec 040 (OPT-01) — the status message shown when Options › Format › Styles "Enable SQL
+        /// Spec 040 (OPT-01) — the status message shown when Options › Format "Enable SQL
         /// formatter" is off, or null when formatting is allowed.
         /// </summary>
         internal static string? FormatterDisabledMessage(Core.Config.FormatterSettings s) =>
-            s.Enabled ? null : "AKML SQL formatting is off — turn it on in Options › Format › Styles.";
+            s.Enabled ? null : "AKML SQL formatting is off — turn it on in Options › Format.";
 
         /// <summary>
         /// Returns false (and says why in the status bar) when "Enable SQL formatter" is off. Every

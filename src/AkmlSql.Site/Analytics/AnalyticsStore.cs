@@ -20,7 +20,7 @@ public sealed class AnalyticsOptions
     public string DatabasePath { get; set; } = "";
 
     /// <summary>
-    /// ADM-004: days of history to keep. Rows older than this are pruned at startup — the tables
+    /// ADM-004: days of history to keep. Rows older than this are pruned by periodic maintenance — the tables
     /// previously grew without bound. 0 disables pruning (keep everything).
     /// </summary>
     public int RetentionDays { get; set; } = 400;
@@ -48,8 +48,8 @@ public sealed class AnalyticsOptions
 
 /// <summary>
 /// SQLite-backed store for page-visit and installer-download metrics (plain ADO.NET, no EF Core).
-/// One shared connection guarded by a lock — writes arrive from a single background consumer and
-/// reads from the /admin dashboard, so contention is negligible. Parameterized commands only.
+/// Writes share a guarded connection; admin reports use independent read-only WAL snapshots.
+/// Parameterized commands only.
 /// <para>
 /// Privacy: the full client address is persisted only when the visitor has explicitly consented;
 /// for everyone else the <c>ip</c> column stays NULL. Always written are
@@ -75,6 +75,32 @@ public sealed partial class AnalyticsStore : IDisposable
     private readonly object _gate = new();
     private readonly SqliteConnection _connection;
     private readonly byte[] _salt;
+    private readonly SqliteTransaction? _readTransaction;
+    private readonly bool _readOnly;
+
+    // A report gets its own WAL snapshot. It never takes the ingestion connection's lock.
+    private AnalyticsStore(string databasePath, TimeZoneInfo zone, bool readOnly)
+    {
+        DatabasePath = databasePath;
+        ReportZone = zone;
+        _readOnly = readOnly;
+        _salt = [];
+        _connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
+        }.ConnectionString);
+        _connection.Open();
+        _readTransaction = _connection.BeginTransaction(deferred: true);
+    }
+
+    internal AnalyticsStore OpenReadSnapshot() => new(DatabasePath, ReportZone, true);
+
+    private SqliteCommand CreateCommand()
+    {
+        var command = _connection.CreateCommand();
+        command.Transaction = _readTransaction;
+        return command;
+    }
 
     public AnalyticsStore(AnalyticsOptions options)
         : this(options?.DatabasePath, ResolveReportZone(options?.ReportTimeZone))
@@ -224,7 +250,7 @@ public sealed partial class AnalyticsStore : IDisposable
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             command.CommandText =
                 "INSERT INTO visits (utc, day, path, referrer_host, ua_family, ip_hash, " +
                 "ip_prefix, country_code, country, " +
@@ -289,7 +315,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// </summary>
     private string ResolveSessionId(string ipHash, DateTimeOffset now, string? uaFamily)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         command.CommandText =
             "SELECT session_id, utc FROM visits " +
             "WHERE ip_hash = $hash AND session_id IS NOT NULL " +
@@ -320,7 +346,7 @@ public sealed partial class AnalyticsStore : IDisposable
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             var day = DateOnly.FromDateTime(download.Utc.UtcDateTime);
             var hash = ComputeIpHash(download.IpAddress, ReportWindow.LocalDay(download.Utc, ReportZone));
 
@@ -373,7 +399,7 @@ public sealed partial class AnalyticsStore : IDisposable
 
         lock (_gate)
         {
-            using var command = _connection.CreateCommand();
+            using var command = CreateCommand();
             command.CommandText =
                 "INSERT INTO not_found (utc, day, path, referrer_host) VALUES ($utc, $day, $path, $referrer);";
             command.Parameters.AddWithValue("$utc", FormatUtc(notFound.Utc));
@@ -398,7 +424,7 @@ public sealed partial class AnalyticsStore : IDisposable
         {
             foreach (var error in batch.Errors)
             {
-                using var command = _connection.CreateCommand();
+                using var command = CreateCommand();
                 command.CommandText =
                     "INSERT INTO client_errors (received_utc, day, event_utc, level, message, exception, " +
                     "source, product_version, host, install_id) " +
@@ -436,6 +462,11 @@ public sealed partial class AnalyticsStore : IDisposable
     /// <summary>Dashboard summary for <paramref name="window"/>, with the comparison period.</summary>
     public AnalyticsSummary GetSummary(ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetSummary(window);
+        }
         ArgumentNullException.ThrowIfNull(window);
 
         // The fixed "today" and "last 7 days" tiles are independent of the selected window, but they
@@ -554,7 +585,7 @@ public sealed partial class AnalyticsStore : IDisposable
 
         long downloaders;
         long unmatched;
-        using (var command = _connection.CreateCommand())
+        using (var command = CreateCommand())
         {
             // Downloads matched to a same-day visit (the same per-day hash), and downloads with no
             // visit behind them at all -- a direct link from elsewhere. Reported separately so the
@@ -608,6 +639,11 @@ public sealed partial class AnalyticsStore : IDisposable
     /// </summary>
     public ClientErrorsSummary GetClientErrorsSummary(ReportWindow window, string? level, int recentLimit)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetClientErrorsSummary(window, level, recentLimit);
+        }
         ArgumentNullException.ThrowIfNull(window);
         var clampedRecentLimit = Math.Clamp(recentLimit, 1, 500);
 
@@ -629,7 +665,11 @@ public sealed partial class AnalyticsStore : IDisposable
         }
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose()
+    {
+        _readTransaction?.Dispose();
+        _connection.Dispose();
+    }
 
     /// <summary>Loads the persisted salt, or generates and persists a fresh 32-byte one on first run.</summary>
     private static byte[] LoadOrCreateSalt(string saltPath)
@@ -660,7 +700,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// </summary>
     private void InitializeSchema()
     {
-        using (var command = _connection.CreateCommand())
+        using (var command = CreateCommand())
         {
             command.CommandText = """
                 PRAGMA journal_mode = WAL;
@@ -736,7 +776,7 @@ public sealed partial class AnalyticsStore : IDisposable
             DropColumnIfPresent("visits", column);
         }
 
-        using (var command = _connection.CreateCommand())
+        using (var command = CreateCommand())
         {
             command.CommandText = """
                 UPDATE visits SET day = substr(utc, 1, 10) WHERE day IS NULL;
@@ -810,7 +850,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// <summary>Removes a column that is no longer collected, if an older database still has it.</summary>
     private void DropColumnIfPresent(string table, string column)
     {
-        using var check = _connection.CreateCommand();
+        using var check = CreateCommand();
         // Table and column names are fixed internal literals, never user input.
         check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column}';";
         if ((long)(check.ExecuteScalar() ?? 0L) == 0)
@@ -818,7 +858,7 @@ public sealed partial class AnalyticsStore : IDisposable
             return;
         }
 
-        using var drop = _connection.CreateCommand();
+        using var drop = CreateCommand();
         drop.CommandText = $"ALTER TABLE {table} DROP COLUMN {column};";
         drop.ExecuteNonQuery();
     }
@@ -829,7 +869,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// <summary>Adds one nullable column when an older database predates it (idempotent).</summary>
     private void AddColumnIfMissing(string table, (string Name, string Type) column)
     {
-        using var check = _connection.CreateCommand();
+        using var check = CreateCommand();
         // Table and column names are fixed internal literals, never user input.
         check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = '{column.Name}';";
         if ((long)(check.ExecuteScalar() ?? 0L) > 0)
@@ -837,7 +877,7 @@ public sealed partial class AnalyticsStore : IDisposable
             return;
         }
 
-        using var alter = _connection.CreateCommand();
+        using var alter = CreateCommand();
         alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column.Name} {column.Type} NULL;";
         alter.ExecuteNonQuery();
     }
@@ -867,7 +907,7 @@ public sealed partial class AnalyticsStore : IDisposable
         {
             var corrected = 0;
 
-            using (var visits = _connection.CreateCommand())
+            using (var visits = CreateCommand())
             {
                 visits.CommandText =
                     "UPDATE visits SET referrer_host = NULL, referrer_url = NULL " +
@@ -876,7 +916,7 @@ public sealed partial class AnalyticsStore : IDisposable
                 corrected += visits.ExecuteNonQuery();
             }
 
-            using (var downloads = _connection.CreateCommand())
+            using (var downloads = CreateCommand())
             {
                 downloads.CommandText =
                     "UPDATE downloads SET referrer_host = NULL, referrer_url = NULL " +
@@ -889,10 +929,18 @@ public sealed partial class AnalyticsStore : IDisposable
         }
     }
 
-    /// <summary>
-    /// ADM-004: deletes rows older than <paramref name="retentionDays"/>. Returns the number of
-    /// rows removed. A non-positive retention keeps everything.
-    /// </summary>
+    /// <summary>Identifiable rows currently overdue under the same UTC-day rule as cleanup.</summary>
+    public long CountIdentifiableBacklog(int retentionDays, DateTimeOffset now)
+    {
+        if (retentionDays <= 0) return 0;
+        using var snapshot = OpenReadSnapshot();
+        using var command = snapshot.CreateCommand();
+        command.CommandText = "SELECT (SELECT COUNT(*) FROM visits WHERE day < $boundary AND (ip IS NOT NULL OR visitor_id IS NOT NULL)) + " +
+            "(SELECT COUNT(*) FROM downloads WHERE day < $boundary AND (ip IS NOT NULL OR visitor_id IS NOT NULL))";
+        command.Parameters.AddWithValue("$boundary", FormatDay(DateOnly.FromDateTime(now.UtcDateTime).AddDays(-retentionDays)));
+        return (long)command.ExecuteScalar()!;
+    }
+
     /// <summary>
     /// Spec 038 T075 (US3): erases identifiable detail past the retention boundary, keeping the row.
     /// <para>
@@ -922,7 +970,7 @@ public sealed partial class AnalyticsStore : IDisposable
             var affected = 0;
             foreach (var table in (string[])["visits", "downloads"])
             {
-                using var command = _connection.CreateCommand();
+                using var command = CreateCommand();
                 command.CommandText =
                     $"UPDATE {table} SET ip = NULL, visitor_id = NULL " +
                     "WHERE day < $boundary AND (ip IS NOT NULL OR visitor_id IS NOT NULL);";
@@ -957,7 +1005,7 @@ public sealed partial class AnalyticsStore : IDisposable
 
             foreach (var table in (string[])["visits", "downloads"])
             {
-                using var command = _connection.CreateCommand();
+                using var command = CreateCommand();
                 command.Transaction = transaction;
                 command.CommandText = $"DELETE FROM {table} WHERE visitor_id = $visitorId;";
                 command.Parameters.AddWithValue("$visitorId", visitorId);
@@ -986,7 +1034,7 @@ public sealed partial class AnalyticsStore : IDisposable
             var removed = 0;
             foreach (var table in (string[])["visits", "downloads", "not_found", "client_errors"])
             {
-                using var command = _connection.CreateCommand();
+                using var command = CreateCommand();
                 command.CommandText = $"DELETE FROM {table} WHERE day < $cutoff;";
                 command.Parameters.AddWithValue("$cutoff", cutoff);
                 removed += command.ExecuteNonQuery();
@@ -1078,7 +1126,7 @@ public sealed partial class AnalyticsStore : IDisposable
         string? distinctColumn = null,
         string timeColumn = "utc")
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         // Table name, WHERE clause and columns are fixed internal fragments (never user input);
         // values are parameterized.
         var selector = distinctColumn is null ? "COUNT(*)" : $"COUNT(DISTINCT {distinctColumn})";
@@ -1121,7 +1169,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// </summary>
     private SessionStats QuerySessionStats(ReportWindow window)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         command.CommandText =
             "SELECT COUNT(*), " +
             "       SUM(CASE WHEN views = 1 THEN 1 ELSE 0 END), " +
@@ -1178,7 +1226,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// <summary>Label/count rows from <paramref name="sql"/>, which may use the window parameters and <c>$limit</c>.</summary>
     private IReadOnlyList<CountRow> QueryTop(string sql, ReportWindow? window)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         command.CommandText = sql;
         if (window is not null)
         {
@@ -1207,7 +1255,7 @@ public sealed partial class AnalyticsStore : IDisposable
     /// </summary>
     private IReadOnlyList<CountRow> QueryClientErrorLevels(ReportWindow window)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         command.CommandText =
             $"SELECT level, COUNT(*) FROM client_errors WHERE {ErrorsInWindow} " +
             "GROUP BY level ORDER BY COUNT(*) DESC, level;";
@@ -1227,17 +1275,18 @@ public sealed partial class AnalyticsStore : IDisposable
     /// Latest stored errors in the window, newest first, capped at <paramref name="limit"/> and
     /// optionally restricted to one (already-normalized) level. Caller must hold <c>_gate</c>.
     /// </summary>
-    private IReadOnlyList<ClientErrorRow> QueryRecentClientErrors(ReportWindow window, string? level, int limit)
+    private IReadOnlyList<ClientErrorRow> QueryRecentClientErrors(ReportWindow window, string? level, int limit, long offset = 0, string? version = null, string? search = null)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         command.CommandText =
             "SELECT id, event_utc, level, product_version, host, install_id, message, exception " +
             "FROM client_errors " +
-            $"WHERE {ErrorsInWindow} AND ($level IS NULL OR level = $level) " +
-            "ORDER BY id DESC LIMIT $limit;";
+            $"WHERE {ErrorsInWindow} AND {ClientErrorFilter} " +
+            "ORDER BY id DESC LIMIT $limit OFFSET $offset;";
         BindWindow(command, window);
-        command.Parameters.AddWithValue("$level", (object?)level ?? DBNull.Value);
+        BindErrorFilters(command, level, version, search);
         command.Parameters.AddWithValue("$limit", limit);
+        command.Parameters.AddWithValue("$offset", Math.Max(0, offset));
 
         var rows = new List<ClientErrorRow>();
         using var reader = command.ExecuteReader();
@@ -1283,7 +1332,7 @@ public sealed partial class AnalyticsStore : IDisposable
         var counts = new Dictionary<DateOnly, long>();
         var distinct = new Dictionary<DateOnly, HashSet<string>>();
 
-        using (var command = _connection.CreateCommand())
+        using (var command = CreateCommand())
         {
             // Table and distinct column are fixed internal fragments; the bounds are parameters.
             command.CommandText = distinctColumn is null

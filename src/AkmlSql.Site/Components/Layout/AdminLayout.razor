@@ -66,11 +66,11 @@
                 <li>
                     @if (range.Key == Range.Key)
                     {
-                        <a href="@AdminNav.WithRange(CurrentPath, range)" aria-current="true" class="is-current">@range.Label</a>
+                        <a href="@RangeUrl(range)" aria-current="true" class="is-current">@range.Label</a>
                     }
                     else
                     {
-                        <a href="@AdminNav.WithRange(CurrentPath, range)">@range.Label</a>
+                        <a href="@RangeUrl(range)">@range.Label</a>
                     }
                 </li>
             }
@@ -113,6 +113,15 @@
 
     /// <summary>The reporting range in force, shared by every section.</summary>
     private ReportRange Range { get; set; } = ReportRange.Default;
+
+    private string RangeUrl(ReportRange range)
+    {
+        var query = QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
+        var values = new Dictionary<string, string?> { ["days"] = range.Key };
+        foreach (var key in new[] { "country", "downloaded", "level", "version", "q", "show" })
+            if (query.TryGetValue(key, out var value)) values[key] = value.ToString();
+        return QueryHelpers.AddQueryString(CurrentPath, values);
+    }
 
     protected override void OnParametersSet()
     {

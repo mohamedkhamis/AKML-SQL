@@ -188,7 +188,42 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             _settings = settings;
             _theme = ResolvePageTheme(settings.Theme);
+            RegisterCombinedPages();
         }
+
+        /// <summary>A section page's key → the combined page that shows it.</summary>
+        private readonly Dictionary<string, string> _combinedPageOf = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The combined pages the tree shows (Pages/CombinedPages.cs), made of the section pages
+        /// registered above. A section keeps its own key: its controls, search entries and links
+        /// use it, and it resolves to the combined page.
+        /// </summary>
+        private void RegisterCombinedPages()
+        {
+            foreach (var page in new CombinedPage[]
+            {
+                new SuggestionsBehaviorPage(_pageBuilders["IntelliSense"], _pageBuilders["CompletionPolish"], _pageBuilders["JoinOptions"]),
+                new SuggestionsListsPage(_pageBuilders["SuggestionTypes"], _pageBuilders["ConnectionScope"], _pageBuilders["ConnectionsMemory"], _pageBuilders["Snippets"]),
+                new InsertedCodePage(_pageBuilders["InsertOptions"], _pageBuilders["Qualification"], _pageBuilders["Aliases"], _pageBuilders["SpecialCharacters"]),
+                new ResultsExecutionPage(_pageBuilders["Grid"], _pageBuilders["Execution"]),
+                new EditorAllPage(_pageBuilders["Editor"], _pageBuilders["Refactoring"], _pageBuilders["Navigation"]),
+            })
+            {
+                _pageBuilders[page.Key] = page;
+                foreach (var section in page.Sections) _combinedPageOf[section.Key] = page.Key;
+            }
+        }
+
+        /// <summary>The page the tree shows for <paramref name="pageKey"/>: its combined page, or itself.</summary>
+        internal string ShownPageKey(string pageKey) =>
+            _combinedPageOf.TryGetValue(pageKey, out var combined) ? combined : pageKey;
+
+        /// <summary>The keys whose controls make up the page <paramref name="pageKey"/>.</summary>
+        private IEnumerable<string> SectionKeys(string pageKey) =>
+            _pageBuilders.TryGetValue(pageKey, out var b) && b is CombinedPage combined
+                ? combined.Sections.Select(s => s.Key)
+                : new[] { pageKey };
 
         /// <summary>
         /// Spec 040 (OPT-02) — the window's brush set for a theme preference: "dark" → Dark,
@@ -580,40 +615,25 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // replaces the old "Miscellaneous ▸ Application" placement (removed below).
             AddTreeLeaf("General", "General");
 
-            // Spec 040 (OPT-04, contracts/ui.md §1): SQL Prompt's arrangement and names, in sentence
-            // case. Only labels move — the page keys (Tags) stay, so deep links and tests still work.
+            // Spec 040 (OPT-04) took SQL Prompt's arrangement and names, in sentence case. Many of
+            // its pages held one to three settings, so they are sections of fuller pages now
+            // (Pages/CombinedPages.cs): twelve pages instead of twenty-three. A section keeps its
+            // page key, so links to it open the page that shows it.
             AddTreeGroup("Suggestions",
-                ("Behavior", "IntelliSense"),
-                ("Types of suggestion", "SuggestionTypes"),
-                ("Tooltips", "CompletionPolish"),
-                ("Connections", "ConnectionScope"),
-                ("Join conditions", "JoinOptions"),
-                ("Snippets", "Snippets"),
+                ("Behavior", "SuggestionsBehavior"),
+                ("Lists & connections", "SuggestionsLists"),
                 ("Warnings & highlighting", "Safety"));
 
-            AddTreeGroup("Inserted code",
-                ("Objects & statements", "InsertOptions"),
-                ("Qualification", "Qualification"),
-                ("Aliases", "Aliases"),
-                ("Special characters", "SpecialCharacters"));
-
-            AddTreeGroup("Format",
-                ("Styles", "Formatting"));
-
-            AddTreeLeaf("Navigation", "Navigation");
+            AddTreeLeaf("Inserted code", "InsertedCode");
+            AddTreeLeaf("Format", "Formatting");
 
             AddTreeGroup("Queries",
-                ("Query results", "Grid"),
+                ("Results & execution", "ResultsExecution"),
                 ("History", "History"),
-                ("Color", "Tabs & UI"),
-                ("Execution", "Execution"));
+                ("Color", "Tabs & UI"));
 
-            AddTreeGroup("Editor",
-                ("Productivity", "Editor"),
-                ("Refactoring", "Refactoring"));
-
+            AddTreeLeaf("Editor", "EditorAll");
             AddTreeLeaf("Code analysis", "Code Analysis");
-            AddTreeLeaf("Connections & memory", "ConnectionsMemory");
             AddTreeLeaf("AI assistance", "AI Assistance");
 
             // Spec 040 (OPT-01): Suggestions › Database and Miscellaneous › Labs are gone — every
@@ -1181,6 +1201,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private bool SelectTreeLeafByPageKey(string pageKey)
         {
             if (_navTree == null) return false;
+            pageKey = ShownPageKey(pageKey);
 
             foreach (var obj in _navTree.Items)
             {
@@ -1249,27 +1270,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var pages = new[]
             {
                 "General",
-                "IntelliSense",
-                "SuggestionTypes",
-                "CompletionPolish",
-                "ConnectionScope",
-                "JoinOptions",
-                "Snippets",
+                "SuggestionsBehavior",
+                "SuggestionsLists",
                 "Safety",
-                "InsertOptions",
-                "Qualification",
-                "Aliases",
-                "SpecialCharacters",
+                "InsertedCode",
                 "Formatting",
-                "Navigation",
-                "Grid",
+                "ResultsExecution",
                 "History",
                 "Tabs & UI",
-                "Execution",
-                "Editor",
-                "Refactoring",
+                "EditorAll",
                 "Code Analysis",
-                "ConnectionsMemory",
                 "AI Assistance",
             };
 
@@ -1286,8 +1296,22 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 // not the short Title — SQL Prompt's band names the full location.
                 AddPageHeader(hostPanel, pageBuilder.Display, pageBuilder.Help);
                 var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
-                var controls = pageBuilder.Build(hostPanel, ctx);
-                _pageControlsByKey[key] = controls;
+                IPageControls? controls = null;
+                if (pageBuilder is CombinedPage combined)
+                {
+                    // Each section under its own key: its search entries find its controls, and
+                    // Save/Load run once per section.
+                    foreach (var section in combined.Sections)
+                    {
+                        _currentPageKey = section.Key;
+                        _pageControlsByKey[section.Key] = section.Build(hostPanel, ctx);
+                    }
+                }
+                else
+                {
+                    controls = pageBuilder.Build(hostPanel, ctx);
+                    _pageControlsByKey[key] = controls;
+                }
                 _pages[key] = WrapInScrollViewer(hostPanel);
 
                 // Page-specific event hookup the host owns: theme switching closes the dialog
@@ -2018,16 +2042,22 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// </summary>
         internal void ResetPageToDefaultsCore(string pageKey)
         {
-            if (!_pageControlsByKey.TryGetValue(pageKey, out var controls))
+            var sections = SectionKeys(pageKey)
+                .Select(k => _pageControlsByKey.TryGetValue(k, out var c) ? c : null)
+                .ToList();
+            if (sections.Count == 0 || sections.Any(c => c == null))
                 throw new InvalidOperationException($"Page '{pageKey}' is not registered in the Options window.");
 
             SaveControlsToSettings();
             _loadingControls = true;
             try
             {
-                controls.Reset(new AppSettings());
-                controls.Save(_settings);
-                controls.Load(_settings);
+                foreach (var controls in sections)
+                {
+                    controls!.Reset(new AppSettings());
+                    controls.Save(_settings);
+                    controls.Load(_settings);
+                }
             }
             finally
             {

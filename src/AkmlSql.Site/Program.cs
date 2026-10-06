@@ -115,6 +115,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         }
     }
 });
+builder.Services.AddSingleton<CollectionHealth>();
 builder.Services.AddSingleton<ChannelAnalyticsSink>();
 builder.Services.AddSingleton<IAnalyticsSink>(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
@@ -139,7 +140,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<FeedbackNotifier>(
 
 // Spec 038 T026 (US1): retention prune + historical referrer repair, run on a background task after
 // start instead of inline before the first request can be served.
-builder.Services.AddHostedService<MaintenanceHostedService>();
+builder.Services.AddSingleton<MaintenanceHostedService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MaintenanceHostedService>());
 
 // Admin cookie: HTTPS-only, HttpOnly, SameSite=Lax, sliding 8-hour session. Visitors get no cookie.
 builder.Services.AddAuthentication(AdminAuth.Scheme)
@@ -223,11 +225,20 @@ app.Use(async (context, next) =>
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler(error => error.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        await context.Response.WriteAsync("An unexpected error occurred. Please try again later.");
+    }));
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Ordinary GET status pages can render through Razor. POST/API failures keep their status
+// and never re-enter a form endpoint with the original request's invalid antiforgery feature.
+app.UseWhen(context => HttpMethods.IsGet(context.Request.Method)
+    && !context.Request.Path.StartsWithSegments("/api"), branch =>
+    branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
 
 // ADM-006: resolve the real client IP before anything reads it (visit tracking, the login

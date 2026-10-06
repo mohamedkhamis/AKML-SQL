@@ -15,9 +15,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class ConnectionScopePage : IPageBuilder
     {
         public string Key     => "ConnectionScope";
-        public string Display => "Suggestions › Connections";
+        public string Display => "Suggestions › Lists & connections › Connections";
         public string Title   => "Connections";
-        public string HelpTopic => "topics/options#suggestions-connections";
+        public string HelpTopic => "topics/options#connections";
         public string Help    => "Narrow the object-suggestion list to specific databases and/or schemas (leave a field empty for no restriction), and choose whether linked servers are suggested after FROM and JOIN.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

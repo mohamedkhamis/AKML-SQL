@@ -31,6 +31,10 @@
     </p>
 </header>
 
+<p><a href="@($"/admin/insights.csv?days={_range.Key}")" download>Export displayed insights</a></p>
+<p class="admin-choice-hint">Conversion tables show the top 10 groups. Downloads count requests,
+    not completed transfers or installations; visitor-day attribution is an estimate.</p>
+
 @* ------------------------------------------------------------------ conversion *@
 <section class="admin-panel insights-conversion" aria-labelledby="conversion-heading">
     <h2 id="conversion-heading">Conversion</h2>

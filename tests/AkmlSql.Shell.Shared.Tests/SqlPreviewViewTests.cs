@@ -49,6 +49,23 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
+        public void A_line_wider_than_the_view_scrolls_sideways_instead_of_being_cut_off()
+        {
+            // The text box used to be only as wide as the visible area, so the outer viewer had
+            // nothing to scroll and the end of a long line was cut off.
+            const string longest = "ON o.CustomerId = c.CustomerId AND o.ShipCountry = c.Country AND o.OrderDate >= '2024-01-01'";
+            var view = new SqlPreviewView { Text = "SELECT 1\n" + longest };
+            view.Measure(new Size(300, 200));
+            view.Arrange(new Rect(0, 0, 300, 200));
+            view.UpdateLayout();
+
+            var scroller = view.Scroller;
+            Assert.Equal(Visibility.Visible, scroller.ComputedHorizontalScrollBarVisibility);
+            Assert.True(scroller.ExtentWidth > scroller.ViewportWidth,
+                $"extent {scroller.ExtentWidth} within viewport {scroller.ViewportWidth}");
+        }
+
+        [StaFact]
         public void Tokens_are_coloured_from_the_live_theme_tokens()
         {
             var view = new SqlPreviewView { Text = "SELECT 'x' -- note" };

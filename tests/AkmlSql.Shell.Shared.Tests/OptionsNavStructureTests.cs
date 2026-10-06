@@ -11,38 +11,27 @@ using Xunit;
 namespace AkmlSql.Shell.Shared.Tests
 {
     /// <summary>
-    /// Spec 040 (T149, OPT-04, FR-050) — the Options tree is SQL Prompt's arrangement, exactly as
-    /// contracts/ui.md §1 lists it: group headers, leaf labels, their order and the page keys
-    /// (unchanged, so deep links keep working). Each page's breadcrumb (<c>IPageBuilder.Display</c>)
-    /// is its tree path, and its Title the last segment.
+    /// Spec 040 (T149, OPT-04, FR-050) took SQL Prompt's arrangement; its one-to-three-setting pages
+    /// are now sections of combined pages (Pages/CombinedPages.cs) — twelve pages: group headers,
+    /// leaf labels, their order and the page keys. Each page's breadcrumb
+    /// (<c>IPageBuilder.Display</c>) is its tree path, and its Title the last segment.
     /// </summary>
     public class OptionsNavStructureTests
     {
-        /// <summary>contracts/ui.md §1, top to bottom: (group or null for a top-level leaf, label, page key).</summary>
+        /// <summary>The tree, top to bottom: (group or null for a top-level leaf, label, page key).</summary>
         private static readonly (string? Group, string Label, string PageKey)[] Expected =
         {
             (null, "General", "General"),
-            ("Suggestions", "Behavior", "IntelliSense"),
-            ("Suggestions", "Types of suggestion", "SuggestionTypes"),
-            ("Suggestions", "Tooltips", "CompletionPolish"),
-            ("Suggestions", "Connections", "ConnectionScope"),
-            ("Suggestions", "Join conditions", "JoinOptions"),
-            ("Suggestions", "Snippets", "Snippets"),
+            ("Suggestions", "Behavior", "SuggestionsBehavior"),
+            ("Suggestions", "Lists & connections", "SuggestionsLists"),
             ("Suggestions", "Warnings & highlighting", "Safety"),
-            ("Inserted code", "Objects & statements", "InsertOptions"),
-            ("Inserted code", "Qualification", "Qualification"),
-            ("Inserted code", "Aliases", "Aliases"),
-            ("Inserted code", "Special characters", "SpecialCharacters"),
-            ("Format", "Styles", "Formatting"),
-            (null, "Navigation", "Navigation"),
-            ("Queries", "Query results", "Grid"),
+            (null, "Inserted code", "InsertedCode"),
+            (null, "Format", "Formatting"),
+            ("Queries", "Results & execution", "ResultsExecution"),
             ("Queries", "History", "History"),
             ("Queries", "Color", "Tabs & UI"),
-            ("Queries", "Execution", "Execution"),
-            ("Editor", "Productivity", "Editor"),
-            ("Editor", "Refactoring", "Refactoring"),
+            (null, "Editor", "EditorAll"),
             (null, "Code analysis", "Code Analysis"),
-            (null, "Connections & memory", "ConnectionsMemory"),
             (null, "AI assistance", "AI Assistance"),
         };
 

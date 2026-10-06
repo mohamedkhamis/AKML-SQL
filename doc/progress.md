@@ -1910,3 +1910,32 @@ caches are still per tab (one cache per server and database would share them).
   E2E theme test was extended and compiled; browser execution used an isolated local
   preview database, not the live site. Artifacts: `artifacts/site-screenshot-review/`.
   No deployment was performed.
+
+## 2026-10-06 — Site admin/security review, approval checkpoint
+
+- Completed the [admin functional/data review](../reports/site-audit-2026-10-06/01-admin-functional-review.md)
+  and [production security report](../reports/site-audit-2026-10-06/02-production-security-audit.md).
+  Audit details remain outside the public documentation ingestion tree.
+- Reviewed production configuration and read-only aggregates; exercised admin
+  mutations using an isolated published-app copy, synthetic data and loopback
+  SMTP. The existing 877 Site tests passed; additional HTTP/browser probes are
+  recorded with evidence and limits in the reports.
+- No application/security fix or deployment was made. The owner explicitly
+  requested stopping after Task 2. Security remediation and Task 3's download
+  root-cause/fix/acceptance work remain deferred until approval.
+
+## 2026-10-06 — Admin fixes and collection health
+
+- Implemented the owner's approved first increment: People latest dimensions,
+  country choices/matching totals, complete filtered exports, feedback/error
+  paging/search, Insights CSV, strict numeric settings validation, recurring
+  retention with backlog/status, collection counters and independent analytics
+  read snapshots. Form errors now preserve their intended status responses.
+- Verification: 890 Site tests passed; full solution Release MSBuild and theme
+  drift checks passed; 12 local Production-mode HTTPS Chromium check groups passed
+  with synthetic data, including 1440/390-pixel layouts. Existing build warnings
+  remain. No production deployment was performed.
+- Details and limits: [implementation report](../reports/site-audit-2026-10-06/03-admin-implementation.md).
+  Collection remains best-effort with process-lifetime counters. Broader security
+  remediation, new installer/SSMS telemetry and Task 3 download work remain outside
+  this approved increment. The earlier audit reports remain dated baselines.

@@ -13,9 +13,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class SnippetsPage : IPageBuilder
     {
         public string Key     => "Snippets";
-        public string Display => "Suggestions › Snippets";
+        public string Display => "Suggestions › Lists & connections › Snippets";
         public string Title   => "Snippets";
-        public string HelpTopic => "topics/options#suggestions-snippets";
+        public string HelpTopic => "topics/options#snippets";
         public string Help    => "Configure the snippet engine: enable snippets and format them after expansion. Set the team folder where shared .akmlsnippet files live. Whether snippets appear in the suggestions box is set on Suggestions › Behavior.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)

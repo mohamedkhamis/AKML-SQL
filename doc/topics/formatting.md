@@ -36,13 +36,13 @@ AKML SQL ships with several built-in styles; the default is "Khamis Style". To s
 
 - use the **AKML SQL** menu -> **Active Style** and pick a style (the active one is ticked), or
 - right-click in the query window -> **Active Style**, or
-- choose **Active style** in **Options** -> **Format › Styles**.
+- choose **Active style** in **Options** -> **Format**.
 
 The new style is used straight away. The active style's name is shown in the status bar (you can turn that off in Options).
 
 ## Edit styles with live preview
 
-Open the Format Styles window from the **AKML SQL** menu -> **Active Style** -> **Edit Styles…**, or from **Options** -> **Format › Styles** -> **Edit formatting styles…**.
+Open the Format Styles window from the **AKML SQL** menu -> **Active Style** -> **Edit Styles…**, or from **Options** -> **Format** -> **Edit formatting styles…**.
 
 - **Left: the style list.** Your own styles come first, then team styles, then the built-in styles. Click a style to edit it; **Set as active style** makes it the one Format SQL uses. The **⋮** button (or a right-click) on a style offers Set Active, Copy, Rename, Delete, Reset to built-in and Export.
 - **Middle: the option pages**, grouped the way SQL Prompt groups them (lists, joins, casing, and so on).
@@ -67,7 +67,7 @@ Built-in styles can be edited too: your changes are saved as your own copy, and 
 
 ## Choose what Format SQL does
 
-In **Options** -> **Format › Styles**, under **When you run Format SQL, AKML SQL will:**, choose what Format Document and Format Selection do to your code:
+In **Options** -> **Format**, under **When you run Format SQL, AKML SQL will:**, choose what Format Document and Format Selection do to your code:
 
 - **Apply layout** — lay out line breaks and indentation with the active style. Turn it off to keep your own spacing and only apply the other actions.
 - **Apply casing** — change keywords, functions and data types to the style's casing.
@@ -90,7 +90,7 @@ If your team uses SQL Prompt, you can import its style files (`.json`, or `.sqlp
 
 ## Share styles with your team
 
-**Use a team style folder.** Put your team's styles in a shared folder (a network share works), then set **Team style folder** in **Options** -> **Format › Styles** to that folder. Everyone who points at it sees those styles in a **TEAM STYLES** group in the style list.
+**Use a team style folder.** Put your team's styles in a shared folder (a network share works), then set **Team style folder** in **Options** -> **Format** to that folder. Everyone who points at it sees those styles in a **TEAM STYLES** group in the style list.
 
 - Team styles are read-only unless you can write to the folder. You can still **Copy** a read-only team style to make one of your own.
 - When a style with the same name exists in more than one place, your own style wins over a team style, and a team style wins over a built-in one.
@@ -104,4 +104,4 @@ If your team uses SQL Prompt, you can import its style files (`.json`, or `.sqlp
 
 Copy an `.akmlstyle` file into a teammate's profiles folder, or use export/import in the Format Styles window, and the style appears in their list.
 
-For the full option list and the style file format, see the [Formatter reference](../formatting.md) and the [Configuration reference](../configuration.md). Every formatting setting in Options is described in [Options](options.md#format-styles).
+For the full option list and the style file format, see the [Formatter reference](../formatting.md) and the [Configuration reference](../configuration.md). Every formatting setting in Options is described in [Options](options.md#format).
