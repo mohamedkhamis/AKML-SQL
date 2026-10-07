@@ -29,6 +29,15 @@
         return THEME_RE.test(theme) ? theme : 'dark';
     }
 
+    // Scrolls to the URL's #fragment (a link into a docs heading), if the page has it.
+    function scrollToHash() {
+        if (!location.hash || location.hash.length < 2) { return; }
+        var target;
+        try { target = document.getElementById(decodeURIComponent(location.hash.slice(1))); }
+        catch (e) { return; }
+        if (target) { target.scrollIntoView(); }
+    }
+
     function closeMenu() {
         var menu = document.getElementById(MENU_ID);
         var button = document.getElementById(BUTTON_ID);
@@ -118,8 +127,17 @@
         window.Blazor.addEventListener('enhancedload', function () {
             // Restore the stylesheet, screenshot variant and accessible picker state together.
             // Merely navigating must not save an OS-derived default as an explicit preference.
+            var link = document.getElementById('akml-theme-css');
+            var swappedIn = link ? link.getAttribute('href') : null;
             apply(selectedTheme, false);
             closeMenu();
+            // The swapped-in page carries the server's default stylesheet, and Blazor has already
+            // scrolled to the link's #fragment with it. When apply() changes the stylesheet, the
+            // page reflows once it loads and the heading slid half under the sticky header:
+            // scroll to it again then.
+            if (link && link.getAttribute('href') !== swappedIn) {
+                link.addEventListener('load', scrollToHash, { once: true });
+            }
         });
     }
 })();

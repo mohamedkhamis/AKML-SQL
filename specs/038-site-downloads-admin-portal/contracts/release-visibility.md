@@ -27,8 +27,8 @@ folder. The page's "can I offer this?" and the endpoint's "will I serve this?" h
 - **R1.1** A release with a `cdnUrl` MUST be offered regardless of local file presence.
 - **R1.2** A release with neither a `cdnUrl` nor a present local file MUST NOT be offered (FR-006).
 - **R1.3** Availability MUST NOT perform any network request. Reachability of the CDN is not probed.
-- **R1.4** Download size MUST be read from the local file when present and omitted otherwise. A
-  CDN-only release shows no size rather than a guessed one.
+- **R1.4** Download size uses the cached GitHub asset metadata when available, otherwise the local
+  file size. If neither is known it is omitted rather than guessed (2026-10-07 follow-up).
 
 ---
 
@@ -68,9 +68,11 @@ folder. The page's "can I offer this?" and the endpoint's "will I serve this?" h
 - **R3.1** Exactly one release is the primary card, carrying version, released date, supported hosts,
   minimum OS, size (when known), SHA-256, and the primary download button (FR-001).
 - **R3.2** History, when shown, is visually secondary — collapsed or clearly de-emphasised (FR-010).
-- **R3.3** The primary download action MUST work with JavaScript disabled (FR-009). The existing
-  progressive enhancement is preserved: no-JS follows `/dl/{file}` and is counted server-side;
-  `download-track.js` rewrites the href to the CDN and beacons `/dl-count/{file}`.
+- **R3.3** The primary download action MUST work with JavaScript disabled (FR-009). CDN asset URLs
+  are rendered directly in SSR, with enhanced navigation disabled. The globally loaded delegated
+  handler beacons `/dl-count/{file}` before native navigation without waiting for the response;
+  direct no-JS/context-menu downloads cannot be counted by the site. Legacy local-only links
+  retain native `/dl/{file}` navigation and server-side counting.
 - **R3.4** At phone width the current version and its button MUST be reachable without scrolling past
   any other version (SC-004).
 
@@ -83,6 +85,15 @@ folder. The page's "can I offer this?" and the endpoint's "will I serve this?" h
   probe.
 - **R4.2** Per render, filesystem probes MUST NOT exceed the number of **local-only** releases
   actually rendered, plus one size stat for the primary card when it is local.
+
+## 5. Latest GitHub release follow-up (2026-10-07)
+
+Latest metadata is refreshed server-side every 15 minutes outside the request path. The last
+usable installer is kept in memory and atomically persisted beside the analytics database;
+the deployed manifest seeds cold starts. API failures retain that link. GitHub's cached latest
+is prepended to manifest history, deduplicated by version, before the existing visibility rule
+is applied; the admin settings preview uses the same combined list. See
+[download-follow-up.md](../download-follow-up.md) for behavior, root cause and verification.
 - **R4.3** With `LatestOnly`, a 100-entry manifest MUST cost at most one probe.
 
 **Test hook**: availability probing is substitutable so a test can count invocations — this is how

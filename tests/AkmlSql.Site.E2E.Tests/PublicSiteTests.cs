@@ -188,6 +188,46 @@ public sealed class PublicSiteTests(SiteFixture site)
         Assert.False(string.IsNullOrWhiteSpace(clipboard));
     }
 
+    [SkippableTheory]
+    [InlineData(ColorScheme.Light)]
+    [InlineData(ColorScheme.Dark)]
+    public async Task HeadingLinks_LandBelowTheStickyHeader(ColorScheme scheme)
+    {
+        SkipIfUnavailable();
+        // F1 in the product opens a docs heading (topics/options#…), and the docs link to each
+        // other's headings. Both scrolled the heading under the sticky site header; a link
+        // followed inside the site (enhanced navigation) lost it again in the light theme, where
+        // the theme stylesheet comes back after Blazor has scrolled.
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await page.EmulateMediaAsync(new PageEmulateMediaOptions { ColorScheme = scheme });
+
+        async Task AssertBelowHeader(string id)
+        {
+            var heading = page.Locator($"article.doc-article [id='{id}']");
+            double top = double.NaN, headerBottom = double.NaN;
+            for (var waited = 0; waited <= 3000; waited += 250) // smooth scrolling settles
+            {
+                top = (await heading.BoundingBoxAsync())?.Y ?? double.NaN;
+                var header = await page.Locator(".site-header").BoundingBoxAsync();
+                headerBottom = header is null ? 0 : header.Y + header.Height;
+                if (top >= headerBottom - 1 && top < 900) return;
+                await page.WaitForTimeoutAsync(250);
+            }
+            Assert.Fail($"{scheme}: #{id} is at y={top:0}; the sticky header ends at y={headerBottom:0}.");
+        }
+
+        // A direct load — what F1 opens.
+        await page.GotoAsync(SiteFixture.BaseUrl + "/docs/topics/options#suggestions-lists-connections");
+        await AssertBelowHeader("suggestions-lists-connections");
+
+        // A link from another topic.
+        await page.GotoAsync(SiteFixture.BaseUrl + "/docs/topics/formatting");
+        await page.Locator("article.doc-article a[href*='options#format']").First.ClickAsync();
+        await page.WaitForURLAsync(url => url.EndsWith("#format", StringComparison.Ordinal));
+        await AssertBelowHeader("format");
+    }
+
     [SkippableFact]
     public async Task DocsSearch_ReturnsExcerpts_AndSupportsKeyboardNavigation()
     {

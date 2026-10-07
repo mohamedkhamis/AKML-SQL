@@ -192,8 +192,6 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             // Ensure theme resources are merged so SetResourceReference resolves.
             ThemeRegistry.Instance.AttachTo(this);
-            // Themed check boxes, radio buttons and scroll bars for the whole window.
-            FormatStylesChrome.ApplyImplicitStyles(this);
 
             BuildUi();
             DataContext = _viewModel;
@@ -234,6 +232,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Outer grid: header / content / footer
             var root = new Grid();
             root.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceCanvas);
+            // Themed check boxes, radio buttons and scroll bars for everything in the window.
+            FormatStylesChrome.ApplyImplicitStyles(root, this);
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -2285,6 +2285,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Xs, Spacing.Sm),
                 Text = "-- The live preview appears once the schema loads and a style is selected.",
             };
+            // Its own style, not the window's implicit one: inside SSMS the shell's scroll bar
+            // styles reach the preview control's resources and would win (see FormatStylesChrome).
+            _previewView.Scroller.Style = FormatStylesChrome.ScrollViewerStyle;
             Grid.SetRow(_previewView, 2);
             previewGrid.Children.Add(_previewView);
 

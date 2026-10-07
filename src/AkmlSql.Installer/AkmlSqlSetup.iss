@@ -137,12 +137,14 @@ SetupLogging=yes
 ChangesAssociations=yes
 ; Art from the "AKML SQL Icon" design. icon.ico is 5a (the hexagon glyph, no text, so it stays
 ; legible at 16/32 px) in 16-256 px; Resources\akml.ico in AkmlSql.Shell.Shared is the same file.
-; The sidebar is 6a (welcome panel). The header image is 6b's hexagon mark: Inno draws it in a
-; square slot (58/77/97/116/124/143/159 px at 100-250% DPI, transparent PNGs), and 6b's gold rule
-; under the header is drawn by AddHeaderRule ([Code]). Inno picks the variant matching the DPI.
+; The sidebar is 6a (welcome panel); Inno picks the variant matching the DPI. The page header is
+; 6b: its brand block (hexagon, AKML SQL, tagline) on the left, the page title and description
+; beside it, and its gold rule along the bottom -- drawn by AddHeaderBrand and AddHeaderRule
+; ([Code]) from assets\brand-light-*.png / brand-dark-*.png ([Files], dontcopy). The square corner
+; image Inno would draw instead is turned off.
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
-WizardSmallImageFile=assets\header-58.png,assets\header-77.png,assets\header-97.png,assets\header-116.png,assets\header-124.png,assets\header-143.png,assets\header-159.png
+WizardSmallImageFile=
 ; Windows 11 look that follows the system's light/dark setting; no bevel lines.
 WizardStyle=modern dynamic windows11 hidebevels
 WizardSizePercent=120
@@ -186,6 +188,8 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: 
 Source: "..\AkmlSql.Updater\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Icon for Apps & features, the Start-menu shortcuts and the akmlsql-update: scheme.
 Source: "assets\icon.ico"; DestDir: "{app}"; DestName: "AKMLSQL.ico"; Flags: ignoreversion
+; The wizard's header art (design 6b), used by Setup itself and never installed (AddHeaderBrand).
+Source: "assets\brand-*.png"; Flags: dontcopy
 ; Registers / removes the update-check scheduled task (see [Run] / [UninstallRun]).
 Source: "update-task.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion
 ; Engine is SelfContained + PublishSingleFile=false — deploy ALL published output
@@ -640,8 +644,47 @@ begin
   Rule.Anchors := [akLeft, akRight, akBottom];
 end;
 
+// Design 6b: the brand block -- the hexagon mark, AKML SQL and its tagline -- on the left of the
+// page header, at the size rendered for this DPI (the header grows with Inno's font-based scale:
+// 46 px tall at 100%, 61/77/92/98/113/126 px at 125-250%) and in the colours for Setup's light or
+// dark style. The page title and its description move beside it.
+procedure AddHeaderBrand;
+var
+  Brand: TBitmapImage;
+  Size, Variant, FileName: String;
+  Target, Left: Integer;
+begin
+  Target := ScaleY(46);
+  if Target <= 46 then Size := '100'
+  else if Target <= 61 then Size := '125'
+  else if Target <= 77 then Size := '150'
+  else if Target <= 92 then Size := '175'
+  else if Target <= 98 then Size := '200'
+  else if Target <= 113 then Size := '225'
+  else Size := '250';
+  if IsDarkInstallMode then Variant := 'dark' else Variant := 'light';
+  FileName := 'brand-' + Variant + '-' + Size + '.png';
+  ExtractTemporaryFile(FileName);
+
+  Brand := TBitmapImage.Create(WizardForm);
+  Brand.Parent := WizardForm.MainPanel;
+  Brand.PngImage.LoadFromFile(ExpandConstant('{tmp}\') + FileName);
+  Brand.Stretch := True;
+  Brand.SetBounds(ScaleX(16), (WizardForm.MainPanel.ClientHeight - ScaleY(2) - ScaleY(46)) div 2,
+    ScaleX(216), ScaleY(46));
+
+  Left := Brand.Left + Brand.Width + ScaleX(16);
+  WizardForm.PageNameLabel.SetBounds(Left, WizardForm.PageNameLabel.Top,
+    WizardForm.MainPanel.ClientWidth - Left - ScaleX(16), WizardForm.PageNameLabel.Height);
+  WizardForm.PageNameLabel.Anchors := [akLeft, akTop, akRight];
+  WizardForm.PageDescriptionLabel.SetBounds(Left, WizardForm.PageDescriptionLabel.Top,
+    WizardForm.MainPanel.ClientWidth - Left - ScaleX(16), WizardForm.PageDescriptionLabel.Height);
+  WizardForm.PageDescriptionLabel.Anchors := [akLeft, akTop, akRight];
+end;
+
 procedure InitializeWizard;
 begin
+  AddHeaderBrand;
   AddHeaderRule;
   // Run environment scan
   RunFullScan;

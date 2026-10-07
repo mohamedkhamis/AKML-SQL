@@ -504,3 +504,22 @@ change, and verify the affected path with its established tests and UI checks.
   best-effort; counters reset on restart. Broader security remediation, new desktop
   telemetry and Task 3 download work remain pending. Audit reports are historical
   baselines, not current source status; consult the implementation report too.
+
+## 2026-10-07 — Download click and latest-release follow-up
+
+- The owner authorized fixing normal clicks that worked only in a new window.
+  Reproduced: a page-local script did not initialize after Blazor enhanced navigation,
+  leaving `/dl/` links intercepted as fetches with no native download. Installer links
+  now render direct CDN URLs with enhanced navigation disabled; the global delegated
+  handler queues one nonblocking count request and suppresses repeat clicks for two seconds.
+- `LatestGitHubRelease` refreshes public GitHub latest metadata every 15 minutes,
+  validates the installer asset, and persists `latest-github-release.json` beside the
+  analytics DB. Last good metadata survives API failures and restart; the manifest
+  seeds a cold start. Public download and admin settings preview use the same combined
+  list. Version/size appear on the button; count attribution accepts API-only versions.
+- Verified 900 Site tests, full solution Release build, theme drift, 33 online browser
+  checks (Chrome/Edge/Playwright Firefox/mobile Chrome emulation) and 8 API-down restart
+  checks. Actual latest EXE size/hash matched GitHub metadata. See
+  [download implementation report](reports/site-audit-2026-10-06/04-download-fix.md).
+  No deployment or Git mutation. Tracking remains best-effort; direct no-JS/context-menu
+  downloads have no beacon. Broader security remediation and desktop telemetry remain pending.

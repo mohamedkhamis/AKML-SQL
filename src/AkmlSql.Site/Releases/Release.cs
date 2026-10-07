@@ -7,6 +7,9 @@ namespace AkmlSql.Site.Releases;
 /// </summary>
 public sealed record Release
 {
+    /// <summary>GitHub asset size when known; absent for older manifest entries.</summary>
+    public long? SizeBytes { get; init; }
+
     /// <summary>Product version, SemVer-ish <c>1.YY.MMDD.HHmm</c> (e.g. <c>1.0.0</c>).</summary>
     public required string Version { get; init; }
 

@@ -291,6 +291,12 @@ a:hover {
    Sticky, token-translucent, backdrop-blurred. The nav children use explicit flex order
    so the mobile row reads: brand | … | theme toggle | hamburger. */
 
+/* A #fragment target — an F1 help link from the product, an "On this page" entry, a shared
+   link — scrolls to just below the sticky header instead of underneath it. */
+html {
+    scroll-padding-top: calc(var(--site-header-h) + var(--akml-scalar-spacing-m));
+}
+
 .site-header {
     position: sticky;
     top: 0;

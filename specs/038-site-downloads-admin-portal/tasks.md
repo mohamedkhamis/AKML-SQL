@@ -908,3 +908,15 @@ Each increment is deployable and adds value without breaking the previous one.
 
 New desktop telemetry, broader security remediation, download-button work and
 deployment are outside this approved increment.
+
+## Download click follow-up — 2026-10-07
+
+- [x] Reproduce normal-click failure following enhanced navigation and explain the
+  working new-window workaround.
+- [x] Render native asset links, use global delegated tracking, suppress duplicate
+  clicks and show version/size. Cache GitHub metadata and persist last good fallback.
+- [x] Preserve release visibility and admin preview; count API-discovered releases.
+- [x] Pass 900 Site tests, full solution build, theme drift, desktop/mobile-emulation
+  browser matrix, API-down restart and real installer integrity checks.
+
+Details: [download-follow-up.md](download-follow-up.md). No deployment or Git mutation.

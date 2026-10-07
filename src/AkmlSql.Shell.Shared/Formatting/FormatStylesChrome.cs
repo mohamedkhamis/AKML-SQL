@@ -49,22 +49,32 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>The token for text on a selection or hover tint (see the class remarks).</summary>
         private static string TintText => IsHighContrast ? ThemeTokens.TextOnAccent : ThemeTokens.TextPrimary;
 
-        /// <summary>Check boxes, radio buttons and scroll bars for everything in <paramref name="root"/>.</summary>
-        internal static void ApplyImplicitStyles(FrameworkElement root)
+        /// <summary>
+        /// Check boxes, radio buttons, scroll viewers and scroll bars for everything in
+        /// <paramref name="scope"/> — the window's content, not the window. Inside VS/SSMS the shell
+        /// themes scroll bars to the IDE (not to AKML) by writing its own ScrollBar and ScrollViewer
+        /// styles into the resources of the elements it themes when the window is shown, replacing
+        /// any kept there and outranking any kept further out. So the ScrollViewer template here
+        /// gives its bars <see cref="ScrollBarStyle"/> directly, which no resource can override,
+        /// and a viewer the shell's styles still reach (the live preview's) is given
+        /// <see cref="ScrollViewerStyle"/> as its own style.
+        /// </summary>
+        internal static void ApplyImplicitStyles(FrameworkElement scope, Window window)
         {
-            root.Resources[typeof(CheckBox)] = CheckBoxStyle;
-            root.Resources[typeof(RadioButton)] = RadioButtonStyle;
-            root.Resources[typeof(ScrollBar)] = ScrollBarStyle;
+            scope.Resources[typeof(CheckBox)] = CheckBoxStyle;
+            scope.Resources[typeof(RadioButton)] = RadioButtonStyle;
+            scope.Resources[typeof(ScrollBar)] = ScrollBarStyle;
+            scope.Resources[typeof(ScrollViewer)] = ScrollViewerStyle;
 
             // The stock ScrollViewer fills the square where its two bars meet with the system
             // control colour — a light-grey block in the dark theme. It reads that colour as a
             // resource, so the panel colour stands in for it here, kept current on a theme change
             // while the window is open.
             void PaintCorner(object? sender, System.EventArgs e) =>
-                root.Resources[SystemColors.ControlBrushKey] = ThemeRegistry.Instance.Resources[ThemeTokens.SurfacePanel];
+                scope.Resources[SystemColors.ControlBrushKey] = ThemeRegistry.Instance.Resources[ThemeTokens.SurfacePanel];
             PaintCorner(null, System.EventArgs.Empty);
             ThemeRegistry.Instance.VariantChanged += PaintCorner;
-            if (root is Window window) window.Closed += (_, _) => ThemeRegistry.Instance.VariantChanged -= PaintCorner;
+            window.Closed += (_, _) => ThemeRegistry.Instance.VariantChanged -= PaintCorner;
         }
 
         // ── Option tree ─────────────────────────────────────────────────────
@@ -82,7 +92,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             bd.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
             bd.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             bd.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
-            bd.SetValue(FrameworkElement.MinHeightProperty, 24.0);
+            bd.SetValue(FrameworkElement.MinHeightProperty, 22.0);
             bd.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 0, 1));
             bd.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
 
@@ -445,7 +455,73 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         // ── Scroll bars ─────────────────────────────────────────────────────
 
-        private static readonly Style ScrollBarStyle = BuildScrollBarStyle();
+        internal static readonly Style ScrollBarStyle = BuildScrollBarStyle();
+
+        /// <summary>
+        /// WPF's own ScrollViewer layout — content, a vertical bar on the right, a horizontal bar
+        /// below, the corner between them — with <see cref="ScrollBarStyle"/> set on both bars.
+        /// The bars bind to the viewer one way, as in the stock template; dragging and paging go
+        /// back to it through the scroll commands it handles.
+        /// </summary>
+        internal static readonly Style ScrollViewerStyle = BuildScrollViewerStyle();
+
+        private static Style BuildScrollViewerStyle()
+        {
+            var root = new FrameworkElementFactory(typeof(Grid));
+            var col0 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col0.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+            var col1 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col1.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
+            var row0 = new FrameworkElementFactory(typeof(RowDefinition));
+            row0.SetValue(RowDefinition.HeightProperty, new GridLength(1, GridUnitType.Star));
+            var row1 = new FrameworkElementFactory(typeof(RowDefinition));
+            row1.SetValue(RowDefinition.HeightProperty, GridLength.Auto);
+            root.AppendChild(col0);
+            root.AppendChild(col1);
+            root.AppendChild(row0);
+            root.AppendChild(row1);
+
+            var presenter = new FrameworkElementFactory(typeof(ScrollContentPresenter), "PART_ScrollContentPresenter");
+            presenter.SetValue(ScrollContentPresenter.CanContentScrollProperty, new TemplateBindingExtension(ScrollViewer.CanContentScrollProperty));
+            presenter.SetValue(FrameworkElement.MarginProperty, new TemplateBindingExtension(Control.PaddingProperty));
+            root.AppendChild(presenter);
+
+            var vertical = new FrameworkElementFactory(typeof(ScrollBar), "PART_VerticalScrollBar");
+            vertical.SetValue(FrameworkElement.StyleProperty, ScrollBarStyle);
+            vertical.SetValue(Grid.ColumnProperty, 1);
+            vertical.SetValue(ScrollBar.OrientationProperty, Orientation.Vertical);
+            vertical.SetValue(FrameworkElement.CursorProperty, Cursors.Arrow);
+            vertical.SetValue(RangeBase.ValueProperty, new TemplateBindingExtension(ScrollViewer.VerticalOffsetProperty));
+            vertical.SetValue(RangeBase.MaximumProperty, new TemplateBindingExtension(ScrollViewer.ScrollableHeightProperty));
+            vertical.SetValue(ScrollBar.ViewportSizeProperty, new TemplateBindingExtension(ScrollViewer.ViewportHeightProperty));
+            vertical.SetValue(UIElement.VisibilityProperty, new TemplateBindingExtension(ScrollViewer.ComputedVerticalScrollBarVisibilityProperty));
+            root.AppendChild(vertical);
+
+            var horizontal = new FrameworkElementFactory(typeof(ScrollBar), "PART_HorizontalScrollBar");
+            horizontal.SetValue(FrameworkElement.StyleProperty, ScrollBarStyle);
+            horizontal.SetValue(Grid.RowProperty, 1);
+            horizontal.SetValue(ScrollBar.OrientationProperty, Orientation.Horizontal);
+            horizontal.SetValue(FrameworkElement.CursorProperty, Cursors.Arrow);
+            horizontal.SetValue(RangeBase.ValueProperty, new TemplateBindingExtension(ScrollViewer.HorizontalOffsetProperty));
+            horizontal.SetValue(RangeBase.MaximumProperty, new TemplateBindingExtension(ScrollViewer.ScrollableWidthProperty));
+            horizontal.SetValue(ScrollBar.ViewportSizeProperty, new TemplateBindingExtension(ScrollViewer.ViewportWidthProperty));
+            horizontal.SetValue(UIElement.VisibilityProperty, new TemplateBindingExtension(ScrollViewer.ComputedHorizontalScrollBarVisibilityProperty));
+            root.AppendChild(horizontal);
+
+            // The corner where the two bars meet: the surface behind the viewer, not a grey block.
+            var corner = new FrameworkElementFactory(typeof(Border));
+            corner.SetValue(Grid.ColumnProperty, 1);
+            corner.SetValue(Grid.RowProperty, 1);
+            corner.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            root.AppendChild(corner);
+
+            var template = new ControlTemplate(typeof(ScrollViewer)) { VisualTree = root };
+            template.Seal();
+            var style = new Style(typeof(ScrollViewer));
+            style.Setters.Add(new Setter(Control.TemplateProperty, template));
+            style.Seal();
+            return style;
+        }
 
         /// <summary>
         /// A slim 10 px bar: no arrow buttons, a transparent track and a rounded muted thumb that

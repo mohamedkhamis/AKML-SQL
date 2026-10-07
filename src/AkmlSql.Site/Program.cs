@@ -46,6 +46,13 @@ builder.Services.AddResponseCompression(options =>
 // T012 (US1): download page feed, loaded once from wwwroot/releases.json.
 // Missing/invalid manifest resolves to the friendly-fallback state per contracts/releases-json.md.
 builder.Services.AddSingleton(sp => ReleasesManifest.Load(sp.GetRequiredService<IWebHostEnvironment>()));
+builder.Services.AddHttpClient("github-releases", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton(sp => new LatestGitHubRelease(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("github-releases"),
+    sp.GetRequiredService<ReleasesManifest>(), sp.GetRequiredService<ILogger<LatestGitHubRelease>>(),
+    Path.Combine(Path.GetDirectoryName(AnalyticsStore.ResolveDatabasePath(
+        sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value.DatabasePath))!, "latest-github-release.json")));
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LatestGitHubRelease>());
 
 // DL-001: the download page checks the advertised installer is actually on disk before offering
 // it. Not a singleton snapshot -- files are dropped into the folder between deploys, so presence

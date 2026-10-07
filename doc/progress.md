@@ -1939,3 +1939,15 @@ caches are still per tab (one cache per server and database would share them).
   Collection remains best-effort with process-lifetime counters. Broader security
   remediation, new installer/SSMS telemetry and Task 3 download work remain outside
   this approved increment. The earlier audit reports remain dated baselines.
+
+## 2026-10-07 — Reliable direct installer downloads
+
+- Fixed the normal-click failure after enhanced navigation: render native GitHub
+  asset links, disable enhanced navigation for installers, and load delegated tracking
+  globally. A brief busy state suppresses duplicate clicks; statistics never delay downloads.
+- Added a 15-minute background latest-release cache with persistent fallback, version
+  and size on the button, trusted version attribution and matching admin release preview.
+- Verified 900 Site tests, full solution Release MSBuild, theme drift, 33 online
+  browser checks and 8 API-down restart checks. The actual GitHub EXE matched its
+  expected name, size and SHA-256. Mobile checks used emulation. No production deployment.
+- [Root cause, evidence and limitations](../reports/site-audit-2026-10-06/04-download-fix.md).
