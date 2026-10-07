@@ -67,7 +67,7 @@ builder.Services.AddSingleton(sp => DocsContentService.Build(
     sp.GetRequiredService<IWebHostEnvironment>(),
     sp.GetRequiredService<IOptions<DocsOptions>>().Value));
 
-// T031 (SEO): canonical base URL for sitemap.xml (config section "Site", default https://akmlsql.com).
+// T031 (SEO): canonical base URL for sitemap.xml (config section "Site", default https://akml.khamis.work).
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOptions.SectionName));
 
 // Site metrics (analytics + admin portal): SQLite store as a singleton, fire-and-forget channel

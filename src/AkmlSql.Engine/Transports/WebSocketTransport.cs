@@ -291,7 +291,7 @@ namespace AkmlSql.Engine.Transports
             "<p>This address is the connection point for AKML SQL Web. There is nothing to use here directly.</p>" +
             "<p>If you opened it to accept its certificate, that is done: this browser can now connect. " +
             "Go back to AKML SQL Web and pair with the PIN from the engine machine " +
-            "(<code>C:\\ProgramData\\AKML SQL Web\\pairing-pin.txt</code>).</p>" +
+            "(<code>%ProgramData%\\AKML SQL Web\\pairing-pin.txt</code>).</p>" +
             "</body></html>";
 
         private async Task HandleConnectionAsync(HttpListenerContext context, CancellationToken ct)

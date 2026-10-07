@@ -49,7 +49,7 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 var waitedSec = ForAiRequestMs(settings) / 1000;
                 return $"The AI request timed out after {waitedSec}s — the provider may be slow or rate-limited. " +
-                       "See AKML SQL → View Logs for the provider's last error.";
+                       "See AKML SQL → Help → View Logs for the provider's last error.";
             }
             return ex.Message;
         }
@@ -65,7 +65,7 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 var waitedSec = ForAiRequestMs(settings, feature) / 1000;
                 return $"The AI request timed out after {waitedSec}s — the provider may be slow or rate-limited. " +
-                       "See AKML SQL → View Logs for the provider's last error.";
+                       "See AKML SQL → Help → View Logs for the provider's last error.";
             }
             return ex.Message;
         }

@@ -73,11 +73,11 @@ internal static class AiFailureTaxonomy
         if (status != null)
         {
             return $"{failureNoun} failed (HTTP {status}). " +
-                   "Full detail is in the log — AKML SQL → View Logs.";
+                   "Full detail is in the log — AKML SQL → Help → View Logs.";
         }
 
         return $"{failureNoun} failed with an unexpected error ({ex.GetType().Name}). " +
-               "Full detail is in the log — AKML SQL → View Logs.";
+               "Full detail is in the log — AKML SQL → Help → View Logs.";
     }
 
     /// <summary>The endpoint to name in messages: the attempt's, else the provider's default.</summary>

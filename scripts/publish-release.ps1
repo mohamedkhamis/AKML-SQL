@@ -45,7 +45,7 @@ param(
     [string[]] $SupportedHosts = @('SSMS 22'),
     [string] $NotesSummary,
     [string] $ReleaseNotesUrl = 'https://github.com/mohamedkhamis/AKML-SQL/releases',
-    [string] $MinimumOsVersion = '10.0',
+    [string] $MinimumOsVersion = '10.0.17763',   # AkmlSqlSetup.iss MinVersion (Windows 10 version 1809)
     [switch] $Force
 )
 

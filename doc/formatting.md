@@ -445,26 +445,29 @@ A pair passes iff the two normalised byte streams are equal. The corpus suite pa
 
 ## Format Actions (IPC)
 
-Format operations can target specific transformations using the `FormatActionType` enum:
+Format operations can target specific transformations using the `FormatActionType` enum
+(`src/AkmlSql.Core/Ipc/Messages/FormatActionRequest.cs`; the values are wire codes, never renumber them):
 
 | Value | Name | Description |
 |-------|------|-------------|
-| 0 | `CasingOnly` | Apply keyword casing, no layout changes |
-| 1 | `ExpandWildcards` | Replace `SELECT *` with column list |
-| 2 | `InsertSemicolons` | Add missing statement terminators |
-| 3 | `RemoveSemicolons` | Remove all `;` |
-| 4 | `QualifyObjectNames` | Add `dbo.` schema prefix |
-| 5 | `AddAsKeyword` | Add `AS` to implicit aliases |
-| 6 | `AddSquareBrackets` | Bracket all identifiers |
-| 7 | `NormalizeWhitespace` | Collapse extra spaces (no indent changes) |
-| 8 | `AlignColumns` | Align columns and aliases |
-| 9 | `ReorderJoins` | Sort joins by type |
-| 10 | `ExtractCte` | Extract subquery to CTE |
-| 11 | `InlineCte` | Inline a CTE back as a subquery |
-| 12 | `AddNocount` | Insert `SET NOCOUNT ON` |
-| 13 | `AddSchemaPrefix` | Add schema prefix to all object references |
-| 14 | `FormatComments` | Normalize comment style |
-| 15 | `FullFormat` | Apply all layout + casing rules (equivalent to Format Document) |
+| 0 | `CasingOnly` | Apply the style's casing, no layout changes |
+| 1 | `InsertSemicolons` | Add missing statement terminators |
+| 2 | `RemoveSemicolons` | Remove statement-terminating `;` |
+| 3 | `ExpandWildcards` | Replace `SELECT *` with the column list (needs the schema cache) |
+| 4 | `QualifyObjectNames` | Add the owning schema to unqualified table names, skipping ambiguous ones (needs the schema cache) |
+| 5 | `AddSquareBrackets` | Bracket identifiers |
+| 6 | `RemoveSquareBrackets` | Remove square brackets from identifiers |
+| 7 | `AddAsKeyword` | Add `AS` to implicit aliases |
+| 8 | `RemoveAsKeyword` | Remove `AS` from aliases |
+| 9 | `ExpandInsertColumns` | Add the column list to an `INSERT` that has none (needs the schema cache) |
+| 10 | `ExpandExecParameters` | Turn positional `EXEC` arguments into named `@param = value` ones (needs the schema cache) |
+| 11 | `ExpandUpdateColumns` | Add the target table's missing columns to an `UPDATE`'s `SET` list, as `NULL` |
+| 12 | `ConvertOldStyleJoins` | Rewrite comma joins as `INNER JOIN ... ON` (non-equi predicates stay in `WHERE`) |
+| 13 | `AddGroupByColumns` | Add a `GROUP BY` listing the non-aggregated columns |
+| 14 | `EncapsulateBeginEnd` | Wrap the selection (or the batch) in `BEGIN ... END` |
+| 15 | `ReplaceDeprecatedSyntax` | Replace deprecated syntax (for example `!=` with `<>`) |
+| 16 | `ConvertSpExecutesql` | Turn an `sp_executesql` call into static SQL by substituting its parameter values |
+| 17 | `Unformat` | Collapse non-significant whitespace into compact SQL |
 
 ---
 

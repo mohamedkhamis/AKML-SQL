@@ -24,7 +24,7 @@ All of these are available from the AKML SQL menu and the editor right-click men
 - Ollama (local models)
 - LM Studio (local models)
 
-Configure your provider and API key in **Tools** -> **Options** -> **AKML SQL** under the AI section — the **Test connection** button there verifies the provider, model, endpoint and key before you save. Ollama and LM Studio run on your own machine, so no data leaves it. Kimi defaults to the international endpoint (`api.moonshot.ai`); for the mainland-China service, set the endpoint to `https://api.moonshot.cn/v1`.
+Configure your provider and API key in **AKML SQL** -> **Options…** -> **AI assistance** — the **Test connection** button there verifies the provider, model, endpoint and key before you save. Ollama and LM Studio run on your own machine, so no data leaves it. Kimi defaults to the international endpoint (`api.moonshot.ai`); for the mainland-China service, set the endpoint to `https://api.moonshot.cn/v1`.
 
 ## Where your API keys live
 

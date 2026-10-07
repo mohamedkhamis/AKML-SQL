@@ -398,7 +398,7 @@ AKML SQL writes its own rolling logs to `%AppData%\AKML SQL\logs\`. Set `logMini
 
 1. Verify the connection has `VIEW DATABASE STATE` and `VIEW ANY DEFINITION` permissions.
 2. Check `%AppData%\AKML SQL\logs\` for `SchemaMetadataService` errors.
-3. Try a manual refresh: Tools → AKML SQL → Refresh Schema Cache.
+3. Try a manual refresh: AKML SQL → Help → Refresh Schema Cache.
 
 ### Build failures
 

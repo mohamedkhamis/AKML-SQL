@@ -202,7 +202,7 @@ Write-Step "Step 2/7: Restoring NuGet packages"
 foreach ($target in $buildTargets) {
     $csproj = Join-Path $srcDir "AkmlSql.$target\AkmlSql.$target.csproj"
     Write-Host "  Restoring AkmlSql.$target..." -NoNewline
-    Invoke-Native { & $msbuild $csproj -t:Restore -p:Configuration=$Configuration -v:quiet 2>&1 } | Out-Null
+    Invoke-Native { & $msbuild $csproj -t:Restore -p:Configuration=$Configuration -p:Version=$buildVersion -v:quiet 2>&1 } | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Fail " FAILED"
         $script:errors += "NuGet restore failed for AkmlSql.$target"
@@ -236,7 +236,7 @@ foreach ($target in $buildTargets) {
     $csproj = Join-Path $srcDir "AkmlSql.$target\AkmlSql.$target.csproj"
     Write-Host "  Building AkmlSql.$target..." -NoNewline
 
-    $output = Invoke-Native { & $msbuild $csproj -t:Build -p:Configuration=$Configuration -v:quiet 2>&1 }
+    $output = Invoke-Native { & $msbuild $csproj -t:Build -p:Configuration=$Configuration -p:Version=$buildVersion -v:quiet 2>&1 }
     # Match real MSBuild error codes (e.g. ": error CS0579:") and skip the
     # literal word "Error" inside warning text like NU1900 vulnerability fetch.
     $buildErrors = $output | Select-String ': error [A-Z]+\d+: '
@@ -301,7 +301,7 @@ foreach ($proj in $publishProjects) {
     $maxAttempts = 3
     while ($true) {
         $attempt++
-        $output = Invoke-Native { dotnet publish $csproj -c $Configuration -r $proj.Rid --verbosity quiet 2>&1 }
+        $output = Invoke-Native { dotnet publish $csproj -c $Configuration -r $proj.Rid -p:Version=$buildVersion --verbosity quiet 2>&1 }
         if ($LASTEXITCODE -eq 0) { break }
         if ($attempt -ge $maxAttempts) {
             Write-Fail " FAILED (after $maxAttempts attempts)"
@@ -333,7 +333,7 @@ if (Test-Path $webCsproj) {
     $maxAttempts = 3
     while ($true) {
         $attempt++
-        $output = Invoke-Native { dotnet publish $webCsproj -c $Configuration --verbosity quiet 2>&1 }
+        $output = Invoke-Native { dotnet publish $webCsproj -c $Configuration -p:Version=$buildVersion --verbosity quiet 2>&1 }
         if ($LASTEXITCODE -eq 0) { break }
         if ($attempt -ge $maxAttempts) {
             Write-Fail " FAILED (after $maxAttempts attempts)"

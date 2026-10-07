@@ -113,7 +113,7 @@ public sealed class LatestGitHubRelease : BackgroundService
             {
                 Version = version, ReleasedAt = DateOnly.FromDateTime(json.GetProperty("published_at").GetDateTimeOffset().UtcDateTime),
                 SupportedHosts = ["SSMS 22"], DownloadUrl = "downloads/" + name, CdnUrl = url,
-                SizeBytes = size, Sha256Hash = hash, MinimumOsVersion = "10.0",
+                SizeBytes = size, Sha256Hash = hash, MinimumOsVersion = "10.0.17763",   // the installer's MinVersion and the updater's platform floor
                 ReleaseNotesUrl = "https://github.com/mohamedkhamis/AKML-SQL/releases/tag/" + Uri.EscapeDataString(tag),
             };
         }

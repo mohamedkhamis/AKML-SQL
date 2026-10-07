@@ -135,8 +135,9 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="intellisense" /></span>
                 <h3>IntelliSense</h3>
                 <p>
-                    Nine completion providers — Column, Alias, Object, Keyword, Snippet, Variable, JOIN,
-                    QuickInfo, and Signature — with fuzzy matching, dot-trigger, and schema-aware ranking.
+                    Suggestions for columns, aliases, objects, keywords, JOINs (with foreign-key ON
+                    conditions), variables, parameters, snippets, databases, and GROUP BY lists, plus
+                    Quick Info and signature help — with fuzzy matching, dot-trigger, and schema-aware ranking.
                     The SQL Prompt-style popup shows type-coded icon badges and turns semi-transparent
                     while you hold Ctrl to peek at the code behind it.
                 </p>
@@ -145,10 +146,10 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="formatting" /></span>
                 <h3>Code formatting</h3>
                 <p>
-                    A 7-stage pipeline (parse → annotate → layout → cast → emit → validate → idempotency)
-                    behind 21 format commands. Share styles as <code>.akmlstyle</code> profiles, and
-                    round-trip SQL Prompt <code>.sqlpromptstylev2</code> XML — import and export — so
-                    existing team styles carry over unchanged.
+                    A 7-stage pipeline (parse → annotate → layout → casing → emit → validate → idempotency)
+                    behind Format Document, Format Selection, Bulk Format, and Unformat. Share styles as
+                    <code>.akmlstyle</code> profiles, and round-trip SQL Prompt <code>.sqlpromptstylev2</code>
+                    XML — import and export — so existing team styles carry over unchanged.
                 </p>
             </li>
             <li class="card feature-card">
@@ -164,9 +165,10 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="refactoring" /></span>
                 <h3>Refactoring</h3>
                 <p>
-                    Heavyweight operations like Smart Rename, Parameterize Values, and Convert Temp Table,
-                    plus 9 lightweight ops — Expand INSERT Columns, Convert Old-Style Joins, Encapsulate
-                    BEGIN/END, and more — that reshape SQL in a single action.
+                    Smart Rename, Script as ALTER, Inline EXEC, Inline Stored Procedure, Convert INSERT to
+                    UPDATE, and Find Invalid Objects, plus light-bulb fixes — expand wildcards, qualify
+                    object names, turn sp_executesql into static SQL, surround with BEGIN/END — that
+                    reshape SQL in a single action.
                 </p>
             </li>
             <li class="card feature-card">
@@ -191,9 +193,9 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="ai" /></span>
                 <h3>AI assistance</h3>
                 <p>
-                    Text-to-SQL, Explain, Fix, Optimize, Index Analysis, Chat, and Ghost Text inline
-                    autocomplete — all schema-aware, so suggestions are grounded in the database you
-                    are actually working against.
+                    Explain, Fix, Chat, and Ghost Text inline autocomplete in SSMS, plus Text-to-SQL,
+                    Optimize, and Index Analysis in the web edition — all schema-aware, so suggestions
+                    are grounded in the database you are actually working against.
                 </p>
             </li>
         </ul>

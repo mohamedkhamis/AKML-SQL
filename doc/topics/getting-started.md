@@ -4,7 +4,7 @@ AKML SQL is a SQL development plugin for SQL Server Management Studio (SSMS) 22.
 
 ## Requirements
 
-- Windows 10 or later
+- Windows 10 version 1809 or later, or Windows 11
 - SQL Server Management Studio 22
 
 > Visual Studio 2026 is no longer supported. Upgrading removes the AKML SQL extension that earlier versions added to Visual Studio.
@@ -25,7 +25,7 @@ Re-running the installer over an existing installation upgrades it in place. You
 
 AKML SQL adds its own **AKML SQL** menu to the SSMS 22 menu bar. Format Document, Format Selection, Active Style and SQL History sit at the top; everything else is grouped under **Formatting**, **Refactor**, **Navigate**, **Tabs**, **AI** (shown when AI is turned on), **Tools** and **Help**.
 
-Many features also appear on the editor right-click menu, and the Command Palette (**Ctrl+Shift+P**) finds any command or option by name.
+The editor's right-click menu has **Format Document** and **Active Style**, and the Command Palette (**Ctrl+Shift+P**) finds any command or option by name.
 
 ## Open the Options dialog
 
@@ -38,7 +38,7 @@ Each feature area (suggestions, formatting, snippets, code analysis, refactoring
 
 - AKML SQL checks for updates automatically on startup (you can turn this off in Options).
 - To check manually, use **AKML SQL** -> **Help** -> **Check for Updates**.
-- If a newer version exists, a notification bar appears with a download link.
+- When a newer version is ready, Windows shows a notification, and SSMS offers it once at startup (**Install now** / **Later**).
 
 ## Next steps
 

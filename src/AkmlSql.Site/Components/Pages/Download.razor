@@ -176,9 +176,9 @@
                         and reopen it afterwards.
                     </li>
                     <li>
-                        <strong>Open the Tools menu.</strong>
-                        AKML SQL is there. The first launch after installing rebuilds the editor's
-                        component cache, so give it a few seconds longer than usual.
+                        <strong>Open the AKML SQL menu.</strong>
+                        It is on the SSMS menu bar, just before Window. The first launch after installing
+                        rebuilds the editor's component cache, so give it a few seconds longer than usual.
                     </li>
                 </ol>
                 <p class="download-note">
@@ -319,8 +319,18 @@ else
 @code {
     /// <summary>U23: display form of the minimum OS version — trims a trailing ".0"
     /// so "10.0" renders as the consumer-facing "Windows 10 or later".</summary>
-    private static string DisplayOsVersion(string version) =>
-        version.EndsWith(".0", StringComparison.Ordinal) ? version[..^2] : version;
+    /// <summary>
+    /// The minimum Windows version as people name it: "10.0" reads "10", and a build number reads as
+    /// its release ("10.0.17763" is "10 version 1809", the oldest the installer and updater accept).
+    /// </summary>
+    internal static string DisplayOsVersion(string version) => version switch
+    {
+        "10.0.17763" => "10 version 1809",
+        "10.0.19041" => "10 version 2004",
+        "10.0.22000" => "11",
+        _ when version.EndsWith(".0", StringComparison.Ordinal) => version[..^2],
+        _ => version,
+    };
 
     /// <summary>The release shown in the primary card, or null when nothing is downloadable.</summary>
     private Release? _latest;

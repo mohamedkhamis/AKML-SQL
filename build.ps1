@@ -44,11 +44,11 @@ $BuildTime   = $_now.ToString("HHmm")
 $Version     = "1.$BuildYear.$BuildDate.$BuildTime"
 
 # --- Tool paths ---
-# MSBuild: prefer VS 2022 Enterprise (the canonical build host); fall back to
-# vswhere discovery so the build also runs on VS 2026 / 18.x dev machines instead
-# of being pinned to one edition/path. Shell extensions still require full MSBuild
-# (not `dotnet build`) per CLAUDE.md — vswhere returns exactly that.
-$MSBuild = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
+# MSBuild: prefer VS 18 Enterprise (the build host); fall back to vswhere discovery
+# so the build also runs on other editions instead of being pinned to one path.
+# Shell extensions still require full MSBuild (not `dotnet build`) per CLAUDE.md —
+# vswhere returns exactly that.
+$MSBuild = "C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe"
 if (-not (Test-Path $MSBuild)) {
     $_vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
     if (Test-Path $_vswhere) {

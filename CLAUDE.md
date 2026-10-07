@@ -1,7 +1,7 @@
 # AKML-SQL Development Guidelines
 
 AI-powered SQL development assistance for SSMS 22. (Visual Studio 2026 support was removed 2026-09-24 — the `AkmlSql.VS2026` project is gone; setup deletes the extension earlier releases put into VS.)
-Author: Mohamed Khamis | License: MIT | Version: 1.0.0
+Author: Mohamed Khamis | License: MIT | Version: stamped per build as 1.YY.MMDD.HHmm (UTC+2; src/Directory.Build.props, build.ps1)
 
 ## Project Structure
 
@@ -27,7 +27,7 @@ tests/
   AkmlSql.Core.Tests/                  # xunit tests (net10.0) — one project per src library (12 total) + E2E/Web.E2E/Installer
   AkmlSql.Site.Tests/                  # xunit + bunit (net10.0) — site components, docs pipeline, releases manifest (spec 034)
   format-parity/                       # SQL Prompt parity corpus + golden outputs
-  completion-corpus/                   # 1,342-case autocomplete corpus + CorpusGateTests ratchet (~97.5% gate)
+  completion-corpus/                   # 1,376-case autocomplete corpus (33 excluded) + CorpusGateTests ratchet (~97.5% gate)
 doc/                                   # All project documentation (architecture, ipc-api, progress, WEB/ milestone docs)
 specs/                                 # Specify framework feature specs (001–034)
 ```
@@ -39,9 +39,9 @@ specs/                                 # Specify framework feature specs (001–
 - **Engine**: .NET 10, self-contained, win-x64 (out-of-process IntelliSense) — single-file and trimming are OFF: Microsoft.Data.SqlClient native SNI interop is incompatible with single-file extraction
 - **Updater**: .NET 10, self-contained single-file, win-x64, PublishTrimmed
 - **Installer**: Inno Setup 7 Pascal Script
-- **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 17.x
-- **Logging**: Serilog 4.x + Serilog.Sinks.File 6.x
-- **JSON**: System.Text.Json 9.x (netstandard2.0 polyfill; net10.0 targets use the inbox STJ)
+- **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 18.x (tests/AkmlSql.UiTests pins 17.11.1)
+- **Logging**: Serilog 4.x + Serilog.Sinks.File 7.x
+- **JSON**: System.Text.Json 10.x (netstandard2.0 polyfill; net10.0 targets use the inbox STJ)
 
 ## VS SDK Versions (Critical)
 
@@ -54,7 +54,7 @@ specs/                                 # Specify framework feature specs (001–
 The full solution can be built in one pass (the CTO cross-contamination is fixed — see Build Gotchas):
 
 ```bash
-MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
 
 # Whole solution (restore first, then build)
 "$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
@@ -323,7 +323,7 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 
 - Spec 040 (`tasks.md` › Deferred): commands with no handler stay off the menu (Text to SQL, AI Optimize, AI Index Analysis, Generate CRUD Procedures, Find in Results Grid, Split Table); the VSCT menu is still parented to `IDM_VS_MENU_BAR` and invisible in SSMS 22 (the runtime menu is what users see); Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; History's "Record failed executions" / "Encrypt at rest" stay hidden; UI Automation walks only the first row of each group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors (flaky `DisableRuleFixActionTests`).
 
-- Spec 039: calibrate option interpretations against SQL Prompt's built-in style exports (user to send); manual SSMS window check. Web E2E needs `playwright.ps1 install chromium` (build 1243); `FormatStylesSharedEngineTests` also needs a Debug build of `AkmlSql.Engine` (it runs it sandboxed via `AKML_APP_DATA_ROOT`).
+- Spec 039: calibrate option interpretations against SQL Prompt's built-in style exports (user to send); manual SSMS window check. Web E2E needs `playwright.ps1 install chromium` (the Chromium build follows the restored Microsoft.Playwright 1.* package); `FormatStylesSharedEngineTests` also needs a Debug build of `AkmlSql.Engine` (it runs it sandboxed via `AKML_APP_DATA_ROOT`).
 
 - Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.

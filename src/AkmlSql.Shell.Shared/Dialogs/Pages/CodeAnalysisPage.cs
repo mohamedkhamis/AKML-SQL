@@ -18,8 +18,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
                 "Enable code analysis",
-                "Master switch for all 120+ analysis rules");
-            ctx.RegisterSearch("Enable code analysis", "Master switch for all 120+ analysis rules", "Toggle", rowEnabled);
+                "Master switch for all code analysis rules");
+            ctx.RegisterSearch("Enable code analysis", "Master switch for all code analysis rules", "Toggle", rowEnabled);
 
             var (rowRunOnType, chkRunOnType) = ctx.Rows.AddToggle(panel,
                 "Analyze while typing",
@@ -37,7 +37,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // Spec 040 (T168, OPT-09) — the "Rules" row opens the Code analysis rules window. The
             // window saves the overrides itself; the page then takes them from disk (see
             // CodeAnalysisControls.RefreshRuleOverridesFromDisk) so OK here can't write stale ones.
-            const string rulesHint = "120+ rules across 8 categories (PE, BP, SE, ST, DE, DEP, EX, NM): turn each on or off and set its severity";
+            const string rulesHint = "Rules in 8 categories (PE, BP, SE, ST, DE, DEP, EX, NM): turn each on or off and set its severity";
             var (rulesRow, btnManageRules) = ctx.Rows.AddButton(panel, "Rules", "Manage rules…", rulesHint);
             ctx.RegisterSearch("Rules", rulesHint, "Button", rulesRow);
             var perProjectRow = ctx.Rows.AddInfoRow(panel, "Per-project config", ".casettings JSON file searched upward from file");

@@ -197,6 +197,20 @@ public sealed class DownloadPageTests : IDisposable
         Assert.DoesNotContain("Windows 10.0 or later", cut.Markup);
     }
 
+    /// <summary>
+    /// The installer and updater refuse anything before Windows 10 1809 (build 17763), so releases
+    /// now say 10.0.17763 — shown as people name it, not as a build number.
+    /// </summary>
+    [Theory]
+    [InlineData("10.0", "10")]
+    [InlineData("10.0.17763", "10 version 1809")]
+    [InlineData("10.0.22000", "11")]
+    [InlineData("10.0.12345", "10.0.12345")]
+    public void Minimum_os_version_reads_as_people_name_it(string version, string shown)
+    {
+        Assert.Equal(shown, Download.DisplayOsVersion(version));
+    }
+
     [Fact]
     public void AdvertisedButMissingInstaller_FallsBackInsteadOfOfferingADeadLink()
     {

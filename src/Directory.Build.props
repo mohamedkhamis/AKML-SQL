@@ -6,16 +6,34 @@
     </Exec>
     <PropertyGroup>
       <GitCommitCount Condition="'$(GitExitCode)' != '0'">0</GitCommitCount>
-      <!-- Version: 1.YY.MMDD.HHmm (e.g. 1.26.0414.0511). 4 segments so every part fits
-           in a ushort (VSIX/AssemblyVersion require each segment ≤ 65535). -->
+      <!-- Version: 1.YY.MMDD.HHmm (e.g. 1.26.0414.0511), the build's date and time at UTC+2.
+           4 segments so every part fits in a ushort (VSIX/AssemblyVersion require each
+           segment ≤ 65535). -->
       <_BuildYear>$([System.DateTime]::UtcNow.AddHours(2).ToString("yy"))</_BuildYear>
       <_BuildDate>$([System.DateTime]::UtcNow.AddHours(2).ToString("MMdd"))</_BuildDate>
       <_BuildTime>$([System.DateTime]::UtcNow.AddHours(2).ToString("HHmm"))</_BuildTime>
-      <Version>1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</Version>
+      <!-- Only when no version was passed in ("1.0.0" is the SDK's default). A property set in a
+           target overrides even a global one, so this used to replace build.ps1's and the release
+           script's -p:Version with each project's own compile minute: one release carried DLLs of
+           several versions (1.26.1007.0243 / .0244 / .0245), none matching the installer's. -->
+      <Version Condition="'$(Version)' == '' or '$(Version)' == '1.0.0'">1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</Version>
       <AssemblyVersion>1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</AssemblyVersion>
       <FileVersion>1.$(_BuildYear).$(_BuildDate).$(_BuildTime)</FileVersion>
+      <!-- The assembly and file versions follow the version too (when it is four numbers). -->
+      <AssemblyVersion Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(Version)', '^\d+\.\d+\.\d+\.\d+$'))">$(Version)</AssemblyVersion>
+      <FileVersion Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(Version)', '^\d+\.\d+\.\d+\.\d+$'))">$(Version)</FileVersion>
       <InformationalVersion>$(Version)</InformationalVersion>
       <GitVersionComputed>true</GitVersionComputed>
+      <!-- The compile instant in UTC, to the minute ("'"-quoted separators, so no culture can
+           change them). The build date About and Options show comes from the version above
+           (AppVersion.FromVersion); this stamp is the fallback for a version of another shape. -->
+      <_BuildTimestamp>$([System.DateTime]::UtcNow.ToString("yyyy'-'MM'-'dd'T'HH':'mm'Z'"))</_BuildTimestamp>
     </PropertyGroup>
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>BuildTimestamp</_Parameter1>
+        <_Parameter2>$(_BuildTimestamp)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
   </Target>
 </Project>

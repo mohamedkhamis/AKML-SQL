@@ -49,9 +49,9 @@ Do the same after installing or upgrading AKML SQL if the menu does not appear.
 ## IntelliSense or schema features not working
 
 1. Check Task Manager for `AkmlSql.Engine.exe` — the helper process that powers completions. If it is absent, look at the logs.
-2. Confirm IntelliSense is enabled in **Tools** -> **Options** -> **AKML SQL** -> **IntelliSense**.
+2. Confirm IntelliSense is enabled in **AKML SQL** -> **Options…** -> **Suggestions** -> **Behavior**.
 3. If the built-in SSMS IntelliSense fights the AKML one, enable "Disable native IntelliSense" on that page.
-4. If the schema never loads, confirm your login has `VIEW DATABASE STATE` and `VIEW ANY DEFINITION`, then refresh manually via **Tools** -> **AKML SQL** -> **Refresh Schema Cache**.
+4. If the schema never loads, confirm your login has `VIEW DATABASE STATE` and `VIEW ANY DEFINITION`, then refresh manually via **AKML SQL** -> **Help** -> **Refresh Schema Cache**.
 
 ## Report an issue
 

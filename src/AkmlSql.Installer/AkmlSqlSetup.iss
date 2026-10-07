@@ -52,8 +52,23 @@
 
 #define MyAppName "AKML SQL"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  ; No /DMyAppVersion (a bare ISCC run): use the version the extension was built with. This
+  ; fell back to "1.0.0", which then went into Apps & features, the setup EXE, the VSIX
+  ; manifest and SSMS's installed-products entry.
+  #define BuiltShellDll AddBackslash(SourcePath) + "..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Ssms22.dll"
+  #if !FileExists(BuiltShellDll)
+    #error "Build the SSMS extension (Release) first, or pass /DMyAppVersion=1.YY.MMDD.HHmm."
+  #endif
+  #define BuiltVersion GetStringFileInfo(BuiltShellDll, "ProductVersion")
+  #if Pos("+", BuiltVersion) > 0
+    #define MyAppVersion Copy(BuiltVersion, 1, Pos("+", BuiltVersion) - 1)
+  #else
+    #define MyAppVersion BuiltVersion
+  #endif
 #endif
+; The copyright runs from the first release year to the year this installer is compiled.
+#define ThisYear GetDateTimeString('yyyy', '', '')
+#define CopyrightYears (ThisYear == "2026" ? "2026" : "2026-" + ThisYear)
 #define MyAppPublisher "Mohamed Khamis"
 #define MyAppURL "https://akml.khamis.work"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
@@ -93,7 +108,7 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/feedback
 AppUpdatesURL={#MyAppURL}/download
 AppContact={#MyAppURL}/feedback
-AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
+AppCopyright=Copyright (C) {#CopyrightYears} {#MyAppPublisher}
 ; VersionInfoVersion stamps the compiled installer .EXE's own file-properties
 ; (Details tab in Explorer → "File version" / "Product version"). Inno Setup
 ; requires the 4-segment x.y.z.w form here; our MyAppVersion already matches.
@@ -102,7 +117,7 @@ VersionInfoProductVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
-VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
+VersionInfoCopyright=Copyright (C) {#CopyrightYears} {#MyAppPublisher}
 ; New installs: Program Files\AKML SQL (64-bit). An install made by the earlier 32-bit installer
 ; stays in its Program Files (x86) folder -- see DefaultInstallDir and MigrateLegacy32BitInstall.
 DefaultDirName={code:DefaultInstallDir}
@@ -201,13 +216,13 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SSMS 22 (x64) extension files — all DLLs from build output plus pkgdef and manifest
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
 
 
 [Icons]
 ; "Settings" pointed at AkmlSql.Core.dll, which cannot be opened -- settings live inside SSMS
-; (Tools > AKML SQL > Options). The update shortcut's AppUserModelID is what lets the updater
+; (AKML SQL > Options... on the SSMS menu bar). The update shortcut's AppUserModelID is what lets the updater
 ; show Windows notifications at all: an unpackaged app's notifications are attributed through a
 ; Start-menu shortcut carrying its ID. Keep it equal to Constants.AppUserModelId.
 Name: "{group}\Check for {#MyAppName} updates"; Filename: "{app}\AkmlSql.Updater.exe"; Parameters: "--check-now"; \
@@ -798,7 +813,7 @@ begin
   OptionsPage := CreateInputOptionPage(wpSelectTasks,
     'Updates and error reports',
     'Keep AKML SQL current and help fix what goes wrong.',
-    'You can change both later in SSMS: Tools > AKML SQL > Options > General.',
+    'You can change both later in SSMS: AKML SQL > Options... > General.',
     False, False);
   OptionsPage.Add('Check for updates automatically, and download them in the background');
   OptionsPage.Add('Send anonymous error reports (recommended)');

@@ -43,7 +43,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "About");
-            var versionRow = ctx.Rows.AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (" + Constants.BuildDate + ")");
+            var versionRow = ctx.Rows.AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (built " + AkmlSql.Core.AppVersion.BuildDateTime + ")");
             ctx.RegisterSearch("Version", Constants.RuntimeVersion, "Info", versionRow);
 
             return new GeneralControls(cboTheme, chkAutoUpdate, chkTelemetry);

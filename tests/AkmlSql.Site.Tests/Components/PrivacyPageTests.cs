@@ -183,7 +183,8 @@ public sealed class PrivacyPageTests : IDisposable
         var section = System.Text.RegularExpressions.Regex.Replace(cut.Find("section#app").TextContent, @"\s+", " ");
         Assert.Contains("never contains your queries, your data", section, StringComparison.Ordinal);
         Assert.Contains("removed from the error text", section, StringComparison.Ordinal);
-        Assert.Contains("Tools > AKML SQL > Options > General", section, StringComparison.Ordinal);
+        // AKML SQL is its own menu on the SSMS menu bar, not under Tools.
+        Assert.Contains("AKML SQL > Options… > General", section, StringComparison.Ordinal);
     }
 
     [Fact]

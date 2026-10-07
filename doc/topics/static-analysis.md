@@ -37,7 +37,7 @@ change should reach. The four scopes go from narrowest to widest:
 The first two write a comment, so they travel with the file — commit them and your team sees the
 same result. The session scope writes nothing at all, which makes it the right choice for "not
 right now" rather than "not ever". The last one is reversible from
-**Tools → AKML SQL → Manage Code Analysis Rules**.
+**AKML SQL → Tools → Manage Code Analysis Rules…**.
 
 ### Writing the comments by hand
 
@@ -76,7 +76,7 @@ A few details worth knowing:
 
 ### Undoing a session suppression
 
-Open **Tools → AKML SQL → Manage Code Analysis Rules**. Rules disabled for the session are
+Open **AKML SQL → Tools → Manage Code Analysis Rules…**. Rules disabled for the session are
 highlighted and listed along the bottom of the dialog, with a **Restore** button that puts them all
 back when you Save. They also come back on their own the next time you start the IDE.
 
@@ -101,6 +101,6 @@ Severity values are `None`, `Info`, `Warning`, and `Error`.
 
 ## Tune analysis
 
-Open **Tools** -> **Options** -> **AKML SQL** -> **Code Analysis** to turn analysis on or off, choose when it runs (as you type / on save), and control Error List integration. See the [Configuration reference](../configuration.md) for all keys.
+Open **AKML SQL** -> **Options…** -> **Code analysis** to turn analysis on or off and control Error List integration. Analysis runs as you type. See the [Configuration reference](../configuration.md) for all keys.
 
 Related: [Refactoring](refactoring.md), [Formatting](formatting.md).
