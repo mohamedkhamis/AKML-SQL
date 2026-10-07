@@ -190,7 +190,8 @@ namespace AkmlSql.Updater
         }
 
         private static Task<int> DownloadAsync(CancellationToken cancellationToken) =>
-            new UpdateDownloader(new HttpClientHandler(), Constants.UpdateResultFilePath, Constants.CachePath)
+            new UpdateDownloader(new HttpClientHandler(), Constants.UpdateResultFilePath, Constants.CachePath,
+                    Constants.UpdateDownloadProgressFilePath)
                 .RunAsync(cancellationToken);
 
         /// <summary>
