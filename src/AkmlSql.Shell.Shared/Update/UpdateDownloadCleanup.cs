@@ -18,12 +18,18 @@ namespace AkmlSql.Shell.Shared.Update
     {
         internal static void AfterCancel(string version)
         {
-            AfterCancel(version, Constants.CachePath, Constants.UpdateResultFilePath);
+            AfterCancel(version, Constants.CachePath, Constants.UpdateResultFilePath, Constants.UpdateDownloadProgressFilePath);
         }
 
         /// <summary>Path-injected core, directly testable without AppData redirection.</summary>
-        internal static void AfterCancel(string version, string cacheDirectory, string resultFilePath)
+        internal static void AfterCancel(string version, string cacheDirectory, string resultFilePath, string? progressFilePath = null)
         {
+            // The killed updater never removed its progress snapshot either.
+            if (progressFilePath != null)
+            {
+                UpdateDownloadProgressStore.TryDelete(progressFilePath);
+            }
+
             try
             {
                 var partial = Path.Combine(cacheDirectory, $"AKMLSQLSetup-{version}.exe.partial");

@@ -12,6 +12,7 @@ namespace AkmlSql.Core.Update
     [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
     [JsonSerializable(typeof(UpdateManifest))]
     [JsonSerializable(typeof(UpdateResult))]
+    [JsonSerializable(typeof(UpdateDownloadProgress))]
     public partial class UpdateJsonContext : JsonSerializerContext
     {
     }

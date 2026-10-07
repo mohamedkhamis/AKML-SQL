@@ -58,6 +58,7 @@ namespace AkmlSql.Core
         public const string AppDataFolderName = "AKML SQL";
         public const string ConfigFileName = "config.json";
         public const string UpdateResultFileName = "update-available.json";
+        public const string UpdateDownloadProgressFileName = "update-download-progress.json";
         public const string LogsFolderName = "logs";
         public const string CacheFolderName = "cache";
 
@@ -133,6 +134,10 @@ namespace AkmlSql.Core
 
         public static string UpdateResultFilePath =>
             System.IO.Path.Combine(AppDataPath, UpdateResultFileName);
+
+        /// <summary>The updater's live download progress (see <c>Update.UpdateDownloadProgress</c>).</summary>
+        public static string UpdateDownloadProgressFilePath =>
+            System.IO.Path.Combine(AppDataPath, UpdateDownloadProgressFileName);
 
         public static string LogsPath =>
             System.IO.Path.Combine(AppDataPath, LogsFolderName);

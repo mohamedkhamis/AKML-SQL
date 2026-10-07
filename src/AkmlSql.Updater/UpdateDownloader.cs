@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -19,24 +20,47 @@ namespace AkmlSql.Updater
     /// no token, no credential.
     ///
     /// Exit codes: <c>0</c> success or nothing to do (incl. cancelled), <c>2</c> the run did not
-    /// produce a verified installer (checksum mismatch, non-HTTPS URL, transport error — the
-    /// persisted <see cref="UpdateResult.FailureReason"/> says which), <c>1</c> is reserved for
-    /// usage errors in <c>Program.Main</c>.
+    /// produce a verified installer (checksum mismatch, non-HTTPS URL, transport error, a stalled
+    /// or truncated transfer — the persisted <see cref="UpdateResult.FailureReason"/> says which),
+    /// <c>1</c> is reserved for usage errors in <c>Program.Main</c>.
+    /// <para>
+    /// The checksum is computed from the bytes as they arrive, so the installer is read once
+    /// rather than written and then read back in full. While it runs the downloader publishes
+    /// <see cref="UpdateDownloadProgress"/> for the shell's download window, and it gives up when
+    /// no data arrives for <see cref="DefaultStallTimeout"/> instead of waiting indefinitely. The
+    /// log records how long the server took to answer, the transfer and its rate, and the
+    /// verification, so a slow update shows where its time went.
+    /// </para>
     /// </summary>
     public sealed class UpdateDownloader
     {
+        /// <summary>No data for this long ends the download as failed.</summary>
+        public static readonly TimeSpan DefaultStallTimeout = TimeSpan.FromSeconds(90);
+
+        /// <summary>The shortest gap between two progress snapshots.</summary>
+        private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(250);
+
+        private const int BufferSize = 128 * 1024;
+
         private readonly HttpMessageHandler _httpMessageHandler;
         private readonly string _resultFilePath;
         private readonly string _cacheDirectory;
+        private readonly string? _progressFilePath;
+        private readonly TimeSpan _stallTimeout;
 
         /// <param name="httpMessageHandler">Transport; tests inject a stub handler.</param>
         /// <param name="resultFilePath">The <c>update-available.json</c> path.</param>
         /// <param name="cacheDirectory">Download cache (<c>Constants.CachePath</c> in production).</param>
-        public UpdateDownloader(HttpMessageHandler httpMessageHandler, string resultFilePath, string cacheDirectory)
+        /// <param name="progressFilePath">Where to publish <see cref="UpdateDownloadProgress"/>; <c>null</c> publishes nothing.</param>
+        /// <param name="stallTimeout">No data for this long fails the download (default <see cref="DefaultStallTimeout"/>).</param>
+        public UpdateDownloader(HttpMessageHandler httpMessageHandler, string resultFilePath, string cacheDirectory,
+            string? progressFilePath = null, TimeSpan? stallTimeout = null)
         {
             _httpMessageHandler = httpMessageHandler ?? throw new ArgumentNullException(nameof(httpMessageHandler));
             _resultFilePath = resultFilePath ?? throw new ArgumentNullException(nameof(resultFilePath));
             _cacheDirectory = cacheDirectory ?? throw new ArgumentNullException(nameof(cacheDirectory));
+            _progressFilePath = progressFilePath;
+            _stallTimeout = stallTimeout ?? DefaultStallTimeout;
         }
 
         public async Task<int> RunAsync(CancellationToken cancellationToken = default)
@@ -87,22 +111,50 @@ namespace AkmlSql.Updater
                 // A partial left by an interrupted previous run can never be resumed — drop it.
                 TryDelete(partialPath);
 
-                // 3. Fetch.
+                // 3. Fetch, hashing the bytes as they arrive.
                 using var client = new HttpClient(_httpMessageHandler, disposeHandler: false);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd($"AkmlSql.Updater/{Constants.RuntimeVersion}");
 
-                Log.Information("Downloading update v{Version}", result.Version);
+                Log.Information("Downloading update v{Version} from {Url}", result.Version, result.DownloadUrl);
+                var clock = Stopwatch.StartNew();
+                Publish(result.Version, UpdateDownloadPhases.Connecting, 0, null);
+                string actualHash;
+                long received;
+                TimeSpan transferTime;
                 using (var response = await client.GetAsync(
                            result.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
                 {
                     response.EnsureSuccessStatusCode();
+                    var total = response.Content.Headers.ContentLength;
+                    Log.Information("Download server answered in {Seconds:0.0} s: {Status}, {Size} from {Host}",
+                        clock.Elapsed.TotalSeconds, (int)response.StatusCode,
+                        total.HasValue ? $"{total.Value / 1048576.0:0.0} MB" : "size not sent",
+                        response.RequestMessage?.RequestUri?.Host ?? "?");
+
+                    var transfer = Stopwatch.StartNew();
                     await using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-                    await using var target = new FileStream(partialPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                    await source.CopyToAsync(target, cancellationToken);
+                    await using (var target = new FileStream(partialPath, FileMode.Create, FileAccess.Write, FileShare.None,
+                                     BufferSize, useAsync: true))
+                    {
+                        (received, actualHash) = await CopyAndHashAsync(source, target, result.Version, total, cancellationToken);
+                    }
+
+                    transferTime = transfer.Elapsed;
+                    Log.Information("Received {Size:0.0} MB in {Seconds:0.0} s ({Rate:0.00} MB/s)",
+                        received / 1048576.0, transferTime.TotalSeconds,
+                        received / 1048576.0 / Math.Max(transferTime.TotalSeconds, 0.001));
+
+                    // A connection closed early is a failed download, not a short installer.
+                    if (total.HasValue && received != total.Value)
+                    {
+                        return Fail(result, $"the download ended early ({received:N0} of {total.Value:N0} bytes)");
+                    }
                 }
 
                 // 4+5. Verify against the manifest hash; a mismatch aborts (FR-040).
-                if (!await HashMatchesAsync(partialPath, result.Sha256Hash, cancellationToken))
+                Publish(result.Version, UpdateDownloadPhases.Verifying, received, received);
+                var finishing = Stopwatch.StartNew();
+                if (!string.Equals(actualHash, result.Sha256Hash, StringComparison.OrdinalIgnoreCase))
                 {
                     Log.Warning("Update download checksum mismatch for v{Version}", result.Version);
                     return Fail(result, "checksum mismatch");
@@ -116,7 +168,10 @@ namespace AkmlSql.Updater
                 result.DownloadState = UpdateDownloadStates.Verified;
                 result.FailureReason = null;
                 UpdateResultStore.SaveAtomic(result, _resultFilePath);
-                Log.Information("Update v{Version} downloaded and verified", result.Version);
+                // Time spent after the last byte is the file system's (an antivirus scan of the
+                // new installer shows up here), not the network's.
+                Log.Information("Update v{Version} downloaded and verified in {Seconds:0.0} s (finishing took {Finish:0.0} s)",
+                    result.Version, clock.Elapsed.TotalSeconds, finishing.Elapsed.TotalSeconds);
                 return 0;
             }
             catch (OperationCanceledException)
@@ -143,6 +198,86 @@ namespace AkmlSql.Updater
                 {
                     TryDelete(partialPath);
                 }
+
+                if (_progressFilePath != null)
+                {
+                    UpdateDownloadProgressStore.TryDelete(_progressFilePath);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Copies <paramref name="source"/> to <paramref name="target"/>, hashing as it goes and
+        /// publishing progress. A read that brings no data within the stall timeout ends the
+        /// download with a <see cref="TimeoutException"/> (the caller records it as the failure).
+        /// </summary>
+        private async Task<(long Received, string Sha256)> CopyAndHashAsync(
+            Stream source, Stream target, string version, long? total, CancellationToken cancellationToken)
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[BufferSize];
+            long received = 0;
+            var sinceReport = Stopwatch.StartNew();
+            Publish(version, UpdateDownloadPhases.Downloading, 0, total);
+
+            while (true)
+            {
+                int read;
+                using (var stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                {
+                    stall.CancelAfter(_stallTimeout);
+                    try
+                    {
+                        read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), stall.Token);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        throw new TimeoutException(
+                            $"the download stalled: no data arrived for {(int)_stallTimeout.TotalSeconds} seconds");
+                    }
+                }
+
+                if (read == 0)
+                {
+                    break;
+                }
+
+                hash.AppendData(buffer, 0, read);
+                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                received += read;
+
+                if (sinceReport.Elapsed >= ProgressInterval)
+                {
+                    Publish(version, UpdateDownloadPhases.Downloading, received, total);
+                    sinceReport.Restart();
+                }
+            }
+
+            return (received, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+        }
+
+        /// <summary>Writes a progress snapshot for the shell; a failed write never stops the download.</summary>
+        private void Publish(string version, string phase, long received, long? total)
+        {
+            if (_progressFilePath == null)
+            {
+                return;
+            }
+
+            try
+            {
+                UpdateDownloadProgressStore.Save(new UpdateDownloadProgress
+                {
+                    Version = version,
+                    Phase = phase,
+                    BytesReceived = received,
+                    TotalBytes = total,
+                    UpdatedAt = DateTimeOffset.UtcNow,
+                }, _progressFilePath);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not write the download progress");
             }
         }
 

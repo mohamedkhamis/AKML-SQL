@@ -137,11 +137,11 @@ SetupLogging=yes
 ChangesAssociations=yes
 ; Art from the "AKML SQL Icon" design. icon.ico is 5a (the hexagon glyph, no text, so it stays
 ; legible at 16/32 px) in 16-256 px; Resources\akml.ico in AkmlSql.Shell.Shared is the same file.
-; The sidebar is 6a (welcome panel); Inno picks the variant matching the DPI. The page header is
-; 6b: its brand block (hexagon, AKML SQL, tagline) on the left, the page title and description
-; beside it, and its gold rule along the bottom -- drawn by AddHeaderBrand and AddHeaderRule
-; ([Code]) from assets\brand-light-*.png / brand-dark-*.png ([Files], dontcopy). The square corner
-; image Inno would draw instead is turned off.
+; The Welcome page is the brand page (AddBrandedWelcome, from assets\welcome-*.png); the sidebar
+; below, 6a, is the Finished page's (Inno picks the variant matching the DPI). The page header is
+; 6b's banner alone -- its brand block (hexagon, AKML SQL, tagline) and its gold rule, drawn by
+; AddHeaderBrand and AddHeaderRule ([Code]) from assets\brand-light-*.png / brand-dark-*.png; the
+; page title and description are not shown. The square corner image Inno would draw is turned off.
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
 WizardSmallImageFile=
@@ -188,8 +188,10 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: 
 Source: "..\AkmlSql.Updater\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Icon for Apps & features, the Start-menu shortcuts and the akmlsql-update: scheme.
 Source: "assets\icon.ico"; DestDir: "{app}"; DestName: "AKMLSQL.ico"; Flags: ignoreversion
-; The wizard's header art (design 6b), used by Setup itself and never installed (AddHeaderBrand).
+; The wizard's own art -- the header banner (design 6b) and the Welcome page -- used by Setup
+; itself and never installed (AddHeaderBrand, AddBrandedWelcome).
 Source: "assets\brand-*.png"; Flags: dontcopy
+Source: "assets\welcome-*.png"; Flags: dontcopy
 ; Registers / removes the update-check scheduled task (see [Run] / [UninstallRun]).
 Source: "update-task.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion
 ; Engine is SelfContained + PublishSingleFile=false — deploy ALL published output
@@ -644,46 +646,108 @@ begin
   Rule.Anchors := [akLeft, akRight, akBottom];
 end;
 
-// Design 6b: the brand block -- the hexagon mark, AKML SQL and its tagline -- on the left of the
-// page header, at the size rendered for this DPI (the header grows with Inno's font-based scale:
-// 46 px tall at 100%, 61/77/92/98/113/126 px at 125-250%) and in the colours for Setup's light or
-// dark style. The page title and its description move beside it.
+// The wizard art is rendered at Inno's header sizes (the font-based scale: 58/77/97/116/124/143/159
+// px for 100-250% DPI); this names the set nearest the current scale.
+function BrandDpiStep: String;
+var
+  Target: Integer;
+begin
+  Target := ScaleY(46);
+  if Target <= 46 then Result := '100'
+  else if Target <= 61 then Result := '125'
+  else if Target <= 77 then Result := '150'
+  else if Target <= 92 then Result := '175'
+  else if Target <= 98 then Result := '200'
+  else if Target <= 113 then Result := '225'
+  else Result := '250';
+end;
+
+// A transparent PNG from [Files] (dontcopy), stretched to whatever bounds the caller sets.
+function LoadBrandImage(Parent: TWinControl; FileName: String): TBitmapImage;
+begin
+  ExtractTemporaryFile(FileName);
+  Result := TBitmapImage.Create(WizardForm);
+  Result.Parent := Parent;
+  Result.PngImage.LoadFromFile(ExpandConstant('{tmp}\') + FileName);
+  Result.Stretch := True;
+end;
+
+// Design 6b: the page header is the banner alone -- the brand block (the hexagon mark, AKML SQL
+// and its tagline) on the left, in the colours for Setup's light or dark style, and the gold rule
+// along the bottom (AddHeaderRule). Inno's page title and description are not shown.
 procedure AddHeaderBrand;
 var
   Brand: TBitmapImage;
-  Size, Variant, FileName: String;
-  Target, Left: Integer;
+  Variant: String;
 begin
-  Target := ScaleY(46);
-  if Target <= 46 then Size := '100'
-  else if Target <= 61 then Size := '125'
-  else if Target <= 77 then Size := '150'
-  else if Target <= 92 then Size := '175'
-  else if Target <= 98 then Size := '200'
-  else if Target <= 113 then Size := '225'
-  else Size := '250';
   if IsDarkInstallMode then Variant := 'dark' else Variant := 'light';
-  FileName := 'brand-' + Variant + '-' + Size + '.png';
-  ExtractTemporaryFile(FileName);
-
-  Brand := TBitmapImage.Create(WizardForm);
-  Brand.Parent := WizardForm.MainPanel;
-  Brand.PngImage.LoadFromFile(ExpandConstant('{tmp}\') + FileName);
-  Brand.Stretch := True;
+  Brand := LoadBrandImage(WizardForm.MainPanel, 'brand-' + Variant + '-' + BrandDpiStep + '.png');
   Brand.SetBounds(ScaleX(16), (WizardForm.MainPanel.ClientHeight - ScaleY(2) - ScaleY(46)) div 2,
     ScaleX(216), ScaleY(46));
+  WizardForm.PageNameLabel.Visible := False;
+  WizardForm.PageDescriptionLabel.Visible := False;
+end;
 
-  Left := Brand.Left + Brand.Width + ScaleX(16);
-  WizardForm.PageNameLabel.SetBounds(Left, WizardForm.PageNameLabel.Top,
-    WizardForm.MainPanel.ClientWidth - Left - ScaleX(16), WizardForm.PageNameLabel.Height);
-  WizardForm.PageNameLabel.Anchors := [akLeft, akTop, akRight];
-  WizardForm.PageDescriptionLabel.SetBounds(Left, WizardForm.PageDescriptionLabel.Top,
-    WizardForm.MainPanel.ClientWidth - Left - ScaleX(16), WizardForm.PageDescriptionLabel.Height);
-  WizardForm.PageDescriptionLabel.Anchors := [akLeft, akTop, akRight];
+// One of Inno's welcome labels, moved onto the brand page in its colours. Style elements off, so
+// the dark style does not repaint it.
+procedure PlaceWelcomeLabel(Lbl: TNewStaticText; Parent: TWinControl; Left, Top, Width: Integer; FontColor: TColor);
+begin
+  Lbl.Parent := Parent;
+  Lbl.StyleElements := [];
+  Lbl.Color := $403600;  // #003640, the brand page
+  Lbl.Font.Color := FontColor;
+  Lbl.AutoSize := False;
+  Lbl.WordWrap := True;
+  Lbl.SetBounds(Left, Top, Width, Lbl.Height);
+  Lbl.Anchors := [akLeft, akTop, akRight];
+  Lbl.AdjustHeight;
+end;
+
+// The Welcome page is the brand page, in the colours of the 6a panel whatever Setup's style: deep
+// teal, the logo lockup (6a's hexagon mark, AKML SQL, its gold rule and tagline), faint hexagons on
+// the right, and Inno's own welcome text (localised, and naming the version) in white.
+procedure AddBrandedWelcome;
+var
+  Page: TNewNotebookPage;
+  Panel: TPanel;
+  Decor, Lockup: TBitmapImage;
+  Step: String;
+  Left, TextWidth: Integer;
+begin
+  Page := WizardForm.WelcomePage;
+  Step := BrandDpiStep;
+  WizardForm.WizardBitmapImage.Visible := False;  // the 6a panel stays for the Finished page
+
+  Panel := TPanel.Create(WizardForm);
+  Panel.Parent := Page;
+  Panel.BevelOuter := bvNone;
+  Panel.ParentBackground := False;
+  Panel.StyleElements := [];
+  Panel.Color := $403600;  // #003640
+  Panel.SetBounds(0, 0, Page.ClientWidth, Page.ClientHeight);
+  Panel.Anchors := [akLeft, akTop, akRight, akBottom];
+
+  Decor := LoadBrandImage(Panel, 'welcome-decor-' + Step + '.png');
+  Decor.BackColor := $403600;
+  Decor.SetBounds(Panel.ClientWidth - ScaleX(170), ScaleY(40), ScaleX(220), ScaleY(300));
+  Decor.Anchors := [akTop, akRight];
+
+  Lockup := LoadBrandImage(Panel, 'welcome-lockup-' + Step + '.png');
+  Lockup.BackColor := $403600;
+  Lockup.SetBounds(ScaleX(36), ScaleY(40), ScaleX(300), ScaleY(96));
+
+  // The text keeps clear of the hexagons on the right.
+  Left := ScaleX(36);
+  TextWidth := Panel.ClientWidth - Left - ScaleX(190);
+  WizardForm.WelcomeLabel1.Font.Size := 13;
+  PlaceWelcomeLabel(WizardForm.WelcomeLabel1, Panel, Left, Lockup.Top + Lockup.Height + ScaleY(28), TextWidth, clWhite);
+  PlaceWelcomeLabel(WizardForm.WelcomeLabel2, Panel, Left,
+    WizardForm.WelcomeLabel1.Top + WizardForm.WelcomeLabel1.Height + ScaleY(12), TextWidth, $E4E2D0);  // #D0E2E4
 end;
 
 procedure InitializeWizard;
 begin
+  AddBrandedWelcome;
   AddHeaderBrand;
   AddHeaderRule;
   // Run environment scan
