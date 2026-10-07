@@ -462,7 +462,25 @@ namespace AkmlSql.Shell.Shared.Formatting
         private string EffectivePreviewSample =>
             PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery ? _currentQueryText
             : PreviewSourceMode == FormatPreviewSource.PageSample && !string.IsNullOrWhiteSpace(_pageSample) ? _pageSample!
+            : PreviewSourceMode == FormatPreviewSource.SelectExample && !string.IsNullOrWhiteSpace(_selectExampleSql) ? _selectExampleSql!
             : _previewSample;
+
+        /// <summary>
+        /// The SELECT example the preview formats while <see cref="PreviewSourceMode"/> is
+        /// <see cref="FormatPreviewSource.SelectExample"/> (one of the schema's <c>selectExamples</c>).
+        /// </summary>
+        public string? SelectExampleSql
+        {
+            get => _selectExampleSql;
+            set
+            {
+                if (string.Equals(_selectExampleSql, value, StringComparison.Ordinal)) return;
+                _selectExampleSql = value;
+                OnPropertyChanged();
+                if (PreviewSourceMode == FormatPreviewSource.SelectExample) QueuePreviewAsync();
+            }
+        }
+        private string? _selectExampleSql;
 
         /// <summary>
         /// True when the engine serves SQL Prompt's option model: settings are keyed
@@ -663,10 +681,20 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// must produce <c>{"insertStatements":{"columns":{...}}}</c>, not a literal
         /// "columns.parenthesisStyle" property).
         /// </summary>
-        internal string BuildProfileJson()
+        internal string BuildProfileJson() => BuildProfileJson(null);
+
+        /// <summary>
+        /// <see cref="BuildProfileJson()"/> with some settings replaced — the working style with one
+        /// option set to each of its values, for the option examples. The working values are untouched.
+        /// </summary>
+        internal string BuildProfileJson(IEnumerable<KeyValuePair<string, object?>>? overrides)
         {
+            var values = new Dictionary<string, object?>(_workingValues, StringComparer.Ordinal);
+            if (overrides != null)
+                foreach (var o in overrides) values[o.Key] = o.Value;
+
             var root = new JsonObject();
-            foreach (var kvp in _workingValues)
+            foreach (var kvp in values)
             {
                 var segments = kvp.Key.Split('.');
                 if (segments.Length < 2 || segments[0].Length == 0) continue;
@@ -674,6 +702,77 @@ namespace AkmlSql.Shell.Shared.Formatting
                 ProfileJsonMerger.SetValueAt(root, segments, ProfileJsonMerger.ToJsonValue(kvp.Value));
             }
             return root.ToJsonString();
+        }
+
+        /// <summary>True while the engine connection is up (option examples need it).</summary>
+        internal bool IsEngineConnected => _rpc.IsConnected;
+
+        /// <summary>The session id of option-example requests, apart from the live preview's.</summary>
+        internal const string ExampleSessionId = "format-styles-editor:example";
+
+        private CancellationTokenSource? _examplesCts;
+        private readonly object _examplesCtsLock = new();
+
+        /// <summary>
+        /// Formats each request's SQL with the working style plus its settings — the "what does each
+        /// value do" cards. One request at a time: the engine answers FormatPreview in order, so a
+        /// burst would hold up the live preview behind it. A new live preview (an edit, a page or
+        /// sample switch) cancels the rest, and so does the next call. Never touches the live
+        /// preview's state. Returns one entry per request (null where that request failed), or
+        /// null when the batch was cancelled — the caller asks again once the live preview lands.
+        /// </summary>
+        internal async Task<IReadOnlyList<string?>?> FormatExamplesAsync(
+            IReadOnlyList<(string Sql, IReadOnlyList<KeyValuePair<string, object?>> Settings)> requests,
+            CancellationToken ct)
+        {
+            CancellationTokenSource cts;
+            lock (_examplesCtsLock)
+            {
+                _examplesCts?.Cancel();
+                _examplesCts?.Dispose();
+                _examplesCts = cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            }
+
+            var results = new string?[requests.Count];
+            for (var i = 0; i < requests.Count; i++)
+            {
+                if (cts.IsCancellationRequested) return null;
+                if (!_rpc.IsConnected) break;
+                try
+                {
+                    var response = await _rpc.SendRequestAsync<FormatPreviewResponse, FormatPreviewRequest>(
+                        MessageTypes.FormatPreview,
+                        new FormatPreviewRequest
+                        {
+                            SessionId = ExampleSessionId,
+                            SampleText = requests[i].Sql,
+                            ProfileJson = BuildProfileJson(requests[i].Settings),
+                        },
+                        timeoutMs: 2000,
+                        cts.Token).ConfigureAwait(false);
+                    // A validation error comes back with the SQL unformatted (the engine never
+                    // changes meaning): that is no example of the value, so it counts as failed.
+                    results[i] = string.IsNullOrEmpty(response?.FormattedText) || !string.IsNullOrEmpty(response!.ValidationError)
+                        ? null
+                        : response.FormattedText;
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested) { return null; }
+                catch (OperationCanceledException)
+                {
+                    // Not ours: the request's 2000 ms timeout. Leave this card out, try the next.
+                    Log.Debug("FormatStylesEditor: option example {Index} timed out", i);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "FormatStylesEditor: option example {Index} failed", i);
+                }
+            }
+            return results;
+        }
+
+        private void CancelExamples()
+        {
+            lock (_examplesCtsLock) _examplesCts?.Cancel();
         }
 
         /// <summary>Shown in the pane when the engine answered but returned no text to display.</summary>
@@ -726,6 +825,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 token = _previewCts.Token;
                 sequence = System.Threading.Interlocked.Increment(ref _previewSequence);
             }
+            // The live preview goes first: option examples still queued would hold it up.
+            CancelExamples();
 
             _ = Task.Run(async () =>
             {
@@ -1765,5 +1866,7 @@ VALUES ('SampleQuery', GETDATE());";
         PageSample,
         /// <summary>The text from the editor that was active when the styles editor opened.</summary>
         CurrentQuery,
+        /// <summary>SQL Prompt model: one of the SELECT examples (<see cref="FormatStylesEditorViewModel.SelectExampleSql"/>).</summary>
+        SelectExample,
     }
 }

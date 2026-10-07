@@ -202,6 +202,23 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
 
         internal const double LineTintOpacity = 0.22;
 
+        private IReadOnlyCollection<int>? _markedLines;
+
+        /// <summary>
+        /// 0-based lines marked by a bar at their left edge — no fill behind the text, so syntax
+        /// colours keep their contrast (a selection fill drops them below 4.5:1, and in High Contrast
+        /// paints the system highlight behind system-coloured text). Every line is indented by the
+        /// bar's width so columns stay aligned. Null: no bars (the default).
+        /// </summary>
+        internal IReadOnlyCollection<int>? MarkedLines
+        {
+            get => _markedLines;
+            set { _markedLines = value; ApplyLineHighlights(); }
+        }
+
+        private static readonly Thickness MarkerBar = new Thickness(3, 0, 0, 0);
+        private static readonly Thickness MarkerGap = new Thickness(5, 0, 0, 0);
+
         /// <summary>
         /// Column-aware tab expansion: a tab advances to the next multiple of
         /// <paramref name="tabSize"/> within its line; columns restart after every line break.
@@ -377,12 +394,15 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
         private static Run MakeRun(string text, string kind, bool highlighted)
         {
             var run = new Run(text);
+            // Syntax colours of their own: the accent and status colours they used read at 2.8:1
+            // (keywords, dark) and 3.3:1 (strings, light), and comments looked like the gutter.
             string fg =
-                kind == SqlPreviewTokenizer.KindKeyword ? ThemeTokens.AccentPrimary :
-                kind == SqlPreviewTokenizer.KindString ? ThemeTokens.StatusSuccess :
-                kind == SqlPreviewTokenizer.KindComment ? ThemeTokens.TextSecondary :
+                kind == SqlPreviewTokenizer.KindKeyword ? ThemeTokens.SyntaxKeyword :
+                kind == SqlPreviewTokenizer.KindString ? ThemeTokens.SyntaxString :
+                kind == SqlPreviewTokenizer.KindComment ? ThemeTokens.SyntaxComment :
                 ThemeTokens.TextPrimary;
             run.SetResourceReference(TextElement.ForegroundProperty, fg);
+            if (kind == SqlPreviewTokenizer.KindComment) run.FontStyle = FontStyles.Italic;
             if (highlighted) run.SetResourceReference(TextElement.BackgroundProperty, ThemeTokens.HistoryMatchHighlight);
             return run;
         }
@@ -403,6 +423,20 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
                     block.SetResourceReference(TextElement.BackgroundProperty, ThemeTokens.SurfaceSelection);
                 else
                     block.ClearValue(TextElement.BackgroundProperty);
+
+                if (_markedLines != null)
+                {
+                    block.BorderThickness = MarkerBar;
+                    block.Padding = MarkerGap;
+                    if (_markedLines.Contains(index)) block.SetResourceReference(Block.BorderBrushProperty, ThemeTokens.StatusWarning);
+                    else block.BorderBrush = Brushes.Transparent;
+                }
+                else
+                {
+                    block.ClearValue(Block.BorderThicknessProperty);
+                    block.ClearValue(Block.PaddingProperty);
+                    block.ClearValue(Block.BorderBrushProperty);
+                }
                 index++;
             }
         }
@@ -414,6 +448,20 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
             var brush = new SolidColorBrush(color) { Opacity = LineTintOpacity };
             brush.Freeze();
             return brush;
+        }
+
+        /// <summary>
+        /// Scrolls so the 0-based <paramref name="line"/> is in view, a third of the way down, unless
+        /// it already is. Call after layout (the viewport must have its size).
+        /// </summary>
+        public void ScrollLineIntoView(int line)
+        {
+            if (line < 0) return;
+            var viewport = _scroll.ViewportHeight;
+            if (viewport <= 0) return;
+            var top = line * LineHeight;
+            if (top >= _scroll.VerticalOffset && top + LineHeight <= _scroll.VerticalOffset + viewport) return;
+            _scroll.ScrollToVerticalOffset(Math.Max(0, top - viewport / 3));
         }
 
         /// <summary>The longest line of <paramref name="text"/> (by characters, tabs already expanded).</summary>
@@ -468,7 +516,16 @@ namespace AkmlSql.Shell.Shared.Ui.SqlPreview
         private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             e.Handled = true;
-            _scroll.ScrollToVerticalOffset(_scroll.VerticalOffset - e.Delta / 3.0);
+            var canScroll = e.Delta > 0 ? _scroll.VerticalOffset > 0 : _scroll.VerticalOffset < _scroll.ScrollableHeight;
+            if (canScroll)
+            {
+                _scroll.ScrollToVerticalOffset(_scroll.VerticalOffset - e.Delta / 3.0);
+                return;
+            }
+            // At its end, or nothing to scroll: pass the wheel on to what holds the preview, so a
+            // preview inside a scrolling list (the Format Styles example cards) doesn't stop it.
+            if (VisualTreeHelper.GetParent(this) is UIElement parent)
+                parent.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta) { RoutedEvent = UIElement.MouseWheelEvent, Source = this });
         }
     }
 }

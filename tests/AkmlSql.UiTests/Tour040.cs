@@ -119,6 +119,71 @@ internal sealed class Tour040(SsmsWindow window, int processId)
         return shot;
     }
 
+    /// <summary>
+    /// Every option page of the Format Styles window (Lists, Parentheses, … Operators), one capture
+    /// per page, named <c>{prefix}-NN-page</c>. The window is closed again at the end.
+    /// </summary>
+    public IEnumerable<string> StylesPageShots(string prefix)
+    {
+        AkmlMenu("Formatting", "Edit Formatting Styles");
+        var styles = WaitWindow(StylesTitle, 30);
+        Thread.Sleep(3000);
+        var shots = new List<string> { Shot.Element(styles, $"{prefix}-00-open") };
+        var tree = Find(() => styles.FindFirstDescendant(cf => cf.ByControlType(ControlType.Tree)), "the option tree");
+        var pages = new List<string>();
+        foreach (var group in tree.FindAllChildren(cf => cf.ByControlType(ControlType.TreeItem)))
+        {
+            if (group.Patterns.ExpandCollapse.IsSupported) group.Patterns.ExpandCollapse.Pattern.Expand();
+            Thread.Sleep(200);
+            var children = group.FindAllChildren(cf => cf.ByControlType(ControlType.TreeItem));
+            if (children.Length == 0) pages.Add(group.Name ?? "");
+            pages.AddRange(children.Select(c => c.Name ?? ""));
+        }
+        var n = 1;
+        foreach (var name in pages.Where(p => p.Length > 0))
+        {
+            var item = Find(() => tree.FindAllDescendants(cf => cf.ByControlType(ControlType.TreeItem))
+                .FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)), $"page '{name}'");
+            try { item.Patterns.ScrollItem.Pattern.ScrollIntoView(); } catch { /* already in view */ }
+            item.Patterns.SelectionItem.Pattern.Select();
+            Thread.Sleep(1800);
+            var slug = new string(name.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+            shots.Add(Shot.Element(styles, $"{prefix}-{n++:00}-{slug}"));
+        }
+
+        // The 2026-10 redesign: the style list folded away, and a SELECT example in the preview.
+        var hide = styles.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+            .FirstOrDefault(b => string.Equals(b.Name, "Hide the style list", StringComparison.Ordinal));
+        if (hide != null)
+        {
+            var join = Find(() => tree.FindAllDescendants(cf => cf.ByControlType(ControlType.TreeItem))
+                .FirstOrDefault(i => string.Equals(i.Name, "Join", StringComparison.OrdinalIgnoreCase)), "page 'Join'");
+            join.Patterns.SelectionItem.Pattern.Select();
+            Thread.Sleep(800);
+            Click(hide);
+            Thread.Sleep(800);
+            var source = styles.FindFirstDescendant(cf => cf.ByControlType(ControlType.ComboBox).And(cf.ByName("Preview source")));
+            if (source != null)
+            {
+                source.Patterns.ExpandCollapse.Pattern.Expand();
+                Thread.Sleep(600);
+                var revenue = source.FindAllDescendants(cf => cf.ByControlType(ControlType.ListItem))
+                    .FirstOrDefault(i => (i.Name ?? "").StartsWith("SELECT: Revenue", StringComparison.Ordinal));
+                revenue?.Patterns.SelectionItem.Pattern.Select();
+                Thread.Sleep(300);
+                try { source.Patterns.ExpandCollapse.Pattern.Collapse(); } catch { /* closed by the pick */ }
+            }
+            Thread.Sleep(2500);
+            shots.Add(Shot.Element(styles, $"{prefix}-15-wide-select-example"));
+            var show = styles.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+                .FirstOrDefault(b => string.Equals(b.Name, "Show the style list", StringComparison.Ordinal));
+            if (show != null) { Click(show); Thread.Sleep(500); }
+        }
+        Click(Button(styles, "Close"));
+        WaitGone(StylesTitle, 10);
+        return shots;
+    }
+
     // ---- Options ----------------------------------------------------------------------------
 
     private Window OpenOptions()

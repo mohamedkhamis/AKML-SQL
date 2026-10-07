@@ -70,9 +70,37 @@ namespace AkmlSql.Shell.Shared.Tests
         {
             var view = new SqlPreviewView { Text = "SELECT 'x' -- note" };
 
-            AssertForeground(view, "SELECT", ThemeTokens.AccentPrimary);
-            AssertForeground(view, "'x'", ThemeTokens.StatusSuccess);
-            AssertForeground(view, "-- note", ThemeTokens.TextSecondary);
+            // Syntax tokens of their own (2026-10): the accent and status colours failed contrast.
+            AssertForeground(view, "SELECT", ThemeTokens.SyntaxKeyword);
+            AssertForeground(view, "'x'", ThemeTokens.SyntaxString);
+            AssertForeground(view, "-- note", ThemeTokens.SyntaxComment);
+            Assert.Equal(FontStyles.Italic, Runs(view).Single(r => r.Text == "-- note").FontStyle);
+        }
+
+        [StaFact]
+        public void Syntax_colours_meet_text_contrast_on_the_preview_background()
+        {
+            foreach (var variant in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+            {
+                var palette = ThemePalette.ForVariant(variant);
+                var background = palette.Brushes[ThemeTokens.SurfaceInput].Color;
+                foreach (var token in new[] { ThemeTokens.SyntaxKeyword, ThemeTokens.SyntaxString, ThemeTokens.SyntaxComment })
+                {
+                    var ratio = Contrast(palette.Brushes[token].Color, background);
+                    Assert.True(ratio >= 4.5, $"{variant} {token}: {ratio:0.00}:1 on {background}");
+                }
+            }
+        }
+
+        private static double Contrast(System.Windows.Media.Color a, System.Windows.Media.Color b)
+        {
+            static double L(System.Windows.Media.Color c)
+            {
+                static double Channel(byte v) { var s = v / 255.0; return s <= 0.03928 ? s / 12.92 : System.Math.Pow((s + 0.055) / 1.055, 2.4); }
+                return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
+            }
+            var (hi, lo) = (System.Math.Max(L(a), L(b)), System.Math.Min(L(a), L(b)));
+            return (hi + 0.05) / (lo + 0.05);
         }
 
         [StaFact]

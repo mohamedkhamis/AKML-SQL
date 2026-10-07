@@ -125,6 +125,59 @@ public sealed class SsmsScreenshotTour(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Every page of the Format Styles window in light and dark, for UI review. Captures land in
+    /// <c>AKML_TOUR_OUT</c> (default <c>%TEMP%\akml-format-styles-tour</c>) named
+    /// <c>{AKML_TOUR_PREFIX}-{theme}-NN-page.png</c>. The theme the user had is put back at the end.
+    /// </summary>
+    [Fact]
+    public async Task Capture_format_styles_pages()
+    {
+        Preconditions.WaitForInteractiveDesktop(timeoutSeconds: 900);
+        var (deployed, _, message) = Preconditions.CheckExtension();
+        output.WriteLine(message);
+        Assert.True(deployed, message);
+
+        Shot.ArtifactDirectory = Environment.GetEnvironmentVariable("AKML_TOUR_OUT")
+                                 ?? Path.Combine(Path.GetTempPath(), "akml-format-styles-tour");
+        Directory.CreateDirectory(Shot.ArtifactDirectory);
+        var prefix = Environment.GetEnvironmentVariable("AKML_TOUR_PREFIX") ?? "styles";
+        var sqlFile = Path.Combine(Path.GetTempPath(), "Northwind sample.sql");
+        await File.WriteAllTextAsync(sqlFile, TourSql);
+
+        string? themeBefore = null;
+        try
+        {
+            using var app = SsmsApp.Launch(sqlFile, server: "(local)", database: "Northwind");
+            var window = app.MainWindow(timeoutSeconds: 240);
+            window.WaitUntilReady(w => w.IsConnected(), timeoutSeconds: 120, description: "the query window to attach to the server");
+            window.BringToFront();
+            foreach (var panel in new[] { "GitHub Copilot Chat", "Copilot" })
+                if (window.CloseToolWindow(panel)) break;
+            var tour = new Tour040(window, app.ProcessId);
+            tour.Prepare();
+
+            themeBefore = tour.Theme();
+            foreach (var theme in new[] { "Dark", "Light" })
+            {
+                tour.SetTheme(theme);
+                foreach (var shot in tour.StylesPageShots($"{prefix}-{theme.ToLowerInvariant()}"))
+                {
+                    output.WriteLine($"Captured {shot}");
+                    Assert.False(Shot.LooksBlank(shot), $"{shot} captured blank.");
+                }
+            }
+
+            tour.SetTheme(themeBefore);
+            themeBefore = null;
+        }
+        finally
+        {
+            if (themeBefore != null) output.WriteLine($"Put the AKML SQL theme back to '{themeBefore}' by hand (Options › General).");
+            try { File.Delete(sqlFile); } catch { /* scratch file */ }
+        }
+    }
+
+    /// <summary>
     /// Spec 040 (T193): the windows spec 040 reworked — the AKML SQL menu and its Active Style
     /// submenu, Options in light and dark (Behavior, History, Color), SQL History with Advanced
     /// search open, and the Format Styles window at its default size on the Lists page. The theme

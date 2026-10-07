@@ -120,6 +120,54 @@ namespace AkmlSql.Shell.Shared.Formatting
             new System.Collections.Generic.Dictionary<string, (FormatSettingNode, TextBlock, Button)>(StringComparer.Ordinal);
         private DispatcherTimer? _movedTimer;
 
+        // ── 2026-10 redesign: more room for the preview, and what each value does ──────────
+        /// <summary>The size the window opens at, when the screen has room for it.</summary>
+        internal const double DefaultWidth = 1440;
+        internal const double DefaultHeight = 900;
+        private const double DefaultStylesWidth = 232;   // "Khamis Style  Modified  ACTIVE" fits
+        private const double StylesMinWidth = 160;
+        /// <summary>Narrower than this, the preview goes under the options instead of beside them.</summary>
+        internal const double StackBelowWidth = 760;
+
+        // Kept for the session, like SQL Prompt's editor: reopening the window keeps the layout.
+        private static bool s_stylesCollapsed;
+        private static double s_stylesWidth = DefaultStylesWidth;
+        private static bool s_examplesOpen = true;
+
+        private ColumnDefinition? _stylesColumn;
+        private Border? _stylesCard;
+        private Border? _stylesRail;
+        private GridSplitter? _stylesSplitter;
+        private Grid? _rightPanel;
+        private Border? _formCard;
+        private GridSplitter? _rightSplitter;
+        private Border? _previewCard;
+        private bool? _stacked;
+        private ComboBox? _sourceCombo;
+        private bool _suppressSourceChanged;
+        private bool _userPickedSource;
+
+        // The option examples under the preview: one card per value of the focused option.
+        private RowDefinition? _previewRow;
+        private RowDefinition? _examplesRow;
+        private TextBlock? _examplesTitle;
+        private TextBlock? _examplesSubtitle;
+        private StackPanel? _examplesHost;
+        private ScrollViewer? _examplesScroll;
+        private Button? _examplesToggle;
+        private string? _focusedSettingId;
+        private string? _examplesShownFor;
+        private string? _examplesSignature;
+        private DispatcherTimer? _examplesTimer;
+        private System.Threading.CancellationTokenSource? _examplesCts;
+        /// <summary>The value whose "Use this" was pressed from the keyboard: its card gets focus back.</summary>
+        private string? _refocusExampleKey;
+        private Button? _stylesExpandButton;
+        /// <summary>Set once the window closes: timers and late previews must not start more work.</summary>
+        private bool _closed;
+        private readonly System.Collections.Generic.Dictionary<string, Border> _rowBorders =
+            new System.Collections.Generic.Dictionary<string, Border>(StringComparer.Ordinal);
+
         /// <summary>
         /// Spec 040 (T091) — test seam for the Rename prompt: given the current name and the existing
         /// style names, returns the new name, or null when cancelled. Null in the product.
@@ -134,7 +182,6 @@ namespace AkmlSql.Shell.Shared.Formatting
         // one batch on toggle-off / close instead of per keystroke (each PreviewSample set is
         // ~5 synchronous filesystem ops on the dispatcher thread plus a discarded preview run).
         private CheckBox? _editSampleToggle;
-        private RadioButton? _rbPageSample;
         private bool EditingSample => _editSampleToggle?.IsChecked == true;
 
         /// <summary>
@@ -183,10 +230,12 @@ namespace AkmlSql.Shell.Shared.Formatting
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
 
             Title = AkmlSql.Core.Config.WindowTitles.For("Format styles");
-            Width = 1060;
-            Height = 680;
-            MinWidth = 920;
-            MinHeight = 560;
+            // Room for the options and a preview beside them; on a smaller screen, 92% of it.
+            var work = SystemParameters.WorkArea;
+            Width = Math.Min(DefaultWidth, Math.Floor(work.Width * 0.92));
+            Height = Math.Min(DefaultHeight, Math.Floor(work.Height * 0.92));
+            MinWidth = Math.Min(1000, Width);
+            MinHeight = Math.Min(620, Height);
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             HasHelpButton = true; // spec 040 (X-03): the title-bar "?" opens CurrentHelpTopic
 
@@ -208,6 +257,19 @@ namespace AkmlSql.Shell.Shared.Formatting
                     e.Handled = true;
             };
             Loaded += OnLoaded;
+
+            // The title bar follows the theme: a light Windows title bar over a dark window looked broken.
+            SourceInitialized += (_, _) => TitleBarTheme.Apply(this, ThemeRegistry.Instance.Current == ThemeVariant.Dark);
+            ThemeRegistry.Instance.VariantChanged += OnThemeVariantChanged;
+            Closed += (_, _) =>
+            {
+                _closed = true;
+                ThemeRegistry.Instance.VariantChanged -= OnThemeVariantChanged;
+                _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+                _viewModel.WorkingValueChanged -= OnWorkingValueChanged;
+                _examplesTimer?.Stop();
+                _examplesCts?.Cancel();
+            };
 
             // Spec 040 (X-03, FR-062): F1 anywhere in the window opens the style-editor topic.
             global::AkmlSql.Shell.Shared.Help.HelpBinding.Attach(this, () => CurrentHelpTopic);
@@ -309,17 +371,24 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Column widths mirror SQL Prompt's Edit Formatting Styles editor (fixed left/middle,
             // flexible right); the two 8px gutter columns double as invisible drag splitters.
             var content = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Md, Spacing.Md, Spacing.Sm) };
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });       // styles
+            // The style list can fold away to a rail (« in its header), giving its width to the preview.
+            _stylesColumn = new ColumnDefinition { Width = new GridLength(s_stylesWidth), MinWidth = StylesMinWidth };
+            content.ColumnDefinitions.Add(_stylesColumn);                                               // styles
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) }); // gutter/splitter
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });       // style options
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180), MinWidth = 170 }); // style options
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) }); // gutter/splitter
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 380 }); // settings + preview
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 420 }); // options + preview
 
-            content.Children.Add(BuildLeftPanel());
-            content.Children.Add(MakeColumnSplitter(1));
+            _stylesCard = (Border)BuildLeftPanel();
+            content.Children.Add(_stylesCard);
+            _stylesRail = BuildStylesRail();
+            content.Children.Add(_stylesRail);
+            _stylesSplitter = MakeColumnSplitter(1);
+            content.Children.Add(_stylesSplitter);
             content.Children.Add(BuildMiddlePanel());
             content.Children.Add(MakeColumnSplitter(3));
             content.Children.Add(BuildRightPanel());
+            SetStylesCollapsed(s_stylesCollapsed, focusList: false);
 
             Grid.SetRow(content, 1);
             root.Children.Add(content);
@@ -491,6 +560,70 @@ namespace AkmlSql.Shell.Shared.Formatting
             return card;
         }
 
+        /// <summary>What the style list folds into: a narrow strip with » to bring it back.</summary>
+        private Border BuildStylesRail()
+        {
+            var expand = new Button
+            {
+                Content = "»",
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
+                ToolTip = "Show the style list",
+            };
+            FormatStylesChrome.ApplyIconButton(expand);
+            System.Windows.Automation.AutomationProperties.SetName(expand, "Show the style list");
+            expand.Click += (_, _) => SetStylesCollapsed(false, focusList: true);
+            _stylesExpandButton = expand;
+
+            var label = new TextBlock
+            {
+                Text = "STYLES",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, Spacing.Sm, 0, 0),
+                LayoutTransform = new RotateTransform(90),
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+
+            var stack = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, Spacing.Sm, 0, Spacing.Sm) };
+            stack.Children.Add(expand);
+            stack.Children.Add(label);
+            var rail = MakePaneCard(0, stack);
+            rail.Width = 36;
+            rail.HorizontalAlignment = HorizontalAlignment.Left;
+            rail.Visibility = Visibility.Collapsed;
+            return rail;
+        }
+
+        /// <summary>
+        /// Folds the style list into its rail, or opens it again at the width it had. The choice
+        /// lasts for the session. The list stays in the window either way (its keys work once open).
+        /// </summary>
+        private void SetStylesCollapsed(bool collapsed, bool focusList)
+        {
+            if (_stylesColumn == null || _stylesCard == null || _stylesRail == null) return;
+            // The splitter rewrites the column's width: remember what the user dragged it to.
+            if (collapsed && _stylesCard.Visibility == Visibility.Visible && _stylesColumn.ActualWidth >= StylesMinWidth)
+                s_stylesWidth = _stylesColumn.ActualWidth;
+            // Folding the card under the keyboard (« pressed with Space) would drop focus to the
+            // window: hand it to the rail's » instead.
+            var focusRail = collapsed && _stylesCard.IsKeyboardFocusWithin;
+            s_stylesCollapsed = collapsed;
+            _stylesCard.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+            _stylesRail.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+            _stylesColumn.MinWidth = collapsed ? 0 : StylesMinWidth;
+            _stylesColumn.Width = collapsed ? GridLength.Auto : new GridLength(Math.Max(StylesMinWidth, s_stylesWidth));
+            if (_stylesSplitter != null) _stylesSplitter.IsEnabled = !collapsed;
+            if (!collapsed && focusList) _styleList?.Focus();
+            if (focusRail) _stylesExpandButton?.Focus();
+        }
+
         // -----------------------------------------------------------------
         // Left panel — style list
         // -----------------------------------------------------------------
@@ -502,8 +635,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // + New Style CTA
 
             _stylesHeader = MakeSectionHeader("STYLES");
-            Grid.SetRow(_stylesHeader, 0);
-            panel.Children.Add(_stylesHeader);
+            var collapse = new Button
+            {
+                Content = "«",
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Top,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
+                ToolTip = "Hide the style list, for a wider preview",
+            };
+            FormatStylesChrome.ApplyIconButton(collapse);
+            System.Windows.Automation.AutomationProperties.SetName(collapse, "Hide the style list");
+            collapse.Click += (_, _) => SetStylesCollapsed(true, focusList: false);
+            var stylesHeaderRow = new DockPanel();
+            DockPanel.SetDock(collapse, Dock.Right);
+            stylesHeaderRow.Children.Add(collapse);
+            stylesHeaderRow.Children.Add(_stylesHeader);
+            Grid.SetRow(stylesHeaderRow, 0);
+            panel.Children.Add(stylesHeaderRow);
 
             _styleList = new ListBox
             {
@@ -1787,6 +1938,20 @@ namespace AkmlSql.Shell.Shared.Formatting
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // What the "● N" beside a page means — users read it as "N options on the page".
+            var legend = new TextBlock
+            {
+                Text = "● N  options that differ from SQL Prompt's defaults",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Xs, 0),
+            };
+            legend.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            Grid.SetRow(legend, 3);
+            panel.Children.Add(legend);
 
             var header = MakeSectionHeader("STYLE OPTIONS");
             Grid.SetRow(header, 0);
@@ -1981,7 +2146,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             foreach (var entry in _groupLeaves)
             {
                 var changed = _viewModel.ChangedCount(entry.Key);
-                entry.Value.Changed.Text = changed > 0 ? changed.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+                entry.Value.Changed.Text = changed > 0 ? "● " + changed.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
                 entry.Value.Changed.Visibility = changed > 0 ? Visibility.Visible : Visibility.Collapsed;
                 ((FrameworkElement)entry.Value.Changed.Parent).ToolTip = changed > 0
                     ? $"{changed} option{(changed == 1 ? "" : "s")} on this page differ from SQL Prompt's default"
@@ -2023,11 +2188,12 @@ namespace AkmlSql.Shell.Shared.Formatting
         // -----------------------------------------------------------------
         private FrameworkElement BuildRightPanel()
         {
+            // The options and the preview side by side, both full height; under the preview, what
+            // each value of the focused option does. On a narrow window the preview goes under the
+            // options instead (ApplyRightLayout).
             var panel = new Grid();
             Grid.SetColumn(panel, 4);
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58, GridUnitType.Star) }); // form
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Spacing.Sm) });            // splitter
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42, GridUnitType.Star) }); // preview
+            _rightPanel = panel;
 
             // ── Settings form card ─────────────────────────────────────────
             var formCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
@@ -2109,20 +2275,18 @@ namespace AkmlSql.Shell.Shared.Formatting
             formGrid.Children.Add(formScroll);
 
             formCard.Child = formGrid;
-            Grid.SetRow(formCard, 0);
+            _formCard = formCard;
             panel.Children.Add(formCard);
 
-            // ── Splitter (horizontal, invisible in the 8px gutter row) ─────
-            var hSplitter = new GridSplitter
+            // ── Splitter between the options and the preview (invisible, in the 8px gutter) ──
+            _rightSplitter = new GridSplitter
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch, // fill the 8px gutter row so it stays draggable
-                ResizeDirection = GridResizeDirection.Rows,
+                VerticalAlignment = VerticalAlignment.Stretch, // fill the gutter so it stays draggable
                 ShowsPreview = false,
                 Background = System.Windows.Media.Brushes.Transparent,
             };
-            Grid.SetRow(hSplitter, 1);
-            panel.Children.Add(hSplitter);
+            panel.Children.Add(_rightSplitter);
 
             // ── Live preview card ──
             var previewCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
@@ -2130,11 +2294,14 @@ namespace AkmlSql.Shell.Shared.Formatting
             previewCard.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
 
             var previewGrid = new Grid();
-            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source controls
+            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source
             previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // warning bar
-            previewGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // preview text
+            _previewRow = new RowDefinition { Height = new GridLength(1.25, GridUnitType.Star), MinHeight = 120 };
+            previewGrid.RowDefinitions.Add(_previewRow);                                                          // preview text
+            _examplesRow = new RowDefinition { Height = new GridLength(1, GridUnitType.Star) };
+            previewGrid.RowDefinitions.Add(_examplesRow);                                                         // option examples
 
-            // Header: LIVE PREVIEW (left) + preview-source controls (right).
+            // Header: LIVE PREVIEW (left) + what it formats (right).
             var previewHeader = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Xs) };
             previewHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             previewHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -2146,57 +2313,36 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Small,
                 FontWeight = Typography.WeightSemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Md, 0),
             };
             previewLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             Grid.SetColumn(previewLabel, 0);
             previewHeader.Children.Add(previewLabel);
 
-            // Spec 030 T019 / FR-008 — preview the active style against the sample OR the SQL from
-            // the editor that was open when this dialog launched.
-            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var rbSample = new RadioButton
+            // One drop-down for what the preview formats: this page's sample, a SELECT example, your
+            // own sample, or the query that was open (spec 030 T019 / FR-008). It replaced a row of
+            // radio buttons that had no room for the SELECT examples.
+            _sourceCombo = new ComboBox
             {
-                Content = "Sample",
-                GroupName = "akmlPreviewSource",
-                IsChecked = true,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Md, 0),
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-            };
-            rbSample.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            var rbCurrent = new RadioButton
-            {
-                Content = "Current query",
-                GroupName = "akmlPreviewSource",
+                MinWidth = 180,
+                MaxWidth = 340,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                // Disabled (with a hint) when no editor query was captured at launch.
-                IsEnabled = _viewModel.HasCurrentQuery,
-                ToolTip = _viewModel.HasCurrentQuery ? null : "No active SQL editor when this dialog opened.",
+                FontSize = Typography.Body,
+                ToolTip = "What the preview formats",
             };
-            rbCurrent.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            rbSample.Checked += (_, _) =>
+            ComboBoxTheming.Apply(_sourceCombo);
+            System.Windows.Automation.AutomationProperties.SetName(_sourceCombo, "Preview source");
+            _sourceCombo.SelectionChanged += (_, _) =>
             {
-                _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
-                if (_editSampleToggle != null) _editSampleToggle.IsEnabled = true;
-            };
-            rbCurrent.Checked += (_, _) =>
-            {
-                _viewModel.PreviewSourceMode = FormatPreviewSource.CurrentQuery;
-                // Sample editing only applies to the Sample source.
-                if (_editSampleToggle != null)
-                {
-                    _editSampleToggle.IsChecked = false;
-                    _editSampleToggle.IsEnabled = false;
-                }
+                if (!_suppressSourceChanged) _userPickedSource = true;
+                OnPreviewSourceChanged();
             };
 
             // Spec 033 (T025 / FR-014) — edit the persisted preview sample in place. While
             // checked, the preview box shows the RAW sample (editable, persisted atomically
             // via the PreviewSample setter on every change); unchecking restores the live
-            // formatted preview.
+            // formatted preview. Only for "My sample".
             _editSampleToggle = new CheckBox
             {
                 Content = "Edit sample",
@@ -2204,7 +2350,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Margin = new Thickness(Spacing.Md, 0, 0, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
-                ToolTip = "Edit the sample SQL the preview formats. Changes persist across sessions.",
+                IsEnabled = false,
+                ToolTip = "Edit your own sample SQL (\"My sample\"). Changes persist across sessions.",
             };
             _editSampleToggle.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _editSampleToggle.Checked += (_, _) =>
@@ -2220,38 +2367,14 @@ namespace AkmlSql.Shell.Shared.Formatting
                 ShowSampleEditor(false);
             };
 
-            // SQL Prompt model: each page previews its own sample, like SQL Prompt's editor.
-            _rbPageSample = new RadioButton
-            {
-                Content = "Page sample",
-                GroupName = "akmlPreviewSource",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Md, 0),
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                Visibility = Visibility.Collapsed,
-                ToolTip = "Preview code this page's options act on.",
-            };
-            _rbPageSample.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
-            _rbPageSample.Checked += (_, _) =>
-            {
-                _viewModel.PreviewSourceMode = FormatPreviewSource.PageSample;
-                if (_editSampleToggle != null)
-                {
-                    _editSampleToggle.IsChecked = false;
-                    _editSampleToggle.IsEnabled = false;
-                }
-            };
-            rbSample.Content = "My sample";
-
-            sourceStack.Children.Add(_rbPageSample);
-            sourceStack.Children.Add(rbSample);
-            sourceStack.Children.Add(rbCurrent);
+            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            sourceStack.Children.Add(_sourceCombo);
             sourceStack.Children.Add(_editSampleToggle);
             Grid.SetColumn(sourceStack, 1);
             previewHeader.Children.Add(sourceStack);
             Grid.SetRow(previewHeader, 0);
             previewGrid.Children.Add(previewHeader);
+            PopulateSourceCombo();
 
             _previewWarningBar = new Border
             {
@@ -2285,6 +2408,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Xs, Spacing.Sm),
                 Text = "-- The live preview appears once the schema loads and a style is selected.",
             };
+            System.Windows.Automation.AutomationProperties.SetName(_previewView, "Live preview");
             // Its own style, not the window's implicit one: inside SSMS the shell's scroll bar
             // styles reach the preview control's resources and would win (see FormatStylesChrome).
             _previewView.Scroller.Style = FormatStylesChrome.ScrollViewerStyle;
@@ -2309,11 +2433,532 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(_previewTextBox, 2);
             previewGrid.Children.Add(_previewTextBox);
 
+            var examples = BuildExamplesPanel();
+            Grid.SetRow(examples, 3);
+            previewGrid.Children.Add(examples);
+
             previewCard.Child = previewGrid;
-            Grid.SetRow(previewCard, 2);
+            _previewCard = previewCard;
             panel.Children.Add(previewCard);
 
+            ApplyRightLayout(stacked: false);
+            panel.SizeChanged += (_, e) => ApplyRightLayout(e.NewSize.Width < StackBelowWidth);
+            SetExamplesOpen(s_examplesOpen);
             return panel;
+        }
+
+        /// <summary>
+        /// The options beside the preview (side by side, both full height) — or, on a narrow
+        /// window, the preview under the options.
+        /// </summary>
+        private void ApplyRightLayout(bool stacked)
+        {
+            if (_rightPanel == null || _formCard == null || _previewCard == null || _rightSplitter == null) return;
+            if (_stacked == stacked) return;
+            _stacked = stacked;
+            _rightPanel.RowDefinitions.Clear();
+            _rightPanel.ColumnDefinitions.Clear();
+            if (stacked)
+            {
+                _rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(45, GridUnitType.Star), MinHeight = 150 });
+                _rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Spacing.Sm) });
+                _rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(55, GridUnitType.Star), MinHeight = 200 });
+            }
+            else
+            {
+                _rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 330 });
+                _rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) });
+                _rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star), MinWidth = 340 });
+            }
+            var i = 0;
+            foreach (var part in new FrameworkElement[] { _formCard, _rightSplitter, _previewCard })
+            {
+                Grid.SetRow(part, stacked ? i : 0);
+                Grid.SetColumn(part, stacked ? 0 : i);
+                i++;
+            }
+            _rightSplitter.ResizeDirection = stacked ? GridResizeDirection.Rows : GridResizeDirection.Columns;
+        }
+
+        // -----------------------------------------------------------------
+        // What the preview formats
+        // -----------------------------------------------------------------
+
+        private const string SourcePage = "page";
+        private const string SourceMine = "mine";
+        private const string SourceCurrent = "current";
+        private const string SourceSelectPrefix = "select:";
+
+        /// <summary>
+        /// Fills the preview's source drop-down: this page's sample (SQL Prompt model), the engine's
+        /// SELECT examples, your own sample, and the query that was open. Keeps a choice the user
+        /// made when it is still offered; otherwise picks this page's sample, or your own sample.
+        /// (The first fill runs before the schema loads, when only "My sample" can be picked: that
+        /// pick must not stick once "This page's sample" is offered.)
+        /// </summary>
+        private void PopulateSourceCombo()
+        {
+            if (_sourceCombo == null) return;
+            var previous = _userPickedSource ? (_sourceCombo.SelectedItem as ComboBoxItem)?.Tag as string : null;
+            _suppressSourceChanged = true;
+            try
+            {
+                _sourceCombo.Items.Clear();
+                var model = _viewModel.SchemaModel;
+                if (_viewModel.IsSqlPromptModel)
+                    _sourceCombo.Items.Add(SourceItem("This page's sample", SourcePage, "Code this page's options act on."));
+                foreach (var q in model?.SelectExamples ?? new System.Collections.Generic.List<FormatStylesSchemaModel.ExampleQuery>())
+                    _sourceCombo.Items.Add(SourceItem("SELECT: " + q.Name, SourceSelectPrefix + q.Id, q.Sql));
+                _sourceCombo.Items.Add(SourceItem("My sample", SourceMine, "Your own sample SQL. Tick \"Edit sample\" to change it."));
+                var current = SourceItem("Current query", SourceCurrent,
+                    _viewModel.HasCurrentQuery ? "The query in the editor that was open when this window opened." : "No SQL editor was open when this window opened.");
+                current.IsEnabled = _viewModel.HasCurrentQuery;
+                _sourceCombo.Items.Add(current);
+
+                var pick = _sourceCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.IsEnabled && Equals(i.Tag, previous))
+                           ?? _sourceCombo.Items.OfType<ComboBoxItem>().First(i => Equals(i.Tag, _viewModel.IsSqlPromptModel ? SourcePage : SourceMine));
+                _sourceCombo.SelectedItem = pick;
+            }
+            finally
+            {
+                _suppressSourceChanged = false;
+            }
+            OnPreviewSourceChanged();
+        }
+
+        private static ComboBoxItem SourceItem(string text, string tag, string tooltip) =>
+            new ComboBoxItem { Content = text, Tag = tag, ToolTip = tooltip };
+
+        private void OnPreviewSourceChanged()
+        {
+            if (_suppressSourceChanged || _sourceCombo?.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
+            if (tag.StartsWith(SourceSelectPrefix, StringComparison.Ordinal))
+            {
+                var id = tag.Substring(SourceSelectPrefix.Length);
+                _viewModel.SelectExampleSql = _viewModel.SchemaModel?.ExampleQueries.TryGetValue(id, out var q) == true ? q.Sql : null;
+                _viewModel.PreviewSourceMode = FormatPreviewSource.SelectExample;
+            }
+            else
+            {
+                _viewModel.PreviewSourceMode = tag switch
+                {
+                    SourcePage => FormatPreviewSource.PageSample,
+                    SourceCurrent => FormatPreviewSource.CurrentQuery,
+                    _ => FormatPreviewSource.Sample,
+                };
+            }
+
+            // Sample editing only applies to "My sample".
+            if (_editSampleToggle != null)
+            {
+                var mine = tag == SourceMine;
+                if (!mine) _editSampleToggle.IsChecked = false;
+                _editSampleToggle.IsEnabled = mine;
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // What each value of the focused option does
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// The panel under the preview: for the option last clicked or tabbed to, one card per value
+        /// (on, off, each choice, or a few numbers), each the example formatted with the working style
+        /// and that value, its changed lines marked. "Use this" sets the value. ▾ folds it away.
+        /// </summary>
+        private FrameworkElement BuildExamplesPanel()
+        {
+            var panel = new Border { BorderThickness = new Thickness(0, 1, 0, 0) };
+            panel.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            panel.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceSidebar);
+
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Sm, Spacing.Xs) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var titles = new StackPanel { Orientation = Orientation.Vertical };
+            _examplesTitle = new TextBlock
+            {
+                Text = "WHAT EACH VALUE DOES",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            _examplesTitle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _examplesSubtitle = new TextBlock
+            {
+                Text = "Click an option to see what each of its values does.",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0),
+            };
+            _examplesSubtitle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            titles.Children.Add(_examplesTitle);
+            titles.Children.Add(_examplesSubtitle);
+            header.Children.Add(titles);
+
+            _examplesToggle = new Button
+            {
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Top,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+            };
+            FormatStylesChrome.ApplyIconButton(_examplesToggle);
+            _examplesToggle.Click += (_, _) => SetExamplesOpen(!s_examplesOpen);
+            Grid.SetColumn(_examplesToggle, 1);
+            header.Children.Add(_examplesToggle);
+            grid.Children.Add(header);
+
+            _examplesHost = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Sm) };
+            _examplesScroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = _examplesHost,
+                Style = FormatStylesChrome.ScrollViewerStyle,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(_examplesScroll, "Option examples");
+            Grid.SetRow(_examplesScroll, 1);
+            grid.Children.Add(_examplesScroll);
+
+            panel.Child = grid;
+            return panel;
+        }
+
+        /// <summary>Opens or folds the option examples; the preview takes the room they free.</summary>
+        private void SetExamplesOpen(bool open)
+        {
+            s_examplesOpen = open;
+            if (_examplesScroll != null) _examplesScroll.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            if (_examplesRow != null) _examplesRow.Height = open ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            if (_examplesToggle != null)
+            {
+                _examplesToggle.Content = open ? "▾" : "▸";
+                _examplesToggle.ToolTip = open ? "Hide the option examples" : "Show what each value of the option does";
+                System.Windows.Automation.AutomationProperties.SetName(_examplesToggle, open ? "Hide the option examples" : "Show the option examples");
+            }
+            if (open) ScheduleExamples();
+        }
+
+        /// <summary>Makes <paramref name="settingId"/> the option the examples are about, and marks its row.</summary>
+        private void FocusOption(string settingId)
+        {
+            if (string.Equals(_focusedSettingId, settingId, StringComparison.Ordinal)) return;
+            if (_focusedSettingId != null && _rowBorders.TryGetValue(_focusedSettingId, out var previous))
+                previous.BorderBrush = System.Windows.Media.Brushes.Transparent;
+            _focusedSettingId = settingId;
+            if (_rowBorders.TryGetValue(settingId, out var row))
+                row.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            ScheduleExamples();
+        }
+
+        /// <summary>Refreshes the examples shortly — after a click, a key, or a new live preview settles.</summary>
+        private void ScheduleExamples()
+        {
+            if (_examplesHost == null || _closed) return;
+            if (_examplesTimer == null)
+            {
+                _examplesTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+                _examplesTimer.Tick += async (_, _) =>
+                {
+                    _examplesTimer.Stop();
+                    if (_closed) return;
+                    try { await RefreshExamplesAsync(); }
+                    catch (Exception ex) { Log.Debug(ex, "FormatStylesEditor: option examples failed"); }
+                };
+            }
+            _examplesTimer.Stop();
+            _examplesTimer.Start();
+        }
+
+        private FormatSettingNode? FocusedSetting =>
+            _focusedSettingId == null ? null : _currentGroup?.Settings.FirstOrDefault(s => s.Id == _focusedSettingId);
+
+        /// <summary>
+        /// Formats the focused option's example once per value with the working style, then shows
+        /// a card per value. Skipped when nothing it depends on changed since the last run.
+        /// </summary>
+        private async System.Threading.Tasks.Task RefreshExamplesAsync()
+        {
+            if (_examplesHost == null || _examplesTitle == null || _examplesSubtitle == null) return;
+            var setting = FocusedSetting;
+            var model = _viewModel.SchemaModel;
+            _examplesTitle.Text = setting == null ? "WHAT EACH VALUE DOES" : $"WHAT “{setting.DisplayName.ToUpperInvariant()}” DOES";
+            if (!s_examplesOpen) return;
+
+            if (setting == null || model == null)
+            {
+                ShowExamplesMessage("Click an option to see what each of its values does.", null);
+                return;
+            }
+            var plan = FormatStylesExamples.For(model, setting);
+            if (plan == null)
+            {
+                ShowExamplesMessage(setting.Example == null && model.ExampleQueries.Count == 0
+                    ? "This engine sends no examples. Update AKML SQL to see what each value does."
+                    : "There is no example for this option.", setting.Id);
+                return;
+            }
+
+            var signature = setting.Id + "\n" + _viewModel.BuildProfileJson() + "\n" + _viewModel.PreviewTabSize
+                            + "\n" + (model.GroupOf(setting.Id)?.Sample?.GetHashCode() ?? 0);
+            if (signature == _examplesSignature && _examplesShownFor == setting.Id) return;
+
+            _examplesCts?.Cancel();
+            var cts = new System.Threading.CancellationTokenSource();
+            _examplesCts = cts;
+            if (_examplesShownFor != setting.Id) ShowExamplesMessage("Formatting the examples…", setting.Id);
+
+            var outputs = await _viewModel.FormatExamplesAsync(plan.Requests, cts.Token).ConfigureAwait(true);
+            // Cancelled: a newer refresh, or a live preview queued (its result or failure asks again).
+            if (outputs == null || cts.IsCancellationRequested || !ReferenceEquals(cts, _examplesCts) || _closed) return;
+            if (FocusedSetting?.Id != setting.Id) return;
+            if (outputs.All(o => o == null))
+            {
+                ShowExamplesMessage(_viewModel.IsEngineConnected
+                    ? "The examples could not be formatted. Try another option, or reopen the window."
+                    : "Examples need the AKML SQL engine, which is not connected.", setting.Id);
+                return;
+            }
+
+            // A card whose request failed (a timeout, a format the engine refused) is left out; keep
+            // the run unfinished so the next refresh — the next live preview — tries it again.
+            _examplesSignature = outputs.All(o => o != null) ? signature : null;
+            _examplesShownFor = setting.Id;
+            RenderExampleCards(setting, plan, outputs);
+        }
+
+        private void ShowExamplesMessage(string text, string? settingId)
+        {
+            if (_examplesHost == null) return;
+            _examplesHost.Children.Clear();
+            _examplesHost.Children.Add(RowNote(text));
+            _examplesShownFor = settingId == null ? null : "message:" + settingId;
+            _examplesSignature = null;
+            if (_examplesSubtitle != null)
+                _examplesSubtitle.Text = settingId == null
+                    ? "Click an option to see what each of its values does."
+                    : "Each value of this option, formatted with this style's other settings.";
+        }
+
+        private void RenderExampleCards(FormatSettingNode setting, FormatStylesExamples.Plan plan, System.Collections.Generic.IReadOnlyList<string?> outputs)
+        {
+            if (_examplesHost == null) return;
+            var offset = _examplesScroll?.VerticalOffset ?? 0;
+            _examplesHost.Children.Clear();
+
+            var gateOpen = IsGateOpen(setting);
+            var with = plan.With.Select(w => $"{OptionLabel(w.Key)} = {ValueLabel(w.Key, w.Value)}").ToList();
+            if (_examplesSubtitle != null)
+            {
+                _examplesSubtitle.Text = (gateOpen ? "Each value on " : $"{GateText(setting)} Each value on ")
+                    + $"“{plan.QueryTitle}”, with this style's other settings"
+                    + (with.Count > 0 ? $" and {string.Join(", ", with)}" : string.Empty)
+                    + ". Marked lines differ from the default.";
+            }
+
+            var current = _viewModel.GetWorkingValue(setting.Id);
+            var canApply = gateOpen && !_viewModel.IsSelectedReadOnly
+                           && !string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
+            var applyBlockedBy = !gateOpen ? GateText(setting)
+                : _viewModel.IsSelectedReadOnly ? FormatStylesEditorViewModel.TeamReadOnlyText(_viewModel.LoadedProfileName ?? string.Empty)
+                : null;
+            foreach (var card in plan.Cards)
+            {
+                var text = outputs[card.Output];
+                if (text == null) continue;
+                var baseline = card.Baseline >= 0 ? outputs[card.Baseline] : null;
+                var isCurrent = FormatStylesEditorViewModel.ValuesEqual(Normalize(setting, current), Normalize(setting, card.Value))
+                                || (current is string s && card.Value is string v && string.Equals(s, v, StringComparison.OrdinalIgnoreCase));
+                var tabSize = FormatStylesExamples.TabSizeOf(plan.Requests[card.Output].Settings, FormatStylesEditorViewModel.SqlPromptTabSizeId, _viewModel.PreviewTabSize);
+                _examplesHost.Children.Add(BuildExampleCard(setting, card, text, card.IsDefault ? null : baseline, isCurrent, canApply, applyBlockedBy, tabSize));
+            }
+            if (_examplesHost.Children.Count == 0)
+                _examplesHost.Children.Add(RowNote("The examples could not be formatted."));
+            if (_examplesScroll != null) _examplesScroll.ScrollToVerticalOffset(offset);
+
+            // "Use this" rebuilt the cards under the keyboard: put focus back on that value's card.
+            if (_refocusExampleKey != null)
+            {
+                var key = _refocusExampleKey;
+                _refocusExampleKey = null;
+                _examplesHost.Children.OfType<Border>().FirstOrDefault(b => Equals(b.Tag, key))?.Focus();
+            }
+        }
+
+        /// <summary>One value's card: its name, Default / Current, "Use this", and the formatted example.</summary>
+        private FrameworkElement BuildExampleCard(FormatSettingNode setting, FormatStylesExamples.Card card, string text, string? baseline,
+            bool isCurrent, bool canApply, string? applyBlockedBy, int tabSize)
+        {
+            var label = ValueLabel(setting.Id, card.Value);
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(isCurrent ? 2 : 1),
+                Margin = new Thickness(0, 0, 0, Spacing.Sm),
+                Tag = FormatStylesSchemaModel.ValueKey(card.Value),
+                // Focusable so "Use this" can hand the keyboard back to the card it rebuilt.
+                Focusable = true,
+            };
+            border.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
+            border.SetResourceReference(Border.BorderBrushProperty, isCurrent ? ThemeTokens.AccentPrimary : ThemeTokens.BorderDefault);
+            System.Windows.Automation.AutomationProperties.SetName(border, $"{setting.DisplayName}: {label}");
+
+            var stack = new StackPanel { Orientation = Orientation.Vertical };
+            var head = new Border { Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Xs, Spacing.Xs), BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = new CornerRadius(5, 5, 0, 0) };
+            head.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfacePanel);
+            head.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            var headRow = new DockPanel { LastChildFill = true };
+
+            var tags = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (card.IsDefault)
+            {
+                var d = new TextBlock { Text = "Default", FontSize = 10.5, FontWeight = Typography.WeightSemiBold };
+                var pill = FormatStylesChrome.Pill(d, ThemeTokens.SurfaceElevated, null, ThemeTokens.TextSecondary);
+                pill.Margin = new Thickness(Spacing.Xs, 0, 0, 0);
+                tags.Children.Add(pill);
+            }
+            if (isCurrent)
+            {
+                var c = new TextBlock { Text = "Current", FontSize = 10.5, FontWeight = Typography.WeightSemiBold };
+                var pill = FormatStylesChrome.Pill(c, ThemeTokens.AccentPrimary, null, ThemeTokens.TextOnAccent);
+                pill.Margin = new Thickness(Spacing.Xs, 0, 0, 0);
+                tags.Children.Add(pill);
+            }
+            else
+            {
+                var use = new Button
+                {
+                    Content = "Use this",
+                    Padding = new Thickness(Spacing.Sm, 1, Spacing.Sm, 1),
+                    Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                    FontFamily = Typography.UiFont,
+                    FontSize = Typography.Small,
+                    IsEnabled = canApply,
+                    ToolTip = applyBlockedBy ?? $"Set “{setting.DisplayName}” to {label}",
+                };
+                // A disabled button shows no tooltip unless asked: the reason matters most then.
+                ToolTipService.SetShowOnDisabled(use, true);
+                ThemedButton.ApplySecondary(use);
+                System.Windows.Automation.AutomationProperties.SetName(use, $"Use {label} for {setting.DisplayName}");
+                use.Click += (_, _) =>
+                {
+                    _refocusExampleKey = use.IsKeyboardFocused ? FormatStylesSchemaModel.ValueKey(card.Value) : null;
+                    ApplyExampleValue(setting, card.Value);
+                };
+                tags.Children.Add(use);
+            }
+            DockPanel.SetDock(tags, Dock.Right);
+            headRow.Children.Add(tags);
+
+            var name = new TextBlock
+            {
+                Text = label,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            name.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            headRow.Children.Add(name);
+            head.Child = headRow;
+            stack.Children.Add(head);
+
+            var ownWith = card.OwnWith.Select(w => $"{OptionLabel(w.Key)} = {ValueLabel(w.Key, w.Value)}").ToList();
+            if (card.OwnQueryTitle != null || ownWith.Count > 0)
+            {
+                var where = card.OwnQueryTitle != null ? $"Shown on “{card.OwnQueryTitle}”" : "Shown";
+                var with = ownWith.Count > 0 ? $" with {string.Join(", ", ownWith)}" : string.Empty;
+                var own = RowNote($"{where}{with}: the main example does not show this value.");
+                own.Margin = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, 0);
+                stack.Children.Add(own);
+            }
+
+            var view = new SqlPreviewView
+            {
+                ShowLineNumbers = false,
+                TabSize = tabSize,   // the width this value was formatted with ("Spaces per tab" cards)
+                MaxHeight = 260,
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs),
+                Text = text,
+                // Bars, not a fill: a fill behind the text drops the syntax colours below 4.5:1.
+                MarkedLines = FormatStylesExamples.ChangedLines(baseline, text),
+            };
+            view.Scroller.Style = FormatStylesChrome.ScrollViewerStyle;
+            System.Windows.Automation.AutomationProperties.SetName(view, $"{label} example");
+            stack.Children.Add(view);
+
+            if (!card.IsDefault && baseline != null && string.Equals(baseline, text, StringComparison.Ordinal))
+            {
+                var same = RowNote("Looks the same as the default here, with this style's other settings.");
+                same.Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Xs);
+                stack.Children.Add(same);
+            }
+
+            border.Child = stack;
+            return border;
+        }
+
+        /// <summary>A card's "Use this": sets the value as the control would, and shows it in the form.</summary>
+        private void ApplyExampleValue(FormatSettingNode setting, object? value)
+        {
+            if (_viewModel.IsSelectedReadOnly)   // a team style: the form is disabled, so are its examples
+            {
+                SetStatus(FormatStylesEditorViewModel.TeamReadOnlyText(_viewModel.LoadedProfileName ?? string.Empty));
+                return;
+            }
+            if (!IsGateOpen(setting))
+            {
+                SetStatus(GateText(setting) ?? $"{setting.DisplayName} is not in effect.");
+                return;
+            }
+            _viewModel.SetWorkingValue(setting.Id, Normalize(setting, value));
+            RefreshVisibleSettingControls(); // the row's control shows the new value; the focus stays on it
+            SetStatus($"{setting.DisplayName}: {ValueLabel(setting.Id, value)}.");
+        }
+
+        /// <summary>A value as the setting's control records it: a number option as an int.</summary>
+        private static object? Normalize(FormatSettingNode setting, object? value)
+        {
+            if (setting.Type == "Int" && value is IConvertible c && !(value is string) && !(value is bool))
+            {
+                try { return Convert.ToInt32(c, System.Globalization.CultureInfo.InvariantCulture); }
+                catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException) { return value; }
+            }
+            return value;
+        }
+
+        /// <summary>An option's label by setting id (any page), or the id.</summary>
+        private string OptionLabel(string settingId) =>
+            _viewModel.SchemaModel?.GroupOf(settingId)?.Settings.FirstOrDefault(s => s.Id == settingId)?.DisplayName ?? settingId;
+
+        /// <summary>How a value reads in the editor: on / off, the choice's label, or the number.</summary>
+        private string ValueLabel(string settingId, object? value)
+        {
+            if (value is bool b) return b ? "On" : "Off";
+            var setting = _viewModel.SchemaModel?.GroupOf(settingId)?.Settings.FirstOrDefault(s => s.Id == settingId);
+            var text = FormatStylesSchemaModel.ValueKey(value);
+            return setting?.EnumLabels != null ? setting.LabelFor(text) : text;
+        }
+
+        private void OnThemeVariantChanged(object? sender, EventArgs e)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnThemeVariantChanged(sender, e)));
+                return;
+            }
+            TitleBarTheme.Apply(this, ThemeRegistry.Instance.Current == ThemeVariant.Dark);
         }
 
         // -----------------------------------------------------------------
@@ -2479,6 +3124,11 @@ namespace AkmlSql.Shell.Shared.Formatting
             _settingControlsHost.Children.Clear();
             _gatedRows.Clear();
             _rowMarkers.Clear();
+            _rowBorders.Clear();
+            // A new page: the examples follow its first option until another one is clicked.
+            if (_focusedSettingId == null || !group.Settings.Any(s => s.Id == _focusedSettingId))
+                _focusedSettingId = group.Settings.FirstOrDefault()?.Id;
+            ScheduleExamples();
 
             if (group.Settings.Count == 0)
             {
@@ -2565,7 +3215,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>
         /// One form row. An on/off option is a checkbox whose own content is its label, across the
         /// whole row, so clicking the words toggles it (as in SQL Prompt). Any other option has its
-        /// label on the left — in a column the page's rows share, at least 200 px and at most 45% of
+        /// label on the left — in a column the page's rows share, at least 160 px and at most 38% of
         /// the page — and its control on the right, left-aligned in a column at most 280 px wide.
         /// Labels wrap instead of being cut off (spec 040 STY-01, FR-020); the tooltip repeats the
         /// label and adds the description. Every row ends in the same fixed column for its ↺, so
@@ -2587,7 +3237,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Tag = setting.Id,
                 Margin = new Thickness(setting.EnabledWhenId != null ? Spacing.Lg : 0, 0, 0, 1),
                 Background = System.Windows.Media.Brushes.Transparent,
+                // The accent bar of the option the examples under the preview are about.
+                BorderThickness = new Thickness(2, 0, 0, 0),
+                BorderBrush = System.Windows.Media.Brushes.Transparent,
             };
+            _rowBorders[setting.Id] = rowBorder;
+            if (string.Equals(setting.Id, _focusedSettingId, StringComparison.Ordinal))
+                rowBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            // Clicking anywhere on the row, or tabbing into its control, shows what its values do.
+            rowBorder.PreviewMouseLeftButtonDown += (_, _) => FocusOption(setting.Id);
+            rowBorder.IsKeyboardFocusWithinChanged += (_, e) => { if (e.NewValue is true) FocusOption(setting.Id); };
             var isMatch = _searchMatches.Contains(setting.Id);
             void Rest()
             {
@@ -2662,9 +3321,36 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Grid.SetColumn(reset, 2);
                 row.Children.Add(reset);
             }
+            else if (control is ComboBox && NeedsOwnLine(setting))
+            {
+                // A drop-down whose longest choice can't fit beside its label (the parenthesis styles:
+                // "Compact: closing parenthesis right-aligned") goes on its own line under the label,
+                // so no choice is ever cut off.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
+                row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                FrameworkElement labelCell = label;
+                if (badge != null)
+                {
+                    badge.HorizontalAlignment = HorizontalAlignment.Left;
+                    badge.Margin = new Thickness(0, 2, 0, 0);
+                    labelCell = new StackPanel { Orientation = Orientation.Vertical, Children = { label, badge } };
+                }
+                row.Children.Add(labelCell);
+                Grid.SetColumn(reset, 1);
+                row.Children.Add(reset);
+                var cell = new Grid { Margin = new Thickness(0, Spacing.Xs, 0, 0) };
+                cell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 340 });
+                cell.Children.Add(control);
+                Grid.SetRow(cell, 1);
+                row.Children.Add(cell);
+            }
             else
             {
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "lbl", MinWidth = 200 });
+                // 160 and 38%, not 200 and 45%: beside the preview the form is narrower, and a wider label column cut
+                // the choices off ("Expanded: to stateme…"); labels wrap instead.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "lbl", MinWidth = 160 });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
                 Grid.SetColumn(reset, 2);
@@ -2720,6 +3406,29 @@ namespace AkmlSql.Shell.Shared.Formatting
             return rowBorder;
         }
 
+        /// <summary>
+        /// The widest choice text a drop-down beside its label can show whole at the default size
+        /// (its cell is about 217 px, less the arrow and padding).
+        /// </summary>
+        private const double OwnLineChoiceWidth = 190;
+
+        /// <summary>True when the option's longest choice is too wide for a drop-down beside its label.</summary>
+        private bool NeedsOwnLine(FormatSettingNode setting)
+        {
+            var choices = setting.EnumLabels ?? setting.AllowedEnumValues;
+            if (choices == null) return false;
+            double pixelsPerDip = 1.0;
+            try { pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip; } catch (Exception) { /* not in a visual tree yet */ }
+            var typeface = new Typeface(Typography.UiFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            foreach (var choice in choices)
+            {
+                var text = new FormattedText(choice, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                    typeface, Typography.Body, System.Windows.Media.Brushes.Black, pixelsPerDip);
+                if (text.WidthIncludingTrailingWhitespace > OwnLineChoiceWidth) return true;
+            }
+            return false;
+        }
+
         /// <summary>The ↺ column every row ends in, shown or not, so controls end at one edge.</summary>
         private const double ResetColumnWidth = 30;
 
@@ -2746,13 +3455,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             return $"Takes effect when \"{gate?.DisplayName ?? setting.EnabledWhenId}\" is {value}.";
         }
 
-        /// <summary>Spec 040 (T078) — an option label takes at most 45% of the page's width.</summary>
+        /// <summary>Spec 040 (T078) — an option label takes at most 38% of the page's width (45% before the preview moved beside the form).</summary>
         private sealed class LabelMaxWidthConverter : System.Windows.Data.IValueConverter
         {
             internal static readonly LabelMaxWidthConverter Instance = new LabelMaxWidthConverter();
 
             public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-                => value is double width && width > 0 ? width * 0.45 : double.PositiveInfinity;
+                => value is double width && width > 0 ? width * 0.38 : double.PositiveInfinity;
 
             public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
                 => throw new NotSupportedException();
@@ -2996,6 +3705,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Set Owner to the DTE main window so the dialog centres correctly.
             // Failure here is non-fatal (e.g. running outside VS during a test).
             TrySetDteOwner();
+            // Centred on a maximised SSMS, the 900 px window could open with its buttons under the
+            // taskbar: keep it on its monitor's work area once it has its place.
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => AkmlSql.Shell.Shared.Ui.WindowBounds.KeepInWorkArea(this)));
 
             UpdateStatus("Loading…");
             await _viewModel.LoadAsync().ConfigureAwait(true);
@@ -3005,12 +3717,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 RebuildSettingsTreeFromSchema(_viewModel.SchemaJson!);
             }
 
-            // SQL Prompt model: preview each page's own sample by default.
-            if (_viewModel.IsSqlPromptModel && _rbPageSample != null)
-            {
-                _rbPageSample.Visibility = Visibility.Visible;
-                _rbPageSample.IsChecked = true;
-            }
+            // SQL Prompt model: preview each page's own sample by default, and offer the engine's
+            // SELECT examples next to it.
+            PopulateSourceCombo();
+            ScheduleExamples();
 
             // The view-model auto-selects the ACTIVE style at open; reflect that in the list.
             // Assigning SelectedItem fires the normal selection-changed flow (SelectProfileAsync
@@ -3062,7 +3772,13 @@ namespace AkmlSql.Shell.Shared.Formatting
                     _movedTimer.Tick -= OnMovedTimerTick;
                     _movedTimer.Tick += OnMovedTimerTick;
                     _movedTimer.Start();
+                    // The flash used to happen below the fold: bring the first moved line into view.
+                    var first = moved.Min();
+                    var view = _previewView;
+                    Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => view.ScrollLineIntoView(first)));
                 }
+                // The option examples format with the working style: refresh them once it settles.
+                ScheduleExamples();
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewTabSize) && _previewView != null)
             {
@@ -3077,6 +3793,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 // T070 — toggle the warning bar above the preview pane.
                 UpdatePreviewWarningBar();
+                // A failed live preview still ends the wait: examples it cancelled can run again.
+                ScheduleExamples();
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedBuiltIn)
@@ -3088,6 +3806,11 @@ namespace AkmlSql.Shell.Shared.Formatting
                 UpdateSaveButtonState();
                 UpdateReadOnlyState();
                 UpdateHeaderState();   // dirty / read-only are reported in the header too
+                if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
+                {
+                    _examplesSignature = null;   // "Use this" follows the style's read-only state
+                    ScheduleExamples();
+                }
             }
         }
 
@@ -3218,6 +3941,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>The setting that turns this one on, and the value that does.</summary>
         public string? EnabledWhenId { get; set; }
         public object? EnabledWhenValue { get; set; }
+        /// <summary>SQL Prompt model (schema 2002+): what each value does, as example SQL to format.</summary>
+        public FormatStylesSchemaModel.OptionExample? Example { get; set; }
 
         /// <summary>Label shown for a stored value (the value itself when there is no label).</summary>
         public string LabelFor(string value)

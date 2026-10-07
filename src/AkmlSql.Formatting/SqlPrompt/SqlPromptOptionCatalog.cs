@@ -92,7 +92,7 @@ public static class SqlPromptOptionCatalog
     /// Kept apart from the AKML settings schema's versions so a cached copy of one is never
     /// mistaken for the other.
     /// </summary>
-    public const int SchemaVersion = 2001;
+    public const int SchemaVersion = 2002;   // 2002: per-option examples, SELECT examples
 
     /// <summary>Prefix of the setting ids in <see cref="ToEditorSchemaJson"/>: working values keyed
     /// <c>sqlPrompt.&lt;path&gt;</c> nest straight into the style's <c>sqlPrompt</c> document.</summary>
@@ -105,6 +105,12 @@ public static class SqlPromptOptionCatalog
     /// and the extras SQL Prompt's editor shows: value labels, notes, sub-headings, which option
     /// turns another on, and each page's preview sample. Setting ids are
     /// <see cref="EditorIdPrefix"/> + the SQL Prompt path.
+    /// <para>
+    /// Each setting also carries its <c>example</c> (<see cref="SqlPromptOptionExamples"/>): the
+    /// query (an id into <c>exampleQueries</c>, or <c>"page"</c> for the page's sample), the
+    /// settings it needs, the values the editor shows a card for, and the values that need a
+    /// query of their own. <c>selectExamples</c> lists the SELECTs the preview offers.
+    /// </para>
     /// </summary>
     public static string ToEditorSchemaJson()
     {
@@ -150,6 +156,7 @@ public static class SqlPromptOptionCatalog
                 if (o.Max is int max) node["max"] = max;
                 if (o.EnabledWhen is { } gate && Find(gate.Path) is { } gateOption)
                     node["enabledWhen"] = new System.Text.Json.Nodes.JsonObject { ["id"] = EditorIdPrefix + gate.Path, ["value"] = Literal(gateOption, gate.Value) };
+                node["example"] = ExampleJson(o, Literal);
                 settings.Add(node);
             }
         }
@@ -159,7 +166,46 @@ public static class SqlPromptOptionCatalog
             ["schemaVersion"] = SchemaVersion,
             ["groups"] = groups,
             ["settings"] = settings,
+            ["exampleQueries"] = new System.Text.Json.Nodes.JsonArray(SqlPromptOptionExamples.Queries.Select(q => (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject
+            {
+                ["id"] = q.Id,
+                ["title"] = q.Title,
+                ["sql"] = q.Sql,
+            }).ToArray()),
+            ["selectExamples"] = new System.Text.Json.Nodes.JsonArray(SqlPromptOptionExamples.SelectExamples.Select(q => (System.Text.Json.Nodes.JsonNode?)q.Id).ToArray()),
         }.ToJsonString();
+    }
+
+    private static System.Text.Json.Nodes.JsonObject ExampleJson(SqlPromptOption o, Func<SqlPromptOption, string, System.Text.Json.Nodes.JsonNode?> literal)
+    {
+        System.Text.Json.Nodes.JsonArray With(IEnumerable<KeyValuePair<string, string>> settings) =>
+            new(settings.Select(w => (System.Text.Json.Nodes.JsonNode?)new System.Text.Json.Nodes.JsonObject
+            {
+                ["id"] = EditorIdPrefix + w.Key,
+                ["value"] = literal(Find(w.Key)!, w.Value),
+            }).ToArray());
+
+        var values = SqlPromptOptionExamples.ValuesFor(o);
+        var main = SqlPromptOptionExamples.For(o.Path);
+        var json = new System.Text.Json.Nodes.JsonObject
+        {
+            ["query"] = main.Query.Id,
+            ["with"] = With(SqlPromptOptionExamples.SettingsFor(o.Path, o.Default)),
+            ["values"] = new System.Text.Json.Nodes.JsonArray(values.Select(v => literal(o, v)).ToArray()),
+        };
+        var byValue = new System.Text.Json.Nodes.JsonObject();
+        foreach (var v in values)
+        {
+            var own = SqlPromptOptionExamples.For(o.Path, v);
+            if (own.Query.Id == main.Query.Id && own.With.Count == main.With.Count) continue;
+            byValue[v] = new System.Text.Json.Nodes.JsonObject
+            {
+                ["query"] = own.Query.Id,
+                ["with"] = With(SqlPromptOptionExamples.SettingsFor(o.Path, v)),
+            };
+        }
+        if (byValue.Count > 0) json["byValue"] = byValue;
+        return json;
     }
 
     // ── shared value sets ────────────────────────────────────────────────────

@@ -39,6 +39,15 @@ namespace AkmlSql.Shell.Shared.Tests
 
         internal static async Task<FormatStylesEditorViewModel> LoadedAsync(string schema)
         {
+            var vm = NewViewModel(schema);
+            await vm.LoadAsync();
+            if (vm.LoadedProfileName == null) await vm.SelectProfileAsync("Default");
+            return vm;
+        }
+
+        /// <summary>A view model on a fake engine serving <paramref name="schema"/>, not loaded yet.</summary>
+        internal static FormatStylesEditorViewModel NewViewModel(string schema)
+        {
             var settings = ConfigManager.Load();
             settings.Formatter.ActiveProfile = "Default";
             ConfigManager.Save(settings);
@@ -53,10 +62,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 SqlPromptJson = "{\"metadata\":{\"id\":\"d\",\"name\":\"Default\"}}", IsSqlPromptStyle = true, IsBuiltIn = true, HasBuiltIn = true,
             });
             FormatStylesEditorViewModel.SetCachedSchemaForTests(null, null);
-            var vm = new FormatStylesEditorViewModel(fake) { MainThreadSwitchOverride = () => Task.CompletedTask };
-            await vm.LoadAsync();
-            if (vm.LoadedProfileName == null) await vm.SelectProfileAsync("Default");
-            return vm;
+            return new FormatStylesEditorViewModel(fake) { MainThreadSwitchOverride = () => Task.CompletedTask };
         }
 
         internal static FormatStylesEditorWindow NewWindow(FormatStylesEditorViewModel vm)
@@ -72,10 +78,14 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         /// <summary>
-        /// The window's client area at its default 1060×680 size (less the resize borders and the
-        /// title bar).
+        /// The window's client area at its default size (less the resize borders and the title bar):
+        /// the options and the preview side by side.
         /// </summary>
-        internal static readonly Size DefaultClientSize = new Size(1060 - 16, 680 - 39);
+        internal static readonly Size DefaultClientSize =
+            new Size(FormatStylesEditorWindow.DefaultWidth - 16, FormatStylesEditorWindow.DefaultHeight - 39);
+
+        /// <summary>The client area at the window's minimum size: the preview goes under the options.</summary>
+        internal static readonly Size MinimumClientSize = new Size(1000 - 16, 620 - 39);
 
         /// <summary>
         /// Moves the window's content into a themed host that can be laid out. A window that is
@@ -91,12 +101,13 @@ namespace AkmlSql.Shell.Shared.Tests
             return host;
         }
 
-        internal static void ShowPage(FormatStylesEditorWindow window, FrameworkElement layoutRoot, FormatStylesSchemaModel.Group group)
+        internal static void ShowPage(FormatStylesEditorWindow window, FrameworkElement layoutRoot, FormatStylesSchemaModel.Group group, Size? size = null)
         {
             window.GetType().GetMethod("UpdateRightForGroup", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(window, new object?[] { group, "Page" });
-            layoutRoot.Measure(DefaultClientSize);
-            layoutRoot.Arrange(new Rect(DefaultClientSize));
+            var client = size ?? DefaultClientSize;
+            layoutRoot.Measure(client);
+            layoutRoot.Arrange(new Rect(client));
             layoutRoot.UpdateLayout();
         }
 
@@ -140,9 +151,11 @@ namespace AkmlSql.Shell.Shared.Tests
                 Assert.Equal(14, pages.Count);
                 var layoutRoot = LayoutRoot(window);
 
+                // Side by side at the default size; stacked (preview under the options) at the minimum.
+                foreach (var size in new[] { DefaultClientSize, MinimumClientSize })
                 foreach (var page in pages)
                 {
-                    ShowPage(window, layoutRoot, page);
+                    ShowPage(window, layoutRoot, page, size);
                     var host = Host(window);
                     var labels = Labels(host).ToList();
                     Assert.NotEmpty(labels);
@@ -158,7 +171,7 @@ namespace AkmlSql.Shell.Shared.Tests
                         var fits = UnconstrainedWidth(label) <= label.ActualWidth + 0.5;
                         var wraps = label.ActualHeight > lineHeight * 1.5;
                         Assert.True(fits || wraps,
-                            $"'{label.Text}' on {page.DisplayName} is clipped: needs {UnconstrainedWidth(label):F0}px, has {label.ActualWidth:F0}px");
+                            $"'{label.Text}' on {page.DisplayName} at {size.Width:F0}px is clipped: needs {UnconstrainedWidth(label):F0}px, has {label.ActualWidth:F0}px");
                     }
 
                     foreach (var setting in page.Settings.Where(s => FormatStylesSchemaModel.ControlKindFor(s) == FormatStylesSchemaModel.ControlKind.CheckBox))

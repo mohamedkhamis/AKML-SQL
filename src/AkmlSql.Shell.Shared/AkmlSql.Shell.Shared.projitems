@@ -99,6 +99,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\RpcClientAccessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ProfileJsonMerger.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesSchemaModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesExamples.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\StyleNameDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\TextViewCreationListener.cs" />
     <!-- CompletionCommandHandler.cs and CompletionSource.cs DELETED — replaced by Editor/Completion/ -->
@@ -108,6 +109,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeVariant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeTokens.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\TitleBarTheme.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\WindowBounds.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Typography.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
