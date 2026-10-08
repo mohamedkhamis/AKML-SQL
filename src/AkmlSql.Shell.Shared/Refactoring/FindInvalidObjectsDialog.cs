@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
-using Constants = AkmlSql.Core.Constants;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Refactoring
 {
@@ -30,7 +31,8 @@ namespace AkmlSql.Shell.Shared.Refactoring
 
         private void Build()
         {
-            Text            = Constants.ProductName + " — Find Invalid Objects";
+            Text            = WindowTitles.For("Find invalid objects");
+            WindowIcon.Apply(this);
             Size            = new Size(960, 560);
             MinimumSize     = new Size(720, 380);
             StartPosition   = FormStartPosition.CenterParent;

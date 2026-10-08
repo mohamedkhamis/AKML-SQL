@@ -88,9 +88,11 @@ public class ExpandWildcardsOperation : ILightweightOperation
                 {
                     foreach (var col in group.Columns)
                     {
+                        // A name like "Order Date" or "Order" only parses bracketed.
+                        var name = SqlIdentifier.QuoteIfNeeded(col.ColumnName);
                         columns.Add(prefix
-                            ? $"{group.Qualifier}.{col.ColumnName}"
-                            : col.ColumnName);
+                            ? $"{SqlIdentifier.QuoteIfNeeded(group.Qualifier)}.{name}"
+                            : name);
                     }
                 }
 

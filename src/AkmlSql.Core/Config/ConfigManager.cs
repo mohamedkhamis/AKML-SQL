@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -34,6 +35,8 @@ namespace AkmlSql.Core.Config
                 {
                     Log.Information("No config file found at {Path}, creating defaults", path);
                     var defaults = new AppSettings();
+                    MigrateTabEnvironments(defaults);
+                    MigrateTriggerDelay(defaults);
                     Save(defaults);
                     return defaults;
                 }
@@ -41,6 +44,8 @@ namespace AkmlSql.Core.Config
                 var json = File.ReadAllText(path);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
                 AiAgentResolver.Normalize(settings.Ai);
+                MigrateTabEnvironments(settings);
+                MigrateTriggerDelay(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -66,12 +71,17 @@ namespace AkmlSql.Core.Config
                 if (!File.Exists(path))
                 {
                     Log.Warning("Config file not found at {Path}, using defaults", path);
-                    return new AppSettings();
+                    var defaults = new AppSettings();
+                    MigrateTabEnvironments(defaults);
+                    MigrateTriggerDelay(defaults);
+                    return defaults;
                 }
 
                 var json = File.ReadAllText(path);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, SerializerOptions) ?? new AppSettings();
                 AiAgentResolver.Normalize(settings.Ai);
+                MigrateTabEnvironments(settings);
+                MigrateTriggerDelay(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -79,6 +89,61 @@ namespace AkmlSql.Core.Config
                 Log.Error(ex, "Failed to load config from {Path}, using defaults", path);
                 return new AppSettings();
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-08, data-model §1.3) — the tab-colour environments migration, in memory
+        /// only (nothing is written here; the next save persists it). Idempotent. A failure is
+        /// logged and leaves the settings as read, so a migration bug can never cost the user the
+        /// rest of their configuration.
+        /// </summary>
+        /// <summary>
+        /// Spec 040 (OPT-01) — "Trigger delay" did nothing before spec 040 and every config carries
+        /// its old default, 100. Honoured as written it would delay every suggestion, so a config
+        /// that has not been through this yet gets 0 (at once, as before) for that value; any other
+        /// value was chosen and is kept. Once only: in memory, persisted by the next save.
+        /// </summary>
+        internal static void MigrateTriggerDelay(AppSettings settings)
+        {
+            var intelliSense = settings?.IntelliSense;
+            if (intelliSense == null || intelliSense.TriggerDelayVersion != null) return;
+            if (intelliSense.TriggerDelayMs == 100) intelliSense.TriggerDelayMs = 0;
+            intelliSense.TriggerDelayVersion = 1;
+        }
+
+        private static void MigrateTabEnvironments(AppSettings settings)
+        {
+            try
+            {
+                Models.Tabs.TabEnvironmentMigration.Apply(settings.Tabs);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Config: tab-colour environment migration failed; settings kept as read");
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-007) — copies the installation's identity and first-run state from
+        /// <paramref name="from"/> onto <paramref name="to"/>: the install id and targets, the
+        /// last update check, the native-IntelliSense prompt flags, Command Palette usage and
+        /// recents, and the config version. Nothing else is touched. Used by "Restore all
+        /// defaults" and settings Import, which replace every user setting but must not make the
+        /// product look freshly installed.
+        /// </summary>
+        public static void PreserveInstallState(AppSettings from, AppSettings to)
+        {
+            if (from == null) throw new ArgumentNullException(nameof(from));
+            if (to == null) throw new ArgumentNullException(nameof(to));
+
+            to.ConfigVersion = from.ConfigVersion;
+            to.InstallId = from.InstallId;
+            to.InstalledTargets = new List<InstalledTarget>(from.InstalledTargets ?? new List<InstalledTarget>());
+            to.LastUpdateCheck = from.LastUpdateCheck;
+            to.NativeIntelliSensePrompted = from.NativeIntelliSensePrompted;
+            to.DisabledNativeIntelliSense = from.DisabledNativeIntelliSense;
+            to.CommandPalette.UsageCounts = new Dictionary<string, int>(from.CommandPalette?.UsageCounts ?? new Dictionary<string, int>());
+            to.CommandPalette.RecentItems = new List<string>(from.CommandPalette?.RecentItems ?? new List<string>());
         }
 
         /// <summary>

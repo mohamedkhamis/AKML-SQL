@@ -47,7 +47,7 @@ Type `(` after a function or procedure name to see its parameter list. The toolt
 
 ## Tune IntelliSense
 
-Open **Tools** -> **Options** -> **AKML SQL** -> **IntelliSense** to adjust auto-trigger delay, maximum suggestions, fuzzy matching, keyword casing, and more. All keys are documented in the [Configuration reference](../configuration.md).
+Open **AKML SQL** -> **Options…** -> **Suggestions** -> **Behavior** to adjust auto-trigger delay, maximum suggestions, fuzzy matching, keyword casing, and more. All keys are documented in the [Configuration reference](../configuration.md).
 
 ## Avoid conflicts with built-in IntelliSense
 

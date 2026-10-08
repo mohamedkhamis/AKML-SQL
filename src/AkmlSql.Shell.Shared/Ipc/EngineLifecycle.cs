@@ -36,6 +36,7 @@ namespace AkmlSql.Shell.Shared.Ipc
 
                 _launching = true;
                 _manager = new EngineProcessManager();
+                _manager.Restarted += (_, __) => Editor.ConnectionWiringHelper.OnEngineRestarted();
                 manager = _manager;
             }
 

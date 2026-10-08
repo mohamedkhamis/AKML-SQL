@@ -2,7 +2,7 @@
 
 AI-powered SQL development assistance for SQL Server Management Studio 22. AKML SQL replicates and extends the Redgate SQL Prompt feature set, runs in SSMS 22 (Visual Studio 2026 is no longer supported), and ships a self-contained `.NET 10` engine for IntelliSense, formatting, refactoring, and static analysis.
 
-**Author**: Mohamed Khamis · **License**: MIT · **Version**: 1.0.0
+**Author**: Mohamed Khamis · **License**: MIT · **Version**: stamped per build as 1.YY.MMDD.HHmm (latest on the [download page](https://akml.khamis.work/download))
 
 ---
 
@@ -10,15 +10,15 @@ AI-powered SQL development assistance for SQL Server Management Studio 22. AKML 
 
 | Area | Highlights |
 |---|---|
-| **IntelliSense** | 9 completion providers (Column / Alias / Object / Keyword / Snippet / Variable / JOIN / QuickInfo / Signature), fuzzy matching, dot-trigger, schema-aware ranking, custom SQL-Prompt-style popup with type-coded icon badges + Ctrl-held semi-transparency |
-| **Code formatting** | 7-stage pipeline (parse → annotate → layout → cast → emit → validate → idempotency), 21 format commands, `.akmlstyle` profile system, **SQL Prompt `.sqlpromptstylev2` XML round-trip** (import + export) |
+| **IntelliSense** | 11 completion providers (Column / Alias / Object / Keyword / Snippet / Variable / Parameter / JOIN / JOIN ON foreign key / Database / Smart GROUP BY) plus Quick Info and signature help, fuzzy matching, dot-trigger, schema-aware ranking, custom SQL-Prompt-style popup with type-coded icon badges + Ctrl-held semi-transparency |
+| **Code formatting** | 7-stage pipeline (parse → annotate → layout → casing → emit → validate → idempotency), Format Document / Selection / Bulk Format / Unformat, `.akmlstyle` profile system, **SQL Prompt `.sqlpromptstylev2` XML round-trip** (import + export) |
 | **Format Styles editor** | Modal three-column WPF editor with style list / settings tree / live preview, type-driven controls, schema fetched via IPC, 100 ms debounced preview, FR-023 unsupported-setting affordance |
 | **Snippets** | Personal + team + built-in folders, context-aware filtering, surround-with chord |
 | **Static analysis** | 130+ rules across 8 categories (Performance / BestPractices / Security / Style / Design / Deprecated / Execution / Naming), inline suppressions, per-project `.casettings`, native VS Error List integration |
-| **Refactoring** | Heavyweight (Smart Rename, Parameterize Values, Convert Temp Table) + 9 lightweight ops (Expand INSERT Columns, Convert Old-Style Joins, Encapsulate BEGIN/END, etc.) |
+| **Refactoring** | Smart Rename, Script as ALTER, Inline EXEC, Inline Stored Procedure, Convert INSERT to UPDATE, Find Invalid Objects + light-bulb fixes (Expand Wildcards, Qualify Object Names, Convert sp_executesql to Static SQL, Surround with BEGIN/END, Unformat). The engine also has Parameterize Values, Convert Temp Table and 12 lightweight operations not yet on the SSMS menu |
 | **SQL History** | Full crash-safe history with three-panel UI (queries / versions / preview), full-text search, star/open/closed filters, syntax-highlighted code preview |
 | **Tab Coloring** | Environment-based per-server colouring (tab background + status bar tint + floating window border), wildcard pattern rules, gradient toggle. See `specs/020-sqlprompt-visual-parity/tab-coloring-audit.md` for the parity audit vs SQL Prompt §5.1 |
-| **AI assistance** | Text-to-SQL, Explain, Fix, Optimize, Index Analysis, Chat, Ghost Text (inline autocomplete), schema-aware prompting |
+| **AI assistance** | Explain, Fix, Chat, Ghost Text (inline autocomplete), schema-aware prompting; Text-to-SQL, Optimize and Index Analysis in the web edition |
 | **Theme system** | Centralised `ThemeTokens` / `ThemeRegistry` / `HostThemeWatcher` (spec 016) with Light / Dark / HighContrast palettes — 25+ brush tokens across Surface / Text / Border / Accent / Status / Editor / Chat / IconBadge / TabColor / History families |
 
 ## Project structure
@@ -27,7 +27,7 @@ AI-powered SQL development assistance for SQL Server Management Studio 22. AKML 
 AKML-SQL.slnx                          # Solution file (.slnx format)
 src/
   AkmlSql.Core/                        # Shared library (netstandard2.0 + net10.0)
-  AkmlSql.Engine/                      # Out-of-process IntelliSense / format / analysis engine (.NET 10, win-x64, trimmed)
+  AkmlSql.Engine/                      # Out-of-process IntelliSense / format / analysis engine (.NET 10, win-x64, self-contained, not trimmed)
   AkmlSql.Formatting/                  # Formatter pipeline + profile system (.NET 10)
   AkmlSql.Analyzer/                    # CLI SQL static analyzer (.NET 10)
   AkmlSql.Shell.Shared/                # Shared project (.projitems) for the shell extensions
@@ -64,7 +64,7 @@ See [doc/architecture.md](doc/architecture.md) for the full component map, start
 Shell projects MUST be built individually with full MSBuild (not `dotnet build`) — VSSDK requires CodeTaskFactory:
 
 ```bash
-MSBUILD="/c/Program Files/Microsoft Visual Studio/2022/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe"   # or: vswhere -latest -prerelease -find MSBuild\**\Bin\MSBuild.exe
 
 # Engine first
 dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj -c Release -r win-x64

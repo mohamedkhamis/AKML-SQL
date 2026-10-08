@@ -562,8 +562,9 @@ namespace AkmlSql.Shell.Shared.Editor.SchemaProgress
             if (!TryGetAuthState(out var state)) return;
             try
             {
-                bool hasExisting = SqlCredentialStore.Has(state.Server, state.Login);
-                var dlg = new SqlCredentialDialog(state.Server, state.Database, state.Login, hasExisting);
+                bool hasExisting = SqlCredentialStore.Has(state.DataSource, state.Login)
+                                   || SqlCredentialStore.Has(state.Server, state.Login);
+                var dlg = new SqlCredentialDialog(state.Server, state.Database, state.Login, hasExisting, state.DataSource);
                 var result = dlg.ShowDialog();
                 if (result == true)
                 {

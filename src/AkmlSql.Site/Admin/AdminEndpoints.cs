@@ -70,30 +70,7 @@ public static class AdminEndpoints
                 IndividualsExport.FileName("downloads", null, window.Range.Days, now, window));
         });
 
-        endpoints.MapGet("/admin/people.csv", (
-            HttpContext http, AnalyticsStore store, string? days, string? country, string? downloaded) =>
-        {
-            var window = store.ResolveWindow(AdminDashboardOptions.ResolveRange(days));
-            var now = window.Now;
-
-            // The export must describe the SAME set the page is showing, filters included -- an
-            // unfiltered dump beside a filtered view is how the two get confused (contract M6.1).
-            var filter = new IndividualFilter(
-                window.Range.Days,
-                string.IsNullOrWhiteSpace(country) ? null : country,
-                downloaded switch { "yes" => true, "no" => false, _ => null },
-                Page: 0,
-                PageSize: 500);
-
-            var csv = IndividualsExport.IndividualsToCsv(
-                store.GetIndividuals(filter, window), store.GetCoverage(window), filter, now, window);
-
-            http.Response.Headers.CacheControl = "no-store";
-            return Results.File(
-                System.Text.Encoding.UTF8.GetBytes(csv),
-                "text/csv",
-                IndividualsExport.FileName("people", filter, window.Range.Days, now, window));
-        });
+        AdminReportExports.Map(endpoints);
 
         endpoints.MapGet("/admin/pages.csv", (HttpContext http, AnalyticsStore store, string? days) =>
         {
@@ -187,11 +164,19 @@ public static class AdminEndpoints
     {
         var logger = loggerFactory.CreateLogger(AuditLoggerName);
 
+        var parseErrors = new List<string>();
+        if (!int.TryParse(form["visibilityCount"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
+            parseErrors.Add("Number of releases must be a whole number.");
+        if (!int.TryParse(form["retentionDays"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var retention))
+            parseErrors.Add("Retention days must be a whole number.");
+        if (parseErrors.Count > 0)
+            return Results.Redirect("/admin/settings?error=" + Uri.EscapeDataString(string.Join("|", parseErrors)));
+
         var candidate = settings.Current with
         {
             Visibility = ReleaseVisibility.Parse(form["visibility"].ToString()),
-            VisibilityCount = ParseIntOr(form["visibilityCount"].ToString(), settings.Current.VisibilityCount),
-            IdentifiableRetentionDays = ParseIntOr(form["retentionDays"].ToString(), settings.Current.IdentifiableRetentionDays),
+            VisibilityCount = count,
+            IdentifiableRetentionDays = retention,
         };
 
         var previous = settings.Current;
@@ -218,10 +203,6 @@ public static class AdminEndpoints
         return Results.Redirect("/admin/settings?saved=1");
     }
 
-
-    /// <summary>Form input is user input: an unparseable number keeps the current value rather than erroring.</summary>
-    private static int ParseIntOr(string? raw, int fallback) =>
-        int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
 
     private static async Task<IResult> HandleLogout(HttpContext http, ILoggerFactory loggerFactory)
     {

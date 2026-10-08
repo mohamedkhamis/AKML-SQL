@@ -113,7 +113,8 @@ public static class DownloadEndpoint
             Microsoft.Extensions.Options.IOptions<DownloadsOptions> options,
             IAnalyticsSink sink,
             GeoLookup geo,
-            ReleasesManifest manifest) => HandleCount(file, http, options.Value, sink, geo, manifest));
+            ReleasesManifest manifest,
+            LatestGitHubRelease latest) => HandleCount(file, http, options.Value, sink, geo, manifest, latest.Find(file)));
 
     /// <summary>
     /// Beacon handler: counts a CDN download only for a file the site actually offers (present
@@ -126,14 +127,15 @@ public static class DownloadEndpoint
         DownloadsOptions options,
         IAnalyticsSink sink,
         GeoLookup? geo = null,
-        ReleasesManifest? manifest = null)
+        ReleasesManifest? manifest = null,
+        Release? cachedRelease = null)
     {
-        if (ResolveCdnUrl(manifest, file) is null && ResolveFilePath(options.Folder, file) is null)
+        if (cachedRelease is null && ResolveCdnUrl(manifest, file) is null && ResolveFilePath(options.Folder, file) is null)
         {
             return Results.NotFound();
         }
 
-        LogDownload(http, file!, sink, geo, manifest);
+        LogDownload(http, file!, sink, geo, manifest, cachedRelease?.Version);
         return Results.NoContent();
     }
 
@@ -237,7 +239,8 @@ public static class DownloadEndpoint
         string fileName,
         IAnalyticsSink sink,
         GeoLookup? geo,
-        ReleasesManifest? manifest = null)
+        ReleasesManifest? manifest = null,
+        string? releaseVersion = null)
     {
         if (http.Request.Headers.ContainsKey("Range"))
         {
@@ -267,7 +270,7 @@ public static class DownloadEndpoint
                 VisitorId = ConsentMiddleware.VisitorIdOf(http),
                 // Resolved AT WRITE TIME: the manifest is mutable, and a release later removed from
                 // it would otherwise retroactively orphan its historical downloads.
-                ReleaseVersion = ResolveReleaseVersion(manifest, fileName),
+                ReleaseVersion = releaseVersion ?? ResolveReleaseVersion(manifest, fileName),
             });
         }
         catch

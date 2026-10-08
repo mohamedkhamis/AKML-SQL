@@ -123,6 +123,12 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
 
                 // Chat (v2.1: assistant bubble deepened slate-100 → slate-200 — with the new
                 // Border.Strong bubble edge it now reads on the white panel)
+                // Syntax (SQL previews) — keyword/comment as docs/theme-tokens.json; strings one step
+                // darker than its #16A34A, which reads at 3.3:1 on white (this is 5.0:1).
+                [ThemeTokens.SyntaxKeyword] = Solid(0x25, 0x63, 0xEB),
+                [ThemeTokens.SyntaxString]  = Solid(0x15, 0x80, 0x3D),
+                [ThemeTokens.SyntaxComment] = Solid(0x64, 0x74, 0x8B),
+
                 [ThemeTokens.ChatUserBubble]      = Solid(0xDB, 0xEA, 0xFE),
                 [ThemeTokens.ChatAssistantBubble] = Solid(0xE2, 0xE8, 0xF0),
                 [ThemeTokens.ChatSystemBubble]    = Solid(0xFE, 0xF3, 0xC7),
@@ -220,6 +226,13 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.EditorPopupBorder]      = Solid(0x14, 0xFF, 0xFF, 0xFF),
 
                 // Chat
+                // Syntax (SQL previews) — keyword/string as docs/theme-tokens.json (blue-400 reads
+                // 5.8:1 here; the blue-600 accent the preview used read 2.8:1); comments lighter than
+                // its #64748B (3.1:1) at 5.0:1, set apart from the line numbers by italics.
+                [ThemeTokens.SyntaxKeyword] = Solid(0x60, 0xA5, 0xFA),
+                [ThemeTokens.SyntaxString]  = Solid(0x4A, 0xDE, 0x80),
+                [ThemeTokens.SyntaxComment] = Solid(0x8A, 0x99, 0xAF),
+
                 [ThemeTokens.ChatUserBubble]      = Solid(0x1E, 0x3A, 0x5F),
                 [ThemeTokens.ChatAssistantBubble] = Solid(0x33, 0x41, 0x55),
                 [ThemeTokens.ChatSystemBubble]    = Solid(0x3A, 0x30, 0x00),
@@ -254,7 +267,8 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.HistoryOpenIcon]       = Solid(0x4A, 0xDE, 0x80),
                 [ThemeTokens.HistoryClosedIcon]     = Solid(0xF8, 0x71, 0x71),
                 [ThemeTokens.HistoryStarActive]     = Solid(0xFB, 0x92, 0x3C),
-                [ThemeTokens.HistoryStarInactive]   = Solid(0x14, 0xFF, 0xFF, 0xFF),
+                // Spec 040 (T185): the empty star is drawn in this colour now; at 8 % white it vanished.
+                [ThemeTokens.HistoryStarInactive]   = Solid(0x64, 0x74, 0x8B),
                 // Spec 020 PR-235 review fix: 30 % alpha (0x4D) preserves the legacy
                 // ThemeManager.HistorySearchHighlight read-through behaviour. Dark-theme
                 // hex (#DAA520 gold) per doc/SQL-PROMPT/SQL-Prompt-History §16.2.
@@ -328,6 +342,11 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 [ThemeTokens.EditorPopupBorder]      = windowFrame,
 
                 // Chat
+                // Syntax: system colours only — emphasis for keywords, plain text otherwise.
+                [ThemeTokens.SyntaxKeyword] = hotTrack,
+                [ThemeTokens.SyntaxString]  = windowText,
+                [ThemeTokens.SyntaxComment] = grayText,
+
                 [ThemeTokens.ChatUserBubble]      = window,
                 [ThemeTokens.ChatAssistantBubble] = control,
                 [ThemeTokens.ChatSystemBubble]    = info,

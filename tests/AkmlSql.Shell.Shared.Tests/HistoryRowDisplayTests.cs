@@ -53,5 +53,34 @@ namespace AkmlSql.Shell.Shared.Tests
         [InlineData(3, 2, "×3 · 2 versions")]
         public void Meta_line_summarises_runs_and_versions(int runs, int versions, string expected)
             => Assert.Equal(expected, HistoryRowDisplay.MetaFor(runs, versions));
+
+        // Spec 040 (HIS-13): a query that was never run reads "Not executed".
+        [Theory]
+        [InlineData(0, 1, 3, "Not executed")]
+        [InlineData(0, 4, 3, "Not executed · 4 versions")]
+        [InlineData(5, 1, 0, "×5")]
+        public void Drafts_read_not_executed(int runs, int versions, int status, string expected)
+            => Assert.Equal(expected, HistoryRowDisplay.MetaFor(runs, versions, status));
+
+        // Spec 040 (HIS-05): the row's second line names the server and the database.
+        [Theory]
+        [InlineData("(local)", "Northwind", "(local) · Northwind")]
+        [InlineData("(local)", null, "(local)")]
+        [InlineData(null, "Northwind", "Northwind")]
+        [InlineData(null, null, "")]
+        public void Connection_label_shows_server_and_database(string? server, string? database, string expected)
+            => Assert.Equal(expected, HistoryRowDisplay.ConnectionLabel(server, database));
+
+        [Fact]
+        public void Rows_are_grouped_like_SQL_Prompt()
+        {
+            var now = new System.DateTime(2026, 9, 30, 15, 0, 0, System.DateTimeKind.Local); // a Wednesday
+            string At(System.DateTime local) => local.ToUniversalTime().ToString("o", System.Globalization.CultureInfo.InvariantCulture);
+
+            Assert.Equal("Today", HistoryRowDisplay.DateGroupFor(At(now.AddHours(-2)), now));
+            Assert.Equal("Yesterday", HistoryRowDisplay.DateGroupFor(At(now.AddDays(-1)), now));
+            Assert.Equal("Older", HistoryRowDisplay.DateGroupFor(At(now.AddYears(-1)), now));
+            Assert.Equal("Older", HistoryRowDisplay.DateGroupFor("not a date", now));
+        }
     }
 }

@@ -12,6 +12,33 @@ using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Commands
 {
+    /// <summary>What the Options loop does after a window closes.</summary>
+    internal enum OptionsLoopStep
+    {
+        /// <summary>A theme was picked: reopen under the new brushes with the working copy.</summary>
+        Reopen,
+        /// <summary>OK: save and notify.</summary>
+        Save,
+        /// <summary>Cancel: write nothing and restore the theme the dialog opened with.</summary>
+        Cancel,
+    }
+
+    /// <summary>
+    /// Spec 040 (T023) — the Options window as the loop sees it, so the loop can be tested with a
+    /// scripted fake. <see cref="SettingsWindow"/> is the only production implementation.
+    /// </summary>
+    internal interface IOptionsDialog
+    {
+        string? InitialAgentId { get; set; }
+        /// <summary>Spec 040 (T163): the label of an option to scroll to and focus once the window loads.</summary>
+        string? InitialFocusLabel { get; set; }
+        bool ShowDialog(string? initialPageKey);
+        bool ThemeChangeRequested { get; }
+        AppSettings WorkingCopy { get; }
+        string? CurrentPageKey { get; }
+        AppSettings GetSettings();
+    }
+
     internal sealed class OptionsCommand
     {
         private OptionsCommand(Package package, OleMenuCommandService commandService)
@@ -49,35 +76,21 @@ namespace AkmlSql.Shell.Shared.Commands
         /// must use this rather than saving settings themselves, or the engine keeps serving
         /// stale settings. Returns true when settings were saved.
         /// </summary>
-        internal static bool ShowOptions(string? pageKey, string? agentId)
+        internal static bool ShowOptions(string? pageKey, string? agentId) =>
+            ShowOptions(pageKey, agentId, null);
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053, T163): as <see cref="ShowOptions(string?, string?)"/>, and once
+        /// the window has loaded it scrolls to, flashes and focuses the option labelled
+        /// <paramref name="focusLabel"/> on that page — the Command Palette's way into an option it
+        /// can't toggle in place. A label no page shows just opens the page.
+        /// </summary>
+        internal static bool ShowOptions(string? pageKey, string? agentId, string? focusLabel)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
-                var settings = ConfigManager.Load();
-
-                // Loop to support theme-change reopen: when the user switches between
-                // Dark and Light themes, the window closes and immediately reopens with
-                // the new theme applied.
-                while (true)
-                {
-                    var window = new SettingsWindow(settings) { InitialAgentId = agentId };
-                    if (window.ShowDialog(pageKey))
-                    {
-                        if (window.ThemeChangeRequested)
-                        {
-                            // Settings were already saved by the theme handler —
-                            // reload them so the next window instance picks up the new theme
-                            settings = ConfigManager.Load();
-                            continue;
-                        }
-
-                        SaveAndNotify(window.GetSettings());
-                        return true;
-                    }
-
-                    return false;
-                }
+                return RunOptionsLoop(pageKey, agentId, focusLabel);
             }
             catch (Exception ex)
             {
@@ -90,6 +103,77 @@ namespace AkmlSql.Shell.Shared.Commands
                 return false;
             }
         }
+
+        /// <summary>
+        /// Spec 040 (OPT-02, FR-004) — open, and reopen after a theme pick, until OK or Cancel.
+        /// A theme pick reopens the window with the previous window's working copy on the same
+        /// page; nothing reaches disk until OK. Cancel restores the theme the dialog opened with.
+        /// <paramref name="focusLabel"/> goes to the first window only — after a theme pick the
+        /// reopened window stays where the user was.
+        /// </summary>
+        internal static bool RunOptionsLoop(string? pageKey, string? agentId, string? focusLabel = null)
+        {
+            var settings = ConfigManager.Load();
+            var originalTheme = settings.Theme;
+
+            while (true)
+            {
+                var window = CreateDialog(settings);
+                window.InitialAgentId = agentId;
+                window.InitialFocusLabel = focusLabel;
+                bool ok = window.ShowDialog(pageKey);
+
+                switch (NextStep(ok, window.ThemeChangeRequested))
+                {
+                    case OptionsLoopStep.Reopen:
+                        settings = window.WorkingCopy;
+                        pageKey = window.CurrentPageKey ?? pageKey;
+                        focusLabel = null;
+                        continue;
+
+                    case OptionsLoopStep.Save:
+                        var saved = window.GetSettings();
+                        SaveAndNotify(saved);
+                        ApplyThemePreference(saved.Theme);
+                        return true;
+
+                    default:
+                        ApplyThemePreference(originalTheme);
+                        return false;
+                }
+            }
+        }
+
+        /// <summary>The loop's decision after a window closes. A theme pick wins over OK/Cancel.</summary>
+        internal static OptionsLoopStep NextStep(bool dialogResult, bool themeChangeRequested)
+        {
+            if (themeChangeRequested) return OptionsLoopStep.Reopen;
+            return dialogResult ? OptionsLoopStep.Save : OptionsLoopStep.Cancel;
+        }
+
+        /// <summary>
+        /// Spec 040 (T023) test seam: when set, the loop creates its windows through this instead
+        /// of <see cref="SettingsWindow"/>. Production code never sets it.
+        /// </summary>
+        internal static Func<AppSettings, IOptionsDialog>? WindowFactoryOverride { get; set; }
+
+        /// <summary>
+        /// Spec 040 (T023) test seam: when set, theme preferences go here instead of
+        /// <see cref="Ui.Theme.ThemeRegistry"/> (whose shared dictionary can't be switched from a
+        /// unit test's thread). Production code never sets it.
+        /// </summary>
+        internal static Action<string>? ThemePreferenceOverride { get; set; }
+
+        /// <summary>Applies a theme preference to every AKML surface (Options preview, OK, Cancel).</summary>
+        internal static void ApplyThemePreference(string? preference)
+        {
+            var pref = string.IsNullOrWhiteSpace(preference) ? "light" : preference!;
+            if (ThemePreferenceOverride != null) ThemePreferenceOverride(pref);
+            else Ui.Theme.ThemeRegistry.Instance.SetPreference(pref);
+        }
+
+        private static IOptionsDialog CreateDialog(AppSettings settings) =>
+            WindowFactoryOverride != null ? WindowFactoryOverride(settings) : new SettingsWindow(settings);
 
         /// <summary>
         /// Test seam (spec 037 review): when set, <see cref="SaveAndNotify"/>'s
@@ -114,6 +198,20 @@ namespace AkmlSql.Shell.Shared.Commands
 
             // FR-042: Live re-render tab colors after settings change
             try { Tabs.TabColoringManager.RepaintAllTabs(); } catch { }
+
+            // Spec 040 (OPT-01): "Show in Error List" applies to open documents at once.
+            try { Analysis.ErrorListReporter.ReapplyAll(); }
+            catch (Exception ex) { Log.Debug(ex, "Options: Error List re-apply failed"); }
+
+            // Spec 040 (T108): the status bar follows "Show active style in status bar" at once,
+            // and (T104) the Active Style menu shows a style chosen on the Format page.
+            try
+            {
+                StatusBar.StatusBarManager.ApplyStatusBarSetting(
+                    settings.Formatter.ShowProfileInStatusBar, settings.Formatter.ActiveProfile);
+            }
+            catch (Exception ex) { Log.Debug(ex, "Options: status bar update failed"); }
+            Formatting.ActiveStyleCache.Instance.RefreshNow();
 
             // T066: Notify the engine to reload its settings cache (fire-and-forget)
             var accessor = TestRpcAccessor;

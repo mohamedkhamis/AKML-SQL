@@ -34,6 +34,10 @@ namespace AkmlSql.Engine.Handlers.Control
             if (ctx.SchemaMetadata == null)
                 throw new InvalidOperationException("RpcContext.SchemaMetadata is required for ConnectionChanged dispatch.");
 
+            // A SQL Server client alias ("ServerDemo") becomes the server it points at before anything
+            // else — the guard below must judge the real target, and SqlClient can't resolve aliases.
+            request.ConnectionString = SqlAliasResolution.Apply(request.ConnectionString);
+
             // A notification has no reply to carry a refusal, so a bridge request for a target the
             // engine will not open under its own identity is logged and ignored: the session keeps
             // its previous connection. The web client runs the same check first and shows the reason.
@@ -117,22 +121,31 @@ namespace AkmlSql.Engine.Handlers.Control
                         return;
                     }
 
-                    if (captured.schemaCache.Phase == PopulationPhase.NotLoaded)
+                    // A reload of the same cache (SchemaCacheManager.ReloadMissing) may be running.
+                    if (captured.schemaCache.Phase == PopulationPhase.NotLoaded
+                        && captured.SchemaCache.TryClaimPopulation(captured.schemaCache.CacheKey))
                     {
-                        Log.Information("Starting Phase A schema population for {Db}", captured.request.DatabaseName);
-                        await captured.SchemaMetadata!.PopulatePhaseAAsync(
-                            captured.schemaCache, captured.request.ConnectionString, CancellationToken.None);
-                        captured.SchemaCache.EvictLru();
-
-                        // Phase B: load columns, FKs, parameters in background. Required for JOIN
-                        // completions and column suggestions. Skip if Phase A ended up
-                        // permission-denied (terminal).
-                        if (captured.schemaCache.Phase == PopulationPhase.PhaseA
-                            && !captured.schemaCache.PermissionDenied)
+                        try
                         {
-                            Log.Information("Starting Phase B for {Db}", captured.request.DatabaseName);
-                            await captured.SchemaMetadata.PopulatePhaseBAsync(
+                            Log.Information("Starting Phase A schema population for {Db}", captured.request.DatabaseName);
+                            await captured.SchemaMetadata!.PopulatePhaseAAsync(
                                 captured.schemaCache, captured.request.ConnectionString, CancellationToken.None);
+                            captured.SchemaCache.EvictLru();
+
+                            // Phase B: load columns, FKs, parameters in background. Required for JOIN
+                            // completions and column suggestions. Skip if Phase A ended up
+                            // permission-denied (terminal).
+                            if (captured.schemaCache.Phase == PopulationPhase.PhaseA
+                                && !captured.schemaCache.PermissionDenied)
+                            {
+                                Log.Information("Starting Phase B for {Db}", captured.request.DatabaseName);
+                                await captured.SchemaMetadata.PopulatePhaseBAsync(
+                                    captured.schemaCache, captured.request.ConnectionString, CancellationToken.None);
+                            }
+                        }
+                        finally
+                        {
+                            captured.SchemaCache.ReleasePopulation(captured.schemaCache.CacheKey);
                         }
                     }
                 }

@@ -42,6 +42,17 @@ foreach ($t in $targets) {
     New-Item -ItemType Directory -Force -Path $outDir | Out-Null
     (Get-Content -LiteralPath $src -Raw) -replace '\$version\$', $Version `
         | Set-Content -LiteralPath $dst -NoNewline -Encoding UTF8
+
+    # The pkgdef's "PID" is the version SSMS shows for AKML SQL (Help > About, installed products).
+    # The source keeps a fixed placeholder so a hand copy still registers; the installer ships this
+    # copy with the build's version (it used to ship "1.0.0" for every release).
+    $pkgSrc = Join-Path $SrcRoot "$t\$t.pkgdef"
+    if (Test-Path -LiteralPath $pkgSrc) {
+        $pkgText = Get-Content -LiteralPath $pkgSrc -Raw
+        if ($pkgText -notmatch '"PID"="[^"]*"') { throw "No `"PID`" value in $pkgSrc" }
+        $pkgText -replace '("PID"=")[^"]*(")', "`${1}$Version`${2}" `
+            | Set-Content -LiteralPath (Join-Path $outDir "$t.pkgdef") -NoNewline -Encoding UTF8
+    }
 }
 
-Write-Host "Resolved $($targets.Count) VSIX manifests @ version $Version"
+Write-Host "Resolved $($targets.Count) VSIX manifests and pkgdefs @ version $Version"

@@ -79,5 +79,12 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Distinct SQL texts recorded within this query session.</summary>
         [Key(16)]
         public int VersionCount { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-02): the query session's key. When History opens the entry, the new document
+        /// adopts it (unless another open tab holds it), so running it again continues the session.
+        /// </summary>
+        [Key(17)]
+        public string? SessionKey { get; set; }
     }
 }

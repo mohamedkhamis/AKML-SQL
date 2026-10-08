@@ -172,7 +172,7 @@ try {
                     sha256Hash       = $sha
                     releaseNotesUrl  = 'https://github.com/mohamedkhamis/AKML-SQL/releases'
                     notesSummary     = $notes
-                    minimumOsVersion = '10.0'
+                    minimumOsVersion = '10.0.17763'   # AkmlSqlSetup.iss MinVersion (Windows 10 version 1809)
                     cdnUrl           = $cdnUrl
                 }
                 $manifest.generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")

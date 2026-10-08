@@ -1,11 +1,15 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows.Threading;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Models.Productivity;
+using AkmlSql.Shell.Shared.Commands;
 using AkmlSql.Shell.Shared.Refactoring;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text.Editor;
@@ -38,6 +42,11 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
 
         // Debounce window before firing the DB-object IPC on each keystroke.
         private const int DbSearchDebounceMs = 150;
+
+        // Spec 040 (OPT-07): the Options entries, fetched — and their On/Off states read from
+        // config.json — the first time this palette lists options; a toggle made here updates its
+        // own entry after that.
+        private IReadOnlyList<OptionPaletteEntry>? _options;
 
         public CommandPaletteViewModel()
         {
@@ -128,11 +137,13 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
         /// </summary>
         public void ExecuteSelected()
         {
-            if (SelectedIndex < 0 || SelectedIndex >= FilteredCommands.Count)
+            // Enter acts on the first result when nothing is highlighted, as in any palette.
+            var index = SelectedIndex >= 0 && SelectedIndex < FilteredCommands.Count ? SelectedIndex
+                : FilteredCommands.Count > 0 ? 0 : -1;
+            if (index < 0)
                 return;
 
-            var entry = FilteredCommands[SelectedIndex];
-            ExecuteCommand(entry);
+            ExecuteCommand(FilteredCommands[index]);
         }
 
         /// <summary>
@@ -142,6 +153,24 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
         {
             try
             {
+                // Spec 040 (OPT-07, FR-053): an Options setting. A toggle flips in place and the
+                // palette stays open to show its new state; any other option closes the palette and
+                // opens Options at that row. Neither counts as command usage.
+                if (entry is OptionPaletteEntry option)
+                {
+                    if (option.IsToggle)
+                    {
+                        ToggleOption(option);
+                        CommandExecuted?.Invoke(option.Id);
+                        return;
+                    }
+
+                    CommandExecuted?.Invoke(option.Id);
+                    CloseRequested?.Invoke();
+                    OpenOption(option);
+                    return;
+                }
+
                 // Spec 030 T086 — DB-object results insert the schema-qualified name at the caret in the
                 // active editor rather than executing a command. They are not registry commands, so their
                 // usage count is not tracked.
@@ -174,6 +203,49 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             {
                 Log.Error(ex, "CommandPalette: failed to execute command {Id}", entry.Id);
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053, research R7) — flips an on/off option and saves it the way the
+        /// Options window's OK does: the current config.json is loaded into the option's page, the
+        /// CheckBox flips, the page writes its values back and <see cref="OptionsCommand.SaveAndNotify"/>
+        /// saves and tells the engine. Only that one setting changes. Returns the new state.
+        /// </summary>
+        internal static bool ToggleOption(OptionPaletteEntry entry)
+        {
+            var option = entry.Option;
+            var toggle = option.Toggle
+                ?? throw new InvalidOperationException($"'{option.Label}' is not an on/off option.");
+
+            var settings = ConfigManager.Load();
+            option.Controls.Load(settings);
+            toggle.IsChecked = toggle.IsChecked != true;
+            option.Controls.Save(settings);
+            OptionsCommand.SaveAndNotify(settings);
+
+            entry.IsOn = toggle.IsChecked == true;
+            Log.Information("CommandPalette: {Page} > {Label} turned {State}", option.PageKey, option.Label, entry.StateText);
+            return entry.IsOn;
+        }
+
+        /// <summary>
+        /// Opens Options on the option's page, scrolled to its row — after the palette has closed and
+        /// the key or click that chose it has finished, so the modal window doesn't open inside it.
+        /// </summary>
+        private static void OpenOption(OptionPaletteEntry entry)
+        {
+            var option = entry.Option;
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    OptionsCommand.ShowOptions(option.PageKey, null, option.Label);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "CommandPalette: failed to open Options at {Page} > {Label}", option.PageKey, option.Label);
+                }
+            }), DispatcherPriority.Background);
         }
 
         /// <summary>
@@ -215,13 +287,27 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
                     .Select(r => r.Entry)
                     .ToList();
 
-                FilteredCommands.Clear();
-                foreach (var entry in ranked)
-                {
-                    FilteredCommands.Add(entry);
-                }
+                // Spec 040 (OPT-07, FR-053): the Options category, once the query has at least two
+                // characters — after the commands whose name or group holds the query, but before
+                // those that only match letter by letter ("retention" is not "Create snippet from
+                // selection"), so Enter opens the option the user typed the name of.
+                var query = (_searchText ?? string.Empty).Trim();
+                bool Holds(CommandEntry e) =>
+                    e.Name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0
+                    || e.Category.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
 
-                // Reset selection to first item
+                FilteredCommands.Clear();
+                foreach (var entry in ranked.Where(Holds))
+                    FilteredCommands.Add(entry);
+                foreach (var option in MatchOptions(_searchText))
+                    FilteredCommands.Add(option);
+                foreach (var entry in ranked.Where(e => !Holds(e)))
+                    FilteredCommands.Add(entry);
+
+                // Reset selection to the first item — announced even when the index is unchanged:
+                // clearing the list drops the list box's selection, and in SSMS the list could show
+                // no highlighted row while the view model still said 0 (spec 040 scenario 41).
+                _selectedIndex = int.MinValue;
                 SelectedIndex = FilteredCommands.Count > 0 ? 0 : -1;
 
                 // Spec 030 T086 — fire a debounced DB-object search that appends matches when they return.
@@ -232,6 +318,25 @@ namespace AkmlSql.Shell.Shared.Productivity.CommandPalette
             {
                 Log.Warning(ex, "CommandPaletteViewModel: failed to refresh filtered commands");
             }
+        }
+
+        /// <summary>
+        /// The Options entries matching <paramref name="query"/>: none for a query under
+        /// <see cref="CommandRegistry.OptionsMinQueryLength"/> characters, so the catalog isn't even
+        /// built until it can be used.
+        /// </summary>
+        private List<OptionPaletteEntry> MatchOptions(string query)
+        {
+            if ((query ?? string.Empty).Trim().Length < CommandRegistry.OptionsMinQueryLength)
+                return new List<OptionPaletteEntry>();
+
+            if (_options == null)
+            {
+                _options = CommandRegistry.GetOptionEntries();
+                try { CommandRegistry.RefreshOptionStates(_options, ConfigManager.Load()); }
+                catch (Exception ex) { Log.Debug(ex, "CommandPaletteViewModel: failed to read option states"); }
+            }
+            return CommandRegistry.MatchOptions(query, _options);
         }
 
         /// <summary>

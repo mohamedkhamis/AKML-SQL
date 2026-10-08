@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Ui
@@ -42,6 +43,13 @@ namespace AkmlSql.Shell.Shared.Ui
         /// </summary>
         public bool CreateBackups { get; private set; } = true;
 
+        /// <summary>The backup checkbox's starting state: the Options setting, or on when it can't be read.</summary>
+        private static bool CreateBackupsDefault()
+        {
+            try { return Core.Config.ConfigManager.Load().Formatter.CreateBackups; }
+            catch (Exception) { return true; }
+        }
+
         /// <summary>
         /// Whether to preview only (dry run) without writing changes.
         /// </summary>
@@ -69,7 +77,8 @@ namespace AkmlSql.Shell.Shared.Ui
 
         private void InitializeComponents(string[] availableProfiles)
         {
-            Text = Constants.ProductName + " - Bulk Format";
+            Text = WindowTitles.For("Bulk format");
+            WindowIcon.Apply(this);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -140,7 +149,8 @@ namespace AkmlSql.Shell.Shared.Ui
                 Text = "Create .bak backups before formatting",
                 Location = new Point(12, 256),
                 AutoSize = true,
-                Checked = true
+                // Spec 040 (OPT-01): starts from Options › Format › Styles "Create backups".
+                Checked = CreateBackupsDefault()
             };
 
             _previewOnlyCheck = new CheckBox

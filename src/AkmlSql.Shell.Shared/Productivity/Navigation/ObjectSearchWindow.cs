@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -46,7 +47,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Navigation
         {
             _sessionId = sessionId;
 
-            Title = "AKML SQL - Object Search";
+            Title = WindowTitles.For("Object search");
             WindowStyle = WindowStyle.None;
             ResizeMode = ResizeMode.NoResize;
             Width = 600;

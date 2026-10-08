@@ -43,7 +43,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         public ImportSummaryDialog(string profileName, string summaryText, ProfileImportOptionReport[]? reports)
         {
-            Title = $"AKML SQL — Import Summary: {profileName}";
+            Title = AkmlSql.Core.Config.WindowTitles.For($"Import summary: {profileName}");
             Width = 720;
             Height = 560;
             MinWidth = 520;

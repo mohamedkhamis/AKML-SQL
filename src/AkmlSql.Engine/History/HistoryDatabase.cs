@@ -16,7 +16,7 @@ namespace AkmlSql.Engine.History;
 /// </summary>
 public sealed class HistoryDatabase : IDisposable
 {
-    private const int SchemaVersion = 2;   // v2: query_sessions + history.session_id
+    private const int SchemaVersion = 3;   // v2: query_sessions + history.session_id; v3: open_pid, FTS update trigger, ISO timestamps (spec 040)
     private const int MaxSqlTextChars = 1_048_576; // 1 MB
 
     private readonly string _connectionString;
@@ -24,9 +24,9 @@ public sealed class HistoryDatabase : IDisposable
 
     public HistoryDatabase()
     {
-        var dbDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AKML SQL", "history");
+        // Constants.AppDataPath honours AKML_APP_DATA_ROOT, so an engine built by a test never
+        // opens (and migrates or trims) the user's real history database.
+        var dbDir = Path.Combine(AkmlSql.Core.Constants.AppDataPath, "history");
         Directory.CreateDirectory(dbDir);
 
         var dbPath = Path.Combine(dbDir, "sqlhistory.db");
@@ -193,6 +193,10 @@ public sealed class HistoryDatabase : IDisposable
 
         await ExecuteNonQueryAsync(conn,
             "CREATE INDEX IF NOT EXISTS IX_history_session ON history (session_id);");
+        // Spec 040 (SC-009): the grouped view's key, so counting and paging groups stay fast at scale.
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_group ON history " +
+            "(COALESCE(CAST(session_id AS TEXT), 'hash:' || content_hash), executed_at DESC, id DESC);");
 
         // Create FTS5 virtual table for full-text search on SQL text
         await ExecuteNonQueryAsync(conn, @"
@@ -221,10 +225,122 @@ public sealed class HistoryDatabase : IDisposable
         await ExecuteNonQueryAsync(conn,
             "CREATE INDEX IF NOT EXISTS IX_history_versions_history_id ON history_versions(history_id);");
 
+        // ── Schema v3 (spec 040): open state per owning shell, FTS kept in step on updates ──
+        // open_pid: the shell process whose editor holds the query open. NULL for web rows and
+        // for rows no shell has claimed. Added with the same duplicate-column guard as v1/v2.
+        await AddColumnIfMissingAsync(conn, "ALTER TABLE history ADD COLUMN open_pid INTEGER NULL;");
+        // open_pid_started: that process's start time (UTC ticks). A PID alone is reused — by
+        // another program after a reboot, or by the next SSMS itself.
+        await AddColumnIfMissingAsync(conn, "ALTER TABLE history ADD COLUMN open_pid_started INTEGER NULL;");
+        // content_hash on snapshots, so a grouped row's version count can include them (the
+        // Versions panel lists runs AND snapshots, de-duplicated by content).
+        await AddColumnIfMissingAsync(conn, "ALTER TABLE history_versions ADD COLUMN content_hash TEXT NULL;");
+
+        // A snapshot rewrites history.sql_text; without this trigger the FTS index kept the OLD
+        // text, so search found replaced text and missed the current one (HIS-05).
+        await ExecuteNonQueryAsync(conn, @"
+            CREATE TRIGGER IF NOT EXISTS history_au AFTER UPDATE OF sql_text ON history BEGIN
+                INSERT INTO history_fts(history_fts, rowid, sql_text) VALUES ('delete', old.id, old.sql_text);
+                INSERT INTO history_fts(rowid, sql_text) VALUES (new.id, new.sql_text);
+            END;");
+
         Log.Information("History database initialized at {ConnectionString}", _connectionString);
 
+        await RepairV3Async(conn);
         await BackfillSessionsAsync(conn);
         await CorrectMisclassifiedScratchNamesAsync(conn);
+    }
+
+    private static async Task AddColumnIfMissingAsync(SqliteConnection conn, string alterSql)
+    {
+        try
+        {
+            await ExecuteNonQueryAsync(conn, alterSql);
+        }
+        catch (SqliteException ex) when (ex.Message.Contains("duplicate column"))
+        {
+            // Already migrated — expected on every start after the first.
+        }
+    }
+
+    /// <summary>Metadata key guarding <see cref="RepairV3Async"/>.</summary>
+    private const string V3RepairFlagKey = "history_v3";
+
+    /// <summary>
+    /// Spec 040 (HIS-05, data-model §2.1) — one-time repair of data written by v2 engines:
+    /// <list type="number">
+    /// <item><c>executed_at</c> and <c>history_versions.saved_at</c> written by SQLite's
+    ///   <c>datetime('now')</c> ('YYYY-MM-DD HH:MM:SS') become the insert path's ISO "o" form, so
+    ///   every comparison and sort on them is by real time;</item>
+    /// <item>orphan <c>history_versions</c> (their row was deleted) are removed;</item>
+    /// <item>snapshots get their <c>content_hash</c>;</item>
+    /// <item>the full-text index is rebuilt, since v2 snapshots changed text without updating it.</item>
+    /// </list>
+    /// Runs under BEGIN IMMEDIATE with the flag written in the same transaction — the database is
+    /// shared with the web engine and other SSMS windows, so a concurrent start either waits or
+    /// fails this pass and retries it next start (the same self-healing story as the backfill).
+    /// </summary>
+    private async Task RepairV3Async(SqliteConnection conn)
+    {
+        await using (var probe = new SqliteCommand("SELECT COUNT(*) FROM metadata WHERE key = @k;", conn))
+        {
+            probe.Parameters.AddWithValue("@k", V3RepairFlagKey);
+            if (Convert.ToInt32(await probe.ExecuteScalarAsync()) > 0) return;
+        }
+
+        try
+        {
+            await using var tx = conn.BeginTransaction(deferred: false);
+
+            async Task RunAsync(string sql)
+            {
+                await using var cmd = new SqliteCommand(sql, conn, (SqliteTransaction)tx);
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            await RunAsync(@"
+                UPDATE history
+                   SET executed_at = substr(executed_at, 1, 10) || 'T' || substr(executed_at, 12, 8) || '.0000000Z'
+                 WHERE substr(executed_at, 11, 1) = ' ';");
+            await RunAsync(@"
+                UPDATE history_versions
+                   SET saved_at = substr(saved_at, 1, 10) || 'T' || substr(saved_at, 12, 8) || '.0000000Z'
+                 WHERE substr(saved_at, 11, 1) = ' ';");
+            await RunAsync("DELETE FROM history_versions WHERE history_id NOT IN (SELECT id FROM history);");
+
+            var unhashed = new List<(long Id, string Sql)>();
+            await using (var cmd = new SqliteCommand(
+                "SELECT id, sql_text FROM history_versions WHERE content_hash IS NULL;", conn, (SqliteTransaction)tx))
+            await using (var r = await cmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync()) unhashed.Add((r.GetInt64(0), r.GetString(1)));
+            }
+            foreach (var (id, sql) in unhashed)
+            {
+                await using var upd = new SqliteCommand(
+                    "UPDATE history_versions SET content_hash = @h WHERE id = @id;", conn, (SqliteTransaction)tx);
+                upd.Parameters.AddWithValue("@h", ComputeContentHash(sql));
+                upd.Parameters.AddWithValue("@id", id);
+                await upd.ExecuteNonQueryAsync();
+            }
+
+            await RunAsync("INSERT INTO history_fts(history_fts) VALUES('rebuild');");
+
+            await using (var flag = new SqliteCommand(
+                "INSERT INTO metadata (key, value) VALUES (@k, '1') ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+                conn, (SqliteTransaction)tx))
+            {
+                flag.Parameters.AddWithValue("@k", V3RepairFlagKey);
+                await flag.ExecuteNonQueryAsync();
+            }
+
+            await tx.CommitAsync();
+            Log.Information("History: v3 repair done ({Snapshots} snapshot hashes computed, search index rebuilt)", unhashed.Count);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "History: v3 repair failed; will retry on next start");
+        }
     }
 
     /// <summary>
@@ -630,9 +746,7 @@ public sealed class HistoryDatabase : IDisposable
             return _connectionString.Substring(prefix.Length);
         }
         // Fallback to default path
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AKML SQL", "history", "sqlhistory.db");
+        return Path.Combine(AkmlSql.Core.Constants.AppDataPath, "history", "sqlhistory.db");
     }
 
     /// <summary>
@@ -690,6 +804,9 @@ public sealed class HistoryDatabase : IDisposable
 
         try
         {
+            // The star is the query's (the session's): a new run of a starred query is starred
+            // too — read before the drafts are absorbed, so a starred draft's star carries over.
+            // Unstarred, it fell to "Clear history (except starred)" and the retention purge.
             const string sql = @"
                 INSERT INTO history (
                     sql_text, truncated, server, database_name, username,
@@ -698,7 +815,10 @@ public sealed class HistoryDatabase : IDisposable
                 ) VALUES (
                     @sqlText, @truncated, @server, @database, @username,
                     @executedAt, @durationMs, @rowCount, @status, @errorMsg,
-                    @source, @tabTitle, @contentHash, 0, @sessionId
+                    @source, @tabTitle, @contentHash,
+                    CASE WHEN @sessionId IS NULL THEN 0
+                         ELSE COALESCE((SELECT MAX(is_favorite) FROM history WHERE session_id = @sessionId), 0) END,
+                    @sessionId
                 );
                 SELECT last_insert_rowid();";
 
@@ -721,6 +841,11 @@ public sealed class HistoryDatabase : IDisposable
             var result = await cmd.ExecuteScalarAsync();
             var entryId = Convert.ToInt64(result);
 
+            // Spec 040 (HIS-14, data-model §2.1): a real run replaces the session's drafts; their
+            // text stays as versions of the query.
+            if (sessionId.HasValue && status != (int)ExecutionStatus.NotExecuted)
+                await AbsorbDraftsAsync(conn, (SqliteTransaction)transaction, sessionId.Value, entryId, contentHash);
+
             await transaction.CommitAsync();
 
             Log.Debug("History entry inserted: Id={EntryId}, Hash={Hash}, Duration={Duration}ms",
@@ -732,6 +857,51 @@ public sealed class HistoryDatabase : IDisposable
         {
             await transaction.RollbackAsync();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Moves the session's draft rows (status 3) under the run <paramref name="runId"/>: each
+    /// draft's text becomes a version (unless it is the run's own text), its versions follow, and
+    /// the draft row goes.
+    /// </summary>
+    private static async Task AbsorbDraftsAsync(SqliteConnection conn, SqliteTransaction tx, long sessionId, long runId, string runHash)
+    {
+        var drafts = new List<(long Id, string Sql, string At, string Hash)>();
+        await using (var select = new SqliteCommand(
+            "SELECT id, sql_text, executed_at, content_hash FROM history WHERE session_id = @sid AND status = 3 AND id <> @run;", conn, tx))
+        {
+            select.Parameters.AddWithValue("@sid", sessionId);
+            select.Parameters.AddWithValue("@run", runId);
+            await using var reader = await select.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                drafts.Add((reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
+        }
+
+        foreach (var draft in drafts)
+        {
+            if (!string.Equals(draft.Hash, runHash, StringComparison.Ordinal))
+            {
+                await using var version = new SqliteCommand(
+                    "INSERT INTO history_versions (history_id, sql_text, saved_at, content_hash) VALUES (@run, @sql, @at, @hash);", conn, tx);
+                version.Parameters.AddWithValue("@run", runId);
+                version.Parameters.AddWithValue("@sql", draft.Sql);
+                version.Parameters.AddWithValue("@at", draft.At);
+                version.Parameters.AddWithValue("@hash", draft.Hash);
+                await version.ExecuteNonQueryAsync();
+            }
+
+            await using (var move = new SqliteCommand("UPDATE history_versions SET history_id = @run WHERE history_id = @draft;", conn, tx))
+            {
+                move.Parameters.AddWithValue("@run", runId);
+                move.Parameters.AddWithValue("@draft", draft.Id);
+                await move.ExecuteNonQueryAsync();
+            }
+            await using (var delete = new SqliteCommand("DELETE FROM history WHERE id = @draft;", conn, tx))
+            {
+                delete.Parameters.AddWithValue("@draft", draft.Id);
+                await delete.ExecuteNonQueryAsync();
+            }
         }
     }
 
@@ -832,25 +1002,37 @@ public sealed class HistoryDatabase : IDisposable
     /// </summary>
     public async Task<(List<HistoryEntryDto> Entries, int TotalCount)> SearchAsync(HistoryFilter filter)
     {
+        var page = await SearchPageAsync(filter);
+        return (page.Entries, page.TotalCount);
+    }
+
+    /// <summary>
+    /// As <see cref="SearchAsync"/>, and whether more rows follow this page — decided before the
+    /// in-memory CamelCase filter, which can leave a page short although more matches follow.
+    /// </summary>
+    public async Task<(List<HistoryEntryDto> Entries, int TotalCount, bool HasMore)> SearchPageAsync(HistoryFilter filter)
+    {
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
         var parameters = new List<SqliteParameter>();
         var whereClauses = new List<string>();
 
-        // FTS5 full-text search join
-        var fromClause = "history h";
+        // Spec 040 (HIS-07, data-model §2.4): the session name is searchable, so both queries join it.
+        var fromClause = "history h LEFT JOIN query_sessions qs ON qs.id = h.session_id";
+
+        // Free text finds a query by its SQL (full-text index) OR its name, source path, server or
+        // database (LIKE). The search clause is built twice at most: with the full-text index, and —
+        // when FTS5 rejects the query — with LIKE on the SQL instead.
+        string? searchClauseFts = null, searchClauseLike = null;
         if (!string.IsNullOrWhiteSpace(filter.SearchText))
+            (searchClauseFts, searchClauseLike) = BuildSearchClauses(filter.SearchText!, filter.SqlOnly, parameters);
+        if (searchClauseFts != null) whereClauses.Add(searchClauseFts);
+
+        if (!string.IsNullOrEmpty(filter.PathFilter))
         {
-            // Sanitize for FTS5: remove unsafe special chars but preserve FTS5 syntax:
-            //   * (prefix wildcard), " (phrase quotes), OR/NOT/AND (boolean operators)
-            var sanitized = SanitizeFts5Query(filter.SearchText);
-            if (!string.IsNullOrWhiteSpace(sanitized))
-            {
-                fromClause = "history h INNER JOIN history_fts fts ON h.id = fts.rowid";
-                whereClauses.Add("history_fts MATCH @search");
-                parameters.Add(new SqliteParameter("@search", sanitized));
-            }
+            whereClauses.Add(@"h.source LIKE '%' || @pathFilter || '%' ESCAPE '\'");
+            parameters.Add(new SqliteParameter("@pathFilter", EscapeLike(filter.PathFilter!)));
         }
 
         // Column filters
@@ -872,36 +1054,42 @@ public sealed class HistoryDatabase : IDisposable
             parameters.Add(new SqliteParameter("@status", filter.Status.Value));
         }
 
+        // Spec 040 (HIS-07): compare instants, not strings — a bound carrying an offset
+        // ("…+03:00") sorts differently from the stored "…Z" text.
         if (filter.DateFrom.HasValue)
         {
-            whereClauses.Add("h.executed_at >= @dateFrom");
+            whereClauses.Add("datetime(h.executed_at) >= datetime(@dateFrom)");
             parameters.Add(new SqliteParameter("@dateFrom",
                 filter.DateFrom.Value.ToString("o", CultureInfo.InvariantCulture)));
         }
 
         if (filter.DateTo.HasValue)
         {
-            whereClauses.Add("h.executed_at <= @dateTo");
+            whereClauses.Add("datetime(h.executed_at) <= datetime(@dateTo)");
             parameters.Add(new SqliteParameter("@dateTo",
                 filter.DateTo.Value.ToString("o", CultureInfo.InvariantCulture)));
         }
 
+        // Spec 040 (HIS-02/HIS-04): with grouping on, "starred" and "open" describe the grouped
+        // query — any run starred, any run open — so they filter the GROUP values (outer WHERE),
+        // not individual runs. Filtering runs made "closed only" list a query with an open run.
+        var groupFilters = new List<string>();
         if (filter.FavoritesOnly)
         {
-            whereClauses.Add("h.is_favorite = 1");
+            if (filter.Deduplicate) groupFilters.Add("MAX(h.is_favorite) = 1");
+            else whereClauses.Add("h.is_favorite = 1");
         }
 
         if (filter.IsOpen.HasValue)
         {
-            whereClauses.Add("h.is_open = @isOpen");
+            if (filter.Deduplicate) groupFilters.Add("MAX(h.is_open) = @isOpen");
+            else whereClauses.Add("h.is_open = @isOpen");
             parameters.Add(new SqliteParameter("@isOpen", filter.IsOpen.Value ? 1 : 0));
         }
 
         if (!string.IsNullOrEmpty(filter.NameFilter))
         {
-            whereClauses.Add(
-                "COALESCE((SELECT qs2.name FROM query_sessions qs2 WHERE qs2.id = h.session_id), h.tab_title) " +
-                "LIKE '%' || @nameFilter || '%'");
+            whereClauses.Add("COALESCE(qs.name, h.tab_title) LIKE '%' || @nameFilter || '%'");
             parameters.Add(new SqliteParameter("@nameFilter", filter.NameFilter));
         }
 
@@ -912,183 +1100,201 @@ public sealed class HistoryDatabase : IDisposable
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
             : "";
+        var groupHaving = groupFilters.Count > 0
+            ? "HAVING " + string.Join(" AND ", groupFilters)
+            : "";
 
-        // Build the count query
-        string countSql;
-        if (filter.Deduplicate)
+        // Count: groups (after the group filters) or rows. With no filter at all the groups are
+        // counted straight off IX_history_group.
+        string BuildCountSql() => !filter.Deduplicate
+            ? $"SELECT COUNT(*) FROM {fromClause} {whereClause}"
+            : whereClauses.Count == 0 && groupFilters.Count == 0
+                ? $"SELECT COUNT(DISTINCT {GroupKey}) FROM history h"
+                : $@"SELECT COUNT(*) FROM (
+                        SELECT {GroupKey} AS group_key
+                          FROM {fromClause} {whereClause}
+                         GROUP BY group_key {groupHaving}) AS g";
+
+        // FTS5 can still reject a query SanitizeFts5Query let through (a dangling OR/NOT): then
+        // search with LIKE on the SQL for every word instead (the name, path, server and database
+        // branches are LIKE already).
+        bool IsFtsError(Exception ex) =>
+            ex is Microsoft.Data.Sqlite.SqliteException se && se.SqliteErrorCode == 1 && searchClauseFts != null;
+        void UseLikeFallback(Exception ex)
         {
-            countSql = $"SELECT COUNT(DISTINCT {GroupKey}) FROM {fromClause} {whereClause}";
+            Log.Warning(ex, "FTS5 query parse error for '{SearchText}', falling back to LIKE search", filter.SearchText);
+            whereClauses.Remove(searchClauseFts!);
+            if (searchClauseLike != null) whereClauses.Add(searchClauseLike);
+            parameters.RemoveAll(p => p.ParameterName.StartsWith("@fts", StringComparison.Ordinal));
+            searchClauseFts = null;
+            whereClause = whereClauses.Count > 0 ? "WHERE " + string.Join(" AND ", whereClauses) : "";
         }
-        else
+        async Task<int> CountAsync()
         {
-            countSql = $"SELECT COUNT(*) FROM {fromClause} {whereClause}";
+            await using var countCmd = new SqliteCommand(BuildCountSql(), conn);
+            foreach (var p in parameters) countCmd.Parameters.Add(CloneParameter(p));
+            return Convert.ToInt32(await countCmd.ExecuteScalarAsync());
         }
 
-        // Execute count query — wrap in try/catch for FTS5 parse error fallback.
-        // Despite quote-balancing in SanitizeFts5Query, other malformed queries can still
-        // cause FTS5 to throw (e.g., dangling operators like trailing OR/NOT).
-        int totalCount;
-        try
+        // Spec 040 (SC-009): a filtered grouped search reads its total from the page query itself
+        // (COUNT(*) OVER () on the groups), so the runs are scanned once, not twice.
+        var countFromPage = filter.Deduplicate && (whereClauses.Count > 0 || groupFilters.Count > 0);
+        var totalCount = -1;
+        if (!countFromPage)
         {
-            await using (var countCmd = new SqliteCommand(countSql, conn))
+            try { totalCount = await CountAsync(); }
+            catch (Exception ex) when (IsFtsError(ex))
             {
-                foreach (var p in parameters)
-                {
-                    countCmd.Parameters.Add(CloneParameter(p));
-                }
-                totalCount = Convert.ToInt32(await countCmd.ExecuteScalarAsync());
+                UseLikeFallback(ex);
+                totalCount = await CountAsync();
             }
-        }
-        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1)
-        {
-            // FTS5 parse error — fall back to LIKE-based search
-            Log.Warning(ex, "FTS5 query parse error for '{SearchText}', falling back to LIKE search",
-                filter.SearchText);
-
-            // Rebuild without FTS5: replace MATCH join with LIKE on sql_text
-            fromClause = "history h";
-            var likeSearch = "%" + filter.SearchText!.Replace("%", "").Replace("_", "") + "%";
-            whereClauses.RemoveAll(c => c.Contains("history_fts MATCH"));
-            parameters.RemoveAll(p => p.ParameterName == "@search");
-            whereClauses.Add("h.sql_text LIKE @searchLike");
-            parameters.Add(new SqliteParameter("@searchLike", likeSearch));
-
-            whereClause = whereClauses.Count > 0
-                ? "WHERE " + string.Join(" AND ", whereClauses)
-                : "";
-            countSql = filter.Deduplicate
-                ? $"SELECT COUNT(DISTINCT {GroupKey}) FROM {fromClause} {whereClause}"
-                : $"SELECT COUNT(*) FROM {fromClause} {whereClause}";
-
-            await using var fallbackCountCmd = new SqliteCommand(countSql, conn);
-            foreach (var p in parameters)
-                fallbackCountCmd.Parameters.Add(CloneParameter(p));
-            totalCount = Convert.ToInt32(await fallbackCountCmd.ExecuteScalarAsync());
         }
 
         // Build the data query
-        string dataSql;
-        if (filter.Deduplicate)
+        string BuildDataSql()
         {
-            // Deduplicated view: one representative row per SESSION (falling back to per-content_hash
-            // grouping for legacy rows with no session_id — see GroupKey above), chosen
-            // deterministically by ROW_NUMBER (latest executed_at, id as tiebreak). Every scalar
-            // column therefore comes from that single latest row. This replaces the prior
-            // GROUP-BY-with-bare-columns query, where SQLite (with several MAX() aggregates present)
-            // pulled name/status/row-count/duration from an ARBITRARY row in the group — so a repeated
-            // query could show a stale status or the wrong duration. exec_count is the number of
-            // executions MATCHING THE CURRENT FILTER (equal to the total when unfiltered, because
-            // COUNT(*) OVER runs after {whereClause}); version_count is the number of DISTINCT
-            // content_hash values in the partition; favourite/open are "any version" (MAX over the
-            // partition, matching the FavoritesOnly filter); and the display name comes from the
-            // joined query_sessions row (falling back to the latest row's own tab_title) — the name
-            // now lives in exactly one query_sessions row, so no window function is needed to
-            // reconstruct it across re-executions. The {whereClause} filters live INSIDE the windowed
-            // subquery so COUNT()/ROW_NUMBER() see the filtered set; only `rn = 1` is applied outside.
-            // version_count (distinct content_hash per partition) cannot be COUNT(DISTINCT ...)
-            // OVER(...) — SQLite rejects DISTINCT inside a window aggregate ("DISTINCT is not
-            // supported for window functions"). Standard workaround: DENSE_RANK() over the
-            // partition ordered by content_hash assigns 1..N to the N distinct hashes, then
-            // MAX(that rank) per partition (one level up, since a window function cannot take
-            // another window function as its own argument) recovers the distinct count. Hence
-            // three levels: base (raw window aggregates incl. hash_rank/rn) → ranked (adds
-            // version_count from base.hash_rank) → outer (applies rn = 1 + paging).
-            dataSql = $@"
-                SELECT
-                    ranked.id,
-                    substr(ranked.sql_text, 1, 500) as sql_text,
-                    ranked.server,
-                    ranked.database_name,
-                    ranked.username,
-                    ranked.executed_at,
-                    ranked.duration_ms,
-                    ranked.row_count,
-                    ranked.status,
-                    ranked.error_msg,
-                    ranked.source,
-                    ranked.session_name as tab_title,
-                    ranked.is_favorite,
-                    ranked.exec_count,
-                    ranked.version_count,
-                    ranked.content_hash,
-                    ranked.is_open
-                FROM (
+            if (filter.Deduplicate)
+            {
+                // Deduplicated view: one representative row per SESSION (falling back to per-content_hash
+                // grouping for legacy rows with no session_id — see GroupKey above): the group's latest
+                // run (latest executed_at, id as tiebreak). Every scalar column comes from that row.
+                // exec_count is the number of runs (not drafts) MATCHING THE CURRENT FILTER;
+                // favourite/open are "any run" and filter the groups (HAVING); the display name comes
+                // from the joined query_sessions row (falling back to the latest row's own tab_title).
+                //
+                // Spec 040 (HIS-04): version_count is the number of DISTINCT contents across the
+                // group's runs AND snapshots — the same set the Versions panel lists
+                // (GetVersionsForGroupAsync) — so "M versions" on the row equals the panel's count.
+                // It is computed only for the page's rows, through the session index or, for legacy
+                // rows, the hash index.
+                //
+                // Spec 040 (SC-009): aggregate each group once, page the groups, then read only the page's
+                // representative rows. Window functions over every run cost ~400 ms at 100,000 runs; this
+                // is ~150 ms. The representative is the latest run (executed_at, then id): the fixed-width
+                // ISO timestamp followed by the zero-padded id sorts in exactly that order.
+                return $@"
+                    WITH g AS (
+                        SELECT {GroupKey} AS gk,
+                               MAX(h.executed_at || printf('%019d', h.id)) AS k,
+                               SUM(CASE WHEN h.status <> 3 THEN 1 ELSE 0 END) AS exec_count,
+                               MAX(h.is_favorite) AS is_favorite,
+                               MAX(h.is_open) AS is_open
+                          FROM {fromClause}
+                          {whereClause}
+                         GROUP BY gk
+                         {groupHaving}
+                    ),
+                    page AS (
+                        SELECT CAST(substr(k, length(k) - 18) AS INTEGER) AS rep_id, exec_count, is_favorite, is_open, k,
+                               COUNT(*) OVER () AS total_groups
+                          FROM g
+                         ORDER BY k DESC
+                         LIMIT @limit OFFSET @offset
+                    )
                     SELECT
-                        base.*,
-                        MAX(base.hash_rank) OVER (PARTITION BY base.group_key) as version_count
-                    FROM (
-                        SELECT
-                            h.id, h.sql_text, h.server, h.database_name, h.username,
-                            h.executed_at, h.duration_ms, h.row_count, h.status, h.error_msg,
-                            h.source, h.content_hash,
-                            COALESCE(qs.name, h.tab_title, '') as session_name,
-                            {GroupKey} as group_key,
-                            COUNT(*)           OVER (PARTITION BY {GroupKey}) as exec_count,
-                            MAX(h.is_favorite) OVER (PARTITION BY {GroupKey}) as is_favorite,
-                            MAX(h.is_open)     OVER (PARTITION BY {GroupKey}) as is_open,
-                            DENSE_RANK()       OVER (PARTITION BY {GroupKey}
-                                                     ORDER BY h.content_hash) as hash_rank,
-                            ROW_NUMBER()       OVER (PARTITION BY {GroupKey}
-                                                     ORDER BY h.executed_at DESC, h.id DESC) as rn
-                        FROM {fromClause}
-                        LEFT JOIN query_sessions qs ON qs.id = h.session_id
-                        {whereClause}
-                    ) AS base
-                ) AS ranked
-                WHERE ranked.rn = 1
-                ORDER BY ranked.executed_at DESC, ranked.id DESC
-                LIMIT @limit OFFSET @offset";
+                        h.id,
+                        substr(h.sql_text, 1, 500) as sql_text,
+                        h.server,
+                        h.database_name,
+                        h.username,
+                        h.executed_at,
+                        h.duration_ms,
+                        h.row_count,
+                        h.status,
+                        h.error_msg,
+                        h.source,
+                        COALESCE(qs.name, h.tab_title, '') as tab_title,
+                        page.is_favorite,
+                        page.exec_count,
+                        (SELECT COUNT(*) FROM (
+                            SELECT h2.content_hash AS ch FROM history h2 WHERE h2.session_id = h.session_id
+                            UNION
+                            SELECT h2.content_hash FROM history h2
+                             WHERE h.session_id IS NULL AND h2.session_id IS NULL AND h2.content_hash = h.content_hash
+                            UNION
+                            SELECT v.content_hash FROM history_versions v
+                             WHERE v.content_hash IS NOT NULL
+                               AND v.history_id IN (SELECT h3.id FROM history h3 WHERE h3.session_id = h.session_id)
+                            UNION
+                            SELECT v.content_hash FROM history_versions v
+                             WHERE v.content_hash IS NOT NULL AND h.session_id IS NULL
+                               AND v.history_id IN (SELECT h3.id FROM history h3
+                                                     WHERE h3.session_id IS NULL AND h3.content_hash = h.content_hash)
+                        )) as version_count,
+                        h.content_hash,
+                        page.is_open,
+                        qs.session_key,
+                        page.total_groups
+                    FROM page
+                    JOIN history h ON h.id = page.rep_id
+                    LEFT JOIN query_sessions qs ON qs.id = h.session_id
+                    ORDER BY page.k DESC";
+            }
+            else
+            {
+                // Non-dedup rows need the same session-name resolution as the dedup branch above
+                // (COALESCE(qs.name, h.tab_title, '')) — otherwise, with Deduplicate off, a row whose
+                // session was renamed keeps showing its pre-rename tab_title, and a row with no
+                // tab_title at all (unsaved scratch tab) falls straight through to raw SQL text
+                // instead of its auto-assigned query-NN session name.
+                return $@"
+                    SELECT
+                        h.id,
+                        substr(h.sql_text, 1, 500) as sql_text,
+                        h.server,
+                        h.database_name,
+                        h.username,
+                        h.executed_at,
+                        h.duration_ms,
+                        h.row_count,
+                        h.status,
+                        h.error_msg,
+                        h.source,
+                        COALESCE(qs.name, h.tab_title, '') as tab_title,
+                        h.is_favorite,
+                        CASE WHEN h.status <> 3 THEN 1 ELSE 0 END as exec_count,
+                        h.content_hash,
+                        h.is_open,
+                        qs.session_key
+                    FROM {fromClause}
+                    {whereClause}
+                    ORDER BY h.executed_at DESC
+                    LIMIT @limit OFFSET @offset";
+            }
         }
-        else
+
+        async Task<(SqliteCommand Cmd, SqliteDataReader Reader)> OpenDataAsync()
         {
-            // Non-dedup rows need the same session-name resolution as the dedup branch above
-            // (COALESCE(qs.name, h.tab_title, '')) — otherwise, with Deduplicate off, a row whose
-            // session was renamed keeps showing its pre-rename tab_title, and a row with no
-            // tab_title at all (unsaved scratch tab) falls straight through to raw SQL text
-            // instead of its auto-assigned query-NN session name.
-            dataSql = $@"
-                SELECT
-                    h.id,
-                    substr(h.sql_text, 1, 500) as sql_text,
-                    h.server,
-                    h.database_name,
-                    h.username,
-                    h.executed_at,
-                    h.duration_ms,
-                    h.row_count,
-                    h.status,
-                    h.error_msg,
-                    h.source,
-                    COALESCE(qs.name, h.tab_title, '') as tab_title,
-                    h.is_favorite,
-                    1 as exec_count,
-                    h.content_hash,
-                    h.is_open
-                FROM {fromClause}
-                LEFT JOIN query_sessions qs ON qs.id = h.session_id
-                {whereClause}
-                ORDER BY h.executed_at DESC
-                LIMIT @limit OFFSET @offset";
+            var cmd = new SqliteCommand(BuildDataSql(), conn);
+            foreach (var p in parameters) cmd.Parameters.Add(CloneParameter(p));
+            cmd.Parameters.AddWithValue("@limit", filter.Limit);
+            cmd.Parameters.AddWithValue("@offset", filter.Offset);
+            try { return (cmd, await cmd.ExecuteReaderAsync()); }
+            catch { await cmd.DisposeAsync(); throw; }
         }
 
         var entries = new List<HistoryEntryDto>();
-        await using var dataCmd = new SqliteCommand(dataSql, conn);
-        foreach (var p in parameters)
+        SqliteCommand dataCmd;
+        SqliteDataReader reader;
+        try { (dataCmd, reader) = await OpenDataAsync(); }
+        catch (Exception ex) when (IsFtsError(ex))
         {
-            dataCmd.Parameters.Add(CloneParameter(p));
+            UseLikeFallback(ex);
+            (dataCmd, reader) = await OpenDataAsync();
         }
-        dataCmd.Parameters.AddWithValue("@limit", filter.Limit);
-        dataCmd.Parameters.AddWithValue("@offset", filter.Offset);
-
-        await using var reader = await dataCmd.ExecuteReaderAsync();
+        await using var dataCmdScope = dataCmd;
+        await using var readerScope = reader;
         // content_hash/is_open shift by one position in the Deduplicate branch (version_count is
         // inserted ahead of them), so look them up by name rather than trusting a fixed ordinal
         // shared across both branches' differently-shaped SELECT lists.
         var contentHashOrdinal = reader.GetOrdinal("content_hash");
         var isOpenOrdinal = reader.GetOrdinal("is_open");
         var versionCountOrdinal = filter.Deduplicate ? reader.GetOrdinal("version_count") : -1;
+        var sessionKeyOrdinal = reader.GetOrdinal("session_key");
+        var totalOrdinal = countFromPage ? reader.GetOrdinal("total_groups") : -1;
         while (await reader.ReadAsync())
         {
+            if (totalOrdinal >= 0 && totalCount < 0) totalCount = reader.GetInt32(totalOrdinal);
             entries.Add(new HistoryEntryDto
             {
                 Id = reader.GetInt64(0),
@@ -1109,9 +1315,17 @@ public sealed class HistoryDatabase : IDisposable
                 IsOpen = reader.GetInt32(isOpenOrdinal) != 0,
                 VersionCount = versionCountOrdinal < 0
                     ? 1
-                    : (reader.IsDBNull(versionCountOrdinal) ? 1 : reader.GetInt32(versionCountOrdinal))
+                    : (reader.IsDBNull(versionCountOrdinal) ? 1 : Math.Max(1, reader.GetInt32(versionCountOrdinal))),
+                SessionKey = reader.IsDBNull(sessionKeyOrdinal) ? null : reader.GetString(sessionKeyOrdinal)
             });
         }
+
+        // An empty page (no match, or paged past the end) carries no total.
+        if (totalCount < 0)
+            totalCount = filter.Offset == 0 ? 0 : await CountAsync();
+
+        // Rows left after this page, counted before the post-filter below shortens it.
+        var hasMore = entries.Count == filter.Limit && filter.Offset + entries.Count < totalCount;
 
         // Apply CamelCase post-filtering in memory if CamelCaseTokens are provided.
         // This filters results to only entries whose sql_text contains words matching
@@ -1132,7 +1346,33 @@ public sealed class HistoryDatabase : IDisposable
         Log.Debug("History search completed: {Count} entries returned, {Total} total matches",
             entries.Count, totalCount);
 
-        return (entries, totalCount);
+        return (entries, totalCount, hasMore);
+    }
+
+    /// <summary>Most values the filter menu lists per column.</summary>
+    internal const int MaxFilterValues = 500;
+
+    /// <summary>
+    /// Spec 040 (HIS-07) — the distinct, non-empty servers and databases in History, sorted, at
+    /// most <see cref="MaxFilterValues"/> each, for History's filter menu.
+    /// </summary>
+    public async Task<(List<string> Servers, List<string> Databases)> GetFilterValuesAsync()
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        async Task<List<string>> Distinct(string column)
+        {
+            var values = new List<string>();
+            await using var cmd = new SqliteCommand(
+                $"SELECT DISTINCT {column} FROM history WHERE {column} IS NOT NULL AND TRIM({column}) <> '' " +
+                $"ORDER BY {column} COLLATE NOCASE LIMIT {MaxFilterValues};", conn);
+            await using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync()) values.Add(reader.GetString(0));
+            return values;
+        }
+
+        return (await Distinct("server"), await Distinct("database_name"));
     }
 
     /// <summary>
@@ -1179,6 +1419,59 @@ public sealed class HistoryDatabase : IDisposable
     /// Retrieves the full (non-truncated) SQL text for a single history entry by ID.
     /// Returns null if the entry does not exist.
     /// </summary>
+    /// <summary>
+    /// Spec 040 (HIS-14): the given entries with their full text, query name and session key, in
+    /// the order asked (restore on start reopens them). Unknown ids are left out; at most 500.
+    /// </summary>
+    public async Task<List<HistoryEntryDto>> GetEntriesAsync(IReadOnlyList<long> ids)
+    {
+        var result = new List<HistoryEntryDto>();
+        if (ids == null || ids.Count == 0) return result;
+        var wanted = ids.Distinct().Take(500).ToList();
+
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = new SqliteCommand { Connection = conn };
+        var names = new List<string>(wanted.Count);
+        for (var i = 0; i < wanted.Count; i++)
+        {
+            names.Add("@id" + i);
+            cmd.Parameters.AddWithValue("@id" + i, wanted[i]);
+        }
+        cmd.CommandText = $@"
+            SELECT h.id, h.sql_text, h.server, h.database_name, h.executed_at, h.status, h.source,
+                   COALESCE(qs.name, h.tab_title), h.is_favorite, h.is_open, qs.session_key
+              FROM history h LEFT JOIN query_sessions qs ON qs.id = h.session_id
+             WHERE h.id IN ({string.Join(", ", names)});";
+
+        var byId = new Dictionary<long, HistoryEntryDto>();
+        await using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var entry = new HistoryEntryDto
+                {
+                    Id = reader.GetInt64(0),
+                    SqlText = reader.GetString(1),
+                    Server = reader.IsDBNull(2) ? null : reader.GetString(2),
+                    Database = reader.IsDBNull(3) ? null : reader.GetString(3),
+                    ExecutedAt = reader.GetString(4),
+                    Status = reader.GetInt32(5),
+                    Source = reader.IsDBNull(6) ? null : reader.GetString(6),
+                    TabTitle = reader.IsDBNull(7) ? null : reader.GetString(7),
+                    IsFavorite = reader.GetInt32(8) != 0,
+                    IsOpen = reader.GetInt32(9) != 0,
+                    SessionKey = reader.IsDBNull(10) ? null : reader.GetString(10),
+                };
+                byId[entry.Id] = entry;
+            }
+        }
+
+        foreach (var id in wanted)
+            if (byId.TryGetValue(id, out var entry)) result.Add(entry);
+        return result;
+    }
+
     public async Task<string?> GetFullSqlAsync(long entryId)
     {
         await using var conn = new SqliteConnection(_connectionString);
@@ -1270,20 +1563,293 @@ public sealed class HistoryDatabase : IDisposable
         await cmd.ExecuteNonQueryAsync();
     }
 
-    /// <summary>
-    /// Marks all entries with a given tab title as closed (is_open = 0).
-    /// </summary>
-    public async Task CloseByTabTitleAsync(string tabTitle)
-    {
-        if (string.IsNullOrEmpty(tabTitle)) return;
+    // ─── Spec 040 (HIS-02, HIS-04): grouped rows and open state ─────────────────
 
+    /// <summary>
+    /// The grouped row an entry belongs to, matching SearchAsync's GroupKey: its query session,
+    /// or — for a legacy row with no session — every session-less row with the same content hash.
+    /// Null when the entry does not exist.
+    /// </summary>
+    private static async Task<(long? SessionId, string ContentHash)?> ResolveGroupAsync(
+        SqliteConnection conn, long entryId, SqliteTransaction? tx = null)
+    {
+        await using var cmd = new SqliteCommand(
+            "SELECT session_id, content_hash FROM history WHERE id = @id;", conn, tx);
+        cmd.Parameters.AddWithValue("@id", entryId);
+        await using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+        return (r.IsDBNull(0) ? (long?)null : r.GetInt64(0), r.GetString(1));
+    }
+
+    /// <summary>WHERE fragment (alias <c>h</c>) selecting a group's rows; binds @gsid or @ghash.</summary>
+    private static string GroupPredicate((long? SessionId, string ContentHash) group, SqliteCommand cmd)
+    {
+        if (group.SessionId.HasValue)
+        {
+            cmd.Parameters.AddWithValue("@gsid", group.SessionId.Value);
+            return "h.session_id = @gsid";
+        }
+        cmd.Parameters.AddWithValue("@ghash", group.ContentHash);
+        return "h.session_id IS NULL AND h.content_hash = @ghash";
+    }
+
+    /// <summary>
+    /// Deletes a whole grouped query in one transaction: its snapshots, its runs, then its query
+    /// session. Returns the number of runs deleted (0 when the entry does not exist).
+    /// </summary>
+    public Task<int> DeleteGroupAsync(long entryId) => DeleteGroupsAsync(new[] { entryId });
+
+    /// <summary>
+    /// Deletes the grouped query of each of <paramref name="entryIds"/> — every run, their versions
+    /// and the session — in one transaction (spec 040: Delete on several selected rows). Ids of
+    /// the same query, or of one already gone, count once. Returns the number of runs deleted.
+    /// </summary>
+    public async Task<int> DeleteGroupsAsync(IReadOnlyList<long> entryIds)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var tx = conn.BeginTransaction(deferred: false);
+
+        var deleted = 0;
+        foreach (var entryId in entryIds.Distinct())
+        {
+            var group = await ResolveGroupAsync(conn, entryId, tx);
+            if (group == null) continue;
+
+            await using (var versions = new SqliteCommand { Connection = conn, Transaction = tx })
+            {
+                versions.CommandText =
+                    $"DELETE FROM history_versions WHERE history_id IN (SELECT h.id FROM history h WHERE {GroupPredicate(group.Value, versions)});";
+                await versions.ExecuteNonQueryAsync();
+            }
+
+            int runs;
+            await using (var rows = new SqliteCommand { Connection = conn, Transaction = tx })
+            {
+                rows.CommandText = $"DELETE FROM history AS h WHERE {GroupPredicate(group.Value, rows)};";
+                runs = await rows.ExecuteNonQueryAsync();
+            }
+
+            if (group.Value.SessionId.HasValue)
+            {
+                await using var session = new SqliteCommand("DELETE FROM query_sessions WHERE id = @sid;", conn, tx);
+                session.Parameters.AddWithValue("@sid", group.Value.SessionId.Value);
+                await session.ExecuteNonQueryAsync();
+            }
+
+            deleted += runs;
+            Log.Information("History: deleted grouped query of entry {Id} ({Count} runs)", entryId, runs);
+        }
+
+        await tx.CommitAsync();
+        return deleted;
+    }
+
+    /// <summary>
+    /// Stars or un-stars a whole grouped query: every run is set to <c>1 - MAX(is_favorite)</c>
+    /// (the row shows starred when any run is). Returns the new state.
+    /// </summary>
+    public async Task<bool> ToggleFavoriteGroupAsync(long entryId)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var tx = conn.BeginTransaction(deferred: false);
+
+        var group = await ResolveGroupAsync(conn, entryId, tx);
+        if (group == null) return false;
+
+        int current;
+        await using (var read = new SqliteCommand { Connection = conn, Transaction = tx })
+        {
+            read.CommandText = $"SELECT COALESCE(MAX(h.is_favorite), 0) FROM history h WHERE {GroupPredicate(group.Value, read)};";
+            current = Convert.ToInt32(await read.ExecuteScalarAsync());
+        }
+
+        var next = current == 0 ? 1 : 0;
+        await using (var write = new SqliteCommand { Connection = conn, Transaction = tx })
+        {
+            write.CommandText = $"UPDATE history AS h SET is_favorite = @fav WHERE {GroupPredicate(group.Value, write)};";
+            write.Parameters.AddWithValue("@fav", next);
+            await write.ExecuteNonQueryAsync();
+        }
+
+        await tx.CommitAsync();
+        return next == 1;
+    }
+
+    /// <summary>
+    /// The versions of a grouped query: its runs and snapshots, one per distinct content (the
+    /// newest occurrence), newest first with the id as tiebreak. The count equals the grouped
+    /// row's <c>VersionCount</c>.
+    /// </summary>
+    public async Task<List<(long Id, string SqlText, string SavedAt, string? Server, string? Database)>> GetVersionsForGroupAsync(long entryId)
+    {
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        await using var cmd = new SqliteCommand(
-            "UPDATE history SET is_open = 0 WHERE tab_title = @title AND is_open = 1", conn);
-        cmd.Parameters.AddWithValue("@title", tabTitle);
+        var group = await ResolveGroupAsync(conn, entryId);
+        if (group == null) return new List<(long, string, string, string?, string?)>();
+
+        var all = new List<(long Id, string Sql, string At, string Hash, string? Server, string? Database)>();
+        await using (var cmd = new SqliteCommand { Connection = conn })
+        {
+            // Spec 040 (HIS-12): each version carries the server and database it ran on (a
+            // snapshot: its run's), for the versions pane.
+            var predicate = GroupPredicate(group.Value, cmd);
+            cmd.CommandText = $@"
+                SELECT h.id, h.sql_text, h.executed_at, h.content_hash, h.server, h.database_name FROM history h WHERE {predicate}
+                UNION ALL
+                SELECT v.id, v.sql_text, v.saved_at, COALESCE(v.content_hash, ''), h.server, h.database_name
+                  FROM history_versions v JOIN history h ON h.id = v.history_id WHERE {predicate};";
+            await using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync())
+            {
+                var sql = r.GetString(1);
+                var hash = r.GetString(3);
+                all.Add((r.GetInt64(0), sql, r.GetString(2), hash.Length == 0 ? ComputeContentHash(sql) : hash,
+                    r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5)));
+            }
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        return all
+            .OrderByDescending(v => ParseStoredTime(v.At))
+            .ThenByDescending(v => v.Id)
+            .Where(v => seen.Add(v.Hash))
+            .Select(v => (v.Id, v.Sql, v.At, v.Server, v.Database))
+            .ToList();
+    }
+
+    /// <summary>A stored timestamp (ISO "o", or a legacy 'YYYY-MM-DD HH:MM:SS' UTC value) as UTC.</summary>
+    private static DateTime ParseStoredTime(string value) =>
+        DateTime.TryParse(value, CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var t)
+            ? t
+            : DateTime.MinValue;
+
+    /// <summary>
+    /// Opens or closes every run of a query session. Open records the owning shell process;
+    /// close clears it.
+    /// </summary>
+    public async Task SetOpenStatusBySessionAsync(string sessionKey, bool isOpen, int ownerPid)
+    {
+        if (string.IsNullOrEmpty(sessionKey)) return;
+
+        var started = isOpen ? ProcessStartTicks(ownerPid) : null;
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+        await using var cmd = new SqliteCommand(@"
+            UPDATE history SET is_open = @open, open_pid = @pid, open_pid_started = @started
+             WHERE session_id = (SELECT id FROM query_sessions WHERE session_key = @key);", conn);
+        cmd.Parameters.AddWithValue("@open", isOpen ? 1 : 0);
+        cmd.Parameters.AddWithValue("@pid", isOpen ? ownerPid : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@started", (object?)started ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@key", sessionKey);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// The start time (UTC ticks) of the process <c>pid</c>, or null when none is running. With
+    /// the PID it identifies a shell: PIDs are reused. Replaceable for tests.
+    /// </summary>
+    internal Func<int, long?> ProcessStartTicks { get; set; } = DefaultProcessStartTicks;
+
+    private static long? DefaultProcessStartTicks(int pid)
+    {
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(pid);
+            return p.HasExited ? null : p.StartTime.ToUniversalTime().Ticks;
+        }
+        catch (ArgumentException) { return null; }
+        catch (InvalidOperationException) { return null; }
+        catch (System.ComponentModel.Win32Exception) { return null; }
+    }
+
+    /// <summary>
+    /// Brings open state in line with reality when a shell starts:
+    /// <list type="bullet">
+    /// <item>closes rows <paramref name="ownerPid"/> owns whose session is not in <paramref name="openKeys"/>;</item>
+    /// <item>closes rows owned by a process that is no longer running (SSMS exited or crashed with
+    ///   the query open) and returns those groups' representative entry ids, newest first — the
+    ///   queries to offer for restore.</item>
+    /// </list>
+    /// Rows with no owner (web rows) and rows owned by other live shells are left alone.
+    /// </summary>
+    public async Task<long[]> ReconcileOpenAsync(int ownerPid, string[] openKeys)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // This shell's rows: its PID and its start time. A row with the PID but another start time
+        // is a dead SSMS's whose PID this one was given. (No start time stored: rows from before
+        // it was recorded, matched by PID as they always were.)
+        var ownStarted = ProcessStartTicks(ownerPid);
+        var ownRows = ownStarted == null
+            ? "open_pid = @pid"
+            : "open_pid = @pid AND (open_pid_started IS NULL OR open_pid_started = @ownStarted)";
+
+        // 1. This shell's own rows whose document is no longer open.
+        await using (var mine = new SqliteCommand { Connection = conn })
+        {
+            var keyParams = new List<string>();
+            for (int i = 0; i < (openKeys?.Length ?? 0); i++)
+            {
+                keyParams.Add("@k" + i);
+                mine.Parameters.AddWithValue("@k" + i, openKeys![i]);
+            }
+            var stillOpen = keyParams.Count == 0
+                ? ""
+                : $" AND (session_id IS NULL OR session_id NOT IN (SELECT id FROM query_sessions WHERE session_key IN ({string.Join(", ", keyParams)})))";
+            mine.CommandText = $"UPDATE history SET is_open = 0, open_pid = NULL, open_pid_started = NULL WHERE ({ownRows}){stillOpen};";
+            mine.Parameters.AddWithValue("@pid", ownerPid);
+            if (ownStarted != null) mine.Parameters.AddWithValue("@ownStarted", ownStarted.Value);
+            await mine.ExecuteNonQueryAsync();
+        }
+
+        // 2. Rows owned by shells that are gone: no process with that PID, or one started at
+        //    another time (the PID was reused).
+        var owners = new List<(int Pid, long? Started)>();
+        await using (var cmd = new SqliteCommand(
+            $"SELECT DISTINCT open_pid, open_pid_started FROM history WHERE is_open = 1 AND open_pid IS NOT NULL AND NOT ({ownRows});", conn))
+        {
+            cmd.Parameters.AddWithValue("@pid", ownerPid);
+            if (ownStarted != null) cmd.Parameters.AddWithValue("@ownStarted", ownStarted.Value);
+            await using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync()) owners.Add((r.GetInt32(0), r.IsDBNull(1) ? null : r.GetInt64(1)));
+        }
+
+        var dead = owners.Where(o => ProcessStartTicks(o.Pid) is not { } actual || (o.Started != null && o.Started != actual)).ToList();
+        if (dead.Count == 0) return Array.Empty<long>();
+
+        // (open_pid, open_pid_started) pairs as SQL; IS matches a NULL start time too.
+        string DeadOwners(string alias) => string.Join(" OR ", dead.Select(o =>
+            $"({alias}open_pid = {o.Pid.ToString(CultureInfo.InvariantCulture)} AND {alias}open_pid_started IS "
+            + (o.Started?.ToString(CultureInfo.InvariantCulture) ?? "NULL") + ")"));
+        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash)";
+
+        var restorable = new List<long>();
+        await using (var cmd = new SqliteCommand($@"
+            SELECT id FROM (
+                SELECT h.id, h.executed_at,
+                       ROW_NUMBER() OVER (PARTITION BY {GroupKey} ORDER BY h.executed_at DESC, h.id DESC) AS rn
+                  FROM history h
+                 WHERE {GroupKey} IN (SELECT {GroupKey} FROM history h WHERE h.is_open = 1 AND ({DeadOwners("h.")}))
+            ) WHERE rn = 1
+            ORDER BY executed_at DESC, id DESC;", conn))
+        await using (var r = await cmd.ExecuteReaderAsync())
+        {
+            while (await r.ReadAsync()) restorable.Add(r.GetInt64(0));
+        }
+
+        await using (var close = new SqliteCommand(
+            $"UPDATE history SET is_open = 0, open_pid = NULL, open_pid_started = NULL WHERE {DeadOwners(string.Empty)};", conn))
+        {
+            await close.ExecuteNonQueryAsync();
+        }
+
+        Log.Information("History: reconciled open state — {Count} queries were open when their SSMS closed", restorable.Count);
+        return restorable.ToArray();
     }
 
     /// <summary>
@@ -1732,33 +2298,66 @@ public sealed class HistoryDatabase : IDisposable
     /// surface change, not a same-file fix, so it is left as a follow-up rather than invented here.
     /// </para>
     /// </summary>
-    public async Task<bool> SaveVersionBySourceAsync(string source, string sqlText)
+    public async Task<bool> SaveVersionBySourceAsync(string source, string sqlText, string? sessionKey = null)
     {
-        if (string.IsNullOrEmpty(source) || string.IsNullOrWhiteSpace(sqlText)) return false;
+        if ((string.IsNullOrEmpty(source) && string.IsNullOrEmpty(sessionKey)) || string.IsNullOrWhiteSpace(sqlText)) return false;
 
         await using var conn = new SqliteConnection(_connectionString);
         await conn.OpenAsync();
 
-        // Find the most recent entry for this document, by id (insertion order) -- see the
-        // Finding 4 remarks above for why executed_at DESC is unsafe here.
-        await using var findCmd = new SqliteCommand(
-            "SELECT id FROM history WHERE source = @source ORDER BY id DESC LIMIT 1", conn);
-        findCmd.Parameters.AddWithValue("@source", source);
-        var result = await findCmd.ExecuteScalarAsync();
+        // Spec 040 (T064): the session's own newest row when the shell knows the session — the
+        // path alone can match another session's row for the same file. Otherwise the most recent
+        // entry for this document, by id (insertion order; see the Finding 4 remarks above).
+        object? result = null;
+        if (!string.IsNullOrEmpty(sessionKey))
+        {
+            await using var bySession = new SqliteCommand(@"
+                SELECT h.id FROM history h JOIN query_sessions qs ON qs.id = h.session_id
+                 WHERE qs.session_key = @key ORDER BY h.id DESC LIMIT 1", conn);
+            bySession.Parameters.AddWithValue("@key", sessionKey);
+            result = await bySession.ExecuteScalarAsync();
+        }
+        // Only a caller that names no session falls back to the path: with a session named, a
+        // path match can be another session's row (SQLQueryN.sql repeats across SSMS starts).
+        if (result == null && string.IsNullOrEmpty(sessionKey) && !string.IsNullOrEmpty(source))
+        {
+            await using var findCmd = new SqliteCommand(
+                "SELECT id FROM history WHERE source = @source ORDER BY id DESC LIMIT 1", conn);
+            findCmd.Parameters.AddWithValue("@source", source);
+            result = await findCmd.ExecuteScalarAsync();
+        }
         if (result == null) return false;
 
         var historyId = Convert.ToInt64(result);
+        var hash = ComputeContentHash(sqlText);
+
+        // The text the query already has is not a new version: the autosave and every tab switch
+        // snapshot the same unchanged text again and again.
+        await using (var currentCmd = new SqliteCommand("SELECT sql_text FROM history WHERE id = @id", conn))
+        {
+            currentCmd.Parameters.AddWithValue("@id", historyId);
+            if (await currentCmd.ExecuteScalarAsync() is string current && string.Equals(current, sqlText, StringComparison.Ordinal))
+                return true;
+        }
+
+        var now = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
         await using var insertCmd = new SqliteCommand(@"
-            INSERT INTO history_versions (history_id, sql_text)
-            VALUES (@historyId, @sqlText);", conn);
+            INSERT INTO history_versions (history_id, sql_text, saved_at, content_hash)
+            VALUES (@historyId, @sqlText, @savedAt, @hash);", conn);
         insertCmd.Parameters.AddWithValue("@historyId", historyId);
         insertCmd.Parameters.AddWithValue("@sqlText", sqlText);
+        insertCmd.Parameters.AddWithValue("@savedAt", now);
+        insertCmd.Parameters.AddWithValue("@hash", hash);
         await insertCmd.ExecuteNonQueryAsync();
 
-        // Also update the main entry's sql_text to the latest version
+        // Also update the main entry to the latest version. Same ISO "o" timestamp and content
+        // hash the insert path writes (v2 used datetime('now') and left the hash stale); the
+        // history_au trigger updates the search index.
         await using var updateCmd = new SqliteCommand(
-            "UPDATE history SET sql_text = @sql, executed_at = datetime('now') WHERE id = @id", conn);
+            "UPDATE history SET sql_text = @sql, executed_at = @now, content_hash = @hash WHERE id = @id", conn);
         updateCmd.Parameters.AddWithValue("@sql", sqlText);
+        updateCmd.Parameters.AddWithValue("@now", now);
+        updateCmd.Parameters.AddWithValue("@hash", hash);
         updateCmd.Parameters.AddWithValue("@id", historyId);
         await updateCmd.ExecuteNonQueryAsync();
 
@@ -1772,10 +2371,12 @@ public sealed class HistoryDatabase : IDisposable
         await conn.OpenAsync();
 
         await using var cmd = new SqliteCommand(@"
-            INSERT INTO history_versions (history_id, sql_text)
-            VALUES (@historyId, @sqlText);", conn);
+            INSERT INTO history_versions (history_id, sql_text, saved_at, content_hash)
+            VALUES (@historyId, @sqlText, @savedAt, @hash);", conn);
         cmd.Parameters.AddWithValue("@historyId", historyId);
         cmd.Parameters.AddWithValue("@sqlText", sqlText);
+        cmd.Parameters.AddWithValue("@savedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("@hash", ComputeContentHash(sqlText));
 
         await cmd.ExecuteNonQueryAsync();
         Log.Debug("History version inserted for entry {Id}", historyId);
@@ -1792,7 +2393,7 @@ public sealed class HistoryDatabase : IDisposable
 
         var versions = new List<(long, string, string)>();
         await using var cmd = new SqliteCommand(
-            "SELECT id, sql_text, saved_at FROM history_versions WHERE history_id = @historyId ORDER BY saved_at DESC;", conn);
+            "SELECT id, sql_text, saved_at FROM history_versions WHERE history_id = @historyId ORDER BY saved_at DESC, id DESC;", conn);
         cmd.Parameters.AddWithValue("@historyId", historyId);
 
         await using var reader = await cmd.ExecuteReaderAsync();
@@ -1833,6 +2434,67 @@ public sealed class HistoryDatabase : IDisposable
     /// valid FTS5 operators: * (prefix wildcard), " (phrase quotes), OR/NOT/AND (boolean keywords).
     /// Unbalanced double quotes are fixed by appending a closing quote.
     /// </summary>
+    /// <summary>
+    /// Spec 040 (HIS-07, data-model §2.4) — the free-text clause, with the full-text index and as a
+    /// LIKE-only fallback. Plain words: every word must match the SQL (full-text phrase) or the name,
+    /// source, server or database. A query using FTS5 syntax (OR, NOT, quotes, *) keeps it: the
+    /// whole query must match the SQL, or every word must match the metadata. With
+    /// <paramref name="sqlOnly"/> (<c>sql:</c>) only the SQL counts. A word with no letters or
+    /// digits (<c>=</c>, <c>&lt;&gt;</c>) is no full-text token — it is matched in the SQL as written.
+    /// </summary>
+    private static (string? Fts, string? Like) BuildSearchClauses(string searchText, bool sqlOnly, List<SqliteParameter> parameters)
+    {
+        var terms = AkmlSql.Core.Text.HistorySearchTerms.Extract(searchText);
+        var metadata = new List<string>();
+        var sqlLike = new List<string>();
+        for (var i = 0; i < terms.Count; i++)
+        {
+            var p = "@term" + i;
+            parameters.Add(new SqliteParameter(p, "%" + EscapeLike(terms[i]) + "%"));
+            metadata.Add($@"(COALESCE(qs.name, h.tab_title, '') LIKE {p} ESCAPE '\' OR h.source LIKE {p} ESCAPE '\' " +
+                         $@"OR h.server LIKE {p} ESCAPE '\' OR h.database_name LIKE {p} ESCAPE '\')");
+            sqlLike.Add($@"h.sql_text LIKE {p} ESCAPE '\'");
+        }
+        if (terms.Count == 0) return (null, null);
+
+        string OrMetadata(string sql, int i) => sqlOnly ? $"({sql})" : $"({sql} OR {metadata[i]})";
+
+        var like = "(" + string.Join(" AND ", sqlLike.Select((s, i) => OrMetadata(s, i))) + ")";
+
+        if (UsesFtsSyntax(searchText))
+        {
+            var sanitized = SanitizeFts5Query(searchText);
+            if (string.IsNullOrWhiteSpace(sanitized)) return (like, like);
+            parameters.Add(new SqliteParameter("@fts0", sanitized));
+            const string match = "h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts0)";
+            var fts = sqlOnly ? $"({match})" : $"({match} OR ({string.Join(" AND ", metadata)}))";
+            return (fts, like);
+        }
+
+        var perTerm = new List<string>();
+        for (var i = 0; i < terms.Count; i++)
+        {
+            if (!terms[i].Any(char.IsLetterOrDigit))
+            {
+                perTerm.Add(OrMetadata(sqlLike[i], i));
+                continue;
+            }
+            // A prefix phrase: "Produ" finds Products, so a word typed part-way already matches
+            // (search runs as the user types). The * applies to the phrase's last token.
+            parameters.Add(new SqliteParameter("@fts" + i, "\"" + terms[i].Replace("\"", "") + "\"*"));
+            perTerm.Add(OrMetadata($"h.id IN (SELECT rowid FROM history_fts WHERE history_fts MATCH @fts{i})", i));
+        }
+        return ("(" + string.Join(" AND ", perTerm) + ")", like);
+    }
+
+    private static readonly Regex FtsSyntax = new Regex(@"(^|\s)(OR|NOT|AND)(\s|$)|[""*]", RegexOptions.Compiled);
+
+    private static bool UsesFtsSyntax(string text) => FtsSyntax.IsMatch(text);
+
+    /// <summary>Escapes LIKE wildcards so a typed % or _ is matched literally (ESCAPE '\').</summary>
+    private static string EscapeLike(string value) =>
+        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
     private static string SanitizeFts5Query(string query)
     {
         // Characters that are special in FTS5 and must be removed:

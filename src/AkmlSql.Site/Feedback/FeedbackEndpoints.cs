@@ -1,3 +1,5 @@
+using AkmlSql.Site.Admin;
+
 namespace AkmlSql.Site.Feedback;
 
 /// <summary>
@@ -44,6 +46,9 @@ public static class FeedbackEndpoints
     private static IResult Back(IFormCollection form, string result)
     {
         var show = form["show"].ToString() is "handled" or "all" ? $"show={form["show"]}&" : "";
-        return Results.Redirect($"/admin/feedback?{show}result={result}");
+        var search = AdminPaging.Search(form["q"].ToString());
+        var page = AdminPaging.Parse(form["page"].ToString());
+        var context = search is null && page == 0 ? "" : $"q={Uri.EscapeDataString(search ?? "")}&page={page}&";
+        return Results.Redirect($"/admin/feedback?{show}{context}result={result}");
     }
 }

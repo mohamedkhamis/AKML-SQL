@@ -31,7 +31,13 @@ namespace AkmlSql.Shell.Shared.Commands
             Instance = new FormatStylesCommand(package, commandService);
         }
 
-        private void Execute(object sender, EventArgs e)
+        private void Execute(object sender, EventArgs e) => Open();
+
+        /// <summary>
+        /// Opens the Format Styles window (modal). Spec 040 (T104): afterwards the Active Style menu's
+        /// list is refreshed, since styles may have been added, renamed or activated there.
+        /// </summary>
+        internal static void Open()
         {
             try
             {
@@ -45,6 +51,10 @@ namespace AkmlSql.Shell.Shared.Commands
                     Constants.ProductName,
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+            finally
+            {
+                ActiveStyleCache.Instance.RefreshNow();
             }
         }
     }

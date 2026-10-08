@@ -55,4 +55,4 @@ The Snippet Manager can import a Redgate SQL Prompt snippet library (`.sqlprompt
 
 ## Settings
 
-Open **Tools** -> **Options** -> **AKML SQL** -> **Snippets** to change the expand key, the surround-with shortcut, folder paths, and context filtering. See the [Configuration reference](../configuration.md) for all keys.
+Open **AKML SQL** -> **Options…** -> **Suggestions** -> **Lists & connections** (Snippets section) to turn snippets on or off, format them after they expand, and set a team snippet folder. See the [Configuration reference](../configuration.md) for all keys.

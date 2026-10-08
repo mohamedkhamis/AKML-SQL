@@ -22,69 +22,109 @@
         </p>
     </header>
 
-    <section class="media-row" aria-labelledby="media-connect-heading">
+    <section class="media-row" aria-labelledby="media-completion-heading">
         <div class="media-text">
-            <p class="eyebrow">Connections</p>
-            <h2 id="media-connect-heading">Connect once, get to work fast</h2>
+            <p class="eyebrow">IntelliSense</p>
+            <h2 id="media-completion-heading">Find the right JOIN as you type</h2>
             <p>
-                Saved connections with friendly display names, Windows or SQL Server
-                authentication, and one-click Test, Save, and Connect. No connection strings
-                to juggle — pick a saved profile and start writing SQL.
+                Suggestions use your database relationships to bring related tables and their
+                ON conditions to the top. See the table, its schema and the join condition
+                before you accept it, right inside the SSMS query editor.
             </p>
         </div>
-        <figure class="screenshot-frame media-frame">
-            <figcaption class="screenshot-chrome" aria-hidden="true">
-                <span class="chrome-dot chrome-dot-close"></span>
-                <span class="chrome-dot chrome-dot-minimize"></span>
-                <span class="chrome-dot chrome-dot-maximize"></span>
-            </figcaption>
-            <img src="img/screenshots/connect-dialog.png" width="720" height="501" loading="lazy"
-                 alt="The AKML SQL connection dialog with a saved Northwind connection and a populated server form." />
-        </figure>
+        <ProductScreenshot Name="05-join-suggestions" Width="740" Height="476" Class="media-frame"
+                           Caption="Related tables and JOIN conditions"
+                           Alt="AKML SQL suggests Northwind tables and their ON conditions after JOIN in the SSMS editor." />
     </section>
 
-    <section class="media-row media-row-flip" aria-labelledby="media-editor-heading">
+    <section class="media-row media-row-flip" aria-labelledby="media-wildcard-heading">
         <div class="media-text">
-            <p class="eyebrow">Editor</p>
-            <h2 id="media-editor-heading">An editor that knows your database</h2>
+            <p class="eyebrow">Column selection</p>
+            <h2 id="media-wildcard-heading">Turn SELECT * into the columns you need</h2>
             <p>
-                Live IntelliSense ranked by your schema, a problems panel fed by 130+ analysis
-                rules, and an execute grid with inline edit, add, and delete — with elapsed
-                time on every run. Format, analyse, refactor, and ask AI without leaving the
-                editor.
+                Expand a wildcard into an explicit column list. The picker shows data types,
+                nullability and key information, with checkboxes so you can choose exactly
+                which columns to insert.
             </p>
         </div>
-        <figure class="screenshot-frame media-frame">
-            <figcaption class="screenshot-chrome" aria-hidden="true">
-                <span class="chrome-dot chrome-dot-close"></span>
-                <span class="chrome-dot chrome-dot-minimize"></span>
-                <span class="chrome-dot chrome-dot-maximize"></span>
-            </figcaption>
-            <img src="img/screenshots/query-results.png" width="1920" height="889" loading="lazy"
-                 alt="The AKML SQL web editor running a Northwind report: schema panel, problems panel, and a live result grid." />
-        </figure>
+        <ProductScreenshot Name="03-expand-wildcard-popup" Width="740" Height="352" Class="media-frame"
+                           Caption="Choose columns before expanding a wildcard"
+                           Alt="The AKML SQL wildcard picker lists Northwind Products columns with selection checkboxes, data types and key details." />
     </section>
 
-    <section class="media-row" aria-labelledby="media-ssms-heading">
+    <section class="media-row" aria-labelledby="media-styles-heading">
         <div class="media-text">
-            <p class="eyebrow">In your IDE</p>
-            <h2 id="media-ssms-heading">Right inside SSMS 22</h2>
+            <p class="eyebrow">Format styles</p>
+            <h2 id="media-styles-heading">Shape your SQL, see every change</h2>
             <p>
-                The same engine runs as a native extension: its own menu, an editor toolbar for
-                formatting, history, outlining and analysis, and margin glyphs that mark problems
-                while you type. Nothing to switch to — it is simply part of the query window you
-                already work in.
+                Choose a style, search its options and fine-tune whitespace, casing, lists
+                and JOIN layout. A live SQL preview shows the effect of your changes.
+                Import and export SQL Prompt styles to keep your team's formatting familiar.
             </p>
         </div>
-        <figure class="screenshot-frame media-frame">
-            <figcaption class="screenshot-chrome" aria-hidden="true">
-                <span class="chrome-dot chrome-dot-close"></span>
-                <span class="chrome-dot chrome-dot-minimize"></span>
-                <span class="chrome-dot chrome-dot-maximize"></span>
-            </figcaption>
-            <img src="img/screenshots/ssms-editor.png" width="1920" height="1048" loading="lazy"
-                 alt="SSMS 22 with the AKML SQL menu, editor toolbar, and analysis glyphs marking issues in a query against the Northwind sample database." />
-        </figure>
+        <ProductScreenshot Name="02-format-styles" Width="1046" Height="673" Class="media-frame"
+                           Caption="Style options alongside a live preview"
+                           Alt="The AKML SQL Format styles window with Khamis Style selected, a searchable options tree, JOIN settings and SQL preview." />
+    </section>
+
+    <section class="media-row media-row-flip" aria-labelledby="media-history-heading">
+        <div class="media-text">
+            <p class="eyebrow">SQL History</p>
+            <h2 id="media-history-heading">Get back to the query that worked</h2>
+            <p>
+                Search earlier queries, star the ones you use often and browse them by date.
+                Repeated runs stay grouped together, with a SQL preview and saved versions
+                ready to reopen in your editor.
+            </p>
+        </div>
+        <ProductScreenshot Name="01-sql-history" Width="804" Height="558" Class="media-frame"
+                           Caption="Search, starred queries and SQL preview"
+                           Alt="AKML SQL History shows starred Northwind queries grouped under Today and previews a top customers by revenue query." />
+    </section>
+
+    <section class="media-row" aria-labelledby="media-options-heading">
+        <div class="media-text">
+            <p class="eyebrow">Options</p>
+            <h2 id="media-options-heading">Make the editor work your way</h2>
+            <p>
+                Search settings or browse familiar categories for suggestions, inserted code,
+                formatting and query tools. Set completion behavior, suggestion limits and
+                trigger delay, with descriptions beside the controls.
+            </p>
+        </div>
+        <ProductScreenshot Name="11-options" Width="866" Height="613" Class="media-frame"
+                           Caption="Searchable settings for your workflow"
+                           Alt="AKML SQL Options on Suggestions, Behavior, showing completion toggles, maximum suggestions and trigger delay." />
+    </section>
+
+    <section class="media-row media-row-flip" aria-labelledby="media-palette-heading">
+        <div class="media-text">
+            <p class="eyebrow">Command palette</p>
+            <h2 id="media-palette-heading">Find an action without hunting through menus</h2>
+            <p>
+                Type what you want to do and jump straight to it. Find formatting commands,
+                style editing and SQL transformations in one searchable list, with keyboard
+                shortcuts shown alongside the actions.
+            </p>
+        </div>
+        <ProductScreenshot Name="10-command-palette" Width="600" Height="400" Class="media-frame"
+                           Caption="Formatting commands, one search away"
+                           Alt="The AKML SQL command palette filtered by format, listing Format Styles, Format SQL Document, Format Selection and related actions." />
+    </section>
+
+    <section class="media-row" aria-labelledby="media-safety-heading">
+        <div class="media-text">
+            <p class="eyebrow">Execution warnings</p>
+            <h2 id="media-safety-heading">A moment to check before a risky query</h2>
+            <p>
+                See a warning when a statement could change every row or when you are about
+                to modify a production database. The prompt names the target and explains
+                the risk before you decide whether to continue.
+            </p>
+        </div>
+        <ProductScreenshot Name="12-safety-prompt" Width="506" Height="421" Class="media-frame"
+                           Caption="An explicit warning before execution"
+                           Alt="An AKML SQL execution warning highlights an UPDATE without WHERE against dbo.Products and offers Execute Anyway or Cancel." />
     </section>
 
     <section aria-labelledby="capability-heading">
@@ -95,8 +135,9 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="intellisense" /></span>
                 <h3>IntelliSense</h3>
                 <p>
-                    Nine completion providers — Column, Alias, Object, Keyword, Snippet, Variable, JOIN,
-                    QuickInfo, and Signature — with fuzzy matching, dot-trigger, and schema-aware ranking.
+                    Suggestions for columns, aliases, objects, keywords, JOINs (with foreign-key ON
+                    conditions), variables, parameters, snippets, databases, and GROUP BY lists, plus
+                    Quick Info and signature help — with fuzzy matching, dot-trigger, and schema-aware ranking.
                     The SQL Prompt-style popup shows type-coded icon badges and turns semi-transparent
                     while you hold Ctrl to peek at the code behind it.
                 </p>
@@ -105,10 +146,10 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="formatting" /></span>
                 <h3>Code formatting</h3>
                 <p>
-                    A 7-stage pipeline (parse → annotate → layout → cast → emit → validate → idempotency)
-                    behind 21 format commands. Share styles as <code>.akmlstyle</code> profiles, and
-                    round-trip SQL Prompt <code>.sqlpromptstylev2</code> XML — import and export — so
-                    existing team styles carry over unchanged.
+                    A 7-stage pipeline (parse → annotate → layout → casing → emit → validate → idempotency)
+                    behind Format Document, Format Selection, Bulk Format, and Unformat. Share styles as
+                    <code>.akmlstyle</code> profiles, and round-trip SQL Prompt <code>.sqlpromptstylev2</code>
+                    XML — import and export — so existing team styles carry over unchanged.
                 </p>
             </li>
             <li class="card feature-card">
@@ -124,9 +165,10 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="refactoring" /></span>
                 <h3>Refactoring</h3>
                 <p>
-                    Heavyweight operations like Smart Rename, Parameterize Values, and Convert Temp Table,
-                    plus 9 lightweight ops — Expand INSERT Columns, Convert Old-Style Joins, Encapsulate
-                    BEGIN/END, and more — that reshape SQL in a single action.
+                    Smart Rename, Script as ALTER, Inline EXEC, Inline Stored Procedure, Convert INSERT to
+                    UPDATE, and Find Invalid Objects, plus light-bulb fixes — expand wildcards, qualify
+                    object names, turn sp_executesql into static SQL, surround with BEGIN/END — that
+                    reshape SQL in a single action.
                 </p>
             </li>
             <li class="card feature-card">
@@ -151,9 +193,9 @@
                 <span class="feature-card-icon" aria-hidden="true"><FeatureIcon Name="ai" /></span>
                 <h3>AI assistance</h3>
                 <p>
-                    Text-to-SQL, Explain, Fix, Optimize, Index Analysis, Chat, and Ghost Text inline
-                    autocomplete — all schema-aware, so suggestions are grounded in the database you
-                    are actually working against.
+                    Explain, Fix, Chat, and Ghost Text inline autocomplete in SSMS, plus Text-to-SQL,
+                    Optimize, and Index Analysis in the web edition — all schema-aware, so suggestions
+                    are grounded in the database you are actually working against.
                 </p>
             </li>
         </ul>

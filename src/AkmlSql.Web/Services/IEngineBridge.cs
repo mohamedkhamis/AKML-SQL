@@ -264,7 +264,7 @@ internal sealed class EngineBridge : IEngineBridge
         {
             PairingPin = pairingPin,
             BearerToken = bearerToken,
-            WebVersion = "1.0.0",
+            WebVersion = AkmlSql.Core.AppVersion.Current,
             ProtocolVersionMin = 1,
             ProtocolVersionMax = 1,
             BrowserLabel = "Web edition",

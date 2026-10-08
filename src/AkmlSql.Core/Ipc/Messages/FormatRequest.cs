@@ -17,7 +17,15 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(3)]
         public byte[]? ProfileOverrides { get; set; }
 
+        /// <summary>Never read; kept in place so key 4 is never reused.</summary>
         [Key(4)]
         public int[]? IncludeActions { get; set; }
+
+        /// <summary>
+        /// Spec 040 (STY-11) — the interactive Format SQL actions. Null = use the style's own
+        /// format actions, as today (CLI, bulk format, the web edition and older shells).
+        /// </summary>
+        [Key(5)]
+        public FormatSqlActionsDto? Actions { get; set; }
     }
 }

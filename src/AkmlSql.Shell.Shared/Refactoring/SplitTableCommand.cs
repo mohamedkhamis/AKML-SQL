@@ -2,9 +2,11 @@
 using System;
 using System.ComponentModel.Design;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Ui;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
@@ -176,7 +178,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
 
             using var form = new Form
             {
-                Text = Constants.ProductName + $" - Split Table \u2014 {sourceTable}",
+                Text = WindowTitles.For($"Split table \u2014 {sourceTable}"),
                 Width = 480,
                 Height = 280,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
@@ -185,6 +187,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
                 StartPosition = FormStartPosition.CenterParent,
                 ShowInTaskbar = false
             };
+            WindowIcon.Apply(form);
 
             // Dispose fonts when form closes
             form.Disposed += (_, __) => { consolasFont.Dispose(); hintFont.Dispose(); };

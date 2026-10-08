@@ -25,28 +25,45 @@ public class FormatRequestHandler(ProfileManager profileManager)
     private readonly FormatterPipeline _pipeline = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _bulkSessions = new();
 
-    public FormatResponse HandleFormat(FormatRequest request)
+    public FormatResponse HandleFormat(FormatRequest request) => HandleFormat(request, null, null);
+
+    /// <summary>
+    /// Format Document. Spec 040 (STY-11): when the shell sends its Format SQL actions
+    /// (<see cref="FormatRequest.Actions"/>), they replace the style's own format actions — layout
+    /// and casing on or off, semicolons, brackets — and, with <paramref name="schemaCache"/> and
+    /// <paramref name="sessions"/>, the schema-aware Expand wildcards / Qualify object names run on
+    /// the validated result. Without actions the output is exactly as before.
+    /// </summary>
+    public FormatResponse HandleFormat(FormatRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
             var profile = LoadProfile(request.ProfileName, out var fallbackWarning);
-            var result = _pipeline.Format(request.Text, profile);
+            var options = ToPipelineOptions(request.Actions);
+            var result = _pipeline.Format(request.Text, profile, options);
+
+            var diagnostics = result.Diagnostics.Select(d => new FormatDiagnosticInfo
+            {
+                Severity = (int)d.Severity,
+                Message = d.Message,
+                Offset = d.Offset,
+                Line = d.Line
+            }).ToList();
+
+            var formatted = result.FormattedText;
+            if (result.Success && result.ValidationPassed && request.Actions is { } actions)
+                formatted = ApplySchemaActions(formatted, actions, profile, options, request.SessionId,
+                    schemaCache, sessions, diagnostics);
 
             return new FormatResponse
             {
                 Success = result.Success,
-                FormattedText = result.FormattedText,
-                WasModified = result.WasModified,
+                FormattedText = formatted,
+                WasModified = !string.Equals(formatted, request.Text, StringComparison.Ordinal),
                 ValidationPassed = result.ValidationPassed,
                 ElapsedMs = result.ElapsedMs,
                 ProfileFallbackWarning = fallbackWarning,
-                Diagnostics = result.Diagnostics.Select(d => new FormatDiagnosticInfo
-                {
-                    Severity = (int)d.Severity,
-                    Message = d.Message,
-                    Offset = d.Offset,
-                    Line = d.Line
-                }).ToArray()
+                Diagnostics = diagnostics.ToArray()
             };
         }
         catch (Exception ex)
@@ -61,24 +78,44 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
-    public FormatSelectionResponse HandleFormatSelection(FormatSelectionRequest request)
+    public FormatSelectionResponse HandleFormatSelection(FormatSelectionRequest request) =>
+        HandleFormatSelection(request, null, null);
+
+    public FormatSelectionResponse HandleFormatSelection(
+        FormatSelectionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
-            var profile = LoadProfile(request.ProfileName);
+            var profile = LoadProfile(request.ProfileName, out var fallbackWarning);
+            var options = ToPipelineOptions(request.Actions);
             var selFormatter = new SelectionFormatter();
             var result = selFormatter.FormatSelection(
-                request.Text, request.SelectionStart, request.SelectionEnd, profile);
+                request.Text, request.SelectionStart, request.SelectionEnd, profile, options);
+
+            // Spec 040 (STY-11): the schema-aware actions run on the formatted statement(s) only.
+            var formatted = result.FormattedText;
+            var wasModified = result.WasModified;
+            if (result.Success && result.ValidationPassed && request.Actions is { } actions)
+            {
+                var expanded = ApplySchemaActions(formatted, actions, profile, options, request.SessionId,
+                    schemaCache, sessions, diagnostics: null);
+                if (!string.Equals(expanded, formatted, StringComparison.Ordinal))
+                {
+                    formatted = expanded;
+                    wasModified = true;
+                }
+            }
 
             return new FormatSelectionResponse
             {
                 Success = result.Success,
-                FormattedText = result.FormattedText,
+                FormattedText = formatted,
                 OriginalStart = result.OriginalStart,
                 OriginalEnd = result.OriginalEnd,
-                WasModified = result.WasModified,
+                WasModified = wasModified,
                 ValidationPassed = result.ValidationPassed,
-                ElapsedMs = result.ElapsedMs
+                ElapsedMs = result.ElapsedMs,
+                ProfileFallbackWarning = fallbackWarning,
             };
         }
         catch (Exception ex)
@@ -86,6 +123,104 @@ public class FormatRequestHandler(ProfileManager profileManager)
             Log.Error(ex, "Format selection request failed");
             return new FormatSelectionResponse { Success = false, FormattedText = request.Text };
         }
+    }
+
+    /// <summary>
+    /// Spec 040 (STY-11) — the shell's Format SQL actions as pipeline options. Null (CLI, bulk,
+    /// the web edition, older shells) stays null: the style's own format actions apply.
+    /// </summary>
+    internal static FormatPipelineOptions? ToPipelineOptions(FormatSqlActionsDto? actions) =>
+        actions == null
+            ? null
+            : new FormatPipelineOptions
+            {
+                ApplyLayout = actions.ApplyLayout,
+                ApplyCasing = actions.ApplyCasing,
+                // UseStyle: no override — the style's own format actions decide.
+                Semicolons = actions.Semicolons switch
+                {
+                    FormatSqlActionsDto.Insert => SemicolonAction.Insert,
+                    FormatSqlActionsDto.Remove => SemicolonAction.Remove,
+                    FormatSqlActionsDto.UseStyle => null,
+                    _ => SemicolonAction.Leave,
+                },
+                SquareBrackets = actions.SquareBrackets switch
+                {
+                    FormatSqlActionsDto.Add => BracketAction.Add,
+                    FormatSqlActionsDto.Remove => BracketAction.Remove,
+                    FormatSqlActionsDto.UseStyle => null,
+                    _ => BracketAction.Leave,
+                },
+            };
+
+    /// <summary>
+    /// Spec 040 (STY-11) — Expand wildcards / Qualify object names on already-formatted, validated
+    /// text: the same schema-aware operations <see cref="HandleFormatAction(FormatActionRequest, SchemaCacheManager?, SessionManager?)"/>
+    /// runs, against the editor session's schema cache. When they change the text and layout is on,
+    /// the result is formatted once more so the inserted column list is laid out like the rest; a
+    /// re-format that fails validation keeps the operations' own text. Their warnings ("connect to a
+    /// database…") are reported as warning diagnostics.
+    /// </summary>
+    private string ApplySchemaActions(string text, FormatSqlActionsDto actions, FormattingProfile profile,
+        FormatPipelineOptions? options, string? sessionId, SchemaCacheManager? schemaCache, SessionManager? sessions,
+        List<FormatDiagnosticInfo>? diagnostics)
+    {
+        if (!actions.ExpandWildcards && !actions.QualifyObjectNames) return text;
+
+        DatabaseCache? cache = null;
+        if (sessions != null && !string.IsNullOrEmpty(sessionId))
+        {
+            var session = sessions.GetSession(sessionId);
+            if (session != null)
+                cache = schemaCache?.GetCache(sessionId, session.DatabaseName);
+        }
+
+        var operations = new List<ILightweightOperation>();
+        if (actions.ExpandWildcards) operations.Add(new ExpandWildcardsOperation());
+        if (actions.QualifyObjectNames) operations.Add(new QualifyObjectNamesOperation());
+
+        var parser = new Parser.TsqlParserService();
+        var current = text;
+        foreach (var operation in operations)
+        {
+            var (modified, warnings) = operation.Apply(new RefactoringContext
+            {
+                DocumentText = current,
+                Script = parser.Parse(current, out _) ?? new Microsoft.SqlServer.TransactSql.ScriptDom.TSqlScript(),
+                Tokens = parser.GetTokenStream(current),
+                SessionId = sessionId ?? string.Empty,
+                SchemaCache = cache,
+            });
+            current = modified;
+            if (diagnostics != null)
+                foreach (var warning in warnings)
+                    diagnostics.Add(new FormatDiagnosticInfo { Severity = (int)DiagnosticSeverity.Warning, Message = warning });
+        }
+
+        if (string.Equals(current, text, StringComparison.Ordinal)) return text;
+
+        // The formatter's promise holds here too: SQL that no longer parses never reaches the
+        // editor. The operations write raw text, so check it before laying it out again.
+        parser.Parse(current, out var errors);
+        if (errors != null && errors.Count > 0)
+        {
+            Log.Warning("Format SQL actions produced SQL that does not parse ({Error}); the formatted text is kept without them",
+                errors[0].Message);
+            diagnostics?.Add(new FormatDiagnosticInfo
+            {
+                Severity = (int)DiagnosticSeverity.Warning,
+                Message = "Expand wildcards / Qualify object names were not applied: the result would not parse.",
+            });
+            return text;
+        }
+
+        if (options?.ApplyLayout ?? true)
+        {
+            var again = _pipeline.Format(current, profile, options);
+            if (again.Success && again.ValidationPassed) current = again.FormattedText;
+        }
+
+        return current;
     }
 
     public FormatPreviewResponse HandleFormatPreview(FormatPreviewRequest request)
@@ -276,7 +411,7 @@ public class FormatRequestHandler(ProfileManager profileManager)
     {
         try
         {
-            var profiles = profileManager.List();
+            var profiles = profileManager.List(out var teamFolderUnavailable);
             return new ProfileListResponse
             {
                 Profiles = profiles.Select(m => new ProfileInfo
@@ -288,8 +423,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
                     IsCustomizedBuiltIn = m.IsCustomizedBuiltIn,
                     IsSqlPromptStyle = m.IsSqlPromptStyle,
                     BasedOn = m.BasedOn,
-                    Modified = m.Modified.ToString("o")
-                }).ToArray()
+                    Modified = m.Modified.ToString("o"),
+                    // Spec 040 (STY-10): where it comes from, and whether a team style is read-only.
+                    Source = m.Source,
+                    IsReadOnly = m.IsReadOnly,
+                }).ToArray(),
+                TeamFolderUnavailable = teamFolderUnavailable,
             };
         }
         catch (Exception ex)

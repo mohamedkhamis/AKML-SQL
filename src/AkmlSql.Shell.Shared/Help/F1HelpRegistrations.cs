@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace AkmlSql.Shell.Shared.Help
@@ -10,24 +11,46 @@ namespace AkmlSql.Shell.Shared.Help
     /// list of all surfaces and their help targets is reviewable from one file
     /// instead of scattered across constructors.
     /// <para>
-    /// <see cref="EnsureInitialized"/> is idempotent and is called once from each
-    /// host's <c>AkmlSqlPackage.Initialize</c> after <c>LoggerFactory.Initialize</c>.
-    /// Calling it again does no harm — <see cref="F1HelpListener.Register"/> is
-    /// itself idempotent.
+    /// Spec 040 (X-03, FR-062, research R26): every target is a page of the product docs site
+    /// (<see cref="DocBase"/> + a slug from <c>doc/</c>, with an optional <c>#anchor</c>). The
+    /// site test <c>F1SlugTests</c> reads this file as text and checks that every
+    /// <c>topics/…</c> literal names a published document and, when it has one, a real heading
+    /// anchor — so keep each topic a plain string literal.
+    /// </para>
+    /// <para>
+    /// <see cref="RegisterAll"/> is idempotent; <see cref="F1HelpListener.Register"/> is itself
+    /// idempotent too.
     /// </para>
     /// </summary>
     internal static class F1HelpRegistrations
     {
+        /// <summary>Base of every help URL: the product docs site. A topic is appended as-is.</summary>
+        internal const string DocBase = "https://akml.khamis.work/docs/";
+
+        /// <summary>F1 target of the Format Styles window (contracts/ui.md §3).</summary>
+        internal const string FormatStylesTopic = "topics/formatting#edit-styles-with-live-preview";
+
+        /// <summary>F1 target of the SQL History tool window (contracts/ui.md §3).</summary>
+        internal const string SqlHistoryTopic = "topics/sql-history";
+
+        /// <summary>F1 target of the Options window when no page is selected.</summary>
+        internal const string OptionsTopic = "topics/options";
+
+        // A docs topic: a lower-case site slug ("topics/options") with an optional anchor
+        // ("#suggestions-behavior"). Context keys ("akmlsql.dialog.safety") never match: their
+        // dots are not slug characters.
+        private static readonly Regex TopicPattern = new Regex(
+            @"^[a-z0-9-]+(/[a-z0-9-]+)*(#[a-z0-9_.-]+)?$",
+            RegexOptions.CultureInvariant);
+
         // 0 = not initialized, 1 = initialized. Interlocked.CompareExchange so that
-        // multiple package-init paths (e.g. SSMS 22 + VS 2022 in the same process,
-        // never happens in practice but is theoretically possible) do not re-register.
+        // multiple package-init paths do not re-register.
         private static int _initialized;
 
         /// <summary>
-        /// Register every Phase 10 UI surface's help context key on the given
-        /// listener instance. Safe to call multiple times — the underlying
-        /// registry is idempotent and the <see cref="_initialized"/> latch
-        /// short-circuits subsequent calls.
+        /// Register every UI surface's help context key on the given listener instance. Safe to
+        /// call multiple times — the underlying registry is idempotent and the
+        /// <see cref="_initialized"/> latch short-circuits subsequent calls.
         /// <para>
         /// IMPORTANT: this method MUST take the listener as a parameter (rather
         /// than reaching through <see cref="F1HelpListener.Default"/>) because
@@ -49,56 +72,49 @@ namespace AkmlSql.Shell.Shared.Help
                 return;
             }
 
-            // Surfaces shipped before Phase 10 (US1 safety dialog, schema progress,
-            // history, snippets, profile editor, etc.) are registered by their
-            // respective spec phases — not duplicated here.
+            // URLs are absolute https URLs: F1HelpListener.Open() calls
+            // Process.Start({UseShellExecute=true}), and a relative path would resolve against the
+            // host's working directory (SSMS's Release\Common7\IDE\).
 
-            // ── Phase 10 / spec 019 user-story registrations ────────────────────
-            // URLs are absolute https GitHub URLs. F1HelpListener.Open() calls
-            // Process.Start({UseShellExecute=true}) which resolves the path against
-            // the host's CWD — for SSMS that's the Release\Common7\IDE\ install
-            // directory, where "doc/..." would not resolve. Absolute https URLs
-            // route through the system browser regardless of CWD.
+            // Suggestions — Column Picker + Wildcard-Tab
+            listener.Register("akmlsql.completion.column-picker", DocUrl("topics/intellisense"));
+            listener.Register("akmlsql.completion.wildcard-tab", DocUrl("topics/intellisense"));
 
-            // US2 — Column Picker + Wildcard-Tab
-            listener.Register("akmlsql.completion.column-picker", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
-            listener.Register("akmlsql.completion.wildcard-tab", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
+            // Code analysis — issues window + lightbulb popup
+            listener.Register("akmlsql.window.analysis-issues", DocUrl("topics/static-analysis#where-results-appear"));
+            listener.Register("akmlsql.popup.lightbulb-details", DocUrl("topics/static-analysis#turn-a-rule-off"));
 
-            // US3 — Code Analysis Issues window + lightbulb popup
-            listener.Register("akmlsql.window.analysis-issues", DocUrl("analysis-rules.md"));
-            listener.Register("akmlsql.popup.lightbulb-details", DocUrl("analysis-rules.md"));
+            // Execution warnings
+            listener.Register("akmlsql.dialog.safety", DocUrl("topics/options#suggestions-warnings-highlighting"));
 
-            // US4 — Right-click tab color
-            listener.Register("akmlsql.menu.tab-color", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
+            // Tab colour — right-click menu + environments editor
+            listener.Register("akmlsql.menu.tab-color", DocUrl("topics/options#queries-color"));
+            listener.Register("akmlsql.dialog.environment-color-editor", DocUrl("topics/options#queries-color"));
 
-            // US6 — Command Palette (4-source aggregation)
-            listener.Register("akmlsql.window.command-palette", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
+            // Refactoring — Smart Rename dialog
+            listener.Register("akmlsql.dialog.smart-rename", DocUrl("topics/refactoring#smart-rename"));
 
-            // US7 — Script nav + Browse Open Tabs + F1 help
-            listener.Register("akmlsql.window.summarize-script", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
-            listener.Register("akmlsql.window.find-unused-variables", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
-            listener.Register("akmlsql.popup.browse-open-tabs", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
+            // Formatting — Format Styles window
+            listener.Register("akmlsql.editor.profile-3col", DocUrl(FormatStylesTopic));
 
-            // US8 — Find Invalid Objects
-            listener.Register("akmlsql.window.find-invalid-objects", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
+            // SQL History tool window
+            listener.Register("akmlsql.window.sql-history", DocUrl(SqlHistoryTopic));
 
-            // US10 — Smart Rename dialog
-            listener.Register("akmlsql.dialog.smart-rename", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_Core.md"));
+            // Options window
+            listener.Register("akmlsql.dialog.options", DocUrl(OptionsTopic));
 
-            // US12 — Theme refresh + Options Dialog Phase 3
-            listener.Register("akmlsql.dialog.environment-color-editor", DocUrl("SQL-PROMPT/SQL-Prompt-Option/SQL_Prompt_Options_Dialog.md"));
-            listener.Register("akmlsql.editor.profile-3col", DocUrl("formatting.md"));
-
-            // US13 — AI feature surfaces
-            listener.Register("akmlsql.window.ai-history", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_AI.md"));
-            listener.Register("akmlsql.adornment.ai-selection-icon", DocUrl("SQL-PROMPT/SQL-Prompt-Features/SQL_Prompt_Features_AI.md"));
+            // AI feature surfaces
+            listener.Register("akmlsql.window.ai-history", DocUrl("topics/ai-assistance"));
+            listener.Register("akmlsql.adornment.ai-selection-icon", DocUrl("topics/ai-assistance"));
         }
 
-        // Base for every doc URL. Branch defaults to `master` per the existing
-        // example in F1HelpListener's class docstring. Switch to a tag (e.g.,
-        // `v1.0`) once a release exists to make URLs immutable.
-        private const string DocBase = "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/";
+        /// <summary>
+        /// The docs URL for <paramref name="topic"/> (a slug with an optional anchor, e.g.
+        /// <c>topics/options#general</c>), or <c>null</c> when it is not a docs topic.
+        /// </summary>
+        internal static string? TopicUrl(string? topic) =>
+            topic != null && TopicPattern.IsMatch(topic) ? DocBase + topic : null;
 
-        private static string DocUrl(string relativePath) => DocBase + relativePath;
+        private static string DocUrl(string topic) => DocBase + topic;
     }
 }

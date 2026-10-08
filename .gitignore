@@ -93,3 +93,12 @@ desktop.ini
 # .NET upgrade assistant raw assessment data (147 MB / 50 MB; over GitHub's file limit) — the .md reports beside it are kept
 /.github/upgrades/scenarios/dotnet-version-upgrade/assessment.json
 /.github/upgrades/scenarios/dotnet-version-upgrade/assessment.csv
+
+# LinkedIn post images (screenshots for posts; not part of the product)
+/LinkedIn/
+src/AkmlSql.Site/wwwroot/docs-metadata.json
+src/AkmlSql.Site/wwwroot/releases.json
+src/AkmlSql.Site/wwwroot/update-manifest.json
+src/AkmlSql.Site/wwwroot/docs-metadata.json
+src/AkmlSql.Site/wwwroot/releases.json
+src/AkmlSql.Site/wwwroot/update-manifest.json

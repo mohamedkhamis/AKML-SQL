@@ -48,6 +48,13 @@ public class DatabaseCache
     public DateTime LastFullRefresh { get; set; }
 
     /// <summary>
+    /// UTC time a request last looked this cache up. Eviction keeps the caches in use: ordering by
+    /// <see cref="LastFullRefresh"/> alone dropped the oldest tab's schema while it was being typed in.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DateTime LastUsedUtc { get; set; }
+
+    /// <summary>
     /// Last <c>CHECKSUM_AGG(BINARY_CHECKSUM(...))</c> value from <c>sys.objects</c>.
     /// Used by <c>ChangeDetector</c> to detect schema modifications efficiently.
     /// </summary>

@@ -22,6 +22,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         string Title { get; }
 
         /// <summary>
+        /// Spec 040 (X-03, FR-062): the F1 target for this page — a docs topic (slug plus anchor,
+        /// e.g. <c>topics/options#general</c>) opened on the product docs site. Values come from
+        /// contracts/ui.md §1; <c>F1SlugTests</c> checks every one exists on the site.
+        /// </summary>
+        string HelpTopic { get; }
+
+        /// <summary>
         /// Page-specific help/intro text (spec 030 T083 / FR-044), rendered by the host beneath the
         /// page header in an accent-bordered block. Every page supplies its own so help coverage is
         /// uniform by construction; return <see cref="string.Empty"/> to render nothing.

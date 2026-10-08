@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Ai
 {
@@ -22,7 +24,8 @@ namespace AkmlSql.Shell.Shared.Ai
         public TextToSqlInputDialog()
         {
             // Form setup
-            Text = "AI: Text to SQL";
+            Text = WindowTitles.For("Text to SQL");
+            WindowIcon.Apply(this);
             Width = 560;
             Height = 260;
             MinimumSize = new Size(400, 220);

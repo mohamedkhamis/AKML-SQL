@@ -5,18 +5,20 @@ using AkmlSql.Core.Config;
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
-    /// Inserted Code › Qualification (Phase 2 C.2). Surfaces the schema-qualification and
-    /// column-qualification parts of <see cref="QualificationSettings"/>. <c>SchemaMode</c>
-    /// is read by <c>CompletionEngine</c> (A.2). Bracket policy (<c>BracketMode</c>) moved
-    /// to the Inserted Code › Special characters page (report §4 rec #1) so SQL Prompt's
-    /// single special-characters pane is mirrored.
+    /// Inserted Code › Qualification (Phase 2 C.2). Surfaces the schema-qualification part of
+    /// <see cref="QualificationSettings"/>. <c>SchemaMode</c> is read by <c>CompletionEngine</c>
+    /// (A.2). Bracket policy (<c>BracketMode</c>) moved to the Inserted Code › Special characters
+    /// page (report §4 rec #1) so SQL Prompt's single special-characters pane is mirrored.
+    /// Spec 040 (OPT-01): "Qualify columns with table name or alias" changed nothing and is
+    /// hidden; its saved value is kept.
     /// </summary>
     internal sealed class QualificationPage : IPageBuilder
     {
         public string Key     => "Qualification";
-        public string Display => "Inserted Code › Qualification";
+        public string Display => "Inserted code › Qualification";
         public string Title   => "Qualification";
-        public string Help    => "Controls how completion-inserted code is qualified: whether object names carry their schema prefix, and whether column references are prefixed with their table name or alias. Bracket-identifier policy lives on Inserted Code › Special characters.";
+        public string HelpTopic => "topics/options#qualification";
+        public string Help    => "Controls whether object names inserted from the suggestions box carry their schema prefix. Bracket-identifier policy is under Special characters, on the same page.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
@@ -28,27 +30,17 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "When inserted from completion: never strip the schema, strip it only if it matches the default schema, or never qualify.");
             ctx.RegisterSearch("Qualify object names with schema", "Schema qualification policy for inserted object names", "Dropdown", rowSchema);
 
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Columns");
-
-            var (rowQualifyCols, chkQualifyCols) = ctx.Rows.AddToggle(panel,
-                "Qualify columns with table name or alias",
-                "Insert column references as 'alias.Column' or 'Table.Column' instead of bare 'Column'.");
-            ctx.RegisterSearch("Qualify columns with table name or alias", "Insert column references with their table or alias prefix", "Toggle", rowQualifyCols);
-
-            return new QualificationControls(cboSchema, chkQualifyCols);
+            return new QualificationControls(cboSchema);
         }
     }
 
     internal sealed class QualificationControls : IPageControls
     {
         private readonly ComboBox _schemaMode;
-        private readonly CheckBox _qualifyColumns;
 
-        public QualificationControls(ComboBox schemaMode, CheckBox qualifyColumns)
+        public QualificationControls(ComboBox schemaMode)
         {
             _schemaMode = schemaMode;
-            _qualifyColumns = qualifyColumns;
         }
 
         public void Load(AppSettings settings)
@@ -61,7 +53,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 SchemaQualifyMode.Never           => 2,
                 _ => 1,
             };
-            _qualifyColumns.IsChecked = q.QualifyColumnsWithTableOrAlias;
         }
 
         public void Save(AppSettings settings)
@@ -73,7 +64,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 2 => SchemaQualifyMode.Never,
                 _ => SchemaQualifyMode.NonDefaultOnly,
             };
-            q.QualifyColumnsWithTableOrAlias = _qualifyColumns.IsChecked == true;
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

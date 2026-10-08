@@ -64,5 +64,19 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(12)]
         public string[]? CamelCaseTokens { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-07): the search's <c>path:</c> filter — entries whose source (file path or
+        /// tab) contains this text. Null for no filter. Appended key.
+        /// </summary>
+        [Key(13)]
+        public string? PathFilter { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-07): <see cref="SearchText"/> came from <c>sql:</c> — match the SQL text
+        /// only, not the name, path, server or database. Appended key.
+        /// </summary>
+        [Key(14)]
+        public bool SqlOnly { get; set; }
     }
 }

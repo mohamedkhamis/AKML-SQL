@@ -1,7 +1,7 @@
 # AKML-SQL Development Guidelines
 
 AI-powered SQL development assistance for SSMS 22. (Visual Studio 2026 support was removed 2026-09-24 — the `AkmlSql.VS2026` project is gone; setup deletes the extension earlier releases put into VS.)
-Author: Mohamed Khamis | License: MIT | Version: 1.0.0
+Author: Mohamed Khamis | License: MIT | Version: stamped per build as 1.YY.MMDD.HHmm (UTC+2; src/Directory.Build.props, build.ps1)
 
 ## Project Structure
 
@@ -27,7 +27,7 @@ tests/
   AkmlSql.Core.Tests/                  # xunit tests (net10.0) — one project per src library (12 total) + E2E/Web.E2E/Installer
   AkmlSql.Site.Tests/                  # xunit + bunit (net10.0) — site components, docs pipeline, releases manifest (spec 034)
   format-parity/                       # SQL Prompt parity corpus + golden outputs
-  completion-corpus/                   # 1,342-case autocomplete corpus + CorpusGateTests ratchet (~97.5% gate)
+  completion-corpus/                   # 1,376-case autocomplete corpus (33 excluded) + CorpusGateTests ratchet (~97.5% gate)
 doc/                                   # All project documentation (architecture, ipc-api, progress, WEB/ milestone docs)
 specs/                                 # Specify framework feature specs (001–034)
 ```
@@ -39,9 +39,9 @@ specs/                                 # Specify framework feature specs (001–
 - **Engine**: .NET 10, self-contained, win-x64 (out-of-process IntelliSense) — single-file and trimming are OFF: Microsoft.Data.SqlClient native SNI interop is incompatible with single-file extraction
 - **Updater**: .NET 10, self-contained single-file, win-x64, PublishTrimmed
 - **Installer**: Inno Setup 7 Pascal Script
-- **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 17.x
-- **Logging**: Serilog 4.x + Serilog.Sinks.File 6.x
-- **JSON**: System.Text.Json 9.x (netstandard2.0 polyfill; net10.0 targets use the inbox STJ)
+- **Tests**: xunit 2.x, Microsoft.NET.Test.Sdk 18.x (tests/AkmlSql.UiTests pins 17.11.1)
+- **Logging**: Serilog 4.x + Serilog.Sinks.File 7.x
+- **JSON**: System.Text.Json 10.x (netstandard2.0 polyfill; net10.0 targets use the inbox STJ)
 
 ## VS SDK Versions (Critical)
 
@@ -54,7 +54,7 @@ specs/                                 # Specify framework feature specs (001–
 The full solution can be built in one pass (the CTO cross-contamination is fixed — see Build Gotchas):
 
 ```bash
-MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
 
 # Whole solution (restore first, then build)
 "$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
@@ -253,7 +253,7 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 
 The shell has three established WPF surfaces: tool-window controls, modal dialogs (`Window` subclasses), and editor margins/adornments (`IWpfTextViewMargin` / adornment layers). **New WPF UI must match these rules** or it will look out of place — especially in dark/blue theme.
 
-- **Theme colors come from `ThemeManager.Instance`** — never hardcode hex for chrome (background, foreground, border, muted text, card background, accent). The singleton exposes `Background`, `Foreground`, `Border`, `AccentColor`, `HighlightBackground`, `HighlightForeground`, `EditorPanelBackground`, `PreviewBackground`, `PlaceholderText`, `SplitterColor`, plus History-specific properties. Semantic colors (amber for "confirm", red for "destructive", green for "success") are the only acceptable hardcoded hex — they should read the same in every theme.
+- **Theme colors come from the token system** — never hardcode hex for chrome (background, foreground, border, muted text, card background, accent). Bind with `SetResourceReference(prop, ThemeTokens.X)` (or `SetResourceBinding` on a `FrameworkElementFactory`, `DynamicResourceExtension` in a `Setter`) so the colour follows theme changes; `ThemeRegistry` holds the live palette (`ThemePalette.Light` / `Dark` / `HighContrast`) and `ThemeAwareWindow` / `ThemeAwareUserControl` merge it. Options pages paint from the `PageTheme` snapshot they are handed (`PageTheme.Light` / `Dark` / `HighContrast`, chosen by `SettingsWindow.ResolvePageTheme`). The legacy `ThemeManager.Instance` is gone from new code. Semantic colors (amber for "confirm", red for "destructive", green for "success") are the only acceptable hardcoded hex — they should read the same in every theme.
 - **Freeze brushes**. Use `private static SolidColorBrush Freeze(SolidColorBrush b) { b.Freeze(); return b; }` and wrap every `new SolidColorBrush(...)` in it. Frozen brushes are thread-safe, skip change notifications, and share cheaply.
 - **Hoist `FontFamily` to `static readonly`**. `new FontFamily("Segoe UI")` / `new FontFamily("Consolas")` per call is a per-iteration allocation; make them class-level statics.
 - **Set `Owner` via DTE HWND** before `ShowDialog()` so the dialog parents to the VS/SSMS main window and `WindowStartupLocation = CenterOwner` actually works. Reference pattern in `src/AkmlSql.Shell.Shared/History/HistoryDiffWindow.cs` — reads `EnvDTE.DTE.MainWindow.HWnd` inside a try/catch and assigns via `WindowInteropHelper.Owner`. Silent no-op when DTE is unreachable.
@@ -298,13 +298,13 @@ The `StrokeDashArray` sum (`10 + 30 = 40`) must be ≥ the ellipse perimeter (`2
 | [doc/deployment.md](doc/deployment.md) | Build commands, install paths, MEF cache clearing, troubleshooting |
 | [doc/analysis-rules.md](doc/analysis-rules.md) | All 130+ analysis rules with descriptions and severities |
 | [doc/formatting.md](doc/formatting.md) | Formatting pipeline stages, profile schema, all options, SQL Prompt round-trip |
-| [doc/progress.md](doc/progress.md) | Development log through spec 037 — per-phase task tables, clarifications, deferred follow-ups |
+| [doc/progress.md](doc/progress.md) | Development log through spec 040 — per-phase task tables, clarifications, deferred follow-ups |
 | [doc/WEB/](doc/WEB/) | Web edition milestone docs (M0 dispatcher/transport … M6 AI browser) + quickstarts |
 | [docs/wpf-theming.md](docs/wpf-theming.md) | WPF theme token system contributor guide (introduced in spec 016) |
 
 ## Progress and Troubleshooting
 
-See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 037 Multiple AI agents with guided setup).
+See [doc/progress.md](doc/progress.md) for the full development progress log — issues, root causes, fixes, cache clearing procedures, and the per-spec progress tables (most recently spec 040 SQL Prompt UI/UX parity for Options, SQL History and format styles).
 
 **Latest merged work**: specs 021 → 033 merged to master through PR #249 (2026-08); specs 036 and 037 (multi-agent AI) landed after. Highlights:
 
@@ -317,10 +317,13 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 - **Spec 037 — Multiple AI agents**: up to 20 named agents under `ai.agents` (flat `ai.provider`/`model`/`apiKey`/`endpoint` are now a derived mirror of the active agent, rewritten on every load and save — downgrade-safe); per-feature assignments (`ai.featureAgents`) + ordered fallback chain (`ai.fallbackOrder`); engine resolution seam in `AiHandlerBase` — resolve + project the feature's agent BEFORE the privacy-consent gate; additive `AiChatResponse.AgentName` (key 6) answer attribution; chat empty state deep-links into a guided add-agent flow; agent list + health badges on Options → AI Assistance.
 
 - **Spec 039 — SQL Prompt style editor** (in progress, on the 038 branch): styles are SQL Prompt documents formatted by a dedicated layout; web Format styles page (`/styles`, saves through a paired engine advertising `styles.sqlprompt.v1`, else IndexedDB); SSMS Format Styles window on SQL Prompt's model; `.json` import/export.
+- **Spec 040 — SQL Prompt UI/UX parity (SSMS 22)** (branch `040-sqlprompt-ui-parity`): Options in SQL Prompt's tree and words (dead rows hidden, child options greyed under their master switch via `RowFactory`'s `parent`, number fields, options in the Command Palette, a tab-colour environments grid, the code analysis rules window in WPF, high contrast); SQL History like SQL Prompt's (full preview, open/closed state, search syntax + Advanced search, date groups, versions + compare, restore on start); Format Styles window (option search, change markers, Active Style menu, team style folder, Format SQL actions); the AKML SQL menu built from `AkmlMenuTable` (marker `akml-menu-v2`); `WindowTitles.For` titles; F1 help to `akml.khamis.work/docs` (`IPageBuilder.HelpTopic`, `HelpBinding`). Verification log: `specs/040-sqlprompt-ui-parity/baseline.md`.
 
 **Open follow-ups** (see `doc/progress.md` and the spec tasks files for full lists):
 
-- Spec 039: calibrate option interpretations against SQL Prompt's built-in style exports (user to send); manual SSMS window check. Web E2E needs `playwright.ps1 install chromium` (build 1243); `FormatStylesSharedEngineTests` also needs a Debug build of `AkmlSql.Engine` (it runs it sandboxed via `AKML_APP_DATA_ROOT`).
+- Spec 040 (`tasks.md` › Deferred): commands with no handler stay off the menu (Text to SQL, AI Optimize, AI Index Analysis, Generate CRUD Procedures, Find in Results Grid, Split Table); the VSCT menu is still parented to `IDM_VS_MENU_BAR` and invisible in SSMS 22 (the runtime menu is what users see); Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; History's "Record failed executions" / "Encrypt at rest" stay hidden; UI Automation walks only the first row of each group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors (flaky `DisableRuleFixActionTests`).
+
+- Spec 039: calibrate option interpretations against SQL Prompt's built-in style exports (user to send); manual SSMS window check. Web E2E needs `playwright.ps1 install chromium` (the Chromium build follows the restored Microsoft.Playwright 1.* package); `FormatStylesSharedEngineTests` also needs a Debug build of `AkmlSql.Engine` (it runs it sandboxed via `AKML_APP_DATA_ROOT`).
 
 - Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.

@@ -82,7 +82,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 }
 
                 var (authMode, rawAuth) = ReadAuthModeFromDocument(dte.ActiveDocument);
-                return ParseCaption(caption, authMode, rawAuth);
+                return ParseCaption(caption, authMode, rawAuth, TryGetActiveConnectionServer());
             }
             catch (Exception ex)
             {
@@ -192,7 +192,17 @@ namespace AkmlSql.Shell.Shared.Editor
                         EnvDTE.Document matchedDoc = null;
                         try { matchedDoc = docs.Item(i); } catch { /* ignore */ }
                         var (authMode, rawAuth) = ReadAuthModeFromDocument(matchedDoc);
-                        return ParseCaption(win.Caption, authMode, rawAuth);
+
+                        // SSMS's connection object only answers for the active query window; for any
+                        // other window the caption is all there is.
+                        string connectedServer = null;
+                        try
+                        {
+                            if (string.Equals(dte.ActiveDocument?.FullName, docFullName, StringComparison.OrdinalIgnoreCase))
+                                connectedServer = TryGetActiveConnectionServer();
+                        }
+                        catch { /* no active document */ }
+                        return ParseCaption(win.Caption, authMode, rawAuth, connectedServer);
                     }
                 }
 
@@ -225,6 +235,15 @@ namespace AkmlSql.Shell.Shared.Editor
         /// Caller must check and skip engine-side schema loading in that case.
         /// </summary>
         internal static ConnectionResult ParseCaption(string caption, AuthMode authMode, string rawAuthType)
+            => ParseCaption(caption, authMode, rawAuthType, null);
+
+        /// <summary>
+        /// As <see cref="ParseCaption(string, AuthMode, string)"/>, connecting to
+        /// <paramref name="connectedServer"/> — the server SSMS's own connection uses — when known.
+        /// The caption shows SSMS 22's custom connection name when one is set ("ServerDemo"), which
+        /// is a label, not a host; the engine must connect to the real server.
+        /// </summary>
+        internal static ConnectionResult ParseCaption(string caption, AuthMode authMode, string rawAuthType, string connectedServer)
         {
             // SSMS 22 caption format: "filename.sql - ServerName.DatabaseName (Username (SPID))"
             // SSMS 20 caption format: "ServerName.DatabaseName - filename.sql"
@@ -322,7 +341,12 @@ namespace AkmlSql.Shell.Shared.Editor
                 }
             }
 
-            var connStr = BuildEngineConnectionString(server, database, authMode);
+            var dataSource = ChooseDataSource(server, connectedServer);
+            if (!string.Equals(dataSource, server, StringComparison.OrdinalIgnoreCase))
+                Log.Debug("SsmsConnectionDetector: the caption names '{Caption}', SSMS is connected to '{Server}' — using the connected server",
+                    server, dataSource);
+
+            var connStr = BuildEngineConnectionString(dataSource, database, authMode);
             var usable = connStr != null;
 
             if (usable)
@@ -376,6 +400,7 @@ namespace AkmlSql.Shell.Shared.Editor
             return new ConnectionResult
             {
                 Server = server,
+                DataSource = dataSource,
                 Database = database,
                 Login = captionUserName,
                 ConnectionString = connStr,
@@ -483,6 +508,34 @@ namespace AkmlSql.Shell.Shared.Editor
                 return false;
             }
         }
+
+        /// <summary>
+        /// The server the query window is connected to, from SSMS's own connection object
+        /// (<c>ScriptFactory…CurrentlyActiveWndConnectionInfo.UIConnectionInfo.ServerName</c>), by
+        /// reflection. Null when unavailable. Answers for the ACTIVE query window only.
+        /// <para>MUST be called on the UI thread.</para>
+        /// </summary>
+        internal static string TryGetActiveConnectionServer()
+        {
+            try
+            {
+                var sfType = ResolveScriptFactoryType();
+                var sf = sfType?.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+                var caw = sf?.GetType().GetProperty("CurrentlyActiveWndConnectionInfo")?.GetValue(sf);
+                var uci = caw?.GetType().GetProperty("UIConnectionInfo")?.GetValue(caw);
+                var server = uci?.GetType().GetProperty("ServerName")?.GetValue(uci) as string;
+                return string.IsNullOrWhiteSpace(server) ? null : server.Trim();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "TryGetActiveConnectionServer: reflection into the SSMS connection failed (non-fatal)");
+                return null;
+            }
+        }
+
+        /// <summary>The server to connect to: SSMS's connected server when known, else the caption's.</summary>
+        internal static string ChooseDataSource(string captionServer, string connectedServer) =>
+            string.IsNullOrWhiteSpace(connectedServer) ? captionServer : connectedServer.Trim();
 
         private static Type ResolveScriptFactoryType()
         {
@@ -740,7 +793,20 @@ namespace AkmlSql.Shell.Shared.Editor
 
         internal class ConnectionResult
         {
+            /// <summary>The server as SSMS shows it (the caption) — a custom connection name or a
+            /// client alias when one is used. For display, tab colours and History.</summary>
             public string Server { get; set; }
+
+            private string _dataSource;
+
+            /// <summary>The server to connect to: SSMS's connected server when known, else
+            /// <see cref="Server"/>. The engine resolves client aliases in it.</summary>
+            public string DataSource
+            {
+                get => string.IsNullOrEmpty(_dataSource) ? Server : _dataSource;
+                set => _dataSource = value;
+            }
+
             public string Database { get; set; }
 
             /// <summary>The login parsed from the SSMS caption "(Login (SPID))", used to key the

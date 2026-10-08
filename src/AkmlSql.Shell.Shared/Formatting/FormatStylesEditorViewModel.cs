@@ -88,6 +88,76 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         public int? CachedSchemaVersion => _cachedSchemaVersion;
 
+        private FormatStylesSchemaModel.Model? _schemaModel;
+        private string? _schemaModelSource;
+
+        /// <summary>
+        /// Spec 040 (T096) — the parsed schema: pages, their options and each option's texts. The
+        /// window builds its page tree from it and <see cref="Search"/> reads it. Null until the
+        /// schema has loaded, or when it cannot be parsed.
+        /// </summary>
+        internal FormatStylesSchemaModel.Model? SchemaModel
+        {
+            get
+            {
+                var json = SchemaJson ?? _cachedSchemaJson;
+                if (json == null) return null;
+                if (!ReferenceEquals(json, _schemaModelSource))
+                {
+                    try { _schemaModel = FormatStylesSchemaModel.Parse(json); }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "FormatStylesEditor: schema could not be parsed");
+                        _schemaModel = null;
+                    }
+                    _schemaModelSource = json;
+                }
+                return _schemaModel;
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (T096, STY-04, FR-030) — the pages and options matching <paramref name="query"/>
+        /// in an option's label, description, note, subgroup, choice labels or id (case-insensitive).
+        /// An empty query returns every page with no counts.
+        /// </summary>
+        internal StyleOptionSearchResult Search(string? query)
+        {
+            var groups = SchemaModel?.FlatGroups ?? new List<FormatStylesSchemaModel.Group>();
+            var q = query?.Trim();
+            if (string.IsNullOrEmpty(q))
+                return new StyleOptionSearchResult(groups.Select(g => g.Id).ToList(),
+                    new Dictionary<string, int>(StringComparer.Ordinal), new string[0], null, null);
+
+            var groupIds = new List<string>();
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            var optionIds = new List<string>();
+            string? firstGroup = null, firstOption = null;
+            foreach (var group in groups)
+            {
+                var n = 0;
+                foreach (var setting in group.Settings)
+                {
+                    if (!OptionMatches(setting, q!)) continue;
+                    n++;
+                    optionIds.Add(setting.Id);
+                    if (firstOption == null) { firstOption = setting.Id; firstGroup = group.Id; }
+                }
+                if (n == 0) continue;
+                groupIds.Add(group.Id);
+                counts[group.Id] = n;
+            }
+            return new StyleOptionSearchResult(groupIds, counts, optionIds, firstGroup, firstOption);
+        }
+
+        internal static bool OptionMatches(FormatSettingNode setting, string query)
+        {
+            bool Has(string? text) => text != null && text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+            return Has(setting.DisplayName) || Has(setting.Description) || Has(setting.Note)
+                   || Has(setting.Subgroup) || Has(setting.Id)
+                   || (setting.EnumLabels != null && setting.EnumLabels.Any(Has));
+        }
+
         private bool _isLoading;
         public bool IsLoading
         {
@@ -161,6 +231,52 @@ namespace AkmlSql.Shell.Shared.Formatting
             private set { if (_isSelectedCustomized != value) { _isSelectedCustomized = value; OnPropertyChanged(); } }
         }
 
+        private bool _isSelectedReadOnly;
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — the loaded style is a team style in a folder that can't be
+        /// written to: its options are shown but disabled, and Save, Rename, Delete and Reset are
+        /// refused (the engine refuses them too). Copy still works.
+        /// </summary>
+        public bool IsSelectedReadOnly
+        {
+            get => _isSelectedReadOnly;
+            private set { if (_isSelectedReadOnly != value) { _isSelectedReadOnly = value; OnPropertyChanged(); } }
+        }
+
+        private bool _teamFolderUnavailable;
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — a team style folder is set but the engine couldn't reach it
+        /// (ProfileListResponse key 1). The list shows "Team styles unavailable".
+        /// </summary>
+        public bool TeamFolderUnavailable
+        {
+            get => _teamFolderUnavailable;
+            private set { if (_teamFolderUnavailable != value) { _teamFolderUnavailable = value; OnPropertyChanged(); } }
+        }
+
+        /// <summary>Spec 040 (T187) — the configured team style folder, named by the unavailable row.</summary>
+        public string TeamStyleFolder { get; private set; } = string.Empty;
+
+        /// <summary>Spec 040 (T187) — the unavailable row's text (contracts/ui.md §4).</summary>
+        internal static string TeamFolderUnavailableText(string folder) =>
+            $"Team styles unavailable — {folder} can't be reached";
+
+        /// <summary>The engine's refusal text for a write to a read-only team style (contracts/ipc.md).</summary>
+        internal static string TeamReadOnlyText(string name) =>
+            $"'{name}' is a team style and can't be changed here — copy it to edit.";
+
+        /// <summary>True (with the refusal in <see cref="LastError"/>) when <paramref name="name"/> is a read-only team style.</summary>
+        private bool RefuseReadOnlyTeamStyle(string? name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+            var readOnly = item?.IsReadOnly == true
+                           || (IsSelectedReadOnly && string.Equals(name, _loadedProfileName, StringComparison.OrdinalIgnoreCase));
+            if (!readOnly) return false;
+            LastError = TeamReadOnlyText(name!);
+            return true;
+        }
+
         /// <summary>
         /// Window-provided prompt shown when switching away from (or closing over) unsaved
         /// edits. Null (headless/tests without a handler) behaves as Discard.
@@ -213,6 +329,80 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// it to keep paths absent from the stored file implicit when an edit matches the default.
         /// </summary>
         private readonly ConcurrentDictionary<string, object?> _schemaDefaults = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Spec 040 (T098) — the working values as the loaded style was last loaded or saved.
+        /// <see cref="IsDirty"/> compares against them, so setting an option back to its saved value
+        /// is no longer an unsaved change.
+        /// </summary>
+        private Dictionary<string, object?> _savedValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+
+        private void CaptureSavedValues() =>
+            _savedValues = new Dictionary<string, object?>(_workingValues, StringComparer.Ordinal);
+
+        private bool DiffersFromSaved()
+        {
+            foreach (var kv in _workingValues)
+            {
+                _savedValues.TryGetValue(kv.Key, out var saved);
+                if (!ValuesEqual(kv.Value, saved)) return true;
+            }
+            foreach (var key in _savedValues.Keys)
+                if (!_workingValues.ContainsKey(key)) return true;
+            return false;
+        }
+
+        /// <summary>Option values compare by meaning: 4, 4L and 4.0 are the same number.</summary>
+        internal static bool ValuesEqual(object? a, object? b)
+        {
+            if (a == null || b == null) return a == null && b == null;
+            if (IsNumber(a) && IsNumber(b))
+                return Convert.ToDouble(a, System.Globalization.CultureInfo.InvariantCulture)
+                       == Convert.ToDouble(b, System.Globalization.CultureInfo.InvariantCulture);
+            return string.Equals(
+                Convert.ToString(a, System.Globalization.CultureInfo.InvariantCulture),
+                Convert.ToString(b, System.Globalization.CultureInfo.InvariantCulture),
+                StringComparison.Ordinal);
+        }
+
+        private static bool IsNumber(object value) =>
+            value is int || value is long || value is double || value is float || value is decimal
+            || value is short || value is byte || value is uint || value is ulong;
+
+        /// <summary>Spec 040 (T098, STY-05) — true when the option differs from SQL Prompt's default.</summary>
+        internal bool IsChanged(string settingId) =>
+            _schemaDefaults.TryGetValue(settingId, out var def) && !ValuesEqual(GetWorkingValue(settingId), def);
+
+        /// <summary>How many options on the page differ from SQL Prompt's default.</summary>
+        internal int ChangedCount(string groupId) =>
+            SchemaModel?.FlatGroups.FirstOrDefault(g => g.Id == groupId)?.Settings.Count(s => IsChanged(s.Id)) ?? 0;
+
+        /// <summary>Puts one option back to SQL Prompt's default (an edit like any other).</summary>
+        internal void ResetOption(string settingId)
+        {
+            if (_schemaDefaults.TryGetValue(settingId, out var def))
+                SetWorkingValue(settingId, def);
+        }
+
+        private string[] _previousPreviewLines = new string[0];
+
+        /// <summary>
+        /// Spec 040 (T098, STY-06) — 0-based lines of <see cref="PreviewText"/> that differ from the
+        /// previous preview at the same position, set only when the preview followed an option
+        /// edit (never a style, page or sample switch). The window highlights them briefly.
+        /// </summary>
+        internal IReadOnlyCollection<int> MovedLines { get; private set; } = new int[0];
+
+        private static string[] PreviewLines(string text) => text.Replace("\r\n", "\n").Split('\n');
+
+        private static int[] Moved(string[] previous, string[] current)
+        {
+            var moved = new List<int>();
+            for (var i = 0; i < current.Length; i++)
+                if (i >= previous.Length || !string.Equals(previous[i], current[i], StringComparison.Ordinal))
+                    moved.Add(i);
+            return moved.ToArray();
+        }
 
         /// <summary>
         /// The sample SQL the preview pane formats. Spec 020 US5 (T069): persisted at
@@ -272,7 +462,25 @@ namespace AkmlSql.Shell.Shared.Formatting
         private string EffectivePreviewSample =>
             PreviewSourceMode == FormatPreviewSource.CurrentQuery && HasCurrentQuery ? _currentQueryText
             : PreviewSourceMode == FormatPreviewSource.PageSample && !string.IsNullOrWhiteSpace(_pageSample) ? _pageSample!
+            : PreviewSourceMode == FormatPreviewSource.SelectExample && !string.IsNullOrWhiteSpace(_selectExampleSql) ? _selectExampleSql!
             : _previewSample;
+
+        /// <summary>
+        /// The SELECT example the preview formats while <see cref="PreviewSourceMode"/> is
+        /// <see cref="FormatPreviewSource.SelectExample"/> (one of the schema's <c>selectExamples</c>).
+        /// </summary>
+        public string? SelectExampleSql
+        {
+            get => _selectExampleSql;
+            set
+            {
+                if (string.Equals(_selectExampleSql, value, StringComparison.Ordinal)) return;
+                _selectExampleSql = value;
+                OnPropertyChanged();
+                if (PreviewSourceMode == FormatPreviewSource.SelectExample) QueuePreviewAsync();
+            }
+        }
+        private string? _selectExampleSql;
 
         /// <summary>
         /// True when the engine serves SQL Prompt's option model: settings are keyed
@@ -381,15 +589,56 @@ namespace AkmlSql.Shell.Shared.Formatting
         public object? GetWorkingValue(string settingId) =>
             _workingValues.TryGetValue(settingId, out var v) ? v : null;
 
+        /// <summary>SQL Prompt's "Number of spaces in tabs" — the tab width in the SQL Prompt model.</summary>
+        internal const string SqlPromptTabSizeId = "sqlPrompt.whitespace.numberOfSpacesInTabs";
+
+        /// <summary>The AKML model's tab width.</summary>
+        internal const string AkmlTabSizeId = "whitespace.tabSize";
+
+        /// <summary>
+        /// Spec 040 (STY-02, FR-021) — the selected style's tab width, which the live preview expands
+        /// tabs to: SQL Prompt's "Number of spaces in tabs", or the AKML model's tab size. Defaults to
+        /// 4 and is clamped to 1–16. Raises <see cref="INotifyPropertyChanged.PropertyChanged"/> when
+        /// either option is edited and whenever a style's values are loaded.
+        /// </summary>
+        internal int PreviewTabSize
+        {
+            get
+            {
+                var raw = GetWorkingValue(IsSqlPromptModel ? SqlPromptTabSizeId : AkmlTabSizeId);
+                double size;
+                try
+                {
+                    size = raw == null ? 4 : Convert.ToDouble(raw, System.Globalization.CultureInfo.InvariantCulture);
+                }
+                catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException)
+                {
+                    size = 4;
+                }
+                if (double.IsNaN(size)) size = 4;
+                return (int)Math.Max(1, Math.Min(16, Math.Round(size)));
+            }
+        }
+
         /// <summary>
         /// Records a user edit and triggers a debounced preview refresh. Marks the loaded
         /// style dirty (browsing edits with no style loaded stay preview-only, never dirty).
         /// </summary>
+        /// <summary>
+        /// Spec 040 (T099) — raised after <see cref="SetWorkingValue"/> changes an option (on the
+        /// caller's thread), so the window can update that option's changed marker in place.
+        /// </summary>
+        internal event Action<string>? WorkingValueChanged;
+
         public void SetWorkingValue(string settingId, object? value)
         {
             _workingValues[settingId] = value;
-            if (_loadedProfileName != null) IsDirty = true;
-            QueuePreviewAsync();
+            WorkingValueChanged?.Invoke(settingId);
+            // Spec 040 (T098): unsaved means "differs from what was saved".
+            if (_loadedProfileName != null) IsDirty = DiffersFromSaved();
+            if (settingId == SqlPromptTabSizeId || settingId == AkmlTabSizeId)
+                OnPropertyChanged(nameof(PreviewTabSize));
+            QueuePreviewAsync(markChanges: true);
         }
 
         /// <summary>
@@ -432,10 +681,20 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// must produce <c>{"insertStatements":{"columns":{...}}}</c>, not a literal
         /// "columns.parenthesisStyle" property).
         /// </summary>
-        internal string BuildProfileJson()
+        internal string BuildProfileJson() => BuildProfileJson(null);
+
+        /// <summary>
+        /// <see cref="BuildProfileJson()"/> with some settings replaced — the working style with one
+        /// option set to each of its values, for the option examples. The working values are untouched.
+        /// </summary>
+        internal string BuildProfileJson(IEnumerable<KeyValuePair<string, object?>>? overrides)
         {
+            var values = new Dictionary<string, object?>(_workingValues, StringComparer.Ordinal);
+            if (overrides != null)
+                foreach (var o in overrides) values[o.Key] = o.Value;
+
             var root = new JsonObject();
-            foreach (var kvp in _workingValues)
+            foreach (var kvp in values)
             {
                 var segments = kvp.Key.Split('.');
                 if (segments.Length < 2 || segments[0].Length == 0) continue;
@@ -443,6 +702,77 @@ namespace AkmlSql.Shell.Shared.Formatting
                 ProfileJsonMerger.SetValueAt(root, segments, ProfileJsonMerger.ToJsonValue(kvp.Value));
             }
             return root.ToJsonString();
+        }
+
+        /// <summary>True while the engine connection is up (option examples need it).</summary>
+        internal bool IsEngineConnected => _rpc.IsConnected;
+
+        /// <summary>The session id of option-example requests, apart from the live preview's.</summary>
+        internal const string ExampleSessionId = "format-styles-editor:example";
+
+        private CancellationTokenSource? _examplesCts;
+        private readonly object _examplesCtsLock = new();
+
+        /// <summary>
+        /// Formats each request's SQL with the working style plus its settings — the "what does each
+        /// value do" cards. One request at a time: the engine answers FormatPreview in order, so a
+        /// burst would hold up the live preview behind it. A new live preview (an edit, a page or
+        /// sample switch) cancels the rest, and so does the next call. Never touches the live
+        /// preview's state. Returns one entry per request (null where that request failed), or
+        /// null when the batch was cancelled — the caller asks again once the live preview lands.
+        /// </summary>
+        internal async Task<IReadOnlyList<string?>?> FormatExamplesAsync(
+            IReadOnlyList<(string Sql, IReadOnlyList<KeyValuePair<string, object?>> Settings)> requests,
+            CancellationToken ct)
+        {
+            CancellationTokenSource cts;
+            lock (_examplesCtsLock)
+            {
+                _examplesCts?.Cancel();
+                _examplesCts?.Dispose();
+                _examplesCts = cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            }
+
+            var results = new string?[requests.Count];
+            for (var i = 0; i < requests.Count; i++)
+            {
+                if (cts.IsCancellationRequested) return null;
+                if (!_rpc.IsConnected) break;
+                try
+                {
+                    var response = await _rpc.SendRequestAsync<FormatPreviewResponse, FormatPreviewRequest>(
+                        MessageTypes.FormatPreview,
+                        new FormatPreviewRequest
+                        {
+                            SessionId = ExampleSessionId,
+                            SampleText = requests[i].Sql,
+                            ProfileJson = BuildProfileJson(requests[i].Settings),
+                        },
+                        timeoutMs: 2000,
+                        cts.Token).ConfigureAwait(false);
+                    // A validation error comes back with the SQL unformatted (the engine never
+                    // changes meaning): that is no example of the value, so it counts as failed.
+                    results[i] = string.IsNullOrEmpty(response?.FormattedText) || !string.IsNullOrEmpty(response!.ValidationError)
+                        ? null
+                        : response.FormattedText;
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested) { return null; }
+                catch (OperationCanceledException)
+                {
+                    // Not ours: the request's 2000 ms timeout. Leave this card out, try the next.
+                    Log.Debug("FormatStylesEditor: option example {Index} timed out", i);
+                }
+                catch (Exception ex)
+                {
+                    Log.Debug(ex, "FormatStylesEditor: option example {Index} failed", i);
+                }
+            }
+            return results;
+        }
+
+        private void CancelExamples()
+        {
+            lock (_examplesCtsLock) _examplesCts?.Cancel();
         }
 
         /// <summary>Shown in the pane when the engine answered but returned no text to display.</summary>
@@ -469,7 +799,13 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// Fire-and-forget request to refresh the preview. 100 ms debounce + supersession via
         /// monotonic sequence ID per <c>contracts/ipc-format-preview-debounce.md</c>.
         /// </summary>
-        public void QueuePreviewAsync()
+        public void QueuePreviewAsync() => QueuePreviewAsync(markChanges: false);
+
+        /// <param name="markChanges">
+        /// Spec 040 (T098): true only for an option edit — the resulting preview marks the lines
+        /// that moved (<see cref="MovedLines"/>).
+        /// </param>
+        internal void QueuePreviewAsync(bool markChanges)
         {
             CancellationToken token;
             int sequence;
@@ -489,6 +825,8 @@ namespace AkmlSql.Shell.Shared.Formatting
                 token = _previewCts.Token;
                 sequence = System.Threading.Interlocked.Increment(ref _previewSequence);
             }
+            // The live preview goes first: option examples still queued would hold it up.
+            CancelExamples();
 
             _ = Task.Run(async () =>
             {
@@ -524,9 +862,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                     {
                         // Always apply: a response can carry ONLY a validation error (empty
                         // FormattedText) — dropping it left the pane stuck on the placeholder.
-                        PreviewText = string.IsNullOrEmpty(response.FormattedText)
+                        var text = string.IsNullOrEmpty(response.FormattedText)
                             ? PreviewEmptyResponseText
                             : response.FormattedText!;
+                        var lines = PreviewLines(text);
+                        // Set before PreviewText: the window reads it when the text changes.
+                        MovedLines = markChanges && _previousPreviewLines.Length > 0
+                            ? Moved(_previousPreviewLines, lines)
+                            : new int[0];
+                        _previousPreviewLines = lines;
+                        PreviewText = text;
                         PreviewValidationError = response.ValidationError;
                     }
                 }
@@ -615,6 +960,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // be renamed or deleted and can still be reset.
                 IsSelectedBuiltIn = response.HasBuiltIn;
                 IsSelectedCustomized = response.IsCustomizedBuiltIn;
+                // Spec 040 (T187): a read-only team style is shown but can't be changed.
+                IsSelectedReadOnly = Profiles.Any(p => p.IsReadOnly && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+                CaptureSavedValues();
                 IsDirty = false;
                 LastError = null;
                 QueuePreviewAsync();
@@ -636,7 +984,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             SelectedProfileName = null;
             IsSelectedBuiltIn = false;
             IsSelectedCustomized = false;
+            IsSelectedReadOnly = false;
             IsSelectedClassic = false;
+            _savedValues = new Dictionary<string, object?>(StringComparer.Ordinal);
             IsDirty = false;
         }
 
@@ -689,6 +1039,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Log.Debug(ex, "FormatStylesEditor: overlay of loaded profile values failed");
             }
+            // Every load path (select, revert, reset) reseeds and then overlays here, so this is
+            // the one place a newly loaded style's tab width reaches the preview.
+            OnPropertyChanged(nameof(PreviewTabSize));
         }
 
         private void OverlayObject(string prefix, JsonElement obj)
@@ -736,6 +1089,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             ReseedWorkingValues();
             OverlayProfileValuesFromJson(_loadedProfileJson!);
+            CaptureSavedValues();
             IsDirty = false;
             LastError = null;
             QueuePreviewAsync();
@@ -757,6 +1111,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 LastError = "No style loaded.";
                 return false;
             }
+            if (RefuseReadOnlyTeamStyle(_loadedProfileName)) return false;   // spec 040 (T187)
             if (!IsSelectedBuiltIn)
             {
                 // Guarded here as well as in the engine: a custom style has no shipped original to
@@ -803,6 +1158,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 _loadedProfileJson = restored;
                 IsSelectedCustomized = false;
+                CaptureSavedValues();
                 IsDirty = false;
                 LastError = null;
                 QueuePreviewAsync();
@@ -832,6 +1188,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 LastError = "No style loaded.";
                 return false;
             }
+            if (RefuseReadOnlyTeamStyle(_loadedProfileName)) return false;   // spec 040 (T187)
             if (!_rpc.IsConnected)
             {
                 LastError = "Engine not connected.";
@@ -865,6 +1222,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     var item = Profiles.FirstOrDefault(p => string.Equals(p.Name, _loadedProfileName, StringComparison.OrdinalIgnoreCase));
                     if (item != null) item.IsCustomized = true;
                 }
+                CaptureSavedValues();
                 IsDirty = false;
                 LastError = null;
                 return true;
@@ -964,6 +1322,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             // override to the style it overrides, so renaming one would orphan the original rather
             // than rename anything. Copy makes an independent style that can be named freely.
             if (IsSelectedBuiltIn) { LastError = "Built-in styles cannot be renamed — use Copy to make one you can name."; return null; }
+            if (RefuseReadOnlyTeamStyle(target)) return null;   // spec 040 (T187)
             if (string.IsNullOrWhiteSpace(newName)) { LastError = "Enter a new name."; return null; }
             if (!_rpc.IsConnected) { LastError = "Engine not connected."; return null; }
 
@@ -1030,6 +1389,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     : "Built-in styles cannot be deleted.";
                 return false;
             }
+            if (RefuseReadOnlyTeamStyle(target)) return false;   // spec 040 (T187)
 
             try
             {
@@ -1079,6 +1439,12 @@ namespace AkmlSql.Shell.Shared.Formatting
             => string.IsNullOrWhiteSpace(sourceName)
                 ? Task.FromResult<string?>(null)
                 : DuplicateAsync(sourceName, UniqueName($"{sourceName} copy"));
+
+        /// <summary>Spec 040 (T101) — Copy under the name the user chose.</summary>
+        public Task<string?> CopyProfileAsync(string sourceName, string newName)
+            => string.IsNullOrWhiteSpace(sourceName) || string.IsNullOrWhiteSpace(newName)
+                ? Task.FromResult<string?>(null)
+                : DuplicateAsync(sourceName, newName.Trim());
 
         private async Task<string?> DuplicateAsync(string source, string newName)
         {
@@ -1208,7 +1574,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         public Task RefreshProfilesAsync() => LoadProfilesAsync(CancellationToken.None);
 
         /// <summary>Returns <paramref name="baseName"/>, or "baseName 2", "baseName 3"… if taken.</summary>
-        private string UniqueName(string baseName)
+        internal string UniqueName(string baseName)
         {
             bool Taken(string n) => Profiles.Any(p => string.Equals(p.Name, n, StringComparison.OrdinalIgnoreCase));
             if (!Taken(baseName)) return baseName;
@@ -1254,11 +1620,17 @@ namespace AkmlSql.Shell.Shared.Formatting
                 else
                     await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
 
+                // Spec 040 (T187): the team folder's state, for the "Team styles unavailable" row.
+                try { TeamStyleFolder = ConfigManager.Load().Formatter.TeamStyleFolder ?? string.Empty; }
+                catch (Exception ex) { Log.Debug(ex, "FormatStylesEditor: team-folder read failed"); }
+                TeamFolderUnavailable = response?.TeamFolderUnavailable == true;
+
                 Profiles.Clear();
                 if (response?.Profiles == null) return;
 
                 foreach (var p in response.Profiles)
                 {
+                    var isTeam = string.Equals(p.Source, StyleListItem.TeamSource, StringComparison.OrdinalIgnoreCase);
                     Profiles.Add(new StyleListItem
                     {
                         Name = p.Name ?? string.Empty,
@@ -1266,10 +1638,14 @@ namespace AkmlSql.Shell.Shared.Formatting
                         // IsBuiltIn alone cannot describe an edited built-in: the file that
                         // resolves is the custom one, so IsBuiltIn is false while the style is
                         // still shipped. The two flags together say "shipped" and "changed".
-                        IsShipped = p.IsBuiltIn || p.IsCustomizedBuiltIn,
-                        IsCustomized = p.IsCustomizedBuiltIn,
+                        // A team style that shadows a shipped name is the team's, not shipped.
+                        IsShipped = !isTeam && (p.IsBuiltIn || p.IsCustomizedBuiltIn),
+                        IsCustomized = !isTeam && p.IsCustomizedBuiltIn,
                         BasedOn = p.BasedOn,
                         IsActive = activeProfile != null && string.Equals(p.Name, activeProfile, StringComparison.OrdinalIgnoreCase),
+                        // Spec 040 (T187, STY-10): team styles get their own group; read-only ones can only be copied.
+                        Source = p.Source,
+                        IsReadOnly = isTeam && p.IsReadOnly,
                     });
                 }
             }
@@ -1368,6 +1744,32 @@ INSERT INTO Audit (Action, Timestamp)
 VALUES ('SampleQuery', GETDATE());";
     }
 
+    /// <summary>Spec 040 (T096) — what an option search matched.</summary>
+    internal sealed class StyleOptionSearchResult
+    {
+        public StyleOptionSearchResult(IReadOnlyList<string> groupIds, IReadOnlyDictionary<string, int> counts,
+            IReadOnlyCollection<string> optionIds, string? firstGroupId, string? firstOptionId)
+        {
+            GroupIds = groupIds;
+            Counts = counts;
+            OptionIds = optionIds;
+            FirstGroupId = firstGroupId;
+            FirstOptionId = firstOptionId;
+        }
+
+        /// <summary>Pages to show, in schema order: all of them for an empty query.</summary>
+        public IReadOnlyList<string> GroupIds { get; }
+
+        /// <summary>Matches per page; empty for an empty query.</summary>
+        public IReadOnlyDictionary<string, int> Counts { get; }
+
+        /// <summary>Ids of the matching options.</summary>
+        public IReadOnlyCollection<string> OptionIds { get; }
+
+        public string? FirstGroupId { get; }
+        public string? FirstOptionId { get; }
+    }
+
     /// <summary>Lightweight DTO bound to the style list (left panel).</summary>
     internal sealed class StyleListItem : INotifyPropertyChanged
     {
@@ -1406,7 +1808,9 @@ VALUES ('SampleQuery', GETDATE());";
         /// no way to tell, from the list, whether a built-in is the shipped style or your edited
         /// version of it -- and that is exactly what someone reaching for Reset needs to know.
         /// </summary>
-        public string Kind => IsCustomized ? "Built-in \u00b7 modified" : IsShipped ? "Built-in" : "Native";
+        public string Kind =>
+            IsTeam ? (IsReadOnly ? "Team \u00b7 read-only" : "Team")
+            : IsCustomized ? "Built-in \u00b7 modified" : IsShipped ? "Built-in" : "Native";
 
         /// <summary>If this profile was forked from another, that source name.</summary>
         public string? BasedOn { get; set; }
@@ -1414,8 +1818,29 @@ VALUES ('SampleQuery', GETDATE());";
         /// <summary>Spec 033 — ✔ marker: this style is <c>Formatter.ActiveProfile</c> (shell config).</summary>
         public bool IsActive { get; set; }
 
-        /// <summary>Spec 033 — list section header ("Your styles" / "Built-in styles").</summary>
-        public string Section => IsShipped ? "Built-in styles" : "Your styles";
+        /// <summary>Spec 033 — list section header ("Your styles" / "Team styles" / "Built-in styles").</summary>
+        public string Section => IsTeam ? "Team styles" : IsShipped ? "Built-in styles" : "Your styles";
+
+        /// <summary>Spec 040 — section order: your styles, then team styles, then built-in styles.</summary>
+        public int SectionOrder => IsTeam ? 1 : IsShipped ? 2 : 0;
+
+        /// <summary><see cref="Source"/> of a style from the shared team style folder.</summary>
+        internal const string TeamSource = "team";
+
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — where the style comes from: "builtIn", "user" or "team"
+        /// (ProfileInfo key 9; null from an older engine).
+        /// </summary>
+        public string? Source { get; set; }
+
+        /// <summary>Spec 040 — a style from the shared team style folder.</summary>
+        public bool IsTeam => string.Equals(Source, TeamSource, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Spec 040 (T187) — a team style in a folder that can't be written to: options disabled,
+        /// Save / Rename / Delete disabled, Copy allowed.
+        /// </summary>
+        public bool IsReadOnly { get; set; }
 
         public override string ToString() =>
             string.IsNullOrEmpty(Description) ? Name : $"{Name} — {Description}";
@@ -1441,5 +1866,7 @@ VALUES ('SampleQuery', GETDATE());";
         PageSample,
         /// <summary>The text from the editor that was active when the styles editor opened.</summary>
         CurrentQuery,
+        /// <summary>SQL Prompt model: one of the SELECT examples (<see cref="FormatStylesEditorViewModel.SelectExampleSql"/>).</summary>
+        SelectExample,
     }
 }

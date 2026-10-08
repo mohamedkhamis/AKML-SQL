@@ -103,9 +103,7 @@ namespace AkmlSql.Shell.Shared.Safety
                 // OnBeforeExecute re-checks settings dynamically on each invocation.
                 ExecutionCommandFilter.Install(package);
 
-                // Register F1 help context for the safety dialog.
-                Help.F1HelpListener.Default.Register("akmlsql.dialog.safety",
-                    "https://github.com/mohamedkhamis/AKML-SQL/blob/master/doc/execution-safety.md");
+                // F1 in the safety dialog: F1HelpRegistrations maps "akmlsql.dialog.safety" to the docs site.
 
                 Log.Information("ExecutionInterceptor: initialized (safety checks enabled)");
             }
@@ -257,8 +255,10 @@ namespace AkmlSql.Shell.Shared.Safety
                     matchedEnvRule = EnvironmentDetector.Match(serverName, databaseName);
                     if (matchedEnvRule != null)
                     {
-                        isProductionServer = matchedEnvRule.Label.IndexOf(
-                            "PROD", StringComparison.OrdinalIgnoreCase) >= 0;
+                        // PROD in the name, or the environment's severity asks for the server
+                        // name: production renamed "Live" stays production.
+                        isProductionServer = AkmlSql.Core.Models.Tabs.EnvironmentSafety.IsProduction(
+                            matchedEnvRule.Label, cachedSafety?.EnvironmentSeverity);
                     }
                 }
                 catch (Exception ex)

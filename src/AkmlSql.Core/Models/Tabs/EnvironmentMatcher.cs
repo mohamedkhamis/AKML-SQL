@@ -32,7 +32,9 @@ namespace AkmlSql.Core.Models.Tabs
         /// Tests a connection against each rule in order. A rule with
         /// <see cref="MatchTargetDatabase"/> is evaluated against <paramref name="databaseName"/>
         /// (regardless of the server, i.e. "database-on-any-server"); any other rule is
-        /// evaluated against <paramref name="serverName"/>.
+        /// evaluated against <paramref name="serverName"/> — and, when it has a non-empty
+        /// <see cref="EnvironmentRule.DatabaseName"/> (spec 040, OPT-08: a "server + database" row
+        /// in the Color grid), against <paramref name="databaseName"/> as well.
         /// Returns the first matching rule, or <c>null</c> if none match.
         /// Rules must be pre-sorted by <see cref="EnvironmentRule.Order"/> ascending.
         /// </summary>
@@ -55,8 +57,16 @@ namespace AkmlSql.Core.Models.Tabs
                 }
                 else if (string.Equals(rule.MatchTarget, MatchTargetServerName, StringComparison.OrdinalIgnoreCase))
                 {
-                    if (!string.IsNullOrWhiteSpace(serverName) && MatchesPattern(rule.Pattern, serverName!))
-                        return rule;
+                    if (string.IsNullOrWhiteSpace(serverName) || !MatchesPattern(rule.Pattern, serverName!))
+                        continue;
+
+                    // Spec 040 (OPT-08): a server rule that names a database matches only that
+                    // server AND database. An empty DatabaseName keeps the server-only behaviour.
+                    if (!string.IsNullOrWhiteSpace(rule.DatabaseName) &&
+                        (string.IsNullOrWhiteSpace(databaseName) || !MatchesPattern(rule.DatabaseName, databaseName!)))
+                        continue;
+
+                    return rule;
                 }
             }
 

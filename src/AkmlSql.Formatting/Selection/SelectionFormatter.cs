@@ -8,12 +8,17 @@ public class SelectionFormatter
     private readonly FormatterPipeline _pipeline = new();
 
     public SelectionResult FormatSelection(string fullText, int selectionStart, int selectionEnd, FormattingProfile profile)
+        => FormatSelection(fullText, selectionStart, selectionEnd, profile, null);
+
+    /// <summary>Spec 040 (STY-11) — with the interactive Format SQL actions; null = as before.</summary>
+    public SelectionResult FormatSelection(string fullText, int selectionStart, int selectionEnd, FormattingProfile profile,
+        FormatPipelineOptions? options)
     {
         // Expand selection to enclosing statement boundaries
         var (expandedStart, expandedEnd) = ExpandToStatementBoundaries(fullText, selectionStart, selectionEnd);
 
         var selectedText = fullText[expandedStart..expandedEnd];
-        var result = _pipeline.Format(selectedText, profile);
+        var result = _pipeline.Format(selectedText, profile, options);
 
         return new SelectionResult
         {

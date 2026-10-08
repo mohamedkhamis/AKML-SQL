@@ -10,7 +10,7 @@ The engine supports three transports, all of which carry the same `RpcMessage` e
 
 | Transport | Class | Wire | Consumers |
 |-----------|-------|------|-----------|
-| **Named pipe** (default) | `Transports/NamedPipeTransport` | `[length][CRC][MessagePack(RpcMessage)]` over `\\.\pipe\akmlsql-engine-{SID}-{PID}` | SSMS 20/21/22, VS 2019/22/26 (today's IDE plugins) |
+| **Named pipe** (default) | `Transports/NamedPipeTransport` | `[length][CRC][MessagePack(RpcMessage)]` over `\\.\pipe\akmlsql-engine-{SID}-{PID}` | SSMS 22 (the extension) |
 | **In-process** | `Transports/InProcessTransport` | Method calls; no serialisation | Blazor WASM running engine logic in the browser tab (spec 021 M2+); engine unit tests |
 | **WebSocket** (M3, future) | `Transports/WebSocketTransport` | One WebSocket binary message = one `RpcMessage` MessagePack payload | Browser ↔ engine bridge (spec 021 M3+) |
 
@@ -324,6 +324,7 @@ OriginalEnd       int      Adjusted selection end
 WasModified       bool
 ValidationPassed  bool
 ElapsedMs         long
+ProfileFallbackWarning string?  Key 7 (spec 040): set when the style could not be loaded and defaults were used
 ```
 
 ---
@@ -464,7 +465,7 @@ The JSON-string payload (rather than a typed MessagePack object) keeps the wire 
 
 **SQL Prompt model (spec 039)**: with `SqlPromptModel = true` the body is
 `SqlPromptOptionCatalog.ToEditorSchemaJson()` — the same `groups` / `settings` shape plus
-`"model": "sqlPrompt"`, `SchemaVersion = 2001`. Groups are SQL Prompt's 14 pages (`parentId` =
+`"model": "sqlPrompt"`, `SchemaVersion = 2002` (2002 added each setting's `example` and the top-level `exampleQueries` / `selectExamples`). Groups are SQL Prompt's 14 pages (`parentId` =
 `global` / `statements` / `clauses` / `expressions`, `sample` = the page's preview SQL); setting ids
 are `sqlPrompt.<SQL Prompt path>` with typed `default`, `allowedEnumValues` + `enumLabels`,
 `min` / `max`, `subgroup` (page sub-heading), `note`, and `enabledWhen: { id, value }`. An engine

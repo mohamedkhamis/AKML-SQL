@@ -70,7 +70,7 @@ public sealed class PublicSiteTests(SiteFixture site)
     // --- UI-004 / A11Y-006: the three-option theme control ------------------
 
     [SkippableFact]
-    public async Task ThemePicker_SwitchesTheme_AndPersistsAcrossReload()
+    public async Task ThemePicker_SwitchesTheme_AndPersistsAcrossReloadAndNavigation()
     {
         SkipIfUnavailable();
         await using var context = await site.NewContextAsync();
@@ -96,6 +96,23 @@ public sealed class PublicSiteTests(SiteFixture site)
 
         await page.ReloadAsync();
         Assert.Equal("high-contrast", await page.GetAttributeAsync("html", "data-akml-theme"));
+
+        // Enhanced navigation patches html/head back to the SSR defaults. The selected theme,
+        // working picker and matching screenshots must survive that patch together.
+        await page.ClickAsync("#theme-toggle");
+        await page.ClickAsync("[data-theme-value='light']");
+        await page.ClickAsync(".site-header a[href='/features']");
+        await page.WaitForURLAsync("**/features");
+        await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-akml-theme", "light");
+        Assert.Contains("light.css", await page.GetAttributeAsync("#akml-theme-css", "href"));
+        await Assertions.Expect(page.Locator("#theme-toggle")).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator(".screenshot-light:visible")).ToHaveCountAsync(7);
+        await Assertions.Expect(page.Locator(".screenshot-dark:visible")).ToHaveCountAsync(0);
+
+        await page.ClickAsync("#theme-toggle");
+        await Assertions.Expect(page.Locator("[data-theme-value='light']")).ToHaveAttributeAsync("aria-checked", "true");
+        await page.ClickAsync("[data-theme-value='dark']");
+        await Assertions.Expect(page.Locator(".screenshot-dark:visible")).ToHaveCountAsync(7);
     }
 
     [SkippableFact]
@@ -169,6 +186,46 @@ public sealed class PublicSiteTests(SiteFixture site)
         await Assertions.Expect(button).ToHaveTextAsync("Copied!");
         var clipboard = await page.EvaluateAsync<string>("navigator.clipboard.readText()");
         Assert.False(string.IsNullOrWhiteSpace(clipboard));
+    }
+
+    [SkippableTheory]
+    [InlineData(ColorScheme.Light)]
+    [InlineData(ColorScheme.Dark)]
+    public async Task HeadingLinks_LandBelowTheStickyHeader(ColorScheme scheme)
+    {
+        SkipIfUnavailable();
+        // F1 in the product opens a docs heading (topics/options#…), and the docs link to each
+        // other's headings. Both scrolled the heading under the sticky site header; a link
+        // followed inside the site (enhanced navigation) lost it again in the light theme, where
+        // the theme stylesheet comes back after Blazor has scrolled.
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await page.EmulateMediaAsync(new PageEmulateMediaOptions { ColorScheme = scheme });
+
+        async Task AssertBelowHeader(string id)
+        {
+            var heading = page.Locator($"article.doc-article [id='{id}']");
+            double top = double.NaN, headerBottom = double.NaN;
+            for (var waited = 0; waited <= 3000; waited += 250) // smooth scrolling settles
+            {
+                top = (await heading.BoundingBoxAsync())?.Y ?? double.NaN;
+                var header = await page.Locator(".site-header").BoundingBoxAsync();
+                headerBottom = header is null ? 0 : header.Y + header.Height;
+                if (top >= headerBottom - 1 && top < 900) return;
+                await page.WaitForTimeoutAsync(250);
+            }
+            Assert.Fail($"{scheme}: #{id} is at y={top:0}; the sticky header ends at y={headerBottom:0}.");
+        }
+
+        // A direct load — what F1 opens.
+        await page.GotoAsync(SiteFixture.BaseUrl + "/docs/topics/options#suggestions-lists-connections");
+        await AssertBelowHeader("suggestions-lists-connections");
+
+        // A link from another topic.
+        await page.GotoAsync(SiteFixture.BaseUrl + "/docs/topics/formatting");
+        await page.Locator("article.doc-article a[href*='options#format']").First.ClickAsync();
+        await page.WaitForURLAsync(url => url.EndsWith("#format", StringComparison.Ordinal));
+        await AssertBelowHeader("format");
     }
 
     [SkippableFact]

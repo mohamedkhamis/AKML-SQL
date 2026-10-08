@@ -9,7 +9,6 @@ using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Handlers.Analysis;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Server;
-using AkmlSql.Engine.Sessions;
 using AkmlSql.Engine.Transports;
 using MessagePack;
 using Serilog;
@@ -45,7 +44,7 @@ public sealed class ListAnalysisRulesHandlerTests
 
         Assert.True(response.Success);
         Assert.Equal(registry.AllRules.Count, response.Rules.Length);
-        Assert.True(response.Rules.Length > 100, $"expected 120+ rules, got {response.Rules.Length}");
+        Assert.True(response.Rules.Length > 100, $"expected 130+ rules, got {response.Rules.Length}");
         // Ids are unique and non-empty.
         Assert.All(response.Rules, r => Assert.False(string.IsNullOrWhiteSpace(r.RuleId)));
         Assert.Equal(response.Rules.Length, response.Rules.Select(r => r.RuleId).Distinct(StringComparer.OrdinalIgnoreCase).Count());

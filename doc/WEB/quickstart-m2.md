@@ -4,7 +4,7 @@ This walks a developer through running the M2 surface locally: the in-browser ed
 
 ## Prerequisites
 
-- .NET SDK 10.0 preview 3 or later (`dotnet --version` should show `11.0.100-preview.*`).
+- .NET 10 SDK (any 10.0.x GA release; the projects target `net10.0`).
 - A modern Chromium / Firefox / Safari with IndexedDB and `prefers-color-scheme` support.
 
 ## Run

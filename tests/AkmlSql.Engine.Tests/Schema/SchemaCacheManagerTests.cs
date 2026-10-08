@@ -86,6 +86,84 @@ public class SchemaCacheManagerTests
         Assert.Null(mgr.GetCache("s", "db1"));
     }
 
+    [Fact]
+    public void EvictLru_keeps_a_cache_still_in_use_however_old_its_refresh()
+    {
+        // Caches are per editor tab: the first tab's schema was refreshed first, so opening more
+        // tabs evicted it while it was being typed in.
+        using var mgr = new SchemaCacheManager(maxDatabases: 2);
+        var first = mgr.GetOrCreateCache("tab1", "Northwind");
+        first.LastFullRefresh = DateTime.UtcNow.AddHours(-2);
+        var second = mgr.GetOrCreateCache("tab2", "Northwind");
+        second.LastFullRefresh = DateTime.UtcNow.AddHours(-1);
+        second.LastUsedUtc = DateTime.UtcNow.AddHours(-1);
+        first.LastUsedUtc = DateTime.UtcNow.AddHours(-1);
+
+        Assert.NotNull(mgr.GetCache("tab1", "Northwind"));   // typed in just now
+        var third = mgr.GetOrCreateCache("tab3", "Northwind");
+        third.LastFullRefresh = DateTime.UtcNow;
+
+        mgr.EvictLru();
+
+        Assert.NotNull(mgr.GetCache("tab1", "Northwind"));
+        Assert.Null(mgr.GetCache("tab2", "Northwind"));
+        Assert.NotNull(mgr.GetCache("tab3", "Northwind"));
+    }
+
+    [Fact]
+    public async Task A_missing_cache_is_reloaded_once_however_often_it_is_asked_for()
+    {
+        // An open tab whose cache was evicted gets it back on its next lookup.
+        using var mgr = new SchemaCacheManager();
+        var release = new TaskCompletionSource();
+        var reloads = 0;
+        mgr.ReloadMissing = async (session, db) =>
+        {
+            Interlocked.Increment(ref reloads);
+            await release.Task;
+            mgr.GetOrCreateCache(session, db);
+        };
+
+        Assert.Null(mgr.GetCache("tab1", "Northwind"));
+        Assert.Null(mgr.GetCache("tab1", "Northwind"));   // while the first reload runs
+        Assert.False(mgr.TryClaimPopulation("tab1:Northwind"));
+        release.SetResult();
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (mgr.GetCache("tab1", "Northwind") == null && DateTime.UtcNow < deadline) await Task.Delay(20);
+
+        Assert.NotNull(mgr.GetCache("tab1", "Northwind"));
+        Assert.Equal(1, reloads);
+        Assert.True(mgr.TryClaimPopulation("tab1:Northwind"));   // released when the reload ended
+    }
+
+    [Theory]
+    [InlineData("tab-gone", "Northwind")]   // the tab closed: no session
+    [InlineData("tab1", "master")]          // another database than the session's own
+    public async Task Only_an_open_sessions_own_database_is_reloaded(string sessionId, string database)
+    {
+        var sessions = new AkmlSql.Engine.Server.SessionManager();
+        sessions.UpdateSession(new AkmlSql.Core.Ipc.Messages.ConnectionInfo
+        {
+            SessionId = "tab1",
+            ConnectionString = "Data Source=(local);Initial Catalog=Northwind;Integrated Security=true",
+            DatabaseName = "Northwind",
+        });
+        using var mgr = new SchemaCacheManager();
+        var ctx = new AkmlSql.Engine.RpcContext
+        {
+            Sessions = sessions,
+            SchemaCache = mgr,
+            Logger = Serilog.Log.Logger,
+            SettingsLoader = () => new AkmlSql.Core.Config.AppSettings(),
+            SchemaMetadata = new SchemaMetadataService(),
+        };
+
+        await AkmlSql.Engine.EngineComposition.ReloadSessionCacheAsync(ctx, sessionId, database);
+
+        Assert.Equal(0, mgr.CacheCount);
+    }
+
     // ── CacheCount ────────────────────────────────────────────────────────
 
     [Fact]

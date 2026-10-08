@@ -1763,3 +1763,191 @@ outside VS fails once looking up IVsSettingsManager, the helper absorbs it); web
   item modified (`StyleListItem` raises change notifications); the space commit takes in an
   auto-closed `]`; parens are checked after the widened range; the "[" scan-back only crosses
   characters a bracketed name is made of (both editors).
+
+---
+
+## Spec 040 — SQL Prompt UI/UX parity: Options, SQL History, format styles (2026-09-28)
+
+Request: bring the SSMS 22 Options window, SQL History and format-style editing up to SQL Prompt's
+UI/UX, as analysed in `doc/_Prompt-Gap/11-UI-UX-Plan-Options-History-Styles.md` (38 work items:
+OPT-01..09, HIS-01..14, STY-01..11, X-01..04). Web edition out of scope. Spec:
+`specs/040-sqlprompt-ui-parity/spec.md`; verification record: `baseline.md` there.
+
+### What the investigation found
+
+The layouts already matched SQL Prompt; the screens did not tell the truth:
+
+- **Options**: about 40 controls changed nothing ("Maximum suggestions", "Trigger delay",
+  "Show nullability info", "Format on paste", …); the theme drop-down saved behind Cancel;
+  Restore Defaults wiped data the page doesn't show (AI agents, rule overrides).
+- **SQL History**: the preview stopped at 500 characters; the open/closed filter and dot never
+  changed (nothing recorded that a query was open); paging stopped before the end; Delete and
+  Favorite on a grouped row acted on the latest run only; a version snapshot left the search
+  index on the old text.
+- **Styles**: labels cut mid-word; the preview ignored the style's tab width; import did not
+  refresh the ACTIVE marker or the list.
+
+### What was built
+
+- **US1–US3 (P1)** — dead settings wired or hidden; Cancel means cancel; Restore Defaults keeps
+  hidden data; History preview complete, open state recorded (open/closed filters, `open:`),
+  paging to the end, group actions on the whole group, snapshot and search index in step; style
+  editor labels wrap, preview honours tab width, import/export keep the list and ACTIVE marker right.
+- **US4** — style option search, change markers and ↺ reset, Active Style menu (AKML SQL menu
+  and the SQL editor's context menu), Format feedback in the status bar.
+- **US5** — History like SQL Prompt's: search as you type with `name:`/`server:`/`open:`… and
+  Advanced search, date groups, star, keyboard-only use, versions with compare, restore of open
+  queries at start, drafts for never-run tabs.
+- **US6** — Options in SQL Prompt's tree and words, child options greyed under their master
+  switch, number fields, options in the Command Palette, a tab-colour environments grid.
+- **US7** — the AKML SQL menu built from `AkmlMenuTable`, `WindowTitles.For` titles, F1 help to
+  `akml.khamis.work/docs`, team style folder (read-only and unreachable cases), Format SQL actions
+  (layout, casing, semicolons, brackets, Expand wildcards, Qualify object names).
+
+### Verification
+
+- Final suites (2026-10-04): Shell 819/819; Engine 1,990/1,990; Formatting 1,515/1,515;
+  Site 877/877; IntelliSense 25/25;
+  Core 1,092 passed, 1 failed (`ProfileGetMessageTests…append_only`, red since spec 039);
+  format-parity goldens unchanged.
+- Quickstart scenarios 1–49 driven in SSMS 22 by a UI Automation runner against the deployed
+  build (Northwind only), results per scenario in `baseline.md` › Final verification. The
+  screenshot tour (`SsmsScreenshotTour.Capture_spec_040_windows`, T193) passes.
+
+### Issues hit (found by the SSMS runs, fixed)
+
+- **SSMS raises `DocumentClosing` up to three times per tab close** (before the save prompt, then
+  twice as the tab goes away). The second and third calls found the session key gone and recorded
+  the executed query again as two "Not executed" drafts, and pushed Reopen Closed Tab entries
+  twice more. `RepeatedCloseFilter` (same document and text within 2 min) keeps the first.
+- **Tab-switch snapshot never fired on the usual run → edit → switch**: it compared the tab with
+  `_lastActiveDocumentPath`, which every run and switch sets to that very tab. It now snapshots
+  when focus leaves the document (`ExecutionCapture.IsSwitchAway`). An unchanged text is no longer
+  stored as a new version (the minute autosave added one every minute).
+- **The startup tab had no schema**: a connection found before the engine pipe was up was dropped
+  (`deferred send skipped`), and so was its text. `ConnectionWiringHelper.WhenEngineReadyAsync`
+  waits up to 10 s for both.
+- **An engine restart left every open tab without a session**: the shell restarts a crashed engine
+  but never told the new one about the open editors, so schema features stopped in all of them.
+  `EngineProcessManager.Restarted` now has `ConnectionWiringHelper` send each open editor's text
+  and connection again.
+- **Schema caches are per tab and evicted by refresh age**, so the first tab lost its cache once
+  ten more opened, and nothing reloaded it. Eviction now keeps the most recently *used* caches,
+  and a lookup that misses an open session's own database reloads it in the background
+  (`SchemaCacheManager.ReloadMissing`, one population per cache at a time).
+- **Enter in the Command Palette did nothing**: SSMS turns Enter in that window into an editor
+  RETURN command, which `CompletionController` swallowed to protect the document. It now hands
+  the key to the focused element (`FocusedKeyDelivery`). Options also rank before commands that
+  match only letter by letter ("retention" ran "Create Snippet from Selection").
+- **No format notice ever showed**: `FormatFailureNotifier` cast the `SVsShell` service to
+  `IServiceProvider` and threw. It uses `ServiceProvider.GlobalProvider` (as does Text to SQL).
+- **History keyboard**: Space (star) reloads the list and focus fell to the window; it returns to
+  the selected row. F2 reaches the pane before SSMS's own key handling (`PreProcessMessage`), and
+  a key pressed while the list reloads runs once it has loaded.
+- Message boxes of Format styles say `AKML SQL – Format styles` like the window.
+
+### PR #254 review (15 findings, all fixed)
+
+- **History** — a tab-switch snapshot needs the tab's own session (no session: nothing saved;
+  the engine no longer falls back to "newest row with this path", which on SSMS's repeating
+  `SQLQueryN.sql` names was another day's query). A tab close waits for the tab to go
+  (`PendingCloses`): Cancel at "save changes?" no longer marks it closed or records a draft,
+  interleaved closes each count once, a re-close is a new close. A cancelled exit no longer leaves
+  History "shutting down" (`ShutdownState`: QueryClose is tentative). New runs of a starred query
+  (and a starred draft that runs) stay starred. Reopened queries are marked open. Open-state
+  owners are a PID *and* its start time (reused PIDs). Delete acts on every selected row.
+  `sql:` searches SQL text only; `=`-like words match as written. A CamelCase search's short
+  pages still offer More (`HistorySearchResponse.HasMore`, key 4).
+- **Safety** — renaming an environment carries its severity to the new name, and an environment
+  that asks for the server name counts as production whatever it is called (`EnvironmentSafety`).
+- **Formatting** — Expand wildcards brackets names that need it, and schema actions whose result
+  would not parse are not applied. "Add square brackets" brackets names only (objects, columns,
+  aliases, types — not `NOCOUNT`, `max`, `DATEADD`, date parts or hints), and Stage 8 output that
+  would not parse is not applied. Format SQL actions default to "As the style says"
+  (`FormatSqlActionsDto.UseStyle`), so a style's own semicolons and brackets apply again.
+- **Completion** — "Trigger delay" defaults to 0 (a config's untouched 100 is moved once,
+  `triggerDelayVersion`); a dot is always immediate.
+- **Team styles** — a team folder scan answers lookups for 5 s (`TeamSnapshotTtl`), not one
+  listing of the share per format request.
+- **Found in SSMS verifying the fixes** — with grouped History the engine deleted only the first
+  of several selected queries (the handler passed `EntryIds[0]` to the group delete);
+  `HistoryDatabase.DeleteGroupsAsync` deletes each one's group in one transaction. Runs:
+  `specs/040-sqlprompt-ui-parity/baseline.md`.
+- **Also seen there, fixed after** — a History refresh (a run in another tab, a draft, a closed
+  tab) kept only the first of several selected rows: the view model keeps them all (by id, else
+  by session) and the list selects them again (`SelectionRestored`). Search matched only whole
+  words of the SQL; a word now matches the start of one (`"term"*` full-text prefix), so a word
+  typed part-way finds the query. Shift+Down in the History list works; the UI test runner's
+  Shift+Down was read as Shift+numpad 2 (NumLock on) and lost its Shift.
+
+### Open
+
+See `specs/040-sqlprompt-ui-parity/tasks.md` › Deferred: commands with no handler stay off the
+AKML SQL menu; the VSCT menu is still parented to `IDM_VS_MENU_BAR` and invisible in SSMS 22;
+Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; "Record failed
+executions" and "Encrypt at rest" stay hidden; UI Automation walks only the first row of each
+group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors. Also: schema
+caches are still per tab (one cache per server and database would share them).
+
+## 2026-10-06 — Product site screenshot refresh
+
+- Home now shows the SSMS Format styles window. Features showcases JOIN suggestions,
+  wildcard column selection, Format styles, SQL History, Options, the command palette
+  and execution warnings. The fourteen PNGs are unchanged dark/light pairs from the
+  owner's screenshot folder, using only the supplied `*-crop.png` files.
+- `ProductScreenshot` renders theme-matched images, descriptive captions/alt text and
+  full-size links. Explicit dimensions preserve layout; Features images load lazily.
+  Phones show the complete crop. High contrast uses the supplied dark capture.
+- Fixed the theme reset exposed during browser verification: enhanced navigation
+  replaced the theme attribute and stylesheet and hid the picker. `theme-toggle.js`
+  restores the active theme and picker after the patch, including without storage,
+  and does not persist an OS default merely because the visitor navigated.
+- Validation: 877 Site unit/component tests passed; full solution Release MSBuild
+  and theme CSS drift check passed (existing build warnings). Local Chromium verified
+  1440/390/320 px layouts, all three themes, reload and enhanced navigation, original
+  image ratios, full-size links, OS defaults, disabled storage and no-JavaScript
+  fallback. All fourteen asset hashes match the supplied crops. The existing deployed
+  E2E theme test was extended and compiled; browser execution used an isolated local
+  preview database, not the live site. Artifacts: `artifacts/site-screenshot-review/`.
+  No deployment was performed.
+
+## 2026-10-06 — Site admin/security review, approval checkpoint
+
+- Completed the [admin functional/data review](../reports/site-audit-2026-10-06/01-admin-functional-review.md)
+  and [production security report](../reports/site-audit-2026-10-06/02-production-security-audit.md).
+  Audit details remain outside the public documentation ingestion tree.
+- Reviewed production configuration and read-only aggregates; exercised admin
+  mutations using an isolated published-app copy, synthetic data and loopback
+  SMTP. The existing 877 Site tests passed; additional HTTP/browser probes are
+  recorded with evidence and limits in the reports.
+- No application/security fix or deployment was made. The owner explicitly
+  requested stopping after Task 2. Security remediation and Task 3's download
+  root-cause/fix/acceptance work remain deferred until approval.
+
+## 2026-10-06 — Admin fixes and collection health
+
+- Implemented the owner's approved first increment: People latest dimensions,
+  country choices/matching totals, complete filtered exports, feedback/error
+  paging/search, Insights CSV, strict numeric settings validation, recurring
+  retention with backlog/status, collection counters and independent analytics
+  read snapshots. Form errors now preserve their intended status responses.
+- Verification: 890 Site tests passed; full solution Release MSBuild and theme
+  drift checks passed; 12 local Production-mode HTTPS Chromium check groups passed
+  with synthetic data, including 1440/390-pixel layouts. Existing build warnings
+  remain. No production deployment was performed.
+- Details and limits: [implementation report](../reports/site-audit-2026-10-06/03-admin-implementation.md).
+  Collection remains best-effort with process-lifetime counters. Broader security
+  remediation, new installer/SSMS telemetry and Task 3 download work remain outside
+  this approved increment. The earlier audit reports remain dated baselines.
+
+## 2026-10-07 — Reliable direct installer downloads
+
+- Fixed the normal-click failure after enhanced navigation: render native GitHub
+  asset links, disable enhanced navigation for installers, and load delegated tracking
+  globally. A brief busy state suppresses duplicate clicks; statistics never delay downloads.
+- Added a 15-minute background latest-release cache with persistent fallback, version
+  and size on the button, trusted version attribution and matching admin release preview.
+- Verified 900 Site tests, full solution Release MSBuild, theme drift, 33 online
+  browser checks and 8 API-down restart checks. The actual GitHub EXE matched its
+  expected name, size and SHA-256. Mobile checks used emulation. No production deployment.
+- [Root cause, evidence and limitations](../reports/site-audit-2026-10-06/04-download-fix.md).

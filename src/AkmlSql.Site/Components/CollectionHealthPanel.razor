@@ -1,0 +1,43 @@
+@using AkmlSql.Site.Analytics
+@inject IServiceProvider Services
+
+<section class="admin-panel" aria-labelledby="collection-heading">
+    <h2 id="collection-heading">Collection health</h2>
+    @if (Services.GetService(typeof(CollectionHealth)) is CollectionHealth health)
+    {
+        var stats = health.Snapshot;
+        <p>Since this process started at @stats.StartedUtc.ToString("u"):
+            @stats.Accepted accepted, @stats.Persisted persisted, @stats.Pending pending,
+            @stats.Dropped dropped before acceptance, @stats.Failed failed writes.</p>
+        <p class="admin-choice-hint">Counts are queue items: each visit, download request or 404 is one item;
+            a client-error batch is one item and may contain several errors. Counters reset on restart.
+            Accepted means queued, not guaranteed delivery. Rejected requests and duplicates are not measured.</p>
+        <p>Last persistence: @(stats.LastPersistedUtc?.ToString("u") ?? "None yet").
+            Last processing delay: @(stats.LastProcessingDelay is { } delay ? $"{delay.TotalMilliseconds:N0} ms" : "Not measured").</p>
+        @if (stats.Dropped + stats.Failed > 0)
+        {
+            <p role="alert">Some collection items were lost. Totals for this period may be incomplete.</p>
+        }
+    }
+    else
+    {
+        <p>Collection counters are unavailable.</p>
+    }
+    @if (Services.GetService(typeof(MaintenanceHostedService)) is MaintenanceHostedService maintenance)
+    {
+        var status = maintenance.Snapshot;
+        <h3>Retention maintenance</h3>
+        <p>Runs hourly and after a retention change. Failed passes retry after one minute.</p>
+        <p>Last attempt: @(status.LastAttemptUtc?.ToString("u") ?? "Not yet run").
+            Last success: @(status.LastSuccessUtc?.ToString("u") ?? "None yet").
+            @(status.Running ? "Running now." : "")</p>
+        <p>Last successful pass: @status.Pruned rows removed, @status.DeIdentified rows de-identified,
+            @status.ReferrersCorrected referrers corrected.</p>
+        <p>Identifiable rows overdue now: @(maintenance.GetIdentifiableBacklog()?.ToString("N0") ?? "Unavailable").
+            Cleanup uses UTC-day boundaries.</p>
+        @if (status.Failed)
+        {
+            <p role="alert">The last pass failed. Retention may be overdue; inspect the server log.</p>
+        }
+    }
+</section>

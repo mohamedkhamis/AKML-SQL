@@ -33,6 +33,9 @@ namespace AkmlSql.Engine.Handlers.Control
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = "No connection string supplied." };
 
             var connDesc = ConnectionDiagnostics.Describe(request.ConnectionString);
+            // A SQL Server client alias becomes the server it points at (the guard judges the real target).
+            request.ConnectionString = SqlAliasResolution.Apply(request.ConnectionString);
+
             if (BridgeSqlTargetGuard.Check(request.ConnectionString) is { } refused)
             {
                 Log.Warning("ListDatabases refused for a bridge request — {ConnDesc}", connDesc);

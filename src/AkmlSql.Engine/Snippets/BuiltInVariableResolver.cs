@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace AkmlSql.Engine.Snippets;
@@ -30,14 +31,16 @@ public class BuiltInVariableResolver
                 _ => "yyyy-MM-dd HH:mm:ss",
             };
             var fmt = m.Groups[2].Value;
-            if (string.IsNullOrEmpty(fmt)) return now.ToString(fallback);
+            if (string.IsNullOrEmpty(fmt)) return now.ToString(fallback, CultureInfo.InvariantCulture);
             try { return now.ToString(fmt); }
-            catch (FormatException) { return now.ToString(fallback); }
+            catch (FormatException) { return now.ToString(fallback, CultureInfo.InvariantCulture); }
         });
 
-        result = result.Replace("$DATE$", now.ToString("yyyy-MM-dd"), StringComparison.OrdinalIgnoreCase);
-        result = result.Replace("$DATETIME$", now.ToString("yyyy-MM-dd HH:mm:ss"), StringComparison.OrdinalIgnoreCase);
-        result = result.Replace("$TIME$", now.ToString("HH:mm:ss"), StringComparison.OrdinalIgnoreCase);
+        // The fixed forms are ISO: the invariant culture keeps them Gregorian with ':' whatever
+        // the user's locale (th-TH gave a Buddhist year, ar-SA a Hijri one).
+        result = result.Replace("$DATE$", now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+        result = result.Replace("$DATETIME$", now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+        result = result.Replace("$TIME$", now.ToString("HH:mm:ss", CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
         // $USER$ prefers the SQL login name when available (e.g. sa, domain\user via SYSTEM_USER);
         // falls back to the OS user when the session has no explicit login (integrated auth).
         var userName = string.IsNullOrEmpty(context.SqlUserName) ? Environment.UserName : context.SqlUserName;

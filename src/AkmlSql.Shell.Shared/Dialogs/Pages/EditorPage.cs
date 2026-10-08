@@ -4,15 +4,21 @@ using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
+    /// <summary>
+    /// Editor › Productivity. Spec 040 (OPT-01): "Named regions" and "Document Outline" changed
+    /// nothing and are hidden; their saved values are kept.
+    /// </summary>
     internal sealed class EditorPage : IPageBuilder
     {
         public string Key     => "Editor";
         public string Display => "Editor › Productivity";
-        public string Title   => "Editor Productivity";
-        public string Help    => "Toggle editor productivity aids such as occurrence highlighting, bracket matching, named regions, sticky scroll, the code minimap, and the Document Outline panel.";
+        public string Title   => "Productivity";
+        public string HelpTopic => "topics/options#productivity";
+        public string Help    => "Toggle editor productivity aids: occurrence highlighting, bracket matching, sticky scroll and the code minimap.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
+            ctx.Rows.AddGroupHeader(panel, "Productivity");
             var (rowHl, chkHl) = ctx.Rows.AddToggle(panel,
                 "Highlight occurrences", "Highlight all occurrences of selected identifier");
             ctx.RegisterSearch("Highlight occurrences", "Highlight all occurrences of selected identifier", "Toggle", rowHl);
@@ -20,10 +26,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var (rowBracket, chkBracket) = ctx.Rows.AddToggle(panel,
                 "Bracket matching", "Highlight matching BEGIN/END and parenthesis pairs");
             ctx.RegisterSearch("Bracket matching", "Highlight matching BEGIN/END and parenthesis pairs", "Toggle", rowBracket);
-
-            var (rowRegions, chkRegions) = ctx.Rows.AddToggle(panel,
-                "Named regions", "Show named region markers in editor");
-            ctx.RegisterSearch("Named regions", "Show named region markers in editor", "Toggle", rowRegions);
 
             var (rowSticky, chkSticky) = ctx.Rows.AddToggle(panel,
                 "Sticky scroll", "Pin parent scope headers while scrolling");
@@ -33,11 +35,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Code minimap", "Show code minimap in editor margin");
             ctx.RegisterSearch("Code minimap", "Show code minimap in editor margin", "Toggle", rowMinimap);
 
-            var (rowOutline, chkOutline) = ctx.Rows.AddToggle(panel,
-                "Document Outline", "Enable Document Outline panel");
-            ctx.RegisterSearch("Document Outline", "Enable Document Outline panel", "Toggle", rowOutline);
-
-            return new EditorControls(chkHl, chkBracket, chkRegions, chkSticky, chkMinimap, chkOutline);
+            return new EditorControls(chkHl, chkBracket, chkSticky, chkMinimap);
         }
     }
 
@@ -45,19 +43,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         private readonly CheckBox _highlightOccurrences;
         private readonly CheckBox _bracketMatching;
-        private readonly CheckBox _namedRegions;
         private readonly CheckBox _stickyScroll;
         private readonly CheckBox _minimap;
-        private readonly CheckBox _documentOutline;
 
-        public EditorControls(CheckBox hl, CheckBox bracket, CheckBox regions, CheckBox sticky, CheckBox minimap, CheckBox outline)
+        public EditorControls(CheckBox hl, CheckBox bracket, CheckBox sticky, CheckBox minimap)
         {
             _highlightOccurrences = hl;
             _bracketMatching = bracket;
-            _namedRegions = regions;
             _stickyScroll = sticky;
             _minimap = minimap;
-            _documentOutline = outline;
         }
 
         public void Load(AppSettings settings)
@@ -65,20 +59,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var ep = settings.EditorProductivity;
             _highlightOccurrences.IsChecked = ep.HighlightOccurrences;
             _bracketMatching.IsChecked = ep.BracketMatching;
-            _namedRegions.IsChecked = ep.NamedRegions;
             _stickyScroll.IsChecked = ep.StickyScroll;
             _minimap.IsChecked = ep.Minimap;
-            _documentOutline.IsChecked = ep.DocumentOutline;
         }
 
         public void Save(AppSettings settings)
         {
             settings.EditorProductivity.HighlightOccurrences = _highlightOccurrences.IsChecked == true;
             settings.EditorProductivity.BracketMatching = _bracketMatching.IsChecked == true;
-            settings.EditorProductivity.NamedRegions = _namedRegions.IsChecked == true;
             settings.EditorProductivity.StickyScroll = _stickyScroll.IsChecked == true;
             settings.EditorProductivity.Minimap = _minimap.IsChecked == true;
-            settings.EditorProductivity.DocumentOutline = _documentOutline.IsChecked == true;
         }
 
         public void Reset(AppSettings defaults) => Load(defaults);

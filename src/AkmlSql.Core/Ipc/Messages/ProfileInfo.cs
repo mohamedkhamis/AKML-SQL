@@ -40,5 +40,19 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(8)]
         public bool IsSqlPromptStyle { get; set; }
+
+        /// <summary>
+        /// Spec 040 (STY-10) — where the style comes from: <c>"builtIn"</c>, <c>"user"</c> or
+        /// <c>"team"</c> (the shared team style folder). Null from older engines.
+        /// </summary>
+        [Key(9)]
+        public string? Source { get; set; }
+
+        /// <summary>
+        /// Spec 040 (STY-10) — a team style in a folder that can't be written to. The engine refuses
+        /// Save, Rename, Delete and Reset on it; Copy makes the user's own style.
+        /// </summary>
+        [Key(10)]
+        public bool IsReadOnly { get; set; }
     }
 }

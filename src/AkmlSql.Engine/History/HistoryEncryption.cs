@@ -262,8 +262,6 @@ public static class HistoryEncryption
     /// </summary>
     private static string GetKeyPath()
     {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AKML SQL", "history", "sqlhistory.key");
+        return Path.Combine(AkmlSql.Core.Constants.AppDataPath, "history", "sqlhistory.key");
     }
 }

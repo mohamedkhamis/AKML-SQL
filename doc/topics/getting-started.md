@@ -4,7 +4,7 @@ AKML SQL is a SQL development plugin for SQL Server Management Studio (SSMS) 22.
 
 ## Requirements
 
-- Windows 10 or later
+- Windows 10 version 1809 or later, or Windows 11
 - SQL Server Management Studio 22
 
 > Visual Studio 2026 is no longer supported. Upgrading removes the AKML SQL extension that earlier versions added to Visual Studio.
@@ -23,22 +23,22 @@ Re-running the installer over an existing installation upgrades it in place. You
 
 ## Find the commands
 
-AKML SQL adds its own menu to SSMS 22: look under **Tools** -> **AKML SQL**.
+AKML SQL adds its own **AKML SQL** menu to the SSMS 22 menu bar. Format Document, Format Selection, Active Style and SQL History sit at the top; everything else is grouped under **Formatting**, **Refactor**, **Navigate**, **Tabs**, **AI** (shown when AI is turned on), **Tools** and **Help**.
 
-The menu includes About, Check for Updates, Options, Send Feedback, and View Logs. Many features also appear on the editor right-click menu.
+The editor's right-click menu has **Format Document** and **Active Style**, and the Command Palette (**Ctrl+Shift+P**) finds any command or option by name.
 
 ## Open the Options dialog
 
-1. Open **Tools** -> **Options**.
-2. Expand the **AKML SQL** section.
+1. Open **AKML SQL** -> **Options…**.
+2. Pick a page in the tree on the left, or type in the search box (**Ctrl+E**) to jump to a setting.
 
-Each feature area (IntelliSense, formatting, snippets, code analysis, refactoring, AI) has its own page. Settings are stored in `%AppData%\AKML SQL\config.json` and apply immediately. See the [Configuration reference](../configuration.md) for every setting.
+Each feature area (suggestions, formatting, snippets, code analysis, refactoring, AI) has its own page; [Options](options.md) describes every page. Settings are stored in `%AppData%\AKML SQL\config.json` and apply immediately. See the [Configuration reference](../configuration.md) for every setting.
 
 ## Check for updates
 
 - AKML SQL checks for updates automatically on startup (you can turn this off in Options).
-- To check manually, use **AKML SQL** -> **Check for Updates**.
-- If a newer version exists, a notification bar appears with a download link.
+- To check manually, use **AKML SQL** -> **Help** -> **Check for Updates**.
+- When a newer version is ready, Windows shows a notification, and SSMS offers it once at startup (**Install now** / **Later**).
 
 ## Next steps
 

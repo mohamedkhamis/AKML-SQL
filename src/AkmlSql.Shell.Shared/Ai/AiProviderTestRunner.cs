@@ -72,7 +72,7 @@ namespace AkmlSql.Shell.Shared.Ai
                 }
 
                 return (false, response.ErrorMessage ??
-                               "The provider test failed without an error message. See AKML SQL → View Logs.");
+                               "The provider test failed without an error message. See AKML SQL → Help → View Logs.");
             }
             catch (Exception ex)
             {

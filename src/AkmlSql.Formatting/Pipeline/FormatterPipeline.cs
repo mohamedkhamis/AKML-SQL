@@ -127,12 +127,16 @@ public class FormatterPipeline
     /// goes through the rule-based layout (annotate, layout, rules, casing, emit).
     /// </summary>
     private string Layout(string sql, TSqlScript script, IList<TSqlParserToken> tokens,
-        List<NoformatRegion> noformatRegions, FormattingProfile profile)
+        List<NoformatRegion> noformatRegions, FormattingProfile profile, FormatPipelineOptions options)
     {
+        // Spec 040 (STY-11): "Apply layout" off keeps the text exactly as written, cased or not.
+        if (!options.ApplyLayout)
+            return KeepLayout(tokens, noformatRegions, options.ApplyCasing ? CasingProfileFor(profile) : null);
+
         if (profile.SqlPrompt is { } document)
         {
             var style = new SqlPrompt.SqlPromptStyle(SqlPrompt.SqlPromptStyleDocument.FromNode(document));
-            var text = SqlPrompt.SqlPromptLayout.Layout(script, tokens, noformatRegions, style);
+            var text = SqlPrompt.SqlPromptLayout.Layout(script, tokens, noformatRegions, style, options.ApplyCasing);
             // Keep the file's final line break (or its absence) as it was.
             if (sql.EndsWith('\n') && !text.EndsWith('\n')) text += "\n";
             return text;
@@ -146,18 +150,65 @@ public class FormatterPipeline
 
         ApplyLayoutRules(layoutNodes, profile);
 
-        var casingEngine = new CasingEngine();
-        casingEngine.ApplyCasing(layoutNodes, profile);
+        if (options.ApplyCasing)
+        {
+            var casingEngine = new CasingEngine();
+            casingEngine.ApplyCasing(layoutNodes, profile);
+        }
 
         var emitter = new TextEmitter();
         return emitter.Emit(layoutNodes, profile);
+    }
+
+    /// <summary>The casing settings a style formats with (a SQL Prompt style's own four options).</summary>
+    private static FormattingProfile CasingProfileFor(FormattingProfile profile) =>
+        profile.SqlPrompt is { } document
+            ? SqlPrompt.SqlPromptLayout.CasingProfile(
+                new SqlPrompt.SqlPromptStyle(SqlPrompt.SqlPromptStyleDocument.FromNode(document)))
+            : profile;
+
+    /// <summary>
+    /// Spec 040 (STY-11) — the "Apply layout" off path: every token as written, whitespace and
+    /// comments included, with only the casing stage applied when <paramref name="casing"/> is given.
+    /// </summary>
+    private static string KeepLayout(IList<TSqlParserToken> tokens, List<NoformatRegion> noformatRegions,
+        FormattingProfile? casing)
+    {
+        var text = new string?[tokens.Count];
+        if (casing != null)
+        {
+            var nodes = new List<LayoutNode>(tokens.Count);
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                var t = tokens[i];
+                if (t.TokenType is TSqlTokenType.WhiteSpace or TSqlTokenType.EndOfFile) continue;
+                nodes.Add(new LayoutNode
+                {
+                    TokenIndex = i,
+                    TokenType = t.TokenType,
+                    OriginalText = t.Text,
+                    FormattedText = t.Text,
+                    IsInNoformatRegion = noformatRegions.Count > 0 && NoformatScanner.IsInNoformatRegion(noformatRegions, t.Offset),
+                });
+            }
+            new CasingEngine().ApplyCasing(nodes, casing);
+            foreach (var node in nodes) text[node.TokenIndex] = node.FormattedText;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].TokenType == TSqlTokenType.EndOfFile) continue;
+            sb.Append(text[i] ?? tokens[i].Text);
+        }
+        return sb.ToString();
     }
 
     /// <summary>
     /// Performs a raw format pass without validation or idempotency checking.
     /// Returns null on parse failure or error, with the exception captured in the out parameter.
     /// </summary>
-    private string? FormatInternal(string sql, FormattingProfile profile, out Exception? error)
+    private string? FormatInternal(string sql, FormattingProfile profile, FormatPipelineOptions options, out Exception? error)
     {
         error = null;
         try
@@ -175,7 +226,7 @@ public class FormatterPipeline
             if (script == null || script.Batches.Count == 0)
                 return null;
 
-            var formatted = Layout(sql, script, tokens, noformatRegions, profile);
+            var formatted = Layout(sql, script, tokens, noformatRegions, profile, options);
             return sqlcmdPreprocessor.Restore(formatted);
         }
         catch (Exception ex)
@@ -190,8 +241,16 @@ public class FormatterPipeline
     /// Returns a <see cref="FormatResult"/> containing the formatted text, elapsed time, and any diagnostics.
     /// If semantic validation fails, <see cref="FormatResult.FormattedSql"/> equals the original input.
     /// </summary>
-    public FormatResult Format(string sql, FormattingProfile profile)
+    public FormatResult Format(string sql, FormattingProfile profile) => Format(sql, profile, null);
+
+    /// <summary>
+    /// <see cref="Format(string, FormattingProfile)"/> with per-call choices (spec 040, STY-11):
+    /// whether the layout and casing stages run, and Stage 8's semicolons and brackets. Null
+    /// <paramref name="options"/> is today's behaviour exactly.
+    /// </summary>
+    public FormatResult Format(string sql, FormattingProfile profile, FormatPipelineOptions? options)
     {
+        options ??= FormatPipelineOptions.Default;
         var sw = Stopwatch.StartNew();
         var diagnostics = new List<FormatDiagnostic>();
 
@@ -235,7 +294,7 @@ public class FormatterPipeline
             }
 
             // Stages 2-5: annotate, lay out, case, emit
-            var formatted = Layout(sql, script, tokens, noformatRegions, profile);
+            var formatted = Layout(sql, script, tokens, noformatRegions, profile, options);
 
             // Stage 5b: Restore SQLCMD directives
             formatted = sqlcmdPreprocessor.Restore(formatted);
@@ -260,7 +319,7 @@ public class FormatterPipeline
             // passes its own semantic re-validation; the Warning stays surfaced.
             if (validationPassed && formatted != sql && profile.Metadata.EnableIdempotencyCheck)
             {
-                var secondPass = FormatInternal(formatted, profile, out var idempotencyError);
+                var secondPass = FormatInternal(formatted, profile, options, out var idempotencyError);
                 if (idempotencyError != null)
                 {
                     diagnostics.Add(new FormatDiagnostic
@@ -301,29 +360,52 @@ public class FormatterPipeline
             // the main pipeline stages, not the action chain.
             // NOTE: false for AddSquareBrackets means "off", NOT "remove brackets" — there is no
             // RemoveSquareBrackets flag in FormatActionConfig, so "false" must be a no-op.
+            // Spec 040 (STY-11): the interactive Format SQL actions choose semicolons and brackets
+            // per call (options); without them the style's own flags decide, exactly as before.
             if (validationPassed)
             {
                 var actions = profile.FormatActions;
+                var beforeActions = formatted;
+
+                // Insert wins when a style sets both (declaration order, as before).
+                var semicolons = options.Semicolons
+                    ?? (actions.InsertSemicolons ? SemicolonAction.Insert
+                        : actions.RemoveSemicolons ? SemicolonAction.Remove
+                        : SemicolonAction.Leave);
+
+                // A style can only opt in to adding brackets; its false means leave them.
+                var brackets = options.SquareBrackets
+                    ?? (actions.AddSquareBrackets ? BracketAction.Add : BracketAction.Leave);
 
                 // InsertSemicolons: add terminators where absent
-                if (actions.InsertSemicolons)
+                if (semicolons == SemicolonAction.Insert)
                 {
                     var r = new InsertSemicolonsAction().Execute(formatted, profile);
                     if (r.Success) formatted = r.FormattedText;
                 }
-                // RemoveSemicolons: strip all terminators (mutually exclusive with Insert, but
-                // if both are set the caller is responsible — we run them in declaration order)
-                else if (actions.RemoveSemicolons)
+                // RemoveSemicolons: strip all terminators
+                else if (semicolons == SemicolonAction.Remove)
                 {
                     var r = new RemoveSemicolonsAction().Execute(formatted, profile);
                     if (r.Success) formatted = r.FormattedText;
                 }
 
-                // AddSquareBrackets: bracket all plain identifiers (opt-in only; false = no-op)
-                if (actions.AddSquareBrackets)
+                if (brackets != BracketAction.Leave)
                 {
-                    var r = new ToggleBracketsAction().Execute(formatted, profile);
+                    var r = new ToggleBracketsAction(addBrackets: brackets == BracketAction.Add).Execute(formatted, profile);
                     if (r.Success) formatted = r.FormattedText;
+                }
+
+                // The same promise as the stages before: SQL that no longer parses never leaves
+                // here. The actions edit tokens without a later validation pass.
+                if (!string.Equals(formatted, beforeActions, StringComparison.Ordinal) && !Parses(formatted))
+                {
+                    formatted = beforeActions;
+                    diagnostics.Add(new FormatDiagnostic
+                    {
+                        Severity = DiagnosticSeverity.Warning,
+                        Message = "The semicolon and square-bracket actions were not applied: the result would not parse.",
+                    });
                 }
             }
 
@@ -349,5 +431,14 @@ public class FormatterPipeline
                 Diagnostics = [new FormatDiagnostic { Severity = DiagnosticSeverity.Error, Message = ex.Message }]
             };
         }
+    }
+
+    /// <summary>True when <paramref name="sql"/> parses without errors.</summary>
+    private static bool Parses(string sql)
+    {
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        using var reader = new StringReader(sql);
+        parser.Parse(reader, out var errors);
+        return errors.Count == 0;
     }
 }

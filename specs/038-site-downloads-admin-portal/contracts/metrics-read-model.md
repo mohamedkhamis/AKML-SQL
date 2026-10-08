@@ -118,10 +118,13 @@ existing shape is reused unchanged; nothing about page-visit reporting is rebuil
 
 ## 6. Export
 
-- **M6.1** Every view exports to CSV, containing **the filtered rows currently displayed** — not the
-  unfiltered table (FR-026).
-- **M6.2** The active window and filters appear in the file name **and** a header comment row, so a
-  file found later is self-describing.
+- **M6.1** Row exports contain **all rows matching the current filters**, across every page.
+  Aggregate exports contain the displayed groups and explicitly state top-N limits (FR-026;
+  owner-approved admin review follow-up, 2026-10-06).
+- **M6.2** The active window (where applicable) and exact filters appear in CSV metadata rows.
+  People filenames retain window/country/downloaded markers; other report filenames carry
+  report/date/window. Free-text search is confined to metadata, not filenames, to avoid exposing
+  potentially sensitive text in filesystem names. Feedback covers its status/search across all time.
 - **M6.3** Exports carrying `ip` or `visitor_id` are labelled as containing personal data (FR-049)
   and require an authenticated session like every other portal surface (FR-033).
 - **M6.4** `Cache-Control: no-store` on every export, as the existing `/admin/metrics.csv` already

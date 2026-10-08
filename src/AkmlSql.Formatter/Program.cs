@@ -5,7 +5,21 @@ namespace AkmlSql.Formatter;
 
 public class Program
 {
-    private const string Version = "1.0.0";
+    /// <summary>The version this build was stamped with (Directory.Build.props); it was a fixed "1.0.0".</summary>
+    private static readonly string Version = ResolveVersion();
+
+    private static string ResolveVersion()
+    {
+        var info = typeof(Program).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion;
+        if (!string.IsNullOrEmpty(info))
+        {
+            var plus = info.IndexOf('+');   // drop the commit hash
+            return plus >= 0 ? info[..plus] : info;
+        }
+        return typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+    }
 
     public static int Main(string[] args)
     {

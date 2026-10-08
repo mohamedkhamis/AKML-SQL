@@ -108,7 +108,7 @@ public sealed class ReleaseAvailability
     /// Human-readable size ("66.3 MB"), or null when the size is unknown — a CDN-only release shows
     /// no size rather than a guessed one.
     /// </summary>
-    public string? DisplaySize(Release release) => SizeBytes(release) is { } bytes ? FormatSize(bytes) : null;
+    public string? DisplaySize(Release release) => (release.SizeBytes ?? SizeBytes(release)) is { } bytes ? FormatSize(bytes) : null;
 
     /// <summary>Formats a byte count for display; shared shape with the admin file listing.</summary>
     public static string FormatSize(long bytes) => bytes switch

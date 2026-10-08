@@ -5,9 +5,13 @@ using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.StatusBar;
+using AkmlSql.Shell.Shared.Ui.SqlPreview;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
@@ -42,7 +46,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         private TreeView? _settingsTree;
         private StackPanel? _settingControlsHost;
         private TextBlock? _settingControlsEmpty;
-        private TextBox? _previewTextBox;
+        private TextBox? _previewTextBox;      // "Edit sample" mode only: the raw, editable sample
+        private SqlPreviewView? _previewView;  // the formatted preview (spec 040 T080)
         private Border? _previewWarningBar;
         private TextBlock? _previewWarningText;
         private TextBlock? _statusText;
@@ -69,6 +74,9 @@ namespace AkmlSql.Shell.Shared.Formatting
         private TextBlock? _stylesHeader;
         private Border? _builtInHint;
         private TextBlock? _builtInHintText;
+
+        /// <summary>Spec 040 (T187) — "Team styles unavailable — ‹folder› can't be reached", under the list.</summary>
+        private TextBlock? _teamUnavailableRow;
         // SQL Prompt-parity redesign: the right pane edits a whole settings *group* (SQL Prompt's
         // "page") at once, not one setting at a time. _currentGroup is the group whose form is
         // showing; _currentGroupCategory is its parent category (for the breadcrumb title).
@@ -80,17 +88,91 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private sealed class GatedRow
         {
-            public GatedRow(FormatSettingNode setting, TextBlock label, FrameworkElement control)
+            public GatedRow(FormatSettingNode setting, TextBlock label, FrameworkElement control, TextBlock hint)
             {
                 Setting = setting;
                 Label = label;
                 Control = control;
+                Hint = hint;
             }
 
             public FormatSettingNode Setting { get; }
             public TextBlock Label { get; }
             public FrameworkElement Control { get; }
+
+            /// <summary>Spec 040 (T103): "Takes effect when …" under the row, shown while the gate is closed.</summary>
+            public TextBlock Hint { get; }
         }
+
+        // Spec 040 (T097) — option search.
+        private TextBox? _searchBox;
+        private TextBlock? _searchPlaceholder;
+        private DispatcherTimer? _searchTimer;
+        private StyleOptionSearchResult? _searchResult;
+        private System.Collections.Generic.HashSet<string> _searchMatches = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>Page tree leaves by group id, with their changed-count and match-count badges.</summary>
+        private readonly System.Collections.Generic.Dictionary<string, (TreeViewItem Leaf, TextBlock Changed, TextBlock Matches, string? Category)> _groupLeaves =
+            new System.Collections.Generic.Dictionary<string, (TreeViewItem, TextBlock, TextBlock, string?)>(StringComparer.Ordinal);
+
+        // Spec 040 (T099) — changed-from-default markers on the rows of the current page.
+        private readonly System.Collections.Generic.Dictionary<string, (FormatSettingNode Setting, TextBlock Label, Button Reset)> _rowMarkers =
+            new System.Collections.Generic.Dictionary<string, (FormatSettingNode, TextBlock, Button)>(StringComparer.Ordinal);
+        private DispatcherTimer? _movedTimer;
+
+        // ── 2026-10 redesign: more room for the preview, and what each value does ──────────
+        /// <summary>The size the window opens at, when the screen has room for it.</summary>
+        internal const double DefaultWidth = 1440;
+        internal const double DefaultHeight = 900;
+        private const double DefaultStylesWidth = 232;   // "Khamis Style  Modified  ACTIVE" fits
+        private const double StylesMinWidth = 160;
+        /// <summary>Narrower than this, the preview goes under the options instead of beside them.</summary>
+        internal const double StackBelowWidth = 760;
+
+        // Kept for the session, like SQL Prompt's editor: reopening the window keeps the layout.
+        private static bool s_stylesCollapsed;
+        private static double s_stylesWidth = DefaultStylesWidth;
+        private static bool s_examplesOpen = true;
+
+        private ColumnDefinition? _stylesColumn;
+        private Border? _stylesCard;
+        private Border? _stylesRail;
+        private GridSplitter? _stylesSplitter;
+        private Grid? _rightPanel;
+        private Border? _formCard;
+        private GridSplitter? _rightSplitter;
+        private Border? _previewCard;
+        private bool? _stacked;
+        private ComboBox? _sourceCombo;
+        private bool _suppressSourceChanged;
+        private bool _userPickedSource;
+
+        // The option examples under the preview: one card per value of the focused option.
+        private RowDefinition? _previewRow;
+        private RowDefinition? _examplesRow;
+        private TextBlock? _examplesTitle;
+        private TextBlock? _examplesSubtitle;
+        private StackPanel? _examplesHost;
+        private ScrollViewer? _examplesScroll;
+        private Button? _examplesToggle;
+        private string? _focusedSettingId;
+        private string? _examplesShownFor;
+        private string? _examplesSignature;
+        private DispatcherTimer? _examplesTimer;
+        private System.Threading.CancellationTokenSource? _examplesCts;
+        /// <summary>The value whose "Use this" was pressed from the keyboard: its card gets focus back.</summary>
+        private string? _refocusExampleKey;
+        private Button? _stylesExpandButton;
+        /// <summary>Set once the window closes: timers and late previews must not start more work.</summary>
+        private bool _closed;
+        private readonly System.Collections.Generic.Dictionary<string, Border> _rowBorders =
+            new System.Collections.Generic.Dictionary<string, Border>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Spec 040 (T091) — test seam for the Rename prompt: given the current name and the existing
+        /// style names, returns the new name, or null when cancelled. Null in the product.
+        /// </summary>
+        internal Func<string, System.Collections.Generic.IReadOnlyCollection<string>, string?>? RenameNameOverride { get; set; }
         private TextBlock? _breadcrumbText;
         private bool _suppressSelectionChanged;
         private bool _closeConfirmed;
@@ -100,8 +182,31 @@ namespace AkmlSql.Shell.Shared.Formatting
         // one batch on toggle-off / close instead of per keystroke (each PreviewSample set is
         // ~5 synchronous filesystem ops on the dispatcher thread plus a discarded preview run).
         private CheckBox? _editSampleToggle;
-        private RadioButton? _rbPageSample;
         private bool EditingSample => _editSampleToggle?.IsChecked == true;
+
+        /// <summary>
+        /// Spec 040 (T078) — the <see cref="FrameworkElement.Tag"/> of every option label on a
+        /// settings page, so tests find the labels without depending on the row's layout.
+        /// </summary>
+        internal const string OptionLabelTag = "akml-option-label";
+
+        // Spec 040 (T077) — seams for the dialogs Import and Export show. Null in the product,
+        // where the real file pickers, prompts and summary dialog appear.
+
+        /// <summary>Returns the file to import, or null when the user cancels.</summary>
+        internal Func<string?>? ImportFileOverride { get; set; }
+
+        /// <summary>Given the suggested file name, returns the export path, or null when cancelled.</summary>
+        internal Func<string, string?>? ExportFileOverride { get; set; }
+
+        /// <summary>Given the suggested name and the existing style names, returns the name to import under, or null.</summary>
+        internal Func<string, System.Collections.Generic.IReadOnlyCollection<string>, string?>? ImportNameOverride { get; set; }
+
+        /// <summary>Answers the Save / Discard / Cancel prompt shown with the given message.</summary>
+        internal Func<string, StyleSwitchDecision>? SaveDecisionOverride { get; set; }
+
+        /// <summary>Replaces the import summary dialog.</summary>
+        internal Action<ProfileImportResponse>? ImportSummaryOverride { get; set; }
 
         private static System.Windows.Media.SolidColorBrush Freeze(System.Windows.Media.SolidColorBrush b)
         {
@@ -114,18 +219,9 @@ namespace AkmlSql.Shell.Shared.Formatting
         private static readonly System.Windows.Media.SolidColorBrush InvalidInputBrush =
             Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE5, 0x14, 0x00)));
 
-        // Fixed dark editor palette for the live-preview card — theme-independent in BOTH light and
-        // dark, matching SQL Prompt (its preview renders on a dark editor panel regardless of theme).
-        // CLAUDE.md allows fixed colours for a surface that must read the same in every theme; the
-        // theme-token EditorPopupBackground is white in light theme, so it can't serve here.
-        private static readonly System.Windows.Media.SolidColorBrush PreviewBgBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1E, 0x22, 0x30)));
-        private static readonly System.Windows.Media.SolidColorBrush PreviewTextBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xD4, 0xD8, 0xE0)));
-        private static readonly System.Windows.Media.SolidColorBrush PreviewMutedBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8B, 0x93, 0xA5)));
-        private static readonly System.Windows.Media.SolidColorBrush PreviewCaptionBrush =
-            Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6A, 0xC4, 0x7A)));
+        // The live-preview card follows the theme (spec 040 T080): its SqlPreviewView colours SQL
+        // from theme tokens, which a fixed dark card would make unreadable in the light theme.
+        // Only the amber warning strip keeps fixed (semantic) colours.
         private static readonly System.Windows.Media.SolidColorBrush PreviewWarnTextBrush =
             Freeze(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x24, 0x1A, 0x00)));
 
@@ -133,13 +229,15 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
 
-            Title = "AKML SQL — Format Styles Editor";
-            Width = 1060;
-            Height = 680;
-            MinWidth = 920;
-            MinHeight = 560;
+            Title = AkmlSql.Core.Config.WindowTitles.For("Format styles");
+            // Room for the options and a preview beside them; on a smaller screen, 92% of it.
+            var work = SystemParameters.WorkArea;
+            Width = Math.Min(DefaultWidth, Math.Floor(work.Width * 0.92));
+            Height = Math.Min(DefaultHeight, Math.Floor(work.Height * 0.92));
+            MinWidth = Math.Min(1000, Width);
+            MinHeight = Math.Min(620, Height);
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            HasHelpButton = false;
+            HasHelpButton = true; // spec 040 (X-03): the title-bar "?" opens CurrentHelpTopic
 
             // Ensure theme resources are merged so SetResourceReference resolves.
             ThemeRegistry.Instance.AttachTo(this);
@@ -151,8 +249,40 @@ namespace AkmlSql.Shell.Shared.Formatting
             _viewModel.DirtyDecisionHandler = PromptStyleSwitchDecisionAsync;
 
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _viewModel.WorkingValueChanged += OnWorkingValueChanged;
+            PreviewKeyDown += (_, e) =>
+            {
+                var key = e.Key == Key.System ? e.SystemKey : e.Key;
+                if (HandleKey(key, Keyboard.Modifiers, _styleList?.IsKeyboardFocusWithin == true))
+                    e.Handled = true;
+            };
             Loaded += OnLoaded;
+
+            // The title bar follows the theme: a light Windows title bar over a dark window looked broken.
+            SourceInitialized += (_, _) => TitleBarTheme.Apply(this, ThemeRegistry.Instance.Current == ThemeVariant.Dark);
+            ThemeRegistry.Instance.VariantChanged += OnThemeVariantChanged;
+            Closed += (_, _) =>
+            {
+                _closed = true;
+                ThemeRegistry.Instance.VariantChanged -= OnThemeVariantChanged;
+                _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+                _viewModel.WorkingValueChanged -= OnWorkingValueChanged;
+                _examplesTimer?.Stop();
+                _examplesCts?.Cancel();
+            };
+
+            // Spec 040 (X-03, FR-062): F1 anywhere in the window opens the style-editor topic.
+            global::AkmlSql.Shell.Shared.Help.HelpBinding.Attach(this, () => CurrentHelpTopic);
         }
+
+        // ── F1 help (spec 040, X-03, FR-062) ─────────────────────────────────
+
+        /// <summary>What F1 and the title-bar "?" open (contracts/ui.md §3).</summary>
+        internal string? CurrentHelpTopic => global::AkmlSql.Shell.Shared.Help.F1HelpRegistrations.FormatStylesTopic;
+
+        /// <summary>The title-bar "?" (<see cref="DialogWindowBase.HasHelpButton"/>).</summary>
+        protected override void InvokeDialogHelp() =>
+            global::AkmlSql.Shell.Shared.Help.HelpBinding.Open(() => CurrentHelpTopic);
 
         // -----------------------------------------------------------------
 
@@ -164,6 +294,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Outer grid: header / content / footer
             var root = new Grid();
             root.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceCanvas);
+            // Themed check boxes, radio buttons and scroll bars for everything in the window.
+            FormatStylesChrome.ApplyImplicitStyles(root, this);
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -189,7 +321,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var subjectStack = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Center };
 
             // "EDITING" labels the style name below it. (Deliberately not repeating the window's
-            // own title — the title bar already says "Format Styles Editor"; a header that echoes it
+            // own title — the title bar already says "AKML SQL – Format styles"; a header that echoes it
             // would spend the most valuable line in the window on nothing.)
             var eyebrow = new TextBlock
             {
@@ -206,7 +338,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Text = "No style selected",
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.H4,
+                FontSize = Typography.H3,
                 FontWeight = Typography.WeightSemiBold,
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
@@ -221,9 +353,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            _headerBuiltInChip = MakeHeaderChip("Built-in", accent: false, out _headerBuiltInChipText);
-            _headerDirtyChip = MakeHeaderChip("Unsaved changes", accent: true, out _);
-            _headerActiveChip = MakeHeaderChip("Active: —", accent: true, out _headerActiveChipText);
+            _headerBuiltInChip = MakeHeaderChip("Built-in", ChipKind.Neutral, out _headerBuiltInChipText);
+            _headerDirtyChip = MakeHeaderChip("Unsaved changes", ChipKind.Warning, out _);
+            _headerActiveChip = MakeHeaderChip("Active: —", ChipKind.Accent, out _headerActiveChipText);
             _headerActiveChip.ToolTip = "The style Format SQL uses";
             chips.Children.Add(_headerBuiltInChip);
             chips.Children.Add(_headerDirtyChip);
@@ -239,17 +371,24 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Column widths mirror SQL Prompt's Edit Formatting Styles editor (fixed left/middle,
             // flexible right); the two 8px gutter columns double as invisible drag splitters.
             var content = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Md, Spacing.Md, Spacing.Sm) };
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(250) });       // styles
+            // The style list can fold away to a rail (« in its header), giving its width to the preview.
+            _stylesColumn = new ColumnDefinition { Width = new GridLength(s_stylesWidth), MinWidth = StylesMinWidth };
+            content.ColumnDefinitions.Add(_stylesColumn);                                               // styles
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) }); // gutter/splitter
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });       // style options
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180), MinWidth = 170 }); // style options
             content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) }); // gutter/splitter
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 380 }); // settings + preview
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 420 }); // options + preview
 
-            content.Children.Add(BuildLeftPanel());
-            content.Children.Add(MakeColumnSplitter(1));
+            _stylesCard = (Border)BuildLeftPanel();
+            content.Children.Add(_stylesCard);
+            _stylesRail = BuildStylesRail();
+            content.Children.Add(_stylesRail);
+            _stylesSplitter = MakeColumnSplitter(1);
+            content.Children.Add(_stylesSplitter);
             content.Children.Add(BuildMiddlePanel());
             content.Children.Add(MakeColumnSplitter(3));
             content.Children.Add(BuildRightPanel());
+            SetStylesCollapsed(s_stylesCollapsed, focusList: false);
 
             Grid.SetRow(content, 1);
             root.Children.Add(content);
@@ -279,7 +418,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Text = string.Empty,
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.Body,
+                FontSize = Typography.Small,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(Spacing.Md, 0, Spacing.Md, 0),
@@ -295,7 +434,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _saveBtn = new Button
             {
                 Content = "Save",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 IsEnabled = false,
@@ -303,6 +442,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 ToolTip = "Select a style first",   // replaced by UpdateSaveButtonState once one loads
             };
+            ThemedButton.ApplyPrimary(_saveBtn);
             _saveBtn.Click += async (_, _) =>
             {
                 try
@@ -324,7 +464,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _revertButton = new Button
             {
                 Content = "Revert",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 Visibility = Visibility.Collapsed,
@@ -332,6 +472,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 ToolTip = "Discard the unsaved changes and go back to the saved values.",
             };
+            ThemedButton.ApplySecondary(_revertButton);
             _revertButton.Click += (_, _) =>
             {
                 try
@@ -351,7 +492,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             _resetButton = new Button
             {
                 Content = "Reset to built-in",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 Visibility = Visibility.Collapsed,
@@ -359,6 +500,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Body,
                 ToolTip = "Discard your saved changes to this built-in style and restore the original.",
             };
+            ThemedButton.ApplySecondary(_resetButton);
             _resetButton.Click += async (_, _) =>
             {
                 try { await OnResetStyleAsync(); }
@@ -369,12 +511,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             var closeBtn = new Button
             {
                 Content = "Close",
-                Padding = new Thickness(Spacing.Lg, Spacing.Sm, Spacing.Lg, Spacing.Sm),
+                Padding = FooterButtonPadding,
                 MinWidth = 84,
                 IsCancel = true,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
             };
+            ThemedButton.ApplySecondary(closeBtn);
             closeBtn.Click += (_, _) => Close();
             footerButtons.Children.Add(closeBtn);
 
@@ -417,25 +560,101 @@ namespace AkmlSql.Shell.Shared.Formatting
             return card;
         }
 
+        /// <summary>What the style list folds into: a narrow strip with » to bring it back.</summary>
+        private Border BuildStylesRail()
+        {
+            var expand = new Button
+            {
+                Content = "»",
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
+                ToolTip = "Show the style list",
+            };
+            FormatStylesChrome.ApplyIconButton(expand);
+            System.Windows.Automation.AutomationProperties.SetName(expand, "Show the style list");
+            expand.Click += (_, _) => SetStylesCollapsed(false, focusList: true);
+            _stylesExpandButton = expand;
+
+            var label = new TextBlock
+            {
+                Text = "STYLES",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, Spacing.Sm, 0, 0),
+                LayoutTransform = new RotateTransform(90),
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+
+            var stack = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(0, Spacing.Sm, 0, Spacing.Sm) };
+            stack.Children.Add(expand);
+            stack.Children.Add(label);
+            var rail = MakePaneCard(0, stack);
+            rail.Width = 36;
+            rail.HorizontalAlignment = HorizontalAlignment.Left;
+            rail.Visibility = Visibility.Collapsed;
+            return rail;
+        }
+
+        /// <summary>
+        /// Folds the style list into its rail, or opens it again at the width it had. The choice
+        /// lasts for the session. The list stays in the window either way (its keys work once open).
+        /// </summary>
+        private void SetStylesCollapsed(bool collapsed, bool focusList)
+        {
+            if (_stylesColumn == null || _stylesCard == null || _stylesRail == null) return;
+            // The splitter rewrites the column's width: remember what the user dragged it to.
+            if (collapsed && _stylesCard.Visibility == Visibility.Visible && _stylesColumn.ActualWidth >= StylesMinWidth)
+                s_stylesWidth = _stylesColumn.ActualWidth;
+            // Folding the card under the keyboard (« pressed with Space) would drop focus to the
+            // window: hand it to the rail's » instead.
+            var focusRail = collapsed && _stylesCard.IsKeyboardFocusWithin;
+            s_stylesCollapsed = collapsed;
+            _stylesCard.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+            _stylesRail.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+            _stylesColumn.MinWidth = collapsed ? 0 : StylesMinWidth;
+            _stylesColumn.Width = collapsed ? GridLength.Auto : new GridLength(Math.Max(StylesMinWidth, s_stylesWidth));
+            if (_stylesSplitter != null) _stylesSplitter.IsEnabled = !collapsed;
+            if (!collapsed && focusList) _styleList?.Focus();
+            if (focusRail) _stylesExpandButton?.Focus();
+        }
+
         // -----------------------------------------------------------------
         // Left panel — style list
         // -----------------------------------------------------------------
         private FrameworkElement BuildLeftPanel()
         {
-            var res = ThemeRegistry.Instance.Resources;
-            var accentBrush = res[ThemeTokens.AccentPrimary] as System.Windows.Media.Brush;
-            var selectionBrush = res[ThemeTokens.SurfaceSelection] as System.Windows.Media.Brush;
-            var selectionStrongBrush = res[ThemeTokens.SurfaceSelectionStrong] as System.Windows.Media.Brush;
-            var textPrimaryBrush = res[ThemeTokens.TextPrimary] as System.Windows.Media.Brush;
-
             var panel = new Grid { Margin = new Thickness(Spacing.Sm) };
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // list
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // + New Style CTA
 
             _stylesHeader = MakeSectionHeader("STYLES");
-            Grid.SetRow(_stylesHeader, 0);
-            panel.Children.Add(_stylesHeader);
+            var collapse = new Button
+            {
+                Content = "«",
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Top,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
+                ToolTip = "Hide the style list, for a wider preview",
+            };
+            FormatStylesChrome.ApplyIconButton(collapse);
+            System.Windows.Automation.AutomationProperties.SetName(collapse, "Hide the style list");
+            collapse.Click += (_, _) => SetStylesCollapsed(true, focusList: false);
+            var stylesHeaderRow = new DockPanel();
+            DockPanel.SetDock(collapse, Dock.Right);
+            stylesHeaderRow.Children.Add(collapse);
+            stylesHeaderRow.Children.Add(_stylesHeader);
+            Grid.SetRow(stylesHeaderRow, 0);
+            panel.Children.Add(stylesHeaderRow);
 
             _styleList = new ListBox
             {
@@ -448,36 +667,19 @@ namespace AkmlSql.Shell.Shared.Formatting
             _styleList.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             ScrollViewer.SetHorizontalScrollBarVisibility(_styleList, ScrollBarVisibility.Disabled);
 
-            // Themed selection colours; the active style additionally gets an accent-tinted card via
-            // the container style below (SQL Prompt: active = tinted card + accent border + ✔).
-            if (selectionStrongBrush != null) _styleList.Resources[SystemColors.HighlightBrushKey] = selectionStrongBrush;
-            if (textPrimaryBrush != null) _styleList.Resources[SystemColors.HighlightTextBrushKey] = textPrimaryBrush;
-            if (selectionBrush != null) _styleList.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = selectionBrush;
-            if (textPrimaryBrush != null) _styleList.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = textPrimaryBrush;
-
-            var itemStyle = new Style(typeof(ListBoxItem));
-            itemStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs)));
-            itemStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0, 1, 0, 1)));
-            itemStyle.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(1)));
-            itemStyle.Setters.Add(new Setter(Control.BorderBrushProperty, System.Windows.Media.Brushes.Transparent));
-            itemStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
-            var activeTrigger = new System.Windows.DataTrigger
-            {
-                Binding = new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)),
-                Value = true,
-            };
-            if (selectionBrush != null) activeTrigger.Setters.Add(new Setter(Control.BackgroundProperty, selectionBrush));
-            if (accentBrush != null) activeTrigger.Setters.Add(new Setter(Control.BorderBrushProperty, accentBrush));
-            itemStyle.Triggers.Add(activeTrigger);
-            _styleList.ItemContainerStyle = itemStyle;
+            // Rows share the option tree's look: a rounded tint and an accent bar on the selected
+            // style. The active style is marked by its ACTIVE pill alone — a second tint for
+            // "active" beside the one for "selected" made the two hard to tell apart.
+            _styleList.ItemContainerStyle = FormatStylesChrome.ListItemStyle();
 
             // Spec 033 (T036) — sectioned list: "YOUR STYLES" first, then "BUILT-IN STYLES",
             // names A→Z within each; group headers via a code-built template (upper-cased).
             var view = new System.Windows.Data.ListCollectionView(_viewModel.Profiles);
             view.GroupDescriptions!.Add(new System.Windows.Data.PropertyGroupDescription(
                 nameof(StyleListItem.Section), new UpperCaseConverter()));
+            // Your own styles, then TEAM STYLES (spec 040, STY-10), then built-in — robust to section-label rewording.
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
-                nameof(StyleListItem.IsShipped), System.ComponentModel.ListSortDirection.Ascending)); // your own styles first — robust to section-label rewording
+                nameof(StyleListItem.SectionOrder), System.ComponentModel.ListSortDirection.Ascending));
             view.SortDescriptions.Add(new System.ComponentModel.SortDescription(
                 nameof(StyleListItem.Name), System.ComponentModel.ListSortDirection.Ascending));
             _styleList.ItemsSource = view;
@@ -487,9 +689,8 @@ namespace AkmlSql.Shell.Shared.Formatting
             headerFactory.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding("Name"));
             headerFactory.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
             headerFactory.SetValue(TextBlock.FontSizeProperty, (double)Typography.Small);
-            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 8, 2, 3));
-            if (res[ThemeTokens.TextSecondary] is System.Windows.Media.Brush secBrush)
-                headerFactory.SetValue(TextBlock.ForegroundProperty, secBrush);
+            headerFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(Spacing.Sm + 2, Spacing.Md, 2, Spacing.Xs));
+            headerFactory.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             groupHeaderTemplate.VisualTree = headerFactory;
             _styleList.GroupStyle.Add(new GroupStyle { HeaderTemplate = groupHeaderTemplate });
 
@@ -516,9 +717,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                     // Shipped styles stay un-renameable and un-deletable even though they are now
                     // editable: the name is what ties an override to the style it overrides, so
                     // renaming would orphan the original rather than rename anything.
-                    miRename.IsEnabled = !selected.IsShipped;
-                    miDelete.IsEnabled = !selected.IsShipped && !selected.IsActive;
-                    miReset.IsEnabled = selected.IsCustomized;
+                    // A read-only team style (spec 040, STY-10) can only be copied.
+                    miRename.IsEnabled = !selected.IsShipped && !selected.IsReadOnly;
+                    miDelete.IsEnabled = !selected.IsShipped && !selected.IsActive && !selected.IsReadOnly;
+                    miReset.IsEnabled = selected.IsCustomized && !selected.IsReadOnly;
                     miSetActive.IsEnabled = !selected.IsActive;
                 }
             };
@@ -549,16 +751,31 @@ namespace AkmlSql.Shell.Shared.Formatting
             // explicit and keeps the ⋮ menu working for users who already know it.
             var listFooter = new StackPanel { Orientation = Orientation.Vertical };
 
+            // Spec 040 (T187, STY-10): a muted row when the team style folder can't be reached —
+            // the user's own and built-in styles above it keep working.
+            _teamUnavailableRow = new TextBlock
+            {
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontStyle = FontStyles.Italic,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Sm),
+                Visibility = Visibility.Collapsed,
+            };
+            _teamUnavailableRow.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            listFooter.Children.Add(_teamUnavailableRow);
+
             _setActiveButton = new Button
             {
                 Content = "Set as active style",
-                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
-                Margin = new Thickness(0, 0, 0, Spacing.Xs),
+                Padding = FooterButtonPadding,
+                Margin = new Thickness(0, Spacing.Xs, 0, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 IsEnabled = false,   // enabled by OnStyleSelectionChangedAsync for a non-active row
                 ToolTip = "Make the selected style the one Format SQL uses",
             };
+            ThemedButton.ApplySecondary(_setActiveButton);
             _setActiveButton.Click += async (_, _) =>
             {
                 try { await OnSetActiveAsync(); }
@@ -566,19 +783,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             };
             listFooter.Children.Add(_setActiveButton);
 
-            listFooter.Children.Add(MakeAccentCtaButton("+ New Style", OnNewStyleAsync));
+            listFooter.Children.Add(MakeAccentCtaButton("+ New style", OnNewStyleAsync));
             Grid.SetRow(listFooter, 2);
             panel.Children.Add(listFooter);
 
             return MakePaneCard(0, panel);
         }
 
+        /// <summary>How a header chip reads: context, unsaved work, or the style Format SQL uses.</summary>
+        private enum ChipKind { Neutral, Warning, Accent }
+
+        /// <summary>One padding, so every footer and list button has the same height.</summary>
+        private static readonly Thickness FooterButtonPadding = new Thickness(Spacing.Md + 2, 5, Spacing.Md + 2, 5);
+
         /// <summary>
-        /// A compact header status chip. <paramref name="accent"/> chips carry the accent token
-        /// (state the user must notice: unsaved work, which style is active); neutral chips use the
-        /// muted token (context only). Starts collapsed — <see cref="UpdateHeaderState"/> shows it.
+        /// A rounded header status pill. A neutral pill is context ("Built-in"); the warning pill
+        /// leads with an amber dot (unsaved work); the accent pill names the active style in the
+        /// link colour on the selection tint. Starts collapsed — <see cref="UpdateHeaderState"/>
+        /// shows it.
         /// </summary>
-        private Border MakeHeaderChip(string text, bool accent, out TextBlock label)
+        private Border MakeHeaderChip(string text, ChipKind kind, out TextBlock label)
         {
             label = new TextBlock
             {
@@ -588,21 +812,44 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontWeight = Typography.WeightSemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            var highContrast = FormatStylesChrome.IsHighContrast;
             label.SetResourceReference(TextBlock.ForegroundProperty,
-                accent ? ThemeTokens.AccentPrimary : ThemeTokens.TextSecondary);
+                highContrast || kind == ChipKind.Warning ? ThemeTokens.TextPrimary
+                : kind == ChipKind.Accent ? ThemeTokens.TextLink
+                : ThemeTokens.TextSecondary);
+
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            if (kind == ChipKind.Warning)
+            {
+                var dot = new TextBlock
+                {
+                    Text = "\u25CF",
+                    FontSize = 9,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 5, 0),
+                };
+                dot.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.StatusWarning);
+                content.Children.Add(dot);
+            }
+            content.Children.Add(label);
 
             var chip = new Border
             {
-                Child = label,
-                CornerRadius = new CornerRadius(2),
+                Child = content,
+                CornerRadius = new CornerRadius(10),
                 BorderThickness = new Thickness(1),
-                Padding = new Thickness(Spacing.Xs, 1, Spacing.Xs, 1),
-                Margin = new Thickness(Spacing.Xs, 0, 0, 0),
+                Padding = new Thickness(Spacing.Sm + 1, 2, Spacing.Sm + 1, 3),
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Visibility = Visibility.Collapsed,
             };
+            // (High Contrast: the tints are the system highlight, so the pill is outlined instead.)
+            chip.SetResourceReference(Border.BackgroundProperty,
+                highContrast ? ThemeTokens.SurfacePanel
+                : kind == ChipKind.Accent ? ThemeTokens.SurfaceSelection : ThemeTokens.SurfaceHover);
             chip.SetResourceReference(Border.BorderBrushProperty,
-                accent ? ThemeTokens.AccentPrimary : ThemeTokens.BorderSubtle);
+                highContrast ? ThemeTokens.BorderDefault
+                : kind == ChipKind.Accent ? ThemeTokens.SurfaceSelection : ThemeTokens.BorderSubtle);
             return chip;
         }
 
@@ -662,7 +909,14 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (_stylesHeader != null)
             {
                 var count = _viewModel.Profiles.Count;
-                _stylesHeader.Text = count > 0 ? $"STYLES · {count}" : "STYLES";
+                _stylesHeader.Inlines.Clear();
+                _stylesHeader.Inlines.Add(new System.Windows.Documents.Run("STYLES"));
+                if (count > 0)
+                {
+                    var countRun = new System.Windows.Documents.Run("  " + count);
+                    countRun.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, ThemeTokens.TextDisabled);
+                    _stylesHeader.Inlines.Add(countRun);
+                }
             }
         }
 
@@ -687,11 +941,13 @@ namespace AkmlSql.Shell.Shared.Formatting
             var btn = new Button
             {
                 Content = content,
-                Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
+                Padding = FooterButtonPadding,
+                MinWidth = 76,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
             };
+            ThemedButton.ApplySecondary(btn);
             // async-void click handler is the WPF event idiom; guarded so a faulted task can't crash the host.
             btn.Click += async (_, _) =>
             {
@@ -701,53 +957,32 @@ namespace AkmlSql.Shell.Shared.Formatting
             return btn;
         }
 
-        /// <summary>Outlined accent call-to-action ("+ New Style") — Border-based so the accent
-        /// border/text survive the host's default button chrome.</summary>
-        private FrameworkElement MakeAccentCtaButton(string content, Func<System.Threading.Tasks.Task> onClick)
+        /// <summary>
+        /// Outlined accent call-to-action ("+ New style"): a real button — keyboard, screen readers
+        /// and UI Automation reach it by name — on the shared themed template, with the accent for
+        /// its border and the link colour for its text.
+        /// </summary>
+        private Button MakeAccentCtaButton(string content, Func<System.Threading.Tasks.Task> onClick)
         {
-            var border = new Border
+            var btn = new Button
             {
-                CornerRadius = new CornerRadius(4),
-                BorderThickness = new Thickness(1),
-                Padding = new Thickness(Spacing.Sm, Spacing.Xs + 1, Spacing.Sm, Spacing.Xs + 1),
-                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Xs, Spacing.Xs),
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Background = System.Windows.Media.Brushes.Transparent,
-                Focusable = true, // keyboard-reachable — this is the only path to "New style"
-            };
-            border.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
-            var label = new TextBlock
-            {
-                Text = content,
+                Content = content,
+                Padding = FooterButtonPadding,
+                Margin = new Thickness(0, Spacing.Sm, 0, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 FontWeight = Typography.WeightSemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center,
+                Cursor = System.Windows.Input.Cursors.Hand,
             };
-            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
-            border.Child = label;
-
-            async System.Threading.Tasks.Task Invoke()
+            ThemedButton.ApplySecondary(btn);
+            btn.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            btn.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextLink);
+            btn.Click += async (_, _) =>
             {
                 try { await onClick(); }
                 catch (Exception ex) { Log.Warning(ex, "FormatStylesEditor: action '{Action}' failed", content); SetStatus(ex.Message); }
-            }
-            void Tint() => border.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceSelection);
-            void Clear() => border.Background = System.Windows.Media.Brushes.Transparent;
-            border.MouseEnter += (_, _) => Tint();
-            border.MouseLeave += (_, _) => { if (!border.IsKeyboardFocused) Clear(); };
-            border.GotKeyboardFocus += (_, _) => Tint();      // visible focus state
-            border.LostKeyboardFocus += (_, _) => Clear();
-            border.MouseLeftButtonUp += async (_, _) => await Invoke();
-            border.KeyDown += async (_, e) =>
-            {
-                if (e.Key is System.Windows.Input.Key.Enter or System.Windows.Input.Key.Space)
-                {
-                    e.Handled = true;
-                    await Invoke();
-                }
             };
-            return border;
+            return btn;
         }
 
         /// <summary>The row's ⋮ glyph opens the shared style context menu against its own row.</summary>
@@ -780,13 +1015,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (_suppressSelectionChanged || _styleList?.SelectedItem is not StyleListItem item) return;
 
             // "Set as active" tracks the selection: pointless on the style that is already active.
-            if (_setActiveButton != null)
-            {
-                _setActiveButton.IsEnabled = !item.IsActive;
-                _setActiveButton.ToolTip = item.IsActive
-                    ? $"'{item.Name}' is already the active style"
-                    : $"Make '{item.Name}' the style Format SQL uses";
-            }
+            SyncSetActiveButton(item.Name, item.IsActive);
 
             var previous = _viewModel.LoadedProfileName;
             bool ok;
@@ -823,6 +1052,16 @@ namespace AkmlSql.Shell.Shared.Formatting
                     : $"Loaded '{item.Name}'.");
         }
 
+        /// <summary>"Set as active style" is disabled, with a reason, on the style that is already active.</summary>
+        private void SyncSetActiveButton(string name, bool isActive)
+        {
+            if (_setActiveButton == null) return;
+            _setActiveButton.IsEnabled = !isActive;
+            _setActiveButton.ToolTip = isActive
+                ? $"'{name}' is already the active style"
+                : $"Make '{name}' the style Format SQL uses";
+        }
+
         /// <summary>Re-points the list selection at <paramref name="name"/> (or clears it) without re-triggering the load.</summary>
         private void RestoreListSelection(string? name)
         {
@@ -852,12 +1091,13 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             if (_saveBtn != null)
             {
-                _saveBtn.IsEnabled = _viewModel.IsDirty;
+                _saveBtn.IsEnabled = _viewModel.IsDirty && !_viewModel.IsSelectedReadOnly;
                 // A disabled button with no explanation reads as broken, so name the actual reason.
                 // Saving a built-in says where the change goes: it writes your own copy rather than
                 // altering the shipped file, which is why it can always be undone.
                 _saveBtn.ToolTip =
                     nothingLoaded ? "Select a style first"
+                    : _viewModel.IsSelectedReadOnly ? FormatStylesEditorViewModel.TeamReadOnlyText(_viewModel.LoadedProfileName!)
                     : !_viewModel.IsDirty ? "No changes to save"
                     : _viewModel.IsSelectedBuiltIn && !_viewModel.IsSelectedCustomized
                         ? $"Save your own copy of the built-in '{_viewModel.LoadedProfileName}' (the original is kept)"
@@ -877,31 +1117,51 @@ namespace AkmlSql.Shell.Shared.Formatting
                     : Visibility.Collapsed;
         }
 
+        /// <summary>
+        /// Spec 040 (T187, STY-10) — shows "Team styles unavailable — ‹folder› can't be reached"
+        /// under the list while the engine reports the team style folder unreachable.
+        /// </summary>
+        private void UpdateTeamUnavailableRow()
+        {
+            if (_teamUnavailableRow == null) return;
+            var show = _viewModel.TeamFolderUnavailable;
+            _teamUnavailableRow.Text = show
+                ? FormatStylesEditorViewModel.TeamFolderUnavailableText(
+                    string.IsNullOrWhiteSpace(_viewModel.TeamStyleFolder) ? "the team style folder" : _viewModel.TeamStyleFolder)
+                : string.Empty;
+            _teamUnavailableRow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>The hint over a built-in style's options.</summary>
+        private const string BuiltInHint = "Built-in style: your edits are saved as your own copy, and the original is kept.";
+
         private void UpdateReadOnlyState()
         {
-            // The settings form is never disabled now — that was the read-only built-in behaviour,
-            // and it is what made the editor look broken on a fresh install where every style is
-            // built-in.
+            // The settings form is disabled only for a read-only team style (spec 040, STY-10) —
+            // built-ins are editable (an edit saves the user's own copy), and disabling them is what
+            // made the editor look broken on a fresh install where every style is built-in.
             if (_settingControlsHost != null)
-                _settingControlsHost.IsEnabled = true;
+                _settingControlsHost.IsEnabled = !_viewModel.IsSelectedReadOnly;
 
             if (_builtInHint != null)
             {
                 var loaded = !string.IsNullOrEmpty(_viewModel.LoadedProfileName);
-                _builtInHint.Visibility = loaded && (_viewModel.IsSelectedBuiltIn || _viewModel.IsSelectedClassic)
+                _builtInHint.Visibility = loaded && (_viewModel.IsSelectedBuiltIn || _viewModel.IsSelectedClassic || _viewModel.IsSelectedReadOnly)
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
                 if (_builtInHintText != null)
                 {
                     var text = _viewModel.IsSelectedCustomized
-                        ? "This is your edited version of a built-in style. The original is still there — Reset to built-in restores it."
+                        ? "Your edited copy of a built-in style. Reset to built-in restores the original."
                         : _viewModel.IsSelectedBuiltIn
-                            ? "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time."
+                            ? BuiltInHint
                             : string.Empty;
-                    if (_viewModel.IsSelectedClassic)
+                    if (_viewModel.IsSelectedClassic && !_viewModel.IsSelectedReadOnly)
                         text = (text.Length > 0 ? text + " " : string.Empty)
-                               + "This style is written in AKML's own model; it is shown in SQL Prompt's terms, and saving makes it a SQL Prompt style, formatted as the preview shows.";
+                               + "Written in AKML's own model and shown in SQL Prompt's terms; saving makes it a SQL Prompt style, formatted as the preview shows.";
+                    if (_viewModel.IsSelectedReadOnly)   // spec 040 (T187)
+                        text = "Read-only team style — its folder can't be written to. Copy it to edit a style of your own.";
                     _builtInHintText.Text = text;
                 }
             }
@@ -910,10 +1170,12 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>The ONE Save / Discard / Cancel prompt (style switch + window close share it).</summary>
         private StyleSwitchDecision PromptSaveDecision(string message)
         {
+            if (SaveDecisionOverride != null) return SaveDecisionOverride(message);
+
             var result = MessageBox.Show(
                 this,
                 message,
-                "AKML SQL — Format Styles",
+                AkmlSql.Core.Config.WindowTitles.For("Format styles"),
                 MessageBoxButton.YesNoCancel,
                 MessageBoxImage.Question);
 
@@ -928,6 +1190,13 @@ namespace AkmlSql.Shell.Shared.Formatting
         private System.Threading.Tasks.Task<StyleSwitchDecision> PromptStyleSwitchDecisionAsync() =>
             System.Threading.Tasks.Task.FromResult(
                 PromptSaveDecision($"Save changes to '{_viewModel.LoadedProfileName ?? "this style"}'?"));
+
+        /// <summary>Spec 040 (T080) — "Edit sample" swaps the formatted preview for the raw, editable sample.</summary>
+        private void ShowSampleEditor(bool editing)
+        {
+            if (_previewTextBox != null) _previewTextBox.Visibility = editing ? Visibility.Visible : Visibility.Collapsed;
+            if (_previewView != null) _previewView.Visibility = editing ? Visibility.Collapsed : Visibility.Visible;
+        }
 
         /// <summary>Persists the in-box sample text if the Edit-sample toggle is active.</summary>
         private void CommitSampleEdit()
@@ -994,7 +1263,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Spec 033 (T035) — New Style… with a chosen name + based-on style.
             var candidates = _viewModel.Profiles.Select(p => p.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
             if (candidates.Count == 0) candidates.Add("Default");
-            var (accepted, name, basedOn) = StyleNameDialog.ShowNewStyle(this, candidates, SelectedStyle() ?? "Default");
+            var (accepted, name, basedOn) = StyleNameDialog.ShowNewStyle(this, candidates, SelectedStyle() ?? "Default", ExistingStyleNames());
             if (!accepted) return;
 
             var created = await _viewModel.CreateStyleAsync(name, basedOn);
@@ -1007,12 +1276,22 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to rename."); return; }
             var item = _viewModel.Profiles.FirstOrDefault(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase));
             if (item?.IsShipped == true) { SetStatus("Built-in styles cannot be renamed — use Copy to make one you can name."); return; }
+            if (item?.IsReadOnly == true) { SetStatus(FormatStylesEditorViewModel.TeamReadOnlyText(current!)); return; }   // spec 040 (T187)
 
-            var (accepted, newName) = StyleNameDialog.ShowRename(this, current!);
-            if (!accepted || string.Equals(newName, current, StringComparison.Ordinal)) return;
+            string? newName;
+            if (RenameNameOverride != null)
+            {
+                newName = RenameNameOverride(current!, ExistingStyleNames());
+            }
+            else
+            {
+                var (accepted, typed) = StyleNameDialog.ShowRename(this, current!, ExistingStyleNames());
+                newName = accepted ? typed : null;
+            }
+            if (string.IsNullOrWhiteSpace(newName) || string.Equals(newName, current, StringComparison.Ordinal)) return;
 
             var wasActive = item?.IsActive == true;
-            var finalName = await _viewModel.RenameSelectedAsync(newName);
+            var finalName = await _viewModel.RenameSelectedAsync(newName!);
             if (finalName == null)
             {
                 SetStatus(_viewModel.LastError ?? "Rename failed.");
@@ -1029,10 +1308,28 @@ namespace AkmlSql.Shell.Shared.Formatting
             var current = SelectedStyle();
             if (string.IsNullOrEmpty(current)) { SetStatus("Select a style to delete."); return; }
 
+            // Spec 040 (T102): say why, before asking "Delete?", for a style that cannot be deleted.
+            var item = _viewModel.Profiles.FirstOrDefault(p => string.Equals(p.Name, current, StringComparison.OrdinalIgnoreCase));
+            if (item?.IsShipped == true)
+            {
+                SetStatus("Built-in styles cannot be deleted. Use Copy to make one of your own.");
+                return;
+            }
+            if (item?.IsReadOnly == true)   // spec 040 (T187): a read-only team style
+            {
+                SetStatus(FormatStylesEditorViewModel.TeamReadOnlyText(current!));
+                return;
+            }
+            if (item?.IsActive == true)
+            {
+                SetStatus($"'{current}' is the active style. Make another style active before deleting it.");
+                return;
+            }
+
             var confirm = MessageBox.Show(
                 this,
                 $"Delete style '{current}'? This cannot be undone.",
-                "AKML SQL — Format Styles",
+                AkmlSql.Core.Config.WindowTitles.For("Format styles"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
@@ -1085,7 +1382,7 @@ namespace AkmlSql.Shell.Shared.Formatting
             var confirm = MessageBox.Show(
                 this,
                 $"Reset '{current}' to the built-in style?\n\nYour saved changes to it will be discarded. This cannot be undone.",
-                "AKML SQL — Format Styles",
+                AkmlSql.Core.Config.WindowTitles.For("Format styles"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Warning,
                 MessageBoxResult.No);
@@ -1112,8 +1409,59 @@ namespace AkmlSql.Shell.Shared.Formatting
         {
             var source = SelectedStyle();
             if (string.IsNullOrEmpty(source)) { SetStatus("Select a style to copy."); return; }
-            var created = await _viewModel.CopyProfileAsync(source!);
-            AfterCreate(created, $"Copied '{source}'");
+            // Spec 040 (T101): Copy asks for the copy's name, suggesting "‹name› copy".
+            var name = StyleNameDialog.ShowCopyStyle(this, source!, ExistingStyleNames(), _viewModel.UniqueName($"{source} copy"));
+            if (string.IsNullOrWhiteSpace(name)) return;
+            var created = await _viewModel.CopyProfileAsync(source!, name!);
+            AfterCreate(created, $"Copied '{source}' to '{created}'.");
+        }
+
+        private System.Collections.Generic.IReadOnlyCollection<string> ExistingStyleNames() =>
+            _viewModel.Profiles.Select(p => p.Name).ToList();
+
+        /// <summary>
+        /// Spec 040 (T102, STY-07) — the window's keys. Anywhere: Ctrl+S saves (when there is
+        /// something to save), Ctrl+F goes to the option search. On the style list: F2 renames,
+        /// Delete deletes, Enter makes the style active. Returns true when the key was handled.
+        /// </summary>
+        internal bool HandleKey(Key key, ModifierKeys modifiers, bool listFocused)
+        {
+            if (modifiers == ModifierKeys.Control && key == Key.S)
+            {
+                if (_saveBtn?.IsEnabled == true) _ = RunKeyActionAsync(SaveSelectedStyleAsync, "Save");
+                return true;
+            }
+            if (modifiers == ModifierKeys.Control && key == Key.F)
+            {
+                FocusSearch();
+                return true;
+            }
+            if (!listFocused || modifiers != ModifierKeys.None) return false;
+
+            switch (key)
+            {
+                case Key.F2:
+                    _ = RunKeyActionAsync(OnRenameStyleAsync, "Rename");
+                    return true;
+                case Key.Delete:
+                    _ = RunKeyActionAsync(OnDeleteStyleAsync, "Delete");
+                    return true;
+                case Key.Enter:
+                    _ = RunKeyActionAsync(OnSetActiveAsync, "Set active");
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private async System.Threading.Tasks.Task RunKeyActionAsync(Func<System.Threading.Tasks.Task> action, string name)
+        {
+            try { await action(); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "FormatStylesEditor: key action '{Action}' failed", name);
+                SetStatus(ex.Message);
+            }
         }
 
         private async System.Threading.Tasks.Task OnSetActiveAsync()
@@ -1130,11 +1478,7 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 // RestoreListSelection suppresses SelectionChanged, so sync the button here or it
                 // would stay enabled on the style that just became active.
-                if (_setActiveButton != null)
-                {
-                    _setActiveButton.IsEnabled = false;
-                    _setActiveButton.ToolTip = $"'{name}' is already the active style";
-                }
+                SyncSetActiveButton(name!, isActive: true);
 
                 UpdateHeaderState();   // "Active: <name>" follows immediately
             }
@@ -1144,35 +1488,54 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
         }
 
-        private async System.Threading.Tasks.Task OnExportAsync()
+        internal async System.Threading.Tasks.Task OnExportAsync()
         {
             var name = SelectedStyle();
             if (string.IsNullOrEmpty(name)) { SetStatus("Select a style to export."); return; }
+
+            // Spec 040 (STY-03, FR-023): Export writes the SAVED style, so unsaved edits to it are
+            // offered for saving first rather than silently left out of the file.
+            if (_viewModel.IsDirty && string.Equals(name, _viewModel.LoadedProfileName, StringComparison.OrdinalIgnoreCase))
+            {
+                switch (PromptSaveDecision($"Save changes to '{name}' before exporting?"))
+                {
+                    case StyleSwitchDecision.Cancel:
+                        SetStatus("Export cancelled.");
+                        return;
+                    case StyleSwitchDecision.Save:
+                        await SaveSelectedStyleAsync();
+                        if (_viewModel.IsDirty) return; // the save failed; its error is in the status bar
+                        break;
+                }
+            }
+
+            var fileName = name + (_viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2");
+            var path = ExportFileOverride != null ? ExportFileOverride(fileName) : PickExportFile(fileName);
+            if (path == null) return;
+            if (await _viewModel.ExportProfileAsync(name!, path))
+                SetStatus($"Exported '{name}'");
+            else
+                SetStatus(_viewModel.LastError ?? "Export failed.");
+        }
+
+        private string? PickExportFile(string fileName)
+        {
             // SQL Prompt 10.5+ reads and writes one .json per style; the engine writes the style's
             // SQL Prompt document there. .sqlpromptstylev2 stays available for older SQL Prompts.
             var dialog = new Microsoft.Win32.SaveFileDialog
             {
                 Title = "Export formatting style",
-                FileName = name + (_viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2"),
+                FileName = fileName,
                 Filter = _viewModel.IsSqlPromptModel
                     ? "SQL Prompt style (*.json)|*.json|SQL Prompt 9 style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*"
                     : "SQL Prompt style (*.sqlpromptstylev2)|*.sqlpromptstylev2|All files (*.*)|*.*",
                 DefaultExt = _viewModel.IsSqlPromptModel ? ".json" : ".sqlpromptstylev2",
                 OverwritePrompt = true,
             };
-            if (dialog.ShowDialog(this) != true) return;
-            if (await _viewModel.ExportProfileAsync(name!, dialog.FileName))
-                SetStatus($"Exported '{name}'");
-            else
-                SetStatus(_viewModel.LastError ?? "Export failed.");
+            return dialog.ShowDialog(this) == true ? dialog.FileName : null;
         }
 
-        /// <summary>
-        /// Spec 031 FR-010/FR-011/FR-012 — imports a SQL Prompt style file (JSON or legacy XML)
-        /// via <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>, selects + activates
-        /// the resulting style, and shows a per-option summary dialog.
-        /// </summary>
-        private async System.Threading.Tasks.Task OnImportAsync()
+        private string? PickImportFile()
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -1180,10 +1543,43 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Filter = "SQL Prompt style (*.json;*.sqlpromptstylev2)|*.json;*.sqlpromptstylev2|All files (*.*)|*.*",
                 CheckFileExists = true,
             };
-            if (dialog.ShowDialog(this) != true) return;
+            return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+        }
 
-            var stem = System.IO.Path.GetFileNameWithoutExtension(dialog.FileName);
-            var peekedName = TryPeekStyleName(dialog.FileName, out var kind);
+        /// <summary>
+        /// Spec 031 FR-010/FR-011/FR-012 — imports a SQL Prompt style file (JSON or legacy XML)
+        /// via <see cref="FormatStylesEditorViewModel.ImportProfileAsync"/>, selects + activates
+        /// the resulting style, and shows a per-option summary dialog. Spec 040 (STY-03): unsaved
+        /// edits are settled before the file is picked, a taken name is never overwritten, and the
+        /// list, header and "Set as active style" show the new active style at once (FR-022).
+        /// </summary>
+        internal async System.Threading.Tasks.Task OnImportAsync()
+        {
+            // The import selects the new style, so settle unsaved edits first — asked here, before
+            // the file picker, instead of halfway through the import.
+            if (_viewModel.IsDirty)
+            {
+                var decision = _viewModel.DirtyDecisionHandler != null
+                    ? await _viewModel.DirtyDecisionHandler()
+                    : StyleSwitchDecision.Discard;
+                if (decision == StyleSwitchDecision.Cancel) { SetStatus("Import cancelled."); return; }
+                if (decision == StyleSwitchDecision.Save)
+                {
+                    await SaveSelectedStyleAsync();
+                    if (_viewModel.IsDirty) return; // the save failed; its error is in the status bar
+                }
+                else
+                {
+                    _viewModel.RevertChanges();
+                    RefreshVisibleSettingControls();
+                }
+            }
+
+            var file = ImportFileOverride != null ? ImportFileOverride() : PickImportFile();
+            if (file == null) return;
+
+            var stem = System.IO.Path.GetFileNameWithoutExtension(file);
+            var peekedName = TryPeekStyleName(file, out var kind);
 
             // Three-way naming rule (the engine falls back to a hardcoded name whenever it
             // can't derive one, so consecutive fallback imports would silently overwrite each
@@ -1206,45 +1602,51 @@ namespace AkmlSql.Shell.Shared.Formatting
             // JSON: the peeked metadata.name (the engine derives the profile name from it),
             // falling back to the stem exactly when the stem is what we pass as targetName.
             // XML: the stem we just chose as the target name. Unrecognized/malformed content:
-            // skip the confirmation — the engine rejects it with a clear error, nothing saved.
+            // skip the check — the engine rejects it with a clear error, nothing saved.
+            // Spec 040 (STY-03): a taken name — a built-in or one of your own styles — is never
+            // overwritten by an import; the user picks another, "‹name› (imported)" suggested.
             string? collisionName = kind == StyleFileKind.Unknown ? null : (peekedName ?? stem);
-            var existing = collisionName == null
-                ? null
-                : _viewModel.Profiles.FirstOrDefault(p =>
-                    !p.IsShipped && string.Equals(p.Name, collisionName, StringComparison.OrdinalIgnoreCase));
-            if (existing != null)
+            var existingNames = _viewModel.Profiles.Select(p => p.Name).ToList();
+            if (collisionName != null && existingNames.Contains(collisionName, StringComparer.OrdinalIgnoreCase))
             {
-                var confirm = MessageBox.Show(
-                    this,
-                    $"Style '{existing.Name}' already exists. Overwrite?",
-                    "AKML SQL",
-                    MessageBoxButton.OKCancel,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.Cancel);
-                if (confirm != MessageBoxResult.OK)
+                var suggested = collisionName + " (imported)";
+                for (var n = 2; existingNames.Contains(suggested, StringComparer.OrdinalIgnoreCase); n++)
+                    suggested = $"{collisionName} (imported {n})";
+
+                var chosen = ImportNameOverride != null
+                    ? ImportNameOverride(suggested, existingNames)
+                    : StyleNameDialog.ShowImportName(this, collisionName, suggested, existingNames);
+                if (string.IsNullOrWhiteSpace(chosen))
                 {
                     SetStatus("Import cancelled.");
                     return;
                 }
+                targetName = chosen!.Trim();
             }
 
-            var response = await _viewModel.ImportProfileAsync(dialog.FileName, targetName);
-
-            // Engine rejects built-in collisions; custom collisions overwrite by ProfileManager
-            // semantics, so the confirm above (against the client-side list) is the only gate.
-            if (response != null && response.Success && response.ProfileName != null)
-            {
-                AfterCreate(response.ProfileName, BuildImportSummary(response));
-                if (_viewModel.SetActiveProfile(response.ProfileName))
-                    UpdateStatusBarActiveStyle(response.ProfileName); // FR-011 — import + set active
-                else
-                    SetStatus(_viewModel.LastError ?? "Imported, but could not set active style.");
-                ShowImportSummaryDialog(response);                    // FR-012 — import itself succeeded
-            }
-            else
+            var response = await _viewModel.ImportProfileAsync(file, targetName);
+            if (response == null || !response.Success || response.ProfileName == null)
             {
                 SetStatus(_viewModel.LastError ?? "Import failed.");
+                return;
             }
+
+            // FR-011 — an imported style becomes the active one. Then the same refresh as "Set as
+            // active" (spec 040 FR-022): the list's ACTIVE pill, the header chip and the button
+            // show it at once, without reopening the window.
+            var imported = response.ProfileName;
+            var activated = _viewModel.SetActiveProfile(imported);
+            await _viewModel.RefreshProfilesAsync();
+            AfterCreate(imported, BuildImportSummary(response)); // selects the style, which loads it
+            var importedItem = _viewModel.Profiles.FirstOrDefault(
+                p => string.Equals(p.Name, imported, StringComparison.OrdinalIgnoreCase));
+            SyncSetActiveButton(imported, importedItem?.IsActive == true);
+            UpdateHeaderState();
+            if (activated)
+                UpdateStatusBarActiveStyle(imported);
+            else
+                SetStatus(_viewModel.LastError ?? "Imported, but could not set active style.");
+            ShowImportSummaryDialog(response); // FR-012 — the import itself succeeded
         }
 
         private static string BuildImportSummary(ProfileImportResponse r)
@@ -1334,6 +1736,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// </summary>
         private void ShowImportSummaryDialog(ProfileImportResponse response)
         {
+            if (ImportSummaryOverride != null) { ImportSummaryOverride(response); return; }
+
             var dialog = new ImportSummaryDialog(
                 response.ProfileName ?? "(unknown)",
                 BuildImportSummary(response),
@@ -1384,78 +1788,136 @@ namespace AkmlSql.Shell.Shared.Formatting
 
         private DataTemplate BuildStyleListItemTemplate()
         {
-            // Row:  [✔ active] Name [Kind] .......... [⋮]
-            // The ✔ marks the active style (accent-coloured); the ⋮ (docked right) opens the
-            // shared per-style context menu against its own row. Uses WPF's built-in
-            // BooleanToVisibilityConverter — no resources needed.
+            // Row:  Name ................ [Modified] [ACTIVE]  ⋮
+            // The badges sit in one right-hand column, so every row's ACTIVE pill and ⋮ line up.
+            // "Built-in" / "Team" is not repeated on each row — the section header above says it;
+            // only what the section can't tell you gets a badge (Modified, Read-only). The row's
+            // tooltip still gives the full kind.
+            // Under High Contrast the selected row is the system highlight: the badges and ⋮ then
+            // take the row's own text colour, and ACTIVE is outlined rather than filled.
+            var highContrast = FormatStylesChrome.IsHighContrast;
             var boolToVis = new System.Windows.Controls.BooleanToVisibilityConverter();
-            var accent = ThemeRegistry.Instance.Resources[ThemeTokens.AccentPrimary];
 
             var template = new DataTemplate(typeof(StyleListItem));
 
-            var dock = new FrameworkElementFactory(typeof(DockPanel));
-            dock.SetValue(DockPanel.LastChildFillProperty, true);
-            dock.SetValue(FrameworkElement.MarginProperty, new Thickness(2, 2, 0, 2));
-
-            var menuGlyph = new FrameworkElementFactory(typeof(TextBlock));
-            menuGlyph.SetValue(TextBlock.TextProperty, "⋮");
-            menuGlyph.SetValue(DockPanel.DockProperty, Dock.Right);
-            menuGlyph.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            menuGlyph.SetValue(TextBlock.FontSizeProperty, (double)Typography.H4);
-            menuGlyph.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 4, 0));
-            menuGlyph.SetValue(UIElement.OpacityProperty, 0.6);
-            menuGlyph.SetValue(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand);
-            menuGlyph.SetValue(FrameworkElement.ToolTipProperty, "Style actions");
-            menuGlyph.AddHandler(UIElement.MouseLeftButtonUpEvent,
-                new System.Windows.Input.MouseButtonEventHandler(OnRowMenuGlyphClick));
-            dock.AppendChild(menuGlyph);
-
-            var stack = new FrameworkElementFactory(typeof(StackPanel));
-            stack.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            var grid = new FrameworkElementFactory(typeof(Grid));
+            grid.SetValue(FrameworkElement.MinHeightProperty, 22.0);
+            grid.SetBinding(FrameworkElement.ToolTipProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
+            var nameCol = new FrameworkElementFactory(typeof(ColumnDefinition));
+            nameCol.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+            var badgeCol = new FrameworkElementFactory(typeof(ColumnDefinition));
+            badgeCol.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
+            var menuCol = new FrameworkElementFactory(typeof(ColumnDefinition));
+            menuCol.SetValue(ColumnDefinition.WidthProperty, new GridLength(20));
+            grid.AppendChild(nameCol);
+            grid.AppendChild(badgeCol);
+            grid.AppendChild(menuCol);
 
             var name = new FrameworkElementFactory(typeof(TextBlock));
             name.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Name)));
             name.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
             name.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
-            stack.AppendChild(name);
+            grid.AppendChild(name);
 
-            // The active style reads as an explicit "ACTIVE" pill rather than the previous bare "✔ "
-            // prefix. A lone check glyph was easy to miss and gave no hint that it means "this is the
-            // style Format SQL will use" — the exact confusion behind "selecting a style doesn't mark
-            // it" (selecting only highlights a row; activating is a separate action).
+            var badges = new FrameworkElementFactory(typeof(StackPanel));
+            badges.SetValue(Grid.ColumnProperty, 1);
+            badges.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            badges.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            // "Modified" / "Read-only": an outlined, muted pill.
+            var kindBadge = new FrameworkElementFactory(typeof(Border));
+            kindBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            kindBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            kindBadge.SetValue(Border.PaddingProperty, new Thickness(6, 0, 6, 1));
+            kindBadge.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
+            kindBadge.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            kindBadge.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind))
+            {
+                Converter = KindBadgeConverter.Instance,
+                ConverterParameter = KindBadgeConverter.VisibilityParameter,
+            });
+            var kindText = new FrameworkElementFactory(typeof(TextBlock));
+            kindText.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)) { Converter = KindBadgeConverter.Instance });
+            kindText.SetValue(TextBlock.FontSizeProperty, 10.0);
+            if (!highContrast) kindText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            kindBadge.AppendChild(kindText);
+            badges.AppendChild(kindBadge);
+
+            // The active style reads as an explicit, filled "ACTIVE" pill: a bare check glyph was
+            // easy to miss and gave no hint that it means "Format SQL uses this style" — the
+            // confusion behind "selecting a style doesn't mark it" (selecting only highlights a
+            // row; activating is a separate action).
             var activeBadge = new FrameworkElementFactory(typeof(Border));
-            activeBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(2));
-            activeBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-            activeBadge.SetValue(Control.PaddingProperty, new Thickness(4, 0, 4, 0));
+            activeBadge.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            activeBadge.SetValue(Border.PaddingProperty, new Thickness(6, 1, 6, 1));
             activeBadge.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 0, 0, 0));
-            activeBadge.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
             activeBadge.SetValue(FrameworkElement.ToolTipProperty, "Format SQL uses this style");
-            if (accent is System.Windows.Media.Brush accentBorder)
-                activeBadge.SetValue(Border.BorderBrushProperty, accentBorder);
+            if (highContrast)
+            {
+                activeBadge.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+                activeBadge.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            }
+            else
+            {
+                activeBadge.SetResourceReference(Border.BackgroundProperty, ThemeTokens.AccentPrimary);
+            }
             activeBadge.SetBinding(UIElement.VisibilityProperty,
                 new System.Windows.Data.Binding(nameof(StyleListItem.IsActive)) { Converter = boolToVis });
-
             var activeText = new FrameworkElementFactory(typeof(TextBlock));
             activeText.SetValue(TextBlock.TextProperty, "ACTIVE");
-            activeText.SetValue(TextBlock.FontSizeProperty, 9.0);
+            activeText.SetValue(TextBlock.FontSizeProperty, 9.5);
             activeText.SetValue(TextBlock.FontWeightProperty, Typography.WeightSemiBold);
-            activeText.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            if (accent is System.Windows.Media.Brush accentFg)
-                activeText.SetValue(TextBlock.ForegroundProperty, accentFg);
+            if (!highContrast) activeText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextOnAccent);
             activeBadge.AppendChild(activeText);
-            stack.AppendChild(activeBadge);
+            badges.AppendChild(activeBadge);
+            grid.AppendChild(badges);
 
-            var kind = new FrameworkElementFactory(typeof(TextBlock));
-            kind.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding(nameof(StyleListItem.Kind)));
-            kind.SetValue(FrameworkElement.MarginProperty, new Thickness(6, 1, 0, 0));
-            kind.SetValue(UIElement.OpacityProperty, 0.55);
-            kind.SetValue(TextBlock.FontSizeProperty, 10.0);
-            kind.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
-            stack.AppendChild(kind);
+            // ⋮ opens the shared per-style context menu against its own row.
+            var menuGlyph = new FrameworkElementFactory(typeof(TextBlock));
+            menuGlyph.SetValue(Grid.ColumnProperty, 2);
+            menuGlyph.SetValue(TextBlock.TextProperty, "⋮");
+            menuGlyph.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
+            menuGlyph.SetValue(TextBlock.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            menuGlyph.SetValue(TextBlock.FontSizeProperty, (double)Typography.H4);
+            menuGlyph.SetValue(FrameworkElement.CursorProperty, System.Windows.Input.Cursors.Hand);
+            menuGlyph.SetValue(FrameworkElement.ToolTipProperty, "Style actions");
+            if (!highContrast) menuGlyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            // Spec 040 (T185): screen readers announce the glyph by name, not as "⋮".
+            menuGlyph.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Style actions");
+            menuGlyph.AddHandler(UIElement.MouseLeftButtonUpEvent,
+                new System.Windows.Input.MouseButtonEventHandler(OnRowMenuGlyphClick));
+            grid.AppendChild(menuGlyph);
 
-            dock.AppendChild(stack);
-            template.VisualTree = dock;
+            template.VisualTree = grid;
             return template;
+        }
+
+        /// <summary>
+        /// The style list's kind badge: only what the row's section header doesn't already say —
+        /// "Modified" for an edited built-in, "Read-only" for a team style that can't be written.
+        /// With <see cref="VisibilityParameter"/> it answers whether the badge shows at all.
+        /// </summary>
+        private sealed class KindBadgeConverter : System.Windows.Data.IValueConverter
+        {
+            internal static readonly KindBadgeConverter Instance = new KindBadgeConverter();
+            internal const string VisibilityParameter = "visibility";
+
+            internal static string Badge(string? kind) =>
+                kind == null ? string.Empty
+                : kind.EndsWith("modified", StringComparison.Ordinal) ? "Modified"
+                : kind.EndsWith("read-only", StringComparison.Ordinal) ? "Read-only"
+                : string.Empty;
+
+            public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            {
+                var badge = Badge(value as string);
+                return Equals(parameter, VisibilityParameter)
+                    ? (badge.Length == 0 ? Visibility.Collapsed : Visibility.Visible)
+                    : badge;
+            }
+
+            public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => throw new NotSupportedException();
         }
 
         /// <summary>Upper-cases the style-list section label ("Your styles" → "YOUR STYLES").</summary>
@@ -1472,15 +1934,32 @@ namespace AkmlSql.Shell.Shared.Formatting
         // -----------------------------------------------------------------
         private FrameworkElement BuildMiddlePanel()
         {
-            var res = ThemeRegistry.Instance.Resources;
-
             var panel = new Grid { Margin = new Thickness(Spacing.Sm) };
             panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // What the "● N" beside a page means — users read it as "N options on the page".
+            var legend = new TextBlock
+            {
+                Text = "● N  options that differ from SQL Prompt's defaults",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Xs, 0),
+            };
+            legend.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            Grid.SetRow(legend, 3);
+            panel.Children.Add(legend);
 
             var header = MakeSectionHeader("STYLE OPTIONS");
             Grid.SetRow(header, 0);
             panel.Children.Add(header);
+
+            var search = BuildSearchBox();
+            Grid.SetRow(search, 1);
+            panel.Children.Add(search);
 
             _settingsTree = new TreeView
             {
@@ -1492,22 +1971,216 @@ namespace AkmlSql.Shell.Shared.Formatting
             _settingsTree.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             ScrollViewer.SetHorizontalScrollBarVisibility(_settingsTree, ScrollBarVisibility.Disabled);
 
-            // Themed selection: the selected group leaf gets an accent bar + on-accent text
-            // (SQL Prompt look). Groups are the selectable leaves; categories only expand.
-            if (res[ThemeTokens.AccentPrimary] is System.Windows.Media.Brush accent)
-            {
-                _settingsTree.Resources[SystemColors.HighlightBrushKey] = accent;
-                _settingsTree.Resources[SystemColors.InactiveSelectionHighlightBrushKey] = accent;
-            }
-            if (res[ThemeTokens.TextOnAccent] is System.Windows.Media.Brush onAccent)
-            {
-                _settingsTree.Resources[SystemColors.HighlightTextBrushKey] = onAccent;
-                _settingsTree.Resources[SystemColors.InactiveSelectionHighlightTextBrushKey] = onAccent;
-            }
-            Grid.SetRow(_settingsTree, 1);
+            // Chevrons on the categories; the selected page gets a soft rounded tint and an accent
+            // bar instead of the stock solid highlight block. Implicit, so it reaches every depth.
+            _settingsTree.Resources[typeof(TreeViewItem)] = FormatStylesChrome.TreeItemStyle();
+            Grid.SetRow(_settingsTree, 2);
             panel.Children.Add(_settingsTree);
 
             return MakePaneCard(2, panel);
+        }
+
+        /// <summary>
+        /// Spec 040 (T097, STY-04, FR-030) — "Search for options…": filters the page tree to pages with
+        /// matching options (with counts) and highlights the matching rows, 150 ms after typing
+        /// stops. Enter opens the first match; Esc clears the search (and, when it is already
+        /// empty, closes the window as usual).
+        /// </summary>
+        private FrameworkElement BuildSearchBox()
+        {
+            // A rounded field with a search glyph; its border turns the focus colour while typing.
+            var frame = new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(Spacing.Xs, 0, Spacing.Xs, Spacing.Sm),
+                SnapsToDevicePixels = true,
+            };
+            frame.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
+            frame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+
+            var host = new Grid();
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            host.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var glyph = new TextBlock
+            {
+                Text = FormatStylesChrome.SearchGlyph,
+                FontFamily = FormatStylesChrome.IconFont,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                IsHitTestVisible = false,
+            };
+            glyph.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
+            host.Children.Add(glyph);
+
+            _searchBox = new TextBox
+            {
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new Thickness(Spacing.Xs + 2, 5, Spacing.Sm, 5),
+                ToolTip = "Search option names, descriptions and choices (Ctrl+F)",
+            };
+            System.Windows.Automation.AutomationProperties.SetName(_searchBox, "Search for options");
+            _searchBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
+            _searchBox.SetResourceReference(TextBoxBase.CaretBrushProperty, ThemeTokens.TextPrimary);
+            _searchBox.GotKeyboardFocus += (_, _) => frame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderFocus);
+            _searchBox.LostKeyboardFocus += (_, _) => frame.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
+            Grid.SetColumn(_searchBox, 1);
+
+            _searchPlaceholder = new TextBlock
+            {
+                Text = "Search for options…",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false,
+            };
+            _searchPlaceholder.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPlaceholder);
+            Grid.SetColumn(_searchPlaceholder, 1);
+
+            _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+            _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); ApplySearch(); };
+            _searchBox.TextChanged += (_, _) =>
+            {
+                _searchPlaceholder.Visibility = string.IsNullOrEmpty(_searchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
+                _searchTimer.Stop();
+                _searchTimer.Start();
+            };
+            _searchBox.PreviewKeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Escape && !string.IsNullOrEmpty(_searchBox.Text))
+                {
+                    _searchBox.Clear();
+                    _searchTimer.Stop();
+                    ApplySearch();
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Enter)
+                {
+                    _searchTimer.Stop();
+                    ApplySearch();
+                    OpenFirstMatch();
+                    e.Handled = true;
+                }
+            };
+
+            host.Children.Add(_searchBox);
+            host.Children.Add(_searchPlaceholder);
+            frame.Child = host;
+            return frame;
+        }
+
+        private void FocusSearch()
+        {
+            if (_searchBox == null) return;
+            _searchBox.Focus();
+            FocusManager.SetFocusedElement(this, _searchBox);
+            _searchBox.SelectAll();
+        }
+
+        /// <summary>Filters the page tree and re-highlights the current page for the search box's text.</summary>
+        private void ApplySearch()
+        {
+            var query = _searchBox?.Text?.Trim() ?? string.Empty;
+            var result = _viewModel.Search(query);
+            _searchResult = result;
+            _searchMatches = new System.Collections.Generic.HashSet<string>(result.OptionIds, StringComparer.Ordinal);
+
+            var visible = new System.Collections.Generic.HashSet<string>(result.GroupIds, StringComparer.Ordinal);
+            foreach (var entry in _groupLeaves)
+            {
+                var (leaf, _, matches, _) = entry.Value;
+                leaf.Visibility = visible.Contains(entry.Key) ? Visibility.Visible : Visibility.Collapsed;
+                if (result.Counts.TryGetValue(entry.Key, out var count))
+                {
+                    matches.Text = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    matches.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    matches.Visibility = Visibility.Collapsed;
+                }
+            }
+            if (_settingsTree != null)
+            {
+                foreach (var node in _settingsTree.Items.OfType<TreeViewItem>())
+                {
+                    if (node.Tag is FormatStylesSchemaModel.Group) continue; // a v1 top-level leaf
+                    node.Visibility = node.Items.OfType<TreeViewItem>().Any(l => l.Visibility == Visibility.Visible)
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                }
+            }
+
+            if (_currentGroup != null) UpdateRightForGroup(_currentGroup, _currentGroupCategory);
+            if (query.Length > 0)
+                SetStatus(result.OptionIds.Count == 0
+                    ? $"No options match '{query}'."
+                    : $"{result.OptionIds.Count} option{(result.OptionIds.Count == 1 ? "" : "s")} match '{query}'. Press Enter to go to the first.");
+        }
+
+        /// <summary>Enter in the search box: opens the first matching page and scrolls to its first match.</summary>
+        private void OpenFirstMatch()
+        {
+            var first = _searchResult;
+            if (first?.FirstGroupId == null || !_groupLeaves.TryGetValue(first.FirstGroupId, out var entry)) return;
+            if (!entry.Leaf.IsSelected) entry.Leaf.IsSelected = true;
+            else if (entry.Leaf.Tag is FormatStylesSchemaModel.Group group) UpdateRightForGroup(group, entry.Category);
+
+            var target = first.FirstOptionId;
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                var row = _settingControlsHost?.Children.OfType<Border>().FirstOrDefault(b => Equals(b.Tag, target));
+                row?.BringIntoView();
+            }));
+        }
+
+        /// <summary>Spec 040 (T099) — "● N" on each page leaf: its options that differ from SQL Prompt's default.</summary>
+        private void UpdateLeafBadges()
+        {
+            foreach (var entry in _groupLeaves)
+            {
+                var changed = _viewModel.ChangedCount(entry.Key);
+                entry.Value.Changed.Text = changed > 0 ? "● " + changed.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+                entry.Value.Changed.Visibility = changed > 0 ? Visibility.Visible : Visibility.Collapsed;
+                ((FrameworkElement)entry.Value.Changed.Parent).ToolTip = changed > 0
+                    ? $"{changed} option{(changed == 1 ? "" : "s")} on this page differ from SQL Prompt's default"
+                    : null;
+            }
+        }
+
+        /// <summary>Spec 040 (T099) — an option edit updates that row's marker and the page counts in place.</summary>
+        private void OnWorkingValueChanged(string settingId)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnWorkingValueChanged(settingId)));
+                return;
+            }
+            if (_rowMarkers.TryGetValue(settingId, out var marker))
+                ApplyChangeMarker(marker.Setting, marker.Label, marker.Reset);
+            UpdateLeafBadges();
+        }
+
+        private void ApplyChangeMarker(FormatSettingNode setting, TextBlock label, Button reset)
+        {
+            var changed = _viewModel.IsChanged(setting.Id);
+            label.FontWeight = changed ? Typography.WeightSemiBold : FontWeights.Normal;
+            reset.Visibility = changed ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        /// <summary>The option's SQL Prompt default, as its control shows it.</summary>
+        private static string DefaultLabel(FormatSettingNode setting)
+        {
+            var raw = setting.DefaultJson.Trim().Trim('"');
+            if (raw == "true") return "on";
+            if (raw == "false") return "off";
+            return setting.EnumLabels != null ? setting.LabelFor(raw) : raw;
         }
 
         // -----------------------------------------------------------------
@@ -1515,11 +2188,12 @@ namespace AkmlSql.Shell.Shared.Formatting
         // -----------------------------------------------------------------
         private FrameworkElement BuildRightPanel()
         {
+            // The options and the preview side by side, both full height; under the preview, what
+            // each value of the focused option does. On a narrow window the preview goes under the
+            // options instead (ApplyRightLayout).
             var panel = new Grid();
             Grid.SetColumn(panel, 4);
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(58, GridUnitType.Star) }); // form
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Spacing.Sm) });            // splitter
-            panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(42, GridUnitType.Star) }); // preview
+            _rightPanel = panel;
 
             // ── Settings form card ─────────────────────────────────────────
             var formCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
@@ -1536,12 +2210,12 @@ namespace AkmlSql.Shell.Shared.Formatting
             {
                 Text = "Select a category",
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.BodyStrong,
+                FontSize = Typography.H4,
                 FontWeight = Typography.WeightSemiBold,
-                Margin = new Thickness(0, Spacing.Xs, 0, Spacing.Sm),
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, 0, Spacing.Sm),
                 TextTrimming = TextTrimming.CharacterEllipsis,
             };
-            _breadcrumbText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.AccentPrimary);
+            _breadcrumbText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
             Grid.SetRow(_breadcrumbText, 0);
             formGrid.Children.Add(_breadcrumbText);
 
@@ -1550,22 +2224,30 @@ namespace AkmlSql.Shell.Shared.Formatting
             _builtInHint = new Border
             {
                 Visibility = Visibility.Collapsed,
-                Padding = new Thickness(Spacing.Sm),
-                Margin = new Thickness(0, 0, 0, Spacing.Sm),
-                CornerRadius = new CornerRadius(3),
-                BorderThickness = new Thickness(1),
+                Margin = new Thickness(Spacing.Xs, 0, 0, Spacing.Sm),
             };
-            _builtInHint.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover);
-            _builtInHint.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            var hintInfo = new TextBlock
+            {
+                Text = FormatStylesChrome.InfoGlyph,
+                FontFamily = FormatStylesChrome.IconFont,
+                FontSize = 12,
+                Margin = new Thickness(0, 1, Spacing.Sm - 2, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+            };
+            hintInfo.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextLink);
             _builtInHintText = new TextBlock
             {
-                Text = "Editing a built-in style saves your own copy of it. The original is kept, so you can reset to it at any time.",
+                Text = BuiltInHint,
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
             };
             _builtInHintText.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            _builtInHint.Child = _builtInHintText;
+            var hintRow = new DockPanel();
+            DockPanel.SetDock(hintInfo, Dock.Left);
+            hintRow.Children.Add(hintInfo);
+            hintRow.Children.Add(_builtInHintText);
+            _builtInHint.Child = hintRow;
             Grid.SetRow(_builtInHint, 1);
             formGrid.Children.Add(_builtInHint);
 
@@ -1575,6 +2257,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             };
             _settingControlsHost = new StackPanel { Orientation = Orientation.Vertical };
+            // Spec 040 (T078): every row's label column is one SharedSizeGroup, so a page's labels
+            // line up at the width of its longest label.
+            Grid.SetIsSharedSizeScope(_settingControlsHost, true);
             _settingControlsEmpty = new TextBlock
             {
                 Text = "Select a category on the left to edit its settings.",
@@ -1590,33 +2275,33 @@ namespace AkmlSql.Shell.Shared.Formatting
             formGrid.Children.Add(formScroll);
 
             formCard.Child = formGrid;
-            Grid.SetRow(formCard, 0);
+            _formCard = formCard;
             panel.Children.Add(formCard);
 
-            // ── Splitter (horizontal, invisible in the 8px gutter row) ─────
-            var hSplitter = new GridSplitter
+            // ── Splitter between the options and the preview (invisible, in the 8px gutter) ──
+            _rightSplitter = new GridSplitter
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch, // fill the 8px gutter row so it stays draggable
-                ResizeDirection = GridResizeDirection.Rows,
+                VerticalAlignment = VerticalAlignment.Stretch, // fill the gutter so it stays draggable
                 ShowsPreview = false,
                 Background = System.Windows.Media.Brushes.Transparent,
             };
-            Grid.SetRow(hSplitter, 1);
-            panel.Children.Add(hSplitter);
+            panel.Children.Add(_rightSplitter);
 
-            // ── Live preview card (fixed dark editor panel in both themes, à la SQL Prompt) ──
+            // ── Live preview card ──
             var previewCard = new Border { CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1) };
             previewCard.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderDefault);
-            previewCard.Background = PreviewBgBrush;
+            previewCard.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
 
             var previewGrid = new Grid();
-            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source controls
+            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // header + source
             previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // warning bar
-            previewGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });  // preview text
-            previewGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // caption
+            _previewRow = new RowDefinition { Height = new GridLength(1.25, GridUnitType.Star), MinHeight = 120 };
+            previewGrid.RowDefinitions.Add(_previewRow);                                                          // preview text
+            _examplesRow = new RowDefinition { Height = new GridLength(1, GridUnitType.Star) };
+            previewGrid.RowDefinitions.Add(_examplesRow);                                                         // option examples
 
-            // Header: LIVE PREVIEW (left) + preview-source controls (right).
+            // Header: LIVE PREVIEW (left) + what it formats (right).
             var previewHeader = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Xs) };
             previewHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             previewHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1628,57 +2313,36 @@ namespace AkmlSql.Shell.Shared.Formatting
                 FontSize = Typography.Small,
                 FontWeight = Typography.WeightSemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, Spacing.Md, 0),
             };
-            previewLabel.Foreground = PreviewMutedBrush;
+            previewLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
             Grid.SetColumn(previewLabel, 0);
             previewHeader.Children.Add(previewLabel);
 
-            // Spec 030 T019 / FR-008 — preview the active style against the sample OR the SQL from
-            // the editor that was open when this dialog launched.
-            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var rbSample = new RadioButton
+            // One drop-down for what the preview formats: this page's sample, a SELECT example, your
+            // own sample, or the query that was open (spec 030 T019 / FR-008). It replaced a row of
+            // radio buttons that had no room for the SELECT examples.
+            _sourceCombo = new ComboBox
             {
-                Content = "Sample",
-                GroupName = "akmlPreviewSource",
-                IsChecked = true,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Md, 0),
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-            };
-            rbSample.Foreground = PreviewTextBrush;
-            var rbCurrent = new RadioButton
-            {
-                Content = "Current query",
-                GroupName = "akmlPreviewSource",
+                MinWidth = 180,
+                MaxWidth = 340,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                // Disabled (with a hint) when no editor query was captured at launch.
-                IsEnabled = _viewModel.HasCurrentQuery,
-                ToolTip = _viewModel.HasCurrentQuery ? null : "No active SQL editor when this dialog opened.",
+                FontSize = Typography.Body,
+                ToolTip = "What the preview formats",
             };
-            rbCurrent.Foreground = PreviewTextBrush;
-            rbSample.Checked += (_, _) =>
+            ComboBoxTheming.Apply(_sourceCombo);
+            System.Windows.Automation.AutomationProperties.SetName(_sourceCombo, "Preview source");
+            _sourceCombo.SelectionChanged += (_, _) =>
             {
-                _viewModel.PreviewSourceMode = FormatPreviewSource.Sample;
-                if (_editSampleToggle != null) _editSampleToggle.IsEnabled = true;
-            };
-            rbCurrent.Checked += (_, _) =>
-            {
-                _viewModel.PreviewSourceMode = FormatPreviewSource.CurrentQuery;
-                // Sample editing only applies to the Sample source.
-                if (_editSampleToggle != null)
-                {
-                    _editSampleToggle.IsChecked = false;
-                    _editSampleToggle.IsEnabled = false;
-                }
+                if (!_suppressSourceChanged) _userPickedSource = true;
+                OnPreviewSourceChanged();
             };
 
             // Spec 033 (T025 / FR-014) — edit the persisted preview sample in place. While
             // checked, the preview box shows the RAW sample (editable, persisted atomically
             // via the PreviewSample setter on every change); unchecking restores the live
-            // formatted preview.
+            // formatted preview. Only for "My sample".
             _editSampleToggle = new CheckBox
             {
                 Content = "Edit sample",
@@ -1686,55 +2350,31 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Margin = new Thickness(Spacing.Md, 0, 0, 0),
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Small,
-                ToolTip = "Edit the sample SQL the preview formats. Changes persist across sessions.",
+                IsEnabled = false,
+                ToolTip = "Edit your own sample SQL (\"My sample\"). Changes persist across sessions.",
             };
-            _editSampleToggle.Foreground = PreviewTextBrush;
+            _editSampleToggle.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             _editSampleToggle.Checked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
-                _previewTextBox.IsReadOnly = false;
                 _previewTextBox.Text = _viewModel.PreviewSample;
+                ShowSampleEditor(true);
             };
             _editSampleToggle.Unchecked += (_, _) =>
             {
                 if (_previewTextBox == null) return;
                 CommitSampleEdit(); // one persist + one preview refresh for the whole edit session
-                _previewTextBox.IsReadOnly = true;
-                _previewTextBox.Text = _viewModel.PreviewText;
+                ShowSampleEditor(false);
             };
 
-            // SQL Prompt model: each page previews its own sample, like SQL Prompt's editor.
-            _rbPageSample = new RadioButton
-            {
-                Content = "Page sample",
-                GroupName = "akmlPreviewSource",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Md, 0),
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                Visibility = Visibility.Collapsed,
-                ToolTip = "Preview code this page's options act on.",
-            };
-            _rbPageSample.Foreground = PreviewTextBrush;
-            _rbPageSample.Checked += (_, _) =>
-            {
-                _viewModel.PreviewSourceMode = FormatPreviewSource.PageSample;
-                if (_editSampleToggle != null)
-                {
-                    _editSampleToggle.IsChecked = false;
-                    _editSampleToggle.IsEnabled = false;
-                }
-            };
-            rbSample.Content = "My sample";
-
-            sourceStack.Children.Add(_rbPageSample);
-            sourceStack.Children.Add(rbSample);
-            sourceStack.Children.Add(rbCurrent);
+            var sourceStack = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            sourceStack.Children.Add(_sourceCombo);
             sourceStack.Children.Add(_editSampleToggle);
             Grid.SetColumn(sourceStack, 1);
             previewHeader.Children.Add(sourceStack);
             Grid.SetRow(previewHeader, 0);
             previewGrid.Children.Add(previewHeader);
+            PopulateSourceCombo();
 
             _previewWarningBar = new Border
             {
@@ -1743,7 +2383,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 BorderThickness = new Thickness(0, 1, 0, 1),
             };
             // Amber/yellow is a semantic colour per CLAUDE.md's allow-list. Near-solid fill + fixed
-            // dark text so the strip reads on the dark preview panel in both themes.
+            // dark text so the strip reads the same in every theme.
             _previewWarningBar.Background = Freeze(new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromArgb(0xF2, 0xFB, 0xBF, 0x24)));
             _previewWarningBar.BorderBrush = Freeze(new System.Windows.Media.SolidColorBrush(
@@ -1759,9 +2399,25 @@ namespace AkmlSql.Shell.Shared.Formatting
             Grid.SetRow(_previewWarningBar, 1);
             previewGrid.Children.Add(_previewWarningBar);
 
+            // The formatted preview: selectable, syntax-coloured, with tabs at the style's own width
+            // (spec 040 STY-02) — a TextBox always used 8.
+            _previewView = new SqlPreviewView
+            {
+                ShowLineNumbers = true,
+                TabSize = _viewModel.PreviewTabSize,
+                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Xs, Spacing.Sm),
+                Text = "-- The live preview appears once the schema loads and a style is selected.",
+            };
+            System.Windows.Automation.AutomationProperties.SetName(_previewView, "Live preview");
+            // Its own style, not the window's implicit one: inside SSMS the shell's scroll bar
+            // styles reach the preview control's resources and would win (see FormatStylesChrome).
+            _previewView.Scroller.Style = FormatStylesChrome.ScrollViewerStyle;
+            Grid.SetRow(_previewView, 2);
+            previewGrid.Children.Add(_previewView);
+
+            // "Edit sample" swaps the preview for this box holding the raw, editable sample.
             _previewTextBox = new TextBox
             {
-                IsReadOnly = true,
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
                 FontFamily = Typography.MonoFont,
@@ -1771,28 +2427,538 @@ namespace AkmlSql.Shell.Shared.Formatting
                 Padding = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Xs),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Text = "-- The live preview appears once the schema loads and a style is selected.",
+                Visibility = Visibility.Collapsed,
             };
-            _previewTextBox.Foreground = PreviewTextBrush;
+            _previewTextBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             Grid.SetRow(_previewTextBox, 2);
             previewGrid.Children.Add(_previewTextBox);
 
-            var caption = new TextBlock
-            {
-                Text = "Preview updates as you change settings.",
-                FontFamily = Typography.UiFont,
-                FontSize = Typography.Small,
-                Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Sm),
-            };
-            caption.Foreground = PreviewCaptionBrush;
-            Grid.SetRow(caption, 3);
-            previewGrid.Children.Add(caption);
+            var examples = BuildExamplesPanel();
+            Grid.SetRow(examples, 3);
+            previewGrid.Children.Add(examples);
 
             previewCard.Child = previewGrid;
-            Grid.SetRow(previewCard, 2);
+            _previewCard = previewCard;
             panel.Children.Add(previewCard);
 
+            ApplyRightLayout(stacked: false);
+            panel.SizeChanged += (_, e) => ApplyRightLayout(e.NewSize.Width < StackBelowWidth);
+            SetExamplesOpen(s_examplesOpen);
             return panel;
+        }
+
+        /// <summary>
+        /// The options beside the preview (side by side, both full height) — or, on a narrow
+        /// window, the preview under the options.
+        /// </summary>
+        private void ApplyRightLayout(bool stacked)
+        {
+            if (_rightPanel == null || _formCard == null || _previewCard == null || _rightSplitter == null) return;
+            if (_stacked == stacked) return;
+            _stacked = stacked;
+            _rightPanel.RowDefinitions.Clear();
+            _rightPanel.ColumnDefinitions.Clear();
+            if (stacked)
+            {
+                _rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(45, GridUnitType.Star), MinHeight = 150 });
+                _rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(Spacing.Sm) });
+                _rightPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(55, GridUnitType.Star), MinHeight = 200 });
+            }
+            else
+            {
+                _rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 330 });
+                _rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Spacing.Sm) });
+                _rightPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.1, GridUnitType.Star), MinWidth = 340 });
+            }
+            var i = 0;
+            foreach (var part in new FrameworkElement[] { _formCard, _rightSplitter, _previewCard })
+            {
+                Grid.SetRow(part, stacked ? i : 0);
+                Grid.SetColumn(part, stacked ? 0 : i);
+                i++;
+            }
+            _rightSplitter.ResizeDirection = stacked ? GridResizeDirection.Rows : GridResizeDirection.Columns;
+        }
+
+        // -----------------------------------------------------------------
+        // What the preview formats
+        // -----------------------------------------------------------------
+
+        private const string SourcePage = "page";
+        private const string SourceMine = "mine";
+        private const string SourceCurrent = "current";
+        private const string SourceSelectPrefix = "select:";
+
+        /// <summary>
+        /// Fills the preview's source drop-down: this page's sample (SQL Prompt model), the engine's
+        /// SELECT examples, your own sample, and the query that was open. Keeps a choice the user
+        /// made when it is still offered; otherwise picks this page's sample, or your own sample.
+        /// (The first fill runs before the schema loads, when only "My sample" can be picked: that
+        /// pick must not stick once "This page's sample" is offered.)
+        /// </summary>
+        private void PopulateSourceCombo()
+        {
+            if (_sourceCombo == null) return;
+            var previous = _userPickedSource ? (_sourceCombo.SelectedItem as ComboBoxItem)?.Tag as string : null;
+            _suppressSourceChanged = true;
+            try
+            {
+                _sourceCombo.Items.Clear();
+                var model = _viewModel.SchemaModel;
+                if (_viewModel.IsSqlPromptModel)
+                    _sourceCombo.Items.Add(SourceItem("This page's sample", SourcePage, "Code this page's options act on."));
+                foreach (var q in model?.SelectExamples ?? new System.Collections.Generic.List<FormatStylesSchemaModel.ExampleQuery>())
+                    _sourceCombo.Items.Add(SourceItem("SELECT: " + q.Name, SourceSelectPrefix + q.Id, q.Sql));
+                _sourceCombo.Items.Add(SourceItem("My sample", SourceMine, "Your own sample SQL. Tick \"Edit sample\" to change it."));
+                var current = SourceItem("Current query", SourceCurrent,
+                    _viewModel.HasCurrentQuery ? "The query in the editor that was open when this window opened." : "No SQL editor was open when this window opened.");
+                current.IsEnabled = _viewModel.HasCurrentQuery;
+                _sourceCombo.Items.Add(current);
+
+                var pick = _sourceCombo.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.IsEnabled && Equals(i.Tag, previous))
+                           ?? _sourceCombo.Items.OfType<ComboBoxItem>().First(i => Equals(i.Tag, _viewModel.IsSqlPromptModel ? SourcePage : SourceMine));
+                _sourceCombo.SelectedItem = pick;
+            }
+            finally
+            {
+                _suppressSourceChanged = false;
+            }
+            OnPreviewSourceChanged();
+        }
+
+        private static ComboBoxItem SourceItem(string text, string tag, string tooltip) =>
+            new ComboBoxItem { Content = text, Tag = tag, ToolTip = tooltip };
+
+        private void OnPreviewSourceChanged()
+        {
+            if (_suppressSourceChanged || _sourceCombo?.SelectedItem is not ComboBoxItem item || item.Tag is not string tag) return;
+            if (tag.StartsWith(SourceSelectPrefix, StringComparison.Ordinal))
+            {
+                var id = tag.Substring(SourceSelectPrefix.Length);
+                _viewModel.SelectExampleSql = _viewModel.SchemaModel?.ExampleQueries.TryGetValue(id, out var q) == true ? q.Sql : null;
+                _viewModel.PreviewSourceMode = FormatPreviewSource.SelectExample;
+            }
+            else
+            {
+                _viewModel.PreviewSourceMode = tag switch
+                {
+                    SourcePage => FormatPreviewSource.PageSample,
+                    SourceCurrent => FormatPreviewSource.CurrentQuery,
+                    _ => FormatPreviewSource.Sample,
+                };
+            }
+
+            // Sample editing only applies to "My sample".
+            if (_editSampleToggle != null)
+            {
+                var mine = tag == SourceMine;
+                if (!mine) _editSampleToggle.IsChecked = false;
+                _editSampleToggle.IsEnabled = mine;
+            }
+        }
+
+        // -----------------------------------------------------------------
+        // What each value of the focused option does
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// The panel under the preview: for the option last clicked or tabbed to, one card per value
+        /// (on, off, each choice, or a few numbers), each the example formatted with the working style
+        /// and that value, its changed lines marked. "Use this" sets the value. ▾ folds it away.
+        /// </summary>
+        private FrameworkElement BuildExamplesPanel()
+        {
+            var panel = new Border { BorderThickness = new Thickness(0, 1, 0, 0) };
+            panel.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            panel.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceSidebar);
+
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var header = new Grid { Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Sm, Spacing.Xs) };
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var titles = new StackPanel { Orientation = Orientation.Vertical };
+            _examplesTitle = new TextBlock
+            {
+                Text = "WHAT EACH VALUE DOES",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            _examplesTitle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            _examplesSubtitle = new TextBlock
+            {
+                Text = "Click an option to see what each of its values does.",
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0),
+            };
+            _examplesSubtitle.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            titles.Children.Add(_examplesTitle);
+            titles.Children.Add(_examplesSubtitle);
+            header.Children.Add(titles);
+
+            _examplesToggle = new Button
+            {
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Top,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+            };
+            FormatStylesChrome.ApplyIconButton(_examplesToggle);
+            _examplesToggle.Click += (_, _) => SetExamplesOpen(!s_examplesOpen);
+            Grid.SetColumn(_examplesToggle, 1);
+            header.Children.Add(_examplesToggle);
+            grid.Children.Add(header);
+
+            _examplesHost = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(Spacing.Md, Spacing.Xs, Spacing.Md, Spacing.Sm) };
+            _examplesScroll = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = _examplesHost,
+                Style = FormatStylesChrome.ScrollViewerStyle,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(_examplesScroll, "Option examples");
+            Grid.SetRow(_examplesScroll, 1);
+            grid.Children.Add(_examplesScroll);
+
+            panel.Child = grid;
+            return panel;
+        }
+
+        /// <summary>Opens or folds the option examples; the preview takes the room they free.</summary>
+        private void SetExamplesOpen(bool open)
+        {
+            s_examplesOpen = open;
+            if (_examplesScroll != null) _examplesScroll.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            if (_examplesRow != null) _examplesRow.Height = open ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            if (_examplesToggle != null)
+            {
+                _examplesToggle.Content = open ? "▾" : "▸";
+                _examplesToggle.ToolTip = open ? "Hide the option examples" : "Show what each value of the option does";
+                System.Windows.Automation.AutomationProperties.SetName(_examplesToggle, open ? "Hide the option examples" : "Show the option examples");
+            }
+            if (open) ScheduleExamples();
+        }
+
+        /// <summary>Makes <paramref name="settingId"/> the option the examples are about, and marks its row.</summary>
+        private void FocusOption(string settingId)
+        {
+            if (string.Equals(_focusedSettingId, settingId, StringComparison.Ordinal)) return;
+            if (_focusedSettingId != null && _rowBorders.TryGetValue(_focusedSettingId, out var previous))
+                previous.BorderBrush = System.Windows.Media.Brushes.Transparent;
+            _focusedSettingId = settingId;
+            if (_rowBorders.TryGetValue(settingId, out var row))
+                row.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            ScheduleExamples();
+        }
+
+        /// <summary>Refreshes the examples shortly — after a click, a key, or a new live preview settles.</summary>
+        private void ScheduleExamples()
+        {
+            if (_examplesHost == null || _closed) return;
+            if (_examplesTimer == null)
+            {
+                _examplesTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(180) };
+                _examplesTimer.Tick += async (_, _) =>
+                {
+                    _examplesTimer.Stop();
+                    if (_closed) return;
+                    try { await RefreshExamplesAsync(); }
+                    catch (Exception ex) { Log.Debug(ex, "FormatStylesEditor: option examples failed"); }
+                };
+            }
+            _examplesTimer.Stop();
+            _examplesTimer.Start();
+        }
+
+        private FormatSettingNode? FocusedSetting =>
+            _focusedSettingId == null ? null : _currentGroup?.Settings.FirstOrDefault(s => s.Id == _focusedSettingId);
+
+        /// <summary>
+        /// Formats the focused option's example once per value with the working style, then shows
+        /// a card per value. Skipped when nothing it depends on changed since the last run.
+        /// </summary>
+        private async System.Threading.Tasks.Task RefreshExamplesAsync()
+        {
+            if (_examplesHost == null || _examplesTitle == null || _examplesSubtitle == null) return;
+            var setting = FocusedSetting;
+            var model = _viewModel.SchemaModel;
+            _examplesTitle.Text = setting == null ? "WHAT EACH VALUE DOES" : $"WHAT “{setting.DisplayName.ToUpperInvariant()}” DOES";
+            if (!s_examplesOpen) return;
+
+            if (setting == null || model == null)
+            {
+                ShowExamplesMessage("Click an option to see what each of its values does.", null);
+                return;
+            }
+            var plan = FormatStylesExamples.For(model, setting);
+            if (plan == null)
+            {
+                ShowExamplesMessage(setting.Example == null && model.ExampleQueries.Count == 0
+                    ? "This engine sends no examples. Update AKML SQL to see what each value does."
+                    : "There is no example for this option.", setting.Id);
+                return;
+            }
+
+            var signature = setting.Id + "\n" + _viewModel.BuildProfileJson() + "\n" + _viewModel.PreviewTabSize
+                            + "\n" + (model.GroupOf(setting.Id)?.Sample?.GetHashCode() ?? 0);
+            if (signature == _examplesSignature && _examplesShownFor == setting.Id) return;
+
+            _examplesCts?.Cancel();
+            var cts = new System.Threading.CancellationTokenSource();
+            _examplesCts = cts;
+            if (_examplesShownFor != setting.Id) ShowExamplesMessage("Formatting the examples…", setting.Id);
+
+            var outputs = await _viewModel.FormatExamplesAsync(plan.Requests, cts.Token).ConfigureAwait(true);
+            // Cancelled: a newer refresh, or a live preview queued (its result or failure asks again).
+            if (outputs == null || cts.IsCancellationRequested || !ReferenceEquals(cts, _examplesCts) || _closed) return;
+            if (FocusedSetting?.Id != setting.Id) return;
+            if (outputs.All(o => o == null))
+            {
+                ShowExamplesMessage(_viewModel.IsEngineConnected
+                    ? "The examples could not be formatted. Try another option, or reopen the window."
+                    : "Examples need the AKML SQL engine, which is not connected.", setting.Id);
+                return;
+            }
+
+            // A card whose request failed (a timeout, a format the engine refused) is left out; keep
+            // the run unfinished so the next refresh — the next live preview — tries it again.
+            _examplesSignature = outputs.All(o => o != null) ? signature : null;
+            _examplesShownFor = setting.Id;
+            RenderExampleCards(setting, plan, outputs);
+        }
+
+        private void ShowExamplesMessage(string text, string? settingId)
+        {
+            if (_examplesHost == null) return;
+            _examplesHost.Children.Clear();
+            _examplesHost.Children.Add(RowNote(text));
+            _examplesShownFor = settingId == null ? null : "message:" + settingId;
+            _examplesSignature = null;
+            if (_examplesSubtitle != null)
+                _examplesSubtitle.Text = settingId == null
+                    ? "Click an option to see what each of its values does."
+                    : "Each value of this option, formatted with this style's other settings.";
+        }
+
+        private void RenderExampleCards(FormatSettingNode setting, FormatStylesExamples.Plan plan, System.Collections.Generic.IReadOnlyList<string?> outputs)
+        {
+            if (_examplesHost == null) return;
+            var offset = _examplesScroll?.VerticalOffset ?? 0;
+            _examplesHost.Children.Clear();
+
+            var gateOpen = IsGateOpen(setting);
+            var with = plan.With.Select(w => $"{OptionLabel(w.Key)} = {ValueLabel(w.Key, w.Value)}").ToList();
+            if (_examplesSubtitle != null)
+            {
+                _examplesSubtitle.Text = (gateOpen ? "Each value on " : $"{GateText(setting)} Each value on ")
+                    + $"“{plan.QueryTitle}”, with this style's other settings"
+                    + (with.Count > 0 ? $" and {string.Join(", ", with)}" : string.Empty)
+                    + ". Marked lines differ from the default.";
+            }
+
+            var current = _viewModel.GetWorkingValue(setting.Id);
+            var canApply = gateOpen && !_viewModel.IsSelectedReadOnly
+                           && !string.Equals(setting.Status, "Unsupported", StringComparison.OrdinalIgnoreCase);
+            var applyBlockedBy = !gateOpen ? GateText(setting)
+                : _viewModel.IsSelectedReadOnly ? FormatStylesEditorViewModel.TeamReadOnlyText(_viewModel.LoadedProfileName ?? string.Empty)
+                : null;
+            foreach (var card in plan.Cards)
+            {
+                var text = outputs[card.Output];
+                if (text == null) continue;
+                var baseline = card.Baseline >= 0 ? outputs[card.Baseline] : null;
+                var isCurrent = FormatStylesEditorViewModel.ValuesEqual(Normalize(setting, current), Normalize(setting, card.Value))
+                                || (current is string s && card.Value is string v && string.Equals(s, v, StringComparison.OrdinalIgnoreCase));
+                var tabSize = FormatStylesExamples.TabSizeOf(plan.Requests[card.Output].Settings, FormatStylesEditorViewModel.SqlPromptTabSizeId, _viewModel.PreviewTabSize);
+                _examplesHost.Children.Add(BuildExampleCard(setting, card, text, card.IsDefault ? null : baseline, isCurrent, canApply, applyBlockedBy, tabSize));
+            }
+            if (_examplesHost.Children.Count == 0)
+                _examplesHost.Children.Add(RowNote("The examples could not be formatted."));
+            if (_examplesScroll != null) _examplesScroll.ScrollToVerticalOffset(offset);
+
+            // "Use this" rebuilt the cards under the keyboard: put focus back on that value's card.
+            if (_refocusExampleKey != null)
+            {
+                var key = _refocusExampleKey;
+                _refocusExampleKey = null;
+                _examplesHost.Children.OfType<Border>().FirstOrDefault(b => Equals(b.Tag, key))?.Focus();
+            }
+        }
+
+        /// <summary>One value's card: its name, Default / Current, "Use this", and the formatted example.</summary>
+        private FrameworkElement BuildExampleCard(FormatSettingNode setting, FormatStylesExamples.Card card, string text, string? baseline,
+            bool isCurrent, bool canApply, string? applyBlockedBy, int tabSize)
+        {
+            var label = ValueLabel(setting.Id, card.Value);
+            var border = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(isCurrent ? 2 : 1),
+                Margin = new Thickness(0, 0, 0, Spacing.Sm),
+                Tag = FormatStylesSchemaModel.ValueKey(card.Value),
+                // Focusable so "Use this" can hand the keyboard back to the card it rebuilt.
+                Focusable = true,
+            };
+            border.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfaceInput);
+            border.SetResourceReference(Border.BorderBrushProperty, isCurrent ? ThemeTokens.AccentPrimary : ThemeTokens.BorderDefault);
+            System.Windows.Automation.AutomationProperties.SetName(border, $"{setting.DisplayName}: {label}");
+
+            var stack = new StackPanel { Orientation = Orientation.Vertical };
+            var head = new Border { Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Xs, Spacing.Xs), BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = new CornerRadius(5, 5, 0, 0) };
+            head.SetResourceReference(Border.BackgroundProperty, ThemeTokens.SurfacePanel);
+            head.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.BorderSubtle);
+            var headRow = new DockPanel { LastChildFill = true };
+
+            var tags = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            if (card.IsDefault)
+            {
+                var d = new TextBlock { Text = "Default", FontSize = 10.5, FontWeight = Typography.WeightSemiBold };
+                var pill = FormatStylesChrome.Pill(d, ThemeTokens.SurfaceElevated, null, ThemeTokens.TextSecondary);
+                pill.Margin = new Thickness(Spacing.Xs, 0, 0, 0);
+                tags.Children.Add(pill);
+            }
+            if (isCurrent)
+            {
+                var c = new TextBlock { Text = "Current", FontSize = 10.5, FontWeight = Typography.WeightSemiBold };
+                var pill = FormatStylesChrome.Pill(c, ThemeTokens.AccentPrimary, null, ThemeTokens.TextOnAccent);
+                pill.Margin = new Thickness(Spacing.Xs, 0, 0, 0);
+                tags.Children.Add(pill);
+            }
+            else
+            {
+                var use = new Button
+                {
+                    Content = "Use this",
+                    Padding = new Thickness(Spacing.Sm, 1, Spacing.Sm, 1),
+                    Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                    FontFamily = Typography.UiFont,
+                    FontSize = Typography.Small,
+                    IsEnabled = canApply,
+                    ToolTip = applyBlockedBy ?? $"Set “{setting.DisplayName}” to {label}",
+                };
+                // A disabled button shows no tooltip unless asked: the reason matters most then.
+                ToolTipService.SetShowOnDisabled(use, true);
+                ThemedButton.ApplySecondary(use);
+                System.Windows.Automation.AutomationProperties.SetName(use, $"Use {label} for {setting.DisplayName}");
+                use.Click += (_, _) =>
+                {
+                    _refocusExampleKey = use.IsKeyboardFocused ? FormatStylesSchemaModel.ValueKey(card.Value) : null;
+                    ApplyExampleValue(setting, card.Value);
+                };
+                tags.Children.Add(use);
+            }
+            DockPanel.SetDock(tags, Dock.Right);
+            headRow.Children.Add(tags);
+
+            var name = new TextBlock
+            {
+                Text = label,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Body,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            name.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextPrimary);
+            headRow.Children.Add(name);
+            head.Child = headRow;
+            stack.Children.Add(head);
+
+            var ownWith = card.OwnWith.Select(w => $"{OptionLabel(w.Key)} = {ValueLabel(w.Key, w.Value)}").ToList();
+            if (card.OwnQueryTitle != null || ownWith.Count > 0)
+            {
+                var where = card.OwnQueryTitle != null ? $"Shown on “{card.OwnQueryTitle}”" : "Shown";
+                var with = ownWith.Count > 0 ? $" with {string.Join(", ", ownWith)}" : string.Empty;
+                var own = RowNote($"{where}{with}: the main example does not show this value.");
+                own.Margin = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, 0);
+                stack.Children.Add(own);
+            }
+
+            var view = new SqlPreviewView
+            {
+                ShowLineNumbers = false,
+                TabSize = tabSize,   // the width this value was formatted with ("Spaces per tab" cards)
+                MaxHeight = 260,
+                Margin = new Thickness(Spacing.Xs, Spacing.Xs, Spacing.Xs, Spacing.Xs),
+                Text = text,
+                // Bars, not a fill: a fill behind the text drops the syntax colours below 4.5:1.
+                MarkedLines = FormatStylesExamples.ChangedLines(baseline, text),
+            };
+            view.Scroller.Style = FormatStylesChrome.ScrollViewerStyle;
+            System.Windows.Automation.AutomationProperties.SetName(view, $"{label} example");
+            stack.Children.Add(view);
+
+            if (!card.IsDefault && baseline != null && string.Equals(baseline, text, StringComparison.Ordinal))
+            {
+                var same = RowNote("Looks the same as the default here, with this style's other settings.");
+                same.Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Xs);
+                stack.Children.Add(same);
+            }
+
+            border.Child = stack;
+            return border;
+        }
+
+        /// <summary>A card's "Use this": sets the value as the control would, and shows it in the form.</summary>
+        private void ApplyExampleValue(FormatSettingNode setting, object? value)
+        {
+            if (_viewModel.IsSelectedReadOnly)   // a team style: the form is disabled, so are its examples
+            {
+                SetStatus(FormatStylesEditorViewModel.TeamReadOnlyText(_viewModel.LoadedProfileName ?? string.Empty));
+                return;
+            }
+            if (!IsGateOpen(setting))
+            {
+                SetStatus(GateText(setting) ?? $"{setting.DisplayName} is not in effect.");
+                return;
+            }
+            _viewModel.SetWorkingValue(setting.Id, Normalize(setting, value));
+            RefreshVisibleSettingControls(); // the row's control shows the new value; the focus stays on it
+            SetStatus($"{setting.DisplayName}: {ValueLabel(setting.Id, value)}.");
+        }
+
+        /// <summary>A value as the setting's control records it: a number option as an int.</summary>
+        private static object? Normalize(FormatSettingNode setting, object? value)
+        {
+            if (setting.Type == "Int" && value is IConvertible c && !(value is string) && !(value is bool))
+            {
+                try { return Convert.ToInt32(c, System.Globalization.CultureInfo.InvariantCulture); }
+                catch (Exception ex) when (ex is FormatException || ex is InvalidCastException || ex is OverflowException) { return value; }
+            }
+            return value;
+        }
+
+        /// <summary>An option's label by setting id (any page), or the id.</summary>
+        private string OptionLabel(string settingId) =>
+            _viewModel.SchemaModel?.GroupOf(settingId)?.Settings.FirstOrDefault(s => s.Id == settingId)?.DisplayName ?? settingId;
+
+        /// <summary>How a value reads in the editor: on / off, the choice's label, or the number.</summary>
+        private string ValueLabel(string settingId, object? value)
+        {
+            if (value is bool b) return b ? "On" : "Off";
+            var setting = _viewModel.SchemaModel?.GroupOf(settingId)?.Settings.FirstOrDefault(s => s.Id == settingId);
+            var text = FormatStylesSchemaModel.ValueKey(value);
+            return setting?.EnumLabels != null ? setting.LabelFor(text) : text;
+        }
+
+        private void OnThemeVariantChanged(object? sender, EventArgs e)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnThemeVariantChanged(sender, e)));
+                return;
+            }
+            TitleBarTheme.Apply(this, ThemeRegistry.Instance.Current == ThemeVariant.Dark);
         }
 
         // -----------------------------------------------------------------
@@ -1803,13 +2969,15 @@ namespace AkmlSql.Shell.Shared.Formatting
             if (_settingsTree == null) return;
 
             _settingsTree.Items.Clear();
+            _groupLeaves.Clear();
             TreeViewItem? firstLeaf = null;
 
             try
             {
                 // Spec 033 (T022) — parsing lives in the testable FormatStylesSchemaModel;
-                // this method only renders WPF nodes from the model.
-                var model = FormatStylesSchemaModel.Parse(schemaJson);
+                // this method only renders WPF nodes from the model. Spec 040 (T096): the view
+                // model keeps the parsed model, which option search reads too.
+                var model = _viewModel.SchemaModel ?? FormatStylesSchemaModel.Parse(schemaJson);
 
                 if (model.Categorized)
                 {
@@ -1822,6 +2990,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                             Header = category.DisplayName,
                             IsExpanded = true,
                             FontWeight = Typography.WeightSemiBold,
+                            Padding = new Thickness(Spacing.Xs, 0, Spacing.Sm, 0),
                         };
                         categoryNode.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
                         foreach (var group in category.Groups)
@@ -1851,18 +3020,41 @@ namespace AkmlSql.Shell.Shared.Formatting
 
             // Open on the first page so the form is never empty (SQL Prompt selects a page by default).
             if (firstLeaf != null) firstLeaf.IsSelected = true;
+            UpdateLeafBadges();
+            if (!string.IsNullOrWhiteSpace(_searchBox?.Text)) ApplySearch();
         }
 
         /// <summary>A selectable settings *group* (SQL Prompt "page"); selecting it renders the
         /// group's whole settings list as a form on the right, under a "Category › Group" title.</summary>
         private TreeViewItem BuildGroupLeaf(FormatStylesSchemaModel.Group group, string? categoryDisplay)
         {
+            // Header: the page name, then two small pills — how many of its options differ from
+            // the default (muted) and, while searching, how many match (accent). Each pill shows
+            // and hides with its number, which UpdateLeafBadges / ApplySearch set.
+            var changed = new TextBlock { FontSize = 10.5, FontWeight = Typography.WeightSemiBold, Visibility = Visibility.Collapsed };
+            var matches = new TextBlock { FontSize = 10.5, FontWeight = Typography.WeightSemiBold, Visibility = Visibility.Collapsed };
+            var changedPill = FormatStylesChrome.Pill(changed, ThemeTokens.SurfaceElevated, null, ThemeTokens.TextSecondary);
+            var matchesPill = FormatStylesChrome.Pill(matches, ThemeTokens.AccentPrimary, null, ThemeTokens.TextOnAccent);
+            foreach (var (pill, text) in new[] { (changedPill, changed), (matchesPill, matches) })
+            {
+                pill.Margin = new Thickness(Spacing.Sm, 0, 0, 0);
+                pill.SetBinding(UIElement.VisibilityProperty, new System.Windows.Data.Binding(nameof(Visibility)) { Source = text });
+            }
+            var header = new StackPanel { Orientation = Orientation.Horizontal };
+            header.Children.Add(new TextBlock { Text = group.DisplayName, VerticalAlignment = VerticalAlignment.Center });
+            header.Children.Add(changedPill);
+            header.Children.Add(matchesPill);
+
             var leaf = new TreeViewItem
             {
-                Header = group.DisplayName,
+                Header = header,
                 FontWeight = FontWeights.Normal, // counteract the inherited semi-bold category weight
                 Tag = group,
+                // Under a category the name lines up with the category's (past its chevron).
+                Padding = new Thickness(categoryDisplay != null ? Spacing.Xs + 20 : Spacing.Sm, 0, Spacing.Sm, 0),
             };
+            System.Windows.Automation.AutomationProperties.SetName(leaf, group.DisplayName);
+            _groupLeaves[group.Id] = (leaf, changed, matches, categoryDisplay);
             leaf.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
             leaf.Selected += (_, e) =>
             {
@@ -1917,12 +3109,26 @@ namespace AkmlSql.Shell.Shared.Formatting
             _viewModel.PageSample = group.Sample;
 
             if (_breadcrumbText != null)
-                _breadcrumbText.Text = categoryDisplay != null
-                    ? $"{categoryDisplay}  ›  {group.DisplayName}"
-                    : group.DisplayName;
+            {
+                // "Clauses › Join": the category muted, the page itself in the heading weight.
+                _breadcrumbText.Inlines.Clear();
+                if (categoryDisplay != null)
+                {
+                    var trail = new System.Windows.Documents.Run(categoryDisplay + "  ›  ") { FontWeight = FontWeights.Normal };
+                    trail.SetResourceReference(System.Windows.Documents.TextElement.ForegroundProperty, ThemeTokens.TextSecondary);
+                    _breadcrumbText.Inlines.Add(trail);
+                }
+                _breadcrumbText.Inlines.Add(new System.Windows.Documents.Run(group.DisplayName));
+            }
 
             _settingControlsHost.Children.Clear();
             _gatedRows.Clear();
+            _rowMarkers.Clear();
+            _rowBorders.Clear();
+            // A new page: the examples follow its first option until another one is clicked.
+            if (_focusedSettingId == null || !group.Settings.Any(s => s.Id == _focusedSettingId))
+                _focusedSettingId = group.Settings.FirstOrDefault()?.Id;
+            ScheduleExamples();
 
             if (group.Settings.Count == 0)
             {
@@ -1946,19 +3152,34 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (setting.Subgroup != null && setting.Subgroup != subgroup)
                 {
                     subgroup = setting.Subgroup;
-                    var heading = new TextBlock
-                    {
-                        Text = subgroup.ToUpperInvariant(),
-                        FontFamily = Typography.UiFont,
-                        FontSize = Typography.Small,
-                        FontWeight = Typography.WeightSemiBold,
-                        Margin = new Thickness(Spacing.Sm, index == 0 ? 0 : Spacing.Md, 0, Spacing.Xs),
-                    };
-                    heading.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-                    _settingControlsHost.Children.Add(heading);
+                    _settingControlsHost.Children.Add(SubgroupHeading(subgroup, first: index == 0));
                 }
                 _settingControlsHost.Children.Add(BuildSettingRow(setting, index++));
             }
+            UpdateLeafBadges();
+        }
+
+        /// <summary>A page's small section heading ("JOIN", "ON") with a hairline running to the right edge.</summary>
+        private static Grid SubgroupHeading(string text, bool first)
+        {
+            var heading = new Grid { Margin = new Thickness(Spacing.Sm, first ? 0 : Spacing.Md, Spacing.Sm, Spacing.Xs) };
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var label = new TextBlock
+            {
+                Text = text.ToUpperInvariant(),
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                FontWeight = Typography.WeightSemiBold,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            label.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            var rule = new System.Windows.Shapes.Rectangle { Height = 1, Margin = new Thickness(Spacing.Sm, 1, 0, 0), VerticalAlignment = VerticalAlignment.Center, SnapsToDevicePixels = true };
+            rule.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, ThemeTokens.BorderSubtle);
+            Grid.SetColumn(rule, 1);
+            heading.Children.Add(label);
+            heading.Children.Add(rule);
+            return heading;
         }
 
         /// <summary>
@@ -1985,13 +3206,21 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (!string.Equals(row.Setting.EnabledWhenId, changed.Id, StringComparison.Ordinal)) continue;
                 var open = IsGateOpen(row.Setting);
                 row.Control.IsEnabled = open;
-                row.Label.SetResourceReference(TextBlock.ForegroundProperty, open ? ThemeTokens.TextSecondary : ThemeTokens.TextDisabled);
+                row.Label.SetResourceReference(TextBlock.ForegroundProperty, open ? ThemeTokens.TextPrimary : ThemeTokens.TextDisabled);
                 row.Label.ToolTip = RowTooltip(row.Setting, open);
+                row.Hint.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
             }
         }
 
-        /// <summary>One form row: setting label (left; +Unsupported badge; description as a tooltip)
-        /// and its type-driven control (right). Alternate rows get a subtle zebra tint.</summary>
+        /// <summary>
+        /// One form row. An on/off option is a checkbox whose own content is its label, across the
+        /// whole row, so clicking the words toggles it (as in SQL Prompt). Any other option has its
+        /// label on the left — in a column the page's rows share, at least 160 px and at most 38% of
+        /// the page — and its control on the right, left-aligned in a column at most 280 px wide.
+        /// Labels wrap instead of being cut off (spec 040 STY-01, FR-020); the tooltip repeats the
+        /// label and adds the description. Every row ends in the same fixed column for its ↺, so
+        /// the controls and reset buttons line up down the page; a row tints under the mouse.
+        /// </summary>
         private FrameworkElement BuildSettingRow(FormatSettingNode setting, int index)
         {
             var gateOpen = IsGateOpen(setting);
@@ -1999,67 +3228,299 @@ namespace AkmlSql.Shell.Shared.Formatting
             var isDisabled = unsupported || !gateOpen;
             var currentValue = _viewModel.GetWorkingValue(setting.Id);
 
+            // Spec 040 (T103): Tag = the option id (tests and "go to first match" find rows by it);
+            // an option another option turns on is indented under it.
             var rowBorder = new Border
             {
-                Padding = new Thickness(Spacing.Sm, Spacing.Xs + 1, Spacing.Sm, Spacing.Xs + 1),
-                CornerRadius = new CornerRadius(3),
+                Padding = new Thickness(Spacing.Sm, 5, Spacing.Xs, 5),
+                CornerRadius = new CornerRadius(4),
+                Tag = setting.Id,
+                Margin = new Thickness(setting.EnabledWhenId != null ? Spacing.Lg : 0, 0, 0, 1),
+                Background = System.Windows.Media.Brushes.Transparent,
+                // The accent bar of the option the examples under the preview are about.
+                BorderThickness = new Thickness(2, 0, 0, 0),
+                BorderBrush = System.Windows.Media.Brushes.Transparent,
             };
-            if (index % 2 == 1)
-                rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceCanvas); // zebra
-
-            var row = new Grid();
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var labelStack = new StackPanel
+            _rowBorders[setting.Id] = rowBorder;
+            if (string.Equals(setting.Id, _focusedSettingId, StringComparison.Ordinal))
+                rowBorder.SetResourceReference(Border.BorderBrushProperty, ThemeTokens.AccentPrimary);
+            // Clicking anywhere on the row, or tabbing into its control, shows what its values do.
+            rowBorder.PreviewMouseLeftButtonDown += (_, _) => FocusOption(setting.Id);
+            rowBorder.IsKeyboardFocusWithinChanged += (_, e) => { if (e.NewValue is true) FocusOption(setting.Id); };
+            var isMatch = _searchMatches.Contains(setting.Id);
+            void Rest()
             {
-                Orientation = Orientation.Horizontal,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, Spacing.Sm, 0),
-            };
+                if (isMatch) rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceSelection); // search match
+                else rowBorder.Background = System.Windows.Media.Brushes.Transparent;
+            }
+            Rest();
+            rowBorder.MouseEnter += (_, _) => { if (!isMatch) rowBorder.SetResourceReference(Panel.BackgroundProperty, ThemeTokens.SurfaceHover); };
+            rowBorder.MouseLeave += (_, _) => Rest();
+
             var label = new TextBlock
             {
                 Text = setting.DisplayName,
+                Tag = OptionLabelTag,
                 FontFamily = Typography.UiFont,
                 FontSize = Typography.Body,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.None,
                 ToolTip = RowTooltip(setting, gateOpen),
             };
-            label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextSecondary);
-            labelStack.Children.Add(label);
-            if (isDisabled && gateOpen) labelStack.Children.Add(BuildUnsupportedBadge());
-            Grid.SetColumn(labelStack, 0);
-            row.Children.Add(labelStack);
+            label.SetResourceReference(TextBlock.ForegroundProperty, isDisabled ? ThemeTokens.TextDisabled : ThemeTokens.TextPrimary);
 
-            // Each control sets its own horizontal alignment (checkbox left; combos/text boxes
-            // stretch to fill the column up to MaxWidth); the row only caps and centres them.
             // Wired whenever the option is supported: a closed gate only disables the control, so
             // RefreshIfGate can turn it back on without rebuilding the row.
             var control = BuildControlForSetting(setting, currentValue, unsupported);
             if (!gateOpen) control.IsEnabled = false;
-            if (!unsupported && setting.EnabledWhenId != null) _gatedRows.Add(new GatedRow(setting, label, control));
             control.VerticalAlignment = VerticalAlignment.Center;
-            control.MaxWidth = 280;
-            Grid.SetColumn(control, 1);
-            row.Children.Add(control);
+            var badge = isDisabled && gateOpen ? BuildUnsupportedBadge() : null;
 
-            rowBorder.Child = row;
+            // Spec 040 (T099, STY-05): an option that differs from SQL Prompt's default has a bold
+            // label and a ↺ that puts it back.
+            var reset = new Button
+            {
+                Content = "\u21BA",
+                Width = 24,
+                Height = 24,
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.BodyStrong,
+                ToolTip = $"Back to SQL Prompt's default ({DefaultLabel(setting)})",
+                Visibility = Visibility.Collapsed,
+                IsEnabled = !unsupported,
+            };
+            FormatStylesChrome.ApplyIconButton(reset);
+            System.Windows.Automation.AutomationProperties.SetName(reset, $"Reset {setting.DisplayName} to SQL Prompt's default");
+            reset.Click += (_, _) =>
+            {
+                _viewModel.ResetOption(setting.Id);
+                RefreshVisibleSettingControls(); // the control shows the default again
+            };
+            _rowMarkers[setting.Id] = (setting, label, reset);
+            ApplyChangeMarker(setting, label, reset);
+
+            var row = new Grid();
+            if (control is CheckBox checkBox)
+            {
+                checkBox.Content = label;
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
+                Grid.SetColumn(checkBox, 0);
+                row.Children.Add(checkBox);
+                if (badge != null)
+                {
+                    badge.VerticalAlignment = VerticalAlignment.Center;
+                    Grid.SetColumn(badge, 1);
+                    row.Children.Add(badge);
+                }
+                Grid.SetColumn(reset, 2);
+                row.Children.Add(reset);
+            }
+            else if (control is ComboBox && NeedsOwnLine(setting))
+            {
+                // A drop-down whose longest choice can't fit beside its label (the parenthesis styles:
+                // "Compact: closing parenthesis right-aligned") goes on its own line under the label,
+                // so no choice is ever cut off.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
+                row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                FrameworkElement labelCell = label;
+                if (badge != null)
+                {
+                    badge.HorizontalAlignment = HorizontalAlignment.Left;
+                    badge.Margin = new Thickness(0, 2, 0, 0);
+                    labelCell = new StackPanel { Orientation = Orientation.Vertical, Children = { label, badge } };
+                }
+                row.Children.Add(labelCell);
+                Grid.SetColumn(reset, 1);
+                row.Children.Add(reset);
+                var cell = new Grid { Margin = new Thickness(0, Spacing.Xs, 0, 0) };
+                cell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 340 });
+                cell.Children.Add(control);
+                Grid.SetRow(cell, 1);
+                row.Children.Add(cell);
+            }
+            else
+            {
+                // 160 and 38%, not 200 and 45%: beside the preview the form is narrower, and a wider label column cut
+                // the choices off ("Expanded: to stateme…"); labels wrap instead.
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "lbl", MinWidth = 160 });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetColumnWidth) });
+                Grid.SetColumn(reset, 2);
+                row.Children.Add(reset);
+
+                if (_settingControlsHost != null)
+                {
+                    label.SetBinding(FrameworkElement.MaxWidthProperty, new System.Windows.Data.Binding(nameof(ActualWidth))
+                    {
+                        Source = _settingControlsHost,
+                        Converter = LabelMaxWidthConverter.Instance,
+                    });
+                }
+
+                FrameworkElement labelCell = label;
+                if (badge != null)
+                {
+                    badge.HorizontalAlignment = HorizontalAlignment.Left;
+                    badge.Margin = new Thickness(0, 2, 0, 0);
+                    labelCell = new StackPanel
+                    {
+                        Orientation = Orientation.Vertical,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Children = { label, badge },
+                    };
+                }
+                labelCell.Margin = new Thickness(0, 0, Spacing.Sm, 0);
+                Grid.SetColumn(labelCell, 0);
+                row.Children.Add(labelCell);
+
+                // The control fills a cell at most 280 px wide that starts at the column's left edge,
+                // so every control on the page begins at the same x. (A capped Stretch control
+                // would be centred in the column instead.)
+                var cell = new Grid();
+                cell.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 280 });
+                cell.Children.Add(control);
+                Grid.SetColumn(cell, 1);
+                row.Children.Add(cell);
+            }
+
+            // Spec 040 (T103, STY-07): the note, and why a dependent option is disabled, read under
+            // the row instead of only in its tooltip.
+            var body = new StackPanel { Orientation = Orientation.Vertical };
+            body.Children.Add(row);
+            if (!string.IsNullOrWhiteSpace(setting.Note))
+                body.Children.Add(RowNote(setting.Note!));
+            var hint = RowNote(GateText(setting) ?? string.Empty);
+            hint.Visibility = gateOpen || setting.EnabledWhenId == null ? Visibility.Collapsed : Visibility.Visible;
+            body.Children.Add(hint);
+            if (!unsupported && setting.EnabledWhenId != null) _gatedRows.Add(new GatedRow(setting, label, control, hint));
+
+            rowBorder.Child = body;
             return rowBorder;
         }
 
-        /// <summary>Description, the option's "shows when…" note, and why it is disabled.</summary>
+        /// <summary>
+        /// The widest choice text a drop-down beside its label can show whole at the default size
+        /// (its cell is about 217 px, less the arrow and padding).
+        /// </summary>
+        private const double OwnLineChoiceWidth = 190;
+
+        /// <summary>True when the option's longest choice is too wide for a drop-down beside its label.</summary>
+        private bool NeedsOwnLine(FormatSettingNode setting)
+        {
+            var choices = setting.EnumLabels ?? setting.AllowedEnumValues;
+            if (choices == null) return false;
+            double pixelsPerDip = 1.0;
+            try { pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip; } catch (Exception) { /* not in a visual tree yet */ }
+            var typeface = new Typeface(Typography.UiFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            foreach (var choice in choices)
+            {
+                var text = new FormattedText(choice, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                    typeface, Typography.Body, System.Windows.Media.Brushes.Black, pixelsPerDip);
+                if (text.WidthIncludingTrailingWhitespace > OwnLineChoiceWidth) return true;
+            }
+            return false;
+        }
+
+        /// <summary>The ↺ column every row ends in, shown or not, so controls end at one edge.</summary>
+        private const double ResetColumnWidth = 30;
+
+        private static TextBlock RowNote(string text)
+        {
+            var note = new TextBlock
+            {
+                Text = text,
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = Typography.UiFont,
+                FontSize = Typography.Small,
+                Margin = new Thickness(0, 2, 0, 0),
+            };
+            note.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            return note;
+        }
+
+        /// <summary>"Takes effect when "X" is on." for an option another option turns on; otherwise null.</summary>
+        private string? GateText(FormatSettingNode setting)
+        {
+            if (setting.EnabledWhenId == null) return null;
+            var gate = _currentGroup?.Settings.FirstOrDefault(x => x.Id == setting.EnabledWhenId);
+            var value = setting.EnabledWhenValue is bool b ? (b ? "on" : "off") : setting.EnabledWhenValue?.ToString();
+            return $"Takes effect when \"{gate?.DisplayName ?? setting.EnabledWhenId}\" is {value}.";
+        }
+
+        /// <summary>Spec 040 (T078) — an option label takes at most 38% of the page's width (45% before the preview moved beside the form).</summary>
+        private sealed class LabelMaxWidthConverter : System.Windows.Data.IValueConverter
+        {
+            internal static readonly LabelMaxWidthConverter Instance = new LabelMaxWidthConverter();
+
+            public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => value is double width && width > 0 ? width * 0.38 : double.PositiveInfinity;
+
+            public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+                => throw new NotSupportedException();
+        }
+
+        /// <summary>The label in full, then the description, the option's "shows when…" note, and why it is disabled.</summary>
         private string? RowTooltip(FormatSettingNode setting, bool gateOpen)
         {
-            var parts = new System.Collections.Generic.List<string>();
+            var parts = new System.Collections.Generic.List<string> { setting.DisplayName };
             if (!string.IsNullOrWhiteSpace(setting.Description)) parts.Add(setting.Description!);
             if (!string.IsNullOrWhiteSpace(setting.Note)) parts.Add(setting.Note!);
-            if (!gateOpen && setting.EnabledWhenId != null)
-            {
-                var gate = _currentGroup?.Settings.FirstOrDefault(x => x.Id == setting.EnabledWhenId);
-                parts.Add($"Takes effect when \"{gate?.DisplayName ?? setting.EnabledWhenId}\" is {(setting.EnabledWhenValue is bool b ? (b ? "on" : "off") : setting.EnabledWhenValue)}.");
-            }
+            if (!gateOpen && GateText(setting) is string gateText) parts.Add(gateText);
             return parts.Count == 0 ? null : string.Join(Environment.NewLine + Environment.NewLine, parts);
+        }
+
+        /// <summary>
+        /// Spec 040 (T103) — ▲/▼ beside a number option: steps by 1 within its range. Setting the
+        /// text runs the box's own validation, which records the value.
+        /// </summary>
+        private static FrameworkElement BuildStepper(FormatSettingNode setting, TextBox textBox, bool isDisabled)
+        {
+            var up = StepButton("\u25B2", "Increase");
+            var down = StepButton("\u25BC", "Decrease");
+            up.IsEnabled = down.IsEnabled = !isDisabled;
+
+            void Step(int delta)
+            {
+                var start = int.TryParse(textBox.Text, out var v) ? v
+                    : int.TryParse(setting.DefaultJson.Trim('"'), out var d) ? d : setting.Min ?? 0;
+                var next = start + delta;
+                if (setting.Min is int min && next < min) next = min;
+                if (setting.Max is int max && next > max) next = max;
+                var text = next.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (textBox.Text != text) textBox.Text = text;
+            }
+            up.Click += (_, _) => Step(1);
+            down.Click += (_, _) => Step(-1);
+
+            var stepper = new StackPanel { Orientation = Orientation.Vertical, Margin = new Thickness(2, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            stepper.Children.Add(up);
+            stepper.Children.Add(down);
+            return stepper;
+        }
+
+        private static RepeatButton StepButton(string glyph, string name)
+        {
+            var button = new RepeatButton
+            {
+                Content = glyph,
+                FontSize = 7,
+                Width = 18,
+                Height = 13,
+                Padding = new Thickness(0),
+                Focusable = false,
+                ToolTip = name,
+            };
+            FormatStylesChrome.ApplyIconButton(button);
+            System.Windows.Automation.AutomationProperties.SetName(button, name);
+            return button;
         }
 
         /// <summary>
@@ -2077,7 +3538,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                 case FormatStylesSchemaModel.ControlKind.CheckBox:
                 {
                     var initial = currentValue is bool b ? b : ParseBool(setting.DefaultJson);
-                    // Bare checkbox — the setting name is the row label to its left (SQL Prompt layout).
+                    // BuildSettingRow makes the option's label this checkbox's content (SQL Prompt layout).
                     var checkBox = new CheckBox
                     {
                         IsChecked = initial,
@@ -2113,6 +3574,7 @@ namespace AkmlSql.Shell.Shared.Formatting
                     textBox.SetResourceReference(Control.ForegroundProperty, ThemeTokens.TextPrimary);
                     textBox.SetResourceReference(Control.BorderBrushProperty, ThemeTokens.BorderDefault);
                     row.Children.Add(textBox);
+                    row.Children.Add(BuildStepper(setting, textBox, isDisabled));
 
                     // Spec 033 (T023) — visible range hint when the v2 schema declares one.
                     if (setting.Min != null || setting.Max != null)
@@ -2243,6 +3705,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             // Set Owner to the DTE main window so the dialog centres correctly.
             // Failure here is non-fatal (e.g. running outside VS during a test).
             TrySetDteOwner();
+            // Centred on a maximised SSMS, the 900 px window could open with its buttons under the
+            // taskbar: keep it on its monitor's work area once it has its place.
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => AkmlSql.Shell.Shared.Ui.WindowBounds.KeepInWorkArea(this)));
 
             UpdateStatus("Loading…");
             await _viewModel.LoadAsync().ConfigureAwait(true);
@@ -2252,12 +3717,10 @@ namespace AkmlSql.Shell.Shared.Formatting
                 RebuildSettingsTreeFromSchema(_viewModel.SchemaJson!);
             }
 
-            // SQL Prompt model: preview each page's own sample by default.
-            if (_viewModel.IsSqlPromptModel && _rbPageSample != null)
-            {
-                _rbPageSample.Visibility = Visibility.Visible;
-                _rbPageSample.IsChecked = true;
-            }
+            // SQL Prompt model: preview each page's own sample by default, and offer the engine's
+            // SELECT examples next to it.
+            PopulateSourceCombo();
+            ScheduleExamples();
 
             // The view-model auto-selects the ACTIVE style at open; reflect that in the list.
             // Assigning SelectedItem fires the normal selection-changed flow (SelectProfileAsync
@@ -2293,27 +3756,68 @@ namespace AkmlSql.Shell.Shared.Formatting
                 // The list (and therefore the active style + count) is settled once loading ends.
                 if (!_viewModel.IsLoading) UpdateHeaderState();
             }
-            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewTextBox != null)
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewText) && _previewView != null)
             {
-                // Spec 033 (T025): while the user is editing the sample, the box shows the RAW
-                // sample — a formatted-preview refresh must not clobber their typing.
-                if (!EditingSample) _previewTextBox.Text = _viewModel.PreviewText;
+                // The sample being edited is in its own box (spec 033 T025), so a formatted-preview
+                // refresh never clobbers the user's typing.
+                _previewView.Text = _viewModel.PreviewText;
+
+                // Spec 040 (T099, STY-06): after an option edit, the lines it moved light up for 2 s.
+                var moved = _viewModel.MovedLines;
+                _previewView.HighlightLines = moved;
+                if (moved.Count > 0)
+                {
+                    _movedTimer ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                    _movedTimer.Stop();
+                    _movedTimer.Tick -= OnMovedTimerTick;
+                    _movedTimer.Tick += OnMovedTimerTick;
+                    _movedTimer.Start();
+                    // The flash used to happen below the fold: bring the first moved line into view.
+                    var first = moved.Min();
+                    var view = _previewView;
+                    Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => view.ScrollLineIntoView(first)));
+                }
+                // The option examples format with the working style: refresh them once it settles.
+                ScheduleExamples();
+            }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewTabSize) && _previewView != null)
+            {
+                // Spec 040 (STY-02): tabs line up at the selected style's own width.
+                _previewView.TabSize = _viewModel.PreviewTabSize;
+            }
+            else if (e.PropertyName == nameof(FormatStylesEditorViewModel.TeamFolderUnavailable))
+            {
+                UpdateTeamUnavailableRow();   // spec 040 (T187)
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.PreviewValidationError))
             {
                 // T070 — toggle the warning bar above the preview pane.
                 UpdatePreviewWarningBar();
+                // A failed live preview still ends the wait: examples it cancelled can run again.
+                ScheduleExamples();
             }
             else if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsDirty)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedBuiltIn)
                      || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedCustomized)
-                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedClassic))
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedClassic)
+                     || e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
             {
                 // Spec 033 — both flip on the UI thread (SetWorkingValue / SelectProfileAsync).
                 UpdateSaveButtonState();
                 UpdateReadOnlyState();
                 UpdateHeaderState();   // dirty / read-only are reported in the header too
+                if (e.PropertyName == nameof(FormatStylesEditorViewModel.IsSelectedReadOnly))
+                {
+                    _examplesSignature = null;   // "Use this" follows the style's read-only state
+                    ScheduleExamples();
+                }
             }
+        }
+
+        private void OnMovedTimerTick(object? sender, EventArgs e)
+        {
+            _movedTimer?.Stop();
+            if (_previewView != null) _previewView.HighlightLines = new int[0];
         }
 
         private void UpdatePreviewWarningBar()
@@ -2437,6 +3941,8 @@ namespace AkmlSql.Shell.Shared.Formatting
         /// <summary>The setting that turns this one on, and the value that does.</summary>
         public string? EnabledWhenId { get; set; }
         public object? EnabledWhenValue { get; set; }
+        /// <summary>SQL Prompt model (schema 2002+): what each value does, as example SQL to format.</summary>
+        public FormatStylesSchemaModel.OptionExample? Example { get; set; }
 
         /// <summary>Label shown for a stored value (the value itself when there is no label).</summary>
         public string LabelFor(string value)

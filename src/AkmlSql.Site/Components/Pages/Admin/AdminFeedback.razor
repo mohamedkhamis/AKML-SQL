@@ -55,11 +55,25 @@
     </ul>
 </nav>
 
+<form method="get" action="/admin/feedback" class="admin-toolbar">
+    <input type="hidden" name="show" value="@_show" />
+    <label for="feedback-search">Search messages, email or category</label>
+    <input class="admin-input" id="feedback-search" name="q" value="@_search" maxlength="200" />
+    <button class="btn btn-secondary" type="submit">Search</button>
+    <a href="@($"/admin/feedback.csv?show={_show}&q={Uri.EscapeDataString(_search ?? "")}")" download>Export all matching messages</a>
+</form>
+<p>@_total matching messages. Status-tab counts cover all messages.</p>
+<nav class="admin-toolbar" aria-label="Feedback pages">
+    @if (_page > 0) { <a href="@PageUrl(_page - 1)">← Previous</a> }
+    <span>Page @(_page + 1) of @Math.Max(1, (_total + AdminPaging.PageSize - 1) / AdminPaging.PageSize)</span>
+    @if (((long)_page + 1) * AdminPaging.PageSize < _total) { <a href="@PageUrl(_page + 1)">Next →</a> }
+</nav>
+
 @if (_items.Count == 0)
 {
     <section class="admin-panel">
         <p class="admin-empty">
-            @(_show == "open" ? "Nothing open — every message has been handled." : "No messages here.")
+            @(_search is not null ? "No messages match this search." : _show == "open" ? "Nothing open — every message has been handled." : "No messages here.")
         </p>
     </section>
 }
@@ -98,6 +112,8 @@ else
                         <form method="post" action="@($"/admin/feedback/{item.Id}/{(item.Handled ? "reopen" : "handled")}")">
                             <AntiforgeryField Token="@_requestToken" />
                             <input type="hidden" name="show" value="@_show" />
+                            <input type="hidden" name="q" value="@_search" />
+                            <input type="hidden" name="page" value="@_page" />
                             <button type="submit" class="btn @(item.Handled ? "btn-secondary" : "btn-primary")">
                                 @(item.Handled ? "Reopen" : "Mark handled")
                             </button>
@@ -106,6 +122,8 @@ else
                         <form method="post" action="@($"/admin/feedback/{item.Id}/delete")">
                             <AntiforgeryField Token="@_requestToken" />
                             <input type="hidden" name="show" value="@_show" />
+                            <input type="hidden" name="q" value="@_search" />
+                            <input type="hidden" name="page" value="@_page" />
                             <button type="submit" class="btn btn-secondary btn-danger-quiet">Delete</button>
                         </form>
 
@@ -185,6 +203,13 @@ else
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
+    [SupplyParameterFromQuery(Name = "q")] private string? SearchQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] private string? PageQuery { get; set; }
+    private string? _search;
+    private int _page;
+    private long _total;
+    private string PageUrl(int page) => $"/admin/feedback?show={_show}&q={Uri.EscapeDataString(_search ?? "")}&page={page}";
+
     private string _show = "open";
     private IReadOnlyList<FeedbackItem> _items = [];
     private (long Open, long Handled) _counts;
@@ -211,7 +236,11 @@ else
     protected override void OnInitialized()
     {
         _show = ShowQuery is "handled" or "all" ? ShowQuery : "open";
-        _items = Store.List(_show switch { "handled" => true, "all" => null, _ => false });
+        _search = AdminPaging.Search(SearchQuery);
+        bool? handled = _show switch { "handled" => true, "all" => null, _ => false };
+        _total = Store.Count(handled, _search);
+        _page = AdminPaging.Clamp(PageQuery, _total);
+        _items = Store.List(handled, AdminPaging.PageSize, (long)_page * AdminPaging.PageSize, _search);
         _counts = Store.Counts();
 
         if (HttpContext is not null)
@@ -220,7 +249,7 @@ else
         }
     }
 
-    private static string TabUrl(string key) => key == "open" ? "/admin/feedback" : $"/admin/feedback?show={key}";
+    private string TabUrl(string key) => $"/admin/feedback?show={key}&q={Uri.EscapeDataString(_search ?? "")}";
 
     private string Local(DateTimeOffset utc) =>
         TimeZoneInfo.ConvertTime(utc, Clock.Zone).ToString("ddd d MMM yyyy, HH:mm", CultureInfo.InvariantCulture);

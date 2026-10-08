@@ -1,6 +1,6 @@
 # Refactoring
 
-Refactoring rewrites your SQL into a cleaner or safer shape without changing what it does. AKML SQL offers three heavyweight, schema-aware operations plus a set of quick text-level rewrites. Find them on the AKML SQL menu and the editor right-click menu.
+Refactoring rewrites your SQL into a cleaner or safer shape without changing what it does. AKML SQL offers schema-aware operations such as Smart Rename, plus a set of quick text-level rewrites. Find them on the **AKML SQL** -> **Refactor** menu and in the Command Palette (**Ctrl+Shift+P**).
 
 ## Preview before anything changes
 
@@ -52,6 +52,6 @@ These run quickly on the current script, still with preview:
 
 ## Settings
 
-Open **Tools** -> **Options** -> **AKML SQL** -> **Refactoring** to control preview, backups, and rename scope. See the [Configuration reference](../configuration.md) for all keys.
+Open **AKML SQL** -> **Options…** -> **Editor** (Refactoring section) to control preview, backups, and rename scope. See the [Configuration reference](../configuration.md) for all keys.
 
 Related: [Static Code Analysis](static-analysis.md), [Formatting](formatting.md).

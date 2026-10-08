@@ -29,7 +29,8 @@ namespace AkmlSql.Core.Models.Tabs
         /// For database-target rules (<see cref="MatchTarget"/> == <c>"database"</c>):
         /// the comma-separated glob pattern(s) matched against the connected database name.
         /// When non-empty, takes precedence over <see cref="Pattern"/> for database matching.
-        /// Maps from <see cref="AkmlSql.Core.Config.ColoringRule.DatabaseName"/>.
+        /// For server-name rules (spec 040, OPT-08), a non-empty value must ALSO match the
+        /// connected database. Maps from <see cref="AkmlSql.Core.Config.ColoringRule.DatabaseName"/>.
         /// </summary>
         public string DatabaseName { get; }
 

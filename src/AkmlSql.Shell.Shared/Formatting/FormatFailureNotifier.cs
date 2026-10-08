@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.Formatting
     /// </summary>
     internal static class FormatFailureNotifier
     {
-        private const string Title = "AKML SQL — Format";
+        private static readonly string Title = AkmlSql.Core.Config.WindowTitles.For("Format");
 
         /// <summary>
         /// Shows a message when a format result is a non-applied failure/preserve outcome.
@@ -53,7 +53,9 @@ namespace AkmlSql.Shell.Shared.Formatting
             try
             {
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                var sp = (IServiceProvider?)Package.GetGlobalService(typeof(SVsShell));
+                // The shell's service provider. SVsShell is IVsShell, not an IServiceProvider: the
+                // cast threw, so no notice (preserved SQL, missing style) was ever shown.
+                IServiceProvider? sp = ServiceProvider.GlobalProvider;
                 if (sp == null)
                 {
                     Log.Warning("Format notice: shell service unavailable, message not shown: {Message}", message);

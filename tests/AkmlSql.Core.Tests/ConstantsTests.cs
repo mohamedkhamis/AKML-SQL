@@ -30,14 +30,23 @@ namespace AkmlSql.Core.Tests
             Assert.Equal(Constants.RuntimeVersion, AppVersion.Current);
         }
 
-        [Fact] public void BuildDate()
+        /// <summary>
+        /// The build date comes from the build, not from source: it was a fixed "2026-03-17" that
+        /// About and Options kept showing for months of builds.
+        /// </summary>
+        [Fact] public void BuildDate_is_the_date_this_build_was_made()
         {
-            Assert.Equal("2026-03-17", Constants.BuildDate);
+            Assert.NotEqual("2026-03-17", Constants.BuildDate);
+            Assert.True(System.DateTime.TryParseExact(Constants.BuildDate, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _), Constants.BuildDate);
+            Assert.Equal(AppVersion.BuildTimestampUtc!.Value.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
+                Constants.BuildDate);
         }
 
         [Fact] public void FeedbackUrl()
         {
-            Assert.Equal("https://github.com/AkmlSql/feedback", Constants.FeedbackUrl);
+            // The product site's feedback page; the old GitHub address answered 404.
+            Assert.Equal("https://akml.khamis.work/feedback", Constants.FeedbackUrl);
         }
 
         [Fact] public void UpdateManifestUrl()

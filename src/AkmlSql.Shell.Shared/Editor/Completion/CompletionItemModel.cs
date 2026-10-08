@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Windows.Media;
 using AkmlSql.Shell.Shared.Ui.Theme;
@@ -31,6 +32,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// </summary>
         public string SourceObject { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Spec 040 (OPT-01) — the engine's matchable text (e.g. the bare column name of an
+        /// "alias.Column" item). Null when the engine sent none; the display text is used then.
+        /// </summary>
+        public string? FilterText { get; set; }
+
         // Computed presentation properties — resolved fresh each access so theme switches
         // pick up the new palette automatically without rebuilding the model.
         public string IconLetter => GetLetter(ObjectType);
@@ -40,11 +47,16 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>
         /// Matches via prefix, substring, or CamelCase initials.
         /// CamelCase: "PC" matches "ProductCategory", "sc" matches "sys_columns".
+        /// Spec 040 (OPT-01): with <paramref name="prefixOnly"/> (fuzzy matching off in Options) only
+        /// a case-insensitive prefix of the filter text or the display text matches.
         /// </summary>
-        public bool MatchesFilter(string filter)
+        public bool MatchesFilter(string filter, bool prefixOnly = false)
         {
             if (string.IsNullOrEmpty(filter))
                 return true;
+
+            if (prefixOnly)
+                return StartsWithFilter(filter);
 
             // Prefix or substring match (case-insensitive)
             if (DisplayText.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0)
@@ -59,10 +71,13 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// Scoring for sort order during filtering. Lower = better match.
         /// Prefix > CamelCase > Substring.
         /// </summary>
-        public int FilterScore(string filter)
+        public int FilterScore(string filter, bool prefixOnly = false)
         {
             if (string.IsNullOrEmpty(filter))
                 return SortPriority;
+
+            if (prefixOnly)
+                return StartsWithFilter(filter) ? 0 : int.MaxValue;
 
             if (DisplayText.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
                 return 0; // Prefix match — best
@@ -75,6 +90,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
             return int.MaxValue; // No match
         }
+
+        private bool StartsWithFilter(string filter) =>
+            (FilterText != null && FilterText.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
+            || DisplayText.StartsWith(filter, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
         /// CamelCase / underscore boundary matching.

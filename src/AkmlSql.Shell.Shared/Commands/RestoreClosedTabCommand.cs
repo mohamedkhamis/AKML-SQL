@@ -1,25 +1,33 @@
 #nullable enable
 using System;
 using System.ComponentModel.Design;
+using System.Linq;
+using System.Threading.Tasks;
+using AkmlSql.Core.Ipc;
+using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Core.Models.Tabs;
+using AkmlSql.Shell.Shared.History;
+using AkmlSql.Shell.Shared.Ipc;
+using AkmlSql.Shell.Shared.Tabs;
 using EnvDTE;
 using Microsoft.VisualStudio.Shell;
-using AkmlSql.Shell.Shared.Tabs;
 using Serilog;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Commands
 {
     /// <summary>
-    /// Restores the most recently closed tab by popping the top entry from
-    /// <see cref="ClosedTabStack"/>, opening a new editor window, and inserting
-    /// the captured content.
+    /// Restores the most recently closed tab: the newest entry of <see cref="ClosedTabStack"/>
+    /// (tabs closed in this session), else — spec 040 (T146, HIS-14) — the newest closed query in
+    /// SQL History, so Ctrl+Shift+T also works after SSMS restarts.
     /// <para>
     /// Bound to <see cref="CommandIds.CmdRestoreClosedTab"/> (0x0501).
-    /// Disabled when the stack is empty (via <c>BeforeQueryStatus</c>).
     /// </para>
     /// </summary>
     internal sealed class RestoreClosedTabCommand
     {
+        private readonly ClosedTabRestorer _restorer = new ClosedTabRestorer();
+
         private RestoreClosedTabCommand(Package package, OleMenuCommandService commandService)
         {
             if (package == null) throw new ArgumentNullException(nameof(package));
@@ -41,73 +49,26 @@ namespace AkmlSql.Shell.Shared.Commands
             Instance = new RestoreClosedTabCommand(package, commandService);
         }
 
-        /// <summary>
-        /// Disables the command when the closed tab stack is empty.
-        /// </summary>
+        /// <summary>Enabled while there is something to reopen: a closed tab, or SQL History.</summary>
         private void OnBeforeQueryStatus(object sender, EventArgs e)
         {
             if (sender is OleMenuCommand cmd)
             {
-                cmd.Enabled = ClosedTabStack.Instance.Count > 0;
+                cmd.Enabled = _restorer.CanRestore;
             }
         }
 
-        /// <summary>
-        /// Pops the most recent entry and opens a new editor with restored content.
-        /// </summary>
         private void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            _ = ExecuteAsync();
+        }
 
+        private async Task ExecuteAsync()
+        {
             try
             {
-                var entry = ClosedTabStack.Instance.Pop();
-                if (entry == null)
-                {
-                    Log.Debug("RestoreClosedTabCommand: stack is empty, nothing to restore");
-                    return;
-                }
-
-                Log.Information("RestoreClosedTabCommand: restoring '{Title}' (closed at {ClosedAt})",
-                    entry.TabTitle ?? "(untitled)", entry.ClosedAt);
-
-                // Get DTE to create a new editor window
-                var dte = (DTE)Package.GetGlobalService(typeof(DTE));
-                if (dte == null)
-                {
-                    Log.Error("RestoreClosedTabCommand: DTE service unavailable");
-                    return;
-                }
-
-                // Open a new untitled SQL file
-                dte.ItemOperations.NewFile(
-                    @"General\Sql File",
-                    entry.TabTitle ?? "Restored.sql",
-                    EnvDTE.Constants.vsViewKindCode);
-
-                // Insert restored content using the TextDocument interface
-                var activeDoc = dte.ActiveDocument;
-                if (activeDoc == null)
-                {
-                    Log.Warning("RestoreClosedTabCommand: no active document after NewFile");
-                    return;
-                }
-
-                var textDocument = activeDoc.Object("TextDocument") as TextDocument;
-                if (textDocument == null)
-                {
-                    Log.Warning("RestoreClosedTabCommand: new document has no TextDocument; content not restored");
-                    return;
-                }
-
-                var editPoint = textDocument.StartPoint.CreateEditPoint();
-                editPoint.Insert(entry.Content);
-
-                // Move cursor to the beginning of the document
-                textDocument.Selection.StartOfDocument();
-
-                Log.Information("RestoreClosedTabCommand: successfully restored '{Title}'",
-                    entry.TabTitle ?? "(untitled)");
+                await _restorer.RestoreAsync();
             }
             catch (Exception ex)
             {
@@ -118,6 +79,125 @@ namespace AkmlSql.Shell.Shared.Commands
                     System.Windows.Forms.MessageBoxButtons.OK,
                     System.Windows.Forms.MessageBoxIcon.Warning);
             }
+        }
+
+        /// <summary>Opens a closed tab's captured text in a new query tab.</summary>
+        internal static void OpenClosedTab(ClosedTabEntry entry)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            Log.Information("RestoreClosedTabCommand: restoring '{Title}' (closed at {ClosedAt})",
+                entry.TabTitle ?? "(untitled)", entry.ClosedAt);
+
+            var dte = (DTE)Package.GetGlobalService(typeof(DTE));
+            if (dte == null)
+            {
+                Log.Error("RestoreClosedTabCommand: DTE service unavailable");
+                return;
+            }
+
+            dte.ItemOperations.NewFile(
+                @"General\Sql File",
+                entry.TabTitle ?? "Restored.sql",
+                EnvDTE.Constants.vsViewKindCode);
+
+            var activeDoc = dte.ActiveDocument;
+            if (activeDoc == null)
+            {
+                Log.Warning("RestoreClosedTabCommand: no active document after NewFile");
+                return;
+            }
+
+            if (activeDoc.Object("TextDocument") is not TextDocument textDocument)
+            {
+                Log.Warning("RestoreClosedTabCommand: new document has no TextDocument; content not restored");
+                return;
+            }
+
+            var editPoint = textDocument.StartPoint.CreateEditPoint();
+            editPoint.Insert(entry.Content);
+            textDocument.Selection.StartOfDocument();
+        }
+    }
+
+    /// <summary>
+    /// Spec 040 (T146, HIS-14) — what Ctrl+Shift+T reopens: the newest tab closed in this session
+    /// (<see cref="ClosedTabStack"/>); when there is none, the newest closed query in SQL History,
+    /// through History's own open path. The history client and the openers are injectable for tests.
+    /// </summary>
+    internal sealed class ClosedTabRestorer
+    {
+        private readonly IRpcClientAccessor _rpc;
+        private readonly ClosedTabStack _stack;
+
+        public ClosedTabRestorer() : this(EngineRpcClientAccessor.Instance, ClosedTabStack.Instance) { }
+
+        internal ClosedTabRestorer(IRpcClientAccessor rpc, ClosedTabStack stack)
+        {
+            _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
+            _stack = stack ?? throw new ArgumentNullException(nameof(stack));
+        }
+
+        internal Action<ClosedTabEntry> OpenClosedTab { get; set; } = RestoreClosedTabCommand.OpenClosedTab;
+
+        internal Action<HistoryEntryDto> OpenFromHistory { get; set; } = entry =>
+            HistoryQueryOpener.OpenInNewTab(entry.SqlText, entry.Server, entry.Database, entry.SessionKey, "History.sql");
+
+        internal Action<string> Notify { get; set; } = text => StatusBar.StatusBarManager.ShowTransient(text, 4);
+
+        public bool CanRestore => _stack.Count > 0 || _rpc.IsConnected;
+
+        private static readonly int CurrentPid = System.Diagnostics.Process.GetCurrentProcess().Id;
+
+        /// <summary>Reopens one tab; false when there was nothing to reopen.</summary>
+        public async Task<bool> RestoreAsync()
+        {
+            var closed = _stack.Pop();
+            if (closed != null)
+            {
+                OpenClosedTab(closed);
+                return true;
+            }
+
+            if (!_rpc.IsConnected) return false;
+
+            var search = await _rpc.SendRequestAsync<HistorySearchResponse, HistorySearchRequest>(
+                MessageTypes.HistorySearch,
+                new HistorySearchRequest { IsOpen = false, Deduplicate = true, Offset = 0, Limit = 1 },
+                timeoutMs: 10000);
+            var newest = search?.Entries?.FirstOrDefault();
+            if (newest == null)
+            {
+                Notify("There are no closed queries to reopen.");
+                return false;
+            }
+
+            // The search rows carry only the start of the text.
+            var full = await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                MessageTypes.HistoryAction,
+                new HistoryActionRequest { Action = HistoryActions.GetFullSql, EntryIds = new[] { newest.Id } },
+                timeoutMs: 10000);
+            if (full?.Success == true && full.FullSqlText != null) newest.SqlText = full.FullSqlText;
+
+            OpenFromHistory(newest);
+
+            // Open now — awaited, so a second Ctrl+Shift+T finds the next closed query, not this one again.
+            if (!string.IsNullOrEmpty(newest.SessionKey)
+                && OpenStateReporter.OnActivated(newest.SessionKey, CurrentPid) is { } open)
+            {
+                try
+                {
+                    await _rpc.SendRequestAsync<HistoryActionResponse, HistoryActionRequest>(
+                        MessageTypes.HistoryAction, open, timeoutMs: 5000);
+                }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Debug(ex, "Reopen closed tab: could not mark '{Name}' open", newest.TabTitle);
+                }
+            }
+
+            Notify($"Restored '{HistoryRowDisplay.DisplayNameFor(newest)}' from SQL History.");
+            return true;
         }
     }
 }

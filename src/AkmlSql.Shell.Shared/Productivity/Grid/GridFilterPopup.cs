@@ -3,6 +3,7 @@ using System;
 using System.Data;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.Grid
@@ -71,7 +72,7 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
 
             _popup = new Form
             {
-                Text = $"Filter: {columnName}",
+                Text = WindowTitles.For($"Filter: {columnName}"),
                 FormBorderStyle = FormBorderStyle.FixedToolWindow,
                 StartPosition = FormStartPosition.Manual,
                 Location = screenLocation,

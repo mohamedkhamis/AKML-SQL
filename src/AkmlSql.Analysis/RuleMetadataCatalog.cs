@@ -182,13 +182,13 @@ public static class RuleMetadataCatalog
         ["DE007"] = new("IDENTITY on non-integer column", "`IDENTITY` on a non-integer column type — unexpected behavior", false),
 
         // ── Deprecated (DEP) ──
-        ["DEP001"] = new("text/ntext/image data type", "`text`, `ntext`, or `image` data type — removed in SQL Server 2022+", true, "https://learn.microsoft.com/sql/t-sql/data-types/ntext-text-and-image-transact-sql"),
+        ["DEP001"] = new("text/ntext/image data type", "`text`, `ntext`, or `image` data type — deprecated, to be removed in a future SQL Server version", true, "https://learn.microsoft.com/sql/t-sql/data-types/ntext-text-and-image-transact-sql"),
         ["DEP002"] = new("Deprecated system procedure", "Deprecated system stored procedure (e.g. `sp_addtype`, `sp_bindrule`)", false),
-        ["DEP003"] = new("SET FMTONLY ON", "`SET FMTONLY ON` — removed in SQL Server 2012", false),
+        ["DEP003"] = new("SET FMTONLY ON", "`SET FMTONLY ON` — deprecated since SQL Server 2012, to be removed in a future version", false),
         ["DEP004"] = new("Old outer-join operators", "Old outer-join operators (`*=`, `=*`) — removed in SQL Server 2012", false),
         ["DEP005"] = new("RAISERROR style 0", "`RAISERROR` with style 0 and without `NOWAIT` — use `THROW` instead", false),
         ["DEP006"] = new("Numbered procedure suffix", "Numbered procedure suffix (`;1`) — deprecated and ignored by the engine", false),
-        ["DEP007"] = new("GROUP BY ALL", "`GROUP BY ALL` — removed in SQL Server 2012", false),
+        ["DEP007"] = new("GROUP BY ALL", "`GROUP BY ALL` — deprecated, to be removed in a future SQL Server version", false),
         ["DEP008"] = new("Locking hint without WITH", "Old-style locking hint without `WITH` (e.g. `(NOLOCK)` vs `WITH (NOLOCK)`)", false),
 
         // ── Execution (EX) ──

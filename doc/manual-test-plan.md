@@ -4,7 +4,7 @@
 > There are no Blazor components. This test plan covers all actual UI surfaces:
 > installer, menus, dialogs, editor integrations, and commands.
 >
-> **Version Under Test:** 1.0.0
+> **Version Under Test:** the build being tested (1.YY.MMDD.HHmm, e.g. 1.26.1007.0509 — see Options › General)
 > **Test Environments:** SSMS 20, SSMS 21, SSMS 22, VS 2019, VS 2022, VS 2026
 > **Tester:** _____________________ **Date:** _____________________
 
@@ -170,7 +170,7 @@
 | **Description** | About dialog opens and displays correct version |
 | **Steps** | 1. Click Tools → AKML SQL → About. |
 | **Test Data** | N/A |
-| **Expected Result** | Dialog titled "About AKML SQL" opens. Shows: Product Name "AKML SQL", Version "1.0.0", Build Date, .NET runtime description, OS description. |
+| **Expected Result** | Dialog titled "About AKML SQL" opens. Shows: Product Name "AKML SQL", Version 1.YY.MMDD.HHmm (this build), Build date (this build's date and time, local), .NET runtime description, OS description. |
 | **Actual Result** | |
 | **Pass/Fail** | |
 
@@ -202,7 +202,7 @@
 | **Description** | "Up to date" message shown when no update available |
 | **Steps** | 1. Delete `%AppData%\AKML SQL\update-available.json` if it exists. 2. Click Tools → AKML SQL → Check for Updates. 3. Wait for result. |
 | **Test Data** | No pre-existing update result file |
-| **Expected Result** | MessageBox shows "AKML SQL v1.0.0 is up to date." with OK button. |
+| **Expected Result** | MessageBox shows "AKML SQL v<this build's version> is up to date." with OK button. |
 | **Actual Result** | |
 | **Pass/Fail** | |
 
@@ -230,7 +230,7 @@
 | **Description** | Update URL with http:// (non-https) is rejected |
 | **Steps** | 1. Create update-available.json with `"downloadUrl":"http://evil.com/malware.exe"`. 2. Run Check for Updates. 3. Click Yes (if dialog appears). |
 | **Test Data** | `{"available":true,"version":"9.9.9","downloadUrl":"http://evil.com/malware.exe"}` |
-| **Expected Result** | Browser not opened. "AKML SQL v1.0.0 is up to date." shown (URL validation fails, treated as not-available). |
+| **Expected Result** | Browser not opened. "AKML SQL v<this build's version> is up to date." shown (URL validation fails, treated as not-available). |
 | **Actual Result** | |
 | **Pass/Fail** | |
 

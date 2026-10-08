@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ipc;
@@ -48,7 +49,36 @@ namespace AkmlSql.Shell.Shared.Analysis
         private void OnBufferChanged(object sender, TextContentChangedEventArgs e)
         {
             if (_disposed) return;
+            if (!ShouldAnalyzeOnEdit(CurrentSettings())) return;
             ScheduleAnalysis();
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-01) — Code Analysis "Analyze while typing": edits analyse only while code
+        /// analysis is on and that option is on. Opening a document and the explicit analysis
+        /// commands still analyse.
+        /// </summary>
+        internal static bool ShouldAnalyzeOnEdit(CodeAnalysisSettings s) => s.Enabled && s.RunOnType;
+
+        private static CodeAnalysisSettings _cachedSettings;
+        private static DateTime _cachedSettingsUtc;
+
+        /// <summary>Settings read at most every 2 s — this runs on every keystroke.</summary>
+        private static CodeAnalysisSettings CurrentSettings()
+        {
+            var cached = _cachedSettings;
+            if (cached == null || (DateTime.UtcNow - _cachedSettingsUtc).TotalSeconds > 2)
+            {
+                try { cached = ConfigManager.Load().CodeAnalysis; }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "AnalysisController: could not read settings; analysing");
+                    cached = new CodeAnalysisSettings();
+                }
+                _cachedSettings = cached;
+                _cachedSettingsUtc = DateTime.UtcNow;
+            }
+            return cached;
         }
 
         /// <summary>

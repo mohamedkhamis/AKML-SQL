@@ -849,22 +849,7 @@ namespace AkmlSql.Shell.Shared.Tabs
         /// Returns <c>null</c> if parsing fails.
         /// </summary>
         private static Color? ParseHexColor(string? hex)
-        {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(hex))
-                    return null;
-
-                if (!hex!.StartsWith("#", StringComparison.Ordinal))
-                    hex = "#" + hex;
-
-                return (Color)ColorConverter.ConvertFromString(hex);
-            }
-            catch
-            {
-                return null;
-            }
-        }
+            => HexBrush.TryParse(hex, out var color) ? color : (Color?)null;
 
         // ────────────────────────────────────────────────────────────────────────────
         //  Original tab coloring (existing functionality)
@@ -1081,14 +1066,12 @@ namespace AkmlSql.Shell.Shared.Tabs
         {
             try
             {
-                if (string.IsNullOrWhiteSpace(hex))
+                if (!HexBrush.TryParse(hex, out var color))
+                {
+                    if (!string.IsNullOrWhiteSpace(hex))
+                        Log.Warning("TabColoringManager: invalid hex color '{Hex}'", hex);
                     return null;
-
-                // Ensure the hex string starts with '#'.
-                if (!hex.StartsWith("#", StringComparison.Ordinal))
-                    hex = "#" + hex;
-
-                var color = (Color)ColorConverter.ConvertFromString(hex);
+                }
 
                 // Use semi-transparent for tab backgrounds so text remains readable.
                 var baseColor = Color.FromArgb(60, color.R, color.G, color.B);

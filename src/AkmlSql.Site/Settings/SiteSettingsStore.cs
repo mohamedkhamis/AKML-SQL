@@ -63,6 +63,9 @@ public sealed class SiteSettingsStore : IDisposable
     /// </summary>
     public SiteSettings Current { get; private set; } = SiteSettings.Defaults;
 
+    /// <summary>Signals background cleanup after a successfully saved retention change.</summary>
+    public event Action? RetentionChanged;
+
     /// <summary>True when the last <see cref="Load"/> failed and <see cref="Current"/> is the fallback.</summary>
     public bool LoadFailed { get; private set; }
 
@@ -159,9 +162,11 @@ public sealed class SiteSettingsStore : IDisposable
             transaction.Commit();
         }
 
+        var retentionChanged = Current.IdentifiableRetentionDays != candidate.IdentifiableRetentionDays;
         Current = candidate;
         LoadFailed = false;
         LoadError = null;
+        if (retentionChanged) RetentionChanged?.Invoke();
         return [];
     }
 

@@ -9,7 +9,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     {
         public string Key     => "General";
         public string Display => "General";
-        public string Title   => "General Settings";
+        public string Title   => "General";
+        public string HelpTopic => "topics/options#general";
         public string Help    => "Configure the AKML SQL dialog theme, automatic update checks, and anonymous error reporting. This page also shows the configuration file, log directory, and installed version.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -22,7 +23,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("Theme", "UI color theme for AKML SQL dialogs", "Dropdown", rowTheme);
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Updates & Telemetry");
+            ctx.Rows.AddGroupHeader(panel, "Updates & telemetry");
             var (rowAutoUpdate, chkAutoUpdate) = ctx.Rows.AddToggle(panel,
                 "Check for updates automatically",
                 "Checks for new versions every 24 hours on startup");
@@ -42,7 +43,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "About");
-            var versionRow = ctx.Rows.AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (" + Constants.BuildDate + ")");
+            var versionRow = ctx.Rows.AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (built " + AkmlSql.Core.AppVersion.BuildDateTime + ")");
             ctx.RegisterSearch("Version", Constants.RuntimeVersion, "Info", versionRow);
 
             return new GeneralControls(cboTheme, chkAutoUpdate, chkTelemetry);

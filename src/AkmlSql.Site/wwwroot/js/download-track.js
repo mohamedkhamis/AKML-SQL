@@ -1,32 +1,42 @@
-// DL-004: upgrade tracked download links to their CDN URL so the visitor's click goes
-// straight to the CDN (no /dl redirect hop — the hop made the browser start a page
-// navigation before the save dialog appeared). The click is still counted server-side
-// via a same-origin beacon to /dl-count/{file}. No-JS users keep the /dl link, which
-// already 302s to the same CDN URL with the metric logged.
+// Loaded once from App.razor. Delegation survives Blazor's enhanced DOM replacements.
 (function () {
     'use strict';
-
-    var links = document.querySelectorAll('a.download-tracked[data-cdn-url]');
-    for (var i = 0; i < links.length; i++) {
-        upgrade(links[i]);
-    }
-
-    function upgrade(a) {
-        var cdn = a.getAttribute('data-cdn-url');
+    if (window.akmlDownloadTracking) return;
+    window.akmlDownloadTracking = true;
+    var busyUntil = new Map();
+    document.addEventListener('click', function (event) {
+        var a = event.target.closest && event.target.closest('a.download-tracked');
+        if (!a || event.button !== 0 || event.defaultPrevented) return;
         var file = a.getAttribute('data-file');
-        if (!cdn || !file) {
+        if (!file) return;
+        var now = Date.now();
+        if ((busyUntil.get(file) || 0) > now) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
             return;
         }
-
-        a.href = cdn;
-        a.addEventListener('click', function () {
-            try {
-                if (navigator.sendBeacon) {
-                    navigator.sendBeacon('/dl-count/' + encodeURIComponent(file));
-                }
-            } catch (e) {
-                // Metrics must never block or break the download.
+        busyUntil.set(file, now + 2000);
+        a.setAttribute('aria-disabled', 'true');
+        a.setAttribute('aria-busy', 'true');
+        var label = a.querySelector('[data-download-label]') || a;
+        var original = label.textContent;
+        label.textContent = 'Starting download…';
+        setTimeout(function () {
+            busyUntil.delete(file);
+            a.removeAttribute('aria-disabled');
+            a.removeAttribute('aria-busy');
+            label.textContent = original;
+        }, 2000);
+        // Queue analytics before native navigation; never await the network.
+        // Local legacy links count at /dl, so only direct CDN links send a beacon.
+        if (a.getAttribute('data-cdn-url')) {
+            var url = '/dl-count/' + encodeURIComponent(file);
+            var queued = false;
+            try { queued = !!navigator.sendBeacon && navigator.sendBeacon(url); } catch (_) { }
+            if (!queued) {
+                try { fetch(url, { method: 'POST', keepalive: true, credentials: 'same-origin' }).catch(function () {}); } catch (_) { }
             }
-        });
-    }
+        }
+        // href already names the asset in SSR markup, including with JS disabled.
+    }, true);
 })();

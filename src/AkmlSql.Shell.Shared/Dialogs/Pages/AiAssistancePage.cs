@@ -18,8 +18,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class AiAssistancePage : IPageBuilder
     {
         public string Key     => "AI Assistance";
-        public string Display => "AI Assistance";
-        public string Title   => "AI Assistance";
+        public string Display => "AI assistance";
+        public string Title   => "AI assistance";
+        public string HelpTopic => "topics/options#ai-assistance";
         public string Help    => "Connect an AI provider (Anthropic, OpenAI, Gemini, Kimi, Ollama, and more) and tune the model, privacy mode, and request parameters that power AI features. Enable assistance such as natural-language-to-SQL, query explanation, error fixes, optimization, index suggestions, the chat panel, and inline ghost-text completions.";
 
         /// <summary>
@@ -62,7 +63,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // Spec 037 (US2, R12): the agent list + its CRUD row sit above the provider rows,
             // which are the editor for the selected agent — inline, not a modal (an agent has
             // ten fields; the rows already exist on this page).
-            ctx.Rows.AddGroupHeader(panel, "Agents");
+            ctx.Rows.AddGroupHeader(panel, "AI agents");
             var agentListView = new AiAgentListView(ctx.Theme);
             agentListView.AddTo(panel);
             ctx.RegisterSearch("AI agents", "Add, duplicate, remove, rename and activate AI agents", "List", agentListView.List);
@@ -238,10 +239,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             panel.Children.Add(fallbackList);
             ctx.RegisterSearch("Fallback order", "Agents tried in order when the answering agent fails", "List", fallbackList);
 
-            var btnFallbackAdd = AiAgentListView.MakeButton("Add", "Add the chosen agent to the fallback order");
-            var btnFallbackRemove = AiAgentListView.MakeButton("Remove", "Remove the selected agent from the fallback order");
-            var btnFallbackUp = AiAgentListView.MakeButton("Move up", "Try the selected agent earlier in the fallback order");
-            var btnFallbackDown = AiAgentListView.MakeButton("Move down", "Try the selected agent later in the fallback order");
+            var btnFallbackAdd = AiAgentListView.MakeButton("Add", "Add the chosen agent to the fallback order", ctx.Theme);
+            var btnFallbackRemove = AiAgentListView.MakeButton("Remove", "Remove the selected agent from the fallback order", ctx.Theme);
+            var btnFallbackUp = AiAgentListView.MakeButton("Move up", "Try the selected agent earlier in the fallback order", ctx.Theme);
+            var btnFallbackDown = AiAgentListView.MakeButton("Move down", "Try the selected agent later in the fallback order", ctx.Theme);
             var fallbackButtons = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -262,7 +263,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             featureRows.FallbackMoveDown = btnFallbackDown;
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Privacy & Data");
+            ctx.Rows.AddGroupHeader(panel, "Privacy & data");
 
             var (rowPrivacy, cboPrivacy) = ctx.Rows.AddDropdown(panel,
                 "Privacy mode",
@@ -283,20 +284,21 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Parameters");
 
-            var (rowMax, sldMax, lblMax) = ctx.Rows.AddSlider(panel,
-                "Max response tokens", 128, 128000, 4096,
-                "Maximum number of tokens in the AI response", largeRange: true);
-            ctx.RegisterSearch("Max response tokens", "Maximum number of tokens in the AI response", "Slider", rowMax);
+            // Spec 040 (OPT-06): number fields for the wide ranges; units after the box, not in the label.
+            var (rowMax, numMax) = ctx.Rows.AddNumber(panel,
+                "Max response tokens", 128, 128000, 256, "tokens",
+                "Maximum number of tokens in the AI response");
+            ctx.RegisterSearch("Max response tokens", "Maximum number of tokens in the AI response", "Number", rowMax);
 
             var (rowTemp, sldTemp, lblTemp) = ctx.Rows.AddSlider(panel,
-                "Temperature (x10)", 0, 20, 2,
-                "Sampling temperature: 0 = deterministic, 20 = creative");
-            ctx.RegisterSearch("Temperature (x10)", "Sampling temperature: 0 = deterministic, 20 = creative", "Slider", rowTemp);
+                "Creativity (temperature)", 0, 20, 2,
+                "0 gives the same answer every time; higher values give more varied answers (the temperature, ×10)");
+            ctx.RegisterSearch("Creativity (temperature)", "0 gives the same answer every time; higher values give more varied answers", "Slider", rowTemp);
 
-            var (rowTimeout, sldTimeout, lblTimeout) = ctx.Rows.AddSlider(panel,
-                "Timeout (seconds)", 5, 300, 30,
-                "Request timeout for AI API calls");
-            ctx.RegisterSearch("Timeout (seconds)", "Request timeout for AI API calls", "Slider", rowTimeout);
+            var (rowTimeout, numTimeout) = ctx.Rows.AddNumber(panel,
+                "Timeout", 5, 300, 5, "seconds",
+                "How long to wait for the AI provider to answer");
+            ctx.RegisterSearch("Timeout", "How long to wait for the AI provider to answer", "Number", rowTimeout);
 
             var (rowRetries, sldRetries, lblRetries) = ctx.Rows.AddSlider(panel,
                 "Retries", 0, 10, 2,
@@ -326,9 +328,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "Index suggestions", "AI-powered index analysis and recommendations");
             ctx.RegisterSearch("Index suggestions", "AI-powered index analysis and recommendations", "Toggle", rowIdx);
 
-            var (rowChat, chkChat) = ctx.Rows.AddToggle(panel,
-                "Chat panel", "Enable the AI chat side panel for interactive assistance");
-            ctx.RegisterSearch("Chat panel", "Enable the AI chat side panel for interactive assistance", "Toggle", rowChat);
+            // Spec 040 (OPT-01): the "Chat panel" toggle changed nothing (the chat window is always
+            // available from the menu) and is hidden; the saved value is kept.
 
             var (rowInline, chkInline) = ctx.Rows.AddToggle(panel,
                 "Inline ghost text", "Show AI-powered inline completion suggestions as ghost text");
@@ -339,8 +340,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.RegisterSearch("Auto-fix on error", "Automatically suggest fixes when query execution fails", "Toggle", rowAutoFix);
 
             return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
-                sldMax, lblMax, sldTemp, lblTemp, sldTimeout, lblTimeout, sldRetries, lblRetries,
-                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkChat, chkInline, chkAutoFix,
+                numMax, sldTemp, lblTemp, numTimeout, sldRetries, lblRetries,
+                chkTextToSql, chkExplain, chkFix, chkOptimize, chkIndex, chkInline, chkAutoFix,
                 chkConsent, btnTest, testResult, keyNotice, txtName, nameError, chkAgentEnabled, agentListView, featureRows);
         }
     }
@@ -374,12 +375,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly TextBox _endpoint;
         private readonly ComboBox _privacy;
         private readonly CheckBox _cloudConsent;
-        private readonly Slider _maxTokens;
-        private readonly TextBlock _maxTokensLabel;
+        private readonly TextBox _maxTokens;
         private readonly Slider _temperature;
         private readonly TextBlock _temperatureLabel;
-        private readonly Slider _timeout;
-        private readonly TextBlock _timeoutLabel;
+        private readonly TextBox _timeout;
         private readonly Slider _retries;
         private readonly TextBlock _retriesLabel;
         private readonly CheckBox _textToSql;
@@ -387,7 +386,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _fix;
         private readonly CheckBox _optimize;
         private readonly CheckBox _indexSuggestions;
-        private readonly CheckBox _chatPanel;
         private readonly CheckBox _inlineCompletion;
         private readonly CheckBox _autoFixOnError;
         private readonly Button _testButton;
@@ -766,10 +764,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public AiAssistanceControls(
             ComboBox provider, TextBox model, TextBox apiKey, TextBox endpoint, ComboBox privacy,
-            Slider sldMax, TextBlock lblMax, Slider sldTemp, TextBlock lblTemp,
-            Slider sldTimeout, TextBlock lblTimeout, Slider sldRetries, TextBlock lblRetries,
+            TextBox maxTokens, Slider sldTemp, TextBlock lblTemp,
+            TextBox timeout, Slider sldRetries, TextBlock lblRetries,
             CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
-            CheckBox idx, CheckBox chat, CheckBox inline, CheckBox autoFix,
+            CheckBox idx, CheckBox inline, CheckBox autoFix,
             CheckBox cloudConsent, Button testButton, TextBlock testResult, Border keyNotice,
             TextBox name, TextBlock nameError, CheckBox agentEnabled, AiAgentListView listView, FeatureAssignmentRows featureRows)
         {
@@ -779,12 +777,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _endpoint = endpoint;
             _privacy = privacy;
             _cloudConsent = cloudConsent;
-            _maxTokens = sldMax;
-            _maxTokensLabel = lblMax;
+            _maxTokens = maxTokens;
             _temperature = sldTemp;
             _temperatureLabel = lblTemp;
-            _timeout = sldTimeout;
-            _timeoutLabel = lblTimeout;
+            _timeout = timeout;
             _retries = sldRetries;
             _retriesLabel = lblRetries;
             _textToSql = textToSql;
@@ -792,7 +788,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _fix = fix;
             _optimize = optimize;
             _indexSuggestions = idx;
-            _chatPanel = chat;
             _inlineCompletion = inline;
             _autoFixOnError = autoFix;
             _testButton = testButton;
@@ -1198,7 +1193,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _fix.IsChecked = ai.Fix;
             _optimize.IsChecked = ai.Optimize;
             _indexSuggestions.IsChecked = ai.IndexSuggestions;
-            _chatPanel.IsChecked = ai.ChatPanel;
             _inlineCompletion.IsChecked = ai.InlineCompletion;
             _autoFixOnError.IsChecked = ai.AutoFixOnError;
         }
@@ -1233,12 +1227,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 agent.KeyDecryptFailed = !keyDecrypted;
                 _keyNotice.Visibility = agent.KeyDecryptFailed ? Visibility.Visible : Visibility.Collapsed;
                 _endpoint.Text = agent.Endpoint ?? string.Empty;
-                _maxTokens.Value = agent.MaxTokens;
-                _maxTokensLabel.Text = agent.MaxTokens.ToString(CultureInfo.InvariantCulture);
+                RowFactory.SetNumber(_maxTokens, agent.MaxTokens);
                 _temperature.Value = (int)(agent.Temperature * 10);
                 _temperatureLabel.Text = ((int)(agent.Temperature * 10)).ToString(CultureInfo.InvariantCulture);
-                _timeout.Value = agent.Timeout;
-                _timeoutLabel.Text = agent.Timeout.ToString(CultureInfo.InvariantCulture);
+                RowFactory.SetNumber(_timeout, agent.Timeout);
                 _retries.Value = agent.Retries;
                 _retriesLabel.Text = agent.Retries.ToString(CultureInfo.InvariantCulture);
             }
@@ -1259,12 +1251,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 _apiKey.Text = string.Empty;
                 _keyNotice.Visibility = Visibility.Collapsed;
                 _endpoint.Text = string.Empty;
-                _maxTokens.Value = 4096;
-                _maxTokensLabel.Text = 4096.ToString(CultureInfo.InvariantCulture);
+                RowFactory.SetNumber(_maxTokens, 4096);
                 _temperature.Value = 2;
                 _temperatureLabel.Text = 2.ToString(CultureInfo.InvariantCulture);
-                _timeout.Value = 30;
-                _timeoutLabel.Text = 30.ToString(CultureInfo.InvariantCulture);
+                RowFactory.SetNumber(_timeout, 30);
                 _retries.Value = 2;
                 _retriesLabel.Text = 2.ToString(CultureInfo.InvariantCulture);
             }
@@ -1304,9 +1294,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // else (review finding 2): the field is empty because decryption failed — never let a
             // Save the user never touched the key in overwrite a non-empty stored key with "".
             agent.Endpoint = _endpoint.Text ?? string.Empty;
-            agent.MaxTokens = (int)_maxTokens.Value;
+            agent.MaxTokens = RowFactory.GetNumber(_maxTokens);
             agent.Temperature = (int)_temperature.Value / 10.0;
-            agent.Timeout = (int)_timeout.Value;
+            agent.Timeout = RowFactory.GetNumber(_timeout);
             agent.Retries = (int)_retries.Value;
         }
 
@@ -1331,9 +1321,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 && string.Equals(_model.Text ?? string.Empty, agent.Model ?? string.Empty, StringComparison.Ordinal)
                 && string.Equals(_apiKey.Text ?? string.Empty, keyDisplay, StringComparison.Ordinal)
                 && string.Equals(_endpoint.Text ?? string.Empty, agent.Endpoint ?? string.Empty, StringComparison.Ordinal)
-                && (int)_maxTokens.Value == agent.MaxTokens
+                && RowFactory.GetNumber(_maxTokens) == agent.MaxTokens
                 && (int)_temperature.Value == (int)(agent.Temperature * 10)
-                && (int)_timeout.Value == agent.Timeout
+                && RowFactory.GetNumber(_timeout) == agent.Timeout
                 && (int)_retries.Value == agent.Retries;
         }
 
@@ -1459,7 +1449,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.Ai.Fix = _fix.IsChecked == true;
             settings.Ai.Optimize = _optimize.IsChecked == true;
             settings.Ai.IndexSuggestions = _indexSuggestions.IsChecked == true;
-            settings.Ai.ChatPanel = _chatPanel.IsChecked == true;
             settings.Ai.InlineCompletion = _inlineCompletion.IsChecked == true;
             settings.Ai.AutoFixOnError = _autoFixOnError.IsChecked == true;
         }
@@ -1515,9 +1504,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var request = AiProviderTestRunner.BuildRequest(
                 _provider.SelectedItem as string, _model.Text, _apiKey.Text, _endpoint.Text);
 
-            // The wait budget follows the dialog's CURRENT timeout slider, not the saved config.
+            // The wait budget follows the dialog's CURRENT timeout, not the saved config.
             var waitSettings = new AppSettings();
-            waitSettings.Ai.Timeout = (int)_timeout.Value;
+            waitSettings.Ai.Timeout = RowFactory.GetNumber(_timeout);
 
             _testButton.IsEnabled = false;
             _testButton.Content = "Testing…";

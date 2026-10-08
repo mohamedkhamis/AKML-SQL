@@ -59,6 +59,20 @@ public class ProfileMetadata
     public bool IsSqlPromptStyle { get; set; }
 
     /// <summary>
+    /// Spec 040 (STY-10) — which folder the style was listed from: <c>"builtIn"</c>,
+    /// <c>"user"</c> or <c>"team"</c>. Derived by <see cref="ProfileManager.List()"/>, never stored.
+    /// </summary>
+    [JsonIgnore]
+    public string? Source { get; set; }
+
+    /// <summary>
+    /// Spec 040 (STY-10) — a team style in a folder (or a file) that can't be written to. Derived
+    /// by <see cref="ProfileManager.List()"/>, never stored.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsReadOnly { get; set; }
+
+    /// <summary>
     /// When true, the formatter skips semantic validation after formatting.
     /// Use in tests or internal pipelines where validation is handled externally.
     /// </summary>

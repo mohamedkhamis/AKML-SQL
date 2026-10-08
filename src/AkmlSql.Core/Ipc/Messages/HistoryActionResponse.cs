@@ -43,6 +43,32 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Number of entries removed (returned by RemoveOlderThan / delete actions).</summary>
         [Key(7)]
         public int DeletedCount { get; set; }
+
+        /// <summary>Spec 040 (HIS-04): the favourite state after ToggleFavorite.</summary>
+        [Key(8)]
+        public bool? IsFavorite { get; set; }
+
+        /// <summary>Spec 040 (HIS-08): distinct server names (GetFilterValues).</summary>
+        [Key(9)]
+        public string[]? Servers { get; set; }
+
+        /// <summary>Spec 040 (HIS-08): distinct database names (GetFilterValues).</summary>
+        [Key(10)]
+        public string[]? Databases { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-02/HIS-14): from ReconcileOpen — the grouped rows that were open when their
+        /// shell exited or crashed, newest first. The restore-on-start service reads these.
+        /// </summary>
+        [Key(11)]
+        public long[]? RestorableEntryIds { get; set; }
+
+        /// <summary>
+        /// Spec 040 (HIS-14): <see cref="HistoryActions.GetEntries"/> — the requested entries with
+        /// their full text, query name and session key, in the order asked.
+        /// </summary>
+        [Key(12)]
+        public HistoryEntryDto[]? Entries { get; set; }
     }
 
     /// <summary>
@@ -59,5 +85,13 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(2)]
         public string SavedAt { get; set; } = string.Empty;
+
+        /// <summary>Spec 040 (HIS-12): the server the version ran on (a snapshot: its query's server). Null from older engines.</summary>
+        [Key(3)]
+        public string? Server { get; set; }
+
+        /// <summary>Spec 040 (HIS-12): the database the version ran in. Null from older engines.</summary>
+        [Key(4)]
+        public string? Database { get; set; }
     }
 }

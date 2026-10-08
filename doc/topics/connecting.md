@@ -4,7 +4,7 @@ AKML SQL works with the connection your query window already uses. Connect in SS
 
 ## Connect a query window
 
-1. Open a new query window in SSMS or VS.
+1. Open a new query window in SSMS.
 2. Use the host's normal connection dialog to pick a server and database.
 3. Once connected, AKML SQL loads the schema in the background. A small progress indicator shows while objects are loading.
 
@@ -43,6 +43,6 @@ For IntelliSense and schema-aware features to work fully, the connecting login n
 
 ## Refresh the schema after changes
 
-AKML SQL detects `CREATE`, `ALTER`, and `DROP` statements you run and refreshes its schema view automatically. To force a refresh, use **Tools** -> **AKML SQL** -> **Refresh Schema Cache**.
+AKML SQL detects `CREATE`, `ALTER`, and `DROP` statements you run and refreshes its schema view automatically. To force a refresh, use **AKML SQL** -> **Help** -> **Refresh Schema Cache**.
 
 Next: [IntelliSense](intellisense.md) and [AI Assistance](ai-assistance.md).

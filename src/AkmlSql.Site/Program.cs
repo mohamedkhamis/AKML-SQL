@@ -46,6 +46,13 @@ builder.Services.AddResponseCompression(options =>
 // T012 (US1): download page feed, loaded once from wwwroot/releases.json.
 // Missing/invalid manifest resolves to the friendly-fallback state per contracts/releases-json.md.
 builder.Services.AddSingleton(sp => ReleasesManifest.Load(sp.GetRequiredService<IWebHostEnvironment>()));
+builder.Services.AddHttpClient("github-releases", client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddSingleton(sp => new LatestGitHubRelease(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("github-releases"),
+    sp.GetRequiredService<ReleasesManifest>(), sp.GetRequiredService<ILogger<LatestGitHubRelease>>(),
+    Path.Combine(Path.GetDirectoryName(AnalyticsStore.ResolveDatabasePath(
+        sp.GetRequiredService<IOptions<AnalyticsOptions>>().Value.DatabasePath))!, "latest-github-release.json")));
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LatestGitHubRelease>());
 
 // DL-001: the download page checks the advertised installer is actually on disk before offering
 // it. Not a singleton snapshot -- files are dropped into the folder between deploys, so presence
@@ -60,7 +67,7 @@ builder.Services.AddSingleton(sp => DocsContentService.Build(
     sp.GetRequiredService<IWebHostEnvironment>(),
     sp.GetRequiredService<IOptions<DocsOptions>>().Value));
 
-// T031 (SEO): canonical base URL for sitemap.xml (config section "Site", default https://akmlsql.com).
+// T031 (SEO): canonical base URL for sitemap.xml (config section "Site", default https://akml.khamis.work).
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOptions.SectionName));
 
 // Site metrics (analytics + admin portal): SQLite store as a singleton, fire-and-forget channel
@@ -115,6 +122,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
         }
     }
 });
+builder.Services.AddSingleton<CollectionHealth>();
 builder.Services.AddSingleton<ChannelAnalyticsSink>();
 builder.Services.AddSingleton<IAnalyticsSink>(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ChannelAnalyticsSink>());
@@ -139,7 +147,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<FeedbackNotifier>(
 
 // Spec 038 T026 (US1): retention prune + historical referrer repair, run on a background task after
 // start instead of inline before the first request can be served.
-builder.Services.AddHostedService<MaintenanceHostedService>();
+builder.Services.AddSingleton<MaintenanceHostedService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MaintenanceHostedService>());
 
 // Admin cookie: HTTPS-only, HttpOnly, SameSite=Lax, sliding 8-hour session. Visitors get no cookie.
 builder.Services.AddAuthentication(AdminAuth.Scheme)
@@ -223,11 +232,20 @@ app.Use(async (context, next) =>
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler(error => error.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        await context.Response.WriteAsync("An unexpected error occurred. Please try again later.");
+    }));
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Ordinary GET status pages can render through Razor. POST/API failures keep their status
+// and never re-enter a form endpoint with the original request's invalid antiforgery feature.
+app.UseWhen(context => HttpMethods.IsGet(context.Request.Method)
+    && !context.Request.Path.StartsWithSegments("/api"), branch =>
+    branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
 
 // ADM-006: resolve the real client IP before anything reads it (visit tracking, the login

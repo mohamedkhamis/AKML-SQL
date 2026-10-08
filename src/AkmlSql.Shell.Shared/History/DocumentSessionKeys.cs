@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 using System.Collections.Generic;
 using Serilog;
@@ -35,6 +36,65 @@ namespace AkmlSql.Shell.Shared.History
         {
             if (string.IsNullOrEmpty(documentFullName)) return;
             lock (Gate) { Keys.Remove(documentFullName); }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-02): the document's session key if it already has one. Unlike
+        /// <see cref="ForDocument"/> this never creates a key — a document that has never run has no
+        /// history rows to mark open or closed.
+        /// </summary>
+        public static bool TryGet(string fullName, out string key)
+        {
+            key = string.Empty;
+            if (string.IsNullOrEmpty(fullName)) return false;
+            lock (Gate)
+            {
+                if (!Keys.TryGetValue(fullName, out var found)) return false;
+                key = found;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-02): a document opened from SQL History continues that query's session, so
+        /// running it again adds to the same history row. Refused (returns false, adopts nothing)
+        /// when another open document already holds the key — e.g. an older version opened beside
+        /// the query that is still open. Two tabs sharing one key would make closing either mark the
+        /// query closed while the other stays open. The new document then gets its own key when it
+        /// first runs.
+        /// </summary>
+        public static bool Adopt(string fullName, string key)
+        {
+            if (string.IsNullOrEmpty(fullName) || string.IsNullOrEmpty(key)) return false;
+            lock (Gate)
+            {
+                foreach (var pair in Keys)
+                {
+                    if (string.Equals(pair.Value, key, StringComparison.Ordinal)
+                        && !string.Equals(pair.Key, fullName, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+                Keys[fullName] = key;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (HIS-12): the full name of the open document holding <paramref name="sessionKey"/>,
+        /// or null. History's Open query switches to that tab instead of opening a copy.
+        /// </summary>
+        public static string? TryFindDocument(string sessionKey)
+        {
+            if (string.IsNullOrEmpty(sessionKey)) return null;
+            lock (Gate)
+            {
+                foreach (var pair in Keys)
+                {
+                    if (string.Equals(pair.Value, sessionKey, StringComparison.Ordinal))
+                        return pair.Key;
+                }
+            }
+            return null;
         }
 
         /// <summary>

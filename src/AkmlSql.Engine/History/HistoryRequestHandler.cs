@@ -42,7 +42,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 recordRequest.Username,
                 recordRequest.DurationMs,
                 recordRequest.RowCount,
-                recordRequest.Status,
+                // Spec 040 (HIS-14): a draft is stored as "not executed" and never counted as a run.
+                recordRequest.IsDraft ? (int)Core.Models.History.ExecutionStatus.NotExecuted : recordRequest.Status,
                 recordRequest.ErrorMessage,
                 recordRequest.Source,
                 recordRequest.TabTitle,
@@ -112,7 +113,9 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 Limit = searchRequest.Limit > 0 ? searchRequest.Limit : 100,
                 IsOpen = searchRequest.IsOpen,
                 NameFilter = searchRequest.NameFilter,
-                CamelCaseTokens = searchRequest.CamelCaseTokens
+                CamelCaseTokens = searchRequest.CamelCaseTokens,
+                PathFilter = searchRequest.PathFilter,
+                SqlOnly = searchRequest.SqlOnly
             };
 
             // Parse ISO 8601 date strings to DateTime
@@ -130,7 +133,7 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 filter.DateTo = dateTo;
             }
 
-            var (entries, totalCount) = await _database.SearchAsync(filter);
+            var (entries, totalCount, hasMore) = await _database.SearchPageAsync(filter);
 
             Log.Debug("History search: {Count} results returned (total={Total}), SearchText={Search}, Server={Server}",
                 entries.Count, totalCount, searchRequest.SearchText, searchRequest.Server);
@@ -139,7 +142,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
             {
                 Success = true,
                 Entries = entries.ToArray(),
-                TotalCount = totalCount
+                TotalCount = totalCount,
+                HasMore = hasMore,
             });
         }
         catch (Exception ex)
@@ -195,6 +199,17 @@ public class HistoryRequestHandler(HistoryDatabase database)
                     });
                 }
 
+                case HistoryActions.GetEntries:
+                {
+                    // Spec 040 (HIS-14): restore on start reopens these.
+                    var entries = await _database.GetEntriesAsync(actionRequest.EntryIds ?? Array.Empty<long>());
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        Entries = entries.ToArray()
+                    });
+                }
+
                 case HistoryActions.GetDiff:
                 {
                     if (actionRequest.EntryIds.Length < 2)
@@ -228,10 +243,14 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         });
                     }
 
-                    await _database.ToggleFavoriteAsync(actionRequest.EntryIds[0]);
+                    // Spec 040 (HIS-04): GroupScope stars the whole grouped query.
+                    var isFavorite = actionRequest.GroupScope == true
+                        ? await _database.ToggleFavoriteGroupAsync(actionRequest.EntryIds[0])
+                        : await _database.ToggleFavoriteAsync(actionRequest.EntryIds[0]);
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
-                        Success = true
+                        Success = true,
+                        IsFavorite = isFavorite
                     });
                 }
 
@@ -246,10 +265,15 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         });
                     }
 
-                    await _database.DeleteEntriesAsync(actionRequest.EntryIds);
+                    // Spec 040 (HIS-04): GroupScope deletes the whole grouped query of each id
+                    // (several when the user selected several rows).
+                    var deletedCount = actionRequest.GroupScope == true
+                        ? await _database.DeleteGroupsAsync(actionRequest.EntryIds)
+                        : await _database.DeleteEntriesAsync(actionRequest.EntryIds);
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
-                        Success = true
+                        Success = true,
+                        DeletedCount = deletedCount
                     });
                 }
 
@@ -366,21 +390,34 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         });
                     }
 
-                    var versions = await _database.GetVersionsAsync(actionRequest.EntryIds[0]);
+                    // Spec 040 (HIS-04): GroupScope lists the grouped query's runs and snapshots,
+                    // each with the server and database it ran on (HIS-12).
+                    var versions = actionRequest.GroupScope == true
+                        ? (await _database.GetVersionsForGroupAsync(actionRequest.EntryIds[0]))
+                            .Select(v => new HistoryVersionDto { Id = v.Id, SqlText = v.SqlText, SavedAt = v.SavedAt, Server = v.Server, Database = v.Database })
+                        : (await _database.GetVersionsAsync(actionRequest.EntryIds[0]))
+                            .Select(v => new HistoryVersionDto { Id = v.Id, SqlText = v.SqlText, SavedAt = v.SavedAt });
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
                         Success = true,
-                        Versions = versions.Select(v => new HistoryVersionDto
-                        {
-                            Id = v.Id,
-                            SqlText = v.SqlText,
-                            SavedAt = v.SavedAt
-                        }).ToArray()
+                        Versions = versions.ToArray()
                     });
                 }
 
                 case HistoryActions.SetOpenStatus:
                 {
+                    // Spec 040 (HIS-02): by session key and owning shell — every run of the query.
+                    if (!string.IsNullOrEmpty(actionRequest.SessionKey) && actionRequest.OwnerPid.HasValue
+                        && actionRequest.IsOpen.HasValue)
+                    {
+                        await _database.SetOpenStatusBySessionAsync(
+                            actionRequest.SessionKey!, actionRequest.IsOpen.Value, actionRequest.OwnerPid.Value);
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = true
+                        });
+                    }
+
                     if (actionRequest.EntryIds.Length == 0 || !actionRequest.IsOpen.HasValue)
                     {
                         return CreateActionResponse(request.RequestId, new HistoryActionResponse
@@ -408,10 +445,44 @@ public class HistoryRequestHandler(HistoryDatabase database)
                         });
                     }
 
-                    var saved = await _database.SaveVersionBySourceAsync(actionRequest.NewName, actionRequest.SqlText);
+                    var saved = await _database.SaveVersionBySourceAsync(
+                        actionRequest.NewName, actionRequest.SqlText, actionRequest.SessionKey);
                     return CreateActionResponse(request.RequestId, new HistoryActionResponse
                     {
                         Success = saved
+                    });
+                }
+
+                case HistoryActions.GetFilterValues:
+                {
+                    // Spec 040 (HIS-07): the lists behind the filter menu.
+                    var (servers, databases) = await _database.GetFilterValuesAsync();
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        Servers = servers.ToArray(),
+                        Databases = databases.ToArray(),
+                    });
+                }
+
+                case HistoryActions.ReconcileOpen:
+                {
+                    // Spec 040 (HIS-02): sent once by a shell after the engine connects.
+                    if (!actionRequest.OwnerPid.HasValue)
+                    {
+                        return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                        {
+                            Success = false,
+                            Error = "OwnerPid required for ReconcileOpen"
+                        });
+                    }
+
+                    var restorable = await _database.ReconcileOpenAsync(
+                        actionRequest.OwnerPid.Value, actionRequest.OpenSessionKeys ?? Array.Empty<string>());
+                    return CreateActionResponse(request.RequestId, new HistoryActionResponse
+                    {
+                        Success = true,
+                        RestorableEntryIds = restorable
                     });
                 }
 

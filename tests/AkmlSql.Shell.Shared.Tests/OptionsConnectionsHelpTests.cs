@@ -37,11 +37,13 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.True(controls.Contains("ConnectionsMemory"),
                 "Expected a consolidated 'ConnectionsMemory' page in _pageControlsByKey.");
 
-            // The relocated rows must be attributed to the new page in the search index
-            // (discriminates against a vacuous value round-trip with no controls).
+            // The relocated SQL-auth row must be attributed to the new page in the search index
+            // (discriminates against a vacuous value round-trip with no controls). Spec 040 (OPT-01)
+            // hid the schema-cache memory rows — they changed nothing — so they are not shown,
+            // but their saved values must survive OK unchanged.
             Assert.Equal("ConnectionsMemory", PageKeyForSearchLabel(dialog, "Use SQL Server-auth credentials for IntelliSense"));
-            Assert.Equal("ConnectionsMemory", PageKeyForSearchLabel(dialog, "Max cached databases"));
-            Assert.Equal("ConnectionsMemory", PageKeyForSearchLabel(dialog, "Persist cache to disk"));
+            Assert.Null(PageKeyForSearchLabel(dialog, "Max cached databases"));
+            Assert.Null(PageKeyForSearchLabel(dialog, "Persist cache to disk"));
 
             var saved = dialog.GetSettings();
             Assert.False(saved.IntelliSense.EnableSqlAuthCredentials);

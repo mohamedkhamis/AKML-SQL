@@ -69,7 +69,7 @@
                 <input type="number" min="1" max="65535" @bind="_form.Port" data-testid="engine-add-port" />
             </label>
             <p class="akml-connections-hint">
-                Use the <b>Bridge port</b> from <code>C:\ProgramData\AKML SQL Web\INSTALL-SUMMARY.txt</code> on the engine
+                Use the <b>Bridge port</b> from <code>%ProgramData%\AKML SQL Web\INSTALL-SUMMARY.txt</code> on the engine
                 computer. The default is @EngineEndpoint.DefaultPort, but the installer can choose another.
             </p>
             @if (NeedsPin)
@@ -81,7 +81,7 @@
                 </label>
                 <p class="akml-connections-hint">
                     An engine on another computer needs its PIN, from
-                    <code>C:\ProgramData\AKML SQL Web\pairing-pin.txt</code> on that computer.
+                    <code>%ProgramData%\AKML SQL Web\pairing-pin.txt</code> on that computer.
                 </p>
             }
             <div class="akml-connections-dialog-buttons">

@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Serilog;
 
 namespace AkmlSql.Shell.Shared.Productivity.Grid
@@ -66,7 +68,8 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
 
         private void BuildLayout(string columnName, ColumnStats stats)
         {
-            Text = $"Column Statistics: {columnName}";
+            Text = WindowTitles.For($"Column statistics: {columnName}");
+            WindowIcon.Apply(this);
             FormBorderStyle = FormBorderStyle.FixedToolWindow;
             ShowInTaskbar = false;
             Size = new Size(320, 280);

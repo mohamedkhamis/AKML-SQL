@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Ai
 {
@@ -41,7 +43,8 @@ namespace AkmlSql.Shell.Shared.Ai
             GeneratedSql = generatedSql;
 
             // Form setup
-            Text = "AI: Generated SQL Preview";
+            Text = WindowTitles.For("Generated SQL preview");
+            WindowIcon.Apply(this);
             Width = 700;
             Height = 520;
             MinimumSize = new Size(500, 400);

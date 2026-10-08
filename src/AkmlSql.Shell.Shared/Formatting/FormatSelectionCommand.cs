@@ -21,6 +21,7 @@ namespace AkmlSql.Shell.Shared.Formatting
         private static void Execute(object sender, EventArgs e)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            if (!FormatActionHelper.EnsureFormatterEnabled()) return;
 
             try
             {
@@ -55,7 +56,10 @@ namespace AkmlSql.Shell.Shared.Formatting
 
                 var request = new FormatSelectionRequest
                 {
-                    SessionId = Guid.NewGuid().ToString("N"),
+                    // Spec 040 (T190): the editor's real session (schema-aware Format SQL actions).
+                    SessionId = FormatDocumentCommand.EditorSessionId(),
+                    // Spec 040 (STY-11): "When you run Format SQL, AKML SQL will:".
+                    Actions = FormatDocumentCommand.ResolveFormatSqlActions(),
                     Text = fullText,
                     SelectionStart = startOffset,
                     SelectionEnd = endOffset,
@@ -84,6 +88,12 @@ namespace AkmlSql.Shell.Shared.Formatting
                             await FormatFailureNotifier.NotifyIfPreservedAsync(
                                 response.Success, response.ValidationPassed, diagnostics: null);
                         }
+
+                        // Spec 040 (T109): the same feedback as Format Document, including the
+                        // style-fallback warning (FormatSelectionResponse key 7).
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        FormatFeedback.Report(request.ProfileName, response.Success && response.ValidationPassed,
+                            response.ProfileFallbackWarning);
                     }
                     catch (Exception ex)
                     {

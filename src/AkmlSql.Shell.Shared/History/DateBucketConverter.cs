@@ -36,4 +36,19 @@ namespace AkmlSql.Shell.Shared.History
             throw new NotSupportedException();
         }
     }
+
+    /// <summary>
+    /// Spec 040 (HIS-05) — groups the SQL History list like SQL Prompt: Today, Yesterday, This week,
+    /// Last week, This month, Older (<see cref="AkmlSql.Core.Models.History.HistoryDateGroups"/>).
+    /// </summary>
+    internal sealed class HistoryDateGroupConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+            HistoryRowDisplay.DateGroupFor(value as string, DateTime.Now);
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
 }

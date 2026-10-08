@@ -14,7 +14,6 @@ using AkmlSql.Engine.Refactoring;
 using AkmlSql.Engine.Safety;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Server;
-using AkmlSql.Engine.Sessions;
 using AkmlSql.Engine.Snippets;
 using AkmlSql.Formatting.Profiles;
 using Serilog;
@@ -52,10 +51,12 @@ internal static class EngineHandlerRegistry
         var wildcardHandler = new WildcardExpansionHandler(parser);
         var signatureProvider = new SignatureProvider();
         var quickInfoProvider = new QuickInfoProvider();
-        var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault());
+        // Spec 040 (STY-10): the team style folder, read per use so a changed setting applies
+        // after AnalysisSettingsChanged invalidates the cached settings — no restart.
+        var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault(
+            () => ctx.EnsureSettings().Formatter.TeamStyleFolder));
 
-        var appDataFolder = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL");
+        var appDataFolder = AkmlSql.Core.Constants.AppDataPath;
         var personalSnippets = Path.Combine(appDataFolder, "snippets", "personal");
         var builtInSnippets = Path.Combine(AppContext.BaseDirectory, "snippets");
         var teamSnippets = ctx.EnsureSettings().Snippets.TeamFolder;
@@ -84,7 +85,6 @@ internal static class EngineHandlerRegistry
         // fresh per call via ctx.EnsureSettings().Ai so the AnalysisSettingsChanged invalidation
         // propagates without an explicit AI refresh hook (FR-013). AiRequestHandler is deleted.
         var aiServices = AiPipelineServices.Build(schemaCache, parser, () => ctx.EnsureSettings().Ai);
-        var sessionRequestHandler = new SessionRequestHandler();
         var gridExportService = new GridExportService();
 
         // History setup (per advisor guidance: build before registering handlers; closures
@@ -306,13 +306,9 @@ internal static class EngineHandlerRegistry
             return Task.FromResult<RpcMessage?>(null);
         });
 
-        // === Session-recovery, History, Productivity, Navigation, CRUD/ScriptAs, GridExport (15 raw) ===
-        router.RegisterRaw(MessageTypes.SessionSave,
-            (msg, ct) => sessionRequestHandler.HandleAsync(msg, MessageTypes.SessionSave));
-        router.RegisterRaw(MessageTypes.SessionRestore,
-            (msg, ct) => sessionRequestHandler.HandleAsync(msg, MessageTypes.SessionRestore));
-        router.RegisterRaw(MessageTypes.SessionDelete,
-            (msg, ct) => sessionRequestHandler.HandleAsync(msg, MessageTypes.SessionDelete));
+        // === History, Productivity, Navigation, CRUD/ScriptAs, GridExport (12 raw) ===
+        // Spec 040 (T147): the session-recovery handlers (50–52) are gone — no shell ever sent them;
+        // restore on start now reopens queries from SQL History.
 
         router.RegisterRaw(MessageTypes.SafetyCheck, (msg, ct) => safetyHandler.HandleAsync(msg));
 

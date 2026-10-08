@@ -7,7 +7,7 @@ using Xunit;
 namespace AkmlSql.Shell.Shared.Tests
 {
     /// <summary>
-    /// Drives the consolidated "Inserted Code › Special characters" Options pane
+    /// Drives the consolidated "Inserted code › Special characters" Options pane
     /// (report §4 rec #1). SQL Prompt keeps bracket-identifiers, add-parentheses and
     /// auto-close-characters together on ONE pane; AKML had them scattered across the
     /// IntelliSense (Behavior) and Qualification pages. These tests pin that (a) a

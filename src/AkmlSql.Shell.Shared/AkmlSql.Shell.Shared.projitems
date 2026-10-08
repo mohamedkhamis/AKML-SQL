@@ -14,8 +14,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\WildcardExpansionPopup.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\AutoClosePairs.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionController.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\FocusedKeyDelivery.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\KeyboardHook.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionItemModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionTriggerPolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupAdornment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\Completion\CompletionPopupProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\CompletionRpcHelper.cs" />
@@ -28,9 +30,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)ExtensionAssemblyResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpListener.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Help\F1HelpRegistrations.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Help\HelpBinding.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatRequestDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesChrome.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesEditorWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\ActiveStyleMenuCommands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatFeedback.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\RegisteredCommands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands\AkmlMenuTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ImportSummaryDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\SsmsConnectionContextResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PackageGuids.cs" />
@@ -42,9 +51,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\ViewLogsCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\AboutDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\EditEnvironmentsDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\PageTheme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CombinedPages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\PageContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\RowFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SnippetsPage.cs" />
@@ -56,7 +67,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SafetyPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\ExecutionPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\EditorPage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SchemaCachePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\HistoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAssistancePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAgentListView.cs" />
@@ -72,7 +82,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\SpecialCharactersPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\InsertStatementsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\JoinCompletionPage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\LabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StatusBar\StatusBarManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateAvailableDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Update\UpdateCheckFlow.cs" />
@@ -90,6 +99,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ipc\RpcClientAccessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\ProfileJsonMerger.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesSchemaModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formatting\FormatStylesExamples.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formatting\StyleNameDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Editor\TextViewCreationListener.cs" />
     <!-- CompletionCommandHandler.cs and CompletionSource.cs DELETED — replaced by Editor/Completion/ -->
@@ -99,6 +109,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RefreshCacheCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeVariant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeTokens.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\TitleBarTheme.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\WindowBounds.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Typography.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\Spacing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemePalette.cs" />
@@ -110,7 +122,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemedButton.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\ThemeAwareUserControl.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\SqlPreview\SqlPreviewView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\DpiHelper.cs" />
+    <!-- Spec 040 T182 — the AKML icon for windows and forms (embedded Resources\akml.ico, below) -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ui\WindowIcon.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionItemViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\CompletionPopup.xaml.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IntelliSense\NativeIntelliSenseManager.cs" />
@@ -177,7 +192,18 @@
     <Compile Include="$(MSBuildThisFileDirectory)Refactoring\FindInvalidObjectsDialog.cs" />
     <!-- Phase 7 — SQL History: execution capture, search, and tool window -->
     <Compile Include="$(MSBuildThisFileDirectory)History\ExecutionCapture.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\ShutdownState.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\PendingCloses.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\DocumentSessionKeys.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\OpenStateReporter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\DraftCapturePolicy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryAdvancedSearch.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryQueryOpener.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Editor\ClientAliasRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRestoreService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\RestoreQueriesDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\VersionLoadGuard.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRestoreState.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryTimeFormat.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)History\HistoryRowDisplay.cs" />
@@ -190,11 +216,13 @@
     <!-- Phase 7 — Tab management: environment detection, coloring, tooltips -->
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\EnvironmentDetector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabColoringManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\HexBrush.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabTooltipProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabManagementInitializer.cs" />
     <!-- Phase 7 US6 — Restore Recently Closed Tabs -->
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\ClosedTabStack.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tabs\TabCloseMonitor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tabs\RepeatedCloseFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\RestoreClosedTabCommand.cs" />
     <!-- Phase 7 US7 — Execution Safety Warnings -->
     <Compile Include="$(MSBuildThisFileDirectory)Safety\SafetyWarningDialog.cs" />
@@ -245,6 +273,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\FuzzyMatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\CommandPaletteWindow.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Productivity\CommandPalette\OptionPaletteEntry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands\CommandPaletteCommand.cs" />
     <!-- Phase 8 US6 — Highlight Occurrences & Bracket Matching -->
     <Compile Include="$(MSBuildThisFileDirectory)Editor\OccurrenceHighlightTagger.cs" />
@@ -323,6 +352,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetManagerCommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Snippets\SnippetGate.cs" />
     <!-- Spec 030 T044/T045 — Create Snippet from Selection + Surround With -->
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\CreateFromSelectionCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Snippets\SurroundWithCommand.cs" />
@@ -330,5 +360,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkGlyphFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Navigation\BookmarkCommands.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Spec 040 T182 — window/form icon (a copy of src\AkmlSql.Installer\assets\icon.ico), read by
+         Ui\WindowIcon.cs. LogicalName fixes the manifest name in every importing project. -->
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)Resources\akml.ico">
+      <LogicalName>AkmlSql.Shell.Shared.Resources.akml.ico</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

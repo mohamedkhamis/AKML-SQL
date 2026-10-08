@@ -1,6 +1,6 @@
 # AKML SQL — Static Code Analysis Rules
 
-The analysis engine ships with 120+ rules across 8 categories. Rules run on every keystroke (debounced) and on save.
+The analysis engine ships with 132 rules across 8 categories. Rules run as you type (debounced).
 
 ## Rule Identifiers
 
@@ -132,29 +132,29 @@ Rules that enforce consistent formatting and naming conventions.
 
 | Rule | Severity | Description |
 |------|----------|-------------|
-| ST001 | Information | Inconsistent keyword casing — enforce `UPPER`, `lower`, or `PascalCase` |
-| ST002 | Information | Old-style implicit alias (`col alias` without `AS`) |
-| ST003 | Information | Old-style comma join syntax (`FROM a, b WHERE a.id = b.id`) instead of explicit `JOIN` |
+| ST001 | Hint | Inconsistent keyword casing — enforce `UPPER`, `lower`, or `PascalCase` |
+| ST002 | Warning | Old-style implicit alias (`col alias` without `AS`) |
+| ST003 | Warning | Old-style comma join syntax (`FROM a, b WHERE a.id = b.id`) instead of explicit `JOIN` |
 | ST004 | Information | Missing statement terminator (`;`) |
-| ST005 | Information | Inconsistent alias naming convention within the same query |
-| ST006 | Information | Unnecessary square-bracket quoting on a non-reserved identifier |
-| ST007 | Information | Object reference missing schema prefix (`dbo.`) |
-| ST008 | Information | Inconsistent indentation detected |
-| ST010 | Information | Line length exceeds configured maximum (default 120 characters) |
-| ST011 | Information | Multiple SQL statements on a single line |
-| ST012 | Information | Table alias defined inline without `AS` keyword |
-| ST013 | Information | Missing blank line between top-level statements |
-| ST014 | Information | Comment style inconsistency (`--` vs `/* */`) |
-| ST015 | Information | Data type keyword casing inconsistency |
-| ST016 | Information | Built-in function reference missing schema prefix (e.g. `dbo.fn_`) |
-| ST017 | Information | Column list items not aligned across clauses |
-| ST018 | Information | `TOP` used without parentheses — `TOP 10` vs `TOP (10)` |
-| ST019 | Information | `ORDER BY` using ordinal position number instead of column name |
-| ST020 | Information | `SELECT DISTINCT` where `GROUP BY` would be clearer |
-| ST021 | Information | Mixed single and double quotes for string literals |
-| ST022 | Information | Column alias uses camelCase — prefer PascalCase or consistent convention |
-| ST023 | Information | Wildcard in object name pattern |
-| ST024 | Information | Ambiguous date literal format (e.g. `'01/02/03'`) — use ISO 8601 (`'2024-01-02'`) |
+| ST005 | Hint | Inconsistent alias naming convention within the same query |
+| ST006 | Hint | Unnecessary square-bracket quoting on a non-reserved identifier |
+| ST007 | Hint | Object reference missing schema prefix (`dbo.`) |
+| ST008 | Hint | Inconsistent indentation detected |
+| ST010 | Hint | Line length exceeds configured maximum (default 120 characters) |
+| ST011 | Hint | Multiple SQL statements on a single line |
+| ST012 | Hint | Table alias defined inline without `AS` keyword |
+| ST013 | Hint | Missing blank line between top-level statements |
+| ST014 | Hint | Comment style inconsistency (`--` vs `/* */`) |
+| ST015 | Hint | Data type keyword casing inconsistency |
+| ST016 | Hint | Built-in function reference missing schema prefix (e.g. `dbo.fn_`) |
+| ST017 | Hint | Column list items not aligned across clauses |
+| ST018 | Hint | `TOP` used without parentheses — `TOP 10` vs `TOP (10)` |
+| ST019 | Warning | `ORDER BY` using ordinal position number instead of column name |
+| ST020 | Hint | `SELECT DISTINCT` where `GROUP BY` would be clearer |
+| ST021 | Hint | Mixed single and double quotes for string literals |
+| ST022 | Hint | Column alias uses camelCase — prefer PascalCase or consistent convention |
+| ST023 | Hint | Wildcard in object name pattern |
+| ST024 | Hint | Ambiguous date literal format (e.g. `'01/02/03'`) — use ISO 8601 (`'2024-01-02'`) |
 | ST025 | Hint | Excessive comment density — more comments than code lines |
 
 ---
@@ -181,13 +181,13 @@ Rules that flag SQL Server features removed or discouraged in modern versions.
 
 | Rule | Severity | Auto-Fix | Description |
 |------|----------|----------|-------------|
-| DEP001 | Warning | Replace with `VARCHAR(MAX)` / `VARBINARY(MAX)` | `text`, `ntext`, or `image` data type — removed in SQL Server 2022+ |
+| DEP001 | Warning | Replace with `VARCHAR(MAX)` / `VARBINARY(MAX)` | `text`, `ntext`, or `image` data type — deprecated, to be removed in a future SQL Server version |
 | DEP002 | Warning | — | Deprecated system stored procedure (e.g. `sp_addtype`, `sp_bindrule`) |
-| DEP003 | Warning | — | `SET FMTONLY ON` — removed in SQL Server 2012 |
+| DEP003 | Warning | — | `SET FMTONLY ON` — deprecated since SQL Server 2012, to be removed in a future version |
 | DEP004 | Warning | — | Old outer-join operators (`*=`, `=*`) — removed in SQL Server 2012 |
 | DEP005 | Warning | — | `RAISERROR` with style 0 and without `NOWAIT` — use `THROW` instead |
 | DEP006 | Warning | — | Numbered procedure suffix (`;1`) — deprecated and ignored by the engine |
-| DEP007 | Warning | — | `GROUP BY ALL` — removed in SQL Server 2012 |
+| DEP007 | Warning | — | `GROUP BY ALL` — deprecated, to be removed in a future SQL Server version |
 | DEP008 | Warning | — | Old-style locking hint without `WITH` (e.g. `(NOLOCK)` vs `WITH (NOLOCK)`) |
 
 ---

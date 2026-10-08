@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Execution
 {
@@ -19,7 +21,8 @@ namespace AkmlSql.Shell.Shared.Execution
         {
             _results = results;
 
-            Text = "Multi-Database Execution Results";
+            Text = WindowTitles.For("Multi-database results");
+            WindowIcon.Apply(this);
             Size = new Size(900, 600);
             MinimumSize = new Size(600, 400);
             StartPosition = FormStartPosition.CenterParent;

@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Shell.Shared.Ui;
 
 namespace AkmlSql.Shell.Shared.Ai
 {
@@ -36,7 +38,8 @@ namespace AkmlSql.Shell.Shared.Ai
         {
             _fixedSql = fixedSql;
 
-            Text = "AI: Fix Preview";
+            Text = WindowTitles.For("Fix preview");
+            WindowIcon.Apply(this);
             Size = new Size(750, 600);
             MinimumSize = new Size(500, 400);
             StartPosition = FormStartPosition.CenterParent;

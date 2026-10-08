@@ -7,6 +7,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Shell.Shared.Ui;
@@ -45,7 +46,7 @@ namespace AkmlSql.Shell.Shared.Snippets
         public SnippetManagerDialog(SnippetManagerViewModel viewModel)
         {
             _viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-            Title = "AKML SQL - Snippet Manager";
+            Title = WindowTitles.For("Snippet manager");
             Width = 900;
             Height = 650;
             MinWidth = 700;

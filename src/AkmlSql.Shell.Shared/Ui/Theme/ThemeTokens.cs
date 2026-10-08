@@ -64,6 +64,11 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
         public const string EditorPopupBackground  = "Akml.Brush.Editor.PopupBackground";
         public const string EditorPopupBorder      = "Akml.Brush.Editor.PopupBorder";
 
+        // --- Syntax group (SQL previews: History, Format styles). Same names as docs/theme-tokens.json. ---
+        public const string SyntaxKeyword = "Akml.Brush.Syntax.Keyword";
+        public const string SyntaxString  = "Akml.Brush.Syntax.String";
+        public const string SyntaxComment = "Akml.Brush.Syntax.Comment";
+
         // --- Chat group (AI Chat tool window message bubbles) ---
         public const string ChatUserBubble      = "Akml.Brush.Chat.UserBubble";
         public const string ChatAssistantBubble = "Akml.Brush.Chat.AssistantBubble";
@@ -155,6 +160,7 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
             StatusSuccess, StatusWarning, StatusDanger, StatusInfo,
             EditorMarginBackground, EditorSpinnerStroke,
             EditorPopupBackground, EditorPopupBorder,
+            SyntaxKeyword, SyntaxString, SyntaxComment,
             ChatUserBubble, ChatAssistantBubble, ChatSystemBubble,
 
             // Spec 020 — IconBadge group

@@ -27,7 +27,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
     /// Supports Dark and Light themes. Code-only (no XAML) — compatible with
     /// SharedProject (.projitems) across all 6 host targets.
     /// </summary>
-    internal sealed class SettingsWindow
+    internal sealed class SettingsWindow : Commands.IOptionsDialog
     {
         // ─── Theme brush set ────────────────────────────────────────────────
         // PageTheme was lifted to Pages/PageTheme.cs (Phase 2 B.1) so per-page
@@ -61,7 +61,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Safety"] = new SafetyPage(),
             ["Execution"] = new ExecutionPage(),
             ["Editor"] = new EditorPage(),
-            ["Schema Cache"] = new SchemaCachePage(),
             ["History"] = new HistoryPage(),
             ["AI Assistance"] = new AiAssistancePage(),
             ["Formatting"] = new FormattingPage(),
@@ -76,12 +75,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["SpecialCharacters"] = new SpecialCharactersPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
             ["JoinOptions"] = new JoinCompletionPage(),
-            ["Labs"] = new LabsPage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
         // Track whether user confirmed via OK
         private bool _dialogResult;
+
+        // Spec 040 (OPT-02): true while controls are being filled from settings, so the Theme
+        // drop-down's SelectionChanged (raised by Load, Reset or Import) is not mistaken for a pick.
+        private bool _loadingControls;
 
         // ─── Search index (built lazily by Add* helpers) ─────────────────────
         /// <summary>One entry per searchable setting across all pages.</summary>
@@ -118,6 +120,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
         public string? InitialAgentId { get; set; }
 
         /// <summary>
+        /// Spec 040 (OPT-07, FR-053, T163): the label of an option to scroll to, flash and focus
+        /// once the window has loaded — set by the Command Palette for options it can't toggle in
+        /// place. <c>null</c> (the default) opens the page as usual.
+        /// </summary>
+        public string? InitialFocusLabel { get; set; }
+
+        /// <summary>The row <see cref="ApplyInitialFocus"/> jumped to (test seam).</summary>
+        internal FrameworkElement? FocusedRow { get; private set; }
+
+        /// <summary>
         /// Test seam (spec 037 review): when set, the OK/Apply agent-validation refusal is
         /// reported through this action instead of a modal <see cref="MessageBox"/>, so the
         /// refusal path is exercisable without a pump-blocking dialog. Production code never
@@ -132,9 +144,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         // IntelliSense
         // IntelliSense controls migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
-
-        // Schema Cache
-        // Schema Cache controls migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // Formatting
         // Formatting controls migrated to Pages/FormattingPage.cs (Phase 2 B.14).
@@ -178,11 +187,88 @@ namespace AkmlSql.Shell.Shared.Dialogs
         public SettingsWindow(AppSettings settings)
         {
             _settings = settings;
-
-            // Pick theme based on settings (default: light, like SQL Prompt)
-            var themeName = settings.Theme?.ToLowerInvariant() ?? "light";
-            _theme = themeName == "dark" ? PageTheme.Dark : PageTheme.Light;
+            _theme = ResolvePageTheme(settings.Theme);
+            RegisterCombinedPages();
         }
+
+        /// <summary>A section page's key → the combined page that shows it.</summary>
+        private readonly Dictionary<string, string> _combinedPageOf = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The combined pages the tree shows (Pages/CombinedPages.cs), made of the section pages
+        /// registered above. A section keeps its own key: its controls, search entries and links
+        /// use it, and it resolves to the combined page.
+        /// </summary>
+        private void RegisterCombinedPages()
+        {
+            foreach (var page in new CombinedPage[]
+            {
+                new SuggestionsBehaviorPage(_pageBuilders["IntelliSense"], _pageBuilders["CompletionPolish"], _pageBuilders["JoinOptions"]),
+                new SuggestionsListsPage(_pageBuilders["SuggestionTypes"], _pageBuilders["ConnectionScope"], _pageBuilders["ConnectionsMemory"], _pageBuilders["Snippets"]),
+                new InsertedCodePage(_pageBuilders["InsertOptions"], _pageBuilders["Qualification"], _pageBuilders["Aliases"], _pageBuilders["SpecialCharacters"]),
+                new ResultsExecutionPage(_pageBuilders["Grid"], _pageBuilders["Execution"]),
+                new EditorAllPage(_pageBuilders["Editor"], _pageBuilders["Refactoring"], _pageBuilders["Navigation"]),
+            })
+            {
+                _pageBuilders[page.Key] = page;
+                foreach (var section in page.Sections) _combinedPageOf[section.Key] = page.Key;
+            }
+        }
+
+        /// <summary>The page the tree shows for <paramref name="pageKey"/>: its combined page, or itself.</summary>
+        internal string ShownPageKey(string pageKey) =>
+            _combinedPageOf.TryGetValue(pageKey, out var combined) ? combined : pageKey;
+
+        /// <summary>The keys whose controls make up the page <paramref name="pageKey"/>.</summary>
+        private IEnumerable<string> SectionKeys(string pageKey) =>
+            _pageBuilders.TryGetValue(pageKey, out var b) && b is CombinedPage combined
+                ? combined.Sections.Select(s => s.Key)
+                : new[] { pageKey };
+
+        /// <summary>
+        /// Spec 040 (OPT-02) — the window's brush set for a theme preference: "dark" → Dark,
+        /// "system" → the host's current theme, anything else → Light. Spec 040 (OPT-09, T169):
+        /// under Windows high contrast (or a high-contrast host) the window is always
+        /// <see cref="PageTheme.HighContrast"/>, whatever the saved preference — fixed Light or Dark
+        /// brushes would paint over the colours the user chose for legibility.
+        /// </summary>
+        internal static PageTheme ResolvePageTheme(string? preference)
+        {
+            if (Ui.Theme.HostThemeWatcher.CurrentHighContrast
+                || Ui.Theme.HostThemeWatcher.CurrentHostVariant == Ui.Theme.ThemeVariant.HighContrast)
+                return PageTheme.HighContrast;
+
+            switch ((preference ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "dark":
+                    return PageTheme.Dark;
+                case "system":
+                    return Ui.Theme.HostThemeWatcher.CurrentHostVariant == Ui.Theme.ThemeVariant.Dark
+                        ? PageTheme.Dark
+                        : PageTheme.Light;
+                default:
+                    return PageTheme.Light;
+            }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-02) — the settings as edited so far, including unsaved edits on every page.
+        /// After a theme change the reopened window starts from this, so nothing is lost and nothing
+        /// is written to disk before OK.
+        /// </summary>
+        public AppSettings WorkingCopy => _settings;
+
+        /// <summary>The page key of the selected tree leaf, so a reopened window lands on the same page.</summary>
+        public string? CurrentPageKey => (_navTree?.SelectedItem as TreeViewItem)?.Tag as string;
+
+        /// <summary>
+        /// Spec 040 (X-03, FR-062): what F1 opens — the selected page's
+        /// <see cref="IPageBuilder.HelpTopic"/>, or the Options topic when no page is selected.
+        /// </summary>
+        internal string? CurrentHelpTopic =>
+            CurrentPageKey is string key && _pageBuilders.TryGetValue(key, out var page)
+                ? page.HelpTopic
+                : global::AkmlSql.Shell.Shared.Help.F1HelpRegistrations.OptionsTopic;
 
         /// <summary>
         /// Shows the settings window as a modal dialog.
@@ -280,7 +366,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             var window = new Window
             {
-                Title = Constants.ProductName + " Options",
+                Title = WindowTitles.For("Options"),
+                Icon = Ui.WindowIcon.Source,
                 Width = 880,
                 Height = 620,
                 MinWidth = 720,
@@ -339,6 +426,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             window.Content = root;
             window.KeyDown += OnWindowKeyDown;
+            // Spec 040 (T163): the Command Palette's jump to one option, once the page is laid out.
+            window.Loaded += (_, _) => ApplyInitialFocus();
 
             return window;
         }
@@ -526,48 +615,29 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // replaces the old "Miscellaneous ▸ Application" placement (removed below).
             AddTreeLeaf("General", "General");
 
-            // Grouping mirrors SQL Prompt (report §4 rec #2): Join conditions live under Suggestions,
-            // Aliases under Inserted Code.
+            // Spec 040 (OPT-04) took SQL Prompt's arrangement and names, in sentence case. Many of
+            // its pages held one to three settings, so they are sections of fuller pages now
+            // (Pages/CombinedPages.cs): twelve pages instead of twenty-three. A section keeps its
+            // page key, so links to it open the page that shows it.
             AddTreeGroup("Suggestions",
-                ("Behavior", "IntelliSense"),
-                ("Types of suggestion", "SuggestionTypes"),
-                ("Tooltips", "CompletionPolish"),
-                ("Connections", "ConnectionScope"),
-                ("Join conditions", "JoinOptions"),
-                ("Database", "Schema Cache"));
+                ("Behavior", "SuggestionsBehavior"),
+                ("Lists & connections", "SuggestionsLists"),
+                ("Warnings & highlighting", "Safety"));
 
-            // Inserted Code group introduced in Phase 2 (C.2-C.4).
-            AddTreeGroup("Inserted Code",
-                ("Qualification", "Qualification"),
-                ("Aliases", "Aliases"),
-                ("Special characters", "SpecialCharacters"),
-                ("INSERT statements", "InsertOptions"));
-
-            AddTreeGroup("Format",
-                ("Styles", "Formatting"));
-
-            AddTreeGroup("Editor",
-                ("Productivity", "Editor"),
-                ("Navigation", "Navigation"),
-                ("Refactoring", "Refactoring"));   // moved from "Inserted Code"
+            AddTreeLeaf("Inserted code", "InsertedCode");
+            AddTreeLeaf("Format", "Formatting");
 
             AddTreeGroup("Queries",
+                ("Results & execution", "ResultsExecution"),
                 ("History", "History"),
-                ("Execution Warnings", "Safety"),
-                ("Query Results", "Grid"),
-                ("Execution", "Execution"));
-
-            AddTreeGroup("Tabs",
                 ("Color", "Tabs & UI"));
 
-            AddTreeLeaf("Code Analysis", "Code Analysis");
-            AddTreeLeaf("Snippets", "Snippets");
-            AddTreeLeaf("Connections & Memory", "ConnectionsMemory");
-            AddTreeLeaf("AI Assistance", "AI Assistance");
+            AddTreeLeaf("Editor", "EditorAll");
+            AddTreeLeaf("Code analysis", "Code Analysis");
+            AddTreeLeaf("AI assistance", "AI Assistance");
 
-            // "Application" moved to the top-level "General" landing leaf; Labs stays under Miscellaneous.
-            AddTreeGroup("Miscellaneous",
-                ("Labs", "Labs"));
+            // Spec 040 (OPT-01): Suggestions › Database and Miscellaneous › Labs are gone — every
+            // row on both changed nothing. "Application" moved to the top-level "General" leaf.
 
             _navTree.SelectedItemChanged += OnNavSelectionChanged;
 
@@ -901,30 +971,33 @@ namespace AkmlSql.Shell.Shared.Dialogs
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            // Type badge — colored letter that matches setting kind
-            var (letter, color) = entry.Kind switch
+            // Type badge — a letter for the setting kind. Spec 040 (OPT-09): theme brushes, not fixed
+            // colours — a setting's badge is the accent pair (Selected / SelectedText, the pair built
+            // to be read together, system Highlight colours under high contrast); an information row
+            // gets the quiet raised face.
+            var (letter, isSetting) = entry.Kind switch
             {
-                "Toggle"   => ("T", Color.FromRgb(0x00, 0x78, 0xD4)),
-                "Slider"   => ("S", Color.FromRgb(0xE0, 0x83, 0x00)),
-                "Dropdown" => ("D", Color.FromRgb(0x6B, 0x46, 0xC1)),
-                "Text"     => ("X", Color.FromRgb(0x16, 0xA3, 0x4A)),
-                _           => ("i", Color.FromRgb(0x88, 0x92, 0xA8)),
+                "Toggle"   => ("T", true),
+                "Slider"   => ("S", true),
+                "Number"   => ("N", true),
+                "Dropdown" => ("D", true),
+                "Text"     => ("X", true),
+                "List"     => ("L", true),
+                "Grid"     => ("G", true),
+                _           => ("i", false),
             };
-            var badgeBrush = new SolidColorBrush(color);
-            badgeBrush.Freeze();
             var badge = new Border
             {
                 Width = 18,
                 Height = 18,
                 CornerRadius = new CornerRadius(3),
-                Background = badgeBrush,
+                Background = isSetting ? _theme.Selected : _theme.Button,
                 Margin = new Thickness(0, 1, 10, 0),
                 VerticalAlignment = VerticalAlignment.Top,
                 Child = new TextBlock
                 {
-                    // Letter sits on a colored badge; SelectedText is "text on accent" (white in both themes).
                     Text = letter,
-                    Foreground = _theme.SelectedText,
+                    Foreground = isSetting ? _theme.SelectedText : _theme.FgPrimary,
                     FontSize = 10,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -1055,20 +1128,69 @@ namespace AkmlSql.Shell.Shared.Dialogs
             if (_searchResultsPopup != null) _searchResultsPopup.IsOpen = false;
 
             // 3. Scroll the target row into view + flash highlight.
-            //    Defer to the dispatcher so the page swap completes first.
-            var row = entry.Row;
-            if (row != null)
+            if (entry.Row != null)
+                ScrollToAndFlash(entry.Row, focusControl: false);
+        }
+
+        /// <summary>
+        /// Scrolls <paramref name="row"/> into view and flashes it — deferred to the dispatcher so a
+        /// page swap made just before completes first. With <paramref name="focusControl"/> the
+        /// row's first focusable control also takes keyboard focus (the Command Palette jump).
+        /// </summary>
+        private void ScrollToAndFlash(FrameworkElement row, bool focusControl)
+        {
+            row.Dispatcher.BeginInvoke(new Action(() =>
             {
-                row.Dispatcher.BeginInvoke(new Action(() =>
+                try
                 {
-                    try
-                    {
-                        row.BringIntoView();
-                        FlashRow(row);
-                    }
-                    catch { /* non-fatal */ }
-                }), System.Windows.Threading.DispatcherPriority.Background);
+                    row.BringIntoView();
+                    FlashRow(row);
+                    if (focusControl)
+                        FirstFocusableControl(row)?.Focus();
+                }
+                catch { /* non-fatal */ }
+            }), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>The first enabled, focusable control inside an option row, depth first.</summary>
+        private static Control? FirstFocusableControl(DependencyObject root)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is not DependencyObject d) continue;
+                if (d is Control c && c.Focusable && c.IsEnabled && c.IsTabStop) return c;
+                var nested = FirstFocusableControl(d);
+                if (nested != null) return nested;
             }
+            return null;
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053, T163) — scrolls to, flashes and focuses the row labelled
+        /// <see cref="InitialFocusLabel"/>: on the selected page when it has one, else on the first
+        /// page that does (selecting that page). Runs when the window loads. Returns false when no
+        /// row has that label (the window then simply opens on its page).
+        /// </summary>
+        internal bool ApplyInitialFocus()
+        {
+            var label = InitialFocusLabel;
+            if (string.IsNullOrEmpty(label)) return false;
+
+            var pageKey = CurrentPageKey;
+            var entry = _searchIndex.FirstOrDefault(e => e.PageKey == pageKey && string.Equals(e.Label, label, StringComparison.Ordinal))
+                        ?? _searchIndex.FirstOrDefault(e => string.Equals(e.Label, label, StringComparison.Ordinal))
+                        ?? _searchIndex.FirstOrDefault(e => string.Equals(e.Label, label, StringComparison.OrdinalIgnoreCase));
+            if (entry?.Row == null)
+            {
+                Log.Debug("SettingsWindow: no option labelled {Label} to focus", label);
+                return false;
+            }
+
+            if (entry.PageKey != pageKey)
+                SelectTreeLeafByPageKey(entry.PageKey);
+            FocusedRow = entry.Row;
+            ScrollToAndFlash(entry.Row, focusControl: true);
+            return true;
         }
 
         /// <summary>
@@ -1079,6 +1201,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private bool SelectTreeLeafByPageKey(string pageKey)
         {
             if (_navTree == null) return false;
+            pageKey = ShownPageKey(pageKey);
 
             foreach (var obj in _navTree.Items)
             {
@@ -1110,11 +1233,18 @@ namespace AkmlSql.Shell.Shared.Dialogs
         /// </summary>
         private void FlashRow(FrameworkElement row)
         {
-            if (row is not Border border) return;
+            // Spec 040 (T161): toggle rows are Borders; number, dropdown and text rows are panels.
+            DependencyProperty? background = row switch
+            {
+                Border _ => Border.BackgroundProperty,
+                Panel _ => Panel.BackgroundProperty,
+                _ => null
+            };
+            if (background == null) return;
 
-            var originalBrush = border.Background;
+            var originalBrush = (Brush?)row.GetValue(background);
             var flashBrush = new SolidColorBrush(((SolidColorBrush)_theme.Selected).Color);
-            border.Background = flashBrush;
+            row.SetValue(background, flashBrush);
 
             var animation = new System.Windows.Media.Animation.ColorAnimation
             {
@@ -1126,7 +1256,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
                 }
             };
-            animation.Completed += (s, e) => border.Background = originalBrush;
+            animation.Completed += (s, e) => row.SetValue(background, originalBrush);
             flashBrush.BeginAnimation(SolidColorBrush.ColorProperty, animation);
         }
 
@@ -1140,30 +1270,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
             var pages = new[]
             {
                 "General",
-                "IntelliSense",
-                "SuggestionTypes",
-                "CompletionPolish",
-                "Aliases",
-                "ConnectionScope",
-                "Schema Cache",
-                "ConnectionsMemory",
-                "Qualification",
-                "SpecialCharacters",
-                "InsertOptions",
-                "JoinOptions",
+                "SuggestionsBehavior",
+                "SuggestionsLists",
+                "Safety",
+                "InsertedCode",
                 "Formatting",
-                "Snippets",
-                "Code Analysis",
-                "Refactoring",
+                "ResultsExecution",
                 "History",
                 "Tabs & UI",
-                "Safety",
+                "EditorAll",
+                "Code Analysis",
                 "AI Assistance",
-                "Grid",
-                "Editor",
-                "Execution",
-                "Navigation",
-                "Labs",
             };
 
             foreach (var key in pages)
@@ -1179,21 +1296,29 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 // not the short Title — SQL Prompt's band names the full location.
                 AddPageHeader(hostPanel, pageBuilder.Display, pageBuilder.Help);
                 var ctx = new PageContext(_theme, _settings, new RowFactory(_theme), RegisterSearchEntry);
-                var controls = pageBuilder.Build(hostPanel, ctx);
-                _pageControlsByKey[key] = controls;
+                IPageControls? controls = null;
+                if (pageBuilder is CombinedPage combined)
+                {
+                    // Each section under its own key: its search entries find its controls, and
+                    // Save/Load run once per section.
+                    foreach (var section in combined.Sections)
+                    {
+                        _currentPageKey = section.Key;
+                        _pageControlsByKey[section.Key] = section.Build(hostPanel, ctx);
+                    }
+                }
+                else
+                {
+                    controls = pageBuilder.Build(hostPanel, ctx);
+                    _pageControlsByKey[key] = controls;
+                }
                 _pages[key] = WrapInScrollViewer(hostPanel);
 
-                // Page-specific event hookups the host owns. Theme switching closes
-                // the dialog and reopens it under the new theme; coloring-rule CRUD
-                // pops a host-owned modal — both stay on SettingsWindow.
+                // Page-specific event hookup the host owns: theme switching closes the dialog
+                // and reopens it under the new theme. (Spec 040, OPT-08: the Color page now owns
+                // its rules grid and environments, so no coloring-rule CRUD lives here.)
                 if (controls is GeneralControls gen)
                     gen.Theme.SelectionChanged += OnThemeSelectionChanged;
-                if (controls is TabsControls tabs)
-                {
-                    tabs.AddRuleButton.Click    += (_, _) => OnAddColoringRule();
-                    tabs.EditRuleButton.Click   += (_, _) => OnEditColoringRule();
-                    tabs.RemoveRuleButton.Click += (_, _) => OnRemoveColoringRule();
-                }
             }
 
             _currentPageKey = string.Empty;
@@ -1220,6 +1345,93 @@ namespace AkmlSql.Shell.Shared.Dialogs
         }
 
         // ═══════════════════════════════════════════════════════════════════════
+        //  Options catalog (Command Palette)
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>A built catalog and the dispatcher its WPF controls belong to.</summary>
+        private sealed class OptionsCatalogCache
+        {
+            public OptionsCatalogCache(System.Windows.Threading.Dispatcher dispatcher, IReadOnlyList<OptionsCatalogEntry> entries)
+            {
+                Dispatcher = dispatcher;
+                Entries = entries;
+            }
+
+            public System.Windows.Threading.Dispatcher Dispatcher { get; }
+            public IReadOnlyList<OptionsCatalogEntry> Entries { get; }
+        }
+
+        private static volatile OptionsCatalogCache? _optionsCatalog;
+
+        /// <summary>
+        /// Spec 040 (OPT-07, FR-053, research R7) — every option the Command Palette can offer, read
+        /// from the Options pages themselves: the pages are built on a throwaway, never-shown
+        /// instance and their search index is the list, so a renamed label, a new row or a moved page
+        /// reaches the palette with no second table to keep in step. Each entry keeps its row, its
+        /// page's controls and — for a Toggle — its CheckBox, which is how the palette reads and flips
+        /// the setting through the page's own Load and Save.
+        ///
+        /// <para>Left out: the AI assistance page (its rows edit whichever agent is selected) and
+        /// Info and Button rows (nothing to set). Built once per UI thread and cached for the session;
+        /// <paramref name="settings"/> only seeds the build. Must run on the UI thread.</para>
+        /// </summary>
+        internal static IReadOnlyList<OptionsCatalogEntry> BuildOptionsCatalog(AppSettings settings)
+        {
+            var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+            var cached = _optionsCatalog;
+            if (cached != null && cached.Dispatcher == dispatcher)
+                return cached.Entries;
+
+            var host = new SettingsWindow(settings);
+            host.BuildPages();
+            // The throwaway host never shows a window. Keeping it "loading" for good turns its Theme
+            // drop-down handler into a no-op, so loading the General page for the palette can never
+            // preview a theme or ask for a reopen.
+            host._loadingControls = true;
+
+            var entries = new List<OptionsCatalogEntry>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var e in host._searchIndex)
+            {
+                if (e.Row == null || e.PageKey == "AI Assistance" || e.Kind == "Info" || e.Kind == "Button")
+                    continue;
+                if (!host._pageControlsByKey.TryGetValue(e.PageKey, out var controls))
+                    continue;
+
+                CheckBox? toggle = null;
+                if (e.Kind == "Toggle")
+                {
+                    toggle = e.Row as CheckBox ?? FindCheckBox(e.Row);
+                    if (toggle == null) continue; // a "Toggle" row the palette couldn't flip
+                }
+
+                // The palette id is page + label, so a label repeated on one page is listed once.
+                if (!seen.Add(e.PageKey + "\u001F" + e.Label))
+                    continue;
+
+                entries.Add(new OptionsCatalogEntry(
+                    e.PageKey, e.PageDisplay, e.Label, e.Description, e.Kind, e.Row, controls, toggle));
+            }
+
+            _optionsCatalog = new OptionsCatalogCache(dispatcher, entries);
+            return entries;
+        }
+
+        /// <summary>Drops the cached catalog, so the next <see cref="BuildOptionsCatalog"/> rebuilds it.</summary>
+        internal static void InvalidateOptionsCatalog() => _optionsCatalog = null;
+
+        /// <summary>The first CheckBox in an option row (a toggle row's Border wraps it directly).</summary>
+        private static CheckBox? FindCheckBox(DependencyObject root)
+        {
+            foreach (var child in LogicalTreeHelper.GetChildren(root))
+            {
+                if (child is CheckBox cb) return cb;
+                if (child is DependencyObject d && FindCheckBox(d) is CheckBox nested) return nested;
+            }
+            return null;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
         //  General
         // ═══════════════════════════════════════════════════════════════════════
         // BuildGeneralPage migrated to Pages/GeneralPage.cs (Phase 2 B.7).
@@ -1228,11 +1440,6 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  IntelliSense
         // ═══════════════════════════════════════════════════════════════════════
         // BuildIntelliSensePage migrated to Pages/IntelliSensePage.cs (Phase 2 B.16).
-
-        // ═══════════════════════════════════════════════════════════════════════
-        //  Schema Cache
-        // ═══════════════════════════════════════════════════════════════════════
-        // BuildSchemaCachePage migrated to Pages/SchemaCachePage.cs (Phase 2 B.11).
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Formatting
@@ -1464,6 +1671,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
             return new ControlTemplate(typeof(Button)) { VisualTree = border };
         }
 
+        /// <summary>
+        /// Secondary push button. Spec 040 (OPT-09, research R9): painted by the themed template
+        /// (<see cref="ThemedButton.ApplySecondary(Button, PageTheme)"/>) — the stock Aero chrome,
+        /// which mouse-enter/leave handlers used to fight, repainted the face near-white on hover in
+        /// Dark and ignored the theme while pressed.
+        /// </summary>
         private Button MakeButton(string text, double width)
         {
             var btn = new Button
@@ -1472,26 +1685,18 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Width = width,
                 Height = 30,
                 FontSize = 12,
-                Foreground = _theme.FgPrimary,
-                Background = _theme.Button,
-                BorderBrush = _theme.Border,
-                BorderThickness = new Thickness(1),
                 Padding = new Thickness(12, 4, 12, 4),
                 Cursor = Cursors.Hand,
                 FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9
             };
-
-            var theme = _theme; // capture for lambda
-            // Explicitly restore Foreground on both enter/leave so that the VS/SSMS host's
-            // default button-hover template doesn't override the text color in dark theme.
-            btn.MouseEnter += (s, e) => { btn.Background = theme.ButtonHover; btn.Foreground = theme.FgPrimary; };
-            btn.MouseLeave += (s, e) => { btn.Background = theme.Button;      btn.Foreground = theme.FgPrimary; };
-
+            ThemedButton.ApplySecondary(btn, _theme);
             return btn;
         }
 
         /// <summary>
-        /// Primary action button — solid blue accent (SQL Prompt style for OK).
+        /// Primary action button — solid accent (SQL Prompt style for OK). Spec 040 (OPT-09): hover
+        /// and pressed come from this window's <see cref="PageTheme"/>, not from
+        /// <see cref="ThemeRegistry"/>'s current palette, which can be the other theme.
         /// </summary>
         private Button MakePrimaryButton(string text, double width)
         {
@@ -1502,21 +1707,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 Height = 30,
                 FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = _theme.SelectedText,
-                Background = _theme.Selected,
-                BorderBrush = _theme.Selected,
-                BorderThickness = new Thickness(1),
                 Padding = new Thickness(12, 4, 12, 4),
                 Cursor = Cursors.Hand,
                 FocusVisualStyle = FocusVisualStyles.HighStakes // FR-018 / O9 (primary action)
             };
-
-            var theme = _theme;
-            // Subtle hover: slightly lighter accent — pulled from the central palette via AccentPrimaryHover token.
-            var hoverBrush = (SolidColorBrush)ThemeRegistry.Instance.Resources[ThemeTokens.AccentPrimaryHover];
-            btn.MouseEnter += (s, e) => { btn.Background = hoverBrush; btn.BorderBrush = hoverBrush; };
-            btn.MouseLeave += (s, e) => { btn.Background = theme.Selected; btn.BorderBrush = theme.Selected; };
-
+            ThemedButton.ApplyPrimary(btn, _theme);
             return btn;
         }
 
@@ -1647,6 +1842,16 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 return;
             }
 
+            // Spec 040 (X-03, FR-062): F1 opens the selected page's topic on the docs site.
+            if (e.Key == Key.F1 && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                var topic = CurrentHelpTopic;
+                if (!string.IsNullOrEmpty(topic))
+                    global::AkmlSql.Shell.Shared.Help.F1HelpListener.Default.Open(topic!);
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.Escape)
             {
                 // If the search popup is open, let its own handler clear it instead.
@@ -1657,44 +1862,33 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
         }
 
+        /// <summary>
+        /// Spec 040 (OPT-02, FR-004, research R2) — a real Theme pick closes the window so it can
+        /// reopen under the new brushes. Nothing is written to disk: every page's unsaved edits go
+        /// into the working copy the reopened window starts from, and OK or Cancel in that window
+        /// decides. Selection changes raised while controls load (window open, Reset, Import) are
+        /// ignored — they used to save half-loaded settings and reopen the window by themselves.
+        /// </summary>
         private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_loadingControls) return;
             if (!_pageControlsByKey.TryGetValue("General", out var c) || c is not GeneralControls gen)
                 return;
-            var idx = gen.Theme.SelectedIndex;
 
-            // Index 0 = Dark, Index 1 = Light, Index 2 = System (auto-detect from VS/SSMS)
-            // Spec 020 (US1 T021): replaced ThemeManager.DetectFromEnvironment() facade with the
-            // canonical HostThemeWatcher signal — same semantic, no legacy intermediary.
-            var requestedTheme = idx switch
+            // Index 0 = Dark, 1 = Light, 2 = System (follow VS/SSMS)
+            var pick = gen.Theme.SelectedIndex switch
             {
-                0 => PageTheme.Dark,
-                2 => Ui.Theme.HostThemeWatcher.Instance.LastDetectedHostVariant == Ui.Theme.ThemeVariant.Dark
-                    ? PageTheme.Dark : PageTheme.Light,
-                _ => PageTheme.Light
+                0 => "dark",
+                2 => "system",
+                _ => "light",
             };
+            if (ResolvePageTheme(pick) == _theme)
+                return; // same brushes — nothing to reopen
 
-            if (_theme == requestedTheme)
-                return; // no change needed
-
-            // Save the new theme preference immediately so the reopened window uses it
             SaveControlsToSettings();
-            try
-            {
-                ConfigManager.Save(_settings);
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "SettingsWindow: Failed to save theme change");
-            }
+            // Other AKML surfaces preview the pick at once; Cancel in the reopened window restores it.
+            Commands.OptionsCommand.ApplyThemePreference(pick);
 
-            // Spec 020 (US1 T021): replaced ThemeManager.Instance.SetUserTheme facade with the
-            // canonical ThemeRegistry.SetPreference call. Every chrome surface that uses
-            // SetResourceReference picks up the change automatically; surfaces that snapshot
-            // brushes at BuildUi-time (like this dialog) reopen after a theme change.
-            Ui.Theme.ThemeRegistry.Instance.SetPreference(_settings.Theme);
-
-            // Signal that the window should be reopened with the new theme
             ThemeChangeRequested = true;
             _dialogResult = true;
             _window?.Close();
@@ -1776,16 +1970,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     return;
                 }
 
-                // Preserve the current install-specific fields that should not be overwritten
-                imported.InstallId = _settings.InstallId;
-                imported.InstalledTargets = _settings.InstalledTargets;
-                imported.LastUpdateCheck = _settings.LastUpdateCheck;
-
-                _settings = imported;
-                LoadSettingsToControls();
+                ImportSettings(imported);
                 Log.Information("Settings imported from {Path}", dlg.FileName);
                 MessageBox.Show(
-                    "Settings imported successfully.\nClick OK or Apply to save.",
+                    "Settings imported. Click OK to save them, or Cancel to discard.",
                     Constants.ProductName,
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -1810,6 +1998,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
             }
         }
 
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-007) — replaces the working copy with <paramref name="imported"/>,
+        /// keeping this installation's identity and first-run state. Nothing is saved until OK.
+        /// </summary>
+        internal void ImportSettings(AppSettings imported)
+        {
+            ConfigManager.PreserveInstallState(_settings, imported);
+            _settings = imported;
+            LoadSettingsToControls();
+        }
+
         private void OnResetThisPageClick(object sender, RoutedEventArgs e)
         {
             try
@@ -1822,12 +2021,12 @@ namespace AkmlSql.Shell.Shared.Dialogs
                     return;
                 }
 
-                if (MessageBox.Show($"Reset all settings on the '{pageName}' page to defaults?",
+                if (MessageBox.Show(ResetConfirmationText(pageName!),
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                     return;
 
+                // Only this page's controls change; unsaved edits on other pages stay as they are.
                 ResetPageToDefaultsCore(pageName!);
-                LoadSettingsToControls();
             }
             catch (Exception ex)
             {
@@ -1836,114 +2035,85 @@ namespace AkmlSql.Shell.Shared.Dialogs
         }
 
         /// <summary>
-        /// Mutates <c>_settings</c> back to defaults for the named page. Extracted
-        /// from <see cref="OnResetThisPageClick"/> so tests can exercise every page
-        /// key without spawning the confirmation MessageBox. Throws when a page
-        /// key has no Reset case — the missing-case bug becomes a loud failure
-        /// (Phase 2 C.6 regression test).
+        /// Spec 040 (OPT-03, FR-005) — resets exactly the settings the page shows: the page's own
+        /// controls load the defaults and write them back, so settings hidden from every page
+        /// (rule overrides, connection aliases, severities …) and the other pages' unsaved edits
+        /// survive. Throws for an unknown page key. Needs the window to be built.
         /// </summary>
-        internal void ResetPageToDefaultsCore(string pageName)
+        internal void ResetPageToDefaultsCore(string pageKey)
         {
-            var defaults = new AppSettings();
-            switch (pageName)
+            var sections = SectionKeys(pageKey)
+                .Select(k => _pageControlsByKey.TryGetValue(k, out var c) ? c : null)
+                .ToList();
+            if (sections.Count == 0 || sections.Any(c => c == null))
+                throw new InvalidOperationException($"Page '{pageKey}' is not registered in the Options window.");
+
+            SaveControlsToSettings();
+            _loadingControls = true;
+            try
             {
-                case "General":
-                    _settings.AutoUpdateEnabled = defaults.AutoUpdateEnabled;
-                    _settings.TelemetryEnabled = defaults.TelemetryEnabled;
-                    _settings.Theme = defaults.Theme;
-                    break;
-                case "IntelliSense":
-                    // Field-scoped to what the Suggestions › Behavior page owns — replacing the
-                    // whole IntelliSense object would also reset sub-objects owned by other pages
-                    // (Qualification, Aliases, SpecialCharOptions, ConnectionScope, SQL-auth creds).
-                    _settings.IntelliSense.Enabled = defaults.IntelliSense.Enabled;
-                    _settings.IntelliSense.AutoTrigger = defaults.IntelliSense.AutoTrigger;
-                    _settings.IntelliSense.AfterDot = defaults.IntelliSense.AfterDot;
-                    _settings.IntelliSense.FuzzyMatch = defaults.IntelliSense.FuzzyMatch;
-                    _settings.IntelliSense.MaxSuggestions = defaults.IntelliSense.MaxSuggestions;
-                    _settings.IntelliSense.TriggerDelayMs = defaults.IntelliSense.TriggerDelayMs;
-                    _settings.IntelliSense.KeywordCase = defaults.IntelliSense.KeywordCase;
-                    _settings.IntelliSense.ShowDataTypes = defaults.IntelliSense.ShowDataTypes;
-                    _settings.IntelliSense.ShowNullability = defaults.IntelliSense.ShowNullability;
-                    _settings.IntelliSense.ShowPkFk = defaults.IntelliSense.ShowPkFk;
-                    _settings.IntelliSense.CtrlTransparentPopups = defaults.IntelliSense.CtrlTransparentPopups;
-                    _settings.IntelliSense.AutoAlias = defaults.IntelliSense.AutoAlias;
-                    _settings.IntelliSense.JoinAssist = defaults.IntelliSense.JoinAssist;
-                    _settings.IntelliSense.DisableNativeIntelliSense = defaults.IntelliSense.DisableNativeIntelliSense;
-                    _settings.IntelliSense.SpaceCommits = defaults.IntelliSense.SpaceCommits;
-                    _settings.IntelliSense.DotCommits = defaults.IntelliSense.DotCommits;
-                    _settings.IntelliSense.SnippetsInCompletion = defaults.IntelliSense.SnippetsInCompletion;
-                    break;
-                case "SuggestionTypes": _settings.IntelliSense.SuggestionTypes = defaults.IntelliSense.SuggestionTypes; break;
-                case "CompletionPolish": _settings.CompletionPolish = defaults.CompletionPolish; break;
-                case "Aliases": _settings.IntelliSense.AliasOptions = defaults.IntelliSense.AliasOptions; break;
-                case "ConnectionScope": _settings.IntelliSense.ConnectionScope = defaults.IntelliSense.ConnectionScope; break;
-                case "Qualification":
-                    // Reset only schema + column qualification; BracketMode now belongs to the
-                    // Special characters page, so leave it untouched here.
-                    _settings.IntelliSense.Qualification.SchemaMode = defaults.IntelliSense.Qualification.SchemaMode;
-                    _settings.IntelliSense.Qualification.QualifyColumnsWithTableOrAlias = defaults.IntelliSense.Qualification.QualifyColumnsWithTableOrAlias;
-                    break;
-                case "SpecialCharacters":
-                    // Consolidated pane owns both special-char toggles and the bracket-identifier policy.
-                    _settings.IntelliSense.SpecialCharOptions = defaults.IntelliSense.SpecialCharOptions;
-                    _settings.IntelliSense.Qualification.BracketMode = defaults.IntelliSense.Qualification.BracketMode;
-                    break;
-                case "InsertOptions": _settings.IntelliSense.InsertOptions = defaults.IntelliSense.InsertOptions; break;
-                case "JoinOptions": _settings.IntelliSense.JoinOptions = defaults.IntelliSense.JoinOptions; break;
-                case "Labs": _settings.Labs = defaults.Labs; break;
-                case "Schema Cache":
-                    // Reset only the refresh-behavior fields; storage/memory belongs to the
-                    // Connections & Memory page.
-                    _settings.Cache.AutoRefresh = defaults.Cache.AutoRefresh;
-                    _settings.Cache.DetectDdl = defaults.Cache.DetectDdl;
-                    _settings.Cache.RefreshIntervalSeconds = defaults.Cache.RefreshIntervalSeconds;
-                    break;
-                case "ConnectionsMemory":
-                    _settings.IntelliSense.EnableSqlAuthCredentials = defaults.IntelliSense.EnableSqlAuthCredentials;
-                    _settings.Cache.MaxDatabases = defaults.Cache.MaxDatabases;
-                    _settings.Cache.LazyLoadColumns = defaults.Cache.LazyLoadColumns;
-                    _settings.Cache.PersistToDisk = defaults.Cache.PersistToDisk;
-                    break;
-                case "Formatting": _settings.Formatter = defaults.Formatter; break;
-                case "Snippets": _settings.Snippets = defaults.Snippets; break;
-                case "Code Analysis": _settings.CodeAnalysis = defaults.CodeAnalysis; break;
-                case "Refactoring": _settings.Refactoring = defaults.Refactoring; break;
-                case "History": _settings.History = defaults.History; break;
-                case "Tabs & UI": _settings.Tabs = defaults.Tabs; break;
-                case "Safety": _settings.Safety = defaults.Safety; break;
-                case "Grid": _settings.Grid = defaults.Grid; break;
-                case "Editor": _settings.EditorProductivity = defaults.EditorProductivity; break;
-                case "Execution": _settings.ExecutionProductivity = defaults.ExecutionProductivity; break;
-                case "Navigation": _settings.Navigation = defaults.Navigation; break;
-                case "AI Assistance":
-                    // Whole-object reset: the default AiSettings carries an empty agent list, a
-                    // blank active id, cleared feature assignments and an empty fallback order
-                    // (spec 037 US2, T048) as well as the flat fields.
-                    _settings.Ai = defaults.Ai;
-                    break;
-                default:
-                    throw new InvalidOperationException(
-                        $"Page '{pageName}' has no Reset case in SettingsWindow.ResetPageToDefaultsCore. " +
-                        "When you add a new page to _pageBuilders, also add a case here.");
+                foreach (var controls in sections)
+                {
+                    controls!.Reset(new AppSettings());
+                    controls.Save(_settings);
+                    controls.Load(_settings);
+                }
             }
+            finally
+            {
+                _loadingControls = false;
+            }
+            // (Spec 040, OPT-08: the Color page's Reset brings back the default rules and
+            // environments itself — they are part of its Load/Save.)
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-006) — the page reset confirmation, naming the page as the tree
+        /// shows it (never the raw page key) and warning about what else goes with it.
+        /// </summary>
+        internal string ResetConfirmationText(string pageKey)
+        {
+            var display = _pageBuilders.TryGetValue(pageKey, out var builder) ? builder.Display : pageKey;
+            var text = $"Reset the settings on {display}?";
+            if (pageKey == "AI Assistance")
+            {
+                var agents = _settings.Ai.Agents?.Count ?? 0;
+                if (agents > 0)
+                    text += Environment.NewLine + $"This also removes your {agents} AI agent{(agents == 1 ? "" : "s")} and their API keys.";
+            }
+            else if (pageKey == "Tabs & UI")
+            {
+                text += Environment.NewLine + "This also restores the default environments and rules.";
+            }
+            return text;
         }
 
         private void OnResetAllClick(object sender, RoutedEventArgs e)
         {
             try
             {
-                if (MessageBox.Show("Reset ALL settings to defaults? This cannot be undone.",
+                if (MessageBox.Show("Reset ALL settings to defaults? Click OK afterwards to save, or Cancel to keep your settings.",
                     Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                     return;
 
-                _settings = new AppSettings();
-                LoadSettingsToControls();
+                ResetAllToDefaultsCore();
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "SettingsWindow: Reset all failed");
             }
+        }
+
+        /// <summary>
+        /// Spec 040 (OPT-03, FR-007) — every setting back to its default in the working copy,
+        /// keeping this installation's identity and first-run state. Saved only on OK.
+        /// </summary>
+        internal void ResetAllToDefaultsCore()
+        {
+            var fresh = new AppSettings();
+            ConfigManager.PreserveInstallState(_settings, fresh);
+            _settings = fresh;
+            LoadSettingsToControls();
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1952,25 +2122,29 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void LoadSettingsToControls()
         {
-            // Spec 037 (US1, FR-017): hand the deep-link agent id to the AI Assistance page
-            // before it loads — it selects that agent, or performs its implicit Add when the
-            // id is "" and the agent list is empty.
-            if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
-                aiPageControls is AiAssistanceControls aiControls)
+            _loadingControls = true;
+            try
             {
-                aiControls.InitialAgentId = InitialAgentId;
+                // Spec 037 (US1, FR-017): hand the deep-link agent id to the AI Assistance page
+                // before it loads — it selects that agent, or performs its implicit Add when the
+                // id is "" and the agent list is empty.
+                if (_pageControlsByKey.TryGetValue("AI Assistance", out var aiPageControls) &&
+                    aiPageControls is AiAssistanceControls aiControls)
+                {
+                    aiControls.InitialAgentId = InitialAgentId;
+                }
+
+                // Single dispatch loop covers every registered IPageBuilder. Adding
+                // a new page to _pageBuilders automatically picks up Load coverage —
+                // there is no second list to keep in sync, which was the root cause
+                // of the C.1-C.5 silent-discard bug fixed in this commit.
+                foreach (var controls in _pageControlsByKey.Values)
+                    controls.Load(_settings);
             }
-
-            // Single dispatch loop covers every registered IPageBuilder. Adding
-            // a new page to _pageBuilders automatically picks up Load coverage —
-            // there is no second list to keep in sync, which was the root cause
-            // of the C.1-C.5 silent-discard bug fixed in this commit.
-            foreach (var controls in _pageControlsByKey.Values)
-                controls.Load(_settings);
-
-            // Coloring rules list is rebuilt by the host — CRUD lives on
-            // SettingsWindow, not on TabsControls.
-            PopulateColoringRulesList();
+            finally
+            {
+                _loadingControls = false;
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1989,171 +2163,56 @@ namespace AkmlSql.Shell.Shared.Dialogs
         //  Null-safe helpers
         // ═══════════════════════════════════════════════════════════════════════
 
-        // ═══════════════════════════════════════════════════════════════════════
-        //  Coloring Rules CRUD
-        // ═══════════════════════════════════════════════════════════════════════
-
-        private ListBox? GetColoringRulesList()
-            => _pageControlsByKey.TryGetValue("Tabs & UI", out var c) && c is TabsControls tc
-                ? tc.ColoringRulesList
-                : null;
-
-        private void PopulateColoringRulesList()
-        {
-            var list = GetColoringRulesList();
-            if (list == null) return;
-            list.Items.Clear();
-            foreach (var rule in _settings.Tabs.ColoringRules)
-            {
-                list.Items.Add($"[{rule.Label}]  {rule.Pattern}  \u2192  {rule.Color}");
-            }
-        }
-
-        private void OnAddColoringRule()
-        {
-            var rule = new AkmlSql.Core.Config.ColoringRule
-            {
-                Order = _settings.Tabs.ColoringRules.Count,
-                MatchTarget = AkmlSql.Core.Models.Tabs.EnvironmentMatcher.MatchTargetServerName
-            };
-
-            if (ShowRuleEditor(rule, "Add Environment Rule"))
-            {
-                _settings.Tabs.ColoringRules.Add(rule);
-                PopulateColoringRulesList();
-            }
-        }
-
-        private void OnEditColoringRule()
-        {
-            var index = GetColoringRulesList()?.SelectedIndex ?? -1;
-            if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
-
-            var rule = _settings.Tabs.ColoringRules[index];
-            if (ShowRuleEditor(rule, "Edit Environment Rule"))
-            {
-                PopulateColoringRulesList();
-                GetColoringRulesList()!.SelectedIndex = index;
-            }
-        }
-
-        private void OnRemoveColoringRule()
-        {
-            var index = GetColoringRulesList()?.SelectedIndex ?? -1;
-            if (index < 0 || index >= _settings.Tabs.ColoringRules.Count) return;
-
-            _settings.Tabs.ColoringRules.RemoveAt(index);
-            PopulateColoringRulesList();
-        }
-
-        private bool ShowRuleEditor(AkmlSql.Core.Config.ColoringRule rule, string title)
-        {
-            var dlg = new System.Windows.Window
-            {
-                Title = title,
-                Width = 420,
-                Height = 260,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                ResizeMode = ResizeMode.NoResize,
-            };
-
-            // Try to set owner to the SettingsWindow's dialog
-            try { dlg.Owner = _window; } catch { }
-
-            var grid = new Grid { Margin = new Thickness(16) };
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Label
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Pattern
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Color
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // spacer
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // buttons
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            // Row 0: Label
-            var lblLabel = new TextBlock { Text = "Label:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
-            Grid.SetRow(lblLabel, 0); Grid.SetColumn(lblLabel, 0);
-            var txtLabel = new TextBox { Text = rule.Label, Margin = new Thickness(0, 4, 0, 4) };
-            Grid.SetRow(txtLabel, 0); Grid.SetColumn(txtLabel, 1);
-
-            // Row 1: Pattern
-            var lblPattern = new TextBlock { Text = "Pattern:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
-            Grid.SetRow(lblPattern, 1); Grid.SetColumn(lblPattern, 0);
-            var txtPattern = new TextBox { Text = rule.Pattern, Margin = new Thickness(0, 4, 0, 4) };
-            Grid.SetRow(txtPattern, 1); Grid.SetColumn(txtPattern, 1);
-
-            // Row 2: Color
-            var lblColor = new TextBlock { Text = "Color:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 4, 8, 4) };
-            Grid.SetRow(lblColor, 2); Grid.SetColumn(lblColor, 0);
-            var colorPanel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
-            var txtColor = new TextBox { Text = rule.Color, Width = 100 };
-            var colorPreview = new Border
-            {
-                Width = 24, Height = 24, Margin = new Thickness(8, 0, 0, 0),
-                CornerRadius = new CornerRadius(2),
-                BorderThickness = new Thickness(1)
-            };
-
-            // Live color preview
-            Action updatePreview = () =>
-            {
-                try
-                {
-                    var hex = txtColor.Text?.Trim() ?? "";
-                    if (!hex.StartsWith("#")) hex = "#" + hex;
-                    var color = (Color)ColorConverter.ConvertFromString(hex);
-                    var brush = new SolidColorBrush(color);
-                    brush.Freeze();
-                    colorPreview.Background = brush;
-                }
-                catch { colorPreview.Background = null; }
-            };
-            updatePreview();
-            txtColor.TextChanged += (s, e) => updatePreview();
-
-            colorPanel.Children.Add(txtColor);
-            colorPanel.Children.Add(colorPreview);
-            Grid.SetRow(colorPanel, 2); Grid.SetColumn(colorPanel, 1);
-
-            // Row 4: Buttons
-            var buttonPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 12, 0, 0)
-            };
-            var btnOk = new Button { Content = "OK", Width = 75, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
-            var btnCancel = new Button { Content = "Cancel", Width = 75, IsCancel = true };
-
-            bool accepted = false;
-            btnOk.Click += (s, e) =>
-            {
-                rule.Label = txtLabel.Text.Trim();
-                rule.Pattern = txtPattern.Text.Trim();
-                rule.Color = txtColor.Text.Trim();
-                accepted = true;
-                dlg.Close();
-            };
-
-            buttonPanel.Children.Add(btnOk);
-            buttonPanel.Children.Add(btnCancel);
-            Grid.SetRow(buttonPanel, 4); Grid.SetColumn(buttonPanel, 0);
-            Grid.SetColumnSpan(buttonPanel, 2);
-
-            grid.Children.Add(lblLabel); grid.Children.Add(txtLabel);
-            grid.Children.Add(lblPattern); grid.Children.Add(txtPattern);
-            grid.Children.Add(lblColor); grid.Children.Add(colorPanel);
-            grid.Children.Add(buttonPanel);
-
-            dlg.Content = grid;
-            dlg.ShowDialog();
-
-            return accepted;
-        }
-
         // IsChecked / SetChecked / SetSlider / GetSliderInt / SetCombo /
         // GetComboIndex / SetText / GetText helpers were used by the inline
         // LoadSettingsToControls / SaveControlsToSettings blocks that have
         // moved into per-page IPageControls implementations (B.2-B.16).
         // Each page now reads/writes its own controls directly.
+    }
+
+    /// <summary>
+    /// Spec 040 (OPT-07, FR-053) — one option as the Command Palette lists it, from
+    /// <see cref="SettingsWindow.BuildOptionsCatalog"/>. The public members describe it; the
+    /// internal ones are the row on the page it came from, that page's controls and, for a toggle,
+    /// its CheckBox.
+    /// </summary>
+    internal sealed class OptionsCatalogEntry
+    {
+        internal OptionsCatalogEntry(
+            string pageKey, string pageDisplay, string label, string description, string kind,
+            FrameworkElement row, IPageControls controls, CheckBox? toggle)
+        {
+            PageKey = pageKey;
+            PageDisplay = pageDisplay;
+            Label = label;
+            Description = description;
+            Kind = kind;
+            Row = row;
+            Controls = controls;
+            Toggle = toggle;
+        }
+
+        /// <summary>The page's key (the tree leaf's Tag), e.g. <c>IntelliSense</c>.</summary>
+        public string PageKey { get; }
+
+        /// <summary>The page's breadcrumb, e.g. <c>Suggestions › Behavior</c>.</summary>
+        public string PageDisplay { get; }
+
+        /// <summary>The option's label, exactly as the page shows it.</summary>
+        public string Label { get; }
+
+        public string Description { get; }
+
+        /// <summary>The search kind the page registered: Toggle, Slider, Number, Dropdown, Text, List or Grid.</summary>
+        public string Kind { get; }
+
+        /// <summary>True for an on/off option the palette flips in place.</summary>
+        public bool IsToggle => Toggle != null;
+
+        internal FrameworkElement Row { get; }
+
+        internal IPageControls Controls { get; }
+
+        internal CheckBox? Toggle { get; }
     }
 }

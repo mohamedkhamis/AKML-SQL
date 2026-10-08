@@ -10,6 +10,11 @@ public sealed partial class AnalyticsStore
     /// <summary>Everything the Insights section shows, for one window.</summary>
     public InsightsReport GetInsights(ReportWindow window)
     {
+        if (!_readOnly)
+        {
+            using var snapshot = OpenReadSnapshot();
+            return snapshot.GetInsights(window);
+        }
         ArgumentNullException.ThrowIfNull(window);
 
         lock (_gate)
@@ -59,7 +64,7 @@ public sealed partial class AnalyticsStore
     /// </summary>
     private IReadOnlyList<ConversionRow> QueryConversionBy(ReportWindow window, string dimension)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         // `dimension` is one of the fixed expressions above, never user input.
         command.CommandText =
             "WITH ranked AS (" +
@@ -122,7 +127,7 @@ public sealed partial class AnalyticsStore
 
     private List<(string Minute, long Count)> CountsByMinute(string table, string exclusion, ReportWindow window)
     {
-        using var command = _connection.CreateCommand();
+        using var command = CreateCommand();
         command.CommandText =
             $"SELECT substr(utc, 1, 16), COUNT(*) FROM {table} WHERE {InWindow} AND {exclusion} GROUP BY 1;";
         BindWindow(command, window);
@@ -153,7 +158,7 @@ public sealed partial class AnalyticsStore
     {
         long newVisitors = 0, newDownloaders = 0, returningVisitors = 0, returningDownloaders = 0;
 
-        using (var command = _connection.CreateCommand())
+        using (var command = CreateCommand())
         {
             command.CommandText =
                 "WITH active AS (" +

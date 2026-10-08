@@ -17,8 +17,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class AliasesPage : IPageBuilder
     {
         public string Key     => "Aliases";
-        public string Display => "Inserted Code › Aliases";
+        public string Display => "Inserted code › Aliases";
         public string Title   => "Aliases";
+        public string HelpTopic => "topics/options#aliases";
         public string Help    => "Control how AKML SQL generates table aliases in completions and JOINs: the include-AS style, a custom map that forces a specific alias for named objects, and naming prefixes to strip before an alias is derived. These apply when alias generation is on (Suggestions › Behavior › Tables Alias).";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
@@ -27,24 +28,23 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowIncludeAs, chkIncludeAs) = ctx.Rows.AddToggle(panel,
                 "Include the AS keyword",
-                "Insert AS in generated aliases (Orders AS o) rather than the bare form (Orders o). Applies when alias generation is on (Suggestions › Behavior › Tables Alias).");
+                "Insert AS in generated aliases (Orders AS o) rather than the bare form (Orders o). Applies when alias generation is on (Suggestions › Behavior › Suggest table aliases).");
             ctx.RegisterSearch("Include the AS keyword", "Insert AS in generated aliases (Orders AS o vs Orders o)", "Toggle", rowIncludeAs);
 
+            // Spec 040 (T159): the row's label is the name search shows — no header repeating it.
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Custom alias map");
 
             var (rowMap, txtMap) = ctx.Rows.AddMultilineTextInput(panel,
-                "Object → alias (one per line, e.g. Customers = c)",
-                "Force a specific alias for an object. One mapping per line as “object = alias”. Object names are matched case-insensitively.",
+                "Custom alias map",
+                "Force a specific alias for an object. One mapping per line as “object = alias”, e.g. Customers = c. Object names are matched case-insensitively.",
                 height: 110);
             ctx.RegisterSearch("Custom alias map", "Force a specific alias for an object (object = alias, one per line)", "Text", rowMap);
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Prefixes to ignore");
 
             var (rowPrefixes, txtPrefixes) = ctx.Rows.AddMultilineTextInput(panel,
-                "Prefixes (one per line, e.g. tbl_, vw_)",
-                "Strip these prefixes from an object name before deriving its alias (tbl_Orders → o). One prefix per line.",
+                "Prefixes to ignore",
+                "Strip these prefixes from an object name before deriving its alias (tbl_Orders → o). One prefix per line, e.g. tbl_ or vw_.",
                 height: 90);
             ctx.RegisterSearch("Prefixes to ignore", "Strip these prefixes before deriving an alias (one per line)", "Text", rowPrefixes);
 

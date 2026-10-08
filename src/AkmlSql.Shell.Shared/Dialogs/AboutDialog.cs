@@ -1,6 +1,8 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using AkmlSql.Core.Config;
+using AkmlSql.Shell.Shared.Ui;
 using Constants = AkmlSql.Core.Constants;
 
 namespace AkmlSql.Shell.Shared.Dialogs
@@ -14,7 +16,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
         private void InitializeComponents()
         {
-            Text = "About " + Constants.ProductName;
+            Text = WindowTitles.For("About");
+            WindowIcon.Apply(this);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -39,7 +42,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
 
             var buildLabel = new Label
             {
-                Text = $"Build Date: {Constants.BuildDate}",
+                Text = $"Build date: {AkmlSql.Core.AppVersion.BuildDateTime}",
                 Location = new Point(20, 80),
                 AutoSize = true
             };
@@ -82,7 +85,7 @@ namespace AkmlSql.Shell.Shared.Dialogs
             {
                 var diagnostics =
                     $"{Constants.ProductName} v{Constants.RuntimeVersion}\n" +
-                    $"Build: {Constants.BuildDate}\n" +
+                    $"Build: {AkmlSql.Core.AppVersion.BuildDateTime} ({BuildUtc()})\n" +
                     $"Runtime: {RuntimeInformation.FrameworkDescription}\n" +
                     $"OS: {RuntimeInformation.OSDescription}\n" +
                     $"Arch: {RuntimeInformation.ProcessArchitecture}\n" +
@@ -107,5 +110,11 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 osLabel, archLabel, licenseLabel, copyDiagButton, okButton
             ]);
         }
+
+        /// <summary>The build instant in UTC for the copied diagnostics (support reads them in any time zone).</summary>
+        private static string BuildUtc() =>
+            AkmlSql.Core.AppVersion.BuildTimestampUtc is System.DateTime utc
+                ? utc.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) + " UTC"
+                : "no build stamp";
     }
 }

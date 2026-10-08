@@ -62,10 +62,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             AutomationProperties.SetName(List, "AI agents");
             List.ItemContainerStyle = BuildItemStyle(theme);
 
-            AddButton = MakeButton("Add", "Add a new AI agent");
-            DuplicateButton = MakeButton("Duplicate", "Duplicate the selected agent, including its key");
-            RemoveButton = MakeButton("Remove", "Remove the selected agent");
-            SetActiveButton = MakeButton("Set as active", "Make the selected agent the active agent");
+            AddButton = MakeButton("Add", "Add a new AI agent", theme);
+            DuplicateButton = MakeButton("Duplicate", "Duplicate the selected agent, including its key", theme);
+            RemoveButton = MakeButton("Remove", "Remove the selected agent", theme);
+            SetActiveButton = MakeButton("Set as active", "Make the selected agent the active agent", theme);
 
             _buttonRow = new StackPanel
             {
@@ -330,7 +330,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return new ControlTemplate(typeof(ListBoxItem)) { VisualTree = border };
         }
 
-        internal static Button MakeButton(string content, string automationName)
+        /// <summary>
+        /// A list-action button. Spec 040 (OPT-09): themed from the Options window's
+        /// <paramref name="theme"/> — the stock button was light chrome on the dark page.
+        /// </summary>
+        internal static Button MakeButton(string content, string automationName, PageTheme theme)
         {
             var button = new Button
             {
@@ -338,6 +342,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 Padding = new Thickness(12, 4, 12, 4),
                 Margin = new Thickness(0, 0, 8, 0),
             };
+            ThemedButton.ApplySecondary(button, theme);
             AutomationProperties.SetName(button, automationName);
             return button;
         }

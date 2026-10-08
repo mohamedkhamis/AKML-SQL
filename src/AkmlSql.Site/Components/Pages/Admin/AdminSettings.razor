@@ -9,6 +9,7 @@
 @inject ReleasesManifest Manifest
 @inject ReleaseAvailability Availability
 @inject IAntiforgery Antiforgery
+@inject IServiceProvider Services
 
 @* Spec 038 T034 (US2): the owner's controls over public behaviour.
 
@@ -79,7 +80,7 @@
     <section class="admin-panel" aria-labelledby="visibility-heading">
         <h2 id="visibility-heading">Release visibility</h2>
         <p>
-            The manifest currently holds <strong>@Manifest.Releases.Count</strong> releases. This
+            The release list currently holds <strong>@ReleaseCount</strong> releases, including the cached GitHub latest. This
             setting decides how many of them the download page offers.
         </p>
 
@@ -171,6 +172,8 @@
     </p>
 }
 
+<CollectionHealthPanel />
+
 @code {
     [SupplyParameterFromQuery(Name = "saved")]
     private string? SavedFlag { get; set; }
@@ -192,6 +195,7 @@
     private IReadOnlyList<Release> VisibleReleases { get; set; } = [];
 
     private int HiddenCount { get; set; }
+    private int ReleaseCount { get; set; }
 
     /// <summary>
     /// Built in C# rather than interleaved into the markup: Razor inserts whitespace around each
@@ -218,8 +222,10 @@
             ? []
             : ErrorFlag.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-        VisibleReleases = ReleaseVisibility.Apply(Current.Visibility, Current.VisibilityCount, Manifest.Releases);
-        HiddenCount = Math.Max(0, Manifest.Releases.Count - VisibleReleases.Count);
+        var releases = (Services.GetService(typeof(LatestGitHubRelease)) as LatestGitHubRelease)?.WithHistory(Manifest) ?? Manifest.Releases;
+        ReleaseCount = releases.Count;
+        VisibleReleases = ReleaseVisibility.Apply(Current.Visibility, Current.VisibilityCount, releases);
+        HiddenCount = Math.Max(0, releases.Count - VisibleReleases.Count);
 
         (LastChangedUtc, LastChangedBy) = Settings.LastChange();
     }

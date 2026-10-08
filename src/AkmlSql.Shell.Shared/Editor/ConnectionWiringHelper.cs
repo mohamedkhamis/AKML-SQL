@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Config;
@@ -54,11 +56,12 @@ namespace AkmlSql.Shell.Shared.Editor
                                     }
                                     Log.Debug("DetectAndSendConnection: session={SessionId} detected on attempt {Attempt} → {Server}.{Db} auth={Auth}",
                                         sessionId, attempt + 1, conn.Server, conn.Database, conn.AuthMode);
-                                    var c = EngineLifecycle.Manager?.Client;
-                                    if (c != null && c.IsConnected)
-                                        await SendConnectionChangedAsync(c, sessionId, conn);
-                                    else
-                                        Log.Debug("DetectAndSendConnection: engine not connected — deferred send skipped for session={SessionId}", sessionId);
+                                    // The engine starts with SSMS; for a tab open at startup it can still
+                                    // be connecting. Skipping the send then left that tab without a schema.
+                                    var found = conn;
+                                    if (!await WhenEngineReadyAsync(EngineReady,
+                                            () => SendConnectionChangedAsync(EngineLifecycle.Manager!.Client, sessionId, found)))
+                                        Log.Warning("DetectAndSendConnection: engine did not connect within 10s for session={SessionId}; schema loading skipped", sessionId);
                                     return;
                                 }
                             }
@@ -89,34 +92,40 @@ namespace AkmlSql.Shell.Shared.Editor
                 Log.Debug("DetectAndSendConnection: session={SessionId} detected synchronously → {Server}.{Db} auth={Auth}",
                     sessionId, connection.Server, connection.Database, connection.AuthMode);
 
-                var client = EngineLifecycle.Manager?.Client;
-                if (client != null && client.IsConnected)
-                {
-                    Task.Run(() => SendConnectionChangedAsync(client, sessionId, connection));
-                    return;
-                }
-
-                // Engine not ready yet — retry in background
-                Log.Debug("DetectAndSendConnection: engine not connected yet for session={SessionId}, polling up to 10s", sessionId);
+                if (!EngineReady())
+                    Log.Debug("DetectAndSendConnection: engine not connected yet for session={SessionId}, polling up to 10s", sessionId);
                 Task.Run(async () =>
                 {
-                    for (int i = 0; i < 20; i++)
-                    {
-                        await Task.Delay(500);
-                        var c = EngineLifecycle.Manager?.Client;
-                        if (c != null && c.IsConnected)
-                        {
-                            Log.Debug("DetectAndSendConnection: engine became ready after {Ms}ms for session={SessionId}", (i + 1) * 500, sessionId);
-                            await SendConnectionChangedAsync(c, sessionId, connection);
-                            return;
-                        }
-                    }
-                    Log.Warning("DetectAndSendConnection: engine did not connect within 10s for session={SessionId}; schema loading skipped", sessionId);
+                    if (!await WhenEngineReadyAsync(EngineReady,
+                            () => SendConnectionChangedAsync(EngineLifecycle.Manager!.Client, sessionId, connection)))
+                        Log.Warning("DetectAndSendConnection: engine did not connect within 10s for session={SessionId}; schema loading skipped", sessionId);
                 });
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "Failed to detect/send SSMS connection");
+            }
+        }
+
+        private static bool EngineReady() => EngineLifecycle.Manager?.Client is { IsConnected: true };
+
+        /// <summary>
+        /// Runs <paramref name="send"/> once the engine is connected, checking every
+        /// <paramref name="delayMs"/> ms up to <paramref name="attempts"/> times; false when it never
+        /// connected. A connection is often found before the engine started with SSMS is up.
+        /// </summary>
+        internal static async Task<bool> WhenEngineReadyAsync(Func<bool> engineReady, Func<Task> send,
+            int attempts = 20, int delayMs = 500)
+        {
+            for (var i = 0; ; i++)
+            {
+                if (engineReady())
+                {
+                    await send().ConfigureAwait(false);
+                    return true;
+                }
+                if (i >= attempts) return false;
+                await Task.Delay(delayMs).ConfigureAwait(false);
             }
         }
 
@@ -138,7 +147,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 var settings = ConfigManager.Load();
                 if (!settings.IntelliSense.EnableSqlAuthCredentials) return; // opt-out → behave like Unsupported
 
-                var pwd = ResolveSqlAuthPassword(conn.Server, conn.Login);
+                var pwd = ResolveSqlAuthPassword(conn.DataSource, conn.Server, conn.Login);
                 bool has = !string.IsNullOrEmpty(pwd);
 
                 if (textView != null)
@@ -146,6 +155,7 @@ namespace AkmlSql.Shell.Shared.Editor
                     textView.TextBuffer.Properties["AkmlSqlAuthState"] = new SqlAuthState
                     {
                         Server = conn.Server,
+                        DataSource = conn.DataSource,
                         Database = conn.Database,
                         Login = conn.Login,
                         NeedsCredentials = !has
@@ -155,7 +165,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (has)
                 {
                     conn.ConnectionString = SsmsConnectionDetector.BuildSqlAuthConnectionString(
-                        conn.Server, conn.Database, conn.Login, pwd);
+                        conn.DataSource, conn.Database, conn.Login, pwd);
                     conn.IsEngineUsable = true;
                 }
             }
@@ -172,7 +182,10 @@ namespace AkmlSql.Shell.Shared.Editor
         /// Returns null when neither yields a password (the caller then shows the click-to-enter
         /// affordance). MUST run on the UI thread — the inherit step reads the SSMS ScriptFactory.
         /// </summary>
-        private static string ResolveSqlAuthPassword(string server, string login)
+        /// <param name="server">The server connected to (the credential store's key).</param>
+        /// <param name="shownServer">The server as SSMS shows it; credentials stored under it before
+        /// custom connection names were resolved are still found.</param>
+        private static string ResolveSqlAuthPassword(string server, string shownServer, string login)
         {
             // Tier 1: inherit the password SSMS already holds for the active window (no prompt).
             if (SsmsConnectionDetector.TryGetActiveSqlAuthPassword(server, login, out var inherited)
@@ -186,6 +199,9 @@ namespace AkmlSql.Shell.Shared.Editor
             // Tier 2: a previously entered/inherited credential from the DPAPI store.
             if (SqlCredentialStore.TryGet(server, login, out var stored) && !string.IsNullOrEmpty(stored))
                 return stored;
+            if (!string.Equals(server, shownServer, StringComparison.OrdinalIgnoreCase)
+                && SqlCredentialStore.TryGet(shownServer, login, out var legacy) && !string.IsNullOrEmpty(legacy))
+                return legacy;
 
             return null; // Tier 3: caller prompts via the click-to-enter affordance.
         }
@@ -206,7 +222,7 @@ namespace AkmlSql.Shell.Shared.Editor
                 if (!textView.TextBuffer.Properties.TryGetProperty<SqlAuthState>("AkmlSqlAuthState", out var state)
                     || state == null)
                     return false;
-                var pwd = ResolveSqlAuthPassword(state.Server, state.Login);
+                var pwd = ResolveSqlAuthPassword(state.DataSource, state.Server, state.Login);
                 if (string.IsNullOrEmpty(pwd))
                     return false;
 
@@ -221,10 +237,11 @@ namespace AkmlSql.Shell.Shared.Editor
                 var conn = new SsmsConnectionDetector.ConnectionResult
                 {
                     Server = state.Server,
+                    DataSource = state.DataSource,
                     Database = state.Database,
                     Login = state.Login,
                     ConnectionString = SsmsConnectionDetector.BuildSqlAuthConnectionString(
-                        state.Server, state.Database, state.Login, pwd),
+                        state.DataSource, state.Database, state.Login, pwd),
                     AuthMode = SsmsConnectionDetector.AuthMode.SqlPassword,
                     IsEngineUsable = true
                 };
@@ -237,6 +254,64 @@ namespace AkmlSql.Shell.Shared.Editor
                 Log.Debug(ex, "TryResolveStoredSqlCredential failed for session={Session}", sessionId);
                 return false;
             }
+        }
+
+        // The open editors by session, so an engine that restarted (and knows none) gets each one's
+        // text and connection again. Weak: a closed view is not kept alive here.
+        private static readonly ConcurrentDictionary<string, WeakReference<Microsoft.VisualStudio.Text.Editor.IWpfTextView>> OpenViews =
+            new ConcurrentDictionary<string, WeakReference<Microsoft.VisualStudio.Text.Editor.IWpfTextView>>();
+
+        /// <summary>Remembers <paramref name="textView"/> under its session until it closes.</summary>
+        public static void Track(string sessionId, Microsoft.VisualStudio.Text.Editor.IWpfTextView textView)
+        {
+            OpenViews[sessionId] = new WeakReference<Microsoft.VisualStudio.Text.Editor.IWpfTextView>(textView);
+            textView.Closed += (_, __) => OpenViews.TryRemove(sessionId, out var ___);
+        }
+
+        /// <summary>
+        /// The engine ran again after a crash (or being killed): it starts with no sessions, so the
+        /// open editors had no schema, completions or Format SQL actions until reopened. Send each
+        /// one's text and connection again.
+        /// </summary>
+        public static void OnEngineRestarted()
+        {
+            _ = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
+            {
+                await Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                var sp = Microsoft.VisualStudio.Shell.ServiceProvider.GlobalProvider as IServiceProvider;
+                var resent = 0;
+                foreach (var pair in OpenViews.ToArray())
+                {
+                    if (!pair.Value.TryGetTarget(out var view) || view.IsClosed)
+                    {
+                        OpenViews.TryRemove(pair.Key, out _);
+                        continue;
+                    }
+                    SendFullDocument(pair.Key, view.TextBuffer);
+                    DetectAndSendConnection(sp, pair.Key, view);
+                    resent++;
+                }
+                Log.Information("Engine restarted: sent {Count} open editor(s) again", resent);
+            });
+        }
+
+        /// <summary>
+        /// <see cref="SendFullDocument"/> once the engine is connected — the engine started with
+        /// SSMS may still be starting when the first editor opens, and a skipped send left that
+        /// editor's text unknown to it.
+        /// </summary>
+        public static void SendFullDocumentWhenReady(string sessionId, ITextBuffer buffer)
+        {
+            if (EngineReady())
+            {
+                SendFullDocument(sessionId, buffer);
+                return;
+            }
+            Task.Run(async () =>
+            {
+                if (!await WhenEngineReadyAsync(EngineReady, () => { SendFullDocument(sessionId, buffer); return Task.CompletedTask; }))
+                    Log.Warning("SendFullDocumentWhenReady: engine did not connect within 10s for session={SessionId}", sessionId);
+            });
         }
 
         public static void SendFullDocument(string sessionId, ITextBuffer buffer)

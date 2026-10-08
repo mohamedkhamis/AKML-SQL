@@ -52,8 +52,23 @@
 
 #define MyAppName "AKML SQL"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.0.0"
+  ; No /DMyAppVersion (a bare ISCC run): use the version the extension was built with. This
+  ; fell back to "1.0.0", which then went into Apps & features, the setup EXE, the VSIX
+  ; manifest and SSMS's installed-products entry.
+  #define BuiltShellDll AddBackslash(SourcePath) + "..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Ssms22.dll"
+  #if !FileExists(BuiltShellDll)
+    #error "Build the SSMS extension (Release) first, or pass /DMyAppVersion=1.YY.MMDD.HHmm."
+  #endif
+  #define BuiltVersion GetStringFileInfo(BuiltShellDll, "ProductVersion")
+  #if Pos("+", BuiltVersion) > 0
+    #define MyAppVersion Copy(BuiltVersion, 1, Pos("+", BuiltVersion) - 1)
+  #else
+    #define MyAppVersion BuiltVersion
+  #endif
 #endif
+; The copyright runs from the first release year to the year this installer is compiled.
+#define ThisYear GetDateTimeString('yyyy', '', '')
+#define CopyrightYears (ThisYear == "2026" ? "2026" : "2026-" + ThisYear)
 #define MyAppPublisher "Mohamed Khamis"
 #define MyAppURL "https://akml.khamis.work"
 #define MyAppId "{{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}"
@@ -93,7 +108,7 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/feedback
 AppUpdatesURL={#MyAppURL}/download
 AppContact={#MyAppURL}/feedback
-AppCopyright=Copyright (C) 2026 {#MyAppPublisher}
+AppCopyright=Copyright (C) {#CopyrightYears} {#MyAppPublisher}
 ; VersionInfoVersion stamps the compiled installer .EXE's own file-properties
 ; (Details tab in Explorer → "File version" / "Product version"). Inno Setup
 ; requires the 4-segment x.y.z.w form here; our MyAppVersion already matches.
@@ -102,7 +117,7 @@ VersionInfoProductVersion={#MyAppVersion}
 VersionInfoProductName={#MyAppName}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
-VersionInfoCopyright=Copyright (C) 2026 {#MyAppPublisher}
+VersionInfoCopyright=Copyright (C) {#CopyrightYears} {#MyAppPublisher}
 ; New installs: Program Files\AKML SQL (64-bit). An install made by the earlier 32-bit installer
 ; stays in its Program Files (x86) folder -- see DefaultInstallDir and MigrateLegacy32BitInstall.
 DefaultDirName={code:DefaultInstallDir}
@@ -135,13 +150,16 @@ DisableProgramGroupPage=yes
 SetupLogging=yes
 ; The akmlsql-update: URL scheme ([Registry]) -- tell Explorer about it.
 ChangesAssociations=yes
-; icon.ico is the original AKML logo. The banner files are that AKML logo (from the 256px
-; icon artwork) rendered square at 100/125/150/200% (55/69/82/110 px): WizardSmallImageFile
-; is drawn in a square area and keeps its aspect ratio. The sidebar is the new design
-; (TURN 6a welcome panel) with 125/150/200% variants. Inno picks the variant matching the DPI.
+; Art from the "AKML SQL Icon" design. icon.ico is 5a (the hexagon glyph, no text, so it stays
+; legible at 16/32 px) in 16-256 px; Resources\akml.ico in AkmlSql.Shell.Shared is the same file.
+; The Welcome page is the brand page (AddBrandedWelcome, from assets\welcome-*.png); the sidebar
+; below, 6a, is the Finished page's (Inno picks the variant matching the DPI). The page header is
+; 6b's banner alone -- its brand block (hexagon, AKML SQL, tagline) and its gold rule, drawn by
+; AddHeaderBrand and AddHeaderRule ([Code]) from assets\brand-light-*.png / brand-dark-*.png; the
+; page title and description are not shown. The square corner image Inno would draw is turned off.
 SetupIconFile=assets\icon.ico
 WizardImageFile=assets\sidebar.bmp,assets\sidebar-125.bmp,assets\sidebar-150.bmp,assets\sidebar-200.bmp
-WizardSmallImageFile=assets\banner.bmp,assets\banner-125.bmp,assets\banner-150.bmp,assets\banner-200.bmp
+WizardSmallImageFile=
 ; Windows 11 look that follows the system's light/dark setting; no bevel lines.
 WizardStyle=modern dynamic windows11 hidebevels
 WizardSizePercent=120
@@ -185,6 +203,10 @@ Source: "..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll"; DestDir: 
 Source: "..\AkmlSql.Updater\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\AkmlSql.Updater.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Icon for Apps & features, the Start-menu shortcuts and the akmlsql-update: scheme.
 Source: "assets\icon.ico"; DestDir: "{app}"; DestName: "AKMLSQL.ico"; Flags: ignoreversion
+; The wizard's own art -- the header banner (design 6b) and the Welcome page -- used by Setup
+; itself and never installed (AddHeaderBrand, AddBrandedWelcome).
+Source: "assets\brand-*.png"; Flags: dontcopy
+Source: "assets\welcome-*.png"; Flags: dontcopy
 ; Registers / removes the update-check scheduled task (see [Run] / [UninstallRun]).
 Source: "update-task.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion
 ; Engine is SelfContained + PublishSingleFile=false — deploy ALL published output
@@ -194,13 +216,13 @@ Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SSMS 22 (x64) extension files — all DLLs from build output plus pkgdef and manifest
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
-Source: "..\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
+Source: "generated\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion
 Source: "generated\AkmlSql.Ssms22\extension.vsixmanifest"; DestDir: "{code:GetSSMS22ExtDir}"; DestName: "extension.vsixmanifest"; Check: CheckSSMS22; Flags: ignoreversion
 
 
 [Icons]
 ; "Settings" pointed at AkmlSql.Core.dll, which cannot be opened -- settings live inside SSMS
-; (Tools > AKML SQL > Options). The update shortcut's AppUserModelID is what lets the updater
+; (AKML SQL > Options... on the SSMS menu bar). The update shortcut's AppUserModelID is what lets the updater
 ; show Windows notifications at all: an unpackaged app's notifications are attributed through a
 ; Start-menu shortcut carrying its ID. Keep it equal to Constants.AppUserModelId.
 Name: "{group}\Check for {#MyAppName} updates"; Filename: "{app}\AkmlSql.Updater.exe"; Parameters: "--check-now"; \
@@ -623,8 +645,126 @@ end;
 
 // --- Wizard Initialization ---
 
+// Design 6b: a gold rule along the bottom of the page header. Style elements off, so the dark
+// theme keeps its color.
+procedure AddHeaderRule;
+var
+  Rule: TPanel;
+begin
+  Rule := TPanel.Create(WizardForm);
+  Rule.Parent := WizardForm.MainPanel;
+  Rule.BevelOuter := bvNone;
+  Rule.ParentBackground := False;
+  Rule.StyleElements := [];
+  Rule.Color := $0098D5;  // #D59800
+  Rule.SetBounds(0, WizardForm.MainPanel.ClientHeight - ScaleY(2), WizardForm.MainPanel.ClientWidth, ScaleY(2));
+  Rule.Anchors := [akLeft, akRight, akBottom];
+end;
+
+// The wizard art is rendered at Inno's header sizes (the font-based scale: 58/77/97/116/124/143/159
+// px for 100-250% DPI); this names the set nearest the current scale.
+function BrandDpiStep: String;
+var
+  Target: Integer;
+begin
+  Target := ScaleY(46);
+  if Target <= 46 then Result := '100'
+  else if Target <= 61 then Result := '125'
+  else if Target <= 77 then Result := '150'
+  else if Target <= 92 then Result := '175'
+  else if Target <= 98 then Result := '200'
+  else if Target <= 113 then Result := '225'
+  else Result := '250';
+end;
+
+// A transparent PNG from [Files] (dontcopy), stretched to whatever bounds the caller sets.
+function LoadBrandImage(Parent: TWinControl; FileName: String): TBitmapImage;
+begin
+  ExtractTemporaryFile(FileName);
+  Result := TBitmapImage.Create(WizardForm);
+  Result.Parent := Parent;
+  Result.PngImage.LoadFromFile(ExpandConstant('{tmp}\') + FileName);
+  Result.Stretch := True;
+end;
+
+// Design 6b: the page header is the banner alone -- the brand block (the hexagon mark, AKML SQL
+// and its tagline) on the left, in the colours for Setup's light or dark style, and the gold rule
+// along the bottom (AddHeaderRule). Inno's page title and description are not shown.
+procedure AddHeaderBrand;
+var
+  Brand: TBitmapImage;
+  Variant: String;
+begin
+  if IsDarkInstallMode then Variant := 'dark' else Variant := 'light';
+  Brand := LoadBrandImage(WizardForm.MainPanel, 'brand-' + Variant + '-' + BrandDpiStep + '.png');
+  Brand.SetBounds(ScaleX(16), (WizardForm.MainPanel.ClientHeight - ScaleY(2) - ScaleY(46)) div 2,
+    ScaleX(216), ScaleY(46));
+  WizardForm.PageNameLabel.Visible := False;
+  WizardForm.PageDescriptionLabel.Visible := False;
+end;
+
+// One of Inno's welcome labels, moved onto the brand page in its colours. Style elements off, so
+// the dark style does not repaint it.
+procedure PlaceWelcomeLabel(Lbl: TNewStaticText; Parent: TWinControl; Left, Top, Width: Integer; FontColor: TColor);
+begin
+  Lbl.Parent := Parent;
+  Lbl.StyleElements := [];
+  Lbl.Color := $403600;  // #003640, the brand page
+  Lbl.Font.Color := FontColor;
+  Lbl.AutoSize := False;
+  Lbl.WordWrap := True;
+  Lbl.SetBounds(Left, Top, Width, Lbl.Height);
+  Lbl.Anchors := [akLeft, akTop, akRight];
+  Lbl.AdjustHeight;
+end;
+
+// The Welcome page is the brand page, in the colours of the 6a panel whatever Setup's style: deep
+// teal, the logo lockup (6a's hexagon mark, AKML SQL, its gold rule and tagline), faint hexagons on
+// the right, and Inno's own welcome text (localised, and naming the version) in white.
+procedure AddBrandedWelcome;
+var
+  Page: TNewNotebookPage;
+  Panel: TPanel;
+  Decor, Lockup: TBitmapImage;
+  Step: String;
+  Left, TextWidth: Integer;
+begin
+  Page := WizardForm.WelcomePage;
+  Step := BrandDpiStep;
+  WizardForm.WizardBitmapImage.Visible := False;  // the 6a panel stays for the Finished page
+
+  Panel := TPanel.Create(WizardForm);
+  Panel.Parent := Page;
+  Panel.BevelOuter := bvNone;
+  Panel.ParentBackground := False;
+  Panel.StyleElements := [];
+  Panel.Color := $403600;  // #003640
+  Panel.SetBounds(0, 0, Page.ClientWidth, Page.ClientHeight);
+  Panel.Anchors := [akLeft, akTop, akRight, akBottom];
+
+  Decor := LoadBrandImage(Panel, 'welcome-decor-' + Step + '.png');
+  Decor.BackColor := $403600;
+  Decor.SetBounds(Panel.ClientWidth - ScaleX(170), ScaleY(40), ScaleX(220), ScaleY(300));
+  Decor.Anchors := [akTop, akRight];
+
+  Lockup := LoadBrandImage(Panel, 'welcome-lockup-' + Step + '.png');
+  Lockup.BackColor := $403600;
+  Lockup.SetBounds(ScaleX(36), ScaleY(40), ScaleX(300), ScaleY(96));
+
+  // The text keeps clear of the hexagons on the right.
+  Left := ScaleX(36);
+  TextWidth := Panel.ClientWidth - Left - ScaleX(190);
+  WizardForm.WelcomeLabel1.Font.Size := 13;
+  PlaceWelcomeLabel(WizardForm.WelcomeLabel1, Panel, Left, Lockup.Top + Lockup.Height + ScaleY(28), TextWidth, clWhite);
+  PlaceWelcomeLabel(WizardForm.WelcomeLabel2, Panel, Left,
+    WizardForm.WelcomeLabel1.Top + WizardForm.WelcomeLabel1.Height + ScaleY(12), TextWidth, $E4E2D0);  // #D0E2E4
+end;
+
 procedure InitializeWizard;
 begin
+  AddBrandedWelcome;
+  AddHeaderBrand;
+  AddHeaderRule;
   // Run environment scan
   RunFullScan;
 
@@ -673,7 +813,7 @@ begin
   OptionsPage := CreateInputOptionPage(wpSelectTasks,
     'Updates and error reports',
     'Keep AKML SQL current and help fix what goes wrong.',
-    'You can change both later in SSMS: Tools > AKML SQL > Options > General.',
+    'You can change both later in SSMS: AKML SQL > Options... > General.',
     False, False);
   OptionsPage.Add('Check for updates automatically, and download them in the background');
   OptionsPage.Add('Send anonymous error reports (recommended)');

@@ -56,6 +56,22 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [Fact]
+        public void AfterCancel_removes_the_killed_updaters_progress_snapshot()
+        {
+            var progress = Path.Combine(_root, "state", "update-download-progress.json");
+            UpdateDownloadProgressStore.Save(new UpdateDownloadProgress
+            {
+                Version = "1.26.0903.0900",
+                Phase = UpdateDownloadPhases.Downloading,
+                BytesReceived = 1024,
+            }, progress);
+
+            UpdateDownloadCleanup.AfterCancel("1.26.0903.0900", _cacheDir, _resultPath, progress);
+
+            Assert.False(File.Exists(progress));
+        }
+
+        [Fact]
         public void AfterCancel_leaves_a_verified_result_untouched()
         {
             // Defensive: a cancel racing a completed verification must not discard it.

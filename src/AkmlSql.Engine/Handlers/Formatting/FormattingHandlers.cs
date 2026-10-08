@@ -25,7 +25,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatDocument;
         public int ResponseMessageType => MessageTypes.FormatDocumentResult;
         public Task<FormatResponse> HandleAsync(FormatRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormat(request));
+            => Task.FromResult(_inner.HandleFormat(request, ctx.SchemaCache, ctx.Sessions));   // spec 040: schema-aware Format SQL actions
     }
 
     public sealed class FormatSelectionHandler : IRpcRequestHandler<FormatSelectionRequest, FormatSelectionResponse>
@@ -35,7 +35,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatSelection;
         public int ResponseMessageType => MessageTypes.FormatSelectionResult;
         public Task<FormatSelectionResponse> HandleAsync(FormatSelectionRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatSelection(request));
+            => Task.FromResult(_inner.HandleFormatSelection(request, ctx.SchemaCache, ctx.Sessions));
     }
 
     public sealed class FormatPreviewHandler : IRpcRequestHandler<FormatPreviewRequest, FormatPreviewResponse>

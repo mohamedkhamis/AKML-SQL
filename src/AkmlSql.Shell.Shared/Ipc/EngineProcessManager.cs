@@ -18,6 +18,9 @@ namespace AkmlSql.Shell.Shared.Ipc
         private int _restartCount;
 
         public PipeRpcClient Client => _client;
+
+        /// <summary>Raised (on a background thread) once a crashed or killed engine runs again.</summary>
+        public event EventHandler Restarted;
         public bool IsRunning => _engineProcess is { HasExited: false };
 
         public EngineProcessManager()
@@ -92,6 +95,8 @@ namespace AkmlSql.Shell.Shared.Ipc
                 {
                     await Task.Delay(500);
                     await LaunchAsync();
+                    // The new engine knows no editor yet: the shell sends each open one again.
+                    Restarted?.Invoke(this, EventArgs.Empty);
                 }
                 catch (Exception ex)
                 {

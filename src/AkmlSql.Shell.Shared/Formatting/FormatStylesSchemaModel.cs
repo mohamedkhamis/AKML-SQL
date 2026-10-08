@@ -37,6 +37,50 @@ namespace AkmlSql.Shell.Shared.Formatting
             public List<Group> Groups { get; } = new List<Group>();
         }
 
+        /// <summary>SQL Prompt model: a query the editor formats to show what an option does.</summary>
+        internal sealed class ExampleQuery
+        {
+            public string Id { get; set; } = string.Empty;
+            public string Name { get; set; } = string.Empty;
+            public string Sql { get; set; } = string.Empty;
+        }
+
+        /// <summary>
+        /// SQL Prompt model: where an option shows — the query (<see cref="PageSampleQueryId"/> for
+        /// its page's sample) and the other settings it needs, by setting id.
+        /// </summary>
+        internal sealed class ExampleTarget
+        {
+            public string QueryId { get; set; } = string.Empty;
+            public List<KeyValuePair<string, object?>> With { get; } = new List<KeyValuePair<string, object?>>();
+        }
+
+        /// <summary>SQL Prompt model: an option's "what does each value do" example.</summary>
+        internal sealed class OptionExample
+        {
+            public ExampleTarget Target { get; set; } = new ExampleTarget();
+            /// <summary>The values to show a card for, the option's default first.</summary>
+            public List<object?> Values { get; } = new List<object?>();
+            /// <summary>Values that only show on another query, keyed by <see cref="ValueKey"/>.</summary>
+            public Dictionary<string, ExampleTarget> ByValue { get; } = new Dictionary<string, ExampleTarget>(StringComparer.Ordinal);
+
+            /// <summary>Where <paramref name="value"/> shows: its own target, or the option's.</summary>
+            public ExampleTarget TargetFor(object? value) =>
+                ByValue.TryGetValue(ValueKey(value), out var own) ? own : Target;
+        }
+
+        /// <summary>The query id that stands for "this option's page sample".</summary>
+        internal const string PageSampleQueryId = "page";
+
+        /// <summary>A value as the schema's <c>byValue</c> keys spell it: <c>true</c>, <c>60</c>, <c>always</c>.</summary>
+        internal static string ValueKey(object? value) => value switch
+        {
+            null => "null",
+            bool b => b ? "true" : "false",
+            IFormattable f => f.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? string.Empty,
+        };
+
         internal sealed class Model
         {
             /// <summary>True when the schema carried category information (v2).</summary>
@@ -47,6 +91,24 @@ namespace AkmlSql.Shell.Shared.Formatting
             public List<Category> Categories { get; } = new List<Category>();
             /// <summary>Always populated (schema order) — the v1 flat rendering source.</summary>
             public List<Group> FlatGroups { get; } = new List<Group>();
+            /// <summary>SQL Prompt model (schema 2002+): the queries option examples use, by id.</summary>
+            public Dictionary<string, ExampleQuery> ExampleQueries { get; } = new Dictionary<string, ExampleQuery>(StringComparer.Ordinal);
+            /// <summary>SQL Prompt model (schema 2002+): the SELECT statements the preview offers, in order.</summary>
+            public List<ExampleQuery> SelectExamples { get; } = new List<ExampleQuery>();
+
+            /// <summary>The page <paramref name="settingId"/> is on, or null.</summary>
+            public Group? GroupOf(string settingId)
+            {
+                foreach (var g in FlatGroups)
+                    foreach (var s in g.Settings)
+                        if (string.Equals(s.Id, settingId, StringComparison.Ordinal)) return g;
+                return null;
+            }
+
+            /// <summary>The SQL behind an example query id: a page's sample for <see cref="PageSampleQueryId"/>.</summary>
+            public string? SqlFor(string queryId, Group? page) =>
+                queryId == PageSampleQueryId ? page?.Sample
+                : ExampleQueries.TryGetValue(queryId, out var q) ? q.Sql : null;
         }
 
         /// <summary>Category id → display name. Ids travel only as ParentId values on group rows.</summary>
@@ -134,7 +196,28 @@ namespace AkmlSql.Shell.Shared.Formatting
                                     && gateEl.TryGetProperty("id", out var gateIdEl) ? gateIdEl.GetString() : null,
                     EnabledWhenValue = s.TryGetProperty("enabledWhen", out var gateEl2) && gateEl2.ValueKind == JsonValueKind.Object
                                        && gateEl2.TryGetProperty("value", out var gateValueEl) ? ProfileJsonMerger.ReadScalar(gateValueEl) : null,
+                    Example = s.TryGetProperty("example", out var exampleEl) ? ReadExample(exampleEl) : null,
                 });
+            }
+
+            if (root.TryGetProperty("exampleQueries", out var queriesEl) && queriesEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var q in queriesEl.EnumerateArray())
+                {
+                    var query = new ExampleQuery
+                    {
+                        Id = q.TryGetProperty("id", out var qid) && qid.ValueKind == JsonValueKind.String ? qid.GetString()! : string.Empty,
+                        Name = q.TryGetProperty("title", out var qt) && qt.ValueKind == JsonValueKind.String ? qt.GetString()! : string.Empty,
+                        Sql = q.TryGetProperty("sql", out var qs) && qs.ValueKind == JsonValueKind.String ? qs.GetString()! : string.Empty,
+                    };
+                    if (query.Id.Length > 0 && query.Sql.Length > 0) model.ExampleQueries[query.Id] = query;
+                }
+            }
+            if (root.TryGetProperty("selectExamples", out var selectEl) && selectEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var id in selectEl.EnumerateArray())
+                    if (id.ValueKind == JsonValueKind.String && model.ExampleQueries.TryGetValue(id.GetString()!, out var q))
+                        model.SelectExamples.Add(q);
             }
 
             var byCategory = new Dictionary<string, Category>(StringComparer.Ordinal);
@@ -182,6 +265,37 @@ namespace AkmlSql.Shell.Shared.Formatting
             }
 
             return model;
+        }
+
+        /// <summary>A setting's <c>example</c>, or null when it has none or it is malformed.</summary>
+        private static OptionExample? ReadExample(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) return null;
+            var target = ReadTarget(el);
+            if (target == null) return null;
+            var example = new OptionExample { Target = target };
+            if (el.TryGetProperty("values", out var values) && values.ValueKind == JsonValueKind.Array)
+                foreach (var v in values.EnumerateArray()) example.Values.Add(ProfileJsonMerger.ReadScalar(v));
+            if (example.Values.Count < 2) return null;
+            if (el.TryGetProperty("byValue", out var byValue) && byValue.ValueKind == JsonValueKind.Object)
+                foreach (var entry in byValue.EnumerateObject())
+                    if (ReadTarget(entry.Value) is { } own) example.ByValue[entry.Name] = own;
+            return example;
+        }
+
+        private static ExampleTarget? ReadTarget(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object || !el.TryGetProperty("query", out var q) || q.ValueKind != JsonValueKind.String) return null;
+            var target = new ExampleTarget { QueryId = q.GetString()! };
+            if (el.TryGetProperty("with", out var with) && with.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var w in with.EnumerateArray())
+                {
+                    if (w.ValueKind != JsonValueKind.Object || !w.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String) continue;
+                    target.With.Add(new KeyValuePair<string, object?>(id.GetString()!, w.TryGetProperty("value", out var value) ? ProfileJsonMerger.ReadScalar(value) : null));
+                }
+            }
+            return target;
         }
 
         private static List<string>? ReadStrings(JsonElement owner, string property)

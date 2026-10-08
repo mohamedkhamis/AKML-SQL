@@ -158,6 +158,86 @@ public sealed class UpdateDownloaderTests : IDisposable
         Assert.Contains("HTTPS", persisted.FailureReason, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Progress_is_published_while_downloading_and_removed_after()
+    {
+        var payload = new byte[8192];
+        new Random(7).NextBytes(payload);
+        SeedResult(NewResult(), Sha256Hex(payload));
+        var progressPath = Path.Combine(_root, "state", "update-download-progress.json");
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = new GatedStream(payload, gate.Task);
+        var handler = new StubHandler((_, _) =>
+        {
+            var content = new StreamContent(stream);
+            content.Headers.ContentLength = payload.Length;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        });
+
+        var run = new UpdateDownloader(handler, _resultPath, _cacheDir, progressPath).RunAsync();
+
+        // Mid-download: the snapshot names the version, the size and the bytes so far.
+        UpdateDownloadProgress? seen = null;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            seen = UpdateDownloadProgressStore.TryLoad(progressPath);
+            if (seen is { BytesReceived: >= 8192 }) break;
+            await Task.Delay(25);
+        }
+        Assert.NotNull(seen);
+        Assert.Equal("1.26.0903.0900", seen!.Version);
+        Assert.Equal(UpdateDownloadPhases.Downloading, seen.Phase);
+        Assert.Equal(8192, seen.BytesReceived);
+        Assert.Equal(8192, seen.TotalBytes);
+
+        gate.SetResult(true);
+        Assert.Equal(0, await run);
+        Assert.Equal("verified", ReadResult().DownloadState);
+        Assert.False(File.Exists(progressPath)); // gone once the run ends
+        Assert.Empty(Directory.GetFiles(_root, "*.tmp", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task A_stalled_download_fails_instead_of_waiting_forever()
+    {
+        var bytes = Encoding.ASCII.GetBytes("fake installer payload");
+        SeedResult(NewResult(), Sha256Hex(bytes));
+        var progressPath = Path.Combine(_root, "state", "update-download-progress.json");
+        var handler = new StubHandler((_, _) => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new HangingReadStream()) }));
+
+        var exit = await new UpdateDownloader(handler, _resultPath, _cacheDir, progressPath, TimeSpan.FromMilliseconds(200)).RunAsync();
+
+        Assert.Equal(2, exit);
+        var persisted = ReadResult();
+        Assert.Equal("failed", persisted.DownloadState);
+        Assert.Contains("stalled", persisted.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(Directory.GetFiles(_root, "*.partial", SearchOption.AllDirectories));
+        Assert.False(File.Exists(progressPath));
+    }
+
+    [Fact]
+    public async Task A_transfer_that_ends_early_fails()
+    {
+        var bytes = Encoding.ASCII.GetBytes("fake installer payload");
+        SeedResult(NewResult(), Sha256Hex(bytes));
+        var handler = new StubHandler((_, _) =>
+        {
+            var content = new StreamContent(new MemoryStream(bytes));
+            content.Headers.ContentLength = bytes.Length * 2; // the server promised more than it sent
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        });
+
+        var exit = await new UpdateDownloader(handler, _resultPath, _cacheDir).RunAsync();
+
+        Assert.Equal(2, exit);
+        var persisted = ReadResult();
+        Assert.Equal("failed", persisted.DownloadState);
+        Assert.Contains("ended early", persisted.FailureReason, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(Directory.GetFiles(_root, "*.partial", SearchOption.AllDirectories));
+    }
+
     // --- helpers -----------------------------------------------------------
 
     private static UpdateResult NewResult() => new()
@@ -195,6 +275,48 @@ public sealed class UpdateDownloaderTests : IDisposable
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken) =>
             _respond(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Delivers the first half of its payload, the second half after 300 ms (so the downloader
+    /// publishes a snapshot), then ends only once <c>gate</c> completes.
+    /// </summary>
+    private sealed class GatedStream : Stream
+    {
+        private readonly byte[] _payload;
+        private readonly Task _gate;
+        private int _reads;
+
+        public GatedStream(byte[] payload, Task gate) { _payload = payload; _gate = gate; }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            var half = _payload.Length / 2;
+            switch (_reads++)
+            {
+                case 0:
+                    _payload.AsMemory(0, half).CopyTo(buffer);
+                    return half;
+                case 1:
+                    await Task.Delay(300, cancellationToken);
+                    _payload.AsMemory(half).CopyTo(buffer);
+                    return _payload.Length - half;
+                default:
+                    await _gate.WaitAsync(cancellationToken);
+                    return 0;
+            }
+        }
     }
 
     /// <summary>Delivers one buffer of bytes, then hangs until the copy's token cancels.</summary>

@@ -5,6 +5,7 @@
 @inject ReleasesManifest Manifest
 @inject ReleaseAvailability Availability
 @inject SiteSettingsStore Settings
+@inject IServiceProvider Services
 
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
@@ -56,12 +57,12 @@
             </p>
 
             <p class="cta-row">
-                @* DL-004: download-track.js upgrades this link to the CDN URL and beacons the click
-                   to /dl-count — the visitor goes straight to the CDN, the metric still lands. *@
-                <a class="btn btn-primary btn-lg download-tracked" href="@ReleaseAvailability.TrackedUrl(latest)"
+                @* Native asset navigation: never let enhanced page navigation fetch installer bytes. *@
+                <a class="btn btn-primary btn-lg download-tracked" href="@(latest.CdnUrl ?? ReleaseAvailability.TrackedUrl(latest))"
+                   data-enhance-nav="false"
                    data-file="@fileName"
                    data-cdn-url="@latest.CdnUrl">
-                    Download AKML SQL
+                    <span data-download-label>Download AKML SQL @latest.Version</span>
                     @if (_latestSize is { } heroSize)
                     {
                         <span class="btn-sub">Windows · @heroSize</span>
@@ -175,9 +176,9 @@
                         and reopen it afterwards.
                     </li>
                     <li>
-                        <strong>Open the Tools menu.</strong>
-                        AKML SQL is there. The first launch after installing rebuilds the editor's
-                        component cache, so give it a few seconds longer than usual.
+                        <strong>Open the AKML SQL menu.</strong>
+                        It is on the SSMS menu bar, just before Window. The first launch after installing
+                        rebuilds the editor's component cache, so give it a few seconds longer than usual.
                     </li>
                 </ol>
                 <p class="download-note">
@@ -209,6 +210,8 @@
             @* Verification used to sit inside a collapsed <details>. Standard practice on a vendor
                page is the opposite: show the digest. Collapsed, the panel rendered as a single bare
                line of text and made the page look empty. *@
+            @if (!string.IsNullOrEmpty(latest.Sha256Hash))
+            {
             <section class="download-card hash-block" aria-labelledby="verify-heading">
                 <h2 id="verify-heading">Verify this download</h2>
                 <p class="hash-hint">
@@ -222,6 +225,7 @@
                 <code class="hash-cmd">Get-FileHash .\@fileName -Algorithm SHA256</code>
             </section>
 
+            }
             <section class="download-card" aria-labelledby="other-sources-heading">
                 <h2 id="other-sources-heading">Other sources</h2>
                 <ul class="download-links">
@@ -249,7 +253,6 @@
 
     @* U22: static SSR renders this into the page body; script-src 'self' allows it. *@
     <script src="@Assets["js/copy-hash.js"]" defer></script>
-    <script src="@Assets["js/download-track.js"]" defer></script>
 
     @* DL-001: only list previous releases that can actually be downloaded. A table rather than a
        stack of cards: older versions are a reference list people scan, not content they read. *@
@@ -277,7 +280,7 @@
                                 </td>
                                 <td>@string.Join(", ", release.SupportedHosts)</td>
                                 <td class="release-table-action">
-                                    <a class="download-tracked" href="@ReleaseAvailability.TrackedUrl(release)"
+                                    <a class="download-tracked" href="@(release.CdnUrl ?? ReleaseAvailability.TrackedUrl(release))" data-enhance-nav="false"
                                        data-file="@System.IO.Path.GetFileName(release.DownloadUrl)"
                                        data-cdn-url="@release.CdnUrl">Download</a>
                                     <details class="hash-block hash-block-inline">
@@ -316,13 +319,23 @@ else
 @code {
     /// <summary>U23: display form of the minimum OS version — trims a trailing ".0"
     /// so "10.0" renders as the consumer-facing "Windows 10 or later".</summary>
-    private static string DisplayOsVersion(string version) =>
-        version.EndsWith(".0", StringComparison.Ordinal) ? version[..^2] : version;
+    /// <summary>
+    /// The minimum Windows version as people name it: "10.0" reads "10", and a build number reads as
+    /// its release ("10.0.17763" is "10 version 1809", the oldest the installer and updater accept).
+    /// </summary>
+    internal static string DisplayOsVersion(string version) => version switch
+    {
+        "10.0.17763" => "10 version 1809",
+        "10.0.19041" => "10 version 2004",
+        "10.0.22000" => "11",
+        _ when version.EndsWith(".0", StringComparison.Ordinal) => version[..^2],
+        _ => version,
+    };
 
     /// <summary>The release shown in the primary card, or null when nothing is downloadable.</summary>
     private Release? _latest;
 
-    /// <summary>Display size of the primary release, resolved once (null for a CDN-only release).</summary>
+    /// <summary>GitHub asset size or local file size, resolved once; omitted if neither is known.</summary>
     private string? _latestSize;
 
     /// <summary>
@@ -348,7 +361,8 @@ else
     /// </summary>
     protected override void OnInitialized()
     {
-        if (!Manifest.IsAvailable)
+        var cache = Services.GetService(typeof(LatestGitHubRelease)) as LatestGitHubRelease;
+        if (!Manifest.IsAvailable && cache?.Current is null)
         {
             return;
         }
@@ -360,7 +374,8 @@ else
         // Settings.Current is an in-memory snapshot — the render path never touches SQLite, so a
         // settings failure can neither break nor slow the site's primary call to action (FR-016a).
         var settings = Settings.Current;
-        var releases = ReleaseVisibility.Apply(settings.Visibility, settings.VisibilityCount, Manifest.Releases);
+        var candidates = cache?.WithHistory(Manifest) ?? Manifest.Releases;
+        var releases = ReleaseVisibility.Apply(settings.Visibility, settings.VisibilityCount, candidates);
 
         var latest = releases.Count > 0 ? releases[0] : null;
 
