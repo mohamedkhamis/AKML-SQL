@@ -128,8 +128,9 @@ own, with no change to layout or settings.
    edits; **When** they press Escape, **Then** the edit is cancelled and the fetched value
    is back.
 10. **Given** a result is shown, **When** the user right-clicks a cell or presses Shift+F10
-    on it, **Then** a menu offers Copy, Copy with headers, Copy as, Select all, View value
-    and Save results as CSV…, and Set to NULL only when the result is editable; **When**
+    on it, **Then** a menu offers Copy, Copy with headers, Copy as, Select all, View value,
+    Save results as CSV… and Save results as tab-delimited…, and Set to NULL only when the
+    result is editable; **When**
     they choose View value on a cell cut by the maximum width, **Then** a dialog shows the
     whole value with a Copy button.
 11. **Given** a result is shown, **When** the user clicks a column's sort control once,
@@ -310,7 +311,7 @@ export held no secrets.
 ### User Story 5 - Tabs and documents that behave like SSMS (Priority: P2)
 
 A developer moves between Results and Messages, between the style editor's "Whitespace
-sample" and "My SQL", and between settings sections. Every tab strip looks the same, works
+sample" and "My SQL", and between the AI panel's Actions and Chat. Every tab strip looks the same, works
 the same with the keyboard, and shows the same active marker. They start a new query, open a
 `.sql` file from disk, and save the current query under a name of their choosing. History
 records the query under that name. The editor keeps a single document in this feature;
@@ -526,7 +527,8 @@ from the toolbar; read the status bar; trigger an analyser finding and see it in
 - **FR-017**: Right-clicking a cell, a row number or the selection (and Shift+F10 or the
   Menu key from the keyboard) MUST open a grid context menu with, in this order: Copy, Copy
   with headers, Copy as ▸ (FR-031), Select all, View value (FR-002), Set to NULL (FR-014;
-  editable results only) and Save results as CSV… (FR-030), each showing its key. "View
+  editable results only), Save results as CSV… and Save results as tab-delimited…
+  (FR-030), each showing its key. "View
   value" MUST open an in-app dialog (FR-086) holding the whole value as text with its size
   and a Copy button; for a value the engine itself cut it MUST say so (see Edge Cases).
 
@@ -565,14 +567,18 @@ from the toolbar; read the status bar; trigger an analyser finding and see it in
   `GO` is a separator only on a line of its own (any letter case, optionally followed by a
   repeat count and a comment), and `GO 3` runs its batch three times. A failing batch MUST
   NOT stop the batches after it: they still run, and their results and messages follow the
-  error in order, as in SSMS; only an error that closes the connection stops the script, and
-  Messages MUST then say that the remaining batches did not run. Every row count, message
-  and error MUST be attributed to the batch that produced it.
+  error in order, as in SSMS; only an error that closes the connection, a batch that times
+  out, or a cancel stops the script, and Messages MUST then say that the remaining batches
+  did not run. A `GO` line holding anything other than a repeat count and a comment
+  (`GO SELECT 2`, `GO;`, `GO 0`) refuses the whole script before any batch runs, with SSMS's
+  message "Incorrect syntax was encountered while parsing GO." Every row count, message and
+  error MUST be attributed to the batch that produced it.
 - **FR-026**: Values MUST display as SSMS does, type by type: `date` as `yyyy-MM-dd`;
   `smalldatetime` as `yyyy-MM-dd HH:mm:ss`; `datetime` as `yyyy-MM-dd HH:mm:ss.fff`; `time`,
   `datetime2` and `datetimeoffset` with the number of fractional-second digits the column
   declares (so `datetime2(7)` shows seven and `time(0)` none), `datetimeoffset` followed by
-  its offset (`+02:00`); binary types as `0x` and upper-case hexadecimal; uniqueidentifier
+  a space and its offset (`2025-10-01 23:57:23.8800000 +02:00`), as SSMS shows it; binary
+  types as `0x` and upper-case hexadecimal; uniqueidentifier
   in upper case; decimal and numeric with the column's declared scale (`12.50`), money with
   four decimal places (`12.5000`); bit as 1/0; NULL as `NULL` in a muted style. Editing a
   cell MUST show and preserve the full-precision value.
@@ -592,10 +598,12 @@ from the toolbar; read the status bar; trigger an analyser finding and see it in
   which the page cannot see; Ctrl+Enter MUST keep working; Execute MUST be offered in the
   Command Palette.
 - **FR-029**: When a result is cut at the row limit, the grid MUST say how many rows were
-  returned and that more exist; the status bar MUST show the returned row count and time.
-- **FR-030**: Users MUST be able to save a result set as a file, choosing comma-delimited
-  (CSV) or tab-delimited as SSMS's "Save Results As" offers; the file MUST have a header
-  row; a value containing the delimiter, a double quote or a line break MUST be enclosed in
+  returned and that more exist; the status bar shows the returned row count and time as
+  FR-083 requires.
+- **FR-030**: Users MUST be able to save a result set as a file through one menu item per
+  format, comma-delimited (CSV) or tab-delimited, the two formats SSMS's "Save Results As"
+  offers; the file MUST have a header row; a value containing the delimiter, a double quote
+  or a line break MUST be enclosed in
   double quotes with inner quotes doubled; NULL MUST be written as `NULL`; the file MUST be
   named after the document; and the user MUST be warned before saving a result that was cut
   at the row limit or that holds values the engine cut.
@@ -605,7 +613,7 @@ from the toolbar; read the status bar; trigger an analyser finding and see it in
   clause) are not required here; tab-separated copy is FR-009.
 - **FR-032**: The results pane MUST have a splitter against the editor, a hide/show toggle
   with a key, and a maximise/restore command; a hidden results pane MUST reappear on the
-  next execution and on an analysis that finds something (FR-034).
+  next execution (FR-034 says when an analysis brings it back).
 - **FR-033**: Before any execution the results pane MUST show a short instruction rather
   than an empty area.
 - **FR-034**: When the user runs Analyse, or a format re-analyses, the results pane MUST be
@@ -709,7 +717,7 @@ from the toolbar; read the status bar; trigger an analyser finding and see it in
   only), Queries and Code analysis settings, including the list of rules suppressed
   everywhere; the AI assistance settings with each provider's name, kind, model and
   endpoint, the active provider, the privacy modes and the ghost-text options; the
-  workspace layout (FR-045) and the grid options. It MUST NOT contain API keys, passwords,
+  workspace layout (FR-045); the grid options are part of Queries. It MUST NOT contain API keys, passwords,
   pairing tokens, engine connections, SQL Server connections, the schema cache, snippets,
   history or the document. An import MUST apply the known settings the file holds, leave
   settings the file does not mention unchanged, ignore unknown settings and report how many
@@ -857,8 +865,9 @@ from the toolbar; read the status bar; trigger an analyser finding and see it in
 - **Message**: one line in the Messages tab — kind (rows affected, print, error,
   completion), text, optional line number, error number and severity, order within the
   batch.
-- **Document**: the query being edited — name, modified state, text, caret, its last
-  results and messages; exactly one in this feature.
+- **Document**: the query being edited — name, modified state, text and caret; exactly one
+  in this feature. Its results and messages are shown while the page is open but are not
+  restored on the next visit.
 - **Settings section**: a named group of settings with its own restore-defaults; the nine
   sections in FR-051.
 - **Settings export**: the portable set of browser-side preferences, with secrets excluded.

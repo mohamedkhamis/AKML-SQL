@@ -247,7 +247,8 @@ and the grid split.
     - each binding in `contracts/ui.md` §2 resolves to its command id, matched on `e.code` (`KeyR`, not `e.key`);
     - `e.repeat` is ignored, and nothing resolves while an `[aria-modal="true"]` element is open;
     - Ctrl+K then Ctrl+F within 1.5 s → `editor:format`; after 1.5 s → nothing;
-    - a lone Ctrl+F is not claimed, so CodeMirror's Find still works.
+    - a lone Ctrl+F is not claimed, so CodeMirror's Find still works;
+    - Ctrl+Alt+KeyO with `e.key = 'ó'`, or with `getModifierState('AltGraph')` true, resolves to nothing (the AltGr rule of `contracts/ui.md` §2).
   - `tests/AkmlSql.Web.Tests/Shell/ShortcutCollisionTests.cs`, over `WorkspaceKeyMap.Bindings`:
     - no duplicate key;
     - no binding equals a CodeMirror key (Mod-Enter, Mod-F, F3, Mod-G, F12, Escape, Tab, Mod-Z, Mod-Y, Mod-/, Mod-D), except as a chord's second stroke;
@@ -256,6 +257,7 @@ and the grid split.
   - `src/AkmlSql.Web/Services/WorkspaceKeyMap.cs`: a static `Bindings` table of `KeyBinding(Code, Ctrl, Shift, Alt, CommandId, ChordPrefix, Display)` holding `contracts/ui.md` §2.
   - `src/AkmlSql.Web/wwwroot/js/akml-workspace.js`:
     - `initKeys(dotNetRef, bindings)` installs a document capture-phase keydown listener. For a claimed key it calls `preventDefault()` and `stopPropagation()` synchronously, then `dotNetRef.invokeMethodAsync('OnWorkspaceKey', id)`.
+    - Before claiming, apply the AltGr rule of `contracts/ui.md` §2: a Ctrl+Alt binding is claimed only when `e.key` is the plain letter of `e.code` and `AltGraph` is not set.
     - `disposeKeys()` removes it.
     - Export the pure `resolveKey`.
   - T028 must pass.
@@ -453,6 +455,7 @@ and the grid split.
     - ellipsis overflow; `.akml-cell-tooltip`; row-glyph styles.
 - [ ] T064 [US1] Implement column layout in `src/AkmlSql.Web/Shared/ResultSetGrid.razor` (depends on T055, T062, T063; R1–R3, FR-001–FR-007).
   - Layout: an inline `--akml-grid-cols` on the root; `data-r`/`data-c` on cells; both render branches iterate `_rowIndexes`.
+  - Add `DisplayText(r, c)`, the single accessor that render, copy and save use for a cell's shown text. Until T104 it returns the wire text (null → `NULL`).
   - Resizing:
     - a `results-col-resizer-{c}` handle per header;
     - `[JSInvokable] OnColumnResizedFromJs`;
@@ -523,6 +526,8 @@ and the grid split.
   - Run `node --test tests/AkmlSql.Web.Tests/js/`, then `ResultsGridTests` after the Debug builds.
   - Walk quickstart §1 in Light, Dark and High contrast.
   - Run `scripts/compare-test-results.ps1` against T003. It must show no passed→not-passed test.
+  - Build the whole solution in one pass (MSBuild restore + Release build, see "Path conventions") and run `scripts/generate-theme-css.ps1 -CheckOnly` for both theme folders. Both must be green (Constitution II).
+  - Update the docs this story changed, in the same change: `CLAUDE.md` (structure notes), this story's rows in the spec 041 entry of `doc/progress.md`, and any affected `doc/*.md` (Constitution, Documentation currency).
 
 **Checkpoint**: US1 is complete and testable on its own. This is the MVP.
 
@@ -544,6 +549,7 @@ and the grid split.
   - `SeparatorError` for `GO SELECT 2`, `GO;`, `GO 0` and negative counts.
   - An unterminated string swallows the rest into the last batch. Whitespace-only batches are skipped.
   - `StartLine` = the previous GO line + 1, including leading blank lines. A script with no line starting with `go` skips lexing.
+  - These tests stay in `tests/AkmlSql.Engine.Tests/Parser/`, beside the existing `TsqlParserService` tests, although the class lives in `AkmlSql.IntelliSense` and `tests/AkmlSql.IntelliSense.Tests` exists. Keeping one home for the parser's tests is the existing convention (Constitution III is met: the behaviour lands with tests).
 - [ ] T076 [P] [US2] Write `tests/AkmlSql.Core.Tests/Ipc/ExecuteQueryMessagesCompatTests.cs` (R20, contracts/ipc.md).
   - Legacy payloads deserialise into the new classes with defaults: an 8-element `ExecuteQueryResult` and an 11-element `ExecuteResultSet` give empty `MessageDetails`/`Batches`, `CompletedAtUnixMs = 0`, null `CurrentDatabase` and `BatchIndex = 0`.
   - A 13-element payload deserialises into a copy of the old class (the older-bundle case).
@@ -628,7 +634,7 @@ and the grid split.
   - Tabs and states:
     - `results-tab-results`, `results-tab-messages` and `results-tab-problems` are always present;
     - `results-empty` reads "Run a query to see results here (F5)";
-    - `results-running` shows the elapsed time, with the previous results marked stale;
+    - `results-running` shows the elapsed time and "A running statement can't be interrupted.", with the previous results marked stale;
     - with zero sets, the Results tab says there is nothing to show;
     - the `results-elapsed`/`results-affected` ids are on the pane; `ActiveTab` binds two-way.
   - Stacked sets:
@@ -748,7 +754,8 @@ and the grid split.
     - after Analyse: Problems when there are findings; otherwise a "No problems found" notification, with the badge cleared (FR-034).
   - Running state:
     - `IWorkspaceStatus.Begin`/`Complete`/`Fail` in `RunSqlAsync`, the autorun path and the apply-refresh path; delete the toolbar's execution status text;
-    - while Running, Execute is not offered: the button is disabled, `editor:execute`'s `IsEnabled` is false, and the key does nothing.
+    - while Running, Execute is not offered: the button is disabled, `editor:execute`'s `IsEnabled` is false, and the key does nothing;
+    - the existing `execute-cancel` toolbar button (shown during every run, though the engine can cancel only a query it has not started, and the web cannot tell the two apart) becomes "Cancel if not started", titled "Stops the query only if the engine has not started it. A running statement cannot be interrupted." (FR-027).
   - Commands:
     - register `editor:execute` (F5) and `editor:parse` (Ctrl+F5);
     - Parse is enabled with `execute.v2` and a connection, with the `parse-button` toolbar button.
@@ -756,10 +763,13 @@ and the grid split.
     - capture the selection's start line at execute;
     - on a message click: `GotoLineAsync` + highlight + `SetDiagnosticsAsync` with an error marker on that document line (FR-023).
   - Add the hidden `execute-complete` (`data-version`, `data-status`) and `execute-running` markers.
+  - Port `tests/AkmlSql.Web.Tests/Pr247_ResultsGridApplyMessageTests.cs` to render `ResultsPaneComponent` with one set (same ids, selected inside `results-set-0`), then delete `src/AkmlSql.Web/Shared/ResultsGridComponent.razor` (FR-090).
 - [ ] T109 [US2] Story gate: run the US2 suites and quickstart §2, then `scripts/compare-test-results.ps1`.
   - Run `tests/AkmlSql.Engine.Tests` (`Parser`, `Execution`, `InProcess`, `Handlers`), `tests/AkmlSql.Core.Tests` (`Ipc`, `Text`), `tests/AkmlSql.Web.Tests` (`Results/*`, `Services/*`, `Shell/*`, `Grid/*`) and the node tests.
   - Publish the Debug engine, then run `ResultsMessagesTests`.
   - Walk quickstart §2. Run the compare script against T003.
+  - Build the whole solution in one pass (MSBuild restore + Release build, see "Path conventions") and run `scripts/generate-theme-css.ps1 -CheckOnly` for both theme folders. Both must be green (Constitution II).
+  - Update the docs this story changed, in the same change: `CLAUDE.md` (structure notes), this story's rows in the spec 041 entry of `doc/progress.md`, and any affected `doc/*.md` (Constitution, Documentation currency).
 
 **Checkpoint**: US1 and US2 both work on their own.
 
@@ -811,6 +821,7 @@ and the grid split.
   - splitter drags; keyboard splitters; maximise;
   - reload persistence, and persistence via `LaunchPersistentContext`;
   - an 1100 × 700 context: both side panels folded, and a 120-character line with no horizontal scrollbar (the existing overflow script);
+  - at 1440 × 900 with Schema and AI hidden, the editor column is at least 95 % of the window width (SC-003);
   - at 800 px the page scrolls as a whole and Execute stays visible;
   - at 150 % zoom the splitters and edge strips are still hit-able;
   - Reset layout; the View menu and palette lists; F6 focus cycling; hiding every region then executing brings results back.
@@ -875,6 +886,8 @@ and the grid split.
   - Run `tests/AkmlSql.Web.Tests` (`Workspace/*`, `Services/*`, `Bridge/*`), the node tests and `WorkspaceLayoutTests`.
   - Walk quickstart §3 steps 1–9 and 11. Step 10's in-editor underline arrives with T200.
   - Run the compare script against T003.
+  - Build the whole solution in one pass (MSBuild restore + Release build, see "Path conventions") and run `scripts/generate-theme-css.ps1 -CheckOnly` for both theme folders. Both must be green (Constitution II).
+  - Update the docs this story changed, in the same change: `CLAUDE.md` (structure notes), this story's rows in the spec 041 entry of `doc/progress.md`, and any affected `doc/*.md` (Constitution, Documentation currency).
 
 **Checkpoint**: all three P1 stories work on their own.
 
@@ -920,12 +933,12 @@ and the grid split.
   - Editor: the reset-session text says exactly what it clears, and the confirmation names the document.
   - Diagnostics: level filters, Export and Clear (Clear confirms).
   - Schema cache: the Clear-all confirmation names N databases and their size.
-  - Connections: the `engine-add-*` and `settings-manage-connections` ids exist.
+  - Connections: `engine-add-*` and `settings-manage-connections` exist; Remove engine connection and Delete saved connection confirm through `FakeDialogService`; Re-pair asks for a new PIN and replaces the pairing token; a saved connection that fails `ValidateTarget` shows its reason in place and stays listed; no password field and no "Remember password" render.
   - Loading, filtering and switching sections make zero store writes (assert the adapter's write count).
 - [ ] T134 [P] [US4] Write `tests/AkmlSql.Web.Tests/Settings/SettingsResetTests.cs` (R46, R47, FR-058, FR-059).
   - Each section's `DescribeResetAsync` lines. With three providers, AI reads "This removes your 3 providers and their keys".
   - Resetting one section leaves the other stores untouched.
-  - Restore all lists every line in one confirmation and covers General, Editor, Format, Queries, Code analysis, AI assistance, Layout and Grid.
+  - Restore all lists every line in one confirmation and covers General, Editor, Format, Queries, Code analysis, AI assistance and Layout.
   - It never touches connections, pairing tokens, the schema cache, snippets, history, chat or the document.
 - [ ] T135 [P] [US4] Write `tests/AkmlSql.Web.Tests/Settings/SettingsPortabilityTests.cs` (R48, R49, FR-059, SC-013).
   - Export:
@@ -999,7 +1012,6 @@ and the grid split.
   - Implementations for General, Editor, Format, Queries, CodeAnalysis and AiAssistance.
     - The AI reset calls `IAiKeyVault.RemoveAsync` per provider, keeping the zeroise path, then clears the active id. It does not clear chat history.
   - Layout, over `IWorkspaceLayoutStore` (from US3, T121).
-  - Grid, which exports the `MaxColumnPx` constant and accepts it on import as known.
   - Section DTOs. Every DTO and every nested object carries `[JsonExtensionData]`. Enums are strings.
 - [ ] T152 [US4] Create `src/AkmlSql.Web/Services/Settings/SettingsPortabilityService.cs` (depends on T151, T015; R48, R49). T134 and T135 must pass.
   - Restore all, Export and Import.
@@ -1052,6 +1064,8 @@ and the grid split.
 - [ ] T162 [US4] Story gate: run the US4 suites and quickstart §4, then `scripts/compare-test-results.ps1`.
   - Run `tests/AkmlSql.Web.Tests` (`Settings/*`, `Services/*`, `Ai/*`, `Theme/*`, `Diagnostics/*`), the node tests, `SettingsPageTests` and the by-design-updated suites.
   - Walk quickstart §4. Run the compare script against T003. The only expected differences are the R69 by-design list.
+  - Build the whole solution in one pass (MSBuild restore + Release build, see "Path conventions") and run `scripts/generate-theme-css.ps1 -CheckOnly` for both theme folders. Both must be green (Constitution II).
+  - Update the docs this story changed, in the same change: `CLAUDE.md` (structure notes), this story's rows in the spec 041 entry of `doc/progress.md`, and any affected `doc/*.md` (Constitution, Documentation currency).
 
 **Checkpoint**: US4 works on its own. Every visible setting changes something (SC-005).
 
@@ -1129,6 +1143,8 @@ and the grid split.
 - [ ] T176 [US5] Story gate: run the US5 suites and quickstart §5, then `scripts/compare-test-results.ps1`.
   - Run `tests/AkmlSql.Web.Tests` (`Editor/*`, `History/*`, `Shell/*`, `Ai/*`, `Styles/*`), `TabStripKeyboardTests` and `DocumentFlowTests`.
   - Walk quickstart §5. Run the compare script against T003.
+  - Build the whole solution in one pass (MSBuild restore + Release build, see "Path conventions") and run `scripts/generate-theme-css.ps1 -CheckOnly` for both theme folders. Both must be green (Constitution II).
+  - Update the docs this story changed, in the same change: `CLAUDE.md` (structure notes), this story's rows in the spec 041 entry of `doc/progress.md`, and any affected `doc/*.md` (Constitution, Documentation currency).
 
 **Checkpoint**: US4 and US5 work on their own.
 
@@ -1180,7 +1196,6 @@ and the grid split.
   - `status-caret` reads "Ln 1, Col 12".
   - `status-version-web` and `status-version-engine` show the stripped versions, with the raw strings as `title`. `status-version-mismatch` shows when the stripped versions differ.
   - The login shows beside `status-connection`, whose text format is unchanged.
-  - Cancel shows only while a request is queued.
   - Clicking the server opens the connection manager.
 - [ ] T184 [P] [US6] Write the shell tests in `tests/AkmlSql.Web.Tests/` `Shell/`, `Styles/`, `Bridge/` and `Cache/` (R40, R63, FR-063, FR-080, FR-084, FR-093).
   - `tests/AkmlSql.Web.Tests/Shell/NavMenuTests.cs`: a `NavLink` is active for the current route, `/editor` included; `nav-{route}` ids; `BunitNavigationManager`.
@@ -1206,7 +1221,8 @@ and the grid split.
     - the status-bar segments;
     - every destructive action confirms in-app, while a `page.Dialog` handler that fails the test proves no browser pop-up opens anywhere (SC-012);
     - page headers compared by computed style;
-    - the analyser underline on line 7 (`.cm-lintRange` on that line); the styled start-up screen.
+    - the analyser underline on line 7 (`.cm-lintRange` on that line); the styled start-up screen;
+    - record every request with `page.Request` for the whole suite and assert each goes to the page's own origin or the paired engine's bridge. The suite triggers no AI call, so nothing else is expected (FR-101).
   - By-design updates:
     - in `FormatStylesTests.cs` and `FormatStylesSharedEngineTests.cs`, replace the `page.Dialog` subscriptions with the in-app `dialog-*` ids;
     - `FormatStylesSharedEngineTests` expects "On this engine" from its `--web` sandbox engine (N28).
@@ -1270,7 +1286,6 @@ and the grid split.
     - a `triangle-alert` mismatch marker.
   - Fix `ProbeCacheAsync`'s key (~:254-271).
   - A server click opens the connection manager.
-  - Cancel shows only while a request is queued, with an honest title.
 - [ ] T196 [US6] Regroup the toolbar in `src/AkmlSql.Web/Pages/Editor.razor` (depends on T193, T011; FR-081).
   - Groups, separated by `.akml-toolbar-sep`: database selector | Execute, Parse | Format, Analyse | Refactor ▾, AI ▾ | New, Open, Save, Save as | View ▾, then the quick control.
   - Every button is an `.akml-btn` with an `Icon`, a label, and `title` = "Name (Keys)" from `WorkspaceKeyMap`.
@@ -1320,20 +1335,29 @@ and the grid split.
   - `src/AkmlSql.Web/wwwroot/index.html` boot and crash screens get token-styled classes in `src/AkmlSql.Web/wwwroot/css/app.css`. No inline styles. The Blazor error UI keeps its id and `.reload` link.
   - The spinner uses `app.css` keyframes under the reduced-motion rule.
 - [ ] T206 [US6] Make labels truthful and remove placeholders across `src/AkmlSql.Web/Pages` and `src/AkmlSql.Web/Shared` (FR-090).
-  - Audit every `<button>` label in `src/AkmlSql.Web/Pages/*.razor` and `src/AkmlSql.Web/Shared/**/*.razor` against what its handler does. A button that inserts text says "Insert", not "Copy".
-  - Remove unused or placeholder interface pieces: leftover `_statusMsg` toolbar lines now replaced by notifications, and disabled "future" options.
+  - Audit every `<button>`, menu item and link in `src/AkmlSql.Web/Pages/*.razor` and `src/AkmlSql.Web/Shared/**/*.razor` against this checklist:
+    - the label names what its handler does: a button that inserts text says "Insert", not "Copy"; one that downloads says "Save" or "Export";
+    - no handler is empty, a TODO, or a stub that only logs;
+    - every disabled control has a `title` saying why;
+    - no text such as "coming soon", "future" or "not available yet" (grep), and no disabled "future" option (FR-063);
+    - no `_statusMsg`-style field or markup is left that the notification migration made dead;
+    - no commented-out markup block, and no component that no page or layout renders (tests aside).
+  - Fix or remove every item that fails.
   - Record the audit list in `specs/041-web-ssms-ux-parity/baseline.md`.
 - [ ] T207 [US6] Pass accessibility and themes over every new surface, fixing tokens in `docs/theme-tokens.json` (FR-091, FR-103, SC-010).
   - In High contrast, text on a selected or hovered row uses `--akml-text-onaccent` in grids, tables, menus and tabs.
   - Every new control has a visible focus ring.
   - Hover-only information also shows on keyboard focus and dismisses with Escape: toolbar tooltips via `title` + `aria-describedby`, the column type, the cell value, and the analyser message (CodeMirror lint tooltip on keyboard focus of the line marker).
   - Animations respect `prefers-reduced-motion`.
+  - Touch: measure the hit areas (splitters 12 px, column resizers 8 px, edge strips 24 px) at 100 % and 150 % zoom, and with Playwright's `hasTouch` emulation drag one splitter and one column edge. Nothing may depend on hover alone (spec Edge Cases, "Touch pointer").
   - Measure the WCAG AA contrast of every new token pair in Light, Dark and High contrast, and record the ratios in `baseline.md`.
   - Fix any failure in `docs/theme-tokens.json` and regenerate both theme folders.
 - [ ] T208 [US6] Story gate: run the US6 suites and quickstart §6, then `scripts/compare-test-results.ps1`.
   - Run `tests/AkmlSql.Engine.Tests` (`Handlers`, `Execution`, `InProcess`), `tests/AkmlSql.Core.Tests`, `tests/AkmlSql.Web.Tests` (`Shell/*`, `Bridge/*`, `Styles/*`, `Theme/*`, `History/*`, `Snippets/*`, `Cache/*`) and the node tests.
   - Publish the Debug engine, then run `ShellPolishTests` and the updated `FormatStylesTests` / `FormatStylesSharedEngineTests`.
   - Walk quickstart §6 in all three themes with reduced motion on. Run the compare script against T003.
+  - Build the whole solution in one pass (MSBuild restore + Release build, see "Path conventions") and run `scripts/generate-theme-css.ps1 -CheckOnly` for both theme folders. Both must be green (Constitution II).
+  - Update the docs this story changed, in the same change: `CLAUDE.md` (structure notes), this story's rows in the spec 041 entry of `doc/progress.md`, and any affected `doc/*.md` (Constitution, Documentation currency).
 
 **Checkpoint**: every user story works on its own.
 
@@ -1343,22 +1367,20 @@ and the grid split.
 
 - [ ] T209 [P] Verify key capture per browser and record it in `specs/041-web-ssms-ux-parity/baseline.md` (FR-049(c), R37).
   - In Chromium, Edge and Firefox, on the editor page, check that each claimed key stops the browser's own action: F5, Ctrl+F5, Ctrl+R, F8, F6/Shift+F6, Ctrl+S, Ctrl+Shift+S, Ctrl+Alt+N, Ctrl+Alt+O, the three Ctrl+K chords, and the grid's Ctrl+Shift+C, Ctrl+0 and Shift+Alt+Arrow. Shift+Alt is the Windows input-language hotkey, so test it with two keyboard layouts installed.
+  - With a Polish (Programmers) keyboard layout, typing ó and ń in the editor still works (AltGr arrives as Ctrl+Alt).
   - Record a browser × key table in `specs/041-web-ssms-ux-parity/baseline.md`.
   - For a key a browser keeps, add an alternative binding to `src/AkmlSql.Web/Services/WorkspaceKeyMap.cs` and show it in the View menu and palette (FR-049(b)). `ShortcutCollisionTests` must stay green.
-- [ ] T210 [P] Add the performance checks to `tests/AkmlSql.Web.E2E.Tests/ResultsGridTests.cs` (SC-009, FR-102, edge case "200 columns").
+- [ ] T210 [P] Add the performance and sizing checks to `tests/AkmlSql.Web.E2E.Tests/ResultsGridTests.cs` (SC-001, SC-009, FR-102, edge case "200 columns").
   - A 1,000-row × 30-column result has its tracks set within 1 s of `execute-complete`, measured with `performance.now()` marks.
+  - In the same result, no rendered cell in a column narrower than the 480 px maximum has `scrollWidth > clientWidth`, checked at the top, middle and bottom of the scroll range (SC-001).
   - On a 50-column result, a drag-resize and a drag-select produce no long task over 100 ms (`PerformanceObserver('longtask')`).
   - Auto-fit completes on a 200-column result.
   - Record the numbers in `baseline.md`.
 - [ ] T211 [P] Create `tests/AkmlSql.Web.E2E.Tests/WorkspaceScreenshotTour.cs` (untagged, and excluded from SC-008 by name like `SiteScreenshotTour`).
   - Capture the editor, Results, Messages, Problems, each Settings section, History and Snippets in Light, Dark and High contrast at 1440 × 900 and 1100 × 700.
   - Write the images to `specs/041-web-ssms-ux-parity/baseline/after/` for comparison with `baseline/*.png`.
-- [ ] T212 [P] Update the documentation: `doc/progress.md` and `CLAUDE.md`.
-  - `doc/progress.md`: a spec 041 entry with the per-phase task table. Deferred follow-ups:
-    - multiple query tabs; a true Cancel;
-    - an engine `CutCells` key; parsing display text back on commit;
-    - navigating errors inside `CREATE PROCEDURE` bodies;
-    - a user setting for the maximum column width.
+- [ ] T212 [P] Finish the documentation: check `doc/progress.md` and `CLAUDE.md` against the shipped stories (each story gate already updated them), and add the release notes.
+  - `doc/progress.md`: the spec 041 entry has the per-phase task table and the table from this file's "Deferred" section.
   - `CLAUDE.md`: web-structure notes for `Shared/Grid`, `Shared/Settings`, `Services/Settings`, the three new JS modules and IndexedDB v4; the "spec 041" line in "Latest merged work".
   - Release notes for two expected effects:
     - users with two app tabs open see the "upgrade is blocked" message once after the update (N26);
@@ -1369,10 +1391,26 @@ and the grid split.
   - Run `scripts/compare-test-results.ps1 -Before …\before -After …\after -OutDir specs/041-web-ssms-ux-parity/baseline/tests/after`.
   - Complete `baseline.md`:
     - the per-suite table;
-    - the SC-008 diff, which must be empty apart from the R69 by-design list (StylesReviewFixTests rewrite, the `page.Dialog` suites, pairing navigation, the FormatStylesSharedEngineTests label, SiteScreenshotTour);
+    - the SC-008 diff, which must be empty apart from the R69 by-design list (StylesReviewFixTests rewrite, the Pr247 grid test ported to the pane, the `page.Dialog` suites, pairing navigation, the FormatStylesSharedEngineTests label, SiteScreenshotTour);
     - the three-theme results, the FR-049(c) table and the performance numbers.
 - [ ] T215 Run quickstart.md end to end (§0–§7) on the dev VM against Debug web, Debug engine and local SQL Server, and tick each step in `baseline.md`. The SC-006 hallway test (10 SSMS users, six tasks in 4 minutes) cannot be automated; record it as pending the user's availability.
 - [ ] T216 Refresh the product-site screenshots deliberately through `tests/AkmlSql.Web.E2E.Tests/SiteScreenshotTour.cs` after the new UI is deployed. Their images change by design (spec "Visual tests" risk). Record this as pending deployment in `baseline.md` until done.
+
+---
+
+## Deferred
+
+Recorded here and in `doc/progress.md` (Constitution, Development Workflow), so scope is never lost silently.
+
+| Item | Reason | Goes to |
+|---|---|---|
+| Multiple query document tabs | Clarified out of scope 2026-10-08 (spec Clarifications) | A later feature |
+| Interrupting a running statement (a true Cancel) | Needs engine transport work (spec Out of Scope) | Engine follow-up |
+| An engine `CutCells` key for engine-cut values | Engine work is limited to the spec's Dependencies list (R8) | Engine follow-up |
+| Parsing displayed values back on commit | Strict ISO input is accepted for now (R11) | Grid follow-up |
+| Navigating errors inside `CREATE PROCEDURE` bodies | The server reports `Procedure`, not a document line (R24) | Messages follow-up |
+| A user setting for the maximum column width | Spec Assumptions: "may become a setting later" | Settings follow-up |
+| Docking, results-to-text, execution plans, column reorder/hide/freeze | Spec Out of Scope | — |
 
 ---
 
@@ -1391,12 +1429,15 @@ and the grid split.
 
 | Task | Needs | Why |
 |---|---|---|
-| T104 [US2] | US1's `ResultSetGrid` tasks, if in flight | Same file (`ResultSetGrid.razor`); sequence them |
+| T104 [US2] | T064 [US1] (and the other US1 `ResultSetGrid` tasks, if in flight) | Uses the `DisplayText` accessor; same file (`ResultSetGrid.razor`), so sequence them |
+| T106 [US2] | T067 [US1] | The pane sums `ResultSetGrid.HasPendingEdits`, which T067 adds |
 | T108 [US2] | T073 [US1], if done | The pending-edit gate moves from `ResultsGridComponent` to `ResultsPaneComponent` |
 | T124 [US3] | — | Hosts whichever results host the page renders (pane after US2, grid host before) |
 | T126 [US3] | US2's Problems tab, for "re-show on Analyse with findings" | Without US2 the old Problems column is still on screen |
+| T145 [US4] | T106 [US2] | Hides the Problems badge in the results pane |
 | T151 [US4] | T121 [US3] | The Layout section exports `IWorkspaceLayoutStore` |
 | T175 [US5] | T073 [US1] | New and Open reuse `ConfirmDiscardPendingEditsAsync` |
+| T175 [US5] | T072 [US1] | Passes the document name to Save results |
 | T189 [US6] | T098 [US2] | `CurrentDatabase` is captured inside the per-batch loop |
 | T194 [US6] | T161 [US4] | Same file (`ProfilePickerComponent.razor`) |
 | T195 [US6] | T107 [US2] | Extends the status-bar segments US2 introduced |

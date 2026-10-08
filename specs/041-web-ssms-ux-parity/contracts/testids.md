@@ -29,9 +29,9 @@ with a descendant selector so the first set keeps today's ids.
 | Area | Ids |
 |---|---|
 | Results pane | `results-pane`, `results-tab-results`, `results-tab-messages`, `results-tab-problems`, `results-problems-badge`, `results-empty`, `results-running`, `results-set-{n}`, `results-set-header-{n}`, `results-jump-{n}`, `results-apply-{n}`, `results-discard-{n}`, `execute-complete` (hidden, `data-version`), `execute-running` |
-| Grid | `results-corner`, `results-rownum-{r}`, `results-col-{c}`, `results-col-resizer-{c}`, `results-sort-{c}`, `results-col-type-{c}`, `results-context-menu`, `results-header-menu`, `results-view-value`, `results-save-csv`, `results-cell-tooltip`, `results-cell-invalid-{r}-{c}` |
+| Grid | `results-corner`, `results-rownum-{r}`, `results-col-{c}`, `results-col-resizer-{c}`, `results-sort-{c}`, `results-col-type-{c}`, `results-context-menu`, `results-header-menu`, `results-view-value`, `results-save-csv`, `results-save-tsv`, `results-cell-tooltip`, `results-cell-invalid-{r}-{c}` |
 | Messages | `messages-list`, `messages-line-{i}`, `messages-error-{i}`, `messages-completion` |
-| Toolbar | `parse-button`, `db-selector`, `db-selector-list`, `doc-new`, `doc-open`, `doc-open-input`, `doc-save`, `doc-saveas`, `view-menu`, `view-toggle-{panel}`, `caps-rows`, `caps-timeout` (existing `caps-*` kept) |
+| Toolbar | `execute-cancel` (existing, relabelled "Cancel if not started"), `parse-button`, `db-selector`, `db-selector-list`, `doc-new`, `doc-open`, `doc-open-input`, `doc-save`, `doc-saveas`, `view-menu`, `view-toggle-{panel}`, `caps-rows`, `caps-timeout` (existing `caps-*` kept) |
 | Document bar | `doc-name`, `doc-modified` |
 | Workspace | `workspace`, `workspace-schema`, `workspace-ai`, `workspace-results`, `workspace-splitter-left`, `workspace-splitter-right`, `workspace-splitter-bottom`, `workspace-edge-left`, `workspace-edge-right`, `workspace-edge-bottom`, `workspace-edge-nav`, `workspace-reset-layout` |
 | Schema panel | `schema-header`, `schema-filter`, `schema-refresh`, `schema-connect`, `schema-loading` |

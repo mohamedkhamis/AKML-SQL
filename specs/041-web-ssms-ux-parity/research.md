@@ -59,7 +59,7 @@ Eight investigations overlapped in places; these are the planner's arbitrations.
 - **X7 — Dialogs and notifications are services hosted in `MainLayout`** (`IDialogService` + `DialogHost`, `INotificationService` + `NotificationHost`), so the Command Palette and every page can await a confirmation. The settings area's `ConfirmDialog` is this host, not a second component.
 - **X8 — One workspace status service** (`IWorkspaceStatus`: execution phase, rows, elapsed, caret, document name, modified) replaces the two proposals (`IExecutionStatus`, `IWorkspaceStatus`).
 - **X9 — JavaScript modules.** `akml-workspace.js` (page keys, splitters, fold-away observer), `akml-results-grid.js` (grid pointer capture, measurement, key trap, drag select), and `akml-ui.js` (the focus helpers moved out of `akml-connection-manager.js` with a stash *stack* and a panel-selector parameter, `trapTabStripKeys`, `copyText` with fallback, `downloadText`). `akml-connection-manager.js` re-exports from `akml-ui.js`, so its callers do not change. The command-palette module stays single-purpose.
-- **X10 — Choices made for the user, flagged in the plan report:** Lucide icons (ISC) rather than Codicons (CC BY 4.0 artwork); saved files are UTF-8 with BOM; default-named documents appear in History as `query-NN` (SSMS's own behaviour for unsaved tabs); a batch timeout stops the remaining GO batches (SSMS behaviour; a narrower reading than FR-025's "only an error that closes the connection"); a GO line carrying other tokens (`GO SELECT 2`) refuses the whole script with SSMS's message; Ctrl+0 (Set to NULL) is claimed only while a grid cell has focus; "Open in editor" from History keeps the current session (not a new History entry); the AI reset does not clear chat history; Connections has no Restore defaults; Restore all defaults does not clear the schema cache or the log.
+- **X10 — Choices made for the user, flagged in the plan report:** Lucide icons (ISC) rather than Codicons (CC BY 4.0 artwork); saved files are UTF-8 with BOM; default-named documents appear in History as `query-NN` (SSMS's own behaviour for unsaved tabs); a batch timeout stops the remaining GO batches (SSMS behaviour; FR-025 amended 2026-10-08 to state it, together with the `GO SELECT 2` refusal); a GO line carrying other tokens (`GO SELECT 2`) refuses the whole script with SSMS's message; Ctrl+0 (Set to NULL) is claimed only while a grid cell has focus; "Open in editor" from History keeps the current session (not a new History entry); the AI reset does not clear chat history; Connections has no Restore defaults; Restore all defaults does not clear the schema cache or the log.
 
 ---
 
@@ -379,7 +379,7 @@ the grid for display only; the editor and Apply keep the wire text. Rules: null 
 `IsEngineCut`; `date` → first 10 chars; `smalldatetime` → `yyyy-MM-dd HH:mm:ss`; `datetime` →
 `.fff`; `datetime2(n)`/`time(n)` → n digits from the 7-digit wire text (`time` arrives as
 `"c"`, which omits a zero fraction); `datetimeoffset(n)` → same plus a space and the offset
-(SSMS spacing; FR-026's literal form lacks the space — pinned by a test so it is a one-line
+(SSMS spacing; FR-026 amended 2026-10-08 to show the space; pinned by a test so it is a one-line
 change); binary → `0x` + upper-case hex, full to 1,024 bytes then a 512-byte preview with
 `IsPreview`; `uniqueidentifier` → upper case; decimal/numeric → wire text (already at declared
 scale); money/smallmoney → padded to four decimals from the type name; bit → `1/0`; the rest
@@ -1014,7 +1014,8 @@ fallback bug by never using it.
 
 **Decision.** `ISettingsSection { Id, Title, DescribeResetAsync(), ResetAsync(), ExportAsync(),
 ImportAsync(JsonElement) }` with one implementation per exportable section (General, Editor,
-Format, Queries, Code analysis, AI assistance, plus Layout and Grid registered by their areas)
+Format, Queries, Code analysis, AI assistance, plus Layout and Grid registered by their areas;
+**superseded 2026-10-08**: there is no Grid section — the grid options live in Queries)
 and `SettingsPortabilityService` aggregating them for Restore all / Export / Import.
 
 ### R47 — Store reset methods
@@ -1029,7 +1030,7 @@ path) then clears the active id; Format reset = the store's default id (**[corre
 `SetActiveIdAsync` writes `builtin.khamis`, so a `ResetActiveAsync` is added rather than
 passing null). Connections has no Restore defaults; Schema cache's is its Clear all; Diagnostics'
 resets the level filters. Restore all covers General, Editor, Format, Queries, Code analysis, AI
-assistance, Layout and Grid — never connections, pairing tokens, cache, snippets, history, chat
+assistance and Layout (Grid dropped 2026-10-08, see R46) — never connections, pairing tokens, cache, snippets, history, chat
 or the document (X10).
 
 ### R48 — Export/import envelope
@@ -1266,7 +1267,10 @@ countdown timer is set to Infinite whenever no reconnect is pending), caret
 differ" marker (**[corrected]** the web segment reads the web assembly's informational version,
 not Core's; the marker is lit in developer builds because each project stamps its own build
 minute unless one `-p:Version` is passed — release builds match; N29). The Cancel control is
-shown only while a request is queued, titled honestly.
+shown only while a request is queued, titled honestly. **Superseded 2026-10-08**: the web cannot
+tell a queued request from a running one (`IQueryExecutionService.CancelAsync` is
+fire-and-forget), so the existing toolbar `execute-cancel` stays and is relabelled "Cancel if not
+started" with an honest title instead (tasks T108).
 
 ### R66 — Start-up and failure screens
 
@@ -1301,7 +1305,8 @@ Virtualize and FocusAsync are answered in both modes, and bUnit's Virtualize ren
 against a fake `IDialogService` registered in the Styles fixtures, and the two E2E suites
 subscribing `page.Dialog` move to the in-app dialog ids; `Pr247_ResultsGridApplyMessageTests`
 keeps its ids and its standalone `Render<ResultsGridComponent>` path (the component stays as the
-single-set host around `ResultSetGrid`); E2E pairing flows navigate to `settings/connections`
+single-set host around `ResultSetGrid`) — **superseded 2026-10-08**: after US2 the test is ported
+to `ResultsPaneComponent` and `ResultsGridComponent` is deleted (FR-090; tasks T108); E2E pairing flows navigate to `settings/connections`
 and keep `engine-add-*`; `FormatStylesSharedEngineTests` expects "On this engine" from its
 `--web` sandbox engine (N28); `SiteScreenshotTour` images change by design. Everything else is the SC-008 regression net: `settings/ai` and
 `settings/schema-cache` keep working as section deep-links; the AI form's accessible names stay;
@@ -1379,7 +1384,7 @@ hover, badge, surface-editor) go into the JSON and are regenerated into both the
 3. Default-named documents appear in History as `query-NN` (SSMS behaviour); user-named ones
    carry their name — R64.
 4. A batch timeout stops the remaining GO batches; `GO SELECT 2` refuses the whole script —
-   R16/R17 (narrower than FR-025's literal wording; SSMS's behaviour).
+   R16/R17 (SSMS's behaviour; FR-025 amended 2026-10-08 to match).
 5. Ctrl+0 (Set to NULL) and Ctrl+Shift+C are claimed only while a grid cell has focus — R4.
 6. "Open in editor" from History keeps the current session — R64.
 7. The AI reset does not clear chat history; Connections has no Restore defaults; Restore all

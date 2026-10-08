@@ -42,7 +42,10 @@ reset layout (`view:reset-layout`). The toolbar and status bar are always visibl
 ## 2. Keyboard map (FR-028, FR-049)
 
 Claimed only while the editor page is mounted (document-level capture listener; ignored while
-an `[aria-modal="true"]` element is open; `e.repeat` ignored; `e.code` matched).
+an `[aria-modal="true"]` element is open; `e.repeat` ignored; `e.code` matched). A Ctrl+Alt
+binding is claimed only when `e.key` is the plain letter of `e.code` (`o` for `KeyO`) and
+`getModifierState('AltGraph')` is false: on Windows AltGr arrives as Ctrl+Alt, and on layouts
+such as Polish it types characters (ó, ń) that must reach the editor.
 
 | Keys | Command | Notes |
 |---|---|---|
@@ -106,15 +109,16 @@ Browser-reserved and not attempted: Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+Shift
   `Batch execution completed N times.`; `The remaining N batch(es) did not run because the
   connection was closed.`; last line `Completion time: 2026-10-08T12:34:56.1234567+02:00`
   (browser local time). Errors are clickable when they map to a document line.
-- Save results as: menu item `Save results as…` → format choice (CSV comma-delimited / tab
-  delimited) → confirmation when truncated or holding engine-cut values → download
+- Save results as: menu items `Save results as CSV…` (comma-delimited) and `Save results as
+  tab-delimited…` → confirmation when truncated or holding engine-cut values → download
   `<document>.csv` / `.tsv`, UTF-8 with BOM.
 
 ## 5. Grid menus (FR-005, FR-017)
 
 Cell / selection menu, in order: Copy (Ctrl+C) · Copy with headers (Ctrl+Shift+C) · Copy as ▸
 (CSV · JSON · Markdown table · INSERT statements) · Select all (Ctrl+A) · View value ·
-Set to NULL (Ctrl+0; editable only; disabled with reason) · Save results as CSV… · — ·
+Set to NULL (Ctrl+0; editable only; disabled with reason) · Save results as CSV… ·
+Save results as tab-delimited… · — ·
 Delete row / Restore row (editable only).
 
 Column header menu: Auto-fit this column · Auto-fit all columns · Reset column widths · Copy

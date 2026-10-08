@@ -41,11 +41,13 @@ already has (research.md R1–R74; findings N1–N26; cross-area arbitrations X1
 
 **Workspace (US3)**
 - One CSS grid with named areas and CSS-variable sizes; pointer splitters in JS, keyboard
-  splitters in Blazor; fold-away below 1200 px; a dedicated layout store with per-field
-  writes; page-scoped key capture (F5, Ctrl+F5, Ctrl+R, F8, F6, the Ctrl+K chords); one
-  command table feeding the View menu, the palette and the keys; analyser findings in the
-  editor through CodeMirror's lint state; a Schema panel with filter, refresh and icons
-  (R33–R42).
+  splitters in Blazor; side panels fold away when the editor would drop below its minimum
+  width (measured, R35); a dedicated layout store with per-field writes; page-scoped key
+  capture (F5, Ctrl+F5, Ctrl+R, F8, F6, the Ctrl+K chords); one command table feeding the
+  View menu, the palette and the keys; a Schema panel that stays present without a
+  connection (R33–R42). The analyser findings in the editor (FR-087) and the Schema panel's
+  filter, refresh and icons (FR-093) belong to US6, as the spec assigns them; tasks.md
+  builds them there (T197, T200).
 
 **Settings (US4)**
 - One Settings component with per-section routes and the old addresses as aliases; nine
@@ -133,8 +135,8 @@ reached through the WebSocket bridge with MessagePack frames (16 MB cap).
   *discarding* edits.
 - Core stays `netstandard2.0`-safe; shell projects build with full MSBuild only.
 
-**Scale/Scope**: 6 user stories, 82 functional requirements, 13 success criteria; about 48 new
-source files (18 components, 14 services/helpers, 3 JS modules, 2 stylesheets, 1 sprite
+**Scale/Scope**: 6 user stories, 81 functional requirements, 13 success criteria; about 54 new
+source files (18 components, 20 services/helpers/models, 3 JS modules, 2 stylesheets, 1 sprite
 toolchain), about 55 modified files, about 50 new test files; 2 new IPC types, 5 additive key
 sets, 2 capabilities; about 50 working days in seven slices.
 
@@ -217,7 +219,7 @@ modules; a dev-time icon vendoring; the `ISettingsSection` abstraction.
 ```text
 specs/041-web-ssms-ux-parity/
 ├── plan.md              # This file
-├── spec.md              # Feature specification (6 user stories, 82 FRs, 13 SCs, clarifications)
+├── spec.md              # Feature specification (6 user stories, 81 FRs, 13 SCs, clarifications)
 ├── research.md          # Phase 0 — findings N1..N26, arbitrations X1..X10, decisions R1..R74
 ├── data-model.md        # Phase 1 — browser records, grid state, IPC DTOs, engine session state, state machines
 ├── quickstart.md        # Phase 1 — build/test commands and the manual acceptance scenarios
@@ -236,6 +238,10 @@ specs/041-web-ssms-ux-parity/
 Slices: **[A]** US1 results grid · **[B]** US2 results pane + engine · **[C]** US3 workspace ·
 **[D]** US4 settings · **[E]** US5 tabs + documents · **[F]** US6 shell polish ·
 **[G]** tests and gates (cross-cutting). Database selector and identity are **[B]**/**[F]**.
+tasks.md builds the shared pieces in its Foundational phase, ahead of the slices that first
+use them: TabStrip, ContextMenu, the dialog and notification services, page key capture, the
+workspace status service, editor diagnostics, icons, `shell.css`, the Core type helpers and
+the `ResultSetGrid` split.
 
 ```text
 src/AkmlSql.Core/
@@ -243,6 +249,7 @@ src/AkmlSql.Core/
 ├── Text/SqlValueDisplay.cs                    [B] NEW — FR-026 display formatting (pure)
 ├── Text/EngineCutIndicator.cs                 [A] NEW — [text N chars] / [binary N bytes] detection
 ├── Text/GridTextFormats.cs                    [A] NEW — Copy-As formatters moved from the shell (goldens-first)
+├── Text/SqlMessageText.cs                     [B] NEW — SSMS message lines (Msg/Level/State/Line, row counts, completion time)
 ├── AppVersion.cs                              [F] StripBuildMetadata helper
 ├── Ipc/RpcMessage.cs                          [B] ChangeDatabase 217/218, ExecuteParse 219/220
 ├── Ipc/Messages/ExecuteQueryMessages.cs       [B] keys 8–12 on ExecuteQueryResult, key 11 on ExecuteResultSet,
@@ -258,6 +265,7 @@ src/AkmlSql.Engine/
 ├── Execution/ExecuteQueryHandler.cs           [B] per-batch loop, behaviour per batch, info-message errors, StatementCompleted,
 │                                                  partial results, completion stamp, message/repeat caps, parse mode, current database
 ├── Execution/ResultSetReader.cs               [B] declared types via SqlTypeName, 255 → null, shared budget, BatchIndex, set callbacks
+├── Execution/ExecuteOutcome.cs                [B] NEW — pure aggregation of messages, batches, caps and status
 ├── Execution/SessionConnection.cs             [B] ChangeDatabase under the gate; note on the info-message flag
 ├── Server/SessionManager.cs                   [B] SetDatabase(sessionId, db, connStr)
 ├── Handlers/Control/ChangeDatabaseHandler.cs  [B] NEW
@@ -281,13 +289,15 @@ src/AkmlSql.Web/
 ├── Pages/History.razor, Snippets.razor, Styles.razor   [E][F] TabStrip, dialogs, notifications, page header, shell.css
 ├── Shared/ResultsPaneComponent.razor          [B] NEW — tabs, stacked sets, messages slot, Problems slot, empty/running states
 ├── Shared/ResultSetGrid.razor                 [A] NEW — one result set: widths, selection, editing, sort, copy, menus
-├── Shared/ResultsGridComponent.razor          [A] stays as the standalone single-set host around ResultSetGrid (the existing bUnit test renders it)
+├── Shared/ResultsGridComponent.razor          [A] split in T037; DELETED after US2 once the Pr247 test renders ResultsPaneComponent (FR-090)
 ├── Shared/MessagesView.razor                  [B] NEW — SSMS-formatted lines, click → document line
 ├── Shared/ContextMenu.razor                   [A] NEW
+├── Shared/MenuItem.cs                         [A] NEW — menu item model
 ├── Shared/CellValueDialog.razor               [A] NEW
 ├── Shared/SplitterComponent.razor             [C] NEW
 ├── Shared/DatabaseSelectorComponent.razor     [B] NEW
 ├── Shared/TabStrip.razor                      [E] NEW
+├── Shared/TabItem.cs                          [E] NEW — tab model
 ├── Shared/DialogHost.razor                    [F] NEW
 ├── Shared/NotificationHost.razor              [F] NEW
 ├── Shared/Icon.razor                          [F] NEW
@@ -296,7 +306,7 @@ src/AkmlSql.Web/
 ├── Shared/MainLayout.razor                    [C][F] DialogHost, NotificationHost, route-scoped padding and nav hide
 ├── Shared/NavMenu.razor                       [F] NavLink, five entries
 ├── Shared/StatusBar.razor                     [F] segments, short version, cache-probe key fix, Diagnostics link
-├── Shared/SchemaTreeComponent.razor           [C] always rendered, header, filter, refresh, icons, connect action
+├── Shared/SchemaTreeComponent.razor           [C] always rendered, connect action; [F] header, filter, refresh, icons
 ├── Shared/ProblemsListComponent.razor         [C][D] ShowHeader, OnVisibleCountChanged, DefaultFilter, analysis-off state
 ├── Shared/EditorComponent.razor               [B][C][D] selection-start-line, SetDiagnosticsAsync, caret events, editor options
 ├── Shared/CommandPalette.razor                [C][D] IsEnabled/IsChecked rendering, section navigation entries, icons
@@ -310,9 +320,10 @@ src/AkmlSql.Web/
 ├── Services/IQueryExecutionService.cs         [B] deadline + NoReply/Disconnected, ParseAsync, CurrentDatabase forwarding
 ├── Services/ExecuteLineMapper.cs              [B] NEW
 ├── Services/ISqlConnectionService.cs          [B] WindowsAuth, ListDatabasesForSessionAsync, ChangeDatabaseAsync, ReportCurrentDatabase
-├── Services/ISchemaSync.cs                    [C] RefreshAsync
+├── Services/ISchemaSync.cs                    [F] RefreshAsync
 ├── Services/IWorkspaceLayoutStore.cs          [C] NEW
 ├── Services/IWorkspaceStatus.cs               [C] NEW
+├── Services/WorkspaceKeyMap.cs                [C] NEW — claimed-key table for akml-workspace.js and ShortcutCollisionTests
 ├── Services/ICommandRegistry.cs               [C] IsChecked / IsEnabled
 ├── Services/IExecutionSettingsStore.cs        [D] ShowColumnTypes, RetainLineBreaksOnCopy, SessionOverride, GetEffectiveAsync, ResetAsync, ReloadAsync
 ├── Services/IEditorSettingsStore.cs           [D] NEW
@@ -324,6 +335,7 @@ src/AkmlSql.Web/
 ├── Services/IDialogService.cs                 [F] NEW
 ├── Services/INotificationService.cs           [F] NEW
 ├── Services/EditorDocument.cs                 [E] NEW
+├── Services/EditorDocumentFlow.cs             [E] NEW — New/Open/Save/Save as, testable without the Editor page
 ├── Services/EditorSessionKeys.cs, IEditorSessionStore.cs  [E] name/modified/counter, StartDocumentAsync
 ├── Services/WebHistoryLogic.cs                [E] tabTitle
 ├── Services/IEngineBridge.cs                  [F] EngineHostKind / EngineRunsAs

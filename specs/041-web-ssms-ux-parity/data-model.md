@@ -74,11 +74,13 @@ remains the source of truth.
     "codeAnalysis": { "enabled": true, "autoAnalyseOnFormat": true, "problemsFilter": {...}, "ruleOverrides": { "PE001": "off" } },
     "aiAssistance": { "providers": [ { "providerId", "displayName", "model", "endpoint" } ], "activeProviderId": "...",
                       "privacy": { "globalDefaultMode", "featureModeOverrides" }, "ghostText": { "enabled", "delayMs", "maxRequestsPer3s" } },
-    "layout":       { ...workspaceLayout fields... },
-    "grid":         { "maxColumnWidthPx": 480 }
+    "layout":       { ...workspaceLayout fields... }
   }
 }
 ```
+
+The grid options (show column types, retain line breaks on copy or save) are exported under
+`queries`. The maximum column width is a constant, not a setting, so it is not exported.
 
 Never present: API keys, passwords, pairing tokens, engine connections, SQL Server connections,
 schema cache, snippets, history, chat, the document, diagnostics (SC-013). Import applies the
