@@ -52,7 +52,7 @@ a:hover { color: var(--akml-accent-primaryhover); }
     --akml-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 /* ── ⌘P command palette (spec 030) ─────────────────────────────────────────

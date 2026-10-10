@@ -72,7 +72,7 @@
         @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
         <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
                 @onclick="ParseAsync" disabled="@(!CanParse)"
-                title="@(SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
+                title="@(_executing ? "A query is running" : !SqlConn.IsConnected ? "Parse needs a SQL Server connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
             <Icon Name="file-check" /><span>Parse</span>
         </button>
         @if (_executing)
@@ -1823,6 +1823,8 @@
             var bindings = WorkspaceKeyMap.For(_contextActions.Select(a => a.Id));
             await _workspaceModule.InvokeVoidAsync("initKeys", _selfRef, bindings);
             await _workspaceModule.InvokeVoidAsync("observeWorkspace", _workspaceEl, _selfRef);
+            _uiModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            await _uiModule.InvokeVoidAsync("installHelpTooltips");
         }
         catch (JSDisconnectedException) { /* tab closing */ }
         catch (JSException ex)
@@ -1871,7 +1873,7 @@
         await Diagnostics.FlushAsync();
         if (_uiModule != null)
         {
-            try { await _uiModule.DisposeAsync(); }
+            try { await _uiModule.InvokeVoidAsync("disposeHelpTooltips"); await _uiModule.DisposeAsync(); }
             catch (JSDisconnectedException) { /* tab closing */ }
         }
     }

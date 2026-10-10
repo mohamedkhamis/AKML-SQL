@@ -87,7 +87,7 @@
         <div class="spike-input-row">
             <label>
                 Corpus:
-                <select @onchange="OnCorpusSelected" value="@(_selectedCorpusId ?? string.Empty)" disabled="@_running">
+                <select @onchange="OnCorpusSelected" value="@(_selectedCorpusId ?? string.Empty)" disabled="@_running" title="@(_running ? "Wait for the current operation to finish" : null)">
                     <option value="">— pick a corpus item —</option>
                     @if (_corpus is not null)
                     {
@@ -115,9 +115,9 @@
 
     @* ---- Actions ---- *@
     <div class="spike-actions">
-        <button id="spike-parse-format" class="spike-btn primary" @onclick="ParseAndFormatAsync" disabled="@_running">Parse &amp; Format</button>
-        <button id="spike-analyse" class="spike-btn" @onclick="AnalyseAsync" disabled="@_running">Analyse</button>
-        <button id="spike-run-corpus" class="spike-btn" @onclick="RunAllCorpusAsync" disabled="@(_running || _corpus is null)">Run all corpus</button>
+        <button id="spike-parse-format" class="spike-btn primary" @onclick="ParseAndFormatAsync" disabled="@_running" title="@(_running ? "Wait for the current operation to finish" : null)">Parse &amp; Format</button>
+        <button id="spike-analyse" class="spike-btn" @onclick="AnalyseAsync" disabled="@_running" title="@(_running ? "Wait for the current operation to finish" : null)">Analyse</button>
+        <button id="spike-run-corpus" class="spike-btn" @onclick="RunAllCorpusAsync" disabled="@(_running || _corpus is null)" title="@(_running ? "Wait for the current operation to finish" : _corpus is null ? "Load the corpus first" : null)">Run all corpus</button>
         @if (_busyLabel is not null)
         {
             <span class="spike-busy">@_busyLabel</span>

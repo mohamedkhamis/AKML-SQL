@@ -52,20 +52,20 @@
     border-color: var(--akml-accent-primary);
 }
 .akml-btn--primary:hover:not(:disabled) {
-    background-color: var(--akml-accent-primaryhover);
-    border-color: var(--akml-accent-primaryhover);
+    background-color: var(--akml-accent-primarypressed);
+    border-color: var(--akml-accent-primarypressed);
 }
 
 /* Destructive confirm buttons. Never the dialog's Enter target (spec 041 R59). */
 .akml-btn--danger {
     color: var(--akml-text-ondanger);
-    background-color: var(--akml-status-danger);
-    border-color: var(--akml-status-danger);
+    background-color: var(--akml-badge-error);
+    border-color: var(--akml-badge-error);
 }
-.akml-btn--danger:hover:not(:disabled) { background-color: var(--akml-status-danger); border-color: var(--akml-text-primary); }
+.akml-btn--danger:hover:not(:disabled) { background-color: var(--akml-badge-error); border-color: var(--akml-text-primary); }
 
 /* A command that removes something but is not a confirm button: red only on hover (Delete… beside Save). */
-.akml-btn--destructive:hover:not(:disabled) { color: var(--akml-status-danger); }
+.akml-btn--destructive:hover:not(:disabled) { color: var(--akml-statustext-danger); }
 
 /* A small button inside dense chrome (the status bar). */
 .akml-btn--compact { min-height: 20px; padding: 0 var(--akml-scalar-spacing-xs); }
@@ -182,7 +182,7 @@ a.akml-btn { text-decoration: none; }
 .akml-textarea { font-family: var(--akml-type-editor-family); resize: vertical; }
 .akml-input[aria-invalid="true"],
 .akml-textarea[aria-invalid="true"] { border-color: var(--akml-status-danger); }
-.akml-field-error { margin: 0; color: var(--akml-status-danger); font-size: 12px; }
+.akml-field-error { margin: 0; color: var(--akml-statustext-danger); font-size: 12px; }
 .akml-hint { margin: 0; color: var(--akml-text-secondary); font-size: 12px; }
 
 /* ── Page header (History, Snippets, Schema cache, Diagnostics, Styles, Settings) ── */
@@ -301,8 +301,8 @@ a.akml-btn { text-decoration: none; }
     background-color: var(--akml-badge-neutral);
     border-radius: var(--akml-scalar-radius-pill);
 }
-.akml-tab-badge[data-kind="error"] { color: var(--akml-text-ondanger); background-color: var(--akml-status-danger); }
-.akml-tab-badge[data-kind="warning"] { color: var(--akml-text-onaccent); background-color: var(--akml-status-warning); }
+.akml-tab-badge[data-kind="error"] { color: var(--akml-text-ondanger); background-color: var(--akml-badge-error); }
+.akml-tab-badge[data-kind="warning"] { color: var(--akml-text-onaccent); background-color: var(--akml-badge-warning); }
 
 /* ── Menus (Shared/ContextMenu.razor) ────────────────────────────────────── */
 .akml-menu-scrim { position: fixed; inset: 0; z-index: 1090; background: transparent; }
@@ -417,3 +417,36 @@ a.akml-btn { text-decoration: none; }
 .akml-splitter:focus-visible::before,
 .akml-workspace--dragging .akml-splitter::before { background-color: var(--akml-accent-primary); }
 .akml-workspace--dragging, .akml-workspace--dragging * { user-select: none; }
+
+/* High contrast uses an inverse system-color pair, including nested controls on highlighted rows. */
+[data-akml-theme="high-contrast"] .akml-btn:hover:not(:disabled),
+[data-akml-theme="high-contrast"] .akml-tool-button:hover:not(:disabled),
+[data-akml-theme="high-contrast"] .akml-table tbody tr:hover .akml-btn,
+[data-akml-theme="high-contrast"] .akml-table tbody tr[aria-selected="true"] .akml-btn,
+[data-akml-theme="high-contrast"] .akml-list-row:hover .akml-btn { background-color: var(--akml-surface-hover); }
+[data-akml-theme="high-contrast"] .akml-btn:hover:not(:disabled),
+[data-akml-theme="high-contrast"] .akml-tool-button:hover:not(:disabled),
+[data-akml-theme="high-contrast"] .akml-table tbody tr:hover *,
+[data-akml-theme="high-contrast"] .akml-table tbody tr[aria-selected="true"] *,
+[data-akml-theme="high-contrast"] .akml-list-row:hover * { color: var(--akml-text-onaccent); }
+.akml-menu-item:focus-visible, .akml-splitter:focus-visible {
+    outline: 2px solid var(--akml-border-focus);
+    outline-offset: -2px;
+}
+.akml-menu-item:focus .akml-menu-submark { color: inherit; }
+.akml-btn:focus-within { outline: 2px solid var(--akml-border-focus); outline-offset: 2px; }
+.akml-keyboard-help {
+    position: fixed;
+    z-index: 1100;
+    max-width: min(420px, calc(100vw - 8px));
+    padding: 6px 8px;
+    color: var(--akml-text-primary);
+    background: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-strong);
+    font-family: var(--akml-type-chrome-family);
+    font-size: var(--akml-type-chrome-size);
+    pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    .akml-splitter::before { transition: none; }
+}

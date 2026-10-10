@@ -85,7 +85,7 @@
         {
             @* Only the providers that need one show the field (FR-056: the hints match what the form allows). *@
             <label class="akml-field">Endpoint
-                <input class="akml-input" @bind="_form.Endpoint" disabled placeholder="Not used by this provider" />
+                <input class="akml-input" @bind="_form.Endpoint" disabled title="This provider uses its standard endpoint" placeholder="Not used by this provider" />
             </label>
         }
         @if (RequiresApiKey(_form.ProviderId))

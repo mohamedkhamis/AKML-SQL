@@ -73,23 +73,23 @@
                 <div class="akml-field">
                     <label class="akml-field-label" for="akml-snippet-shortcode">Shortcode</label>
                     <input id="akml-snippet-shortcode" class="akml-input" value="@_editShortcode" @oninput="@(e => _editShortcode = e.Value?.ToString() ?? "")"
-                           disabled="@_selected.IsBuiltIn" />
+                           disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)" />
                 </div>
                 <div class="akml-field">
                     <label class="akml-field-label" for="akml-snippet-title">Title</label>
                     <input id="akml-snippet-title" class="akml-input" value="@_editTitle" @oninput="@(e => _editTitle = e.Value?.ToString() ?? "")"
-                           disabled="@_selected.IsBuiltIn" />
+                           disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)" />
                 </div>
                 <div class="akml-field">
                     <label class="akml-field-label" for="akml-snippet-description">Description</label>
                     <input id="akml-snippet-description" class="akml-input" value="@_editDescription" @oninput="@(e => _editDescription = e.Value?.ToString() ?? "")"
-                           disabled="@_selected.IsBuiltIn" />
+                           disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)" />
                 </div>
                 <div class="akml-field akml-field-grow">
                     <label class="akml-field-label" for="akml-snippet-body">Body</label>
                     <textarea id="akml-snippet-body" class="akml-textarea akml-snippets-bodyedit" spellcheck="false"
                               value="@_editBody" @oninput="@(e => _editBody = e.Value?.ToString() ?? "")"
-                              disabled="@_selected.IsBuiltIn"></textarea>
+                              disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)"></textarea>
                     <p class="akml-snippets-hint">
                         Placeholders use <code>$name$</code>; final caret <code>$CURSOR$</code>;
                         selection slot <code>$SELECTEDTEXT$</code>.

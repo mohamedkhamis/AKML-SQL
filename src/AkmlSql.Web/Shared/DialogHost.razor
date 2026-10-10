@@ -63,7 +63,7 @@
                 }
                 <button @ref="_ok" type="button" data-testid="dialog-confirm"
                         class="akml-btn @(confirm is { Destructive: true } ? "akml-btn--danger" : "akml-btn--primary")"
-                        disabled="@invalid" @onclick="ConfirmAsync">@(_entry.Kind == DialogKind.Alert ? "OK" : prompt?.ConfirmLabel ?? confirm?.ConfirmLabel ?? "OK")</button>
+                        disabled="@invalid" title="@(invalid ? _error : null)" @onclick="ConfirmAsync">@(_entry.Kind == DialogKind.Alert ? "OK" : prompt?.ConfirmLabel ?? confirm?.ConfirmLabel ?? "OK")</button>
             </div>
         </div>
     </div>

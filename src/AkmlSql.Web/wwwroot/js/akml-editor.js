@@ -711,7 +711,50 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         parent: host,
     });
 
-    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment });
+    const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
+    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, disposeLintKeyboard });
+}
+
+// CodeMirror's lint gutter opens its own tooltip on mouseover. Give its markers the same
+// interaction from the keyboard, and let its existing mouse-leave logic dismiss it on Escape.
+function installLintKeyboard(view, hostElementId) {
+    if (typeof MutationObserver === 'undefined' || !view.dom) return () => {};
+    let focused = null;
+    const close = () => {
+        focused?.dispatchEvent(new MouseEvent('mouseout'));
+        focused?.removeAttribute('aria-describedby');
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: -100, clientY: -100 }));
+    };
+    const decorate = () => {
+        for (const marker of view.dom.querySelectorAll('.cm-lint-marker')) {
+            marker.tabIndex = 0;
+            marker.setAttribute('aria-label', 'SQL diagnostics');
+        }
+        const tip = view.dom.querySelector('.cm-tooltip-lint');
+        if (focused && tip) {
+            tip.id = `${hostElementId}-lint-help`;
+            tip.setAttribute('role', 'tooltip');
+            focused.setAttribute('aria-describedby', tip.id);
+        }
+    };
+    const focus = e => {
+        if (!e.target.matches('.cm-lint-marker')) return;
+        focused = e.target;
+        focused.dispatchEvent(new MouseEvent('mouseover'));
+    };
+    const blur = () => { close(); focused = null; };
+    const key = e => { if (e.key === 'Escape') close(); };
+    const observer = new MutationObserver(decorate);
+    observer.observe(view.dom, { childList: true, subtree: true });
+    view.dom.addEventListener('focusin', focus);
+    view.dom.addEventListener('focusout', blur);
+    view.dom.addEventListener('keydown', key);
+    return () => {
+        close(); observer.disconnect();
+        view.dom.removeEventListener('focusin', focus);
+        view.dom.removeEventListener('focusout', blur);
+        view.dom.removeEventListener('keydown', key);
+    };
 }
 
 /** Spec 041 (R53) — apply changed editor options to an open editor. */
@@ -1060,6 +1103,7 @@ export function dispose(hostElementId) {
     }
     const host = document.getElementById(hostElementId);
     if (host && host._akmlPeek) { host._akmlPeek.remove(); host._akmlPeek = null; }
+    inst.disposeLintKeyboard?.();
     inst.view.destroy();
     if (inst.dotNetRef && typeof inst.dotNetRef.dispose === 'function') {
         inst.dotNetRef.dispose();

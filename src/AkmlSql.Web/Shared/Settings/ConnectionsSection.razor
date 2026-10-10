@@ -59,7 +59,7 @@
                             }
                             else if (c.WindowsAuth)
                             {
-                                <button type="button" class="akml-btn" disabled="@(Bridge.State != BridgeState.Open)"
+                                <button type="button" class="akml-btn" disabled="@(Bridge.State != BridgeState.Open)" title="@(Bridge.State != BridgeState.Open ? "Connect to an engine first" : null)"
                                         @onclick="@(() => ConnectAsync(c))">Connect</button>
                             }
                             else

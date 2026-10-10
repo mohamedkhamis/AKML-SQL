@@ -109,7 +109,7 @@
             <button class="akml-tool-button" @onclick="OnCancel">Cancel</button>
             <button class="akml-tool-button akml-rpv-apply"
                     data-testid="refactor-apply"
-                    disabled="@(!CanApply)"
+                    disabled="@(!CanApply)" title="@(CanApply ? null : Heavy is { CanApply: false } ? "Resolve the preview conflicts before applying changes" : "There are no changes to apply")"
                     @onclick="OnApply">Apply</button>
         </div>
     </div>

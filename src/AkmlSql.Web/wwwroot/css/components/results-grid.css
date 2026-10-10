@@ -22,7 +22,7 @@
     padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
     font-size: var(--akml-type-chrome-size);
     border-bottom: 1px solid var(--akml-border-subtle);
-    color: var(--akml-status-warning);
+    color: var(--akml-statustext-warning);
 }
 .akml-results-spacer { flex: 1 1 auto; }
 .akml-results-stat { color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
@@ -38,9 +38,9 @@
     flex: 0 0 auto;
 }
 .akml-legend-chip { color: var(--akml-text-secondary); }
-.akml-legend-chip.akml-row-edited { color: var(--akml-status-warning); box-shadow: none; }
-.akml-legend-chip.akml-row-new { color: var(--akml-status-success); box-shadow: none; }
-.akml-legend-chip.akml-row-deleted { color: var(--akml-status-danger); box-shadow: none; }
+.akml-legend-chip.akml-row-edited { color: var(--akml-statustext-warning); box-shadow: none; }
+.akml-legend-chip.akml-row-new { color: var(--akml-statustext-success); box-shadow: none; }
+.akml-legend-chip.akml-row-deleted { color: var(--akml-statustext-danger); box-shadow: none; }
 
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
 /* Spec 041 (R1): every row is a CSS grid over ONE track list, --akml-grid-cols, written inline on the
@@ -153,7 +153,7 @@
 .akml-resizing,
 .akml-resizing * { user-select: none; cursor: col-resize; }
 
-/* Selection (FR-008/FR-010). High contrast pairs the selection fill with HighlightText (FR-091). */
+/* Selection (FR-008/FR-010). High contrast pairs the selection fill with on-accent text (FR-091). */
 .akml-cell-selected { background-color: var(--akml-surface-selection); }
 .akml-results-colheader.akml-cell-selected { background-color: var(--akml-surface-selection); color: var(--akml-text-primary); }
 .akml-results-rowmarker.akml-cell-selected {
@@ -168,11 +168,11 @@
 /* Values: NULL and engine-cut values are muted; an invalid edit is marked by an outline AND a glyph. */
 .akml-cell-cut { color: var(--akml-text-secondary); font-style: italic; }
 .akml-cell-invalid { box-shadow: inset 0 0 0 2px var(--akml-status-danger); }
-.akml-cell-invalid-glyph { color: var(--akml-status-danger); margin-right: 2px; }
+.akml-cell-invalid-glyph { color: var(--akml-statustext-danger); margin-right: 2px; }
 .akml-row-glyph { flex: 0 0 auto; }
-.akml-row-edited .akml-row-glyph { color: var(--akml-status-warning); }
-.akml-row-new .akml-row-glyph { color: var(--akml-status-success); }
-.akml-row-deleted .akml-row-glyph { color: var(--akml-status-danger); }
+.akml-row-edited .akml-row-glyph { color: var(--akml-statustext-warning); }
+.akml-row-new .akml-row-glyph { color: var(--akml-statustext-success); }
+.akml-row-deleted .akml-row-glyph { color: var(--akml-statustext-danger); }
 
 /* Keyboard tooltip for a cell whose value the column hides (FR-103): pinned to the grid's bottom edge. */
 .akml-cell-tooltip {
@@ -250,12 +250,12 @@
     border-top: 1px solid var(--akml-border-subtle);
     flex: 0 0 auto;
 }
-.akml-results-truncated { color: var(--akml-status-warning); font-size: var(--akml-type-chrome-size); }
+.akml-results-truncated { color: var(--akml-statustext-warning); font-size: var(--akml-type-chrome-size); }
 .akml-results-blocked {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--akml-status-danger);
+    color: var(--akml-statustext-danger);
     font-size: var(--akml-type-chrome-size);
 }
 
@@ -284,8 +284,8 @@
 .akml-results-pane .akml-connmgr-btn:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
 .akml-results-pane .akml-connmgr-btn:disabled { opacity: 0.5; cursor: default; }
 .akml-results-pane .akml-connmgr-btn-primary { border-color: var(--akml-accent-primary); }
-.akml-results-pane .akml-connmgr-msg-ok { color: var(--akml-status-success); font-size: var(--akml-type-chrome-size); }
-.akml-results-pane .akml-connmgr-msg-error { color: var(--akml-status-danger); font-size: var(--akml-type-chrome-size); }
+.akml-results-pane .akml-connmgr-msg-ok { color: var(--akml-statustext-success); font-size: var(--akml-type-chrome-size); }
+.akml-results-pane .akml-connmgr-msg-error { color: var(--akml-statustext-danger); font-size: var(--akml-type-chrome-size); }
 
 /* ── View value (CellValueDialog) ──────────────────────────────────────────── */
 .akml-cellvalue-type { color: var(--akml-text-secondary); font-family: var(--akml-type-editorgrid-family); font-size: var(--akml-type-chrome-size); }
@@ -301,7 +301,7 @@
     font-family: var(--akml-type-editorgrid-family);
     font-size: var(--akml-type-editorgrid-size);
 }
-.akml-cellvalue-status { margin-right: auto; color: var(--akml-status-success); font-size: var(--akml-type-chrome-size); }
+.akml-cellvalue-status { margin-right: auto; color: var(--akml-statustext-success); font-size: var(--akml-type-chrome-size); }
 
 /* ── Messages tab (MessagesView, spec 041 FR-022/FR-023) ───────────────────── */
 .akml-messages {
@@ -313,7 +313,7 @@
     color: var(--akml-text-primary);
 }
 .akml-messages-line { white-space: pre-wrap; line-height: 1.5; }
-.akml-messages-line--error { color: var(--akml-status-danger); }
+.akml-messages-line--error { color: var(--akml-statustext-danger); }
 .akml-messages-line--system,
 .akml-messages-line--completion { color: var(--akml-text-secondary); }
 .akml-messages-line--completion { margin-top: var(--akml-scalar-spacing-s); }
@@ -323,7 +323,7 @@
     font: inherit;
     text-align: left;
     white-space: pre-wrap;
-    color: var(--akml-status-danger);
+    color: var(--akml-statustext-danger);
     background: transparent;
     border: none;
     cursor: pointer;
@@ -381,4 +381,11 @@
     color: var(--akml-text-secondary);
     background-color: var(--akml-surface-elevated);
     border-bottom: 1px solid var(--akml-border-subtle);
+}
+
+[data-akml-theme="high-contrast"] .akml-results-row:not(.akml-results-headerrow):hover,
+[data-akml-theme="high-contrast"] .akml-results-row:not(.akml-results-headerrow):hover .akml-results-cell:not(.akml-results-rowmarker),
+[data-akml-theme="high-contrast"] .akml-cell-selected *,
+[data-akml-theme="high-contrast"] .akml-results-jump-btn:hover {
+    color: var(--akml-text-onaccent);
 }

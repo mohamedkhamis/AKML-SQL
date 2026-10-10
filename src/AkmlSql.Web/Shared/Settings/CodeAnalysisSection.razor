@@ -14,7 +14,7 @@
 </SettingRow>
 <SettingRow Id="analysis-reanalyse-after-format" Kind="switch">
     <input id="setting-analysis-reanalyse-after-format-control" type="checkbox" checked="@_settings.AutoAnalyseOnFormat"
-           disabled="@(!_settings.Enabled)" aria-describedby="setting-analysis-reanalyse-after-format-help" @onchange="OnAutoAnalyseAsync" />
+           disabled="@(!_settings.Enabled)" title="@(!_settings.Enabled ? "Enable code analysis first" : null)" aria-describedby="setting-analysis-reanalyse-after-format-help" @onchange="OnAutoAnalyseAsync" />
 </SettingRow>
 <SettingRow Id="analysis-problems-filter" Kind="block">
     <span role="group" aria-label="Default Problems filters" aria-describedby="setting-analysis-problems-filter-help" class="akml-setting-control">

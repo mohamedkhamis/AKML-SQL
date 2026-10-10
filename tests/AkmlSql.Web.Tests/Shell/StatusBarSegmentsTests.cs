@@ -45,6 +45,27 @@ public sealed class StatusBarSegmentsTests : BunitContext
     };
 
     [Fact]
+    public async Task A_live_bridge_hides_a_stale_startup_pairing_failure()
+    {
+        Services.AddSingleton<IEngineAutoConnect>(new StaleFailureAutoConnect());
+        var cut = Render<StatusBar>();
+        Assert.Single(cut.FindAll("[data-testid=engine-issue]"));
+
+        await cut.InvokeAsync(() => _bridge.SetState(BridgeState.Open));
+
+        Assert.Empty(cut.FindAll("[data-testid=engine-issue]"));
+        Assert.Contains("Live", cut.Find("[data-testid=status-pill]").TextContent);
+    }
+
+    private sealed class StaleFailureAutoConnect : IEngineAutoConnect
+    {
+        public EngineConnectFailure? LastFailure => new(EngineConnectFailureKind.NotPaired, "No engine is paired.", null);
+        public event Action? FailureChanged { add { } remove { } }
+        public Task StartAsync() => Task.CompletedTask;
+        public Task RetryNowAsync() => Task.CompletedTask;
+    }
+
+    [Fact]
     public void Before_any_execute_there_is_no_outcome()
     {
         var cut = Render<StatusBar>();

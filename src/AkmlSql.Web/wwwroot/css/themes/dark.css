@@ -84,9 +84,16 @@
     --akml-history-star-active: #fb923c;
     --akml-history-star-inactive: rgba(255, 255, 255, 0.078);
     --akml-history-matchhighlight: rgba(218, 165, 32, 0.302);
+    /* StatusText */
+    --akml-statustext-success: #4ade80;
+    --akml-statustext-warning: #fb923c;
+    --akml-statustext-danger: #f87171;
     /* Badge */
     --akml-badge-neutral: #334155;
     --akml-badge-neutraltext: #e2e8f0;
+    --akml-badge-error: #b91c1c;
+    --akml-badge-success: #166534;
+    --akml-badge-warning: #92400e;
     /* Spacing (theme-invariant scalars in DIU) */
     --akml-scalar-spacing-xs: 4px;
     --akml-scalar-spacing-s: 8px;

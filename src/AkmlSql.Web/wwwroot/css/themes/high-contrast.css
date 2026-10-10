@@ -11,9 +11,9 @@
     --akml-surface-sidebar: ButtonFace;
     --akml-surface-input: Field;
     --akml-surface-inputreadonly: ButtonFace;
-    --akml-surface-hover: Highlight;
-    --akml-surface-selection: Highlight;
-    --akml-surface-selectionstrong: Highlight;
+    --akml-surface-hover: CanvasText;
+    --akml-surface-selection: CanvasText;
+    --akml-surface-selectionstrong: CanvasText;
     --akml-surface-editor: Canvas;
     --akml-surface-scrim: Canvas;
     /* Text */
@@ -22,23 +22,23 @@
     --akml-text-disabled: GrayText;
     --akml-text-placeholder: GrayText;
     --akml-text-link: LinkText;
-    --akml-text-onaccent: HighlightText;
-    --akml-text-ondanger: HighlightText;
+    --akml-text-onaccent: Canvas;
+    --akml-text-ondanger: Canvas;
     /* Border */
     --akml-border-default: ButtonText;
     --akml-border-strong: ButtonText;
     --akml-border-subtle: GrayText;
     --akml-border-focus: LinkText;
     --akml-border-splitter: GrayText;
-    --akml-border-splitterhover: Highlight;
+    --akml-border-splitterhover: CanvasText;
     /* Accent */
-    --akml-accent-primary: Highlight;
-    --akml-accent-primaryhover: Highlight;
-    --akml-accent-primarypressed: Highlight;
+    --akml-accent-primary: CanvasText;
+    --akml-accent-primaryhover: CanvasText;
+    --akml-accent-primarypressed: CanvasText;
     /* Status */
-    --akml-status-success: Highlight;
-    --akml-status-warning: Highlight;
-    --akml-status-danger: Highlight;
+    --akml-status-success: CanvasText;
+    --akml-status-warning: CanvasText;
+    --akml-status-danger: CanvasText;
     --akml-status-info: LinkText;
     /* Editor */
     --akml-editor-marginbackground: ButtonFace;
@@ -83,10 +83,17 @@
     --akml-history-closedicon: LinkText;
     --akml-history-star-active: LinkText;
     --akml-history-star-inactive: GrayText;
-    --akml-history-matchhighlight: Highlight;
+    --akml-history-matchhighlight: CanvasText;
+    /* StatusText */
+    --akml-statustext-success: CanvasText;
+    --akml-statustext-warning: CanvasText;
+    --akml-statustext-danger: CanvasText;
     /* Badge */
     --akml-badge-neutral: Canvas;
     --akml-badge-neutraltext: CanvasText;
+    --akml-badge-error: CanvasText;
+    --akml-badge-success: CanvasText;
+    --akml-badge-warning: CanvasText;
     /* Spacing (theme-invariant scalars in DIU) */
     --akml-scalar-spacing-xs: 4px;
     --akml-scalar-spacing-s: 8px;

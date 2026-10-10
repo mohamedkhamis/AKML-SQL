@@ -86,7 +86,7 @@
                         <label class="akml-field-label" for="conn-database">Database</label>
                         <div class="akml-connmgr-db-row">
                             <select id="conn-database" class="akml-select akml-connmgr-select"
-                                    @bind="_database" disabled="@_dbLoading" data-testid="conn-database-select">
+                                    @bind="_database" disabled="@_dbLoading" title="@(_dbLoading ? "Loading databases…" : null)" data-testid="conn-database-select">
                                 @* Always keep the current value selectable — a saved/typed DB may not be
                                    in the freshly-loaded list (or the list may not be loaded yet). *@
                                 @if (!string.IsNullOrEmpty(_database) &&
@@ -101,8 +101,8 @@
                             </select>
                             <button type="button" class="akml-btn akml-connmgr-db-refresh"
                                     @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
-                                    title="Load the database list from the server"
-                                    data-testid="conn-database-refresh">@(_dbLoading ? "…" : "⟳")</button>
+                                    title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
+                                    data-testid="conn-database-refresh"><Icon Name="refresh-cw" /></button>
                         </div>
                         @if (!string.IsNullOrEmpty(_dbMessage))
                         {
@@ -148,18 +148,6 @@
                         </div>
                     }
 
-                    <!-- Microsoft Entra ID sign-in: not available yet. (Remote servers ARE supported, with SQL
-                         Server authentication -- this used to read "Remote server / Azure AD", which made it
-                         look as if no remote server could be reached.) -->
-                    <div class="akml-connmgr-field akml-connmgr-future" data-testid="conn-remote-future"
-                         title="Not available yet. Remote servers work today with SQL Server authentication.">
-                        <label class="akml-connmgr-radio akml-connmgr-disabled">
-                            <input type="radio" name="connauth-future" disabled />
-                            Microsoft Entra ID (Azure AD)
-                            <span class="akml-connmgr-badge-future">Future</span>
-                        </label>
-                    </div>
-
                     @if (!string.IsNullOrEmpty(_message))
                     {
                         <p class="akml-connmgr-msg @(_messageIsError ? "error" : "ok")" data-testid="conn-message">@_message</p>
@@ -169,14 +157,14 @@
 
             <div class="akml-connmgr-footer">
                 <button type="button" class="akml-btn" @onclick="TestAsync"
-                        disabled="@_busy" data-testid="conn-test-btn">Test</button>
+                        disabled="@_busy" title="@(_busy ? "Wait for the current connection operation" : null)" data-testid="conn-test-btn">Test</button>
                 <button type="button" class="akml-btn" @onclick="SaveAsync"
-                        disabled="@_busy" data-testid="conn-save-btn">Save</button>
+                        disabled="@_busy" title="@(_busy ? "Wait for the current connection operation" : null)" data-testid="conn-save-btn">Save</button>
                 <button type="button" class="akml-btn" @onclick="DeleteAsync"
-                        disabled="@(_busy || string.IsNullOrEmpty(_selectedId))" data-testid="conn-delete-btn">Delete</button>
+                        disabled="@(_busy || string.IsNullOrEmpty(_selectedId))" title="@(_busy ? "Wait for the current connection operation" : string.IsNullOrEmpty(_selectedId) ? "Select a saved connection to delete" : null)" data-testid="conn-delete-btn">Delete</button>
                 <span class="akml-connmgr-footer-spacer"></span>
                 <button type="button" class="akml-btn akml-btn--primary" @onclick="ConnectAsync"
-                        disabled="@_busy" data-testid="conn-connect-btn">Connect</button>
+                        disabled="@_busy" title="@(_busy ? "Wait for the current connection operation" : null)" data-testid="conn-connect-btn">Connect</button>
             </div>
         </div>
     </div>
@@ -302,15 +290,6 @@
     }
     .akml-connmgr-radio { display: block; color: var(--akml-text-primary); font-size: 13px; margin-top: 2px; }
     .akml-connmgr-hint { color: var(--akml-text-secondary); font-size: 11px; font-style: italic; }
-
-    .akml-connmgr-future { margin-top: var(--akml-scalar-spacing-xs); }
-    .akml-connmgr-disabled { color: var(--akml-text-placeholder); cursor: not-allowed; }
-    .akml-connmgr-badge-future {
-        margin-left: var(--akml-scalar-spacing-xs);
-        font-size: 10px; padding: 0 4px; border-radius: var(--akml-scalar-radius-xs);
-        background-color: var(--akml-surface-hover); color: var(--akml-text-secondary);
-        text-transform: uppercase; letter-spacing: 0.04em;
-    }
 
     .akml-connmgr-msg { font-size: 12px; margin: var(--akml-scalar-spacing-xs) 0 0; }
     .akml-connmgr-msg.error { color: var(--akml-status-danger); }

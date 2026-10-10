@@ -12,6 +12,56 @@
 
 const _focusStack = [];
 
+let _helpCleanup = null;
+
+/** Native titles remain available to the pointer; keyboard users get dismissible help too. */
+export function installHelpTooltips() {
+    disposeHelpTooltips();
+    let owner = null;
+    let tip = null;
+    let previousDescription = null;
+    const close = () => {
+        tip?.remove();
+        if (owner) {
+            if (previousDescription) owner.setAttribute('aria-describedby', previousDescription);
+            else owner.removeAttribute('aria-describedby');
+        }
+        tip = owner = null;
+    };
+    const focus = e => {
+        close();
+        const el = e.target.closest?.('.akml-editor-toolbar [title], .cm-lint-marker[title]');
+        if (!el || !el.title) return;
+        owner = el;
+        previousDescription = el.getAttribute('aria-describedby');
+        tip = document.createElement('div');
+        tip.id = 'akml-keyboard-help';
+        tip.className = 'akml-keyboard-help';
+        tip.setAttribute('role', 'tooltip');
+        tip.textContent = el.title;
+        document.body.appendChild(tip);
+        el.setAttribute('aria-describedby', [previousDescription, tip.id].filter(Boolean).join(' '));
+        const box = el.getBoundingClientRect();
+        tip.style.left = `${Math.max(4, Math.min(box.left, window.innerWidth - tip.offsetWidth - 4))}px`;
+        tip.style.top = `${Math.min(box.bottom + 4, window.innerHeight - tip.offsetHeight - 4)}px`;
+    };
+    const key = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('focusin', focus);
+    document.addEventListener('focusout', close);
+    document.addEventListener('keydown', key, true);
+    _helpCleanup = () => {
+        close();
+        document.removeEventListener('focusin', focus);
+        document.removeEventListener('focusout', close);
+        document.removeEventListener('keydown', key, true);
+    };
+}
+
+export function disposeHelpTooltips() {
+    _helpCleanup?.();
+    _helpCleanup = null;
+}
+
 /**
  * Remember the element that has focus, to hand focus back to it on close. Call once when a modal
  * surface opens. With `panelSelector`, an element already inside that panel is NOT stashed (a second

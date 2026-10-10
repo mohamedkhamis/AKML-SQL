@@ -205,7 +205,7 @@
 
     <!-- Status strip -->
     <div class="akml-hist-status">
-        <span>@_total entries@(string.IsNullOrEmpty(_statusMsg) ? "" : " · " + _statusMsg)</span>
+        <span>@_total entries</span>
         <span class="akml-hist-spacer"></span>
         @if (_loading) { <span class="akml-hist-loading">Loading…</span> }
     </div>
@@ -343,7 +343,6 @@
 
     private int _total;
     private bool _loading;
-    private string? _statusMsg;
 
     private readonly HashSet<string> _collapsed = new();
     private readonly List<long> _compare = new();   // up to 2 ids selected for compare
@@ -505,7 +504,7 @@
     {
         if (_compare.Count != 2) return;
         var diff = await HistorySvc.GetDiffAsync(_compare[0], _compare[1], CancellationToken.None);
-        if (diff == null) { _statusMsg = "Compare failed."; return; }
+        if (diff == null) { Notifications.Notify("Compare failed.", NotificationKind.Error); return; }
         _diffLeft = diff.Value.left;
         _diffRight = diff.Value.right;
         _compareOpen = true;
@@ -565,7 +564,7 @@
             Destructive = true,
         })) return;
         var n = await HistorySvc.RemoveOlderThanAsync(entry.Id, keepFavorites: true, CancellationToken.None);
-        _statusMsg = $"Removed {n} older entr{(n == 1 ? "y" : "ies")}.";
+        Notifications.Notify($"Removed {n} older entr{(n == 1 ? "y" : "ies")}.", NotificationKind.Success);
         await LoadAsync(true);
     }
 
@@ -619,7 +618,7 @@
             _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
             await _downloadModule.InvokeVoidAsync("downloadBase64", name, mime,
                 Convert.ToBase64String(Encoding.UTF8.GetBytes(content)));
-            _statusMsg = $"Exported {_entries.Count} entries ({fmt}).";
+            Notifications.Notify($"Exported {_entries.Count} entries ({fmt}).", NotificationKind.Success);
         }
         catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Export failed: {ex.Message}"); }
     }
