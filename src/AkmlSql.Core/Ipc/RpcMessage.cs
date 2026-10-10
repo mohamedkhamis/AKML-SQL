@@ -343,5 +343,15 @@ namespace AkmlSql.Core.Ipc
         public const int ExecuteCancel = 214;
         public const int ApplyChanges = 215;
         public const int ApplyChangesResult = 216;
+
+        // Spec 041 (R26, contracts/ipc.md) — switch the session's database on its persistent connection (the
+        // toolbar's database selector). Sent only when the engine advertises session.database.v1.
+        public const int ChangeDatabase = 217;
+        public const int ChangeDatabaseResult = 218;
+
+        // Spec 041 (R21, contracts/ipc.md) — Parse: the same request and reply classes as ExecuteQuery, run
+        // under SET PARSEONLY ON. Sent only when the engine advertises execute.v2.
+        public const int ExecuteParse = 219;
+        public const int ExecuteParseResult = 220;
     }
 }

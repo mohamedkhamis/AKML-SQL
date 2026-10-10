@@ -2,8 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
+using AkmlSql.Core.Text;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
 
@@ -251,315 +251,28 @@ namespace AkmlSql.Shell.Shared.Productivity.Grid
 
         #region Formatters
 
-        internal static string FormatAsCsv(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine(string.Join(",", headers.Select(EscapeCsvField)));
-            foreach (var row in rows)
-            {
-                sb.AppendLine(string.Join(",", row.Select(EscapeCsvField)));
-            }
-            return sb.ToString();
-        }
+        // Spec 041 (research R5): the formatter bodies live in AkmlSql.Core.Text.GridTextFormats, shared
+        // with the web edition's results grid. These delegations keep every caller (the Copy As menu,
+        // GridExportManager, GridScriptGenerator) unchanged; GridTextFormatsTests pins the output to the
+        // goldens captured from the code that used to be here.
 
-        internal static string FormatAsTsv(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine(string.Join("\t", headers));
-            foreach (var row in rows)
-            {
-                sb.AppendLine(string.Join("\t", row));
-            }
-            return sb.ToString();
-        }
+        internal static string FormatAsCsv(string[] headers, List<string[]> rows) => GridTextFormats.Csv(headers, rows);
 
-        internal static string FormatAsJson(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("[");
-            for (int r = 0; r < rows.Count; r++)
-            {
-                sb.Append("  {");
-                var row = rows[r];
-                for (int c = 0; c < headers.Length && c < row.Length; c++)
-                {
-                    if (c > 0) sb.Append(", ");
-                    sb.Append('"');
-                    sb.Append(EscapeJsonString(headers[c]));
-                    sb.Append("\": ");
-                    AppendJsonValue(sb, row[c]);
-                }
-                sb.Append('}');
-                if (r < rows.Count - 1) sb.Append(',');
-                sb.AppendLine();
-            }
-            sb.Append(']');
-            return sb.ToString();
-        }
+        internal static string FormatAsTsv(string[] headers, List<string[]> rows) => GridTextFormats.Tsv(headers, rows);
 
-        internal static string FormatAsXml(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
-            sb.AppendLine("<rows>");
-            foreach (var row in rows)
-            {
-                sb.Append("  <row>");
-                for (int c = 0; c < headers.Length && c < row.Length; c++)
-                {
-                    var tag = SanitizeXmlTag(headers[c]);
-                    sb.Append($"<{tag}>");
-                    sb.Append(EscapeXml(row[c]));
-                    sb.Append($"</{tag}>");
-                }
-                sb.AppendLine("</row>");
-            }
-            sb.Append("</rows>");
-            return sb.ToString();
-        }
+        internal static string FormatAsJson(string[] headers, List<string[]> rows) => GridTextFormats.Json(headers, rows);
 
-        internal static string FormatAsHtml(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("<table>");
-            sb.Append("  <thead><tr>");
-            foreach (var h in headers)
-            {
-                sb.Append($"<th>{EscapeHtml(h)}</th>");
-            }
-            sb.AppendLine("</tr></thead>");
-            sb.AppendLine("  <tbody>");
-            foreach (var row in rows)
-            {
-                sb.Append("    <tr>");
-                for (int c = 0; c < headers.Length && c < row.Length; c++)
-                {
-                    sb.Append($"<td>{EscapeHtml(row[c])}</td>");
-                }
-                sb.AppendLine("</tr>");
-            }
-            sb.AppendLine("  </tbody>");
-            sb.Append("</table>");
-            return sb.ToString();
-        }
+        internal static string FormatAsXml(string[] headers, List<string[]> rows) => GridTextFormats.Xml(headers, rows);
 
-        internal static string FormatAsInsert(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            var columnList = string.Join(", ", headers.Select(h => $"[{h}]"));
-            foreach (var row in rows)
-            {
-                sb.Append("INSERT INTO [TableName] (");
-                sb.Append(columnList);
-                sb.Append(") VALUES (");
-                for (int c = 0; c < headers.Length && c < row.Length; c++)
-                {
-                    if (c > 0) sb.Append(", ");
-                    sb.Append(QuoteSqlValue(row[c]));
-                }
-                sb.AppendLine(");");
-            }
-            return sb.ToString();
-        }
+        internal static string FormatAsHtml(string[] headers, List<string[]> rows) => GridTextFormats.Html(headers, rows);
 
-        internal static string FormatAsInClause(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            var columnName = headers.Length > 0 ? headers[0] : "Column";
+        internal static string FormatAsInsert(string[] headers, List<string[]> rows) => GridTextFormats.Insert(headers, rows);
 
-            // Collect values from the first column
-            var values = new List<string>();
-            bool hasNulls = false;
+        internal static string FormatAsInClause(string[] headers, List<string[]> rows) => GridTextFormats.InClause(headers, rows);
 
-            foreach (var row in rows)
-            {
-                var val = row.Length > 0 ? row[0] : "NULL";
-                if (val == "NULL")
-                {
-                    hasNulls = true;
-                    continue;
-                }
-                values.Add(val);
-            }
+        internal static string FormatAsMarkdown(string[] headers, List<string[]> rows) => GridTextFormats.Markdown(headers, rows);
 
-            // Build the formatted values list
-            var formattedValues = new List<string>();
-            foreach (var val in values)
-            {
-                // Detect numeric values: leave unquoted
-                if (long.TryParse(val, out _))
-                {
-                    formattedValues.Add(val);
-                }
-                else if (double.TryParse(val, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out _))
-                {
-                    formattedValues.Add(val);
-                }
-                else
-                {
-                    // String value: wrap in single quotes with escaped internal quotes
-                    formattedValues.Add("'" + val.Replace("'", "''") + "'");
-                }
-            }
-
-            sb.Append("WHERE [");
-            sb.Append(columnName);
-            sb.Append("] IN (");
-            sb.Append(string.Join(", ", formattedValues));
-            sb.Append(')');
-
-            if (hasNulls)
-            {
-                sb.AppendLine();
-                sb.Append("-- NULL values excluded");
-            }
-
-            if (values.Count > 1000)
-            {
-                sb.AppendLine();
-                sb.Append("-- Note: SQL Server IN clause limited to ~1000 values");
-            }
-
-            sb.AppendLine();
-            return sb.ToString();
-        }
-
-        internal static string FormatAsMarkdown(string[] headers, List<string[]> rows)
-        {
-            var sb = new StringBuilder();
-            sb.Append("| ");
-            sb.Append(string.Join(" | ", headers));
-            sb.AppendLine(" |");
-            sb.Append("| ");
-            sb.Append(string.Join(" | ", headers.Select(_ => "---")));
-            sb.AppendLine(" |");
-            foreach (var row in rows)
-            {
-                sb.Append("| ");
-                var values = new string[headers.Length];
-                for (int c = 0; c < headers.Length; c++)
-                {
-                    values[c] = c < row.Length ? row[c].Replace("|", "\\|") : "";
-                }
-                sb.Append(string.Join(" | ", values));
-                sb.AppendLine(" |");
-            }
-            return sb.ToString();
-        }
-
-        #endregion
-
-        #region Escape helpers
-
-        private static string EscapeCsvField(string value)
-        {
-            if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
-            {
-                return "\"" + value.Replace("\"", "\"\"") + "\"";
-            }
-            return value;
-        }
-
-        private static string EscapeJsonString(string value)
-        {
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r")
-                .Replace("\t", "\\t");
-        }
-
-        private static void AppendJsonValue(StringBuilder sb, string value)
-        {
-            if (value == "NULL")
-            {
-                sb.Append("null");
-                return;
-            }
-
-            // Try to detect numeric values
-            if (long.TryParse(value, out var longVal))
-            {
-                sb.Append(longVal);
-                return;
-            }
-            if (double.TryParse(value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var dblVal))
-            {
-                sb.Append(dblVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                return;
-            }
-            if (value is "True" or "true" or "False" or "false")
-            {
-                sb.Append(value.ToLowerInvariant());
-                return;
-            }
-
-            sb.Append('"');
-            sb.Append(EscapeJsonString(value));
-            sb.Append('"');
-        }
-
-        private static string EscapeXml(string value)
-        {
-            return value
-                .Replace("&", "&amp;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;")
-                .Replace("\"", "&quot;")
-                .Replace("'", "&apos;");
-        }
-
-        private static string EscapeHtml(string value)
-        {
-            return value
-                .Replace("&", "&amp;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;")
-                .Replace("\"", "&quot;");
-        }
-
-        private static string SanitizeXmlTag(string name)
-        {
-            // XML tag names must start with a letter or underscore
-            var sanitized = new StringBuilder();
-            for (int i = 0; i < name.Length; i++)
-            {
-                var ch = name[i];
-                if (i == 0 && !char.IsLetter(ch) && ch != '_')
-                {
-                    sanitized.Append('_');
-                }
-                if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' || ch == '.')
-                {
-                    sanitized.Append(ch);
-                }
-                else
-                {
-                    sanitized.Append('_');
-                }
-            }
-            return sanitized.Length > 0 ? sanitized.ToString() : "column";
-        }
-
-        internal static string QuoteSqlValue(string value)
-        {
-            if (value == "NULL") return "NULL";
-
-            // Numeric check
-            if (long.TryParse(value, out _)) return value;
-            if (double.TryParse(value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out _)) return value;
-
-            // Boolean
-            if (value is "True" or "true") return "1";
-            if (value is "False" or "false") return "0";
-
-            // String — use N'' for Unicode safety
-            return "N'" + value.Replace("'", "''") + "'";
-        }
+        internal static string QuoteSqlValue(string value) => GridTextFormats.QuoteSqlValue(value);
 
         #endregion
     }

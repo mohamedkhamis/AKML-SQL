@@ -14,6 +14,14 @@ namespace AkmlSql.Core.Ipc.Messages
     {
         [Key(0)]
         public string ConnectionString { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 041 (R25, contracts/ipc.md): when set and <see cref="ConnectionString"/> is empty, list the databases
+        /// of this session's server with the connection the engine already holds (the browser never resends a
+        /// password). Sent only when the engine advertises <c>session.database.v1</c>.
+        /// </summary>
+        [Key(1)]
+        public string? SessionId { get; set; }
     }
 
     /// <summary>Engine → Web/Shell (spec 030): result of <see cref="ListDatabasesRequest"/>.</summary>
