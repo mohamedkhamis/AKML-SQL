@@ -56,6 +56,21 @@ namespace AkmlSql.Engine
         public const string DiagnosticsEngineLogTailV1 = "diagnostics.engine-log-tail.v1";
 
         /// <summary>
+        /// Spec 041 (contracts/ipc.md) — the execute reply carries structured messages, batches, the
+        /// completion time and the omitted-message count (keys 8–11), sets carry their batch, and
+        /// <c>ExecuteParse</c> (219 → 220) is understood. Scripts are split on GO and keep running after a
+        /// failing batch.
+        /// </summary>
+        public const string ExecuteV2 = "execute.v2";
+
+        /// <summary>
+        /// Spec 041 (R25–R27, contracts/ipc.md): the database selector — <c>ListDatabasesRequest.SessionId</c> (the
+        /// list from the connection the engine holds), <c>ChangeDatabase</c> (217 → 218) and
+        /// <c>ExecuteQueryResult.CurrentDatabase</c> (the database a script's <c>USE</c> left the session in).
+        /// </summary>
+        public const string SessionDatabaseV1 = "session.database.v1";
+
+        /// <summary>
         /// The set of capabilities the current engine build advertises. M3 baseline includes
         /// the always-available capabilities; <see cref="SchemaCacheV1"/> joined the list when
         /// T104 (SchemaIdentify) shipped. Future tasks add to this list:
@@ -74,6 +89,8 @@ namespace AkmlSql.Engine
             DiagnosticsEngineLogTailV1,
             SnippetsWrite,
             StylesSqlPromptV1,
+            ExecuteV2,
+            SessionDatabaseV1,
         };
 
         /// <summary>

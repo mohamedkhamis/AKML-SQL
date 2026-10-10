@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.RegularExpressions;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Engine.Parser;
@@ -131,54 +130,96 @@ public partial class TsqlParserService
         }
     }
 
+    /// <summary>The refusal SSMS gives for anything but a repeat count and a comment after <c>GO</c>.</summary>
+    public const string GoSeparatorError = "Incorrect syntax was encountered while parsing GO.";
+
     /// <summary>
-    /// T105: Splits SQL text on GO batch separators.
-    /// GO must appear on its own line (case-insensitive), optionally with leading/trailing whitespace
-    /// and an optional repeat count (e.g., "GO 5").
-    /// Returns a list of (startOffset, endOffset, batchText) tuples.
+    /// Spec 041 (research R16, N3) — splits a script into the batches SSMS would send, on <c>GO</c>.
+    /// ScriptDom's lexer decides what a separator is: a <c>GO</c> token at the start of a line, never
+    /// inside a string, a comment or <c>[GO]</c> (a block comment before it on the same line still lets it
+    /// separate). On the GO line only whitespace, one repeat count (<c>GO 3</c>, at least 1) and a comment
+    /// may follow; anything else (<c>GO SELECT 2</c>, <c>GO;</c>, <c>GO 0</c>) sets
+    /// <see cref="SqlBatchSplit.SeparatorError"/> and the caller refuses the whole script, as SSMS does.
+    /// Each batch runs verbatim from the line after the previous GO line to the GO token, so the server's
+    /// line 1 is the batch's <see cref="SqlBatchSpan.StartLine"/>. Whitespace-only batches are skipped; an
+    /// unterminated string swallows the rest of the script into the last batch. A script with no
+    /// <c>go</c> in it at all is not lexed.
     /// </summary>
-    public List<(int startOffset, int endOffset, string text)> SplitBatches(string sql)
+    public SqlBatchSplit SplitBatches(string? sql)
     {
-        var batches = new List<(int, int, string)>();
-        if (string.IsNullOrEmpty(sql))
+        var batches = new List<SqlBatchSpan>();
+        if (string.IsNullOrEmpty(sql)) return new SqlBatchSplit(batches, null);
+
+        var lineStarts = LineStarts(sql);
+        if (sql.IndexOf("go", StringComparison.OrdinalIgnoreCase) < 0)
         {
-            return batches;
+            AddBatch(batches, sql, 0, sql.Length, 1, lineStarts);
+            return new SqlBatchSplit(batches, null);
         }
 
-        var matches = GoPattern().Matches(sql);
-
+        var tokens = GetTokenStream(sql);
         int batchStart = 0;
-        foreach (Match match in matches)
+        for (int i = 0; i < tokens.Count; i++)
         {
-            var batchEnd = match.Index;
-            if (batchEnd > batchStart)
+            var go = tokens[i];
+            if (go.TokenType != TSqlTokenType.Go) continue;
+
+            // What follows GO on its line: whitespace, at most one repeat count, comments.
+            int repeat = 1;
+            bool sawCount = false;
+            int lineEnd = go.Offset + go.Text.Length;
+            for (int k = i + 1; k < tokens.Count; k++)
             {
-                var batchText = sql[batchStart..batchEnd];
-                if (!string.IsNullOrWhiteSpace(batchText))
+                var t = tokens[k];
+                if (t.TokenType == TSqlTokenType.EndOfFile) break;
+                if (t.TokenType == TSqlTokenType.WhiteSpace)
                 {
-                    batches.Add((batchStart, batchEnd, batchText));
+                    if (t.Text.IndexOf('\n') >= 0) break;   // the GO line ends here
+                    continue;
                 }
+                if (t.TokenType == TSqlTokenType.SingleLineComment || t.TokenType == TSqlTokenType.MultilineComment)
+                {
+                    lineEnd = t.Offset + t.Text.Length;
+                    if (t.Text.IndexOf('\n') >= 0) break;
+                    continue;
+                }
+                if (t.TokenType == TSqlTokenType.Integer && !sawCount
+                    && int.TryParse(t.Text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+                    && n >= 1)
+                {
+                    sawCount = true;
+                    repeat = n;
+                    lineEnd = t.Offset + t.Text.Length;
+                    continue;
+                }
+                return new SqlBatchSplit(batches, GoSeparatorError);
             }
-            batchStart = match.Index + match.Length;
-        }
 
-        // Final batch after the last GO (or the entire text if no GO found)
-        if (batchStart < sql.Length)
-        {
-            var remaining = sql[batchStart..];
-            if (!string.IsNullOrWhiteSpace(remaining))
-            {
-                batches.Add((batchStart, sql.Length, remaining));
-            }
+            AddBatch(batches, sql, batchStart, go.Offset, repeat, lineStarts);
+            int newline = sql.IndexOf('\n', lineEnd);
+            batchStart = newline < 0 ? sql.Length : newline + 1;
         }
-
-        return batches;
+        AddBatch(batches, sql, batchStart, sql.Length, 1, lineStarts);
+        return new SqlBatchSplit(batches, null);
     }
 
-    // Matches GO on its own line, optionally followed by a repeat count.
-    // ^\s*GO\s*(\d*)\s*$ with multiline flag.
-    [GeneratedRegex(@"^\s*GO\s*(\d*)\s*$", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
-    private static partial Regex GoPattern();
+    private static void AddBatch(List<SqlBatchSpan> batches, string sql, int start, int end, int repeat, List<int> lineStarts)
+    {
+        if (end <= start) return;
+        var text = sql.Substring(start, end - start);
+        if (string.IsNullOrWhiteSpace(text)) return;
+        int line = lineStarts.BinarySearch(start);
+        if (line < 0) line = ~line - 1;
+        batches.Add(new SqlBatchSpan(batches.Count, start, end, line + 1, repeat, text));
+    }
+
+    private static List<int> LineStarts(string sql)
+    {
+        var starts = new List<int> { 0 };
+        for (int i = 0; i < sql.Length; i++)
+            if (sql[i] == '\n') starts.Add(i + 1);
+        return starts;
+    }
 
     private static TSqlParser CreateParser(int serverVersion)
     {

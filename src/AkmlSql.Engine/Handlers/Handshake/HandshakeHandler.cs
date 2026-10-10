@@ -109,6 +109,8 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         EngineCapabilities = Capabilities.Current.ToArray(),
                         NewBearerToken = minted,
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
+                        HostKind = EngineIdentity.HostKind,
+                        RunsAs = EngineIdentity.RunsAs,
                         // Spec 025 (M3 bridge closure) FR-006: publish the LAN-mode cert
                         // thumbprint so the browser can pin it on first connect and warn
                         // on drift. Null on localhost transports -- WebSocketTransport
@@ -139,6 +141,8 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         ChosenProtocolVersion = chosen,
                         EngineCapabilities = Capabilities.Current.ToArray(),
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
+                        HostKind = EngineIdentity.HostKind,
+                        RunsAs = EngineIdentity.RunsAs,
                         // Spec 025 (M3 bridge closure) FR-006: publish the LAN-mode cert
                         // thumbprint so the browser can pin it on first connect and warn
                         // on drift. Null on localhost transports -- WebSocketTransport
@@ -165,6 +169,9 @@ namespace AkmlSql.Engine.Handlers.Handshake
                 ChosenProtocolVersion = chosen,
                 EngineCapabilities = Capabilities.Current.ToArray(),
                 ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
+                // Spec 041 (R29): how the engine runs, so the web names its styles truthfully (FR-063).
+                HostKind = EngineIdentity.HostKind,
+                RunsAs = EngineIdentity.RunsAs,
             });
         }
 

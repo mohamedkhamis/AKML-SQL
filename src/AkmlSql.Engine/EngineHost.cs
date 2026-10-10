@@ -44,6 +44,8 @@ namespace AkmlSql.Engine
 
             LoggerFactory.Initialize();
             Log.Information("AkmlSql.Engine starting. Pipe={Pipe}, ParentPid={ParentPid}", pipeName, parentPid);
+            // Spec 041 (R29): started by SSMS over the pipe — it runs as the signed-in user.
+            EngineIdentity.Set(EngineIdentity.Ide);
 
             // Spec 021 T121 -- wire the AkmlSql.AI provider factory's KeyDecryptor hook to
             // the Windows-only DPAPI CredentialManager so the named-pipe path keeps the
@@ -188,6 +190,9 @@ namespace AkmlSql.Engine
             LoggerFactory.Initialize();
             Log.Information("AkmlSql.Engine starting in WEB mode. Config={Config}",
                 string.IsNullOrWhiteSpace(configPath) ? "(default)" : configPath);
+            // Spec 041 (R29): the Windows service, or an interactive --web.
+            EngineIdentity.Set(Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService()
+                ? EngineIdentity.Service : EngineIdentity.Console);
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
             var token = cts.Token;

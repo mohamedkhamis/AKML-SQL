@@ -122,6 +122,15 @@ class RpcMessage {
 | Engine→Shell | `HandshakeResponse` | 201 |
 | Shell→Engine | `SchemaIdentifyRequest` | 202 |
 | Engine→Shell | `SchemaIdentifyResponse` | 203 |
+| Shell→Engine | `ExecuteQuery` | 212 |
+| Engine→Shell | `ExecuteQueryResult` | 213 |
+| Shell→Engine | `ExecuteCancel` (notification) | 214 |
+| Shell→Engine | `ApplyChanges` | 215 |
+| Engine→Shell | `ApplyChangesResult` | 216 |
+| Shell→Engine | `ChangeDatabase` | 217 |
+| Engine→Shell | `ChangeDatabaseResult` | 218 |
+| Shell→Engine | `ExecuteParse` | 219 |
+| Engine→Shell | `ExecuteParseResult` | 220 |
 
 Note: codes 200–203 are part of the spec 021 web-edition bridge. They carry over named-pipe transports unchanged, but their primary purpose is the browser ↔ engine WebSocket bridge introduced in M3.
 
@@ -957,6 +966,11 @@ HandshakeResponse (Engine→Shell, type 201)
     NewBearerToken             string?   Set ONLY on a successful PairingPin handshake. The browser stores it (wrapped) and uses it on future connections.
     ServerCanonicalIdentity    string?   The engine's canonical identity for any SQL Server currently selected by this session — used as the schema-cache key. Null if engine has no DB connection.
     ErrorMessage               string?   Human-readable detail on error; null on success.
+    ServerTlsThumbprint        string?   (key 7) LAN-mode certificate thumbprint for pinning.
+    HostKind                   string?   (key 8, spec 041) "ide" (started by SSMS over the pipe, runs as the signed-in user),
+                                         "service" (the Windows service) or "console" (an interactive --web); null from older
+                                         engines. The web calls the engine's styles "Shared with SSMS" only for "ide".
+    RunsAs                     string?   (key 9, spec 041) the account the engine runs as; shown on hover and in Diagnostics.
 ```
 
 #### Capabilities (current advertised list)
@@ -974,6 +988,8 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `refactoring.heavy` (planned) | `Capabilities.RefactoringHeavy` | Heavyweight schema-aware refactorings. Added when T117 lands. |
 | `ai.text-to-sql.v1` (reserved) | `Capabilities.AiTextToSqlV1` | AI Text-to-SQL via the bridge. AI invocation in the web edition normally goes direct-to-provider (FR-030); this capability covers any engine-hosted helpers a future M6 design adds. |
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
+| `session.database.v1` | `Capabilities.SessionDatabaseV1` | Spec 041 — the database selector: `ListDatabasesRequest.SessionId` (key 1), `ChangeDatabase` (217 → 218) and `ExecuteQueryResult.CurrentDatabase` (key 12). |
+| `execute.v2` | `Capabilities.ExecuteV2` | Spec 041 — scripts split on GO and keep running after a failing batch; the execute reply carries structured messages, batches, the completion time and the omitted-message count (keys 8–11), sets carry their batch (key 11), and `ExecuteParse` (219 → 220) is understood. |
 
 ### SchemaIdentify (202 / 203) — `contracts/schema-cache-shape.md`
 
@@ -992,3 +1008,132 @@ SchemaIdentifyResponse (Engine→Shell, type 203)
 ```
 
 The handshake's `ServerCanonicalIdentity` covers the single-DB case (engine has exactly one connection); `SchemaIdentify` covers the multi-session case where the browser needs to resolve identity per `SessionId`.
+
+## Query Execution (212–216, 219/220) — web edition
+
+Spec 030 added query execution with inline editing for the web edition; spec 041 made a script run as SSMS
+runs it (`specs/041-web-ssms-ux-parity/contracts/ipc.md`). Every DTO is MessagePack with contiguous
+`[Key(n)]` and **append-only** keys: an older web bundle ignores the trailing keys, and a newer bundle on an
+older engine sees them at their defaults (empty arrays, 0, null) and falls back to the legacy fields.
+
+### `ExecuteQuery` (212) → `ExecuteQueryResult` (213)
+
+Runs the script on the session's persistent connection (temp tables, `SET` options and `USE` persist between
+runs). The engine clamps the caps (rows ≤ 100,000, timeout ≤ 600 s) and always answers — never null.
+
+```
+ExecuteQueryRequest (type 212; also the payload of 219)
+    0  SessionId              string    The web session (ISqlConnectionService.SessionId).
+    1  Sql                    string    The script (the selection, or the whole document).
+    2  MaxRows                int       Rows kept per result set (default 1,000).
+    3  CommandTimeoutSeconds  int       Per command (default 30).
+    4  QueryId                string    App-level id ExecuteCancel refers to.
+    5  IncludeProvenance      bool      Read base-table provenance (KeyInfo) so a set can be edited.
+
+ExecuteQueryResult (type 213; also the payload of 220)
+    0  QueryId                string
+    1  Status                 int       ExecuteStatus: 0 Ok · 1 Error · 2 Cancelled · 3 TimedOut · 4 NoConnection ·
+                                        5 Skipped · 6 Disconnected (client-only) · 7 NoReply (client-only).
+                                        Ok when no batch reported an error; Error when any did (the script still ran
+                                        on); TimedOut / Cancelled when the script stopped for that reason.
+    2  ErrorMessage           string?   The first error's text.
+    3  ResultSets             ExecuteResultSet[]   Always returned, also when a later batch failed.
+    4  Messages               string[]  Every message worded as SSMS words it: "Msg 208, Level 16, State 1, Line 4"
+                                        + newline + text ("Procedure p, " before "Line" when set); "(N rows
+                                        affected)"; "(N rows returned; more exist)" for a capped set; PRINT text;
+                                        engine lines. Kept for older bundles; MessageDetails carries the same.
+    5  ElapsedMs              long      The whole script.
+    6  TotalRowsAffected      int       Sum of the DML row counts; -1 when none.
+    7  ConnectionWasReset     bool      The connection had broken and was reopened (temp tables and SET state lost).
+    8  MessageDetails         ExecuteMessageDto[]  execute.v2 — every message in stream order.
+    9  Batches                ExecuteBatchDto[]    execute.v2 — one per batch (a GO n loop is one entry).
+    10 CompletedAtUnixMs      long      execute.v2 — end of the script, UTC Unix ms; 0 from older engines.
+    11 MessagesOmitted        int       execute.v2 — messages dropped beyond 10,000 (one System line says so).
+    12 CurrentDatabase        string?   session.database.v1 — the connection's database after the script.
+
+ExecuteResultSet
+    0  ColumnNames            string[]
+    1  ColumnSqlTypes         string[]  The DECLARED type: nvarchar(50), nvarchar(max), decimal(10,2), datetime2(3),
+                                        time(0); bare for int, date, money, uniqueidentifier, UDTs. Older engines
+                                        send bare names; SqlTypeName.Parse reads both.
+    2  ClrTypeHints           int[]     ClrTypeHint per column (how to parse the text back).
+    3  Rows                   string?[][]  Round-trip text (ISO-8601 "o" dates, TimeSpan "c", Base64 binary,
+                                        invariant numbers); null = SQL NULL; very large values are sent as
+                                        "[text N chars]" / "[binary N bytes]".
+    4  Truncated              bool      The row cap or the reply budget stopped the set.
+    5  RowsOmitted            int
+    6  Provenance             ColumnProvenanceDto[]  Base column, key, identity, read-only, nullability,
+                                        provider type, size, precision and scale (null when not applicable —
+                                        SqlClient's 255 sentinel is never sent, so Apply never binds it).
+    7  IsEditable             bool      One base table with a key.
+    8  BaseSchema / 9 BaseTable / 10 BaseCatalog   string?
+    11 BatchIndex             int       execute.v2 — the batch that produced the set.
+
+ExecuteMessageDto (execute.v2)
+    0 Kind (0 Info · 1 RowCount · 2 Error · 3 System) · 1 Text · 2 BatchIndex · 3 Number (0 for PRINT) ·
+    4 Severity · 5 State · 6 Line (batch-relative, 0 = none) · 7 Procedure? · 8 ResultSetIndex (-1 = none) ·
+    9 RowCount (-1 = none)
+
+ExecuteBatchDto (execute.v2)
+    0 Index · 1 StartLine (1-based line of the submitted SQL where the batch starts; the batch is sent
+    verbatim, so the server's line 1 is this line) · 2 StartOffset · 3 EndOffset · 4 Status · 5 ElapsedMs ·
+    6 RepeatCount (≥ 1, at most 10,000) · 7 ErrorCount
+```
+
+How a script runs (execute.v2):
+
+- **Batches** — split on `GO` by ScriptDom's lexer (`TsqlParserService.SplitBatches`): a `GO` at the start of
+  a line, never inside a string, a comment or `[GO]`. `GO n` runs the batch n times ("Beginning execution
+  loop" … "Batch execution completed n times."). Anything else on a GO line (`GO SELECT 2`, `GO;`, `GO 0`)
+  refuses the whole script with one error and runs nothing.
+- **Per batch** — its own command and timeout. `CommandBehavior.KeyInfo` (for provenance) only when the batch
+  selects something and does not start with `CREATE`/`ALTER` of a procedure, view, function, trigger,
+  schema, default or rule (KeyInfo's `SET NO_BROWSETABLE ON` prefix would break those).
+- **Errors** — severity ≤ 16 arrive as info messages for the duration of the execute
+  (`FireInfoMessageEventOnUserErrors`, restored afterwards) and the reader carries on, so the sets before and
+  after an error are kept; a failing batch does not stop the script. A closed connection (severity ≥ 20)
+  skips the remaining batches ("The remaining N batch(es) did not run because the connection was closed.");
+  a timeout or a cancellation stops the script and the remaining batches are `Skipped`.
+- **Counts** — one `RowCount` message per statement (`StatementCompleted`; none under `SET NOCOUNT ON`); a
+  SELECT's count names its set.
+- **Budget** — one 15 MB budget for every set and message of the reply (a message's text is counted twice);
+  at most 10,000 messages and 1,000 sets.
+
+### `ExecuteCancel` (214) — notification
+
+`ExecuteCancelRequest { 0 SessionId, 1 QueryId }`. Cancels an execute that is still queued behind another on
+the session's connection; it does not interrupt a statement that is already running.
+
+### `ApplyChanges` (215) → `ApplyChangesResult` (216)
+
+Writes a result set's pending edits (parameterized UPDATE / INSERT / DELETE, each keyed by the fetched key
+values) in one transaction on the same persistent connection. Any failed edit rolls the whole batch back; the
+failed edit carries the error and every other edit the note "Rolled back — edit N failed.". `Status`,
+`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity }`) and
+`ConnectionWasReset`.
+
+### `ListDatabases` (94) → `ListDatabasesResult` (194) — `SessionId`
+
+`ListDatabasesRequest { 0 ConnectionString, 1 SessionId }`. Spec 041 (session.database.v1): with `SessionId` set
+and `ConnectionString` empty, the engine lists the databases of the session's server with the connection string
+it already holds (the browser never resends a password); alias resolution and the bridge target guard run as
+for any other request; an unknown or disconnected session gets `Ok = false` with an error.
+
+### `ChangeDatabase` (217) → `ChangeDatabaseResult` (218) — session.database.v1
+
+`ChangeDatabaseRequest { 0 SessionId, 1 DatabaseName }` → `ChangeDatabaseResponse { 0 Ok, 1 DatabaseName,
+2 ErrorMessage, 3 ConnectionWasReset }`. The toolbar's database selector: the name is refused when it holds
+`;` `=` quotes or control characters; the session's connection string is pointed at it and judged by the bridge
+guard; then, under the session gate, the persistent connection (opened first if it never was) runs the
+synchronous `SqlConnection.ChangeDatabase` — the same physical connection, so #temp tables and SET options
+survive. The session is re-keyed to the new database (`SessionManager.SetDatabase`, no dispose) and its schema
+cache is created and populated (Phase A, then B) under a claimed populate. A script's `USE` re-keys the session
+the same way after the execute (`ExecuteQueryResult.CurrentDatabase`).
+
+### `ExecuteParse` (219) → `ExecuteParseResult` (220) — execute.v2
+
+The same request and reply classes as `ExecuteQuery`. Under the session gate: `SET PARSEONLY ON` as its own
+command, each batch once (results ignored, no row counts), then `SET PARSEONLY OFF` — if that fails the
+connection is closed so the next execute reopens it and reports `ConnectionWasReset`. `Status` Ok means the
+server found no syntax error ("Commands completed successfully."); errors carry batch-relative lines like an
+execute's. Sent only when the engine advertises `execute.v2`: an engine that does not know 219 gives no reply.

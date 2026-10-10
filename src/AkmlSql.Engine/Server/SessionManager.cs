@@ -78,6 +78,19 @@ public class SessionManager
         }
     }
 
+    /// <summary>
+    /// Spec 041 (R26, R27): the session moved to another database on the same connection (the database selector,
+    /// or a script's <c>USE</c>). Updates the database and connection string only — unlike
+    /// <see cref="UpdateSession"/>, nothing here is a new connection, so the persistent one is kept.
+    /// </summary>
+    public void SetDatabase(string sessionId, string databaseName, string connectionString)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session)) return;
+        Log.Information("SessionManager.SetDatabase: session={Session} {OldDb} -> {NewDb}", sessionId, session.DatabaseName, databaseName);
+        session.DatabaseName = databaseName;
+        session.ConnectionString = connectionString;
+    }
+
     public SessionState? GetSession(string sessionId)
     {
         _sessions.TryGetValue(sessionId, out var session);

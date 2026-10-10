@@ -274,6 +274,8 @@ internal static class EngineHandlerRegistry
         // Spec 029: validate SQL-auth credential before the shell stores it.
         router.Register(new Handlers.Control.TestSqlConnectionHandler());
         router.Register(new Handlers.Control.ListDatabasesHandler());
+        // Spec 041 (R26): the toolbar's database selector (217 → 218), advertised as session.database.v1.
+        router.Register(new Handlers.Control.ChangeDatabaseHandler());
 
         // === WebSocket bridge handshake (spec 025 US5 wire-up; spec 026 M4 closure auth) ===
         // The HandshakeHandler exists from spec 021 T060. The named-pipe transport doesn't need
@@ -338,11 +340,18 @@ internal static class EngineHandlerRegistry
         // a notification (ack-and-drop), mirroring AiStreamCancel=78.
         var sessionConnections = ctx.SessionConnections
             ?? new Execution.SessionConnectionRegistry();
-        var executeQueryHandler = new Execution.ExecuteQueryHandler(sessionConnections, schemaCache);
+        // Spec 041 (R16, R17): the handler splits scripts on GO with the same parser as everything else.
+        // Spec 041 (R27): a script's USE re-keys the session the way the database selector does.
+        var executeQueryHandler = new Execution.ExecuteQueryHandler(sessionConnections, schemaCache, parser,
+            (sessionId, database) => Handlers.Control.ChangeDatabaseHandler.MoveSession(ctx, sessionId, database));
         var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections);
         var executeCancelHandler = new Execution.ExecuteCancelHandler(sessionConnections);
         router.RegisterRaw(MessageTypes.ExecuteQuery,
             (msg, ct) => executeQueryHandler.HandleAsync(msg, lookupSession, ct));
+        // Spec 041 (R21): Parse is its own request type (an older engine never sees it — the web sends it
+        // only when execute.v2 is advertised). Its reply type (220) is never registered.
+        router.RegisterRaw(MessageTypes.ExecuteParse,
+            (msg, ct) => executeQueryHandler.HandleAsync(msg, lookupSession, parseOnly: true, ct));
         router.RegisterRaw(MessageTypes.ApplyChanges,
             (msg, ct) => applyChangesHandler.HandleAsync(msg, lookupSession, ct));
         router.RegisterRaw(MessageTypes.ExecuteCancel, (msg, ct) =>

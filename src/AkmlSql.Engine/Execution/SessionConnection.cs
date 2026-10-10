@@ -17,6 +17,10 @@ namespace AkmlSql.Engine.Execution
     /// (keyed by app-level QueryId) is the cancel-registry — the transport ct is per-connection, never
     /// per-request, so each execute creates and registers its own CTS.
     ///
+    /// <para>Spec 041 (R18): an execute sets <c>FireInfoMessageEventOnUserErrors</c> on this connection for
+    /// the duration of its script and restores it before releasing the gate, so an ApplyChanges that runs
+    /// next still gets its errors as exceptions.</para>
+    ///
     /// <para>Broken-connection handling: if the connection was previously opened but is no longer
     /// <see cref="ConnectionState.Open"/>, the reopen is SURFACED (logged + a flag returned to the
     /// caller) rather than silently swallowed, because a reopened connection loses all
