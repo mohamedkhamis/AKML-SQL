@@ -1,7 +1,20 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-10-07T04:17:37Z",
+    "generatedAt":  "2026-10-10T13:52:05Z",
     "releases":  [
+                     {
+                         "version":  "1.26.1010.1108",
+                         "releasedAt":  "2026-10-10",
+                         "supportedHosts":  [
+                                                "SSMS 22"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.1010.1108.exe",
+                         "sha256Hash":  "604e32aa4963dbdeed7465b4e558abdf45f6291c098fc5bbacc58ccae22d4b5c",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.1010.1108 installer for SQL Server Management Studio 22 (54.04 MB).",
+                         "minimumOsVersion":  "10.0.17763",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.1010.1108/AKMLSQLSetup-1.26.1010.1108.exe"
+                     },
                      {
                          "version":  "1.26.1007.0613",
                          "releasedAt":  "2026-10-07",
