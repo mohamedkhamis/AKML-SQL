@@ -66,7 +66,9 @@ public sealed class WebAppFixture : IAsyncDisposable
     public static async Task<SqlSession> WithSqlOrSkipAsync(
         ITestOutputHelper? output = null,
         string database = "tempdb",
-        BrowserNewContextOptions? contextOptions = null)
+        BrowserNewContextOptions? contextOptions = null,
+        Action<IPage>? configurePage = null,
+        string browserName = "chromium")
     {
         Skip.IfNot(await SandboxEngine.LocalSqlServerAnswersAsync(), "No local SQL Server answering on localhost:1433.");
 
@@ -80,12 +82,17 @@ public sealed class WebAppFixture : IAsyncDisposable
             catch (Exception ex) { throw new SkipException($"Web app could not start (build it Debug first): {ex.Message}"); }
 
             pw = await Playwright.CreateAsync();
-            try { browser = await pw.Chromium.LaunchAsync(); }
-            catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
+            try
+            {
+                browser = browserName == "firefox" ? await pw.Firefox.LaunchAsync()
+                    : await pw.Chromium.LaunchAsync(new() { Channel = browserName == "edge" ? "msedge" : null });
+            }
+            catch (PlaywrightException ex) { throw new SkipException($"Could not launch {browserName}: {ex.Message}"); }
 
             var context = await browser.NewContextAsync(contextOptions ?? new BrowserNewContextOptions { ViewportSize = new() { Width = 1440, Height = 900 } });
             await Keys.InstallAsync(context);
             var page = await context.NewPageAsync();
+            configurePage?.Invoke(page);
             page.Console += (_, m) => { if (m.Type is "error") SqlSession.Log(output, $"[browser {m.Type}] {m.Text}"); };
 
             await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
