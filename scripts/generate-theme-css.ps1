@@ -151,6 +151,11 @@ function Format-VariantCss {
         $family = $spec.family
         # Quote multi-word font families
         if ($family -match '\s') { $family = "`"$family`"" }
+        # Spec 041 (R67): a fallback stack so a missing preferred font (Consolas off Windows) degrades
+        # to a like-for-like face instead of the browser default. WPF ignores the field.
+        if ($spec.PSObject.Properties.Name -contains 'fallback' -and -not [string]::IsNullOrWhiteSpace($spec.fallback)) {
+            $family = "$family, $($spec.fallback)"
+        }
         $null = $sb.AppendLine("    ${base}-family: ${family};")
         $size = $spec.size
         $null = $sb.AppendLine("    ${base}-size: ${size}px;")

@@ -1,7 +1,7 @@
 {
   "$schema": "./theme-tokens.schema.json",
   "version": 2,
-  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs (edit BOTH in lockstep). High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime. v2 (2026-06): rebranded to AKML Blue #2563EB + slate surfaces; added radius scalars and a Syntax group; UI 14px / editor 13px. v2.1 (2026-09): light-theme legibility pass — placeholder/disabled text, control/popup borders, splitters and the assistant chat bubble all strengthened (user feedback: elements were invisible on white surfaces); dark theme unchanged. v2.1.1 (2026-09): light Accent.PrimaryHover corrected blue-800 #1E40AF -> blue-700 #1D4ED8 to match ThemePalette.cs — it had collapsed onto the PrimaryPressed value, so hover and pressed rendered identically on the web once the hover token gained consumers.",
+  "description": "Single source of truth for AKML SQL theme tokens. Consumed by the WPF ThemeRegistry (spec 016) and by scripts/generate-theme-css.ps1 which emits CSS custom-property files for the web edition (spec 021). Hex values mirror src/AkmlSql.Shell.Shared/Ui/Theme/ThemePalette.cs (edit BOTH in lockstep). High-contrast values map to CSS system colors (forced-colors keywords) since the WPF surface delegates HC to Windows SystemColors at runtime. v2 (2026-06): rebranded to AKML Blue #2563EB + slate surfaces; added radius scalars and a Syntax group; UI 14px / editor 13px. v2.1 (2026-09): light-theme legibility pass — placeholder/disabled text, control/popup borders, splitters and the assistant chat bubble all strengthened (user feedback: elements were invisible on white surfaces); dark theme unchanged. v2.1.1 (2026-09): light Accent.PrimaryHover corrected blue-800 #1E40AF -> blue-700 #1D4ED8 to match ThemePalette.cs — it had collapsed onto the PrimaryPressed value, so hover and pressed rendered identically on the web once the hover token gained consumers. v2.2 (2026-10, spec 041): web-only tokens Surface.Editor, Surface.Scrim, Border.SplitterHover and the Badge group (NOT mirrored in ThemePalette.cs: the WPF surface has no equivalent), and a fallback font stack on each typography entry (appended to the CSS font-family by the generator; WPF ignores it).",
   "groups": {
     "Surface": {
       "Akml.Brush.Surface.Canvas":          { "light": "#F1F5F9",   "dark": "#0F172A",   "highContrast": "Canvas" },
@@ -12,7 +12,9 @@
       "Akml.Brush.Surface.InputReadOnly":   { "light": "#F8FAFC",   "dark": "#334155",   "highContrast": "ButtonFace" },
       "Akml.Brush.Surface.Hover":           { "light": "#F1F5F9",   "dark": "#334155",   "highContrast": "Highlight" },
       "Akml.Brush.Surface.Selection":       { "light": "#1F2563EB", "dark": "#262563EB", "highContrast": "Highlight" },
-      "Akml.Brush.Surface.SelectionStrong": { "light": "#2563EB",   "dark": "#2563EB",   "highContrast": "Highlight" }
+      "Akml.Brush.Surface.SelectionStrong": { "light": "#2563EB",   "dark": "#2563EB",   "highContrast": "Highlight" },
+      "Akml.Brush.Surface.Editor":          { "light": "#FFFFFF",   "dark": "#1E293B",   "highContrast": "Canvas" },
+      "Akml.Brush.Surface.Scrim":           { "light": "#660F172A", "dark": "#99000000", "highContrast": "Canvas" }
     },
     "Text": {
       "Akml.Brush.Text.Primary":     { "light": "#0F172A", "dark": "#E2E8F0", "highContrast": "CanvasText" },
@@ -28,7 +30,8 @@
       "Akml.Brush.Border.Strong":   { "light": "#64748B", "dark": "#28FFFFFF", "highContrast": "ButtonText" },
       "Akml.Brush.Border.Subtle":   { "light": "#CBD5E1", "dark": "#0DFFFFFF", "highContrast": "GrayText" },
       "Akml.Brush.Border.Focus":    { "light": "#2563EB", "dark": "#60A5FA", "highContrast": "LinkText" },
-      "Akml.Brush.Border.Splitter": { "light": "#CBD5E1", "dark": "#14FFFFFF", "highContrast": "GrayText" }
+      "Akml.Brush.Border.Splitter": { "light": "#CBD5E1", "dark": "#14FFFFFF", "highContrast": "GrayText" },
+      "Akml.Brush.Border.SplitterHover": { "light": "#2563EB", "dark": "#2563EB", "highContrast": "Highlight" }
     },
     "Accent": {
       "Akml.Brush.Accent.Primary":        { "light": "#2563EB", "dark": "#2563EB", "highContrast": "Highlight" },
@@ -90,6 +93,10 @@
       "Akml.Brush.History.Star.Active":    { "light": "#EA580C",   "dark": "#FB923C",   "highContrast": "LinkText" },
       "Akml.Brush.History.Star.Inactive":  { "light": "#CBD5E1",   "dark": "#14FFFFFF", "highContrast": "GrayText" },
       "Akml.Brush.History.MatchHighlight": { "light": "#4DFEF08A", "dark": "#4DDAA520", "highContrast": "Highlight" }
+    },
+    "Badge": {
+      "Akml.Brush.Badge.Neutral":     { "light": "#E2E8F0", "dark": "#334155", "highContrast": "Canvas" },
+      "Akml.Brush.Badge.NeutralText": { "light": "#0F172A", "dark": "#E2E8F0", "highContrast": "CanvasText" }
     }
   },
   "spacing": {
@@ -105,10 +112,10 @@
     "Akml.Scalar.Radius.Pill": 999
   },
   "typography": {
-    "Akml.Type.Chrome":      { "family": "Segoe UI", "size": 14, "weight": "Normal" },
-    "Akml.Type.ChromeTitle": { "family": "Segoe UI", "size": 14, "weight": "SemiBold" },
-    "Akml.Type.Editor":      { "family": "Consolas", "size": 13, "weight": "Normal" },
-    "Akml.Type.EditorGrid":  { "family": "Consolas", "size": 12, "weight": "Normal" },
-    "Akml.Type.IconBadge":   { "family": "Segoe UI", "size": 9,  "weight": "SemiBold" }
+    "Akml.Type.Chrome":      { "family": "Segoe UI", "size": 14, "weight": "Normal",   "fallback": "system-ui, sans-serif" },
+    "Akml.Type.ChromeTitle": { "family": "Segoe UI", "size": 14, "weight": "SemiBold", "fallback": "system-ui, sans-serif" },
+    "Akml.Type.Editor":      { "family": "Consolas", "size": 13, "weight": "Normal",   "fallback": "'Cascadia Mono', 'Courier New', monospace" },
+    "Akml.Type.EditorGrid":  { "family": "Consolas", "size": 12, "weight": "Normal",   "fallback": "'Cascadia Mono', 'Courier New', monospace" },
+    "Akml.Type.IconBadge":   { "family": "Segoe UI", "size": 9,  "weight": "SemiBold", "fallback": "system-ui, sans-serif" }
   }
 }
