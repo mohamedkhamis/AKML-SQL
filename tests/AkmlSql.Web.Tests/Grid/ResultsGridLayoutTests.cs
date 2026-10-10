@@ -88,6 +88,19 @@ public sealed class ResultsGridLayoutTests : IDisposable
     }
 
     [Fact]
+    public async Task Resizing_updates_clipped_titles_and_keeps_the_selection()
+    {
+        var cut = _host.Render(ReadOnlySet());
+        ClickCell(cut, 0, 1);
+        await cut.InvokeAsync(() => cut.Instance.OnColumnResizedFromJs(1, 48));
+        Assert.NotNull(Cell(cut, 2, 1).GetAttribute("title"));
+        Assert.Equal("true", Cell(cut, 0, 1).GetAttribute("aria-selected"));
+        await cut.InvokeAsync(() => cut.Instance.OnColumnResizedFromJs(1, 400));
+        Assert.Null(Cell(cut, 2, 1).GetAttribute("title"));
+        Assert.Equal("true", Cell(cut, 0, 1).GetAttribute("aria-selected"));
+    }
+
+    [Fact]
     public void Widths_survive_a_re_render_of_the_same_result_and_a_new_result_is_fitted_afresh()
     {
         var set = ReadOnlySet();

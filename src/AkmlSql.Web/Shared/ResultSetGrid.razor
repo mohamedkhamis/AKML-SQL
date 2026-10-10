@@ -27,6 +27,8 @@
     int colCount = set.ColumnNames.Length;
     _selectedColumns = new HashSet<int>(_selection.SelectedColumns());
     var tooltip = TooltipText;
+    if (!_pointerRender) _rowRenderVersion++;
+    _pointerRender = false;
 }
 @* CRUD legend — only when the set is editable. Each chip pairs a glyph with the colour. *@
 @if (set.IsEditable)
@@ -98,7 +100,7 @@
     {
         <div class="akml-results-virtualbody" data-testid="results-virtualized">
             <Virtualize Items="@_positions" Context="d" ItemSize="25">
-                @RenderRow(d, tooltip)
+                <GridRowBoundary @key="d" StateKey="@RowStateKey(d, tooltip)" ChildContent="@RenderRow(d, tooltip)" />
             </Virtualize>
         </div>
     }
@@ -106,7 +108,7 @@
     {
         @for (int d = 0; d < _rowIndexes.Length; d++)
         {
-            @RenderRow(d, tooltip)
+            <GridRowBoundary @key="d" StateKey="@RowStateKey(d, tooltip)" ChildContent="@RenderRow(d, tooltip)" />
         }
     }
 
@@ -162,9 +164,9 @@
         }
         <span class="akml-results-spacer"></span>
         <button type="button" class="akml-btn" data-testid="@($"results-discard{ApplyTestIdSuffix}")"
-                @onclick="DiscardEditsAsync" disabled="@_applying">Discard</button>
+                @onclick="DiscardEditsAsync" disabled="@_applying" title="@(_applying ? "Wait for changes to finish applying" : null)">Discard</button>
         <button type="button" class="akml-btn akml-btn--primary" data-testid="@($"results-apply{ApplyTestIdSuffix}")"
-                title="@(invalid > 0 ? "Some cells need a value before the changes can be applied." : null)"
+                title="@(_applying ? "Wait for changes to finish applying" : invalid > 0 ? "Some cells need a value before the changes can be applied." : null)"
                 @onclick="ApplyEditsAsync" disabled="@(_applying || invalid > 0)">@(_applying ? "Applying…" : "Apply")</button>
     </div>
 }
@@ -505,7 +507,7 @@
 
     /// <summary>The value the column width hides (estimated from its length) — it gets a hover title.</summary>
     private bool IsCutByWidth(string text, int c) =>
-        text.Length > 0 && GridColumnLayout.EstimatePx(text) + GridColumnLayout.CellPaddingPx > _layout.WidthPx(c);
+        text.Length > 0 && GridColumnLayout.EstimatePx(text) + GridColumnLayout.CellPaddingPx + GridColumnLayout.CellBorderPx > _layout.WidthPx(c);
 
     private string? CellTitle(DisplayValue v, int c, bool invalid)
     {
@@ -534,6 +536,21 @@
     {
         for (int c = 0; c < ColumnCount; c++) if (_selection.IsSelected(d, c)) return true;
         return false;
+    }
+
+    // Pointer work changes selection/focus and width-dependent titles only. Keep unchanged rows out
+    // of Blazor's render diff; normal renders (editing, sorting, parameters) invalidate every row.
+    private bool _pointerRender;
+    private long _rowRenderVersion;
+    private string RowStateKey(int d, string? tooltip)
+    {
+        var cells = new char[ColumnCount];
+        bool focusedRow = !_selection.IsEmpty && _selection.Focus.Row == d;
+        for (int c = 0; c < cells.Length; c++)
+            cells[c] = (char)('A' + (_selection.IsSelected(d, c) ? 1 : 0)
+                + (IsCutByWidth(CellDisplay(_rowIndexes[d], c).Text, c) ? 2 : 0)
+                + (focusedRow && _area == FocusArea.Cell && _selection.Focus.Col == c ? 4 : 0));
+        return $"{_rowRenderVersion}:{d}:{focusedRow && _area == FocusArea.RowNumber}:{tooltip != null}:{new string(cells)}";
     }
 
     private RenderFragment RenderRow(int d, string? tooltip) => __builder =>
@@ -694,6 +711,7 @@
         _selection.Click(displayRow, col, shift, ctrl);
         _area = FocusArea.Cell;
         _keyboardFocus = false;
+        _pointerRender = true;
         StateHasChanged();
     });
 
@@ -719,6 +737,7 @@
         _selection.DragTo(displayRow, col);
         _area = FocusArea.Cell;
         _pressOnFocused = false;
+        _pointerRender = true;
         StateHasChanged();
     });
 
@@ -727,6 +746,7 @@
     public Task OnColumnResizedFromJs(int col, int px) => InvokeAsync(() =>
     {
         _layout.SetUserWidth(col, px);
+        _pointerRender = true;
         StateHasChanged();
     });
 

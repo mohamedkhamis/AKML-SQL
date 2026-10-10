@@ -28,6 +28,9 @@ public sealed class GridColumnLayout
     /// <summary>A cell's left + right padding (results-grid.css).</summary>
     public const int CellPaddingPx = 16;
 
+    /// <summary>The right border also takes space inside a cell's CSS grid track.</summary>
+    public const int CellBorderPx = 1;
+
     /// <summary>Room a header needs beyond its text: the sort control and the resize handle.</summary>
     public const int HeaderAllowancePx = 28;
 
@@ -132,8 +135,8 @@ public sealed class GridColumnLayout
     /// <summary>The fitted width for measured header and widest-value widths (text only, in px).</summary>
     public static int Fit(double headerPx, double valuePx)
     {
-        double headerNeed = headerPx + CellPaddingPx + HeaderAllowancePx;
-        double valueNeed = valuePx + CellPaddingPx;
+        double headerNeed = headerPx + CellPaddingPx + CellBorderPx + HeaderAllowancePx;
+        double valueNeed = valuePx + CellPaddingPx + CellBorderPx;
         double floor = Math.Max(MinColumnPx, Math.Min(headerNeed, MaxColumnPx));
         double width = Math.Max(headerNeed, valueNeed);
         return (int)Math.Ceiling(Math.Clamp(width, floor, MaxColumnPx));

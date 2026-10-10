@@ -53,7 +53,7 @@ public sealed class GridColumnLayoutTests
     public void Fit_adds_padding_to_the_widest_value()
     {
         // 80 px of text + cell padding.
-        Assert.Equal(80 + GridColumnLayout.CellPaddingPx, GridColumnLayout.Fit(headerPx: 20, valuePx: 80));
+        Assert.Equal(80 + GridColumnLayout.CellPaddingPx + GridColumnLayout.CellBorderPx, GridColumnLayout.Fit(headerPx: 20, valuePx: 80));
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class GridColumnLayoutTests
     {
         int width = GridColumnLayout.Fit(headerPx: 150, valuePx: 30);
 
-        Assert.Equal(150 + GridColumnLayout.CellPaddingPx + GridColumnLayout.HeaderAllowancePx, width);
+        Assert.Equal(150 + GridColumnLayout.CellPaddingPx + GridColumnLayout.CellBorderPx + GridColumnLayout.HeaderAllowancePx, width);
     }
 
     [Fact]

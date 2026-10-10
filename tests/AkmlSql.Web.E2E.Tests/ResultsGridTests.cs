@@ -22,6 +22,69 @@ public sealed class ResultsGridTests
 {
     private readonly ITestOutputHelper _output;
 
+    [SkippableFact]
+    public async Task Large_results_fit_without_clipping_and_pointer_work_stays_responsive()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        var page = s.Page;
+        await page.EvaluateAsync("""
+            () => {
+                window.__gridTiming = { complete: null, fitted: null, tasks: [] };
+                const timing = window.__gridTiming;
+                const observer = new MutationObserver(() => {
+                    const marker = document.querySelector('[data-testid="execute-complete"]');
+                    if (marker && Number(marker.dataset.version) > 0 && timing.complete === null)
+                        timing.complete = performance.now();
+                    const grid = document.querySelector('[data-testid="results-grid"]');
+                    if (timing.complete !== null && grid?.style.getPropertyValue('--akml-grid-cols').trim().split(/\s+/).length === 31) {
+                        requestAnimationFrame(() => { timing.fitted = performance.now(); });
+                        observer.disconnect();
+                    }
+                });
+                observer.observe(document.body, { subtree: true, childList: true, attributes: true });
+                window.__gridLongTasks = new PerformanceObserver(list => timing.tasks.push(...list.getEntries().map(e => e.duration)));
+                window.__gridLongTasks.observe({ type: 'longtask' });
+            }
+            """);
+        static string Query(int columns) => "SELECT TOP (1000) " + string.Join(", ", Enumerable.Range(0, columns)
+            .Select(c => c == 5 ? "CAST('2025-10-01T23:57:23.1234567' AS datetime2(7)) AS precise_date"
+                : $"CONCAT('column{c}-', ROW_NUMBER() OVER (ORDER BY a.object_id, b.object_id)) AS col{c}"))
+            + " FROM sys.all_objects a CROSS JOIN sys.all_objects b;";
+        await s.ExecuteAsync(Query(30));
+        await page.WaitForFunctionAsync("() => window.__gridTiming.fitted !== null");
+        var elapsed = await page.EvaluateAsync<double>("() => window.__gridTiming.fitted - window.__gridTiming.complete");
+        _output.WriteLine($"SC-009 1000 x 30 tracks: {elapsed:F1} ms");
+        Assert.InRange(elapsed, 0, 1000);
+        foreach (var fraction in new[] { 0, 0.5, 1 })
+        {
+            await Grid(page).EvaluateAsync("(el, fraction) => { el.scrollTop = (el.scrollHeight - el.clientHeight) * fraction; }", fraction);
+            await page.WaitForTimeoutAsync(250); // allow Virtualize's intersection observer to fill the viewport
+            var clipped = await Grid(page).EvaluateAsync<int>("""
+                el => [...el.querySelectorAll('[data-r][data-c]')].filter(c => c.dataset.c !== '-1'
+                    && c.clientWidth < 479 && c.scrollWidth > c.clientWidth).length
+                """);
+            Assert.Equal(0, clipped);
+        }
+        await s.ExecuteAsync(Query(50));
+        await Grid(page).EvaluateAsync("el => { el.scrollTop = 0; el.scrollLeft = 0; }");
+        await Assertions.Expect(Cell(page, 0, 0)).ToBeVisibleAsync();
+        await page.WaitForTimeoutAsync(250);
+        _output.WriteLine($"Rendered rows before pointer work: {await page.Locator("[data-testid^='results-row-']").CountAsync()}");
+        await page.EvaluateAsync("() => { window.__gridLongTasks.takeRecords(); window.__gridTiming.tasks = []; }");
+        await DragAsync(page, page.GetByTestId("results-col-resizer-0"), 80, 0);
+        await DragAsync(page, Cell(page, 0, 0), 180, 50);
+        await page.WaitForTimeoutAsync(250);
+        var tasks = await page.EvaluateAsync<double[]>("() => window.__gridTiming.tasks");
+        _output.WriteLine($"SC-002/009 50-column drag maximum long task: {(tasks.Length == 0 ? 0 : tasks.Max()):F1} ms");
+        await s.ExecuteAsync(Query(200));
+        await EventuallyAsync(async () => (await TracksAsync(page)).Length == 201, "200 columns fitted");
+        await page.GetByTestId("results-col-0").ClickAsync(new() { Button = MouseButton.Right });
+        await page.GetByTestId("results-menu-autofit-all").ClickAsync();
+        await EventuallyAsync(async () => (await TracksAsync(page)).All(w => w > 0), "200 columns auto-fitted");
+        _output.WriteLine("200-column auto-fit completed.");
+        Assert.All(tasks, duration => Assert.True(duration <= 100, $"Pointer long task: {duration:F1} ms"));
+    }
+
     public ResultsGridTests(ITestOutputHelper output) => _output = output;
 
     /// <summary>Ten rows: n, a label, and a column that is NULL on every third row.</summary>
@@ -108,7 +171,7 @@ public sealed class ResultsGridTests
 
         var cut = await s.Page.EvaluateAsync<int>(
             "() => [...document.querySelectorAll('[data-testid=results-grid] [data-r][data-c], [data-testid=results-grid] .akml-col-name')]" +
-            ".filter(c => c.dataset.c !== '-1' && c.scrollWidth > c.clientWidth + 1).length");
+            ".filter(c => c.dataset.c !== '-1' && c.scrollWidth > c.clientWidth).length");
         Assert.Equal(0, cut);
     }
 
