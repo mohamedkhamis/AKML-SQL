@@ -152,4 +152,43 @@ public sealed class AnalyserServiceTests
 
     private static string Describe(ParityCorpusLoader.ParityFinding? f) =>
         f is null ? "(none)" : $"{f.RuleId} {f.Severity} L{f.Line}:C{f.Column} — {f.Message}";
+
+    // ── Spec 041 (T132, research R50, N18, FR-055) — "Enable code analysis" really switches it off ──────────
+
+    private const string SelectStarInProc = "CREATE PROCEDURE dbo.GetCustomers AS\nBEGIN\n    SELECT * FROM dbo.Customers;\nEND;";
+
+    [Fact]
+    public async Task With_analysis_off_there_are_no_findings_and_the_analyser_does_not_run()
+    {
+        var settings = new AnalysisSettingsStore(new InMemoryIndexedDbAdapter());
+        await settings.SetAsync(new WebAnalysisSettings { Enabled = false });
+        var service = new AnalyserService(settings);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        // The analyser honours cancellation, so a run would throw; switched off, nothing runs.
+        var response = await service.AnalyseAsync(SelectStarInProc, null, cancelled.Token);
+
+        Assert.NotNull(response.Issues);
+        Assert.Empty(response.Issues);
+    }
+
+    [Fact]
+    public async Task Switching_analysis_back_on_finds_again()
+    {
+        var settings = new AnalysisSettingsStore(new InMemoryIndexedDbAdapter());
+        await settings.SetAsync(new WebAnalysisSettings { Enabled = false });
+        var service = new AnalyserService(settings);
+        Assert.Empty((await service.AnalyseAsync(SelectStarInProc)).Issues);
+
+        await settings.SetAsync(new WebAnalysisSettings { Enabled = true });
+
+        Assert.Contains((await service.AnalyseAsync(SelectStarInProc)).Issues, i => i.RuleId == "PE001");
+    }
+
+    [Fact]
+    public async Task Without_a_settings_store_analysis_is_on()
+    {
+        Assert.Contains((await new AnalyserService(null).AnalyseAsync(SelectStarInProc)).Issues, i => i.RuleId == "PE001");
+    }
 }

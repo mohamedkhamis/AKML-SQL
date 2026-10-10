@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using AkmlSql.Web;
 using AkmlSql.Web.Services;
+using AkmlSql.Web.Services.Settings;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
@@ -46,6 +47,17 @@ builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();
 // dispose the returned token on unmount.
 builder.Services.AddSingleton<ICommandRegistry, CommandRegistry>();
 
+// Spec 041 — shell services hosted in MainLayout so every page and the command palette can use them:
+//   IDialogService        R59 -- in-app confirm / prompt / alert (no browser pop-ups anywhere).
+builder.Services.AddSingleton<IDialogService, DialogService>();
+//   INotificationService  R60 -- the one notification area for transient status messages.
+builder.Services.AddSingleton<INotificationService, NotificationService>();
+//   IWorkspaceStatus      R41 -- execution phase / rows / time / caret / document, read by the status bar
+//                                and the results pane's running indicator.
+builder.Services.AddSingleton<IWorkspaceStatus, WorkspaceStatus>();
+// Spec 041 (R36) — the remembered editor workspace layout (one IndexedDB record per field).
+builder.Services.AddSingleton<IWorkspaceLayoutStore, WorkspaceLayoutStore>();
+
 // Spec 021 M3 (browser-side bridge):
 //   IWebCryptoWrapper      T069 -- AES-GCM wrap via wwwroot/js/akml-crypto.js.
 //   IPairingTokenVault     T069 -- bearer tokens at rest, bound to connectionId via aad.
@@ -74,6 +86,11 @@ builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();
 // ExecuteQuery / ExecuteCancel / ApplyChanges through the bridge using the canonical SessionId;
 // ExecutionSettingsStore persists the advisory max-rows / timeout caps (the engine re-clamps).
 builder.Services.AddSingleton<IExecutionSettingsStore, ExecutionSettingsStore>();
+// Spec 041 (R53) — the editor options of Settings › Editor (key editorSettings in the analysisSettings store).
+builder.Services.AddSingleton<IEditorSettingsStore, EditorSettingsStore>();
+// Spec 041 (R64) — the editor's document (New / Open / Save / Save as) and the browser download it saves through.
+builder.Services.AddSingleton<IFileDownloader, JsFileDownloader>();
+builder.Services.AddSingleton<EditorDocumentFlow>();
 builder.Services.AddSingleton<IQueryExecutionService, QueryExecutionService>();
 // Spec 030 — web SQL History: read/search/record/manage via the engine's history IPC (40/41/42)
 // over the bridge (shared per-user store; no new engine code). Editor.razor records user-initiated
@@ -129,6 +146,17 @@ builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
 builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
 // Spec 028 (M6) T034 (US6): local-only persisted chat conversations.
 builder.Services.AddSingleton<IChatHistoryStore, ChatHistoryStore>();
+
+// Spec 041 (R46–R49) — the Settings page's exportable sections, in export-envelope order, and Restore all /
+// Export / Import over them. Each section reads only its own preference store (SC-013).
+builder.Services.AddSingleton<ISettingsSection, GeneralSettingsSection>();
+builder.Services.AddSingleton<ISettingsSection, EditorSettingsSection>();
+builder.Services.AddSingleton<ISettingsSection, FormatSettingsSection>();
+builder.Services.AddSingleton<ISettingsSection, QueriesSettingsSection>();
+builder.Services.AddSingleton<ISettingsSection, CodeAnalysisSettingsSection>();
+builder.Services.AddSingleton<ISettingsSection, AiAssistanceSettingsSection>();
+builder.Services.AddSingleton<ISettingsSection, LayoutSettingsSection>();
+builder.Services.AddSingleton<ISettingsPortability, SettingsPortabilityService>();
 // Spec 028 (M6) T031 (US5): direct-to-provider inline ghost-text completion.
 builder.Services.AddSingleton<IAiGhostTextService, AiGhostTextService>();
 

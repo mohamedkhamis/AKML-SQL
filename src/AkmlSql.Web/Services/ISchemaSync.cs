@@ -34,6 +34,15 @@ public interface ISchemaSync : IAsyncDisposable
 
     /// <summary>Raised whenever the engine reports a checksum that differs from the cached value.</summary>
     event Action<ChecksumDriftNotice>? ChecksumDrifted;
+
+    /// <summary>
+    /// Spec 041 (research R40, N27, FR-093) — the Schema panel's Refresh, after it has asked the engine to reload
+    /// (<c>SchemaRefreshRequest</c>, 6). Re-arms the poll, waits for the engine's reload to settle, fetches Phase A
+    /// and B whatever the checksum says (a reload that changes neither phase nor object count produces no drift),
+    /// and raises <see cref="ChecksumDrifted"/>. Nothing but the re-arm happens when the sync is not running or the
+    /// bridge is not open.
+    /// </summary>
+    Task RefreshAsync(CancellationToken ct = default);
 }
 
 public sealed record ChecksumDriftNotice(string ServerCanonicalIdentity, string DatabaseName, string NewChecksum);
@@ -136,6 +145,59 @@ internal sealed class SchemaSync : ISchemaSync
     }
 
     public void ReportEditorActive() => _lastEditorActivity = DateTimeOffset.UtcNow;
+
+    /// <summary>How often <see cref="RefreshAsync"/> asks whether the engine's reload has settled.</summary>
+    internal TimeSpan SettlePollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>How long <see cref="RefreshAsync"/> waits for the reload before fetching what there is.</summary>
+    internal TimeSpan SettleTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    public async Task RefreshAsync(CancellationToken ct = default)
+    {
+        ReportEditorActive();
+        var session = _sessionId; var server = _server; var database = _database;
+        if (_bridge.State != BridgeState.Open || session == null || server == null || database == null) return;
+
+        var checksum = await WaitForSettledAsync(session, server, database, ct).ConfigureAwait(false);
+        await FetchPhaseAAsync(ct).ConfigureAwait(false);
+        await FetchPhaseBAsync(ct).ConfigureAwait(false);
+        _diagnostics.Log(DiagnosticLevel.Info, "schema-sync", $"Refreshed {server}/{database} ({checksum}).");
+        ChecksumDrifted?.Invoke(new ChecksumDriftNotice(server, database, checksum ?? string.Empty));
+    }
+
+    /// <summary>
+    /// The engine's checksum is <c>{phase}:{objectCount}</c>; its reload clears the cache (<c>NotLoaded</c>) and
+    /// repopulates Phase A then Phase B. Settled means Phase B or Complete. The first look waits one interval, so the
+    /// engine has handled the refresh notification before its old, settled checksum could be read.
+    /// </summary>
+    private async Task<string?> WaitForSettledAsync(string session, string server, string database, CancellationToken ct)
+    {
+        var deadline = DateTimeOffset.UtcNow + SettleTimeout;
+        string? checksum = null;
+        while (true)
+        {
+            await Task.Delay(SettlePollInterval, ct).ConfigureAwait(false);
+            try
+            {
+                var response = await _bridge.SendAsync<SchemaChecksumRequest, SchemaChecksumResponse>(
+                    MessageTypes.SchemaChecksumRequest,
+                    new SchemaChecksumRequest { SessionId = session, ServerCanonicalIdentity = server, DatabaseName = database },
+                    ct).ConfigureAwait(false);
+                if (!response.HasConnection) return checksum;
+                checksum = response.Checksum;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _diagnostics.Log(DiagnosticLevel.Warn, "schema-sync", $"Refresh could not read the checksum: {ex.Message}");
+                return checksum;
+            }
+            if (IsSettled(checksum) || DateTimeOffset.UtcNow >= deadline) return checksum;
+        }
+    }
+
+    internal static bool IsSettled(string? checksum) =>
+        checksum != null &&
+        (checksum.StartsWith("PhaseB:", StringComparison.Ordinal) || checksum.StartsWith("Complete:", StringComparison.Ordinal));
 
     private async Task RunLoopAsync(CancellationToken ct)
     {

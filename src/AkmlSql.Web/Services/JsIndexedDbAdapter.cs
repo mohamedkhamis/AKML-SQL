@@ -111,4 +111,7 @@ public static class StoreNames
     // Phase 4 (web connection manager) -- saved SQL-Server connections. The value MUST
     // match the JS STORES string in akml-indexeddb.js exactly. NO password is ever stored.
     public const string SavedSqlConnections = "savedSqlConnections";
+
+    // Spec 041 (R36) -- the editor workspace layout, one record per field (IndexedDB version 4).
+    public const string WorkspaceLayout = "workspaceLayout";
 }

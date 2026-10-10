@@ -46,6 +46,13 @@ public interface IAiKeyVault
 
     /// <summary>Remove the wrapped key + provider config. Best-effort zeroise before delete.</summary>
     Task RemoveAsync(string providerId);
+
+    /// <summary>
+    /// Spec 041 (R49) — Settings › Import: write a provider's name, model and endpoint. An existing wrapped key is
+    /// kept; a new provider is created without one (<c>HasKey = false</c>, whatever the import says) — an
+    /// exported file never carries a key.
+    /// </summary>
+    Task UpsertConfigAsync(AiProviderConfig config);
 }
 
 /// <summary>
@@ -215,6 +222,31 @@ internal sealed class AiKeyVault : IAiKeyVault
                 .ConfigureAwait(false);
         }
         await _store.DeleteAsync(StoreNames.AiKeys, providerId).ConfigureAwait(false);
+    }
+
+    public async Task UpsertConfigAsync(AiProviderConfig config)
+    {
+        if (config == null) throw new ArgumentNullException(nameof(config));
+        if (string.IsNullOrEmpty(config.ProviderId)) throw new ArgumentException("ProviderId is required.", nameof(config));
+
+        var raw = await _store.GetAsync(StoreNames.AiKeys, config.ProviderId).ConfigureAwait(false);
+        var existing = string.IsNullOrEmpty(raw) ? null : SafeDeserialize(raw!);
+        bool hasKey = existing != null && existing.Config.HasKey && !string.IsNullOrEmpty(existing.Ciphertext);
+        var record = new PersistedConfig
+        {
+            Config = new AiProviderConfig
+            {
+                ProviderId = config.ProviderId,
+                DisplayName = config.DisplayName ?? string.Empty,
+                Model = config.Model ?? string.Empty,
+                Endpoint = config.Endpoint,
+                HasKey = hasKey,
+            },
+            Ciphertext = hasKey ? existing!.Ciphertext : string.Empty,
+            Iv = hasKey ? existing!.Iv : string.Empty,
+            Aad = hasKey ? existing!.Aad : string.Empty,
+        };
+        await _store.SetAsync(StoreNames.AiKeys, config.ProviderId, JsonSerializer.Serialize(record)).ConfigureAwait(false);
     }
 
     internal static string AadFor(string providerId) => "akmlsql.aikey." + providerId;

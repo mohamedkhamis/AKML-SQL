@@ -46,6 +46,13 @@ public interface IProfileStore
     Task<string> GetActiveIdAsync();
     Task SetActiveIdAsync(string id);
 
+    /// <summary>
+    /// Spec 041 (R47, FR-054): back to the store's default style — the stored choice is deleted, so every place
+    /// that reads the active id falls back to the same default. (<see cref="SetActiveIdAsync"/> with null writes
+    /// the default's id instead, which a later change of default would not follow.)
+    /// </summary>
+    Task ResetActiveAsync();
+
     // ── SQL Prompt styles ────────────────────────────────────────────────────
 
     /// <summary>True when a paired engine stores styles (new styles are saved there).</summary>
@@ -58,6 +65,12 @@ public interface IProfileStore
     /// name cannot be checked.
     /// </summary>
     string? EngineStylesError { get; }
+
+    /// <summary>
+    /// Spec 041 (R29, FR-063): what the engine's styles are called — "Shared with SSMS" only when SSMS started the
+    /// engine (it runs as the signed-in user and reads their styles folder), otherwise "On this engine".
+    /// </summary>
+    string EngineStylesGroupName => ProfileStore.EngineStylesGroupNameFor(null);
 
     /// <summary>Raised when styles were added, changed, renamed or deleted, or the engine came or went.</summary>
     event Action? StylesChanged;
@@ -121,7 +134,7 @@ internal sealed class ProfileStore : IProfileStore
     // definitions), with Khamis Style active by default. builtin.default/ansi stay for
     // persisted references.
     private static readonly string[] BuiltInIds = { "builtin.khamis", "builtin.collapsed", "builtin.default", "builtin.ansi" };
-    private const string DefaultActiveId = "builtin.khamis";
+    internal const string DefaultActiveId = "builtin.khamis";
 
     private readonly IIndexedDbAdapter _store;
     private readonly IEngineBridge? _bridge;
@@ -138,6 +151,12 @@ internal sealed class ProfileStore : IProfileStore
     }
 
     public event Action? StylesChanged;
+
+    public string EngineStylesGroupName => EngineStylesGroupNameFor(_bridge?.EngineHostKind);
+
+    /// <summary>"Shared with SSMS" for an engine SSMS started (<c>ide</c>), "On this engine" for any other or unknown.</summary>
+    public static string EngineStylesGroupNameFor(string? hostKind) =>
+        string.Equals(hostKind, "ide", StringComparison.Ordinal) ? "Shared with SSMS" : "On this engine";
 
     public bool EngineStylesAvailable =>
         _bridge != null &&
@@ -240,8 +259,19 @@ internal sealed class ProfileStore : IProfileStore
         return string.IsNullOrEmpty(stored) ? DefaultActiveId : v!;
     }
 
-    public Task SetActiveIdAsync(string id) =>
-        _store.SetAsync(StoreNames.Profiles, ActiveIdKey, id ?? DefaultActiveId);
+    // Spec 041 (FR-054): a change of the active style raises StylesChanged, so the editor's picker and Settings ›
+    // Format always show the same style.
+    public async Task SetActiveIdAsync(string id)
+    {
+        await _store.SetAsync(StoreNames.Profiles, ActiveIdKey, id ?? DefaultActiveId).ConfigureAwait(false);
+        StylesChanged?.Invoke();
+    }
+
+    public async Task ResetActiveAsync()
+    {
+        await _store.DeleteAsync(StoreNames.Profiles, ActiveIdKey).ConfigureAwait(false);
+        StylesChanged?.Invoke();
+    }
 
     // ── SQL Prompt styles ────────────────────────────────────────────────────
 

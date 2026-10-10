@@ -49,8 +49,9 @@ public sealed class CommandAction
     public required string Title { get; init; }
     public required CommandGroup Group { get; init; }
 
-    /// <summary>A short glyph shown at the row's left edge (emoji / unicode — no icon font dependency).</summary>
-    public string Icon { get; init; } = "•";
+    /// <summary>Spec 041 (R62, FR-081): the icon at the row's left edge — a sprite name for <c>Shared/Icon.razor</c>
+    /// (tools/icons/icons.json), never an emoji or a text symbol.</summary>
+    public string Icon { get; init; } = "chevron-right";
 
     /// <summary>Optional right-aligned shortcut hint, e.g. "Ctrl+K Ctrl+F".</summary>
     public string? Shortcut { get; init; }
@@ -60,6 +61,37 @@ public sealed class CommandAction
 
     /// <summary>Invoked when the user runs this entry.</summary>
     public required Func<System.Threading.Tasks.Task> Run { get; init; }
+
+    /// <summary>Spec 041 (R38) — optional "is this command available right now" (Execute is not while a
+    /// query runs, FR-027). The palette shows an unavailable command disabled and never runs it; the
+    /// page key handler skips it too. Null = always available.</summary>
+    public Func<bool>? IsEnabled { get; init; }
+
+    /// <summary>Spec 041 (R38) — optional "is this command on" for a toggle (a visible panel). The
+    /// palette and the View menu show a check mark. Null = not a toggle.</summary>
+    public Func<bool>? IsChecked { get; init; }
+
+    /// <summary><see cref="IsEnabled"/> evaluated safely: true when unset, false when it throws.</summary>
+    public bool IsAvailable
+    {
+        get
+        {
+            if (IsEnabled == null) return true;
+            try { return IsEnabled(); }
+            catch { return false; }
+        }
+    }
+
+    /// <summary><see cref="IsChecked"/> evaluated safely: false when unset or when it throws.</summary>
+    public bool IsOn
+    {
+        get
+        {
+            if (IsChecked == null) return false;
+            try { return IsChecked(); }
+            catch { return false; }
+        }
+    }
 }
 
 /// <summary>The ranked result buckets, in display order.</summary>
@@ -69,6 +101,8 @@ public enum CommandGroup
     Action = 1,
     File = 2,
     Object = 3,
+    /// <summary>Spec 041 (R38) — the editor workspace's View commands (panels, layout).</summary>
+    View = 4,
 }
 
 internal sealed class CommandRegistry : ICommandRegistry

@@ -91,4 +91,23 @@ public sealed class RingBufferTests
         await buffer.RestoreAsync(); // must not throw
         Assert.Empty(buffer.Snapshot());
     }
+
+    [Fact]
+    public async Task RestoreAsync_is_idempotent()
+    {
+        // Spec 041 (T131, N20): Settings › Diagnostics restores the buffer too; a second restore must not
+        // append the persisted entries again.
+        var store = new InMemoryIndexedDbAdapter();
+        var first = new DiagnosticsRingBuffer(store);
+        first.Log(DiagnosticLevel.Info, "src", "one");
+        first.Log(DiagnosticLevel.Info, "src", "two");
+        first.Log(DiagnosticLevel.Info, "src", "three");
+        await first.FlushAsync();
+
+        var second = new DiagnosticsRingBuffer(store);
+        await second.RestoreAsync();
+        await second.RestoreAsync();
+
+        Assert.Equal(3, second.Snapshot().Count);
+    }
 }

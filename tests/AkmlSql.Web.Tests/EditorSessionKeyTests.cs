@@ -136,6 +136,91 @@ public class EditorSessionKeyTests
         var second = await EditorSessionKeys.GetOrCreateAsync(store, await store.RestoreAsync());
         Assert.Equal(first, second);
     }
+
+    // ── Spec 041 (T164, research R64, data-model.md §1.3) — the document fields ──────────────────────────
+
+    [Fact]
+    public async Task The_document_fields_round_trip_through_the_store()
+    {
+        var db = new RecordingIndexedDbAdapter();
+        var store = new EditorSessionStore(db);
+        await store.SaveAsync(new EditorSessionRecord { DocumentText = "SELECT 1;", DocumentName = "orders-audit", IsModified = true, NextDefaultNumber = 4, SessionKey = "k" });
+        await store.FlushAsync();
+
+        var read = await new EditorSessionStore(db).RestoreAsync();
+
+        Assert.Equal("orders-audit", read!.DocumentName);
+        Assert.True(read.IsModified);
+        Assert.Equal(4, read.NextDefaultNumber);
+    }
+
+    [Fact]
+    public void A_record_written_before_documents_had_names_reads_the_defaults()
+    {
+        var read = System.Text.Json.JsonSerializer.Deserialize<EditorSessionRecord>("{\"DocumentText\":\"SELECT 1;\",\"SessionKey\":\"k\"}")!;
+
+        Assert.Null(read.DocumentName);
+        Assert.False(read.IsModified);
+        Assert.Equal(1, read.NextDefaultNumber);
+    }
+
+    [Fact]
+    public void The_text_change_writer_carries_the_document_fields()
+    {
+        var record = EditorSessionKeys.BuildTextChangeRecord("k", "SELECT 2;", "builtin.ansi",
+            documentName: "orders-audit", isModified: true, nextDefaultNumber: 3);
+
+        Assert.Equal("orders-audit", record.DocumentName);
+        Assert.True(record.IsModified);
+        Assert.Equal(3, record.NextDefaultNumber);
+        Assert.Equal("k", record.SessionKey);
+    }
+
+    [Fact]
+    public async Task The_history_writer_keeps_the_document_fields()
+    {
+        var store = new FakeEditorSessionStore();
+        await store.SaveAsync(new EditorSessionRecord { DocumentText = "old", DocumentName = "orders-audit", NextDefaultNumber = 5, SessionKey = "k" });
+
+        await EditorSessionKeys.SetDocumentTextAsync(store, "SELECT * FROM Orders;");
+
+        var read = await store.RestoreAsync();
+        Assert.Equal("orders-audit", read!.DocumentName);
+        Assert.Equal(5, read.NextDefaultNumber);
+        Assert.Equal("k", read.SessionKey);
+    }
+
+    [Fact]
+    public async Task Starting_a_document_writes_a_fresh_record_with_a_new_session_key()
+    {
+        var store = new FakeEditorSessionStore();
+        var oldKey = await EditorSessionKeys.GetOrCreateAsync(store);
+
+        var newKey = await EditorSessionKeys.StartDocumentAsync(store, "SQLQuery2", "", nextDefaultNumber: 3);
+
+        Assert.NotEqual(oldKey, newKey);
+        var read = await store.RestoreAsync();
+        Assert.Equal(newKey, read!.SessionKey);
+        Assert.Equal("SQLQuery2", read.DocumentName);
+        Assert.Equal(string.Empty, read.DocumentText);
+        Assert.False(read.IsModified);
+        Assert.Equal(3, read.NextDefaultNumber);
+    }
+
+    [Fact]
+    public async Task A_save_still_pending_is_what_a_restore_reads()
+    {
+        // New and Open read the record, change it and write it back: a keystroke saved a moment earlier (still in
+        // the debounce) must not be lost to the copy in IndexedDB.
+        var db = new RecordingIndexedDbAdapter();
+        var store = new EditorSessionStore(db);
+        await store.SaveAsync(new EditorSessionRecord { DocumentText = "typed just now", SessionKey = "k" });
+
+        var read = await store.RestoreAsync();
+
+        Assert.Equal("typed just now", read!.DocumentText);
+        Assert.Empty(db.Writes);   // restoring never writes
+    }
 }
 
 /// <summary>In-memory <see cref="IEditorSessionStore"/> fake — mirrors the shape of the real

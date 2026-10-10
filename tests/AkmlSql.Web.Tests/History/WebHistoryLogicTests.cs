@@ -98,4 +98,21 @@ public class WebHistoryLogicTests
         Assert.Equal(0, req.Status);
         Assert.Equal("web", req.Source);
     }
+
+    // ── Spec 041 (T165, research R64, N11) — a document the user named names its history session ─────────
+
+    [Theory]
+    [InlineData("orders-audit", "orders-audit")]
+    [InlineData("SQLQuery1", null)]   // a default name reads query-NN in History, as SSMS's unsaved tabs do
+    [InlineData("SQLQuery12", null)]
+    [InlineData(null, null)]
+    public void The_tab_title_is_the_document_name_unless_it_is_a_default_name(string? name, string? expected)
+    {
+        var result = new ExecuteQueryResult { Status = ExecuteStatus.Ok, ResultSets = Array.Empty<ExecuteResultSet>() };
+
+        var req = WebHistoryLogic.BuildRecordRequest("SELECT 1", result, "localhost", "Northwind", "key-1", documentName: name);
+
+        Assert.Equal(expected, req.TabTitle);
+        Assert.Equal("key-1", req.SessionKey);
+    }
 }

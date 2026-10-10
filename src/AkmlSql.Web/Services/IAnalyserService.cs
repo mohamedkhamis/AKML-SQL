@@ -83,6 +83,11 @@ internal sealed class AnalyserService : IAnalyserService
         // Spec 021 FR-011 (T042): refuse documents larger than the 10 MB limit.
         DocumentSizeLimit.EnsureWithinLimit(documentText);
 
+        // Spec 041 (R50, FR-055): "Enable code analysis" off means no analysis at all — not findings dropped
+        // afterwards. Without a settings store analysis is on.
+        if (_settingsStore != null && !(await _settingsStore.GetAsync().ConfigureAwait(false)).Enabled)
+            return new CodeAnalysisResponse { RequestId = Guid.NewGuid().ToString(), Issues = Array.Empty<CodeIssueInfo>(), AnalyzedVersion = 1 };
+
         var request = new CodeAnalysisRequest
         {
             SessionId = "web-session",
