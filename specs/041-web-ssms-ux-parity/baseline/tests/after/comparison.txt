@@ -1,0 +1,14 @@
+﻿Suite        BeforePassed AfterPassed Regressed Missing NowSkipped NowPassing Unexpected
+-----        ------------ ----------- --------- ------- ---------- ---------- ----------
+Core                 1120        1285         0       0          0          0          0
+Engine               2005        2091         0       0          0          0          0
+Formatting           1635        1635         0       0          0          0          0
+IntelliSense           25          25         0       0          0          0          0
+ShellShared           882         882         0       0          0          0          0
+Site                  904         904         0       0          0          0          0
+Web                   503        1131         0       0          0          0          0
+WebE2E                 17          78         0       0          0          0          0
+
+
+
+No test that passed before has stopped passing.

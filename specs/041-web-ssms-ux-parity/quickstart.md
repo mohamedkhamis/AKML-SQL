@@ -17,7 +17,8 @@ Debug engine paired to a local SQL Server.
 
 ```bash
 # Theme gate + solution (regenerates nothing; fails on drift)
-pwsh scripts/generate-theme-css.ps1 -CheckOnly
+powershell -NoProfile -File scripts/generate-theme-css.ps1 -RepoRoot . -CheckOnly
+powershell -NoProfile -File scripts/generate-theme-css.ps1 -RepoRoot . -OutputFolder src/AkmlSql.Site/wwwroot/css/themes -CheckOnly
 MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
 "$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
 "$MSBUILD" AKML-SQL.slnx -t:Build -p:Configuration=Release -m -v:minimal
@@ -36,7 +37,10 @@ node --test tests/AkmlSql.Web.Tests/js/*.test.mjs
 dotnet test tests/AkmlSql.Site.Tests/AkmlSql.Site.Tests.csproj --filter ThemeCssSyncTests
 
 # Browser suites (dev VM: Debug web + engine, Chromium, SQL Server up)
-dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --filter "Category=BridgeE2E"
+dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build --filter "Category=BridgeE2E" -- xUnit.ParallelizeTestCollections=false
+
+# Full SC-008 browser suite; run only after all Debug builds have finished
+dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build --filter "FullyQualifiedName!~SiteScreenshotTour&FullyQualifiedName!~WorkspaceScreenshotTour" -- xUnit.ParallelizeTestCollections=false
 ```
 
 **Gates:**
@@ -45,8 +49,8 @@ dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --filter "C
   before the move.
 - **SC-008 check by check**: before the first code change, record the pass list of every suite
   above with `--logger "trx;LogFileName=<suite>.before.trx" --results-directory <local dir>`
-  (exclude `SiteScreenshotTour` by name in `Web.E2E`), then at each slice gate run
-  `pwsh scripts/compare-test-results.ps1 -Before <dir> -After <dir>` and paste its per-test
+  (exclude `SiteScreenshotTour` and `WorkspaceScreenshotTour` by name in `Web.E2E`), then at each slice gate run
+  `powershell -NoProfile -File scripts/compare-test-results.ps1 -Before <dir> -After <dir> -OutDir <pass-list-dir>` and paste its per-test
   pass-lists into `baseline/tests/` and the table into `baseline.md`. Known pre-existing red
   (listed once in `baseline.md`): the 42 `FormatterServiceTests` sp031 goldens.
 - **Web CSS token gate** (`WebCssTokenTests`): the literal ratchet may only go down; every

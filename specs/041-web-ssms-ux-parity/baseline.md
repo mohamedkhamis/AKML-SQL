@@ -46,3 +46,283 @@ results in `%LOCALAPPDATA%\AKML SQL\spec041-tests\before\`, per-test pass-lists 
 
 From here on, any new red against these lists is a regression this feature caused. Compare with
 `scripts/compare-test-results.ps1 -Before …\before -After …\after -OutDir specs/041-web-ssms-ux-parity/baseline/tests/after`.
+
+## Resumed implementation — 2026-10-10
+
+Resumed from the existing staged work with exactly T186 and T206–T216 unchecked. Completed
+task markers and the existing index were preserved. No deployment or Git mutation is part
+of this continuation. The requirements checklist remains read-only, 16/16 checked.
+
+### T206 — control and label audit
+
+Audited the routed Razor pages and shared components, including multiline disabled-control
+tags, handler bodies, menu actions, component references and remaining status fields.
+
+| Surface | Finding / action |
+|---|---|
+| Connection manager | Removed the unsupported Entra/Future radio and its unused styles. Loading, busy and no-selection states now explain disabled controls. Refresh uses the existing icon sprite. |
+| Editor toolbar | Parse explains running, disconnected and unsupported-engine states separately. New/Open/Save/Save as, Format, Analyse and View handlers are present. |
+| History | Compare failure, prune and export now use notifications; removed the old `_statusMsg` field and footer fragment. Copy and Open in editor labels match their handlers. |
+| Snippets | Built-in fields explain that they are read-only; personal Save/Delete and import/export have handlers. |
+| Settings | Dependent analysis setting, disconnected saved-connection Connect and provider-specific disabled endpoint explain their state. Other sections already have working controls and resets. |
+| Dialogs / refactoring | Invalid prompt confirmation explains validation; disabled Apply explains the unavailable preview. No empty action handlers found. |
+| Result grid | Applying disables Discard/Apply with a reason; invalid cells keep their existing explanatory text. Copy, Copy as, View value, Save, sort and resize actions are wired. |
+| AI actions / chat | Insert at caret, Copy and Export match their handlers. Busy/empty-input controls already explain their disabled state. |
+| Spike development route | Running and unloaded-corpus controls now explain their disabled state. |
+| Navigation / menus / status | Working routes and commands; no unsupported future option remains. Every shared Razor component has a production reference (MainLayout is the router's default layout). |
+
+No rendered “coming soon”/“not available yet” placeholders, TODO handlers or commented-out
+markup remain. Architectural Razor comments are retained. Live status fields in Editor,
+Snippets and Styles are retained where current handlers and tests still consume them.
+
+### Pending external acceptance
+
+- **T209 native keyboard checks:** browser DOM cancellation is automated separately from
+  native browser accelerators. Real Windows input with two layouts, Polish AltGr and
+  Shift+Alt language switching still needs an interactive check; synthetic Playwright
+  events cannot establish those results.
+- **SC-006:** the ten-SSMS-user hallway study remains pending participant availability.
+- **T215 manual quickstart:** automated coverage is recorded below. The complete human
+  walkthrough, including the remaining variants identified there, is not being represented
+  as completed by component tests or screenshots.
+- **T216:** product-site screenshots remain pending deployment. The local workspace tour
+  does not replace or overwrite the deployed product-site screenshots.
+
+### Browser key capture (T209)
+
+`BrowserKeyCaptureTests` runs a real browser against the sandbox engine and local SQL.
+The table records cancellation of the DOM default action; it does **not** certify native
+Windows/browser accelerator handling. All three engines passed without skips in the
+targeted run; the final suite repeats these checks.
+
+| Keys / context | Chromium | Edge | Firefox |
+|---|---|---|---|
+| F5, Ctrl+F5, Ctrl+R, F8 | Prevented | Prevented | Prevented |
+| F6, Shift+F6 | Prevented | Prevented | Prevented |
+| Ctrl+S, Ctrl+Shift+S | Prevented | Prevented | Prevented |
+| Ctrl+Alt+N, Ctrl+Alt+O | Prevented | Prevented | Prevented |
+| Ctrl+K, Ctrl+F / Ctrl+L / Ctrl+S | Prevented | Prevented | Prevented |
+| Grid: Ctrl+Shift+C, Ctrl+0, Shift+Alt+Left/Right | Prevented | Prevented | Prevented |
+| Synthetic Polish ó / ń with Ctrl+Alt | Not intercepted | Not intercepted | Not intercepted |
+| F5 on Settings | Not intercepted | Not intercepted | Not intercepted |
+| Native browser accelerators; two installed layouts; physical Polish AltGr | Pending | Pending | Pending |
+
+No alternative binding is justified by these DOM results. T209 stays unchecked until the
+native-input checks establish whether a browser or Windows keeps a claimed key.
+
+### Accessibility implementation (T207)
+
+- Toolbar help and lint-gutter diagnostics open on keyboard focus and dismiss with Escape.
+  Grid type/value help, menus and focus rings retain their existing keyboard coverage.
+- Reduced motion now disables animations and transitions. Assigning a tiny nonzero global
+  transition duration had inadvertently animated controls that originally had no transition.
+- High contrast uses the inverse `CanvasText`/`Canvas` pair for selected/hovered surfaces and
+  accent controls. Chromium's default `Highlight`/`HighlightText` measured **4.4989:1**,
+  below 4.5; the inverse pair measures **21:1** on this VM. These remain system colors.
+- Success, error and warning badge fills are web-only tokens; destructive confirmation buttons share
+  the error fill. Primary hover uses the existing pressed accent. Desktop hex tokens are unchanged.
+- Web-only status text tokens provide readable success/warning/error text on both panel and
+  canvas backgrounds. Status dots and border indicators retain the original status colors.
+- Connection-status pills use contrast-tested fills; Offline/Disconnected use the neutral
+  badge pair. The accessibility test also measures the rendered Live pill, not just token pairs.
+- Generated theme files were regenerated for both Web and Site from `docs/theme-tokens.json`.
+
+### Grid performance implementation (T210)
+
+The original 50-column drag repeatedly produced 101–121 ms main-thread tasks. A row render
+boundary now skips rows whose pointer-visible state is unchanged. Selection, focus and
+width-dependent hover titles participate in the state key; normal renders invalidate all
+rows so edits, sort and new results remain current. The existing grid suites cover those
+paths, with an added regression check for clipped titles after narrowing/widening a column.
+Final browser measurements are recorded below after the complete suite.
+
+Screenshot inspection also exposed a one-pixel sizing error that the earlier `+1` test
+tolerance allowed: a datetime cell had a 168 px track, 167 px client width and 168 px scroll
+width. Auto-fit now includes its 1 px right border. The large-result query includes
+`datetime2(7)`, and both sizing checks reject **any** `scrollWidth > clientWidth`.
+
+The status-bar review found a stale "No engine is paired" startup failure next to a Live
+connection after manual pairing. The failure strip now hides whenever the bridge is open;
+a component regression test and the three-theme shell browser test check this state.
+
+### Measured accessibility results
+
+`WorkspaceAccessibilityTests`, Chromium on this VM, explicit Light/Dark/High contrast
+themes with reduced motion enabled. Ratios use the WCAG relative-luminance calculation
+on resolved browser colors; assertions compare unrounded values against 4.5.
+
+| Foreground / background | Light | Dark | High contrast |
+|---|---:|---:|---:|
+| Primary / editor | 17.85 | 11.87 | 21.00 |
+| Neutral badge text / neutral badge | 14.48 | 8.40 | 21.00 |
+| Primary / dialog or tooltip panel | 17.85 | 11.87 | 21.00 |
+| On-accent / strong selection | 5.17 | 5.17 | 21.00 |
+| Secondary / panel | 7.58 | 5.71 | 5.17 |
+| On-danger / error badge or confirmation | 6.47 | 6.47 | 21.00 |
+| On-accent / warning badge | 7.09 | 7.09 | 21.00 |
+| On-accent / success badge | 7.13 | 7.13 | 21.00 |
+| Rendered Live status pill | 7.13 | 7.13 | 21.00 |
+| On-accent / primary button | 5.17 | 5.17 | 21.00 |
+| On-accent / primary button hover | 8.72 | 8.72 | 21.00 |
+| Success text / panel | 7.13 | 8.40 | 21.00 |
+| Success text / canvas | 6.51 | 10.25 | 21.00 |
+| Warning text / panel | 7.09 | 6.46 | 21.00 |
+| Warning text / canvas | 6.47 | 7.89 | 21.00 |
+| Danger text / panel | 6.47 | 5.29 | 21.00 |
+| Danger text / canvas | 5.91 | 6.45 | 21.00 |
+
+Status-text pairs on panel/canvas are checked in the same test. Keyboard help, lint help,
+high-contrast row and button hover, visible focus and disabled motion are also asserted.
+
+| Touch target | 100% hit area / drag change | 150% hit area / drag change |
+|---|---|---|
+| Results splitter | 12 px / 64 px | 18 px / 96 px |
+| Column edge | 8 px / 64 px | 12 px / 96 px |
+| Collapsed Schema strip | At least 24 px; tap restores | At least 36 px; tap restores |
+
+These use touch events with `HasTouch`, not a mouse-drag substitute. Zoom is CSS zoom
+inside a Chromium viewport. Native Windows display scaling remains a separate manual check.
+
+Final targeted sizing run: **14.7 ms** for 1,000 × 30 tracks; **zero clipped cells** below
+the 480 px cap at top, middle and bottom, including `datetime2(7)`; **no reported long
+tasks** during the 50-column resize/select (the Long Tasks API reports tasks of at least
+50 ms); 200-column auto-fit completed. The assertion still rejects any task over 100 ms.
+
+### Quickstart replay and remaining manual variants (T215)
+
+The checks below distinguish real-browser replay against Debug web/engine and local SQL
+from variants covered only by unit/integration tests. A checked item means its listed browser
+scenario ran; an unchecked item identifies a remaining manual variant, not an omitted feature.
+The complete manual T215 gate stays unchecked. Clipboard content is inspected directly;
+no claim is made that a human pasted it into a spreadsheet.
+
+**§0:** Debug builds, published sandbox engine, local SQL, full Release solution build,
+theme drift gates and full test suites. Final SC-008 results are recorded separately below.
+
+**§1 — Result columns** (`ResultsGridTests`, `QuickstartAcceptanceTests`):
+
+- [x] 1.1 Database results fit without clipped values, including dates.
+- [x] 1.2 The capped wide value opens in View value.
+- [x] 1.3 Drag width and header/body alignment.
+- [x] 1.4 Edge double-click and auto-fit.
+- [x] 1.5 User widths survive virtualization, resize and panel hiding; a new result resets them.
+- [x] 1.6 Row/column selection and tab-separated clipboard content.
+- [x] 1.7 Pointer/keyboard context menu and Copy as commands; output formats also have goldens.
+- [x] 1.8 Sort cycles and a new query clears sorting.
+- [x] 1.9 Selection/editing, invalid input, NULL, persisted date/money changes.
+- [ ] 1.10 F5 confirmation replayed; repeat pending-edit Open/New/History navigation manually.
+- [x] 1.11 Keyboard grid navigation, resize, tooltip and menu dismissal.
+
+**§2 — Results and Messages** (`ResultsMessagesTests`, `QuickstartAcceptanceTests`):
+
+- [x] 2.1 A SELECT shows results and completion messages.
+- [x] 2.2 Multiple SELECT/PRINT/UPDATE messages retain order.
+- [ ] 2.3 Document error navigation replayed; selected-text and later-GO-batch variants have
+  engine/mapper tests but still need the complete manual browser walkthrough.
+- [x] 2.4 Divide-by-zero retains surrounding result sets.
+- [ ] 2.5 GO loops and invalid GO replayed; repeat three batches with the second failing manually
+  (engine integration tests cover continuation).
+- [x] 2.6 CREATE PROCEDURE / GO / EXEC / GO / DROP.
+- [x] 2.7 Timeout skips later work.
+- [x] 2.8 F5 runs from each editor region; Settings leaves its DOM default unclaimed.
+- [x] 2.9 Running state ends on sandbox-engine loss and says the statement may still have run.
+- [x] 2.10 Parse reports syntax without executing the script.
+- [ ] 2.11 Display values replayed; CSV/TSV and truncation confirmation have component tests,
+  but the full manual download/paste walkthrough remains.
+
+**§3 — Workspace** (`WorkspaceLayoutTests`, `ShellPolishTests`, `QuickstartAcceptanceTests`):
+
+- [x] 3.1 Hide/restore side panels.
+- [x] 3.2 Hide results; execution brings them back.
+- [x] 3.3 Pointer and keyboard splitters respect bounds.
+- [x] 3.4 Maximise and restore.
+- [x] 3.5 Layout survives reload and browser restart.
+- [x] 3.6 Responsive folding and a 120-character line at 1100 px.
+- [x] 3.7 Reset layout survives reload.
+- [x] 3.8 View/palette commands and F6 focus order.
+- [x] 3.9 Disconnected prompt, schema target, filtering and refresh.
+- [x] 3.10 Line-7 analysis marker and analysis-off/Turn on path.
+- [x] 3.11 Hidden navigation restores and other pages retain navigation.
+
+**§4 — Settings** (`SettingsPageTests`, `FormatStylesTests`, `FormatStylesSharedEngineTests`):
+
+- [x] 4.1 Five navigation entries and legacy routes.
+- [x] 4.2 All nine settings sections.
+- [x] 4.3 Saved query defaults versus toolbar session overrides.
+- [x] 4.4 Analysis off and Turn on.
+- [x] 4.5 Suppress everywhere and Undo.
+- [x] 4.6 Restore three providers without resetting other sections.
+- [x] 4.7 Secret-free export, import into another browser context, unknown-setting warning.
+- [ ] 4.8 Active style and standalone-engine sharing replayed; repeat the SSMS-started-engine
+  group and duplicate-name picker variants manually (identity/label component tests pass).
+- [x] 4.9 Live editor preferences survive reload; editor reset confirms the document.
+- [x] 4.10 Settings search retains section context.
+- [x] 4.11 Dark theme loads before first paint.
+- [x] 4.12 A second tab does not restore stale preferences.
+
+**§5 — Documents** (`DocumentFlowTests`, shared `TabStrip` component tests):
+
+- [ ] 5.1 Arrow/Home/End semantics have shared-component tests; repeat across all three visible
+  tab strips manually.
+- [x] 5.2 Modified-document New confirmation and numbering.
+- [ ] 5.3 UTF-16/UTF-8 and modified-document Open replayed; >10 MB refusal has component tests,
+  but that browser-file variant remains in the manual walkthrough.
+- [x] 5.4 Named Save/Save as, UTF-8 BOM and title/modified marker.
+- [x] 5.5 History keeps named sessions separate from a new query.
+
+**§6 — Shell polish** (`ShellPolishTests`, three themes with reduced motion): toolbar/icons,
+temporary-table-preserving database switches and USE, status segments, in-app destructive
+confirmations, consistent headers/startup, keyboard diagnostics and theme behavior are
+replayed. The default quickstart uses Windows authentication; repeating the switch with an
+existing SQL-auth login and an SSMS-started engine remains part of manual acceptance.
+
+**§7:** final comparison and local captures are recorded here. The human hallway study and
+post-deployment product-site captures remain pending; no deployment was performed.
+
+### Final SC-008 comparison — 2026-10-10
+
+| Suite | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Core | 1,285 | 1 | 3 |
+| Engine | 2,091 | 0 | 0 |
+| Formatting | 1,635 | 0 | 0 |
+| IntelliSense | 25 | 0 | 0 |
+| Site | 904 | 0 | 0 |
+| Web | 1,131 | 42 | 0 |
+| Shell shared | 882 | 0 | 0 |
+| Web E2E | 78 | 0 | 10 |
+| Node | 97 | 0 | 0 |
+
+The Core positional-key failure and 42 Web formatter-corpus failures are the same failures
+recorded in T003. The ten browser skips are unchanged. The comparison script reports
+**zero regressed, missing, newly skipped or unexpected tests** across all eight TRX suites;
+no allow-list was needed. Final pass lists are in [`baseline/tests/after/`](baseline/tests/after/).
+Node is recorded separately because it does not produce TRX. Formatting goldens and the
+completion corpus were not modified; completion remains **1,311 / 1,343 (97.6%)**.
+
+The clean full browser run completed in 15m19s. An earlier run failed during the service
+restart because a concurrent Debug rebuild changed browser asset hashes; the clean serial
+rerun, with builds finished first, passed all 78 executable cases. Both screenshot tours are
+excluded from that suite. The final status-pill contrast adjustment is verified separately
+with the focused shell/accessibility run and refreshed local screenshot tour.
+
+The final source passed a full MSBuild solution restore and Release build. Both Web and
+Site theme folders passed `generate-theme-css.ps1 -CheckOnly`. Debug Web (including its
+Blazor output) and E2E assemblies were built before the focused browser run. The final
+Web unit rerun retained 1,131 passes and the same 42 formatter failures; Site passed all
+904 tests and Node passed all 97 tests. No extension hooks are registered
+(`.specify/extensions.yml` is absent).
+
+**Final focused run: 10/10 passed** (seven shell cases, two accessibility cases and the
+workspace screenshot tour; 2m25s). All 18 contrast measurements per theme passed, including
+the rendered Live pill. These supplemental results are outside the full-suite TRX folder
+to avoid double-counting. All **90** PNGs in [`baseline/after/`](baseline/after/) were refreshed
+at 23:11–23:12 local time: 45 at 1440×900 and 45 at 1100×700, 30 per theme. Representative
+Light and High contrast editor captures at 1100×700 and Dark Settings at 1440×900 were
+visually inspected: date values fit, the Live pill is readable, and the stale pairing-failure
+strip is absent. Theme-change notifications visible in captures are expected transient UI.
+The installed bridge service is Running after verification; no test host remains.
+
+**Continuation outcome:** nine of the twelve originally open tasks are complete. T209,
+T215 and T216 remain unchecked for the specific native-input, manual-acceptance and
+deployment prerequisites recorded above. Previously completed task markers were preserved.

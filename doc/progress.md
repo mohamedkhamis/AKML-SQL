@@ -1968,8 +1968,8 @@ record: `baseline.md` there. Branch `041-web-ssms-ux-parity`.
 | 5 US3 Workspace | T110–T129 | done (gate 2026-10-09) |
 | 6 US4 Settings | T130–T162 | done (gate 2026-10-09) |
 | 7 US5 Tabs and documents | T163–T176 | done (gate 2026-10-09) |
-| 8 US6 Shell polish | T177–T208 | in progress |
-| 9 Polish | T209–T216 | not started |
+| 8 US6 Shell polish | T177–T208 | complete; automated story gate passed (2026-10-10) |
+| 9 Polish | T209–T216 | native keyboard (T209), full manual quickstart (T215) and deployed screenshots (T216) remain; hallway study pending participants |
 
 ### US1 — what was built
 
@@ -2263,3 +2263,63 @@ record: `baseline.md` there. Branch `041-web-ssms-ux-parity`.
   `orders-audit` and a new query's run separately). `AiChatComposerKeysTests` pass on the new AI tab strip.
 - One-pass MSBuild restore + Release build of the solution: 0 errors, no warning in a changed file (the unused
   download field the old Save left behind removed). Theme CSS drift check green for the web and site folders.
+
+### US6 and final verification — continuation on 2026-10-10
+
+Resumed T186 and T206–T216 without changing the completed task markers or the staged index.
+The implemented US6 work now has browser checks for the toolbar, a database switch retaining
+`#temp` state, `USE` updating the selector/schema/status, status versions/caret, analyser
+underlines and keyboard gutter help, in-app confirmations, consistent headers and startup
+styling. Style E2E uses in-app dialogs and the sandbox engine's “On this engine” label.
+
+The final control audit removed the unsupported Entra/Future option, explained disabled
+controls and moved History's remaining status messages to notifications. Keyboard toolbar
+help is dismissible with Escape; lint gutter markers open CodeMirror's own tooltip from
+focus. High-contrast hover text and focus treatment were audited across shell controls.
+`WorkspaceAccessibilityTests` covers token contrast, reduced motion and touch dragging at
+100% and 150% scale. `BrowserKeyCaptureTests` separates browser DOM cancellation from native
+Windows accelerator/layout checks. The grid performance case covers 1,000 × 30 values,
+50-column drags and 200-column auto-fit. Auto-fit includes the cell border (a one-pixel
+omission clipped dates), and pointer updates skip unchanged rows through `GridRowBoundary`.
+The strict sizing replay fitted 1,000 × 30 tracks in 14.7 ms without clipping, reported no
+50 ms long tasks during the drag, and completed 200-column auto-fit. Web-only badge and
+status-text tokens fix contrast without changing desktop hex values. A Live bridge now hides
+stale startup pairing failures. `QuickstartAcceptanceTests` adds width persistence, schema
+controls/navigation and sandbox-engine-loss checks.
+
+`WorkspaceScreenshotTour` writes 90 local captures (15 surfaces × three themes × two sizes)
+to `specs/041-web-ssms-ux-parity/baseline/after/`. It is deliberately excluded from SC-008,
+like the deployed `SiteScreenshotTour`. Release notes are in
+`doc/WEB/workspace-041-release-notes.md`, including the one-time blocked-upgrade message
+with two tabs and developer-build version mismatch markers.
+
+Full engine verification: **2,091 passed**. Completion corpus: **1,311 / 1,343 (97.6%)**,
+unchanged from T003. Formatting: **1,635 passed**, with no golden changes. Shell: **882
+passed**. The baseline file records the final suite comparison, browser measurements and
+remaining acceptance prerequisites; no deployment or Git mutation was performed.
+
+Final gate: Release solution restore/build and both theme drift checks passed. The clean
+full browser suite passed **78**, with **10 existing skips**; the final color adjustment
+then passed **10/10** focused shell/accessibility/screenshot cases. All **90** local images
+were refreshed and representative views inspected. Web passed **1,131** with the same
+42 baseline formatter failures; Core passed **1,285** with its same positional-key failure
+and three skips; Site passed **904**, IntelliSense **25**, Node **97**. SC-008 reports
+zero regressions or missing previously passing tests, without an allow-list. Nine of the
+twelve tasks open at resumption are complete; T209, T215 and T216 remain as recorded below.
+
+### Spec 041 deferred scope
+
+| Item | Reason | Goes to |
+|---|---|---|
+| Multiple query document tabs | Clarified out of scope 2026-10-08 | A later feature |
+| Interrupting a running statement (true Cancel) | Needs engine transport work | Engine follow-up |
+| Engine `CutCells` key for cut values | Engine work limited to the spec's Dependencies list | Engine follow-up |
+| Parsing displayed values back on commit | Strict ISO input accepted for now | Grid follow-up |
+| Errors inside `CREATE PROCEDURE` bodies | Server reports `Procedure`, not a document line | Messages follow-up |
+| User setting for maximum column width | A possible later setting | Settings follow-up |
+| Docking, results-to-text, execution plans, column reorder/hide/freeze | Spec Out of Scope | — |
+
+Native keyboard/layout acceptance, the full manual quickstart and the ten-user hallway study
+remain external checks; `baseline.md` identifies the browser-replayed steps and remaining variants.
+Product-site screenshots remain pending deployment (T216); local captures do not change
+the deployed site's images.

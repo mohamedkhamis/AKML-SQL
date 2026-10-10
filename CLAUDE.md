@@ -326,7 +326,25 @@ See [doc/progress.md](doc/progress.md) for the full development progress log —
 
 **Open follow-ups** (see `doc/progress.md` and the spec tasks files for full lists):
 
-- Spec 041: date edits must be typed in the engine's round-trip form (`2025-10-01T00:00:00.0000000`) until displayed values parse back on commit (tasks.md › Deferred). US6 (T177–T208) is in progress — T186 (ShellPolishTests), T206 (label audit, partly done) and T207–T208 are open; Polish (T209–T216) is not started. `QuerySessionStoreTests.Concurrent_creation_with_same_key_returns_one_session` (SQLite, History; not touched by spec 041) fails about 4 runs in 5 when run alone on the dev machine.
+Spec 041 US6 adds the session-preserving database selector (`session.database.v1`), engine host/account
+identity on handshake, truthful style-source labels, grouped toolbar, schema filtering/refresh, caret and
+version status, and in-app confirmation/notification paths. `akml-ui.js` also owns dismissible keyboard
+toolbar help; `akml-editor.js` makes lint gutter tooltips keyboard-accessible. Browser acceptance lives in
+`ShellPolishTests`, `WorkspaceAccessibilityTests`, `BrowserKeyCaptureTests` and the large-result test in
+`ResultsGridTests`. `WorkspaceScreenshotTour` writes local three-theme captures under the spec's
+`baseline/after/`; exclude it and `SiteScreenshotTour` from routine SC-008 runs. Release notes:
+`doc/WEB/workspace-041-release-notes.md`. Run browser suites serially after all Debug builds finish;
+rebuilding an engine while its sandbox is running locks the DLLs on Windows.
+
+The final spec 041 grid checks include the cell border in auto-fit widths. `GridRowBoundary`
+skips unchanged rows during pointer selection/resize; other renders invalidate all rows.
+If pointer behavior changes, keep its selection/focus/clipped-title state key complete.
+Web semantic `Badge` and `StatusText` tokens provide readable text/fills without
+changing desktop hex values. High contrast uses inverse system colors for highlighted controls.
+`QuickstartAcceptanceTests` covers width persistence, schema/navigation controls and engine loss
+during execution. The baseline distinguishes these automated checks from pending manual variants.
+
+- Spec 041: date edits must be typed in the engine's round-trip form (`2025-10-01T00:00:00.0000000`) until displayed values parse back on commit (tasks.md › Deferred). US6 (T177–T208) passed its automated story gate; final SC-008 comparison has no regressions. Remaining: native browser/Windows-layout shortcuts (T209), full manual quickstart (T215), and product-site screenshots after deployment (T216). The ten-user hallway study awaits participants. See `baseline.md` for results and precise manual variants. `QuerySessionStoreTests.Concurrent_creation_with_same_key_returns_one_session` is historically intermittent; it passed in the 2026-10-10 full engine run.
 
 - Spec 040 (`tasks.md` › Deferred): commands with no handler stay off the menu (Text to SQL, AI Optimize, AI Index Analysis, Generate CRUD Procedures, Find in Results Grid, Split Table); the VSCT menu is still parented to `IDM_VS_MENU_BAR` and invisible in SSMS 22 (the runtime menu is what users see); Format SQL actions lack SQL Prompt's AS-keyword and column-alias options; History's "Record failed executions" / "Encrypt at rest" stay hidden; UI Automation walks only the first row of each group in grouped WPF lists; `ConfigManager.Save` swallows transient I/O errors (flaky `DisableRuleFixActionTests`).
 

@@ -523,3 +523,38 @@ change, and verify the affected path with its established tests and UI checks.
   [download implementation report](reports/site-audit-2026-10-06/04-download-fix.md).
   No deployment or Git mutation. Tracking remains best-effort; direct no-JS/context-menu
   downloads have no beacon. Broader security remediation and desktop telemetry remain pending.
+
+## 2026-10-10 — Spec 041 web workspace continuation
+
+- Current feature: `specs/041-web-ssms-ux-parity/`. US1–US5 were already complete when this
+  continuation resumed T186 and T206–T216. Preserve that staged work; consult the current
+  task ledger and baseline for the final verification state.
+- The earlier web map is superseded in these places: results now use
+  `Shared/ResultsPaneComponent.razor` and `Shared/ResultSetGrid.razor`, with helpers in
+  `Shared/Grid/`; Settings is one routed page with sections in `Shared/Settings/` and
+  contracts/catalog in `Services/Settings/`. IndexedDB is v4 (`workspaceLayout`).
+- The editor has named documents, persisted panel layout, page-scoped keys, server Parse,
+  GO batches, structured Messages and a session-preserving database selector. Engine host
+  identity determines whether styles say “Shared with SSMS” or “On this engine”.
+- Shared web helpers: `akml-ui.js` (dialogs/focus/clipboard/keyboard help),
+  `akml-results-grid.js` (grid pointer/keyboard/measurement), and `akml-workspace.js`
+  (page keys/splitters). Lint gutter markers now expose their existing tooltip on focus.
+- Verification on 2026-10-10: full Engine 2,091 passed; Formatting 1,635; Shell 882;
+  completion corpus unchanged at 1,311/1,343. Full Web E2E: 78 passed, 10 existing skips;
+  final color/screenshot follow-up: 10/10 passed. Web: 1,131 passed with 42 known formatter
+  failures; Core: 1,285 passed with one known failure and three skips. Site: 904;
+  IntelliSense: 25; Node: 97. Release solution build and both theme drift checks passed;
+  SC-008 found no regressions or missing prior passes. Build Debug web and engine before E2E, finish builds
+  before starting sandbox engines, and run browser classes serially. Exclude both screenshot
+  tours from routine suite comparisons.
+- The local workspace screenshot tour captures three themes at 1440×900 and 1100×700.
+  All 90 images were refreshed; nine of the twelve tasks open at resumption are complete.
+  T209, T215 and T216 remain unchecked for the acceptance prerequisites below.
+  Native Windows keyboard/layout checks, the full manual quickstart, the hallway study and
+  post-deployment product-site screenshots are separate acceptance items. No installed application
+  files were changed. The existing full E2E suite also exercises the installed bridge's service
+  restart/reconnect path and restores it to Running; spec 041 browser tests use sandbox engines.
+- Final audit fixes: web-only status-text/badge tokens and inverse high-contrast system colors;
+  auto-fit includes the cell border; `GridRowBoundary` skips unchanged rows on pointer updates;
+  a Live bridge hides stale startup pairing failures. `QuickstartAcceptanceTests` checks schema
+  controls, width persistence and loss of the sandbox engine during execution.

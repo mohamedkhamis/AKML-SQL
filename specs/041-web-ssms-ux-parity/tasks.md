@@ -1215,7 +1215,7 @@ and the grid split.
   - Add `tests/AkmlSql.Web.Tests/History/HistoryDialogTests.cs`: the rename prompt, the delete confirmation, the remove-older confirmation.
   - Add `tests/AkmlSql.Web.Tests/Snippets/SnippetDeleteConfirmTests.cs`.
   - Add a palette `schema:clear` confirmation test in `tests/AkmlSql.Web.Tests/Services/CommandRegistryStateTests.cs`.
-- [ ] T186 [P] [US6] Write `tests/AkmlSql.Web.E2E.Tests/ShellPolishTests.cs` (`BridgeE2E`, `WithSqlOrSkipAsync`), and make the by-design E2E updates (R69, R70).
+- [X] T186 [P] [US6] Write `tests/AkmlSql.Web.E2E.Tests/ShellPolishTests.cs` (`BridgeE2E`, `WithSqlOrSkipAsync`), and make the by-design E2E updates (R69, R70).
   - New suite, covering quickstart §6:
     - toolbar groups and tooltips;
     - the database selector: a switch keeps a `#temp` table, and `USE master` moves the selector;
@@ -1335,7 +1335,7 @@ and the grid split.
   - Every pane uses `.akml-empty` with a next step: Messages before a run; Problems with "No problems found. Run Analyse (Ctrl+K, Ctrl+L)"; History, Snippets and the AI panel when empty. Panes that load also get a loading state.
   - `src/AkmlSql.Web/wwwroot/index.html` boot and crash screens get token-styled classes in `src/AkmlSql.Web/wwwroot/css/app.css`. No inline styles. The Blazor error UI keeps its id and `.reload` link.
   - The spinner uses `app.css` keyframes under the reduced-motion rule.
-- [ ] T206 [US6] Make labels truthful and remove placeholders across `src/AkmlSql.Web/Pages` and `src/AkmlSql.Web/Shared` (FR-090).
+- [X] T206 [US6] Make labels truthful and remove placeholders across `src/AkmlSql.Web/Pages` and `src/AkmlSql.Web/Shared` (FR-090).
   - Audit every `<button>`, menu item and link in `src/AkmlSql.Web/Pages/*.razor` and `src/AkmlSql.Web/Shared/**/*.razor` against this checklist:
     - the label names what its handler does: a button that inserts text says "Insert", not "Copy"; one that downloads says "Save" or "Export";
     - no handler is empty, a TODO, or a stub that only logs;
@@ -1345,7 +1345,7 @@ and the grid split.
     - no commented-out markup block, and no component that no page or layout renders (tests aside).
   - Fix or remove every item that fails.
   - Record the audit list in `specs/041-web-ssms-ux-parity/baseline.md`.
-- [ ] T207 [US6] Pass accessibility and themes over every new surface, fixing tokens in `docs/theme-tokens.json` (FR-091, FR-103, SC-010).
+- [X] T207 [US6] Pass accessibility and themes over every new surface, fixing tokens in `docs/theme-tokens.json` (FR-091, FR-103, SC-010).
   - In High contrast, text on a selected or hovered row uses `--akml-text-onaccent` in grids, tables, menus and tabs.
   - Every new control has a visible focus ring.
   - Hover-only information also shows on keyboard focus and dismisses with Escape: toolbar tooltips via `title` + `aria-describedby`, the column type, the cell value, and the analyser message (CodeMirror lint tooltip on keyboard focus of the line marker).
@@ -1353,7 +1353,7 @@ and the grid split.
   - Touch: measure the hit areas (splitters 12 px, column resizers 8 px, edge strips 24 px) at 100 % and 150 % zoom, and with Playwright's `hasTouch` emulation drag one splitter and one column edge. Nothing may depend on hover alone (spec Edge Cases, "Touch pointer").
   - Measure the WCAG AA contrast of every new token pair in Light, Dark and High contrast, and record the ratios in `baseline.md`.
   - Fix any failure in `docs/theme-tokens.json` and regenerate both theme folders.
-- [ ] T208 [US6] Story gate: run the US6 suites and quickstart §6, then `scripts/compare-test-results.ps1`.
+- [X] T208 [US6] Story gate: run the US6 suites and quickstart §6, then `scripts/compare-test-results.ps1`.
   - Run `tests/AkmlSql.Engine.Tests` (`Handlers`, `Execution`, `InProcess`), `tests/AkmlSql.Core.Tests`, `tests/AkmlSql.Web.Tests` (`Shell/*`, `Bridge/*`, `Styles/*`, `Theme/*`, `History/*`, `Snippets/*`, `Cache/*`) and the node tests.
   - Publish the Debug engine, then run `ShellPolishTests` and the updated `FormatStylesTests` / `FormatStylesSharedEngineTests`.
   - Walk quickstart §6 in all three themes with reduced motion on. Run the compare script against T003.
@@ -1371,23 +1371,23 @@ and the grid split.
   - With a Polish (Programmers) keyboard layout, typing ó and ń in the editor still works (AltGr arrives as Ctrl+Alt).
   - Record a browser × key table in `specs/041-web-ssms-ux-parity/baseline.md`.
   - For a key a browser keeps, add an alternative binding to `src/AkmlSql.Web/Services/WorkspaceKeyMap.cs` and show it in the View menu and palette (FR-049(b)). `ShortcutCollisionTests` must stay green.
-- [ ] T210 [P] Add the performance and sizing checks to `tests/AkmlSql.Web.E2E.Tests/ResultsGridTests.cs` (SC-001, SC-009, FR-102, edge case "200 columns").
+- [X] T210 [P] Add the performance and sizing checks to `tests/AkmlSql.Web.E2E.Tests/ResultsGridTests.cs` (SC-001, SC-009, FR-102, edge case "200 columns").
   - A 1,000-row × 30-column result has its tracks set within 1 s of `execute-complete`, measured with `performance.now()` marks.
   - In the same result, no rendered cell in a column narrower than the 480 px maximum has `scrollWidth > clientWidth`, checked at the top, middle and bottom of the scroll range (SC-001).
   - On a 50-column result, a drag-resize and a drag-select produce no long task over 100 ms (`PerformanceObserver('longtask')`).
   - Auto-fit completes on a 200-column result.
   - Record the numbers in `baseline.md`.
-- [ ] T211 [P] Create `tests/AkmlSql.Web.E2E.Tests/WorkspaceScreenshotTour.cs` (untagged, and excluded from SC-008 by name like `SiteScreenshotTour`).
+- [X] T211 [P] Create `tests/AkmlSql.Web.E2E.Tests/WorkspaceScreenshotTour.cs` (untagged, and excluded from SC-008 by name like `SiteScreenshotTour`).
   - Capture the editor, Results, Messages, Problems, each Settings section, History and Snippets in Light, Dark and High contrast at 1440 × 900 and 1100 × 700.
   - Write the images to `specs/041-web-ssms-ux-parity/baseline/after/` for comparison with `baseline/*.png`.
-- [ ] T212 [P] Finish the documentation: check `doc/progress.md` and `CLAUDE.md` against the shipped stories (each story gate already updated them), and add the release notes.
+- [X] T212 [P] Finish the documentation: check `doc/progress.md` and `CLAUDE.md` against the shipped stories (each story gate already updated them), and add the release notes.
   - `doc/progress.md`: the spec 041 entry has the per-phase task table and the table from this file's "Deferred" section.
   - `CLAUDE.md`: web-structure notes for `Shared/Grid`, `Shared/Settings`, `Services/Settings`, the three new JS modules and IndexedDB v4; the "spec 041" line in "Latest merged work".
   - Release notes for two expected effects:
     - users with two app tabs open see the "upgrade is blocked" message once after the update (N26);
     - developer builds show the web/engine version-mismatch marker (N29).
-- [ ] T213 Confirm the ratchets did not move. `tests/AkmlSql.Formatting.Tests` (format-parity goldens) and `CorpusGateTests` (completion corpus) must report the same numbers as T003. This feature does not touch the formatter pipeline or the completion engine.
-- [ ] T214 Run the final SC-008 comparison with `scripts/compare-test-results.ps1`.
+- [X] T213 Confirm the ratchets did not move. `tests/AkmlSql.Formatting.Tests` (format-parity goldens) and `CorpusGateTests` (completion corpus) must report the same numbers as T003. This feature does not touch the formatter pipeline or the completion engine.
+- [X] T214 Run the final SC-008 comparison with `scripts/compare-test-results.ps1`.
   - Re-run every suite of T003 into `$env:LOCALAPPDATA\AKML SQL\spec041-tests\after` with `*.after.trx` names.
   - Run `scripts/compare-test-results.ps1 -Before …\before -After …\after -OutDir specs/041-web-ssms-ux-parity/baseline/tests/after`.
   - Complete `baseline.md`:
