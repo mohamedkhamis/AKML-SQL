@@ -1,5 +1,6 @@
 /*
-  Spec 030 — Phase 5. Token-only styling for ResultsGridComponent. No hardcoded chrome hex —
+  Spec 030 — Phase 5; spec 041. Token-only styling for the results pane (ResultsPaneComponent,
+  ResultSetGrid, MessagesView, CellValueDialog). No hardcoded chrome hex —
   every surface/border/text colour reads an --akml-* token; only the semantic CRUD status colours
   (--akml-status-warning/success/danger) are intentional (they read the same in every theme).
   The grid body is DIV-based (role=grid) so Blazor <Virtualize> works (it cannot live in <tbody>).
@@ -8,64 +9,23 @@
 .akml-results-pane {
     display: flex;
     flex-direction: column;
-    min-height: 0;                 /* lets the grid shrink inside the flex-column page */
-    height: 38%;
-    max-height: 55%;
+    flex: 1 1 auto;
+    min-height: 0;                 /* fills the workspace's results area (spec 041 R33); the splitter sizes it */
+    height: 100%;
     border-top: 1px solid var(--akml-border-default);
     background-color: var(--akml-surface-panel);
     overflow: hidden;
 }
 
-/* ── Header / tabs ─────────────────────────────────────────────────────────── */
-.akml-results-header {
-    display: flex;
-    align-items: center;
-    gap: var(--akml-scalar-spacing-s);
-    padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-    border-bottom: 1px solid var(--akml-border-subtle);
-    background-color: var(--akml-surface-elevated);
-    flex: 0 0 auto;
-}
-.akml-results-tabs { display: flex; gap: var(--akml-scalar-spacing-xs); }
-.akml-results-tab {
-    font-family: var(--akml-type-chrome-family);
-    font-size: var(--akml-type-chrome-size);
-    background: transparent;
-    color: var(--akml-text-secondary);
-    border: 1px solid transparent;
-    border-radius: var(--akml-scalar-radius-xs);
-    padding: 2px var(--akml-scalar-spacing-s);
-    cursor: pointer;
-}
-.akml-results-tab:hover { background-color: var(--akml-surface-hover); }
-.akml-results-tab.active {
-    color: var(--akml-text-primary);
-    border-color: var(--akml-accent-primary);
-    background-color: var(--akml-surface-selection);
-}
-.akml-results-spacer { flex: 1 1 auto; }
-.akml-results-stat { color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
-
 /* ── Banners ───────────────────────────────────────────────────────────────── */
-.akml-results-error,
 .akml-results-warning {
     padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
     font-size: var(--akml-type-chrome-size);
     border-bottom: 1px solid var(--akml-border-subtle);
+    color: var(--akml-status-warning);
 }
-.akml-results-error { color: var(--akml-status-danger); }
-.akml-results-warning { color: var(--akml-status-warning); }
-
-/* ── Messages pane ─────────────────────────────────────────────────────────── */
-.akml-results-messages {
-    flex: 1 1 auto;
-    overflow: auto;
-    padding: var(--akml-scalar-spacing-s);
-    font-family: var(--akml-type-editorgrid-family);
-    font-size: var(--akml-type-editorgrid-size);
-    color: var(--akml-text-primary);
-}
-.akml-results-message { white-space: pre-wrap; line-height: 1.5; }
+.akml-results-spacer { flex: 1 1 auto; }
+.akml-results-stat { color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
 
 /* ── Legend (CRUD glyph chips — a11y: state is glyph + colour, never colour alone) ── */
 .akml-results-legend {
@@ -83,60 +43,162 @@
 .akml-legend-chip.akml-row-deleted { color: var(--akml-status-danger); box-shadow: none; }
 
 /* ── Grid ──────────────────────────────────────────────────────────────────── */
+/* Spec 041 (R1): every row is a CSS grid over ONE track list, --akml-grid-cols, written inline on the
+   grid root from GridColumnLayout (row-number track first). Header, virtualised body rows and new rows
+   share it, so column widths never reflow while scrolling, resizing the window or toggling panels, and
+   the grid scrolls horizontally with the sticky header aligned (FR-006/FR-007). */
 .akml-results-grid {
     flex: 1 1 auto;
     overflow: auto;
     font-family: var(--akml-type-editorgrid-family);
     font-size: var(--akml-type-editorgrid-size);
     color: var(--akml-text-primary);
+    outline: none;
 }
+.akml-results-grid:focus-visible { box-shadow: inset 0 0 0 2px var(--akml-border-focus); }
 .akml-results-virtualbody { display: block; }
 
 .akml-results-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--akml-grid-cols, 36px);
+    width: max-content;
+    min-width: 100%;          /* row highlights span the full scrolled width */
     border-bottom: 1px solid var(--akml-border-subtle);
     min-height: 24px;
+    user-select: none;        /* a drag selects cells, not text */
 }
 .akml-results-row:hover { background-color: var(--akml-surface-hover); }
 .akml-results-headerrow {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 3;
     background-color: var(--akml-surface-elevated);
     border-bottom: 1px solid var(--akml-border-default);
 }
 .akml-results-headerrow:hover { background-color: var(--akml-surface-elevated); }
 
 .akml-results-cell {
-    flex: 1 0 120px;
-    min-width: 80px;
+    min-width: 0;
     padding: 2px var(--akml-scalar-spacing-s);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     border-right: 1px solid var(--akml-border-subtle);
 }
+/* A cell brought into view by the keyboard stops below the sticky header, not under it. */
+.akml-results-cell[data-r] { scroll-margin-top: 28px; }
+/* Row numbers stay at the left edge while the grid scrolls sideways, as in SSMS. The surface is opaque
+   (the translucent selection fill is layered on top of it) so scrolled cells never show through. */
 .akml-results-rowmarker {
-    flex: 0 0 28px;
-    min-width: 28px;
-    text-align: center;
-    color: var(--akml-text-secondary);
-    padding: 0;
-}
-.akml-results-colheader {
+    position: sticky;
+    left: 0;
+    z-index: 2;
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    text-align: right;
+    color: var(--akml-text-secondary);
+    padding: 0 4px 0 2px;
+    background-color: var(--akml-surface-sidebar);
+    cursor: default;
+    user-select: none;
+}
+.akml-rownum { font-family: var(--akml-type-editorgrid-family); }
+.akml-results-corner { cursor: pointer; }
+.akml-results-colheader {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
     color: var(--akml-text-secondary);
     font-family: var(--akml-type-chrome-family);
+    cursor: pointer;
+    user-select: none;
+    padding-right: 10px;     /* room for the resize handle */
 }
-.akml-col-name { color: var(--akml-text-primary); font-weight: 600; }
-.akml-col-type { color: var(--akml-text-secondary); font-size: 10px; }
+.akml-col-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.akml-col-name { color: var(--akml-text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.akml-col-type { color: var(--akml-text-secondary); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Sort control (FR-012): separate from the header click, which selects the column. */
+.akml-col-sort {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    padding: 1px;
+    color: var(--akml-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--akml-scalar-radius-xs);
+    cursor: pointer;
+    opacity: 0.45;
+}
+.akml-results-colheader:hover .akml-col-sort,
+.akml-col-sort.is-sorted { opacity: 1; }
+.akml-col-sort.is-sorted { color: var(--akml-accent-primary); }
+
+/* Resize handle (FR-003): an 8 px strip on the header's right edge. */
+.akml-col-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+.akml-col-resizer:hover,
+.akml-resizing .akml-col-resizer:active { background-color: var(--akml-border-splitterhover); }
+.akml-resizing,
+.akml-resizing * { user-select: none; cursor: col-resize; }
+
+/* Selection (FR-008/FR-010). High contrast pairs the selection fill with HighlightText (FR-091). */
+.akml-cell-selected { background-color: var(--akml-surface-selection); }
+.akml-results-colheader.akml-cell-selected { background-color: var(--akml-surface-selection); color: var(--akml-text-primary); }
+.akml-results-rowmarker.akml-cell-selected {
+    background-color: var(--akml-surface-sidebar);
+    background-image: linear-gradient(var(--akml-surface-selection), var(--akml-surface-selection));
+    color: var(--akml-text-primary);
+}
+[data-akml-theme="high-contrast"] .akml-cell-selected { background-color: var(--akml-surface-selectionstrong); color: var(--akml-text-onaccent); }
+.akml-cell-focus { box-shadow: inset 0 0 0 1px var(--akml-border-focus); }
+.akml-results-grid:focus .akml-cell-focus { box-shadow: inset 0 0 0 2px var(--akml-border-focus); }
+
+/* Values: NULL and engine-cut values are muted; an invalid edit is marked by an outline AND a glyph. */
+.akml-cell-cut { color: var(--akml-text-secondary); font-style: italic; }
+.akml-cell-invalid { box-shadow: inset 0 0 0 2px var(--akml-status-danger); }
+.akml-cell-invalid-glyph { color: var(--akml-status-danger); margin-right: 2px; }
+.akml-row-glyph { flex: 0 0 auto; }
+.akml-row-edited .akml-row-glyph { color: var(--akml-status-warning); }
+.akml-row-new .akml-row-glyph { color: var(--akml-status-success); }
+.akml-row-deleted .akml-row-glyph { color: var(--akml-status-danger); }
+
+/* Keyboard tooltip for a cell whose value the column hides (FR-103): pinned to the grid's bottom edge. */
+.akml-cell-tooltip {
+    position: sticky;
+    left: 0;
+    bottom: 0;
+    z-index: 2;
+    max-width: 640px;
+    max-height: 6.5em;
+    overflow: hidden;
+    padding: 4px 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--akml-text-primary);
+    background-color: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-strong);
+    border-radius: var(--akml-scalar-radius-xs);
+}
 
 .akml-cell-null { color: var(--akml-text-secondary); font-style: italic; }
 .akml-cell-editable { cursor: cell; }
 .akml-cell-editable:hover { background-color: var(--akml-surface-selection); }
 
+.akml-cell-editing { padding: 0 1px; }
 .akml-cell-input {
+    user-select: text;
     width: 100%;
     box-sizing: border-box;
     font-family: var(--akml-type-editorgrid-family);
@@ -148,15 +210,26 @@
     padding: 0 2px;
 }
 
+/* The delete / restore button overlays the glyph corner of the row number and shows on hover (pointer
+   users only — it is out of the tab order; the keyboard uses Delete on the row number, or the menu). */
 .akml-rowmarker-btn {
-    background: transparent;
+    position: absolute;
+    left: 1px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    padding: 1px;
+    background-color: var(--akml-surface-sidebar);
     border: none;
+    border-radius: var(--akml-scalar-radius-xs);
     color: var(--akml-text-secondary);
     cursor: pointer;
-    font-size: 12px;
-    line-height: 22px;
+    opacity: 0;
 }
-.akml-rowmarker-btn:hover { color: var(--akml-text-primary); }
+.akml-results-row:hover .akml-rowmarker-btn,
+.akml-rowmarker-btn:focus-visible { opacity: 1; }
+.akml-rowmarker-btn:hover { color: var(--akml-text-primary); background-color: var(--akml-surface-hover); }
 
 /* CRUD tints — inset LEFT edge-bar (semantic colour) so it works on any theme; the legend
    glyph carries the meaning for colour-blind users. */
@@ -178,6 +251,13 @@
     flex: 0 0 auto;
 }
 .akml-results-truncated { color: var(--akml-status-warning); font-size: var(--akml-type-chrome-size); }
+.akml-results-blocked {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--akml-status-danger);
+    font-size: var(--akml-type-chrome-size);
+}
 
 /* ── Apply bar (connmgr footer idiom) ──────────────────────────────────────── */
 .akml-results-applybar {
@@ -206,3 +286,99 @@
 .akml-results-pane .akml-connmgr-btn-primary { border-color: var(--akml-accent-primary); }
 .akml-results-pane .akml-connmgr-msg-ok { color: var(--akml-status-success); font-size: var(--akml-type-chrome-size); }
 .akml-results-pane .akml-connmgr-msg-error { color: var(--akml-status-danger); font-size: var(--akml-type-chrome-size); }
+
+/* ── View value (CellValueDialog) ──────────────────────────────────────────── */
+.akml-cellvalue-type { color: var(--akml-text-secondary); font-family: var(--akml-type-editorgrid-family); font-size: var(--akml-type-chrome-size); }
+/* Scoped under the dialog: shell.css's .akml-textarea (same specificity) loads later. */
+.akml-dialog .akml-cellvalue-text {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 240px;
+    max-height: 60vh;
+    resize: vertical;
+    white-space: pre-wrap;
+    font-family: var(--akml-type-editorgrid-family);
+    font-size: var(--akml-type-editorgrid-size);
+}
+.akml-cellvalue-status { margin-right: auto; color: var(--akml-status-success); font-size: var(--akml-type-chrome-size); }
+
+/* ── Messages tab (MessagesView, spec 041 FR-022/FR-023) ───────────────────── */
+.akml-messages {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: var(--akml-scalar-spacing-s);
+    font-family: var(--akml-type-editorgrid-family);
+    font-size: var(--akml-type-editorgrid-size);
+    color: var(--akml-text-primary);
+}
+.akml-messages-line { white-space: pre-wrap; line-height: 1.5; }
+.akml-messages-line--error { color: var(--akml-status-danger); }
+.akml-messages-line--system,
+.akml-messages-line--completion { color: var(--akml-text-secondary); }
+.akml-messages-line--completion { margin-top: var(--akml-scalar-spacing-s); }
+.akml-messages-error {
+    display: inline;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    white-space: pre-wrap;
+    color: var(--akml-status-danger);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline dotted;
+}
+.akml-messages-error:hover { text-decoration: underline; }
+
+/* ── Results pane (ResultsPaneComponent, spec 041 R34) ─────────────────────── */
+.akml-results-pane > .akml-tabs { flex: 0 0 auto; }
+.akml-results-content { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.akml-results-stale { opacity: 0.55; }
+.akml-results-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.akml-results-panel[hidden] { display: none; }
+.akml-results-emptystate {
+    margin: auto;
+    padding: var(--akml-scalar-spacing-l);
+    color: var(--akml-text-secondary);
+    font-size: var(--akml-type-chrome-size);
+    text-align: center;
+}
+.akml-results-running { display: inline-flex; align-items: center; gap: var(--akml-scalar-spacing-xs); color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
+.akml-results-running-note { color: var(--akml-text-secondary); font-style: italic; }
+.akml-results-jump {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--akml-scalar-spacing-xs);
+    padding: 2px var(--akml-scalar-spacing-s);
+    border-bottom: 1px solid var(--akml-border-subtle);
+    flex: 0 0 auto;
+}
+.akml-results-jump-btn {
+    min-width: 24px;
+    padding: 0 var(--akml-scalar-spacing-xs);
+    font: inherit;
+    font-size: var(--akml-type-chrome-size);
+    color: var(--akml-text-primary);
+    background-color: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-default);
+    border-radius: var(--akml-scalar-radius-xs);
+    cursor: pointer;
+}
+.akml-results-jump-btn:hover { background-color: var(--akml-surface-hover); }
+/* One set fills the pane; stacked sets each get a share and the stack scrolls (FR-021). */
+.akml-results-sets { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.akml-results-set { position: relative; display: flex; flex-direction: column; flex: 0 0 auto; max-height: 22rem; min-height: 6rem; }
+.akml-results-set + .akml-results-set { border-top: 2px solid var(--akml-border-default); }
+.akml-results-set:only-child { flex: 1 1 auto; max-height: none; min-height: 0; }
+.akml-results-set-header {
+    margin: 0;
+    padding: 2px var(--akml-scalar-spacing-s);
+    font-family: var(--akml-type-chrome-family);
+    font-size: var(--akml-type-chrome-size);
+    font-weight: 600;
+    color: var(--akml-text-secondary);
+    background-color: var(--akml-surface-elevated);
+    border-bottom: 1px solid var(--akml-border-subtle);
+}

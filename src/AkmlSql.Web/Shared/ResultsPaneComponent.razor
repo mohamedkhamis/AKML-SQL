@@ -1,0 +1,267 @@
+@*
+    Spec 041 (research R34, X6, FR-020, FR-021, FR-029, FR-033, FR-034) — the results pane: Results, Messages and
+    Problems tabs that are always there; "Run a query to see results here (F5)" before any run; a running
+    indicator with the elapsed time (the previous results stay, dimmed, until the new ones arrive); every result
+    set stacked under its own header, each a ResultSetGrid with its own pending edits, Apply and Discard; the
+    Messages view; the Problems list with a badge that counts what its filters let through.
+
+    The page owns the result and which tab shows (ActiveTab is two-way): Results after a run with sets and no
+    error, else Messages (FR-020); Problems after an Analyse with findings (FR-034). All three panels stay
+    mounted — hiding one keeps its grids' pending edits. Styles: components/results-grid.css.
+*@
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@using Microsoft.Extensions.DependencyInjection
+@implements IAsyncDisposable
+@inject IServiceProvider Services
+@inject IJSRuntime JS
+
+<div class="akml-results-pane" data-testid="results-pane" aria-busy="@(IsRunning ? "true" : null)">
+    <TabStrip Tabs="Tabs" ActiveId="@ActiveTab" ActiveIdChanged="OnTabChanged" AriaLabel="Results pane"
+              IdPrefix="@IdPrefix" Name="results">
+        <Trailing>
+            @if (IsRunning)
+            {
+                <span class="akml-results-running" data-testid="results-running" role="status">
+                    <Icon Name="loader-circle" Size="14" Class="akml-spin" />
+                    <span>Executing @ElapsedText</span>
+                    <span class="akml-results-running-note">A running statement can't be interrupted.</span>
+                </span>
+            }
+            else if (Result != null)
+            {
+                <span class="akml-results-stat" data-testid="results-elapsed">@Result.ElapsedMs.ToString("N0", Inv) ms</span>
+                @if (Result.TotalRowsAffected > 0)
+                {
+                    <span class="akml-results-stat" data-testid="results-affected">@Result.TotalRowsAffected.ToString("N0", Inv) affected</span>
+                }
+            }
+        </Trailing>
+    </TabStrip>
+
+    @if (Result?.ConnectionWasReset == true)
+    {
+        <div class="akml-results-warning" role="alert" data-testid="results-conn-reset">
+            The connection was reopened — any #temp tables, SET options or USE state from earlier runs were lost.
+        </div>
+    }
+
+    <div class="akml-results-content @(IsRunning ? "akml-results-stale" : null)" data-testid="results-content">
+        <div class="akml-results-panel" role="tabpanel" id="@TabStrip.PanelId(IdPrefix, ResultsTab)"
+             aria-labelledby="@TabStrip.TabId(IdPrefix, ResultsTab)" data-testid="results-panel-results"
+             hidden="@(ActiveTab != ResultsTab)">
+            @if (Result == null)
+            {
+                @if (!IsRunning)
+                {
+                    <div class="akml-empty akml-results-emptystate" data-testid="results-empty">Run a query to see results here (F5)</div>
+                }
+            }
+            else if (Sets.Length == 0)
+            {
+                <div class="akml-empty akml-results-emptystate" data-testid="results-no-sets">
+                    The query did not return any rows to show here. Its messages are on the Messages tab.
+                </div>
+            }
+            else
+            {
+                @if (Sets.Length > JumpThreshold)
+                {
+                    <nav class="akml-results-jump" aria-label="Jump to result">
+                        <span class="akml-results-stat">Jump to</span>
+                        @for (int i = 0; i < Sets.Length; i++)
+                        {
+                            var n = i;
+                            <button type="button" class="akml-results-jump-btn" data-testid="@($"results-jump-{n}")"
+                                    title="@($"Result {n + 1}")" @onclick="() => JumpAsync(n)">@(n + 1)</button>
+                        }
+                    </nav>
+                }
+                <div class="akml-results-sets">
+                    @for (int i = 0; i < Sets.Length; i++)
+                    {
+                        var n = i;
+                        var set = Sets[n];
+                        <section class="akml-results-set" data-testid="@($"results-set-{n}")" aria-label="@($"Result {n + 1}")"
+                                 @ref="_sections[n]">
+                            @if (Sets.Length > 1)
+                            {
+                                <h3 class="akml-results-set-header" data-testid="@($"results-set-header-{n}")">@SetHeader(n, set)</h3>
+                            }
+                            else
+                            {
+                                <h3 class="akml-results-set-header akml-visually-hidden" data-testid="@($"results-set-header-{n}")">@SetHeader(n, set)</h3>
+                            }
+                            <ResultSetGrid @ref="_grids[n]" Set="set" SetIndex="n" OnApplied="OnApplied"
+                                           DocumentName="@DocumentName" FallbackCatalog="@Result?.CurrentDatabase" ShowColumnTypes="ShowColumnTypes"
+                                           RetainLineBreaksOnCopy="RetainLineBreaksOnCopy"
+                                           ApplyTestIdSuffix="@(Sets.Length > 1 ? $"-{n}" : null)" />
+                        </section>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="akml-results-panel" role="tabpanel" id="@TabStrip.PanelId(IdPrefix, MessagesTab)"
+             aria-labelledby="@TabStrip.TabId(IdPrefix, MessagesTab)" data-testid="results-panel-messages"
+             hidden="@(ActiveTab != MessagesTab)">
+            @if (Result != null)
+            {
+                <MessagesView Result="Result" SelectionStartLine="SelectionStartLine" ReceivedAt="ReceivedAt" OnNavigate="OnNavigateToLine" />
+            }
+            else if (!IsRunning)
+            {
+                <div class="akml-empty akml-results-emptystate" data-testid="messages-empty">Messages from the next run appear here. Run a query (F5).</div>
+            }
+        </div>
+
+        <div class="akml-results-panel" role="tabpanel" id="@TabStrip.PanelId(IdPrefix, ProblemsTab)"
+             aria-labelledby="@TabStrip.TabId(IdPrefix, ProblemsTab)" data-testid="results-panel-problems"
+             hidden="@(ActiveTab != ProblemsTab)">
+            <ProblemsListComponent Findings="Findings" ShowHeader="false" OnVisibleCountChanged="OnProblemsCountChanged"
+                                   AnalysisEnabled="AnalysisEnabled" OnEnableAnalysis="OnEnableAnalysis" DefaultFilter="ProblemsDefaultFilter"
+                                   OnJumpToIssue="OnJumpToIssue" OnSuppressLine="OnSuppressLine" OnSuppressGlobal="OnSuppressGlobal" />
+        </div>
+    </div>
+</div>
+
+@code {
+    public const string ResultsTab = "results";
+    public const string MessagesTab = "messages";
+    public const string ProblemsTab = "problems";
+
+    private const string IdPrefix = "akml-results";
+    private const int JumpThreshold = 5;
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+
+    /// <summary>The last execute (or parse); null before the first.</summary>
+    [Parameter] public ExecuteQueryResult? Result { get; set; }
+
+    /// <summary>A query is running: the indicator shows and the previous results are marked stale.</summary>
+    [Parameter] public bool IsRunning { get; set; }
+
+    [Parameter] public string ActiveTab { get; set; } = ResultsTab;
+    [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
+
+    /// <summary>The analyser's findings for the Problems tab.</summary>
+    [Parameter] public CodeAnalysisResponse? Findings { get; set; }
+
+    /// <summary>Analysis is on; off hides the Problems badge and the Problems tab offers to turn it on.</summary>
+    [Parameter] public bool AnalysisEnabled { get; set; } = true;
+
+    /// <summary>Spec 041 (FR-034): "Turn on" in the Problems tab while analysis is off.</summary>
+    [Parameter] public EventCallback OnEnableAnalysis { get; set; }
+
+    /// <summary>Spec 041 (R51): the Problems tab's severity filters when it first opens.</summary>
+    [Parameter] public ProblemsFilter? ProblemsDefaultFilter { get; set; }
+
+    [Parameter] public EventCallback<ProblemsListComponent.IssueLocation> OnJumpToIssue { get; set; }
+    [Parameter] public EventCallback<ProblemsListComponent.IssueLocation> OnSuppressLine { get; set; }
+    [Parameter] public EventCallback<ProblemsListComponent.IssueLocation> OnSuppressGlobal { get; set; }
+
+    /// <summary>The document line the executed text started on (error lines map from it).</summary>
+    [Parameter] public int SelectionStartLine { get; set; } = 1;
+
+    /// <summary>When <see cref="Result"/> arrived (the completion time an older engine does not send).</summary>
+    [Parameter] public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.Now;
+
+    /// <summary>An error message was clicked: the document line it points at.</summary>
+    [Parameter] public EventCallback<int> OnNavigateToLine { get; set; }
+
+    /// <summary>A set's Apply succeeded (the page may re-run the query).</summary>
+    [Parameter] public EventCallback OnApplied { get; set; }
+
+    [Parameter] public string? DocumentName { get; set; }
+    [Parameter] public bool ShowColumnTypes { get; set; }
+    [Parameter] public bool RetainLineBreaksOnCopy { get; set; }
+
+    private ResultSetGrid?[] _grids = Array.Empty<ResultSetGrid?>();
+    private ElementReference[] _sections = Array.Empty<ElementReference>();
+    private int _problemsCount;
+    private IWorkspaceStatus? _workspace;
+    private System.Threading.Timer? _elapsedTimer;
+    private IJSObjectReference? _ui;
+
+    private ExecuteResultSet[] Sets => Result?.ResultSets ?? Array.Empty<ExecuteResultSet>();
+
+    /// <summary>True while any set holds edits not yet applied (FR-015).</summary>
+    public bool HasPendingEdits => _grids.Any(g => g?.HasPendingEdits == true);
+
+    /// <summary>The pending changes of every set together.</summary>
+    public int PendingEditCount => _grids.Sum(g => g?.PendingEditCount ?? 0);
+
+    private IReadOnlyList<TabItem> Tabs => new[]
+    {
+        new TabItem(ResultsTab, "Results", TestId: "results-tab-results"),
+        new TabItem(MessagesTab, "Messages", TestId: "results-tab-messages",
+            BadgeKind: ErrorCount > 0 ? "error" : null, Badge: ErrorCount > 0 ? ErrorCount.ToString(Inv) : null),
+        new TabItem(ProblemsTab, "Problems", TestId: "results-tab-problems",
+            Badge: AnalysisEnabled && _problemsCount > 0 ? _problemsCount.ToString(Inv) : null,
+            BadgeTestId: "results-problems-badge"),
+    };
+
+    private int ErrorCount => Result?.MessageDetails?.Count(m => m.Kind == ExecuteMessageKind.Error) ?? 0;
+
+    private string ElapsedText =>
+        TimeSpan.FromMilliseconds(_workspace?.ElapsedMs ?? 0).ToString(@"hh\:mm\:ss", Inv);
+
+    private static string SetHeader(int n, ExecuteResultSet set)
+    {
+        int rows = set.Rows?.Length ?? 0;
+        string count = rows.ToString("N0", Inv) + (rows == 1 ? " row" : " rows");
+        return set.Truncated ? $"Result {n + 1} ({count} returned; more exist)" : $"Result {n + 1} ({count})";
+    }
+
+    protected override void OnInitialized()
+    {
+        _workspace = Services.GetService<IWorkspaceStatus>();
+        if (_workspace != null)
+        {
+            _workspace.Changed += OnWorkspaceChanged;
+            _elapsedTimer = new System.Threading.Timer(_ => _ = InvokeAsync(StateHasChanged), null,
+                System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        int n = Sets.Length;
+        if (_grids.Length != n) _grids = new ResultSetGrid?[n];
+        if (_sections.Length != n) _sections = new ElementReference[n];
+        _elapsedTimer?.Change(IsRunning ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
+    }
+
+    private void OnWorkspaceChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task OnTabChanged(string tab)
+    {
+        ActiveTab = tab;
+        await ActiveTabChanged.InvokeAsync(tab);
+    }
+
+    private void OnProblemsCountChanged(int count) => _problemsCount = count;
+
+    private async Task JumpAsync(int n)
+    {
+        if (n < 0 || n >= _sections.Length) return;
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            if (_ui != null) await _ui.InvokeVoidAsync("scrollToElement", _sections[n]);
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_workspace != null) _workspace.Changed -= OnWorkspaceChanged;
+        _elapsedTimer?.Dispose();
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

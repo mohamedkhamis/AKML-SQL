@@ -17,21 +17,25 @@
 @inject IProfileStore Store
 @inject IFormatterService Formatter
 @inject IJSRuntime JS
+@inject IDialogService Dialogs
 
 <PageTitle>Format styles — AKML SQL</PageTitle>
 
 <div class="akml-styles" data-testid="styles-page">
-    <div class="akml-styles-header">
-        <h2>Format styles</h2>
+    @* Spec 041 (T203, FR-085): the one page header; the storage line stays beside the title. *@
+    <div class="akml-page-header akml-styles-header" data-testid="page-header">
+        <h1 class="akml-page-title" data-testid="page-title">Format styles</h1>
         <span class="akml-styles-where" data-testid="styles-location">
-            @(Store.EngineStylesAvailable ? "New styles are saved on the engine, shared with SSMS." : "No engine paired: styles are saved in this browser.")
+            @(Store.EngineStylesAvailable ? (EngineSharedWithSsms ? "New styles are saved on the engine, shared with SSMS." : "New styles are saved on the engine.") : "No engine paired: styles are saved in this browser.")
         </span>
-        <span class="akml-styles-spacer"></span>
-        <button class="akml-tool-button" @onclick="NewStyleAsync" data-testid="style-new">New</button>
-        <label class="akml-tool-button" data-testid="style-import-label">
-            Import SQL Prompt style
-            <InputFile OnChange="ImportAsync" accept=".json" class="akml-hidden-file" data-testid="style-import" />
-        </label>
+        <span class="akml-page-spacer"></span>
+        <div class="akml-page-actions" data-testid="page-actions">
+            <button type="button" class="akml-btn" @onclick="NewStyleAsync" data-testid="style-new">New</button>
+            <label class="akml-btn" data-testid="style-import-label">
+                Import SQL Prompt style
+                <InputFile OnChange="ImportAsync" accept=".json" class="akml-hidden-file" data-testid="style-import" />
+            </label>
+        </div>
     </div>
 
     @if (Store.EngineStylesError is { } engineError)
@@ -110,25 +114,25 @@
                         <span class="akml-styles-dirty" data-testid="style-dirty">unsaved changes</span>
                     }
                     <span class="akml-styles-spacer"></span>
-                    <button class="akml-tool-button primary" @onclick="SaveAsync" disabled="@(!_dirty && _selectedId != null)" data-testid="style-save">Save</button>
-                    <button class="akml-tool-button" @onclick="SaveAsAsync" data-testid="style-saveas">Save as…</button>
+                    <button class="akml-btn akml-btn--primary" @onclick="SaveAsync" disabled="@(!_dirty && _selectedId != null)" title="@(!_dirty && _selectedId != null ? "No unsaved changes to save" : null)" data-testid="style-save">Save</button>
+                    <button class="akml-btn" @onclick="SaveAsAsync" data-testid="style-saveas">Save as…</button>
                     @if (_dirty)
                     {
-                        <button class="akml-tool-button" @onclick="DiscardAsync" data-testid="style-discard">Discard changes</button>
+                        <button class="akml-btn" @onclick="DiscardAsync" data-testid="style-discard">Discard changes</button>
                     }
                     @if (_selectedId != null && _selectedId != _activeId)
                     {
-                        <button class="akml-tool-button" @onclick="SetActiveAsync" data-testid="style-set-active">Use in editor</button>
+                        <button class="akml-btn" @onclick="SetActiveAsync" data-testid="style-set-active">Use in editor</button>
                     }
-                    <button class="akml-tool-button" @onclick="ExportAsync" data-testid="style-export">Export .json</button>
+                    <button class="akml-btn" @onclick="ExportAsync" data-testid="style-export">Export .json</button>
                     @if (Selected is { } sel && sel.Origin != ProfileOrigin.BuiltIn)
                     {
-                        <button class="akml-tool-button" @onclick="RenameAsync" data-testid="style-rename">Rename</button>
-                        <button class="akml-tool-button danger" @onclick="DeleteAsync" data-testid="style-delete">Delete</button>
+                        <button class="akml-btn" @onclick="RenameAsync" data-testid="style-rename">Rename</button>
+                        <button class="akml-btn akml-btn--destructive" @onclick="DeleteAsync" data-testid="style-delete">Delete</button>
                     }
                     @if (Selected is { IsCustomizedBuiltIn: true })
                     {
-                        <button class="akml-tool-button" @onclick="ResetAsync" data-testid="style-reset">Reset to built-in</button>
+                        <button class="akml-btn" @onclick="ResetAsync" data-testid="style-reset">Reset to built-in</button>
                     }
                 </div>
 
@@ -161,17 +165,17 @@
                                         @switch (option.Kind)
                                         {
                                             case SqlPromptOptionKind.Boolean:
-                                                <input id="@Id(option)" type="checkbox" checked="@(value == "true")" disabled="@(!enabled)"
+                                                <input id="@Id(option)" type="checkbox" checked="@(value == "true")" disabled="@(!enabled)" title="@(enabled ? null : GateTitle(option))"
                                                        data-testid="option-@option.Path"
                                                        @onchange="e => ChangeBool(option, e)" />
                                                 break;
                                             case SqlPromptOptionKind.Integer:
-                                                <input id="@Id(option)" type="number" min="@option.Min" max="@option.Max" value="@NumberShown(option, value)" disabled="@(!enabled)"
+                                                <input id="@Id(option)" type="number" min="@option.Min" max="@option.Max" value="@NumberShown(option, value)" disabled="@(!enabled)" title="@(enabled ? null : GateTitle(option))"
                                                        data-testid="option-@option.Path"
                                                        @onchange="e => ChangeNumberAsync(option, e.Value?.ToString() ?? option.Default)" />
                                                 break;
                                             default:
-                                                <select id="@Id(option)" value="@value" disabled="@(!enabled)" data-testid="option-@option.Path"
+                                                <select id="@Id(option)" value="@value" disabled="@(!enabled)" title="@(enabled ? null : GateTitle(option))" data-testid="option-@option.Path"
                                                         @onchange="e => Change(option, e.Value?.ToString() ?? option.Default)">
                                                     @foreach (var choice in option.Choices)
                                                     {
@@ -182,8 +186,9 @@
                                         }
                                         @if (changed)
                                         {
-                                            <button class="akml-option-reset" title="Back to SQL Prompt's default (@DefaultLabel(option))"
-                                                    data-testid="reset-@option.Path" @onclick="() => Change(option, option.Default)">↺</button>
+                                            <button type="button" class="akml-option-reset" title="Back to SQL Prompt's default (@DefaultLabel(option))"
+                                                    aria-label="@($"Reset {option.Label} to SQL Prompt's default")"
+                                                    data-testid="reset-@option.Path" @onclick="() => Change(option, option.Default)"><Icon Name="rotate-ccw" Size="12" /></button>
                                         }
                                     </div>
                                     <div class="akml-option-help">
@@ -203,10 +208,11 @@
                     </div>
 
                     <div class="akml-styles-preview">
-                        <div class="akml-preview-tabs" role="tablist">
-                            <button class="@(_mySql ? "" : "selected")" role="tab" data-testid="preview-sample" @onclick="() => SetPreviewSource(false)">@current.Label sample</button>
-                            <button class="@(_mySql ? "selected" : "")" role="tab" data-testid="preview-mysql" @onclick="() => SetPreviewSource(true)">My SQL</button>
-                        </div>
+                        @* Spec 041 (R58, FR-070): the one tab strip. The panels below carry its ids. *@
+                        <TabStrip Tabs="@PreviewTabs(current.Label)" ActiveId="@(_mySql ? "mysql" : "sample")" ActiveIdChanged="@(id => SetPreviewSource(id == "mysql"))"
+                                  AriaLabel="Preview" IdPrefix="preview" Name="preview" Class="akml-preview-tabs" />
+                        <div role="tabpanel" id="@TabStrip.PanelId("preview", _mySql ? "mysql" : "sample")"
+                             aria-labelledby="@TabStrip.TabId("preview", _mySql ? "mysql" : "sample")" class="akml-preview-panel">
                         @if (_mySql)
                         {
                             <textarea class="akml-preview-input" spellcheck="false" placeholder="Paste SQL to preview with this style"
@@ -216,6 +222,7 @@
                         <pre class="akml-preview-output" data-testid="preview" aria-live="polite">@foreach (var (line, moved) in _previewLines)
 {<span class="@(moved ? "moved" : null)">@(line + NewLine)</span>}</pre>
                         <div class="akml-preview-status" data-testid="preview-status">@_previewStatus</div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -225,29 +232,28 @@
 
 <style>
     .akml-styles { display: flex; flex-direction: column; height: 100%; font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); color: var(--akml-text-primary); }
-    .akml-styles-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m); background-color: var(--akml-surface-panel); border-bottom: 1px solid var(--akml-border-default); flex-wrap: wrap; }
-    .akml-styles-header h2 { margin: 0; font-size: var(--akml-type-chrometitle-size); }
+    .akml-styles-header { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m); }
     .akml-styles-where { color: var(--akml-text-secondary); font-size: 12px; }
     .akml-styles-spacer { flex: 1 1 auto; }
     .akml-styles-status { margin: 0; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-status-info); }
-    .akml-styles-status.error { color: var(--akml-status-error, #c42b1c); }
+    .akml-styles-status.error { color: var(--akml-status-danger); }
     .akml-styles-body { flex: 1 1 auto; display: grid; grid-template-columns: 220px 190px 1fr; min-height: 0; }
     .akml-styles-list, .akml-styles-tree { display: flex; flex-direction: column; overflow: auto; background-color: var(--akml-surface-panel); border-right: 1px solid var(--akml-border-default); }
     .akml-styles-group, .akml-styles-category { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m) 2px; color: var(--akml-text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
     .akml-styles-row, .akml-styles-page { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: transparent; border: 0; color: inherit; font: inherit; padding: 5px var(--akml-scalar-spacing-m); cursor: pointer; }
     .akml-styles-row:hover, .akml-styles-page:hover { background-color: var(--akml-surface-hover); }
-    .akml-styles-row.selected, .akml-styles-page.selected { background-color: var(--akml-surface-hover); box-shadow: inset 3px 0 0 var(--akml-accent, #0e639c); }
+    .akml-styles-row.selected, .akml-styles-page.selected { background-color: var(--akml-surface-hover); box-shadow: inset 3px 0 0 var(--akml-accent-primary); }
     .akml-styles-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-styles-badge { font-size: 10px; padding: 0 5px; border-radius: 8px; border: 1px solid var(--akml-border-default); color: var(--akml-text-secondary); }
-    .akml-styles-badge.active { color: var(--akml-text-onaccent); background-color: var(--akml-accent, #0e639c); border-color: transparent; }
+    .akml-styles-badge.active { color: var(--akml-text-onaccent); background-color: var(--akml-accent-primary); border-color: transparent; }
     .akml-styles-badge.muted { opacity: 0.8; }
     .akml-styles-page span:first-child { flex: 1 1 auto; }
-    .akml-styles-count { font-size: 10px; min-width: 16px; text-align: center; border-radius: 8px; background-color: var(--akml-accent, #0e639c); color: var(--akml-text-onaccent); }
+    .akml-styles-count { font-size: 10px; min-width: 16px; text-align: center; border-radius: 8px; background-color: var(--akml-accent-primary); color: var(--akml-text-onaccent); }
     .akml-styles-empty { grid-column: 2 / span 2; padding: var(--akml-scalar-spacing-l, 24px); color: var(--akml-text-secondary); }
     .akml-styles-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
     .akml-styles-toolbar { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m); border-bottom: 1px solid var(--akml-border-default); flex-wrap: wrap; }
     .akml-styles-title { font-size: 14px; }
-    .akml-styles-dirty { color: var(--akml-status-warning, #b8860b); font-size: 12px; }
+    .akml-styles-dirty { color: var(--akml-status-warning); font-size: 12px; }
     .akml-styles-notice { margin: 0; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-text-secondary); background-color: var(--akml-surface-panel); border-bottom: 1px solid var(--akml-border-subtle); }
     .akml-styles-split { flex: 1 1 auto; display: grid; grid-template-columns: minmax(300px, 420px) 1fr; min-height: 0; }
     .akml-styles-options { overflow: auto; padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-m); border-right: 1px solid var(--akml-border-default); }
@@ -262,19 +268,13 @@
     .akml-option-reset { background: transparent; border: 0; color: var(--akml-text-secondary); cursor: pointer; font-size: 14px; }
     .akml-option-help { grid-column: 1 / span 2; color: var(--akml-text-secondary); font-size: 11px; }
     .akml-styles-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-    .akml-preview-tabs { display: flex; gap: 2px; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m) 0; }
-    .akml-preview-tabs button { background: transparent; border: 1px solid transparent; border-bottom: 0; color: var(--akml-text-secondary); padding: 4px 10px; font: inherit; cursor: pointer; }
-    .akml-preview-tabs button.selected { color: var(--akml-text-primary); border-color: var(--akml-border-default); background-color: var(--akml-surface-panel); }
+    .akml-preview-tabs { padding: 0 var(--akml-scalar-spacing-m); }
+    .akml-preview-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .akml-preview-input { margin: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m) 0; min-height: 90px; resize: vertical; font-family: var(--akml-type-editor-family); background-color: var(--akml-surface-input); color: var(--akml-text-primary); border: 1px solid var(--akml-border-default); }
     .akml-preview-output { flex: 1 1 auto; margin: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); padding: var(--akml-scalar-spacing-s); overflow: auto; font-family: var(--akml-type-editor-family); font-size: 13px; line-height: 1.45; background-color: var(--akml-surface-input); border: 1px solid var(--akml-border-default); tab-size: @_tabSize; white-space: pre; }
-    .akml-preview-output .moved { background-color: color-mix(in srgb, var(--akml-accent, #0e639c) 22%, transparent); }
+    .akml-preview-output .moved { background-color: color-mix(in srgb, var(--akml-accent-primary) 22%, transparent); }
     .akml-preview-status { padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); font-size: 12px; }
     .akml-hidden-file { display: none; }
-    .akml-tool-button { font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); background-color: var(--akml-surface-panel); color: var(--akml-text-primary); border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs); padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer; }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
-    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
-    .akml-tool-button.primary { border-color: var(--akml-accent, #0e639c); }
-    .akml-tool-button.danger:hover { color: var(--akml-status-error, #c42b1c); }
     @@media (max-width: 900px) {
         /* minmax(0, 1fr), not 1fr: a 1fr track never shrinks below its widest content (a long
            preview line, a style name), so the one-column layout was wider than the phone. */
@@ -341,7 +341,7 @@
         var browserBuiltIn = _styles.Where(s => s.Location == ProfileLocation.Browser && s.Origin == ProfileOrigin.BuiltIn).ToList();
         var browserMine = _styles.Where(s => s.Location == ProfileLocation.Browser && s.Origin != ProfileOrigin.BuiltIn).ToList();
         var engine = _styles.Where(s => s.Location == ProfileLocation.Engine).ToList();
-        if (engine.Count > 0) yield return ("Shared with SSMS", engine);
+        if (engine.Count > 0) yield return (Store.EngineStylesGroupName, engine);   // spec 041 (FR-063): truthful
         if (browserBuiltIn.Count > 0) yield return ("Built-in", browserBuiltIn);
         if (browserMine.Count > 0) yield return ("In this browser", browserMine);
     }
@@ -364,7 +364,7 @@
     /// </summary>
     private async Task<bool> SelectAsync(string id, bool discardEdits = false)
     {
-        if (!discardEdits && _dirty && id != _selectedId && !await ConfirmAsync("Discard the unsaved changes to this style?")) return false;
+        if (!discardEdits && _dirty && id != _selectedId && !await ConfirmDiscardAsync()) return false;
         (SqlPromptStyleDocument Document, ProfileRecord Record)? opened;
         try
         {
@@ -401,6 +401,12 @@
         _previousPreview = Array.Empty<string>();
         RenderPreview(markChanges: false);
     }
+
+    private static IReadOnlyList<TabItem> PreviewTabs(string sampleLabel) => new[]
+    {
+        new TabItem("sample", $"{sampleLabel} sample", TestId: "preview-sample"),
+        new TabItem("mysql", "My SQL", TestId: "preview-mysql"),
+    };
 
     private void SetPreviewSource(bool mySql)
     {
@@ -446,6 +452,12 @@
         option.EnabledWhen is not { } gate || _document!.Get(gate.Path) == gate.Value;
 
     private static string Id(SqlPromptOption option) => "opt-" + option.Path.Replace('.', '-');
+
+    // Spec 041 (T206, FR-090): a disabled option says which switch turns it on.
+    private static string? GateTitle(SqlPromptOption option) =>
+        option.EnabledWhen is { } gate && SqlPromptOptionCatalog.Options.FirstOrDefault(o => o.Path == gate.Path) is { } master
+            ? $"Applies when “{master.Label}” is {ValueLabel(master.Path, gate.Value)}"
+            : null;
 
     private static string DefaultLabel(SqlPromptOption option) => ValueLabel(option.Path, option.Default);
 
@@ -512,8 +524,8 @@
 
     private async Task NewStyleAsync()
     {
-        if (_dirty && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
-        var name = await PromptAsync("Name for the new style (it starts from SQL Prompt's defaults):", UniqueName("My style"));
+        if (_dirty && !await ConfirmDiscardAsync()) return;
+        var name = await PromptNameAsync("New style", "It starts from SQL Prompt's defaults.", UniqueName("My style"), "Create");
         if (string.IsNullOrWhiteSpace(name)) return;
         await CreateAsync(SqlPromptStyleDocument.CreateDefault(name.Trim()));
     }
@@ -560,7 +572,7 @@
     private async Task SaveAsAsync()
     {
         if (_document == null) return;
-        var name = await PromptAsync("Save a copy of this style as:", UniqueName(_document.Name + " copy"));
+        var name = await PromptNameAsync("Save style as", "Save a copy of this style as:", UniqueName(_document.Name + " copy"), "Save");
         if (string.IsNullOrWhiteSpace(name)) return;
         var copy = _document.Clone();
         copy.Name = name.Trim();
@@ -588,7 +600,7 @@
     private async Task RenameAsync()
     {
         if (_selectedId == null || _document == null) return;
-        var name = await PromptAsync("New name for the style:", _document.Name);
+        var name = await PromptNameAsync("Rename style", $"New name for “{_document.Name}”:", _document.Name, "Rename");
         if (string.IsNullOrWhiteSpace(name) || name.Trim() == _document.Name) return;
         try
         {
@@ -616,7 +628,13 @@
     private async Task DeleteAsync()
     {
         if (_selectedId == null || _document == null) return;
-        if (!await ConfirmAsync($"Delete the style “{_document.Name}”? This cannot be undone.")) return;
+        if (!await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete style",
+            Message = $"Delete the style “{_document.Name}”? This cannot be undone.",
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        })) return;
         try
         {
             var name = _document.Name;
@@ -639,7 +657,13 @@
     private async Task ResetAsync()
     {
         if (_selectedId == null || _document == null) return;
-        if (!await ConfirmAsync($"Discard your edits to the built-in style “{_document.Name}”?")) return;
+        if (!await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Reset style",
+            Message = $"Discard your edits to the built-in style “{_document.Name}”?",
+            ConfirmLabel = "Reset",
+            Destructive = true,
+        })) return;
         try
         {
             await Store.ResetAsync(_selectedId);
@@ -656,7 +680,7 @@
     private async Task ImportAsync(InputFileChangeEventArgs e)
     {
         // The imported style is opened in place of this one, exactly like New.
-        if (_dirty && !await ConfirmAsync("Discard the unsaved changes to this style?")) return;
+        if (_dirty && !await ConfirmDiscardAsync()) return;
         var file = e.File;
         if (file.Size > MaxImportBytes)
         {
@@ -701,8 +725,12 @@
         return name;
     }
 
-    private static string Where(ProfileRecord record) =>
-        record.Location == ProfileLocation.Engine ? " on the engine (shared with SSMS)" : " in this browser";
+    // Spec 041 (R29, FR-084): "shared with SSMS" only when SSMS started the engine.
+    private bool EngineSharedWithSsms => Store.EngineStylesGroupName == ProfileStore.EngineStylesGroupNameFor("ide");
+
+    private string Where(ProfileRecord record) =>
+        record.Location != ProfileLocation.Engine ? " in this browser"
+        : EngineSharedWithSsms ? " on the engine (shared with SSMS)" : " on the engine";
 
     /// <summary>
     /// A failed store action, for the status line. Every failure is reported there — an engine
@@ -717,17 +745,25 @@
         _statusIsError = error;
     }
 
-    private async Task<bool> ConfirmAsync(string message)
+    // Spec 041 (R59, FR-086): asked in the app; a dialog that cannot be shown answers "no" — never a silent yes.
+    private Task<bool> ConfirmDiscardAsync() => Dialogs.ConfirmAsync(new DialogRequest
     {
-        try { return await JS.InvokeAsync<bool>("confirm", message); }
-        catch (JSException) { return true; }
-    }
+        Title = "Unsaved changes",
+        Message = "Discard the unsaved changes to this style?",
+        ConfirmLabel = "Discard",
+        Destructive = true,
+    });
 
-    private async Task<string?> PromptAsync(string message, string suggestion)
-    {
-        try { return await JS.InvokeAsync<string?>("prompt", message, suggestion); }
-        catch (JSException) { return suggestion; }
-    }
+    private Task<string?> PromptNameAsync(string title, string message, string suggestion, string confirmLabel) =>
+        Dialogs.PromptAsync(new PromptRequest
+        {
+            Title = title,
+            Message = message,
+            Label = "Name",
+            InitialValue = suggestion,
+            ConfirmLabel = confirmLabel,
+            Validate = value => string.IsNullOrWhiteSpace(value) ? "Enter a name." : null,
+        });
 
     public async ValueTask DisposeAsync()
     {

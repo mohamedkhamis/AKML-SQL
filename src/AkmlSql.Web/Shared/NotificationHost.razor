@@ -1,0 +1,60 @@
+@*
+    Spec 041 (research R60, FR-086) — the notification area: a bottom-right stack of toasts for transient
+    status messages. Mounted once in MainLayout; position:fixed, so it adds no in-flow row to the layout's
+    three-row grid. Information and success are polite status messages; errors are alerts and stay until
+    closed. Never uses the reserved error-banner test id. Styles: .akml-toast* in components/shell.css.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject INotificationService Notifications
+
+@{ var visible = Notifications.Visible; }
+@if (visible.Count > 0)
+{
+    <div class="akml-toast-stack" data-testid="toast-stack">
+        @foreach (var note in visible)
+        {
+            var id = note.Id;
+            var isError = note.Kind == NotificationKind.Error;
+            <div class="akml-toast" data-testid="toast" data-kind="@KindName(note.Kind)"
+                 role="@(isError ? "alert" : "status")" aria-live="@(isError ? "assertive" : "polite")"
+                 @key="id" @onkeydown="@(e => OnKeyDown(e, id))">
+                <Icon Name="@IconName(note.Kind)" />
+                <span class="akml-toast-text">@note.Text</span>
+                <button type="button" class="akml-btn akml-btn--icon akml-btn--ghost" data-testid="toast-close"
+                        aria-label="Dismiss" title="Dismiss" @onclick="@(() => Notifications.Dismiss(id))">
+                    <Icon Name="x" Size="14" />
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Notifications.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnKeyDown(KeyboardEventArgs e, int id)
+    {
+        if (e.Key == "Escape") Notifications.Dismiss(id);
+    }
+
+    private static string KindName(NotificationKind kind) => kind switch
+    {
+        NotificationKind.Success => "success",
+        NotificationKind.Warning => "warning",
+        NotificationKind.Error => "error",
+        _ => "info",
+    };
+
+    private static string IconName(NotificationKind kind) => kind switch
+    {
+        NotificationKind.Success => "circle-check",
+        NotificationKind.Warning => "triangle-alert",
+        NotificationKind.Error => "circle-alert",
+        _ => "info",
+    };
+
+    public void Dispose() => Notifications.Changed -= OnChanged;
+}

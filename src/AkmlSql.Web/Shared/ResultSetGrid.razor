@@ -1,0 +1,1800 @@
+@*
+    Spec 041 (research R1–R9, R11, R14, R15, X6) — ONE result set's grid: header, virtualised body, row
+    numbers, spreadsheet selection, copy, sort, column widths, menus, View value, Save results, and inline
+    CRUD (edits / inserts / deletes, keyed by FETCHED row index) with that set's own Apply / Discard bar. A
+    stacked results pane gives every set its own grid, so each keeps its own pending edits, Apply, widths
+    and sort (FR-015, FR-021).
+
+    Coordinates: a DISPLAY row is a position on screen and _rowIndexes maps it to the FETCHED row. A sort
+    permutes _rowIndexes only, so pending edits, deletes, the Apply request and the results-cell-{r}-{c} /
+    results-row-{r} test ids stay on the fetched row (FR-016); data-r on a cell is its display row.
+
+    Focus: the grid root is the only tab stop (role=grid, aria-activedescendant), so focus never sits on an
+    element Virtualize may remove. Interop (wwwroot/js/akml-results-grid.js) does only what JS must: column
+    drag, drag-select, cell presses (no Blazor handler per cell), the context-menu event, canvas measurement
+    and cancelling the browser default of the grid's keys. Everything else lives here. CRUD state is an edge
+    bar PLUS a glyph, never colour alone. All chrome reads --akml-* tokens (components/results-grid.css).
+*@
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Core.Text
+@using AkmlSql.Web.Services
+@using AkmlSql.Web.Shared.Grid
+@using Microsoft.Extensions.DependencyInjection
+@implements IAsyncDisposable
+
+@{
+    var set = Set;
+    int colCount = set.ColumnNames.Length;
+    _selectedColumns = new HashSet<int>(_selection.SelectedColumns());
+    var tooltip = TooltipText;
+}
+@* CRUD legend — only when the set is editable. Each chip pairs a glyph with the colour. *@
+@if (set.IsEditable)
+{
+    <div class="akml-results-legend" data-testid="results-legend">
+        <span class="akml-legend-chip akml-row-edited"><Icon Name="pencil" Size="12" /> edited</span>
+        <span class="akml-legend-chip akml-row-new"><Icon Name="plus" Size="12" /> new</span>
+        <span class="akml-legend-chip akml-row-deleted"><Icon Name="x" Size="12" /> deleted</span>
+        <span class="akml-results-spacer"></span>
+        <button type="button" class="akml-btn" data-testid="results-add-row"
+                @onclick="AddNewRow" title="Add a new row"><Icon Name="plus" Size="12" /> Row</button>
+    </div>
+}
+
+<div class="akml-results-grid" role="grid" data-testid="results-grid" tabindex="0"
+     aria-label="@($"Result {SetIndex + 1}")" aria-multiselectable="true"
+     aria-readonly="@(set.IsEditable ? null : "true")"
+     aria-rowcount="@(set.Rows.Length + 1 + _inserts.Count)" aria-colcount="@(colCount + 1)"
+     aria-activedescendant="@ActiveDescendantId"
+     style="@($"--akml-grid-cols:{_layout.ToCssTracks()}")"
+     @ref="_root" @onkeydown="OnGridKeyDownAsync">
+    @* Header row (aria-rowindex 1; data rows start at 2). *@
+    <div class="akml-results-row akml-results-headerrow" role="row" aria-rowindex="1">
+        <div class="akml-results-cell akml-results-rowmarker akml-results-corner @(_selection.IsAll ? "akml-cell-selected" : null)"
+             role="columnheader" data-testid="results-corner" title="Select all"
+             @onmousedown="OnCornerMouseDown"></div>
+        @for (int c = 0; c < colCount; c++)
+        {
+            var col = c;
+            bool headerFocus = _area == FocusArea.Header && _headerCol == col;
+            <div id="@HeaderId(col)" class="@HeaderClass(col, headerFocus)" role="columnheader"
+                 data-testid="@($"results-col-{col}")" data-header-c="@col"
+                 title="@HeaderTitle(col)" aria-sort="@AriaSort(col)"
+                 aria-describedby="@(headerFocus && tooltip != null ? TooltipId : null)"
+                 @onmousedown="e => OnHeaderMouseDown(col, e)">
+                <span class="akml-col-text">
+                    <span class="akml-col-name">@ColumnLabel(col)</span>
+                    @if (ShowColumnTypes)
+                    {
+                        <span class="akml-col-type" data-testid="@($"results-col-type-{col}")">@DeclaredType(col)</span>
+                    }
+                </span>
+                <button type="button" class="akml-col-sort @(_sortCol == col ? "is-sorted" : null)" tabindex="-1"
+                        aria-label="Sort" title="@SortTitle(col)" data-testid="@($"results-sort-{col}")"
+                        @onmousedown:stopPropagation="true" @onclick="() => CycleSort(col)" @onclick:stopPropagation="true">
+                    @if (_sortCol == col && !_sortDesc)
+                    {
+                        <Icon Name="arrow-up" Size="12" />
+                    }
+                    else if (_sortCol == col)
+                    {
+                        <Icon Name="arrow-down" Size="12" />
+                    }
+                    else
+                    {
+                        <Icon Name="arrow-up-down" Size="12" />
+                    }
+                </button>
+                <span class="akml-col-resizer" data-col="@col" data-testid="@($"results-col-resizer-{col}")" aria-hidden="true"
+                      @onmousedown:stopPropagation="true"
+                      @ondblclick="() => AutoFitColumnAsync(col)" @ondblclick:stopPropagation="true"></span>
+            </div>
+        }
+    </div>
+
+    @* Body — virtualized only above the threshold (mirrors SchemaTreeComponent). Both branches iterate
+       DISPLAY positions; RenderRow maps each to its fetched row through _rowIndexes. *@
+    @if (set.Rows.Length > VirtualizeThreshold)
+    {
+        <div class="akml-results-virtualbody" data-testid="results-virtualized">
+            <Virtualize Items="@_positions" Context="d" ItemSize="25">
+                @RenderRow(d, tooltip)
+            </Virtualize>
+        </div>
+    }
+    else
+    {
+        @for (int d = 0; d < _rowIndexes.Length; d++)
+        {
+            @RenderRow(d, tooltip)
+        }
+    }
+
+    @* New rows ALWAYS render after the body — OUTSIDE the virtualize branch, so they are visible and
+       editable on large sets too (a <Virtualize> body only renders fetched rows). *@
+    @for (int i = 0; i < _inserts.Count; i++)
+    {
+        @RenderInsertRow(i)
+    }
+
+    @* The focused cell's value when the column hides it, or the focused header's type (FR-103). Escape
+       dismisses it; pointer users get the same text from the cell's title. *@
+    @if (tooltip != null)
+    {
+        <div class="akml-cell-tooltip" role="tooltip" id="@TooltipId" data-testid="results-cell-tooltip">@tooltip</div>
+    }
+</div>
+
+@* Footer: row count + truncation banner + apply result message. *@
+<div class="akml-results-footer">
+    <span class="akml-results-stat" data-testid="results-rowcount">
+        showing @set.Rows.Length row@(set.Rows.Length == 1 ? "" : "s")
+    </span>
+    @if (set.Truncated)
+    {
+        <span class="akml-results-truncated" data-testid="results-truncated">
+            result capped (~@(set.RowsOmitted)+ rows omitted) — raise Max rows to fetch more
+        </span>
+    }
+    @* The apply result message lives HERE, not in the apply-bar: a SUCCESSFUL apply clears the pending
+       edits, which removes the apply-bar entirely, so the confirmation must render in the always-present
+       footer to be seen at all (PR #247 follow-up). A FAILED apply keeps the pending edits and shows the
+       error here too, above the apply-bar. *@
+    @if (!string.IsNullOrEmpty(_applyMessage))
+    {
+        <span class="@(_applyOk ? "akml-connmgr-msg-ok" : "akml-connmgr-msg-error")"
+              data-testid="results-apply-message">@_applyMessage</span>
+    }
+</div>
+
+@* Apply bar — only when there are pending edits. RUN-IMMEDIATELY (no confirm); blocked while a cell is
+   invalid (FR-014), and the bar says why. *@
+@if (set.IsEditable && HasPendingEdits)
+{
+    var invalid = InvalidCellCount;
+    <div class="akml-results-applybar" data-testid="results-applybar">
+        <span class="akml-results-stat">@PendingEditCount pending change@(PendingEditCount == 1 ? "" : "s")</span>
+        @if (invalid > 0)
+        {
+            <span class="akml-results-blocked" role="status" data-testid="results-apply-blocked">
+                <Icon Name="circle-alert" Size="12" /> @Plural(invalid, "cell") @(invalid == 1 ? "needs" : "need") a value: enter one or set NULL.
+            </span>
+        }
+        <span class="akml-results-spacer"></span>
+        <button type="button" class="akml-btn" data-testid="@($"results-discard{ApplyTestIdSuffix}")"
+                @onclick="DiscardEditsAsync" disabled="@_applying">Discard</button>
+        <button type="button" class="akml-btn akml-btn--primary" data-testid="@($"results-apply{ApplyTestIdSuffix}")"
+                title="@(invalid > 0 ? "Some cells need a value before the changes can be applied." : null)"
+                @onclick="ApplyEditsAsync" disabled="@(_applying || invalid > 0)">@(_applying ? "Applying…" : "Apply")</button>
+    </div>
+}
+
+@if (_menu != null)
+{
+    <ContextMenu Items="_menu.Items" X="_menu.X" Y="_menu.Y" OnClose="CloseMenu"
+                 TestId="@(_menu.Header ? "results-header-menu" : "results-context-menu")"
+                 AriaLabel="@(_menu.Header ? "Column" : "Results")" />
+}
+
+@if (_viewValue != null)
+{
+    <CellValueDialog ColumnName="@_viewValue.Column" DeclaredType="@_viewValue.Type" AllowsNull="_viewValue.AllowsNull"
+                     Value="@_viewValue.Value" IsEngineCut="_viewValue.IsEngineCut" IsBinary="_viewValue.IsBinary"
+                     OnClose="CloseViewValue" />
+}
+
+@code {
+    [Inject] private IQueryExecutionService QueryExec { get; set; } = default!;
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private IServiceProvider Services { get; set; } = default!;
+
+    /// <summary>The result set this grid shows. A different set (a new execution, another tab) starts
+    /// afresh: pending edits, widths, sort and selection belong to the set they were made on.</summary>
+    [Parameter, EditorRequired] public ExecuteResultSet Set { get; set; } = default!;
+
+    /// <summary>The set's position in its batch (0-based).</summary>
+    [Parameter] public int SetIndex { get; set; }
+
+    /// <summary>Raised after a successful Apply so the page can re-run the query to refresh the grid.</summary>
+    [Parameter] public EventCallback OnApplied { get; set; }
+
+    /// <summary>The document the result came from; names the files Save results writes.</summary>
+    [Parameter] public string? DocumentName { get; set; }
+
+    /// <summary>Spec 041 (R27): the database the set's run was in (its reply's <c>CurrentDatabase</c>) — Apply writes
+    /// there when the set carries no base catalog, so a later <c>USE</c> never redirects an older grid's edits.</summary>
+    [Parameter] public string? FallbackCatalog { get; set; }
+
+    /// <summary>Show each column's declared type as a second header line (FR-011; off by default).</summary>
+    [Parameter] public bool ShowColumnTypes { get; set; }
+
+    /// <summary>Keep line breaks inside values on copy and save (FR-009/FR-030; off, as in SSMS).</summary>
+    [Parameter] public bool RetainLineBreaksOnCopy { get; set; }
+
+    /// <summary>Appended to the Apply / Discard test ids when sets are stacked (<c>results-apply-1</c>).</summary>
+    [Parameter] public string? ApplyTestIdSuffix { get; set; }
+
+    /// <summary>Shift+Alt+Left/Right resize step (FR-003).</summary>
+    public const int ResizeStepPx = 16;
+
+    /// <summary>The file name Save results uses when the document has none.</summary>
+    public const string DefaultDocumentName = "SQLQuery1";
+
+    private const int VirtualizeThreshold = 200;
+    private const int PageRows = 20;
+    private const string InvalidTitle = "Enter a value or set NULL";
+    private const string NoColumnName = "(No column name)";
+
+    private enum FocusArea { Cell, Header, RowNumber }
+
+    private sealed record GridMenu(double X, double Y, bool Header, IReadOnlyList<MenuItem> Items);
+
+    private sealed record CellValueView(string Column, string? Type, bool? AllowsNull, string Value, bool IsEngineCut, bool IsBinary);
+
+    private INotificationService? Notifications => Services.GetService<INotificationService>();
+    private IDialogService? Dialogs => Services.GetService<IDialogService>();
+
+    // ── Per-set state ──────────────────────────────────────────────────────────────────────────────
+    private ExecuteResultSet? _boundSet;
+    private int[] _rowIndexes = Array.Empty<int>();               // display position → fetched row
+    private int[] _positions = Array.Empty<int>();                // 0..n-1, the Virtualize items
+    private SqlTypeName[] _types = Array.Empty<SqlTypeName>();
+    private DisplayValue?[]?[] _displayCache = Array.Empty<DisplayValue?[]?>();   // fetched values only
+    private GridColumnLayout _layout = new(0, 0);
+    private GridSelection _selection = new(0, 0);
+    private HashSet<int> _selectedColumns = new();
+    private FocusArea _area = FocusArea.Cell;
+    private int _headerCol;
+    private bool _pressOnFocused;      // the press landed on the already-focused single cell: its click edits
+    private bool _keyboardFocus;       // the focus last moved by keyboard (the focus tooltip shows)
+    private bool _tooltipDismissed;
+    private (int Display, int Col) _menuCell = (-1, -1);
+    private int _sortCol = -1;
+    private bool _sortDesc;
+
+    // ── Edit tracking, keyed by FETCHED row index ─────────────────────────────────────────────────
+    private readonly Dictionary<int, Dictionary<int, string?>> _edits = new();   // rowIndex -> (colIndex -> new value)
+    private readonly HashSet<int> _deletes = new();                              // deleted fetched rows
+    private readonly List<Dictionary<int, string?>> _inserts = new();            // new rows (colIndex -> value)
+
+    // The inline editor: a fetched cell (_editInsert < 0) or a new row's cell (_editInsert = its index).
+    private int _editRow = -1;
+    private int _editDisplay = -1;
+    private int _editCol = -1;
+    private int _editInsert = -1;
+    private int _editSession;
+    private string _editInitial = string.Empty;
+    private bool _editReplaced;        // started by a printable key, which replaced the value
+
+    private bool _applying;
+    private string? _applyMessage;
+    private bool _applyOk;
+
+    private GridMenu? _menu;
+    private CellValueView? _viewValue;
+
+    // ── Interop ────────────────────────────────────────────────────────────────────────────────────
+    private ElementReference _root;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _ui;
+    private IJSObjectReference? _download;
+    private DotNetObjectReference<ResultSetGrid>? _selfRef;
+    private bool _fitPending;
+    private bool _focusRootPending;
+    private bool _scrollPending;
+    private bool _disposed;
+
+    /// <summary>True while this set holds edits, deletes or new rows not yet applied.</summary>
+    public bool HasPendingEdits => _edits.Count > 0 || _deletes.Count > 0 || _inserts.Count > 0;
+
+    /// <summary>How many pending changes this set holds (edited rows + deletes + new rows).</summary>
+    public int PendingEditCount => _edits.Count + _deletes.Count + _inserts.Count;
+
+    /// <summary>Cells that need a value before Apply can run (FR-014).</summary>
+    public int InvalidCellCount
+    {
+        get
+        {
+            int n = 0;
+            foreach (var (row, cells) in _edits)
+            {
+                if (_deletes.Contains(row)) continue;
+                foreach (var (c, v) in cells) if (IsInvalidValue(c, v)) n++;
+            }
+            for (int i = 0; i < _inserts.Count; i++)
+                for (int c = 0; c < ColumnCount; c++)
+                    if (IsInvalidInsert(i, c)) n++;
+            return n;
+        }
+    }
+
+    private int ColumnCount => Set.ColumnNames.Length;
+    private int RowCount => _rowIndexes.Length;
+    private bool IsEditing => _editCol >= 0;
+    private IReadOnlyList<int> AllColumns => Enumerable.Range(0, ColumnCount).ToArray();
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Set, _boundSet)) return;
+        _boundSet = Set;
+
+        int cols = Set.ColumnNames.Length;
+        _types = new SqlTypeName[cols];
+        for (int c = 0; c < cols; c++) _types[c] = SqlTypeName.Parse(Set.ColumnSqlTypes.ElementAtOrDefault(c));
+        ResetEditState();
+        _sortCol = -1;
+        _sortDesc = false;
+        _menu = null;
+        _viewValue = null;
+        _area = FocusArea.Cell;
+        _headerCol = 0;
+        _keyboardFocus = false;
+        RebuildRowIndexes();
+        _layout = new GridColumnLayout(cols, Set.Rows.Length);
+        // Size by estimate now so the first frame is never unsized; the canvas measurement refines it.
+        FitByEstimate(AllColumns, replaceUser: false);
+        _fitPending = true;
+    }
+
+    private void ResetEditState()
+    {
+        _edits.Clear();
+        _deletes.Clear();
+        _inserts.Clear();
+        EndEdit();
+        _applyMessage = null;
+    }
+
+    /// <summary>The row set changed (a new result, or an Apply baked its changes in): display order back
+    /// to fetched order, a fresh selection and display cache. The sort STATE is kept — callers re-apply it.</summary>
+    private void RebuildRowIndexes()
+    {
+        int n = Set?.Rows.Length ?? 0;
+        _rowIndexes = Enumerable.Range(0, n).ToArray();
+        _positions = Enumerable.Range(0, n).ToArray();
+        _displayCache = new DisplayValue?[]?[n];
+        _selection = new GridSelection(n, Set?.ColumnNames.Length ?? 0);
+    }
+
+    // ── Values ─────────────────────────────────────────────────────────────────────────────────────
+
+    private string? CurrentWire(int row, int col)
+    {
+        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.TryGetValue(col, out var edited)) return edited;
+        var cells = Set.Rows[row];
+        return col < cells.Length ? cells[col] : null;
+    }
+
+    private DisplayValue Format(string? wire, int col, bool fullText) =>
+        SqlValueDisplay.Format(wire, col < _types.Length ? _types[col] : SqlTypeName.Parse(null),
+            Set.ClrTypeHints.ElementAtOrDefault(col), fullText);
+
+    /// <summary>What a cell shows (a large binary value as a preview). Fetched values are formatted once.</summary>
+    private DisplayValue CellDisplay(int row, int col)
+    {
+        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.TryGetValue(col, out var edited)) return Format(edited, col, false);
+        var cache = _displayCache[row] ??= new DisplayValue?[ColumnCount];
+        return cache[col] ??= Format(Set.Rows[row].ElementAtOrDefault(col), col, false);
+    }
+
+    /// <summary>
+    /// The text the grid shows for a cell, at full length: the single accessor copy, Save results and View
+    /// value use (FR-009, FR-026, FR-030). Null for SQL NULL. The inline editor and Apply keep the engine's
+    /// round-trip wire text instead, so editing never loses precision.
+    /// </summary>
+    public string? DisplayText(int row, int col)
+    {
+        var wire = CurrentWire(row, col);
+        return wire == null ? null : Format(wire, col, true).Text;
+    }
+
+    private string ColumnLabel(int c)
+    {
+        var name = Set.ColumnNames[c];
+        return string.IsNullOrEmpty(name) ? NoColumnName : name;
+    }
+
+    private string DeclaredType(int c) => Set.ColumnSqlTypes.ElementAtOrDefault(c) ?? string.Empty;
+
+    private ColumnProvenanceDto? Provenance(int c) => c >= 0 && c < Set.Provenance.Length ? Set.Provenance[c] : null;
+
+    /// <summary>NULL / NOT NULL from provenance, for a column that comes from a table; null otherwise.</summary>
+    private bool? AllowsNull(int c)
+    {
+        var p = Provenance(c);
+        return p != null && !string.IsNullOrEmpty(p.BaseColumnName) ? p.AllowDBNull : null;
+    }
+
+    private string HeaderTitle(int c)
+    {
+        var type = DeclaredType(c);
+        if (string.IsNullOrEmpty(type)) type = TypeHintTitle(c);
+        var nullability = AllowsNull(c) switch { true => ", NULL", false => ", NOT NULL", _ => string.Empty };
+        return $"{ColumnLabel(c)} ({type}{nullability})";
+    }
+
+    private string TypeHintTitle(int col) => Set.ClrTypeHints.ElementAtOrDefault(col) switch
+    {
+        ClrTypeHint.Int64 => "integer",
+        ClrTypeHint.Double => "floating point",
+        ClrTypeHint.Decimal => "decimal",
+        ClrTypeHint.Bool => "bit",
+        ClrTypeHint.DateTime => "date/time",
+        ClrTypeHint.DateTimeOffset => "datetimeoffset",
+        ClrTypeHint.Guid => "uniqueidentifier",
+        ClrTypeHint.Binary => "binary",
+        ClrTypeHint.Variant => "sql_variant",
+        _ => "text",
+    };
+
+    /// <summary>A blank value is an empty string for character types and invalid for every other (FR-014).
+    /// Without a declared type (an older engine) the CLR hint decides.</summary>
+    private bool IsCharacterColumn(int c)
+    {
+        var type = c < _types.Length ? _types[c] : null;
+        if (type != null && type.BaseName.Length > 0) return type.IsCharacter;
+        var hint = Set.ClrTypeHints.ElementAtOrDefault(c);
+        return hint == ClrTypeHint.String || hint == ClrTypeHint.Variant;
+    }
+
+    private bool IsBinaryColumn(int c) =>
+        Set.ClrTypeHints.ElementAtOrDefault(c) == ClrTypeHint.Binary
+        || (c < _types.Length && _types[c].BaseName is "binary" or "varbinary" or "image" or "timestamp" or "rowversion");
+
+    private bool IsInvalidValue(int c, string? value) => value != null && value.Length == 0 && !IsCharacterColumn(c);
+
+    private bool IsInvalidEdit(int row, int c) =>
+        !_deletes.Contains(row) && _edits.TryGetValue(row, out var cells) && cells.TryGetValue(c, out var v) && IsInvalidValue(c, v);
+
+    /// <summary>A new row's cell is invalid when it is blank on a non-character type, or left unset on a NOT
+    /// NULL, non-identity column the user must supply.</summary>
+    private bool IsInvalidInsert(int insIdx, int c)
+    {
+        if (!IsColumnInsertable(c)) return false;
+        if (_inserts[insIdx].TryGetValue(c, out var v)) return IsInvalidValue(c, v);
+        var p = Provenance(c);
+        return p != null && !p.AllowDBNull && !p.IsAutoIncrement;
+    }
+
+    /// <summary>Editable in an EXISTING row: writable, non-identity, AND not a key column — the key is
+    /// the WHERE identity, so editing it would retarget or orphan the row.</summary>
+    private bool IsColumnEditable(int col)
+    {
+        var p = Provenance(col);
+        return p != null && !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement
+            && !p.IsKey && !p.IsTruePrimaryKey
+            && !string.IsNullOrEmpty(p.BaseColumnName);
+    }
+
+    /// <summary>Supplyable on a NEW row: writable + non-identity, INCLUDING a non-identity (natural) key
+    /// the user must provide on insert. (Identity/computed/expression columns are still excluded.)</summary>
+    private bool IsColumnInsertable(int col)
+    {
+        var p = Provenance(col);
+        return p != null && !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement && !string.IsNullOrEmpty(p.BaseColumnName);
+    }
+
+    private bool IsAutoIncrement(int col) => Provenance(col)?.IsAutoIncrement == true;
+
+    private bool IsCellEditable(int row, int col) => Set.IsEditable && IsColumnEditable(col) && !_deletes.Contains(row);
+
+    // ── Rendering helpers ──────────────────────────────────────────────────────────────────────────
+
+    private string IdPrefix => $"akml-grid-{SetIndex}";
+    private string CellId(int d, int c) => $"{IdPrefix}-{d}-{c}";
+    private string RowNumberId(int d) => $"{IdPrefix}-{d}-rn";
+    private string HeaderId(int c) => $"{IdPrefix}-h-{c}";
+    private string TooltipId => $"{IdPrefix}-tip";
+
+    private string? ActiveDescendantId => _area switch
+    {
+        FocusArea.Header => ColumnCount > 0 ? HeaderId(Math.Clamp(_headerCol, 0, ColumnCount - 1)) : null,
+        FocusArea.RowNumber => _selection.IsEmpty ? null : RowNumberId(_selection.Focus.Row),
+        _ => _selection.IsEmpty ? null : CellId(_selection.Focus.Row, _selection.Focus.Col),
+    };
+
+    private string HeaderClass(int c, bool focus) =>
+        "akml-results-cell akml-results-colheader"
+        + (_selectedColumns.Contains(c) ? " akml-cell-selected" : string.Empty)
+        + (focus ? " akml-cell-focus" : string.Empty);
+
+    private string? AriaSort(int c) => _sortCol == c ? (_sortDesc ? "descending" : "ascending") : null;
+
+    private string SortTitle(int c) =>
+        _sortCol != c ? "Sort ascending" : !_sortDesc ? "Sort descending" : "Clear sort";
+
+    /// <summary>The value the column width hides (estimated from its length) — it gets a hover title.</summary>
+    private bool IsCutByWidth(string text, int c) =>
+        text.Length > 0 && GridColumnLayout.EstimatePx(text) + GridColumnLayout.CellPaddingPx > _layout.WidthPx(c);
+
+    private string? CellTitle(DisplayValue v, int c, bool invalid)
+    {
+        if (invalid) return InvalidTitle;
+        if (v.IsEngineCut) return GridCellText.EngineCutTitle;
+        if (v.IsEmptyString) return "(empty string)";
+        return v.IsPreview || IsCutByWidth(v.Text, c) ? GridCellText.Tooltip(v.Text) : null;
+    }
+
+    private string? TooltipText
+    {
+        get
+        {
+            if (!_keyboardFocus || _tooltipDismissed || IsEditing || _menu != null || _viewValue != null) return null;
+            if (_area == FocusArea.Header)
+                return _headerCol >= 0 && _headerCol < ColumnCount ? HeaderTitle(_headerCol) : null;
+            if (_area != FocusArea.Cell || _selection.IsEmpty) return null;
+            var f = _selection.Focus;
+            var v = CellDisplay(_rowIndexes[f.Row], f.Col);
+            if (v.IsEngineCut) return GridCellText.EngineCutTitle;
+            return v.IsPreview || IsCutByWidth(v.Text, f.Col) ? GridCellText.Tooltip(v.Text) : null;
+        }
+    }
+
+    private bool RowHasSelection(int d)
+    {
+        for (int c = 0; c < ColumnCount; c++) if (_selection.IsSelected(d, c)) return true;
+        return false;
+    }
+
+    private RenderFragment RenderRow(int d, string? tooltip) => __builder =>
+    {
+        int r = _rowIndexes[d];
+        bool deleted = _deletes.Contains(r);
+        bool edited = !deleted && _edits.ContainsKey(r);
+        bool rowFocus = _area == FocusArea.RowNumber && !_selection.IsEmpty && _selection.Focus.Row == d;
+        string rowClass = "akml-results-row" + (deleted ? " akml-row-deleted" : edited ? " akml-row-edited" : string.Empty);
+        string markerClass = "akml-results-cell akml-results-rowmarker"
+            + (RowHasSelection(d) ? " akml-cell-selected" : string.Empty)
+            + (rowFocus ? " akml-cell-focus" : string.Empty);
+
+        <div @key="r" class="@rowClass" role="row" data-testid="@($"results-row-{r}")" aria-rowindex="@(d + 2)">
+            <div id="@RowNumberId(d)" class="@markerClass" role="rowheader" data-testid="@($"results-rownum-{r}")"
+                 data-r="@d" data-c="-1" @onmousedown="e => OnRowNumberMouseDown(d, e)">
+                @if (deleted)
+                {
+                    <Icon Name="x" Size="12" Class="akml-row-glyph" Label="Deleted row" />
+                }
+                else if (edited)
+                {
+                    <Icon Name="pencil" Size="12" Class="akml-row-glyph" Label="Edited row" />
+                }
+                <span class="akml-rownum">@(d + 1)</span>
+                @if (Set.IsEditable)
+                {
+                    <button type="button" class="akml-rowmarker-btn" tabindex="-1"
+                            title="@(deleted ? "Restore row" : "Delete row")" aria-label="@(deleted ? "Restore row" : "Delete row")"
+                            data-testid="@($"results-delete-{r}")"
+                            @onmousedown:stopPropagation="true" @onclick="() => ToggleDelete(r)" @onclick:stopPropagation="true">
+                        @if (deleted)
+                        {
+                            <Icon Name="refresh-cw" Size="12" />
+                        }
+                        else
+                        {
+                            <Icon Name="x" Size="12" />
+                        }
+                    </button>
+                }
+            </div>
+            @for (int c = 0; c < ColumnCount; c++)
+            {
+                var col = c;
+                bool editable = IsCellEditable(r, col);
+                bool selected = _selection.IsSelected(d, col);
+                bool focus = _area == FocusArea.Cell && !_selection.IsEmpty && _selection.Focus.Row == d && _selection.Focus.Col == col;
+                if (_editInsert < 0 && _editRow == r && _editCol == col)
+                {
+                    int session = _editSession;
+                    <div id="@CellId(d, col)" class="akml-results-cell akml-cell-editing" role="gridcell" aria-selected="true"
+                         data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col">
+                        <GridCellEditor @key="session" InitialValue="@_editInitial"
+                                        Label="@($"Edit {ColumnLabel(col)}, row {d + 1}")"
+                                        OnDone="@(res => OnEditorDoneAsync(session, res))" />
+                    </div>
+                    continue;
+                }
+                var v = CellDisplay(r, col);
+                bool invalid = IsInvalidEdit(r, col);
+                string cellClass = "akml-results-cell"
+                    + (editable ? " akml-cell-editable" : string.Empty)
+                    + (v.IsNull ? " akml-cell-null" : string.Empty)
+                    + (v.IsEmptyString ? " akml-cell-empty" : string.Empty)
+                    + (v.IsEngineCut ? " akml-cell-cut" : string.Empty)
+                    + (selected ? " akml-cell-selected" : string.Empty)
+                    + (focus ? " akml-cell-focus" : string.Empty)
+                    + (invalid ? " akml-cell-invalid" : string.Empty);
+                if (editable)
+                {
+                    <div id="@CellId(d, col)" class="@cellClass" role="gridcell" aria-selected="@(selected ? "true" : "false")"
+                         aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(focus && tooltip != null ? TooltipId : null)"
+                         title="@CellTitle(v, col, invalid)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col"
+                         @ondblclick="() => BeginEdit(d, col)">
+                        @if (invalid)
+                        {
+                            <span class="akml-cell-invalid-glyph" title="@InvalidTitle" data-testid="@($"results-cell-invalid-{r}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
+                        }
+                        @v.Text
+                    </div>
+                }
+                else
+                {
+                    <div id="@CellId(d, col)" class="@cellClass" role="gridcell" aria-selected="@(selected ? "true" : "false")"
+                         aria-describedby="@(focus && tooltip != null ? TooltipId : null)"
+                         title="@CellTitle(v, col, false)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col">@v.Text</div>
+                }
+            }
+        </div>
+    };
+
+    private RenderFragment RenderInsertRow(int i) => __builder =>
+    {
+        var ins = _inserts[i];
+        <div class="akml-results-row akml-row-new" role="row" data-testid="@($"results-insert-{i}")" aria-rowindex="@(Set.Rows.Length + 2 + i)">
+            <div class="akml-results-cell akml-results-rowmarker" role="rowheader">
+                <Icon Name="plus" Size="12" Class="akml-row-glyph" Label="New row" />
+                <span class="akml-rownum">*</span>
+                <button type="button" class="akml-rowmarker-btn" tabindex="-1" title="Remove new row" aria-label="Remove new row"
+                        data-testid="@($"results-remove-insert-{i}")" @onclick="() => RemoveInsert(i)">
+                    <Icon Name="x" Size="12" />
+                </button>
+            </div>
+            @for (int c = 0; c < ColumnCount; c++)
+            {
+                var col = c;
+                bool insertable = IsColumnInsertable(col);
+                if (_editInsert == i && _editCol == col)
+                {
+                    int session = _editSession;
+                    <div class="akml-results-cell akml-cell-editing" role="gridcell" data-testid="@($"results-insert-cell-{i}-{col}")">
+                        <GridCellEditor @key="session" InitialValue="@_editInitial"
+                                        Label="@($"Edit {ColumnLabel(col)}, new row")"
+                                        OnDone="@(res => OnEditorDoneAsync(session, res))" />
+                    </div>
+                    continue;
+                }
+                bool has = ins.TryGetValue(col, out var value);
+                bool invalid = IsInvalidInsert(i, col);
+                bool auto = IsAutoIncrement(col);
+                // An unset cell inserts NULL (shown so), unless the column must be supplied (invalid, blank).
+                string text = auto ? "(auto)" : has ? Format(value, col, false).Text : invalid ? string.Empty : GridTextFormats.NullText;
+                bool muted = auto || (has ? value == null : !invalid);
+                string cellClass = "akml-results-cell"
+                    + (insertable ? " akml-cell-editable" : string.Empty)
+                    + (muted ? " akml-cell-null" : string.Empty)
+                    + (invalid ? " akml-cell-invalid" : string.Empty);
+                if (insertable)
+                {
+                    <div class="@cellClass" role="gridcell" aria-invalid="@(invalid ? "true" : null)" title="@(invalid ? InvalidTitle : null)"
+                         data-testid="@($"results-insert-cell-{i}-{col}")"
+                         @onclick="() => BeginInsertEdit(i, col)" @ondblclick="() => BeginInsertEdit(i, col)">
+                        @if (invalid)
+                        {
+                            <span class="akml-cell-invalid-glyph" title="@InvalidTitle" data-testid="@($"results-insert-invalid-{i}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
+                        }
+                        @text
+                    </div>
+                }
+                else
+                {
+                    <div class="@cellClass" role="gridcell" data-testid="@($"results-insert-cell-{i}-{col}")">@text</div>
+                }
+            }
+        </div>
+    };
+
+    // ── Pointer ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>A press on a data cell (from akml-results-grid.js — no Blazor handler per cell).</summary>
+    [JSInvokable]
+    public Task OnCellPointerDownFromJs(int displayRow, int col, bool shift, bool ctrl) => InvokeAsync(() =>
+    {
+        if (displayRow < 0 || displayRow >= RowCount || col < 0 || col >= ColumnCount) return;
+        _pressOnFocused = !shift && !ctrl && _area == FocusArea.Cell && _selection.IsSingleCell
+                          && _selection.Focus == new GridCell(displayRow, col);
+        _selection.Click(displayRow, col, shift, ctrl);
+        _area = FocusArea.Cell;
+        _keyboardFocus = false;
+        StateHasChanged();
+    });
+
+    /// <summary>A click on a data cell. A second click on the focused cell edits it (FR-013).</summary>
+    [JSInvokable]
+    public Task OnCellClickFromJs(int displayRow, int col) => InvokeAsync(() =>
+    {
+        bool second = _pressOnFocused;
+        _pressOnFocused = false;
+        if (!second || displayRow < 0 || displayRow >= RowCount || col < 0 || col >= ColumnCount) return;
+        if (IsCellEditable(_rowIndexes[displayRow], col))
+        {
+            BeginEdit(displayRow, col);
+            StateHasChanged();
+        }
+    });
+
+    /// <summary>A drag reached another cell: select the rectangle from the press.</summary>
+    [JSInvokable]
+    public Task OnDragSelectFromJs(int displayRow, int col) => InvokeAsync(() =>
+    {
+        if (RowCount == 0 || ColumnCount == 0) return;
+        _selection.DragTo(displayRow, col);
+        _area = FocusArea.Cell;
+        _pressOnFocused = false;
+        StateHasChanged();
+    });
+
+    /// <summary>A column edge drag ended (FR-003).</summary>
+    [JSInvokable]
+    public Task OnColumnResizedFromJs(int col, int px) => InvokeAsync(() =>
+    {
+        _layout.SetUserWidth(col, px);
+        StateHasChanged();
+    });
+
+    /// <summary>
+    /// The context-menu event (a right-click, the Menu key or Shift+F10 — the keyboard ones are routed by
+    /// the module to the focused cell). <paramref name="displayRow"/>/<paramref name="col"/> name the cell
+    /// it was for (col -1 = a row number; -1/-1 = no cell); <paramref name="header"/> = a column header.
+    /// </summary>
+    [JSInvokable]
+    public Task OnContextMenuFromJs(double x, double y, int displayRow, int col, bool header) => InvokeAsync(() =>
+    {
+        if (_disposed || IsEditing) return;
+        if (header)
+        {
+            if (col < 0 || col >= ColumnCount) return;
+            _area = FocusArea.Header;
+            _headerCol = col;
+            _menu = new GridMenu(x, y, true, HeaderMenuItems(col));
+            StateHasChanged();
+            return;
+        }
+        if (RowCount == 0 || ColumnCount == 0) return;
+        if (displayRow >= 0 && displayRow < RowCount)
+        {
+            if (col < 0)
+            {
+                if (!RowHasSelection(displayRow)) _selection.ClickRowHeader(displayRow, false, false);
+                _area = FocusArea.RowNumber;
+            }
+            else if (col < ColumnCount)
+            {
+                if (!_selection.IsSelected(displayRow, col)) _selection.Click(displayRow, col, false, false);
+                _area = FocusArea.Cell;
+            }
+            _menuCell = (displayRow, Math.Max(0, col));
+        }
+        else
+        {
+            if (_selection.IsEmpty) _selection.Click(0, 0, false, false);
+            _menuCell = (_selection.Focus.Row, _selection.Focus.Col);
+        }
+        _menu = new GridMenu(x, y, false, CellMenuItems());
+        StateHasChanged();
+    });
+
+    private void OnCornerMouseDown(MouseEventArgs e)
+    {
+        if (e.Button != 0) return;
+        _selection.SelectAll();
+        _area = FocusArea.Cell;
+        _keyboardFocus = false;
+    }
+
+    private void OnHeaderMouseDown(int col, MouseEventArgs e)
+    {
+        if (e.Button != 0) return;
+        _selection.ClickColumnHeader(col, e.ShiftKey, e.CtrlKey || e.MetaKey);
+        _area = FocusArea.Header;
+        _headerCol = col;
+        _keyboardFocus = false;
+    }
+
+    private void OnRowNumberMouseDown(int displayRow, MouseEventArgs e)
+    {
+        if (e.Button != 0) return;
+        _selection.ClickRowHeader(displayRow, e.ShiftKey, e.CtrlKey || e.MetaKey);
+        _area = FocusArea.RowNumber;
+        _keyboardFocus = false;
+    }
+
+    // ── Keyboard (contracts/ui.md §2) ──────────────────────────────────────────────────────────────
+
+    private async Task OnGridKeyDownAsync(KeyboardEventArgs e)
+    {
+        bool ctrl = e.CtrlKey || e.MetaKey;
+        string key = e.Key ?? string.Empty;
+        if (IsEditing)
+        {
+            // A fast typist's next keys can reach the grid before the new editor has focus: keep them.
+            if (key.Length == 1 && !ctrl && !e.AltKey)
+            {
+                _editInitial += key;
+                _editReplaced = true;
+                _editSession++;
+            }
+            return;
+        }
+        if (_menu != null)
+        {
+            // The menu takes focus a moment after it opens; an Escape that beats it still closes it.
+            if (key == "Escape") CloseMenu();
+            return;
+        }
+        if (_viewValue != null) return;
+
+        if (e.ShiftKey && e.AltKey && !ctrl && key is "ArrowLeft" or "ArrowRight")
+        {
+            ResizeFocusedColumn(key == "ArrowRight" ? ResizeStepPx : -ResizeStepPx);
+            return;
+        }
+        if (ctrl && !e.AltKey)
+        {
+            switch (key)
+            {
+                case "a":
+                case "A":
+                    SelectAll();
+                    return;
+                case "c":
+                case "C":
+                    await CopyAsync(CopyFormat.Tsv, includeHeader: e.ShiftKey);
+                    return;
+                case "0":
+                    SetFocusedToNull();
+                    return;
+            }
+        }
+        if (key == "Escape")
+        {
+            if (TooltipText != null) _tooltipDismissed = true;
+            return;
+        }
+        if (e.AltKey) return;   // Alt+… belongs to the browser and the page
+
+        switch (_area)
+        {
+            case FocusArea.Header: HeaderKey(key, e.ShiftKey); break;
+            case FocusArea.RowNumber: RowNumberKey(key, e.ShiftKey); break;
+            default: CellKey(key, e.ShiftKey, ctrl); break;
+        }
+    }
+
+    private void CellKey(string key, bool shift, bool ctrl)
+    {
+        if (RowCount == 0 || ColumnCount == 0) return;
+        GridMove? move = key switch
+        {
+            "ArrowUp" => GridMove.Up,
+            "ArrowDown" => GridMove.Down,
+            "ArrowLeft" => GridMove.Left,
+            "ArrowRight" => GridMove.Right,
+            "PageUp" => GridMove.PageUp,
+            "PageDown" => GridMove.PageDown,
+            "Home" => ctrl ? GridMove.CtrlHome : GridMove.Home,
+            "End" => ctrl ? GridMove.CtrlEnd : GridMove.End,
+            _ => null,
+        };
+        if (move is { } m)
+        {
+            // Past the top row the focus goes to the header (type tooltip, resize, header menu); left of the
+            // first column, to the row number (Delete toggles the row's delete).
+            if (!shift && !ctrl && !_selection.IsEmpty)
+            {
+                if (m == GridMove.Up && _selection.Focus.Row == 0) { FocusHeader(_selection.Focus.Col); return; }
+                if (m == GridMove.Left && _selection.Focus.Col == 0) { _area = FocusArea.RowNumber; KeyboardMoved(); return; }
+            }
+            _selection.Move(m, shift, PageRows);
+            KeyboardMoved();
+            return;
+        }
+        if (ctrl || _selection.IsEmpty) return;
+
+        var focus = _selection.Focus;
+        if (!IsCellEditable(_rowIndexes[focus.Row], focus.Col)) return;
+        if (key is "Enter" or "F2") BeginEdit(focus.Row, focus.Col);
+        else if (key.Length == 1) BeginEdit(focus.Row, focus.Col, replaceWith: key);   // FR-013: typing replaces
+    }
+
+    private void HeaderKey(string key, bool shift)
+    {
+        if (ColumnCount == 0) return;
+        switch (key)
+        {
+            case "ArrowLeft": _headerCol = Math.Max(0, _headerCol - 1); KeyboardMoved(); break;
+            case "ArrowRight": _headerCol = Math.Min(ColumnCount - 1, _headerCol + 1); KeyboardMoved(); break;
+            case "Home": _headerCol = 0; KeyboardMoved(); break;
+            case "End": _headerCol = ColumnCount - 1; KeyboardMoved(); break;
+            case "ArrowDown":
+                if (RowCount == 0) return;
+                _selection.Click(0, _headerCol, false, false);
+                _area = FocusArea.Cell;
+                KeyboardMoved();
+                break;
+            case " ":
+            case "Enter":
+                _selection.ClickColumnHeader(_headerCol, shift, false);
+                break;
+        }
+    }
+
+    private void RowNumberKey(string key, bool shift)
+    {
+        if (RowCount == 0 || _selection.IsEmpty) return;
+        int row = _selection.Focus.Row;
+        switch (key)
+        {
+            case "ArrowUp":
+                if (row > 0) _selection.ClickRowHeader(row - 1, shift, false);
+                KeyboardMoved();
+                break;
+            case "ArrowDown":
+                if (row < RowCount - 1) _selection.ClickRowHeader(row + 1, shift, false);
+                KeyboardMoved();
+                break;
+            case "ArrowRight":
+                _selection.Click(row, 0, false, false);
+                _area = FocusArea.Cell;
+                KeyboardMoved();
+                break;
+            case " ":
+                _selection.ClickRowHeader(row, shift, false);
+                break;
+            case "Delete":
+                if (Set.IsEditable) ToggleDelete(_rowIndexes[row]);
+                break;
+        }
+    }
+
+    private void FocusHeader(int col)
+    {
+        _area = FocusArea.Header;
+        _headerCol = Math.Clamp(col, 0, Math.Max(0, ColumnCount - 1));
+        KeyboardMoved();
+    }
+
+    private void KeyboardMoved()
+    {
+        _keyboardFocus = true;
+        _tooltipDismissed = false;
+        _scrollPending = true;
+    }
+
+    private void SelectAll()
+    {
+        _selection.SelectAll();
+        _area = FocusArea.Cell;
+    }
+
+    // ── Column widths (FR-001–FR-007) ──────────────────────────────────────────────────────────────
+
+    private void ResizeFocusedColumn(int delta)
+    {
+        int c = _area == FocusArea.Header ? _headerCol : _selection.IsEmpty ? -1 : _selection.Focus.Col;
+        if (c < 0 || c >= ColumnCount) return;
+        _layout.SetUserWidth(c, _layout.WidthPx(c) + delta);
+    }
+
+    /// <summary>The header and the longest display texts of one column. Display length follows the wire
+    /// length for every type except money (padded to four decimals), so only money is formatted per row.</summary>
+    private FitCandidates Candidates(int c)
+    {
+        var header = ColumnLabel(c);
+        int n = Set.Rows.Length;
+        bool money = c < _types.Length && _types[c].BaseName is "money" or "smallmoney";
+        if (money)
+            return GridColumnLayout.SelectCandidates(header, Enumerable.Range(0, n).Select(r => Format(CurrentWire(r, c), c, false).Text));
+        var picked = GridColumnLayout.SelectCandidates(header, Enumerable.Range(0, n).Select(r => CurrentWire(r, c) ?? GridTextFormats.NullText));
+        return picked with
+        {
+            Values = picked.Values.Select(w => w == GridTextFormats.NullText ? w : Format(w, c, false).Text).ToList(),
+        };
+    }
+
+    private void FitByEstimate(IReadOnlyList<int> cols, bool replaceUser)
+    {
+        foreach (var c in cols)
+        {
+            var cand = Candidates(c);
+            double value = cand.Values.Count == 0 ? 0 : cand.Values.Max(GridColumnLayout.EstimatePx);
+            Apply(c, GridColumnLayout.Fit(GridColumnLayout.EstimatePx(cand.Header), value), replaceUser);
+        }
+    }
+
+    /// <summary>Fit columns to their content: the browser measures the candidates with a canvas; without it
+    /// (tests, a disposal race) the 7 px-per-character estimate stands in.</summary>
+    private async Task FitColumnsAsync(IReadOnlyList<int> cols, bool replaceUser)
+    {
+        if (cols.Count == 0) return;
+        var cands = cols.Select(Candidates).ToArray();
+        MeasuredWidth[]? measured = null;
+        var module = await ModuleAsync();
+        if (module != null)
+        {
+            try
+            {
+                measured = await module.InvokeAsync<MeasuredWidth[]?>("measureColumns", _root,
+                    cands.Select(x => x.Header).ToArray(), cands.Select(x => x.Values.ToArray()).ToArray());
+            }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+            catch (TaskCanceledException) { }
+        }
+        for (int i = 0; i < cols.Count; i++)
+        {
+            double header, value;
+            if (measured != null && i < measured.Length && measured[i] != null)
+            {
+                header = measured[i].Header;
+                value = measured[i].Value;
+            }
+            else
+            {
+                header = GridColumnLayout.EstimatePx(cands[i].Header);
+                value = cands[i].Values.Count == 0 ? 0 : cands[i].Values.Max(GridColumnLayout.EstimatePx);
+            }
+            Apply(cols[i], GridColumnLayout.Fit(header, value), replaceUser);
+        }
+    }
+
+    private void Apply(int col, int px, bool replaceUser)
+    {
+        if (replaceUser) _layout.AutoFit(col, px);
+        else _layout.ApplyFit(col, px);
+    }
+
+    /// <summary>"Auto-fit this column" and a double-click on the column's edge (FR-004).</summary>
+    private Task AutoFitColumnAsync(int col) => FitColumnsAsync(new[] { col }, replaceUser: true);
+
+    // ── Copy (FR-009, FR-031) ──────────────────────────────────────────────────────────────────────
+
+    private string[] Headers() => Enumerable.Range(0, ColumnCount).Select(ColumnLabel).ToArray();
+
+    private async Task CopyAsync(CopyFormat format, bool includeHeader)
+    {
+        if (_selection.IsEmpty) return;
+        var result = GridClipboard.Build(_selection, Headers(), _rowIndexes, DisplayText, format, includeHeader, RetainLineBreaksOnCopy);
+        if (result.RowCount == 0) return;
+        if (!await CopyTextAsync(result.Text))
+        {
+            Notify("Couldn't copy to the clipboard: the browser didn't allow it.", NotificationKind.Error);
+            return;
+        }
+        if (result.Truncated)
+        {
+            Notify($"Copied the first {GridClipboard.MaxCopyChars.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)} characters only: the selection is too large to copy whole.", NotificationKind.Warning);
+            return;
+        }
+        var text = $"Copied {Plural(result.RowCount, "row")}.";
+        if (result.EngineCutCount > 0)
+        {
+            text += result.EngineCutCount == 1
+                ? " 1 value the engine cut was copied as its size."
+                : $" {result.EngineCutCount} values the engine cut were copied as their size.";
+        }
+        Notify(text, result.EngineCutCount > 0 ? NotificationKind.Warning : NotificationKind.Success);
+    }
+
+    private async Task CopyColumnNameAsync(int col)
+    {
+        if (await CopyTextAsync(Set.ColumnNames[col])) Notify("Copied the column name.", NotificationKind.Success);
+        else Notify("Couldn't copy to the clipboard: the browser didn't allow it.", NotificationKind.Error);
+    }
+
+    private async Task<bool> CopyTextAsync(string text)
+    {
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            return _ui != null && await _ui.InvokeAsync<bool>("copyText", text);
+        }
+        catch (JSException) { return false; }
+        catch (JSDisconnectedException) { return false; }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    // ── Save results (FR-030) ──────────────────────────────────────────────────────────────────────
+
+    private int CountEngineCut()
+    {
+        int n = 0;
+        for (int r = 0; r < Set.Rows.Length; r++)
+            for (int c = 0; c < ColumnCount; c++)
+                if (EngineCutIndicator.IsIndicator(CurrentWire(r, c))) n++;
+        return n;
+    }
+
+    /// <summary>"Save results as CSV…" (<paramref name="delimiter"/> ',') and "Save results as
+    /// tab-delimited…" ('\t'): every row in display order, the text the grid shows, a header row.</summary>
+    private async Task SaveResultsAsync(char delimiter)
+    {
+        bool csv = delimiter == ',';
+        int cut = CountEngineCut();
+        if ((Set.Truncated || cut > 0) && Dialogs is { } dialogs)
+        {
+            var details = new List<string>();
+            if (Set.Truncated) details.Add($"The result was cut at the row limit: only the {Plural(Set.Rows.Length, "row")} shown will be saved.");
+            if (cut > 0) details.Add(cut == 1
+                ? "1 value the engine cut will be saved as its size, not its content."
+                : $"{cut} values the engine cut will be saved as their size, not their content.");
+            bool go = await dialogs.ConfirmAsync(new DialogRequest
+            {
+                Title = "Save an incomplete result?",
+                Message = "The file will not hold the whole result.",
+                Details = details,
+                ConfirmLabel = "Save anyway",
+            });
+            if (!go) return;
+        }
+
+        var rows = new List<string[]>(_rowIndexes.Length);
+        foreach (var r in _rowIndexes)
+        {
+            var line = new string[ColumnCount];
+            for (int c = 0; c < ColumnCount; c++) line[c] = DisplayText(r, c) ?? GridTextFormats.NullText;
+            rows.Add(line);
+        }
+        var text = GridTextFormats.Delimited(Headers(), rows, delimiter, RetainLineBreaksOnCopy);
+        var fileName = SaveFileName(DocumentName, csv ? ".csv" : ".tsv");
+        bool ok;
+        try
+        {
+            _download ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
+            if (_download != null)
+                await _download.InvokeVoidAsync("downloadText", fileName,
+                    csv ? "text/csv;charset=utf-8" : "text/tab-separated-values;charset=utf-8", text, true);
+            ok = _download != null;
+        }
+        catch (JSException) { ok = false; }
+        catch (JSDisconnectedException) { ok = false; }
+        catch (InvalidOperationException) { ok = false; }
+        if (ok) Notify($"Saved {Plural(rows.Count, "row")} to {fileName}.", NotificationKind.Success);
+        else Notify("Couldn't save the results file.", NotificationKind.Error);
+    }
+
+    /// <summary>The document's name without its extension and with characters a file name cannot hold
+    /// replaced, plus <paramref name="extension"/>; <see cref="DefaultDocumentName"/> when it has none.</summary>
+    public static string SaveFileName(string? documentName, string extension)
+    {
+        var name = (documentName ?? string.Empty).Trim();
+        if (name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase)) name = name.Substring(0, name.Length - 4);
+        var invalid = System.IO.Path.GetInvalidFileNameChars().Concat(new[] { '<', '>', ':', '"', '/', '\\', '|', '?', '*' }).ToHashSet();
+        name = new string(name.Select(ch => invalid.Contains(ch) || char.IsControl(ch) ? '_' : ch).ToArray()).Trim(' ', '.');
+        return (name.Length == 0 ? DefaultDocumentName : name) + extension;
+    }
+
+    // ── Sort (FR-012) ──────────────────────────────────────────────────────────────────────────────
+
+    private void CycleSort(int col)
+    {
+        if (_sortCol != col) SortBy(col, descending: false);
+        else if (!_sortDesc) SortBy(col, descending: true);
+        else ClearSort();
+        _focusRootPending = true;
+    }
+
+    private void SortBy(int col, bool descending)
+    {
+        _sortCol = col;
+        _sortDesc = descending;
+        ApplySort();
+    }
+
+    private void ClearSort()
+    {
+        _sortCol = -1;
+        _sortDesc = false;
+        ApplySort();
+    }
+
+    /// <summary>Order the display by the sort column's CURRENT (edited) values. Only _rowIndexes moves;
+    /// the selection follows the focused fetched row.</summary>
+    private void ApplySort()
+    {
+        var before = _rowIndexes;
+        var identity = Enumerable.Range(0, Set.Rows.Length).ToArray();
+        _rowIndexes = _sortCol < 0 || _sortCol >= ColumnCount
+            ? identity
+            : GridSortComparer.Sort(identity, r => CurrentWire(r, _sortCol), Set.ClrTypeHints.ElementAtOrDefault(_sortCol), _sortDesc);
+        _selection.RemapThroughPermutation(before, _rowIndexes);
+    }
+
+    // ── Menus (FR-005, FR-017) ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>Runs a menu command and re-renders the grid (the menu itself is gone by then).</summary>
+    private Func<Task> Command(Func<Task> action) => async () =>
+    {
+        await action();
+        StateHasChanged();
+    };
+
+    private Func<Task> Command(Action action) => () =>
+    {
+        action();
+        StateHasChanged();
+        return Task.CompletedTask;
+    };
+
+    private IReadOnlyList<MenuItem> CellMenuItems()
+    {
+        var items = new List<MenuItem>
+        {
+            new() { Label = "Copy", Shortcut = "Ctrl+C", TestId = "results-menu-copy", OnSelect = Command(() => CopyAsync(CopyFormat.Tsv, false)) },
+            new() { Label = "Copy with headers", Shortcut = "Ctrl+Shift+C", TestId = "results-menu-copy-headers", OnSelect = Command(() => CopyAsync(CopyFormat.Tsv, true)) },
+            new()
+            {
+                Label = "Copy as", TestId = "results-menu-copy-as",
+                Children = new[]
+                {
+                    new MenuItem { Label = "CSV", TestId = "results-menu-copy-csv", OnSelect = Command(() => CopyAsync(CopyFormat.Csv, true)) },
+                    new MenuItem { Label = "JSON", TestId = "results-menu-copy-json", OnSelect = Command(() => CopyAsync(CopyFormat.Json, true)) },
+                    new MenuItem { Label = "Markdown table", TestId = "results-menu-copy-markdown", OnSelect = Command(() => CopyAsync(CopyFormat.Markdown, true)) },
+                    new MenuItem { Label = "INSERT statements", TestId = "results-menu-copy-insert", OnSelect = Command(() => CopyAsync(CopyFormat.Insert, true)) },
+                },
+            },
+            new() { Label = "Select all", Shortcut = "Ctrl+A", TestId = "results-menu-select-all", OnSelect = Command(SelectAll) },
+            ViewValueItem(),
+        };
+        if (Set.IsEditable) items.Add(SetNullItem());
+        items.Add(new MenuItem { Label = "Save results as CSV…", TestId = "results-save-csv", OnSelect = Command(() => SaveResultsAsync(',')) });
+        items.Add(new MenuItem { Label = "Save results as tab-delimited…", TestId = "results-save-tsv", OnSelect = Command(() => SaveResultsAsync('\t')) });
+        if (Set.IsEditable)
+        {
+            items.Add(MenuItem.Separator());
+            items.Add(DeleteRowsItem());
+        }
+        return items;
+    }
+
+    private MenuItem ViewValueItem()
+    {
+        var (d, c) = _menuCell;
+        string? wire = d >= 0 && d < RowCount && c >= 0 && c < ColumnCount ? CurrentWire(_rowIndexes[d], c) : null;
+        return new MenuItem
+        {
+            Label = "View value", TestId = "results-menu-view-value",
+            Disabled = wire == null, DisabledReason = "The value is NULL.",
+            OnSelect = Command(() => OpenViewValue(_rowIndexes[d], c)),
+        };
+    }
+
+    private MenuItem SetNullItem()
+    {
+        var (d, c) = _menuCell;
+        string? reason = d >= 0 && d < RowCount && c >= 0 && c < ColumnCount ? SetNullBlockedReason(_rowIndexes[d], c) : "Select a cell first.";
+        return new MenuItem
+        {
+            Label = "Set to NULL", Shortcut = "Ctrl+0", TestId = "results-menu-set-null",
+            Disabled = reason != null, DisabledReason = reason,
+            OnSelect = Command(() => CommitEdit(_rowIndexes[d], c, null)),
+        };
+    }
+
+    private MenuItem DeleteRowsItem()
+    {
+        var rows = _selection.SelectedRows().Select(d => _rowIndexes[d]).ToList();
+        bool restore = rows.Count > 0 && rows.All(_deletes.Contains);
+        string noun = rows.Count == 1 ? "row" : "rows";
+        return new MenuItem
+        {
+            Label = (restore ? "Restore " : "Delete ") + noun,
+            TestId = "results-menu-delete-row",
+            Disabled = rows.Count == 0, DisabledReason = "Select a row first.",
+            OnSelect = Command(() =>
+            {
+                foreach (var r in rows)
+                {
+                    if (restore) _deletes.Remove(r);
+                    else if (_deletes.Add(r)) _edits.Remove(r);
+                }
+            }),
+        };
+    }
+
+    private IReadOnlyList<MenuItem> HeaderMenuItems(int col) => new List<MenuItem>
+    {
+        new() { Label = "Auto-fit this column", TestId = "results-menu-autofit", OnSelect = Command(() => AutoFitColumnAsync(col)) },
+        new() { Label = "Auto-fit all columns", TestId = "results-menu-autofit-all", OnSelect = Command(() => FitColumnsAsync(AllColumns, replaceUser: true)) },
+        new() { Label = "Reset column widths", TestId = "results-menu-reset-widths", OnSelect = Command(() => _layout.ResetWidths()) },
+        new()
+        {
+            Label = "Copy column name", TestId = "results-menu-copy-name",
+            Disabled = string.IsNullOrEmpty(Set.ColumnNames[col]), DisabledReason = "The column has no name.",
+            OnSelect = Command(() => CopyColumnNameAsync(col)),
+        },
+        MenuItem.Separator(),
+        new() { Label = "Sort ascending", TestId = "results-menu-sort-asc", OnSelect = Command(() => SortBy(col, descending: false)) },
+        new() { Label = "Sort descending", TestId = "results-menu-sort-desc", OnSelect = Command(() => SortBy(col, descending: true)) },
+        new()
+        {
+            Label = "Clear sort", TestId = "results-menu-sort-clear",
+            Disabled = _sortCol < 0, DisabledReason = "The rows are in their original order.",
+            OnSelect = Command(ClearSort),
+        },
+    };
+
+    private void CloseMenu()
+    {
+        _menu = null;
+        _focusRootPending = true;
+    }
+
+    private void OpenViewValue(int row, int col)
+    {
+        var wire = CurrentWire(row, col);
+        if (wire == null) return;
+        _viewValue = new CellValueView(ColumnLabel(col), DeclaredType(col), AllowsNull(col), DisplayText(row, col)!,
+            EngineCutIndicator.IsIndicator(wire), IsBinaryColumn(col));
+    }
+
+    private void CloseViewValue()
+    {
+        _viewValue = null;
+        _focusRootPending = true;
+    }
+
+    // ── NULL (FR-014) ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Why Set to NULL is unavailable on a cell; null when it is available. The NOT NULL reason is
+    /// given only for a column that comes from a table, so exotic sources show no false reason (R14).</summary>
+    private string? SetNullBlockedReason(int row, int col)
+    {
+        if (!Set.IsEditable) return "This result can't be edited.";
+        if (_deletes.Contains(row)) return "The row is marked for deletion.";
+        if (!IsColumnEditable(col)) return $"{ColumnLabel(col)} can't be edited.";
+        if (AllowsNull(col) == false) return $"{ColumnLabel(col)} does not allow NULL.";
+        return null;
+    }
+
+    private void SetFocusedToNull()
+    {
+        if (_area != FocusArea.Cell || _selection.IsEmpty) return;
+        var f = _selection.Focus;
+        int row = _rowIndexes[f.Row];
+        var reason = SetNullBlockedReason(row, f.Col);
+        if (reason != null)
+        {
+            if (Set.IsEditable) Notify(reason, NotificationKind.Info);
+            return;
+        }
+        CommitEdit(row, f.Col, null);
+    }
+
+    // ── Editing (FR-013) ───────────────────────────────────────────────────────────────────────────
+
+    private void BeginEdit(int displayRow, int col, string? replaceWith = null)
+    {
+        int row = _rowIndexes[displayRow];
+        if (_editInsert < 0 && _editRow == row && _editCol == col) return;   // already editing it
+        if (!IsCellEditable(row, col)) return;
+        _editSession++;
+        _editRow = row;
+        _editDisplay = displayRow;
+        _editCol = col;
+        _editInsert = -1;
+        _editReplaced = replaceWith != null;
+        _editInitial = replaceWith ?? CurrentWire(row, col) ?? string.Empty;
+        _menu = null;
+    }
+
+    private void BeginInsertEdit(int insIdx, int col)
+    {
+        if (insIdx < 0 || insIdx >= _inserts.Count || !IsColumnInsertable(col)) return;
+        if (_editInsert == insIdx && _editCol == col) return;
+        _editSession++;
+        _editRow = -1;
+        _editDisplay = -1;
+        _editCol = col;
+        _editInsert = insIdx;
+        _editReplaced = false;
+        _editInitial = (_inserts[insIdx].TryGetValue(col, out var v) ? v : null) ?? string.Empty;
+    }
+
+    private void EndEdit()
+    {
+        _editRow = _editDisplay = _editCol = _editInsert = -1;
+        _editReplaced = false;
+    }
+
+    /// <param name="session">The edit the reporting editor belongs to: a replaced editor's late blur is ignored.</param>
+    private Task OnEditorDoneAsync(int session, GridEditorResult result)
+    {
+        if (!IsEditing || session != _editSession) return Task.CompletedTask;
+        int row = _editRow, display = _editDisplay, col = _editCol, ins = _editInsert;
+        // An untouched editor changes nothing (F2 then Enter on a NULL int must not make it blank).
+        bool changed = _editReplaced || !string.Equals(result.Value, _editInitial, StringComparison.Ordinal);
+        if (result.Exit != GridEditorExit.Cancel && changed)
+        {
+            if (ins >= 0) CommitInsert(ins, col, result.Value);
+            else CommitEdit(row, col, result.Value);
+        }
+        EndEdit();
+
+        switch (result.Exit)
+        {
+            case GridEditorExit.Enter:
+            case GridEditorExit.Cancel:
+                _focusRootPending = true;
+                break;
+            case GridEditorExit.Tab:
+            case GridEditorExit.TabBack:
+                bool back = result.Exit == GridEditorExit.TabBack;
+                if (ins >= 0)
+                {
+                    var next = NextInsertCell(ins, col, back);
+                    if (next is { } n) BeginInsertEdit(n.Insert, n.Col);
+                    else _focusRootPending = true;
+                }
+                else
+                {
+                    var next = NextEditableCell(display, col, back);
+                    if (next is { } n)
+                    {
+                        _selection.Click(n.Display, n.Col, false, false);
+                        _area = FocusArea.Cell;
+                        BeginEdit(n.Display, n.Col);
+                        _scrollPending = true;
+                    }
+                    else
+                    {
+                        _focusRootPending = true;
+                    }
+                }
+                break;
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The next (or previous) editable cell in display order, row by row.</summary>
+    private (int Display, int Col)? NextEditableCell(int display, int col, bool back)
+    {
+        int cols = ColumnCount;
+        long total = (long)RowCount * cols;
+        long pos = (long)display * cols + col;
+        for (long p = back ? pos - 1 : pos + 1; p >= 0 && p < total; p += back ? -1 : 1)
+        {
+            int d = (int)(p / cols), c = (int)(p % cols);
+            if (IsCellEditable(_rowIndexes[d], c)) return (d, c);
+        }
+        return null;
+    }
+
+    private (int Insert, int Col)? NextInsertCell(int insIdx, int col, bool back)
+    {
+        int cols = ColumnCount;
+        int total = _inserts.Count * cols;
+        for (int p = insIdx * cols + col + (back ? -1 : 1); p >= 0 && p < total; p += back ? -1 : 1)
+        {
+            if (IsColumnInsertable(p % cols)) return (p / cols, p % cols);
+        }
+        return null;
+    }
+
+    private void CommitEdit(int row, int col, string? value)
+    {
+        if (row < 0 || row >= Set.Rows.Length) return;
+        // The cell value is stored verbatim (a blank input is kept as an empty string — invalid on a
+        // non-character type until a value or NULL is set); the write path binds it through
+        // SqlScalarEncoder.Decode for the column's type. null = SQL NULL.
+        var original = Set.Rows[row].ElementAtOrDefault(col);
+        if (!string.Equals(original, value, StringComparison.Ordinal))
+        {
+            if (!_edits.TryGetValue(row, out var rowEdits))
+            {
+                rowEdits = new Dictionary<int, string?>();
+                _edits[row] = rowEdits;
+            }
+            rowEdits[col] = value;
+        }
+        else if (_edits.TryGetValue(row, out var rowEdits))
+        {
+            // Back to the fetched value: no longer a change.
+            rowEdits.Remove(col);
+            if (rowEdits.Count == 0) _edits.Remove(row);
+        }
+    }
+
+    private void CommitInsert(int insIdx, int col, string? value)
+    {
+        if (insIdx >= 0 && insIdx < _inserts.Count) _inserts[insIdx][col] = value;
+    }
+
+    private void ToggleDelete(int row)
+    {
+        if (!_deletes.Remove(row)) _deletes.Add(row);
+        // A deleted row's pending edits are moot.
+        if (_deletes.Contains(row)) _edits.Remove(row);
+    }
+
+    private void AddNewRow()
+    {
+        _inserts.Add(new Dictionary<int, string?>());
+    }
+
+    private void RemoveInsert(int insIdx)
+    {
+        if (insIdx >= 0 && insIdx < _inserts.Count) _inserts.RemoveAt(insIdx);
+        if (_editInsert >= 0) EndEdit();
+    }
+
+    /// <summary>The Discard button: ask first (FR-015), then drop this set's pending edits only.</summary>
+    private async Task DiscardEditsAsync()
+    {
+        if (Dialogs is { } dialogs)
+        {
+            int n = PendingEditCount;
+            bool discard = await dialogs.ConfirmAsync(new DialogRequest
+            {
+                Title = $"Discard {Plural(n, "pending edit")}?",
+                Message = "The changes in this result have not been applied. Discard them?",
+                ConfirmLabel = "Discard",
+                CancelLabel = "Keep editing",
+                Destructive = true,
+            });
+            if (!discard) return;
+        }
+        ResetEditState();
+    }
+
+    // ── Apply ──────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// After a successful Apply, reflect the committed edits / deletes / inserts in the in-memory
+    /// result set so the grid stays consistent with the database WITHOUT re-running the query. The
+    /// page only re-runs single read-only SELECTs (see Editor.OnAppliedReExecuteAsync /
+    /// <see cref="QueryRefreshSafety"/>); for a multi-statement batch we must NOT re-run it (that
+    /// would repeat its side effects), so without this the grid would revert to the stale pre-edit
+    /// values when the overlay is cleared. When the page DOES re-run, the fresh result simply
+    /// replaces these rows. Server-filled identity/computed values on INSERT aren't known here — a
+    /// manual re-Execute surfaces them.
+    /// </summary>
+    private void BakeCommittedChangesIntoSet(ExecuteResultSet set)
+    {
+        int colCount = set.ColumnNames.Length;
+        var rows = new List<string?[]>(set.Rows.Length + _inserts.Count);
+        for (int r = 0; r < set.Rows.Length; r++)
+        {
+            if (_deletes.Contains(r)) continue;                  // committed delete → drop the row
+            var row = set.Rows[r];
+            if (_edits.TryGetValue(r, out var rowEdits))         // committed edits → overwrite cells
+            {
+                foreach (var (c, v) in rowEdits)
+                    if (c >= 0 && c < row.Length) row[c] = v;
+            }
+            rows.Add(row);
+        }
+        foreach (var ins in _inserts)                            // committed inserts → append rows
+        {
+            var row = new string?[colCount];
+            foreach (var (c, v) in ins)
+                if (c >= 0 && c < colCount) row[c] = v;
+            rows.Add(row);
+        }
+        set.Rows = rows.ToArray();
+    }
+
+    private async Task ApplyEditsAsync()
+    {
+        var set = Set;
+        if (set == null || !set.IsEditable || InvalidCellCount > 0) return;
+
+        _applying = true;
+        _applyMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var req = BuildApplyRequest(set);
+            var result = await QueryExec.ApplyAsync(req, System.Threading.CancellationToken.None);
+
+            if (result.Status == ExecuteStatus.Ok)
+            {
+                // Reflect the committed changes in-memory BEFORE clearing the overlay so the grid shows
+                // the new values even when the page declines to re-run the query (multi-statement batch).
+                BakeCommittedChangesIntoSet(set);
+                ResetEditState();
+                RebuildRowIndexes();             // deletes/inserts changed the row set.
+                _layout.SetRowCount(set.Rows.Length);
+                if (_sortCol >= 0) ApplySort();  // the sort STATE survived; order the new rows by it.
+                // Set the success message AFTER ResetEditState — which clears _applyMessage — so it
+                // actually surfaces (previously it was set then immediately nulled by the reset).
+                _applyOk = true;
+                _applyMessage = $"Applied {req.Edits.Length} change(s).";
+                // Caller may re-run the query to refresh; we surface the success and clear tints.
+                await OnApplied.InvokeAsync();
+            }
+            else
+            {
+                _applyOk = false;
+                // Surface the SPECIFIC failed edit from the per-edit results (the engine rolled the whole
+                // batch back, so nothing persisted). Every other edit carries the engine's "Rolled back —
+                // edit N failed." note, which must not win just because it comes first. Keep the pending
+                // edits — do NOT ResetEditState — so the user can correct the offending value and re-Apply.
+                var failed = (result.Results ?? System.Array.Empty<CrudEditResult>())
+                    .FirstOrDefault(r => !r.Ok && !string.IsNullOrEmpty(r.Error)
+                                         && !r.Error.StartsWith("Rolled back — edit ", StringComparison.Ordinal));
+                _applyMessage = failed?.Error ?? result.ErrorMessage ?? "Apply failed.";
+                if (result.ConnectionWasReset)
+                    _applyMessage += " (connection was reset — #temp/SET state lost.)";
+            }
+        }
+        finally
+        {
+            _applying = false;
+            StateHasChanged();
+        }
+    }
+
+    private ApplyChangesRequest BuildApplyRequest(ExecuteResultSet set)
+    {
+        var edits = new List<CrudEditDto>();
+
+        // Key columns: prefer true PK; fall back to any IsKey column.
+        var keyProv = set.Provenance.Where(p => p.IsTruePrimaryKey).ToList();
+        if (keyProv.Count == 0) keyProv = set.Provenance.Where(p => p.IsKey).ToList();
+
+        // UPDATE SET: writable NON-KEY columns (keys go to the WHERE, never the SET).
+        bool IsUpdatable(ColumnProvenanceDto p) =>
+            !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement
+            && !p.IsKey && !p.IsTruePrimaryKey
+            && !string.IsNullOrEmpty(p.BaseColumnName);
+
+        // INSERT VALUES: every supplyable column INCLUDING a non-identity (natural) key.
+        bool IsInsertable(ColumnProvenanceDto p) =>
+            !p.IsReadOnly && !p.IsExpression && !p.IsAutoIncrement && !string.IsNullOrEmpty(p.BaseColumnName);
+
+        // Deletes.
+        foreach (var rowIdx in _deletes)
+        {
+            edits.Add(new CrudEditDto
+            {
+                Op = CrudOp.Delete,
+                KeyCells = keyProv.Select(p => KeyCell(set, rowIdx, p)).ToArray(),
+            });
+        }
+
+        // Updates (skip rows also marked for delete).
+        foreach (var kv in _edits)
+        {
+            if (_deletes.Contains(kv.Key)) continue;
+            var setCells = kv.Value
+                .Where(e => IsUpdatable(set.Provenance[e.Key]))
+                .Select(e => new CrudCellDto
+                {
+                    BaseColumnName = set.Provenance[e.Key].BaseColumnName!,
+                    ProviderType = set.Provenance[e.Key].ProviderType,
+                    Size = set.Provenance[e.Key].ColumnSize,
+                    Precision = set.Provenance[e.Key].Precision,
+                    Scale = set.Provenance[e.Key].Scale,
+                    Value = e.Value,
+                })
+                .ToArray();
+            if (setCells.Length == 0) continue;
+            edits.Add(new CrudEditDto
+            {
+                Op = CrudOp.Update,
+                SetCells = setCells,
+                KeyCells = keyProv.Select(p => KeyCell(set, kv.Key, p)).ToArray(),
+            });
+        }
+
+        // Inserts.
+        foreach (var ins in _inserts)
+        {
+            var setCells = new List<CrudCellDto>();
+            for (int c = 0; c < set.Provenance.Length; c++)
+            {
+                var p = set.Provenance[c];
+                if (!IsInsertable(p)) continue;
+                ins.TryGetValue(c, out var v);
+                setCells.Add(new CrudCellDto
+                {
+                    BaseColumnName = p.BaseColumnName!,
+                    ProviderType = p.ProviderType,
+                    Size = p.ColumnSize,
+                    Precision = p.Precision,
+                    Scale = p.Scale,
+                    Value = v,
+                });
+            }
+            if (setCells.Count == 0) continue;
+            edits.Add(new CrudEditDto { Op = CrudOp.Insert, SetCells = setCells.ToArray() });
+        }
+
+        return new ApplyChangesRequest
+        {
+            BaseCatalog = string.IsNullOrEmpty(set.BaseCatalog) ? FallbackCatalog : set.BaseCatalog,
+            BaseSchema = set.BaseSchema ?? string.Empty,
+            BaseTable = set.BaseTable ?? string.Empty,
+            Edits = edits.ToArray(),
+        };
+    }
+
+    private static CrudCellDto KeyCell(ExecuteResultSet set, int rowIdx, ColumnProvenanceDto p) => new()
+    {
+        BaseColumnName = p.BaseColumnName!,
+        ProviderType = p.ProviderType,
+        Size = p.ColumnSize,
+        Precision = p.Precision,
+        Scale = p.Scale,
+        // The WHERE always uses the ORIGINAL fetched value (not any pending edit).
+        Value = set.Rows[rowIdx].ElementAtOrDefault(p.Ordinal),
+    };
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────────────────────────────
+
+    private async Task<IJSObjectReference?> ModuleAsync()
+    {
+        if (_module != null || _disposed) return _module;
+        try { _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-results-grid.js"); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+        return _module;
+    }
+
+    private async Task CallModuleAsync(string identifier, params object?[] args)
+    {
+        var module = await ModuleAsync();
+        if (module == null) return;
+        try { await module.InvokeVoidAsync(identifier, args); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+        catch (TaskCanceledException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed) return;
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            await CallModuleAsync("init", _root, _selfRef);
+        }
+        if (_fitPending)
+        {
+            _fitPending = false;
+            var before = _layout.ToCssTracks();
+            await FitColumnsAsync(AllColumns, replaceUser: false);
+            if (_layout.ToCssTracks() != before) StateHasChanged();
+        }
+        if (_focusRootPending)
+        {
+            _focusRootPending = false;
+            await CallModuleAsync("focusRoot", _root);
+        }
+        if (_scrollPending)
+        {
+            _scrollPending = false;
+            await CallModuleAsync("scrollCellIntoView", _root, ActiveDescendantId, _selection.Focus.Row);
+        }
+    }
+
+    private void Notify(string text, NotificationKind kind) => Notifications?.Notify(text, kind);
+
+    private static string Plural(int n, string noun) =>
+        n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " " + noun + (n == 1 ? string.Empty : "s");
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", _root);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { /* tab closing */ }
+            catch (JSException) { /* element gone */ }
+        }
+        foreach (var module in new[] { _ui, _download })
+        {
+            if (module == null) continue;
+            try { await module.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+        _selfRef?.Dispose();
+    }
+}

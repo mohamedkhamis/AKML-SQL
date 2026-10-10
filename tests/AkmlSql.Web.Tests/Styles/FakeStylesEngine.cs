@@ -31,6 +31,15 @@ internal sealed class FakeStylesEngine : IEngineBridge
 
     public List<int> Sent { get; } = new();
 
+    /// <summary>A style already in the engine's folder (saved by SSMS), which the browser's save would refuse to
+    /// duplicate — e.g. one named like a browser built-in.</summary>
+    public void SeedCustom(string name)
+    {
+        var profile = new FormattingProfile();
+        profile.Metadata.Name = name;
+        _custom[name] = ProfileSerializer.Serialize(profile);
+    }
+
     /// <summary>The style file as the engine stores it (custom first), or null.</summary>
     public FormattingProfile? Stored(string name) =>
         _custom.TryGetValue(name, out var json) || _builtIn.TryGetValue(name, out json) ? ProfileSerializer.Deserialize(json) : null;
@@ -38,6 +47,9 @@ internal sealed class FakeStylesEngine : IEngineBridge
     public BridgeState State { get; private set; } = BridgeState.Open;
     public string[] EngineCapabilities { get; }
     public string? EngineVersion => "test";
+
+    /// <summary>Spec 041 (R29): how the engine says it runs (the style group name follows it).</summary>
+    public string? EngineHostKind { get; set; }
 
     public event Action<BridgeState>? StateChanged;
     public event Action<DateTimeOffset?>? RetryScheduled;

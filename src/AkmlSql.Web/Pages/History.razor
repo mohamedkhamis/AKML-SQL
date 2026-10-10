@@ -10,6 +10,7 @@
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Core.Models.History
 @using AkmlSql.Web.Services
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IHistoryService HistorySvc
@@ -20,17 +21,34 @@
 @inject IEditorSessionStore SessionStore
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject INotificationService Notifications
 
 <PageTitle>SQL History — AKML SQL</PageTitle>
 
-<div class="akml-hist">
+<div class="akml-page akml-hist">
+    @* Spec 041 (T203, FR-085): the one page header. *@
+    <div class="akml-page-header akml-hist-header" data-testid="page-header">
+        <h1 class="akml-page-title" data-testid="page-title">SQL History</h1>
+        <span class="akml-page-spacer"></span>
+        <div class="akml-page-actions" data-testid="page-actions">
+            <button type="button" class="akml-btn" @onclick="@(() => LoadAsync(true))" title="Refresh"><Icon Name="refresh-cw" /><span>Refresh</span></button>
+            <select class="akml-select" value="" @onchange="OnExportChanged" title="Export visible entries" aria-label="Export visible entries">
+                <option value="">Export…</option>
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+                <option value="sql">SQL</option>
+            </select>
+        </div>
+    </div>
     <!-- Top bar: search + filters -->
     <div class="akml-hist-top">
         <input class="akml-hist-search" placeholder="Search SQL history…  (server: db: name: starred:)"
                value="@_search" @oninput="OnSearchInput"
                @onkeydown="OnSearchKey" data-testid="history-search" />
-        <button class="akml-tool-button @(_favoritesOnly ? "active" : "")" title="Favorites only"
-                @onclick="ToggleFavoritesFilter" data-testid="history-fav-filter">★</button>
+        <button class="akml-btn akml-hist-fav @(_favoritesOnly ? "is-active" : null)" title="Favorites only"
+                aria-pressed="@(_favoritesOnly ? "true" : "false")"
+                @onclick="ToggleFavoritesFilter" data-testid="history-fav-filter" aria-label="Favorites only"><Icon Name="star" /></button>
         <select class="akml-hist-select" value="@(_server ?? "")" @onchange="OnServerChanged" title="Server">
             <option value="">All servers</option>
             @foreach (var s in _servers) { <option value="@s">@s</option> }
@@ -39,25 +57,22 @@
             <option value="">All databases</option>
             @foreach (var d in _databases) { <option value="@d">@d</option> }
         </select>
-        <button class="akml-tool-button" @onclick="@(() => LoadAsync(true))" title="Refresh">⟳</button>
         @if (_compare.Count == 2)
         {
-            <button class="akml-tool-button" @onclick="OpenCompareAsync" data-testid="history-compare">Compare (2)</button>
+            <button class="akml-btn" @onclick="OpenCompareAsync" data-testid="history-compare">Compare (2)</button>
         }
-        <span class="akml-hist-spacer"></span>
-        <select class="akml-hist-select" value="" @onchange="OnExportChanged" title="Export visible entries">
-            <option value="">Export…</option>
-            <option value="csv">CSV</option>
-            <option value="json">JSON</option>
-            <option value="sql">SQL</option>
-        </select>
     </div>
 
     @if (!HistorySvc.IsAvailable)
     {
-        <div class="akml-hist-empty">
-            <p>Connect an engine to view SQL history.</p>
-            <button class="akml-tool-button" @onclick="@(() => LoadAsync(true))">Retry</button>
+        @* Spec 041 (T205, FR-088): what is missing and the two ways forward. *@
+        <div class="akml-empty akml-hist-empty" data-testid="history-unavailable">
+            <p class="akml-empty-title">SQL History needs a connected engine</p>
+            <p>The engine keeps the history SSMS and the web edition share. Pair one, or retry if it is starting.</p>
+            <div class="akml-page-actions">
+                <button type="button" class="akml-btn" data-testid="history-retry" @onclick="@(() => LoadAsync(true))">Retry</button>
+                <a class="akml-btn" href="settings/connections" data-testid="history-setup">Set up engine</a>
+            </div>
         </div>
     }
     else
@@ -65,7 +80,7 @@
         <div class="akml-hist-body">
             <!-- LEFT: master list (top) + version sub-panel (bottom) -->
             <div class="akml-hist-left">
-                <div class="akml-hist-list" data-testid="history-list">
+                <div class="akml-hist-list" data-testid="history-list" role="listbox" aria-label="History entries">
                     @{ string? lastBucket = null; }
                     @foreach (var e in _entries)
                     {
@@ -76,18 +91,19 @@
                             lastBucket = bucket;
                             var b = bucket;
                             <div class="akml-hist-group" @onclick="@(() => ToggleBucket(b))">
-                                <span class="akml-hist-chevron">@(_collapsed.Contains(b) ? "▸" : "▾")</span>
+                                <span class="akml-hist-chevron"><Icon Name="@(_collapsed.Contains(b) ? "chevron-right" : "chevron-down")" Size="12" /></span>
                                 <span>@b</span>
                             </div>
                         }
                         if (!_collapsed.Contains(bucket))
                         {
                             var entry = e;
-                            <div class="akml-hist-row @(_selected?.Id == e.Id ? "selected" : "")"
+                            <div class="akml-list-row akml-hist-row @(_selected?.Id == e.Id ? "is-selected" : null)" data-testid="history-row"
+                                 role="option" aria-selected="@(_selected?.Id == e.Id ? "true" : "false")"
                                  @onclick="@(() => SelectAsync(entry))">
                                 <span class="akml-hist-star @(e.IsFavorite ? "on" : "")" title="Toggle favorite"
                                       @onclick="@(() => ToggleFavoriteAsync(entry))" @onclick:stopPropagation="true">
-                                    @(e.IsFavorite ? "★" : "☆")
+                                    <Icon Name="star" Size="14" Label="@(e.IsFavorite ? "Favorite" : "Not a favorite")" />
                                 </span>
                                 <span class="akml-hist-rowmain">
                                     <span class="akml-hist-name">@rv.DisplayName</span>
@@ -95,7 +111,7 @@
                                         <span>@rv.RelativeTime</span>
                                         @if (!string.IsNullOrEmpty(rv.Meta)) { <span class="akml-hist-count"> · @rv.Meta</span> }
                                         <span class="akml-hist-conn">
-                                            <span class="akml-hist-dot" style="color:@(e.IsOpen ? "var(--akml-status-success)" : "var(--akml-status-danger)")">●</span>
+                                            <span class="akml-hist-dot @(e.IsOpen ? "is-open" : "is-closed")" title="@(e.IsOpen ? "Open" : "Closed")"></span>
                                             @rv.ServerDb
                                         </span>
                                     </span>
@@ -107,13 +123,28 @@
                             </div>
                         }
                     }
-                    @if (_entries.Count == 0 && !_loading)
+                    @if (_entries.Count == 0 && _loading)
                     {
-                        <p class="akml-hist-none">No history entries@(string.IsNullOrWhiteSpace(_search) ? "" : " match your search").</p>
+                        <div class="akml-empty" data-testid="history-loading" role="status">
+                            <Icon Name="loader-circle" Class="akml-spin" /><span>Loading history…</span>
+                        </div>
+                    }
+                    else if (_entries.Count == 0)
+                    {
+                        <div class="akml-empty" data-testid="history-empty">
+                            @if (IsFiltered)
+                            {
+                                <span>No history entries match the search or filters.</span>
+                            }
+                            else
+                            {
+                                <span>No history yet. Run a query in the editor (F5) and it appears here.</span>
+                            }
+                        </div>
                     }
                     @if (_entries.Count < _total)
                     {
-                        <button class="akml-tool-button akml-hist-more" @onclick="@(() => LoadAsync(false))">
+                        <button class="akml-btn akml-hist-more" @onclick="@(() => LoadAsync(false))">
                             Load more (@(_total - _entries.Count) more)
                         </button>
                     }
@@ -150,7 +181,7 @@
                 <div class="akml-hist-meta-bar">
                     @if (_selected != null)
                     {
-                        <span class="akml-hist-dot" style="color:var(--akml-status-success)">●</span>
+                        <span class="akml-hist-dot is-open"></span>
                         <span class="akml-hist-mtext">@(_selected.Server)@(string.IsNullOrEmpty(_selected.Database) ? "" : " · " + _selected.Database)</span>
                         @if (_versions.Length > 0)
                         {
@@ -160,12 +191,12 @@
                     <span class="akml-hist-spacer"></span>
                     @if (_selected != null)
                     {
-                        <button class="akml-tool-button" @onclick="CopySqlAsync">Copy</button>
-                        <button class="akml-tool-button" @onclick="@(() => RenameAsync(_selected))">Rename</button>
-                        <button class="akml-tool-button" @onclick="@(() => DeleteAsync(_selected))">Delete</button>
-                        <button class="akml-tool-button" @onclick="@(() => RemoveOlderAsync(_selected))">Remove older</button>
-                        <button class="akml-tool-button" @onclick="ReExecuteAsync">Re-execute</button>
-                        <button class="akml-tool-button primary" @onclick="OpenInEditorAsync" data-testid="history-open">Open</button>
+                        <button class="akml-btn" @onclick="CopySqlAsync" data-testid="history-copy">Copy</button>
+                        <button class="akml-btn" @onclick="@(() => RenameAsync(_selected))" data-testid="history-rename">Rename</button>
+                        <button class="akml-btn" @onclick="@(() => DeleteAsync(_selected))" data-testid="history-delete">Delete</button>
+                        <button class="akml-btn" @onclick="@(() => RemoveOlderAsync(_selected))" data-testid="history-remove-older">Remove older</button>
+                        <button class="akml-btn" @onclick="ReExecuteAsync">Re-execute</button>
+                        <button class="akml-btn akml-btn--primary" @onclick="OpenInEditorAsync" data-testid="history-open">Open</button>
                     }
                 </div>
             </div>
@@ -182,15 +213,19 @@
 
 @if (_compareOpen)
 {
-    <div class="akml-hist-modal-backdrop" @onclick="CloseCompare">
-        <div class="akml-hist-modal" @onclick:stopPropagation="true">
-            <div class="akml-hist-modal-hdr">Compare</div>
-            <div class="akml-hist-modal-body">
+    @* Spec 041 (R59): the shared scrim and dialog, as every other modal; Escape and the scrim close it. *@
+    <div class="akml-scrim" @onclick="CloseCompare">
+        <div class="akml-dialog akml-dialog--wide akml-hist-compare" role="dialog" aria-modal="true" aria-labelledby="akml-hist-compare-title"
+             data-testid="history-compare-dialog" tabindex="-1" @onclick:stopPropagation="true" @onkeydown="OnCompareKeyDown">
+            <div class="akml-dialog-header">
+                <h2 class="akml-dialog-title" id="akml-hist-compare-title">Compare</h2>
+            </div>
+            <div class="akml-dialog-body akml-hist-compare-body">
                 <pre class="akml-hist-preview">@_diffLeft</pre>
                 <pre class="akml-hist-preview">@_diffRight</pre>
             </div>
-            <div class="akml-hist-modal-foot">
-                <button class="akml-tool-button" @onclick="CloseCompare">Close</button>
+            <div class="akml-dialog-footer">
+                <button type="button" class="akml-btn" @onclick="CloseCompare" data-testid="history-compare-close">Close</button>
             </div>
         </div>
     </div>
@@ -210,6 +245,7 @@
         border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
         padding: 2px var(--akml-scalar-spacing-xs); }
     .akml-hist-spacer { flex: 1 1 auto; }
+    .akml-hist-header { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-xs); }
     .akml-hist-body { flex: 1 1 auto; display: grid; grid-template-columns: 42% 1fr; min-height: 0; }
     .akml-hist-left { display: grid; grid-template-rows: 1fr auto; min-height: 0;
         border-right: 1px solid var(--akml-border-default); }
@@ -222,21 +258,20 @@
     .akml-hist-row { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
         border-left: 3px solid transparent; border-bottom: 1px solid var(--akml-border-subtle); }
-    .akml-hist-row:hover { background-color: var(--akml-surface-hover); }
-    .akml-hist-row.selected { background-color: var(--akml-surface-selection);
-        border-left-color: var(--akml-accent-primary); }
     .akml-hist-star { cursor: pointer; color: var(--akml-text-disabled); font-size: 14px; width: 16px; text-align: center; }
     .akml-hist-star.on { color: var(--akml-history-star-active, var(--akml-status-warning)); }
+    .akml-hist-star.on .akml-icon, .akml-hist-fav.is-active .akml-icon { fill: currentColor; }
     .akml-hist-rowmain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
     .akml-hist-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         color: var(--akml-text-primary); font-weight: var(--akml-type-chrome-weight); }
     .akml-hist-meta { display: flex; gap: 4px; align-items: center; color: var(--akml-text-secondary);
         font-size: 11px; overflow: hidden; }
     .akml-hist-conn { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .akml-hist-dot { font-size: 9px; margin-right: 2px; }
+    .akml-hist-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .akml-hist-dot.is-open { background-color: var(--akml-status-success); }
+    .akml-hist-dot.is-closed { background-color: var(--akml-status-danger); }
     .akml-hist-count { font-style: italic; }
     .akml-hist-cmp { flex: 0 0 auto; }
-    .akml-hist-none { color: var(--akml-text-secondary); font-style: italic; padding: var(--akml-scalar-spacing-m); }
     .akml-hist-more { margin: var(--akml-scalar-spacing-s); }
     .akml-hist-versions { border-top: 1px solid var(--akml-border-default); display: flex; flex-direction: column;
         max-height: 38%; background-color: var(--akml-surface-panel); }
@@ -264,7 +299,7 @@
     .akml-hist-preview .tok-keyword { color: var(--akml-accent-primary); }
     .akml-hist-preview .tok-string { color: var(--akml-status-success); }
     .akml-hist-preview .tok-comment { color: var(--akml-text-secondary); font-style: italic; }
-    .akml-hist-preview .hit { background-color: var(--akml-history-match-highlight, var(--akml-surface-selection)); }
+    .akml-hist-preview .hit { background-color: var(--akml-history-matchhighlight); }
     .akml-hist-meta-bar { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
         padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
         border-top: 1px solid var(--akml-border-default); background-color: var(--akml-surface-elevated); }
@@ -274,25 +309,10 @@
     .akml-hist-loading { font-style: italic; }
     .akml-hist-empty { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
         justify-content: center; gap: var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); }
-    .akml-tool-button { font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer; white-space: nowrap; }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
-    .akml-tool-button.active { color: var(--akml-history-star-active, var(--akml-status-warning)); }
-    .akml-tool-button.primary { background-color: var(--akml-accent-primary); color: var(--akml-text-onaccent);
-        border-color: var(--akml-accent-primary); }
-    .akml-hist-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4);
-        display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .akml-hist-modal { width: 80%; height: 70%; display: flex; flex-direction: column;
-        background-color: var(--akml-surface-panel); border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-s); }
-    .akml-hist-modal-hdr { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
-        font-weight: var(--akml-type-chrome-weight); border-bottom: 1px solid var(--akml-border-default); }
-    .akml-hist-modal-body { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr;
-        gap: 1px; min-height: 0; background-color: var(--akml-border-default); }
-    .akml-hist-modal-foot { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
-        display: flex; justify-content: flex-end; border-top: 1px solid var(--akml-border-default); }
+    .akml-hist-compare { height: 70vh; display: flex; flex-direction: column; }
+    .akml-hist-compare-body { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; gap: var(--akml-scalar-spacing-s); min-height: 0; }
+    .akml-hist-compare-body .akml-hist-preview { margin: 0; overflow: auto; }
+    .akml-hist-fav.is-active { color: var(--akml-status-warning); }
 </style>
 
 @code {
@@ -332,6 +352,7 @@
     private string _diffRight = string.Empty;
 
     private IJSObjectReference? _downloadModule;
+    private IJSObjectReference? _ui;
 
     protected override async Task OnInitializedAsync()
     {
@@ -492,10 +513,24 @@
 
     private void CloseCompare() => _compareOpen = false;
 
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _favoritesOnly || _server != null || _database != null;
+
+    private void OnCompareKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CloseCompare();
+    }
+
     private async Task RenameAsync(HistoryEntryDto entry)
     {
         var current = entry.TabTitle ?? string.Empty;
-        var name = await JS.InvokeAsync<string?>("prompt", "Rename history entry:", current);
+        var name = await Dialogs.PromptAsync(new PromptRequest
+        {
+            Title = "Rename history entry",
+            Label = "Name",
+            InitialValue = current,
+            ConfirmLabel = "Rename",
+            Validate = value => string.IsNullOrWhiteSpace(value) ? "Enter a name." : null,
+        });
         if (string.IsNullOrWhiteSpace(name) || name == current) return;
         if (await HistorySvc.RenameAsync(entry.Id, name.Trim(), CancellationToken.None))
         {
@@ -508,7 +543,13 @@
 
     private async Task DeleteAsync(HistoryEntryDto entry)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Delete this history entry?")) return;
+        if (!await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete history entry",
+            Message = $"Delete “{RowFor(entry).DisplayName}” from SQL History? This cannot be undone.",
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        })) return;
         await HistorySvc.DeleteAsync(new[] { entry.Id }, CancellationToken.None);
         ClearDetail();
         await LoadAsync(true);
@@ -516,7 +557,13 @@
 
     private async Task RemoveOlderAsync(HistoryEntryDto entry)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", "Remove all entries older than this one? (favorites are kept)")) return;
+        if (!await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Remove older entries",
+            Message = "Remove every entry older than this one? Favorites are kept.",
+            ConfirmLabel = "Remove",
+            Destructive = true,
+        })) return;
         var n = await HistorySvc.RemoveOlderThanAsync(entry.Id, keepFavorites: true, CancellationToken.None);
         _statusMsg = $"Removed {n} older entr{(n == 1 ? "y" : "ies")}.";
         await LoadAsync(true);
@@ -524,8 +571,20 @@
 
     private async Task CopySqlAsync()
     {
-        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", _previewSql); _statusMsg = "Copied SQL."; }
-        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Copy failed: {ex.Message}"); }
+        // Spec 041 (T201, R5, N14): copyText also works on the http LAN deployment, where navigator.clipboard is absent.
+        bool copied;
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            copied = await _ui.InvokeAsync<bool>("copyText", _previewSql);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Copy failed: {ex.Message}");
+            copied = false;
+        }
+        if (copied) Notifications.Notify("Copied SQL.", NotificationKind.Success);
+        else Notifications.Notify("Copy failed — select the text and press Ctrl+C.", NotificationKind.Error);
     }
 
     private async Task OpenInEditorAsync()
@@ -651,7 +710,7 @@
 
     private static string ServerDb(HistoryEntryDto e)
     {
-        if (!string.IsNullOrEmpty(e.Server) && !string.IsNullOrEmpty(e.Database)) return $"{e.Server}→{e.Database}";
+        if (!string.IsNullOrEmpty(e.Server) && !string.IsNullOrEmpty(e.Database)) return $"{e.Server} · {e.Database}";
         return e.Server ?? e.Database ?? "";
     }
 
@@ -687,6 +746,11 @@
         if (_downloadModule != null)
         {
             try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
             catch (JSDisconnectedException) { }
         }
     }

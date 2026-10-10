@@ -7,23 +7,30 @@
     <base href="/" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <!--
-        Theme CSS is loaded dynamically by wwwroot/js/akml-theme.js so the chosen mode
-        (system / light / dark / high-contrast) takes effect before Blazor renders. We
-        keep light.css inlined as the boot default to avoid a flash of unstyled content
-        on first paint -- akml-theme.js replaces it on startup.
+        Theme CSS: light.css is the default the link starts with; the classic script straight after it
+        (spec 041 R54) points the link at the remembered theme before the first paint, so the page never
+        flashes the wrong theme. akml-theme.js takes over once Blazor starts.
     -->
     <link id="akml-theme-css" rel="stylesheet" href="css/themes/light.css" />
+    <!-- External (not inline) so the CSP script-src needs no 'unsafe-inline'/hash; classic and synchronous
+         (not a module, which is deferred). See js/akml-theme-boot.js. -->
+    <script src="js/akml-theme-boot.js"></script>
     <!-- Global base + focus rings (token-driven). Loaded AFTER the theme link so it can
          reference the --akml-* custom properties whichever variant is active. -->
     <link rel="stylesheet" href="css/app.css" />
-    <!-- External (not inline) so the CSP script-src needs no 'unsafe-inline'/hash. Applies the
-         boot theme before Blazor renders; see js/akml-theme-boot.js. -->
-    <script type="module" src="js/akml-theme-boot.js"></script>
 </head>
 <body>
-    <div id="app">Loading AKML SQL…</div>
+    <!-- Spec 041 (T205, R66, FR-088): the start-up and crash screens, styled by tokens in css/app.css (no inline
+         styles). Blazor replaces #app's content once it starts, and shows #blazor-error-ui on an unhandled error. -->
+    <div id="app">
+        <div class="akml-boot" role="status">
+            <span class="akml-boot-spinner" aria-hidden="true"></span>
+            <p class="akml-boot-title">AKML SQL</p>
+            <p class="akml-boot-text">Loading the web edition…</p>
+        </div>
+    </div>
 
-    <div id="blazor-error-ui" style="display:none">
+    <div id="blazor-error-ui" class="akml-crash" role="alert">
         Something went wrong. Reload the page to try again.
         <a href="" class="reload">Reload</a>
     </div>

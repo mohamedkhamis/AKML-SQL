@@ -7,11 +7,26 @@
       * Render inline suppression hint (-- akml-disable-line RuleId)
 *@
 @using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
 
 <div class="akml-problems">
-    <div class="akml-problems-header">
-        <span>Problems</span>
-        <span class="akml-problems-count">@(_filtered?.Count ?? 0)</span>
+    @if (!AnalysisEnabled)
+    {
+        @* Spec 041 (FR-034, FR-055): switched off in Settings › Code analysis — say so and offer to turn it on. *@
+        <p class="akml-empty akml-problems-empty" data-testid="problems-analysis-off">
+            Code analysis is off.
+            <button type="button" class="akml-btn" data-testid="problems-enable-analysis" @onclick="OnEnableAnalysis">Turn on</button>
+        </p>
+    }
+    else
+    {
+    <div class="akml-problems-header" data-testid="problems-header">
+        @* Spec 041 (R34): inside the results pane the Problems tab carries the title and the count. *@
+        @if (ShowHeader)
+        {
+            <span data-testid="problems-title">Problems</span>
+            <span class="akml-problems-count">@(_filtered?.Count ?? 0)</span>
+        }
         <span class="akml-problems-spacer"></span>
         <label class="akml-problems-filter-label">
             <input type="checkbox" checked="@_showInfo" @onchange="ToggleInfo" /> Info
@@ -26,7 +41,21 @@
 
     @if (_filtered == null || _filtered.Count == 0)
     {
-        <p class="akml-problems-empty">No problems detected.</p>
+        @* Spec 041 (T205, FR-034, FR-088): truthful about what was analysed, and what to do next. *@
+        <div class="akml-empty akml-problems-empty" data-testid="problems-empty">
+            @if (Findings == null)
+            {
+                <span>This document has not been analysed yet. Run Analyse (Ctrl+K, Ctrl+L).</span>
+            }
+            else if (Findings.Issues is { Length: > 0 })
+            {
+                <span>Every problem is hidden by the Info / Warn / Error filters.</span>
+            }
+            else
+            {
+                <span>No problems found. Run Analyse (Ctrl+K, Ctrl+L) again after a change.</span>
+            }
+        </div>
     }
     else
     {
@@ -62,6 +91,7 @@
                 </li>
             }
         </ul>
+    }
     }
 </div>
 
@@ -146,11 +176,33 @@
 </style>
 
 @code {
+    /// <summary>Spec 041 (FR-055): false when Settings › Code analysis is off — the list says so instead.</summary>
+    [Parameter] public bool AnalysisEnabled { get; set; } = true;
+
+    /// <summary>"Turn on" in the analysis-off message.</summary>
+    [Parameter] public EventCallback OnEnableAnalysis { get; set; }
+
+    /// <summary>Spec 041 (R51): the severities shown when the list opens (Settings › Code analysis). Applied
+    /// once — the first time it is given — so it never undoes what the user toggled here.</summary>
+    [Parameter] public ProblemsFilter? DefaultFilter { get; set; }
+
+    private bool _defaultFilterApplied;
+
     [Parameter] public CodeAnalysisResponse? Findings { get; set; }
     [Parameter] public EventCallback<IssueLocation> OnJumpToIssue { get; set; }
     // Spec 027 T025/T026 (US4) — suppression actions surfaced up to the editor page.
     [Parameter] public EventCallback<IssueLocation> OnSuppressLine { get; set; }
     [Parameter] public EventCallback<IssueLocation> OnSuppressGlobal { get; set; }
+
+    /// <summary>Spec 041 (R34) — show the "Problems" title and count; off inside the results pane, whose tab
+    /// shows them. The severity filters stay either way.</summary>
+    [Parameter] public bool ShowHeader { get; set; } = true;
+
+    /// <summary>Spec 041 (R34) — the number of findings the filters let through, raised only when it changes
+    /// (the Problems tab badge).</summary>
+    [Parameter] public EventCallback<int> OnVisibleCountChanged { get; set; }
+
+    private int _lastVisibleCount = -1;
 
     private bool _showInfo = true;
     private bool _showWarn = true;
@@ -163,16 +215,36 @@
     private const int SeverityWarning = 2;
     private const int SeverityError = 3;
 
-    protected override void OnParametersSet() => Recompute();
+    protected override void OnParametersSet()
+    {
+        if (!_defaultFilterApplied && DefaultFilter != null)
+        {
+            _defaultFilterApplied = true;
+            _showInfo = DefaultFilter.ShowInfo;
+            _showWarn = DefaultFilter.ShowWarning;
+            _showError = DefaultFilter.ShowError;
+        }
+        Recompute();
+    }
 
     private void Recompute()
     {
-        if (Findings?.Issues == null) { _filtered = null; return; }
-        _filtered = Findings.Issues
-            .Where(i => MatchesFilter(i.Severity))
-            .OrderBy(i => i.Line)
-            .ThenBy(i => i.Column)
-            .ToList();
+        _filtered = !AnalysisEnabled || Findings?.Issues == null
+            ? null
+            : Findings.Issues
+                .Where(i => MatchesFilter(i.Severity))
+                .OrderBy(i => i.Line)
+                .ThenBy(i => i.Column)
+                .ToList();
+
+        int count = _filtered?.Count ?? 0;
+        if (count != _lastVisibleCount)
+        {
+            _lastVisibleCount = count;
+            // Raised from OnParametersSet too, so only on a change — a parent that re-renders on it must
+            // not loop.
+            _ = OnVisibleCountChanged.InvokeAsync(count);
+        }
     }
 
     private bool MatchesFilter(int severity) =>

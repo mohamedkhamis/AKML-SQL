@@ -9,20 +9,22 @@
 @using AkmlSql.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
 @inject IProfileStore ProfileStore
-@inject IJSRuntime JS
+@inject IDialogService Dialogs
 @implements IDisposable
 
 <div class="akml-profile-picker">
-    <label for="@_selectId" class="akml-profile-label">Profile</label>
+    @* Spec 041 (FR-054): "Style", the word Settings › Format and the Format styles page use. *@
+    <label for="@_selectId" class="akml-profile-label">Style</label>
     <select id="@_selectId" class="akml-profile-select" data-testid="profile-picker" value="@_activeId" @onchange="OnSelectionChanged">
         @if (_profiles != null)
         {
             @if (_profiles.Any(p => p.Location == ProfileLocation.Engine) || _unlistedEngineStyle != null)
             {
-                <optgroup label="Shared with SSMS">
+                @* Spec 041 (FR-063): "Shared with SSMS" only when SSMS started the engine. *@
+                <optgroup label="@ProfileStore.EngineStylesGroupName">
                     @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Engine))
                     {
-                        <option value="@p.Id">@p.Name</option>
+                        <option value="@p.Id">@OptionText(p)</option>
                     }
                     @if (_unlistedEngineStyle != null)
                     {
@@ -30,18 +32,21 @@
                     }
                 </optgroup>
             }
-            <optgroup label="Built-in">
-                @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.BuiltIn))
-                {
-                    <option value="@p.Id">@p.Name</option>
-                }
-            </optgroup>
+            @if (_profiles.Any(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.BuiltIn))
+            {
+                <optgroup label="Built-in">
+                    @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.BuiltIn))
+                    {
+                        <option value="@p.Id">@OptionText(p)</option>
+                    }
+                </optgroup>
+            }
             @if (_profiles.Any(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.User))
             {
                 <optgroup label="User">
                     @foreach (var p in _profiles.Where(p => p.Location == ProfileLocation.Browser && p.Origin == ProfileOrigin.User))
                     {
-                        <option value="@p.Id">@p.Name</option>
+                        <option value="@p.Id">@OptionText(p)</option>
                     }
                 </optgroup>
             }
@@ -50,7 +55,7 @@
                 <optgroup label="SQL Prompt">
                     @foreach (var p in _profiles.Where(p => p.Origin == ProfileOrigin.SqlPromptImport))
                     {
-                        <option value="@p.Id">@p.Name</option>
+                        <option value="@p.Id">@OptionText(p)</option>
                     }
                 </optgroup>
             }
@@ -60,9 +65,9 @@
     @* Built-in profiles are non-deletable. *@
     @if (_active != null && _active.Origin != ProfileOrigin.BuiltIn)
     {
-        <button class="akml-profile-button" @onclick="DeleteActiveAsync" title="Delete profile">Delete</button>
+        <button type="button" class="akml-btn akml-btn--destructive" @onclick="DeleteActiveAsync" title="Delete this style">Delete…</button>
     }
-    <a class="akml-profile-button" href="/styles" title="Edit formatting styles (SQL Prompt style editor)" data-testid="profile-edit-styles">Edit…</a>
+    <a class="akml-btn" href="/styles" title="Edit formatting styles (SQL Prompt style editor)" data-testid="profile-edit-styles">Edit…</a>
 </div>
 
 <style>
@@ -84,20 +89,6 @@
         border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs);
         min-width: 200px;
-    }
-    .akml-profile-button {
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
-        background-color: transparent;
-        color: var(--akml-text-secondary);
-        border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        cursor: pointer;
-    }
-    .akml-profile-button:hover {
-        background-color: var(--akml-surface-hover);
-        color: var(--akml-text-primary);
     }
 </style>
 
@@ -128,6 +119,20 @@
     }
 
     private void OnStylesChanged() => _ = InvokeAsync(ReloadAsync);
+
+    /// <summary>
+    /// Spec 041 (FR-084): a closed select shows only the option's text, so a name used in two groups says which:
+    /// "Khamis Style (built-in)" beside "Khamis Style (on this engine)". A unique name is shown as it is.
+    /// </summary>
+    private string OptionText(ProfileRecord p)
+    {
+        if (_profiles == null || _profiles.Count(o => string.Equals(o.Name, p.Name, StringComparison.OrdinalIgnoreCase)) < 2) return p.Name;
+        var group = p.Location == ProfileLocation.Engine ? (ProfileStore.EngineStylesGroupName == "Shared with SSMS" ? "shared with SSMS" : "on this engine")
+            : p.Origin == ProfileOrigin.BuiltIn ? "built-in"
+            : p.Origin == ProfileOrigin.SqlPromptImport ? "SQL Prompt"
+            : "in this browser";
+        return $"{p.Name} ({group})";
+    }
 
     public void Dispose() => ProfileStore.StylesChanged -= OnStylesChanged;
 
@@ -196,13 +201,19 @@
     {
         if (_active == null || _active.Origin == ProfileOrigin.BuiltIn) return;
 
-        // Lightweight confirm via JS to keep the UI clean -- a real modal lands with the
-        // Settings page redesign.
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Delete profile '{_active.Name}'?");
+        // Spec 041 (FR-054, FR-102): the in-app confirmation, naming the style.
+        var confirmed = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete style",
+            Message = $"Delete the style “{_active.Name}”? Format SQL goes back to the default style.",
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        });
         if (!confirmed) return;
 
         await ProfileStore.DeleteAsync(_active.Id);
-        await ProfileStore.SetActiveIdAsync("builtin.default");
+        // Back to the store's default — the same one Settings › Format and Restore defaults use.
+        await ProfileStore.ResetActiveAsync();
         // The active style changes, so the reload notifies the editor (with the full style).
         await ReloadAsync();
     }

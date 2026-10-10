@@ -1,0 +1,47 @@
+@*
+    Spec 041 (research R42, FR-041) — the navigation bar, which the editor page may hide (View › Navigation bar);
+    a hidden bar leaves a strip that brings it back. Every other page always shows it.
+*@
+@using AkmlSql.Web.Services
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.Extensions.DependencyInjection
+@implements IDisposable
+@inject NavigationManager Nav
+@inject IServiceProvider Services
+
+@if (Hidden)
+{
+    <button type="button" class="akml-edge-nav" data-testid="workspace-edge-nav" title="Show navigation bar" @onclick="ShowAsync">
+        Show navigation bar
+    </button>
+}
+else
+{
+    <NavMenu />
+}
+
+@code {
+    private IWorkspaceLayoutStore? _layout;
+
+    private bool Hidden =>
+        _layout != null && !_layout.Current.NavVisible && WorkspaceRoutes.IsEditorRoute(Nav.ToBaseRelativePath(Nav.Uri));
+
+    protected override void OnInitialized()
+    {
+        _layout = Services.GetService<IWorkspaceLayoutStore>();
+        if (_layout != null) _layout.Changed += OnChanged;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    private Task ShowAsync() => _layout?.SetAsync(WorkspaceLayoutFields.NavVisible, true) ?? Task.CompletedTask;
+
+    public void Dispose()
+    {
+        if (_layout != null) _layout.Changed -= OnChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

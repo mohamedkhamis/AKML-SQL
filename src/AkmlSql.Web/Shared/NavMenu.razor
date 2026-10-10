@@ -1,19 +1,19 @@
 @*
-    Spec 021 T029 — top navigation. Real route links land alongside the page
-    components in M2 (T031 / T039 / T045 onwards).
+    Spec 021 T029 — top navigation. Spec 041 (R43, R63, FR-050, FR-080): five places, the current one highlighted
+    and announced as the current page. AI providers, Schema cache and Diagnostics are Settings sections now.
 *@
-<nav class="akml-nav">
+@implements IDisposable
+@inject NavigationManager Nav
+
+<nav class="akml-nav" aria-label="Main">
     <span class="akml-brand">AKML SQL</span>
     <span class="akml-tagline">web edition</span>
     <span class="akml-spacer"></span>
-    <a class="akml-nav-link" href="/">Editor</a>
-    <a class="akml-nav-link" href="/snippets">Snippets</a>
-    <a class="akml-nav-link" href="/styles">Format styles</a>
-    <a class="akml-nav-link" href="/history">History</a>
-    <a class="akml-nav-link" href="/settings">Settings</a>
-    <a class="akml-nav-link" href="/settings/ai">AI providers</a>
-    <a class="akml-nav-link" href="/settings/schema-cache">Schema cache</a>
-    <a class="akml-nav-link" href="/diagnostics">Diagnostics</a>
+    @foreach (var place in Places)
+    {
+        <NavLink class="@LinkClass(place)" href="@place.Href" Match="@(place.Href.Length == 0 ? NavLinkMatch.All : NavLinkMatch.Prefix)"
+                 data-testid="@("nav-" + place.Id)" aria-current="@(PlaceOf(Nav.ToBaseRelativePath(Nav.Uri)) == place.Id ? "page" : null)">@place.Title</NavLink>
+    }
 </nav>
 
 <style>
@@ -53,12 +53,63 @@
         color: var(--akml-text-link);
     }
     .akml-nav-link.active {
-        color: var(--akml-text-link);
+        color: var(--akml-text-primary);
         background-color: var(--akml-surface-selection);
         font-weight: var(--akml-type-chrometitle-weight);
+    }
+    [data-akml-theme="high-contrast"] .akml-nav-link.active {
+        color: var(--akml-text-onaccent);
     }
     .akml-disabled {
         color: var(--akml-text-disabled);
         pointer-events: none;
     }
 </style>
+
+@code {
+    private sealed record Place(string Id, string Title, string Href);
+
+    private static readonly Place[] Places =
+    {
+        new("editor", "Editor", ""),
+        new("snippets", "Snippets", "snippets"),
+        new("styles", "Format styles", "styles"),
+        new("history", "History", "history"),
+        new("settings", "Settings", "settings"),
+    };
+
+    /// <summary>
+    /// The place a base-relative address belongs to: the editor answers at <c>/</c> and <c>/editor</c>, Settings at
+    /// <c>/settings…</c> and <c>/diagnostics</c>; anything else is no place.
+    /// </summary>
+    internal static string? PlaceOf(string relative)
+    {
+        var path = relative.Split('?', '#')[0].Trim('/');
+        var first = path.Split('/')[0].ToLowerInvariant();
+        return first switch
+        {
+            "" or "editor" => "editor",
+            "snippets" => "snippets",
+            "styles" => "styles",
+            "history" => "history",
+            "settings" or "diagnostics" => "settings",
+            _ => null,
+        };
+    }
+
+    // NavLink highlights its own address; the editor's /editor and Settings' /diagnostics are added here.
+    private string LinkClass(Place place)
+    {
+        var relative = Nav.ToBaseRelativePath(Nav.Uri);
+        var first = relative.Split('?', '#')[0].Trim('/').Split('/')[0];
+        var other = PlaceOf(relative) == place.Id && !string.Equals(first, place.Href, StringComparison.OrdinalIgnoreCase);
+        return other ? "akml-nav-link active" : "akml-nav-link";
+    }
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

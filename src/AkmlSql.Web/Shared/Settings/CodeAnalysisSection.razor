@@ -1,0 +1,105 @@
+@*
+    Spec 041 (R51, FR-055) — Settings › Code analysis: the master switch, re-analyse after format, the Problems
+    tab's default filters, and the rules suppressed everywhere (with Undo). Other per-rule values are listed
+    read-only as severity changes.
+*@
+@using AkmlSql.Web.Services
+@using AkmlSql.Engine.Analysis
+@inject IAnalysisSettingsStore Store
+@inject INotificationService Notifications
+
+<SettingRow Id="analysis-enabled" Kind="switch">
+    <input id="setting-analysis-enabled-control" type="checkbox" checked="@_settings.Enabled"
+           aria-describedby="setting-analysis-enabled-help" @onchange="OnEnabledAsync" />
+</SettingRow>
+<SettingRow Id="analysis-reanalyse-after-format" Kind="switch">
+    <input id="setting-analysis-reanalyse-after-format-control" type="checkbox" checked="@_settings.AutoAnalyseOnFormat"
+           disabled="@(!_settings.Enabled)" aria-describedby="setting-analysis-reanalyse-after-format-help" @onchange="OnAutoAnalyseAsync" />
+</SettingRow>
+<SettingRow Id="analysis-problems-filter" Kind="block">
+    <span role="group" aria-label="Default Problems filters" aria-describedby="setting-analysis-problems-filter-help" class="akml-setting-control">
+        <label><input type="checkbox" checked="@_settings.ProblemsFilter.ShowInfo" @onchange="@(e => OnFilterAsync(e, (f, v) => f.ShowInfo = v))" /> Info</label>
+        <label><input type="checkbox" checked="@_settings.ProblemsFilter.ShowWarning" @onchange="@(e => OnFilterAsync(e, (f, v) => f.ShowWarning = v))" /> Warning</label>
+        <label><input type="checkbox" checked="@_settings.ProblemsFilter.ShowError" @onchange="@(e => OnFilterAsync(e, (f, v) => f.ShowError = v))" /> Error</label>
+    </span>
+</SettingRow>
+<SettingRow Id="analysis-suppressed-rules" Kind="block">
+    <div id="setting-analysis-suppressed-rules-control" aria-describedby="setting-analysis-suppressed-rules-help">
+        @if (Suppressed.Count == 0 && Remapped.Count == 0)
+        {
+            <p class="akml-settings-status">No rule is suppressed.</p>
+        }
+        else
+        {
+            <ul class="akml-settings-rules">
+                @foreach (var (id, _) in Suppressed)
+                {
+                    <li data-testid="@($"suppressed-rule-{id}")">
+                        <strong>@id</strong> @RuleName(id)
+                        <button type="button" class="akml-btn akml-btn--ghost" data-testid="@($"suppressed-rule-undo-{id}")"
+                                aria-label="@($"Undo: bring {id} back")" @onclick="@(() => UndoAsync(id))">Undo</button>
+                    </li>
+                }
+                @foreach (var (id, severity) in Remapped)
+                {
+                    <li data-testid="@($"remapped-rule-{id}")"><strong>@id</strong> @RuleName(id) — reported as @severity</li>
+                }
+            </ul>
+        }
+    </div>
+</SettingRow>
+
+@code {
+    private WebAnalysisSettings _settings = new();
+
+    private List<(string Id, string Value)> Suppressed =>
+        _settings.RuleOverrides.Where(kv => string.Equals(kv.Value, "off", StringComparison.OrdinalIgnoreCase))
+            .Select(kv => (kv.Key, kv.Value)).OrderBy(r => r.Key, StringComparer.OrdinalIgnoreCase).ToList();
+
+    private List<(string Id, string Value)> Remapped =>
+        _settings.RuleOverrides.Where(kv => !string.Equals(kv.Value, "off", StringComparison.OrdinalIgnoreCase))
+            .Select(kv => (kv.Key, kv.Value)).OrderBy(r => r.Key, StringComparer.OrdinalIgnoreCase).ToList();
+
+    private static string RuleName(string id)
+    {
+        var name = RuleMetadataCatalog.Get(id).Name;
+        return string.IsNullOrEmpty(name) || string.Equals(name, id, StringComparison.OrdinalIgnoreCase) ? string.Empty : name;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Store.ReloadAsync();
+        _settings = await Store.GetAsync();
+    }
+
+    private async Task SaveAsync(string message)
+    {
+        await Store.SetAsync(_settings);
+        Notifications.Notify(message, NotificationKind.Success);
+    }
+
+    private Task OnEnabledAsync(ChangeEventArgs e)
+    {
+        _settings.Enabled = e.Value is bool b && b;
+        return SaveAsync(_settings.Enabled ? "Code analysis is on." : "Code analysis is off.");
+    }
+
+    private Task OnAutoAnalyseAsync(ChangeEventArgs e)
+    {
+        _settings.AutoAnalyseOnFormat = e.Value is bool b && b;
+        return SaveAsync(_settings.AutoAnalyseOnFormat ? "Format SQL re-analyses." : "Format SQL no longer re-analyses.");
+    }
+
+    private Task OnFilterAsync(ChangeEventArgs e, Action<ProblemsFilter, bool> set)
+    {
+        set(_settings.ProblemsFilter, e.Value is bool b && b);
+        return SaveAsync("Default Problems filters saved.");
+    }
+
+    /// <summary>Undo removes the key exactly as stored (R48).</summary>
+    private Task UndoAsync(string id)
+    {
+        _settings.RuleOverrides.Remove(id);
+        return SaveAsync($"{id} is back.");
+    }
+}

@@ -1,0 +1,138 @@
+@*
+    Spec 041 (R32, FR-057) — Settings › Connections, one vocabulary for both kinds: engine connections (add,
+    connect, re-pair with a new PIN, remove — confirmed) and SQL Server connections (the connection now, the saved
+    ones with Connect and Delete — confirmed — and the connection manager). A saved connection the web app cannot
+    use says why, in place, and stays listed. No password is ever asked for or kept here. No Restore defaults.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject ISqlConnectionService SqlConn
+@inject ISavedSqlConnectionStore Saved
+@inject IEngineBridge Bridge
+@inject IConnectionManagerController ConnManager
+@inject IDialogService Dialogs
+@inject INotificationService Notifications
+
+<SettingRow Id="connections-engines" Kind="block">
+    <ConnectionPickerComponent ShowTitle="false" />
+</SettingRow>
+
+<SettingRow Id="connections-sql" Kind="block">
+    <p class="akml-hint">
+        The paired engine opens the SQL Server connection, so the server can be on this computer or another one —
+        the other server does not need AKML SQL installed. Windows authentication uses the engine computer's
+        identity; for a remote server, use SQL Server authentication.
+    </p>
+
+    @if (SqlConn.IsConnected)
+    {
+        <p class="akml-settings-status" data-testid="settings-sql-connected">
+            Connected to <strong>@SqlConn.Server</strong> / <strong>@SqlConn.Database</strong>.
+            <button type="button" class="akml-btn" @onclick="DisconnectAsync">Disconnect</button>
+        </p>
+    }
+    else if (Bridge.State != BridgeState.Open)
+    {
+        <p class="akml-settings-status">Pair an engine first (Engine connections › Add), then connect to SQL Server.</p>
+    }
+    else
+    {
+        <p class="akml-settings-status">Not connected to SQL Server.</p>
+    }
+
+    @if (_saved is { Count: > 0 })
+    {
+        <table class="akml-table">
+            <thead><tr><th>Name</th><th>Server / database</th><th>Authentication</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _saved)
+                {
+                    var (ok, why) = SqlConnectionService.ValidateTarget(c.Server, c.Database, c.WindowsAuth);
+                    <tr data-testid="@($"saved-connection-{c.Id}")">
+                        <td>@c.Name</td>
+                        <td>@c.Server / @c.Database</td>
+                        <td>@(c.WindowsAuth ? "Windows" : $"SQL Server login {c.Login}")</td>
+                        <td>
+                            @if (!ok)
+                            {
+                                <span class="akml-field-error" data-testid="@($"saved-connection-problem-{c.Id}")">@why</span>
+                            }
+                            else if (c.WindowsAuth)
+                            {
+                                <button type="button" class="akml-btn" disabled="@(Bridge.State != BridgeState.Open)"
+                                        @onclick="@(() => ConnectAsync(c))">Connect</button>
+                            }
+                            else
+                            {
+                                @* SQL Server authentication: the password is asked for in the connection manager, never kept. *@
+                                <button type="button" class="akml-btn" @onclick="@(() => ConnManager.Open())">Connect…</button>
+                            }
+                            <button type="button" class="akml-btn akml-btn--danger" data-testid="@($"saved-connection-delete-{c.Id}")"
+                                    @onclick="@(() => DeleteAsync(c))">Delete…</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <button type="button" class="akml-btn" @onclick="() => ConnManager.Open()" data-testid="settings-manage-connections">Manage connections…</button>
+</SettingRow>
+
+@code {
+    private IReadOnlyList<SavedSqlConnection>? _saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SqlConn.StateChanged += OnStateChanged;
+        Bridge.StateChanged += OnBridgeStateChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _saved = await Saved.ListAsync();
+
+    private void OnStateChanged() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    private void OnBridgeStateChanged(BridgeState state) => _ = InvokeAsync(StateHasChanged);
+
+    private async Task ConnectAsync(SavedSqlConnection c)
+    {
+        var (ok, error) = await SqlConn.ConnectAsync(c.Server, c.Database, windowsAuth: true, user: null, password: null, CancellationToken.None);
+        if (ok)
+        {
+            await Saved.SetActiveIdAsync(c.Id);
+            Notifications.Notify($"Connected to {c.Server} / {c.Database}.", NotificationKind.Success);
+        }
+        else
+        {
+            Notifications.Notify(error ?? $"Could not connect to {c.Server}.", NotificationKind.Error);
+        }
+    }
+
+    private async Task DisconnectAsync()
+    {
+        await SqlConn.DisconnectAsync();
+        Notifications.Notify("Disconnected from SQL Server.", NotificationKind.Success);
+    }
+
+    private async Task DeleteAsync(SavedSqlConnection c)
+    {
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete saved connection",
+            Message = $"Delete the saved connection “{c.Name}” ({c.Server} / {c.Database})?",
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        });
+        if (!ok) return;
+        await Saved.RemoveAsync(c.Id);
+        Notifications.Notify($"Deleted the saved connection “{c.Name}”.", NotificationKind.Success);
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        SqlConn.StateChanged -= OnStateChanged;
+        Bridge.StateChanged -= OnBridgeStateChanged;
+    }
+}

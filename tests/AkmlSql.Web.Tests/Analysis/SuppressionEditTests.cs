@@ -101,5 +101,7 @@ public sealed class SuppressionEditTests
             => _settings = new WebAnalysisSettings { RuleOverrides = overrides };
         public Task<WebAnalysisSettings> GetAsync() => Task.FromResult(_settings);
         public Task SetAsync(WebAnalysisSettings settings) => Task.CompletedTask;
+        public Task ResetAsync() => Task.CompletedTask;
+        public Task ReloadAsync() => Task.CompletedTask;
     }
 }

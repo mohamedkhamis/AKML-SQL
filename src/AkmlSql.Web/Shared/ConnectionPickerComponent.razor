@@ -16,11 +16,16 @@
 @inject IPairingTokenVault Vault
 @inject IEngineBridge Bridge
 @inject IDiagnosticsRingBuffer Diagnostics
+@inject IDialogService Dialogs
+@inject INotificationService Notifications
 
 <div class="akml-connections">
     <div class="akml-connections-header">
-        <h3>Engine connections</h3>
-        <button class="akml-tool-button" @onclick="ShowAddDialog">Add</button>
+        @if (ShowTitle)
+        {
+            <h3>Engine connections</h3>
+        }
+        <button class="akml-btn" @onclick="ShowAddDialog">Add</button>
     </div>
 
     @* The question users actually have: "does the other server need AKML on it?" Answered here,
@@ -47,8 +52,14 @@
                     <span class="akml-connections-name">@c.Name</span>
                     <span class="akml-connections-host">@c.Host:@c.Port</span>
                     <span class="akml-connections-badge">@(c.IsLocalhost ? "Local" : "LAN")</span>
-                    <button class="akml-tool-button" @onclick="@(() => ConnectAsync(c))">Connect</button>
-                    <button class="akml-tool-button" @onclick="@(() => RemoveAsync(c))">Remove</button>
+                    <button class="akml-btn" @onclick="@(() => ConnectAsync(c))">Connect</button>
+                    @if (!c.IsLocalhost)
+                    {
+                        @* Spec 041 (FR-057): a new PIN replaces the stored pairing token (an engine re-installed, or
+                           a token that expired). *@
+                        <button class="akml-btn" data-testid="@($"engine-repair-{c.Id}")" @onclick="@(() => RepairAsync(c))">Re-pair…</button>
+                    }
+                    <button class="akml-btn" data-testid="@($"engine-remove-{c.Id}")" @onclick="@(() => RemoveAsync(c))">Remove…</button>
                 </li>
             }
         </ul>
@@ -58,15 +69,14 @@
     {
         <div class="akml-connections-dialog">
             <h4>Add connection</h4>
-            <label>Name <input @bind="_form.Name" placeholder="optional" data-testid="engine-add-name" /></label>
-            <label>
-                Address
-                <input @bind="_form.Host" @bind:event="oninput" placeholder="localhost, a server name or IP, or host:port"
+            <label class="akml-field"><span class="akml-field-label">Name</span>
+                <input class="akml-input" @bind="_form.Name" placeholder="optional" data-testid="engine-add-name" /></label>
+            <label class="akml-field"><span class="akml-field-label">Address</span>
+                <input class="akml-input" @bind="_form.Host" @bind:event="oninput" placeholder="localhost, a server name or IP, or host:port"
                        data-testid="engine-add-host" />
             </label>
-            <label>
-                Port
-                <input type="number" min="1" max="65535" @bind="_form.Port" data-testid="engine-add-port" />
+            <label class="akml-field"><span class="akml-field-label">Port</span>
+                <input class="akml-input" type="number" min="1" max="65535" @bind="_form.Port" data-testid="engine-add-port" />
             </label>
             <p class="akml-connections-hint">
                 Use the <b>Bridge port</b> from <code>%ProgramData%\AKML SQL Web\INSTALL-SUMMARY.txt</code> on the engine
@@ -74,9 +84,8 @@
             </p>
             @if (NeedsPin)
             {
-                <label>
-                    Pairing PIN
-                    <input @bind="_form.PairingPin" inputmode="numeric" autocomplete="off" placeholder="PIN from the engine computer"
+                <label class="akml-field"><span class="akml-field-label">Pairing PIN</span>
+                    <input class="akml-input" @bind="_form.PairingPin" inputmode="numeric" autocomplete="off" placeholder="PIN from the engine computer"
                            data-testid="engine-add-pin" />
                 </label>
                 <p class="akml-connections-hint">
@@ -85,8 +94,8 @@
                 </p>
             }
             <div class="akml-connections-dialog-buttons">
-                <button class="akml-tool-button" @onclick="SubmitAddAsync" data-testid="engine-add-pair">Pair</button>
-                <button class="akml-tool-button" @onclick="() => _showAdd = false">Cancel</button>
+                <button class="akml-btn" @onclick="SubmitAddAsync" data-testid="engine-add-pair">Pair</button>
+                <button class="akml-btn" @onclick="() => _showAdd = false">Cancel</button>
             </div>
             @if (!string.IsNullOrEmpty(_lastError))
             {
@@ -108,7 +117,7 @@
             @if (d.TrustUrl is not null)
             {
                 <p>
-                    <a class="akml-tool-button" href="@d.TrustUrl" target="_blank" rel="noopener noreferrer"
+                    <a class="akml-btn" href="@d.TrustUrl" target="_blank" rel="noopener noreferrer"
                        data-testid="engine-trust-link">Open the engine address in a new tab</a>
                 </p>
             }
@@ -160,14 +169,6 @@
         border: 1px solid var(--akml-border-default);
         border-radius: var(--akml-scalar-radius-xs);
     }
-    .akml-connections-dialog label { display: block; margin-bottom: var(--akml-scalar-spacing-s); }
-    .akml-connections-dialog input {
-        margin-left: var(--akml-scalar-spacing-xs);
-        background-color: var(--akml-surface-canvas);
-        color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default);
-        padding: var(--akml-scalar-spacing-xs);
-    }
     .akml-connections-dialog-buttons {
         display: flex;
         gap: var(--akml-scalar-spacing-s);
@@ -193,18 +194,13 @@
     .akml-connections-diagnosis-summary { margin-top: 0; font-weight: bold; }
     .akml-connections-diagnosis ol { padding-left: 1.25rem; }
     .akml-connections-diagnosis li { margin-bottom: var(--akml-scalar-spacing-xs); }
-    .akml-connections-diagnosis a.akml-tool-button { display: inline-block; text-decoration: none; }
     .akml-connections-diagnosis code { overflow-wrap: anywhere; }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
-    }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
 </style>
 
 @code {
+    /// <summary>Show the "Engine connections" heading; off where the host (Settings › Connections) has one.</summary>
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
     private IReadOnlyList<EngineConnection>? _connections;
     private string? _activeId;
     private bool _showAdd;
@@ -368,15 +364,74 @@
 
     private async Task RemoveAsync(EngineConnection c)
     {
+        // Spec 041 (FR-057, FR-102): removing an engine connection confirms, naming it.
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Remove engine connection",
+            Message = $"Remove the engine connection “{c.Name}” ({c.Host}:{c.Port})?",
+            Details = c.IsLocalhost ? null : new[] { "Its pairing token is deleted: adding it again needs the engine's PIN." },
+            ConfirmLabel = "Remove",
+            Destructive = true,
+        });
+        if (!ok) return;
         try
         {
             if (c.BearerTokenWrappedRef != null) await Vault.RemoveAsync(c.Id);
             await Connections.RemoveAsync(c.Id);
+            Notifications.Notify($"Removed the engine connection “{c.Name}”.", NotificationKind.Success);
             await ReloadAsync();
         }
         catch (Exception ex)
         {
             _lastError = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Spec 041 (FR-057): pair again with a new PIN; the new token replaces the stored one.</summary>
+    private async Task RepairAsync(EngineConnection c)
+    {
+        var pin = await Dialogs.PromptAsync(new PromptRequest
+        {
+            Title = "Re-pair engine",
+            Message = $"Enter the pairing PIN of “{c.Name}” ({c.Host}:{c.Port}). It is in %ProgramData%\\AKML SQL Web\\pairing-pin.txt on that computer.",
+            Label = "Pairing PIN",
+            ConfirmLabel = "Re-pair",
+            Validate = v => string.IsNullOrWhiteSpace(v) ? "Enter the PIN." : null,
+        });
+        if (string.IsNullOrWhiteSpace(pin)) return;
+        _lastError = null;
+        _diagnosis = null;
+        try
+        {
+            var response = await Bridge.ConnectAsync(c, bearerToken: null, pairingPin: pin.Trim(), CancellationToken.None);
+            if (response.Status != HandshakeStatus.Ok)
+            {
+                _lastError = $"The engine refused the PIN: {response.Status} — {response.ErrorMessage}";
+                StateHasChanged();
+                return;
+            }
+            if (!string.IsNullOrEmpty(response.NewBearerToken))
+            {
+                if (c.BearerTokenWrappedRef != null) await Vault.RemoveAsync(c.Id);
+                c.BearerTokenWrappedRef = await Vault.StoreAsync(c.Id, response.NewBearerToken!, DateTimeOffset.UtcNow.AddDays(60));
+            }
+            c.LastConnectedAt = DateTimeOffset.UtcNow;
+            c.LastKnownEngineVersion = response.EngineVersion;
+            c.LastKnownCapabilities = response.EngineCapabilities;
+            await Connections.UpdateAsync(c);
+            await Connections.SetActiveIdAsync(c.Id);
+            Notifications.Notify($"Paired again with “{c.Name}”.", NotificationKind.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex) when (IsSocketFailure(ex))
+        {
+            _diagnosis = EngineConnectDiagnosis.For(c.Host, c.Port, ex);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _lastError = EngineConnectDiagnosis.FirstLine(ex.Message);
             StateHasChanged();
         }
     }

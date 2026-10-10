@@ -1,0 +1,77 @@
+@*
+    Spec 041 (R52, FR-052) — Settings › Queries: the saved query defaults. Saving one clears the toolbar's
+    session-only override, so the next run uses what was just set.
+*@
+@using AkmlSql.Web.Services
+@inject IExecutionSettingsStore Store
+@inject INotificationService Notifications
+
+<SettingRow Id="queries-max-rows" Kind="number">
+    <input id="setting-queries-max-rows-control" type="number" class="akml-input" min="1" max="100000"
+           value="@_settings.MaxRows" aria-describedby="setting-queries-max-rows-help" @onchange="OnMaxRowsAsync" />
+    <span class="akml-settings-status">rows</span>
+</SettingRow>
+<SettingRow Id="queries-timeout" Kind="number">
+    <input id="setting-queries-timeout-control" type="number" class="akml-input" min="1" max="600"
+           value="@_settings.CommandTimeoutSeconds" aria-describedby="setting-queries-timeout-help" @onchange="OnTimeoutAsync" />
+    <span class="akml-settings-status">seconds</span>
+</SettingRow>
+<SettingRow Id="queries-show-column-types" Kind="switch">
+    <input id="setting-queries-show-column-types-control" type="checkbox" checked="@_settings.ShowColumnTypes"
+           aria-describedby="setting-queries-show-column-types-help" @onchange="OnShowTypesAsync" />
+</SettingRow>
+<SettingRow Id="queries-retain-line-breaks" Kind="switch">
+    <input id="setting-queries-retain-line-breaks-control" type="checkbox" checked="@_settings.RetainLineBreaksOnCopy"
+           aria-describedby="setting-queries-retain-line-breaks-help" @onchange="OnRetainAsync" />
+</SettingRow>
+
+@code {
+    private ExecutionSettings _settings = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Store.ReloadAsync();
+        _settings = await Store.GetAsync();
+    }
+
+    private async Task SaveAsync(Action<ExecutionSettings> change, string message)
+    {
+        var next = new ExecutionSettings
+        {
+            MaxRows = _settings.MaxRows,
+            CommandTimeoutSeconds = _settings.CommandTimeoutSeconds,
+            ShowColumnTypes = _settings.ShowColumnTypes,
+            RetainLineBreaksOnCopy = _settings.RetainLineBreaksOnCopy,
+        };
+        change(next);
+        await Store.SetAsync(next);   // clears the toolbar's session override (R52)
+        _settings = next;
+        Notifications.Notify(message, NotificationKind.Success);
+    }
+
+    private Task OnMaxRowsAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var v) || v < 1) return Task.CompletedTask;
+        v = Math.Min(v, 100_000);
+        return SaveAsync(s => s.MaxRows = v, $"Default row limit: {v:N0} rows.");
+    }
+
+    private Task OnTimeoutAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var v) || v < 1) return Task.CompletedTask;
+        v = Math.Min(v, 600);
+        return SaveAsync(s => s.CommandTimeoutSeconds = v, $"Command timeout: {v} seconds.");
+    }
+
+    private Task OnShowTypesAsync(ChangeEventArgs e)
+    {
+        bool on = e.Value is bool b && b;
+        return SaveAsync(s => s.ShowColumnTypes = on, on ? "Column types are shown." : "Column types are hidden.");
+    }
+
+    private Task OnRetainAsync(ChangeEventArgs e)
+    {
+        bool on = e.Value is bool b && b;
+        return SaveAsync(s => s.RetainLineBreaksOnCopy = on, on ? "Line breaks are kept on copy and save." : "Line breaks become spaces on copy and save.");
+    }
+}

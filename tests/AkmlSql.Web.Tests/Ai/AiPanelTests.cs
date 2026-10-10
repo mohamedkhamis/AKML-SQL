@@ -35,6 +35,10 @@ public sealed class AiPanelTests
         var cut = ctx.Render<AiPanel>();
         Assert.Contains("No AI provider configured", cut.Markup);
         Assert.DoesNotContain("Explain</button>", cut.Markup);
+        // Spec 041 (T205, FR-088): the shared empty state, with the way to add one.
+        var empty = cut.Find("[data-testid=ai-empty]");
+        Assert.Contains("akml-empty", empty.ClassList);
+        Assert.Equal("settings/ai-assistance", empty.QuerySelector("a")!.GetAttribute("href"));
     }
 
     [Fact]
@@ -45,7 +49,7 @@ public sealed class AiPanelTests
         Assert.Contains("Explain", cut.Markup);
         Assert.Contains("Fix", cut.Markup);
         Assert.Contains("Optimize", cut.Markup);
-        Assert.Contains("NL → SQL", cut.Markup);
+        Assert.Contains("Text to SQL", cut.Markup);   // spec 041 (T204, FR-090): SSMS's name, no arrow glyph
         Assert.Contains("Index Analysis", cut.Markup);
     }
 
@@ -110,6 +114,8 @@ public sealed class AiPanelTests
         public Task<AiFeatureSettings> GetAsync() => Task.FromResult(new AiFeatureSettings());
         public Task SetAsync(AiFeatureSettings settings) => Task.CompletedTask;
         public Task<AiPrivacyMode> ResolveModeAsync(string featureId) => Task.FromResult(AiPrivacyMode.FullSchema);
+        public Task ResetAsync() => Task.CompletedTask;
+        public Task ReloadAsync() => Task.CompletedTask;
     }
 
     private sealed class StubDiagnostics : IDiagnosticsRingBuffer

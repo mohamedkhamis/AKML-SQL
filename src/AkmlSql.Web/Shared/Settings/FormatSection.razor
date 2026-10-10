@@ -1,0 +1,48 @@
+@*
+    Spec 041 (FR-054) — Settings › Format: the active style (labelled "Style", as the toolbar picker is) and a link
+    to the Format styles page.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject IProfileStore Profiles
+@inject INotificationService Notifications
+
+<SettingRow Id="format-style">
+    <select id="setting-format-style-control" class="akml-select" aria-describedby="setting-format-style-help" @onchange="OnStyleChangedAsync">
+        @foreach (var p in _styles)
+        {
+            <option value="@p.Id" selected="@(p.Id == _activeId)">@p.Name</option>
+        }
+    </select>
+    <a class="akml-btn akml-btn--ghost" href="styles" data-testid="settings-format-styles-link">Format styles…</a>
+</SettingRow>
+
+@code {
+    private IReadOnlyList<ProfileRecord> _styles = Array.Empty<ProfileRecord>();
+    private string _activeId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Profiles.StylesChanged += OnStylesChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _styles = await Profiles.ListAsync();
+        _activeId = await Profiles.GetActiveIdAsync();
+    }
+
+    private void OnStylesChanged() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    private async Task OnStyleChangedAsync(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString();
+        if (string.IsNullOrEmpty(id) || id == _activeId) return;
+        await Profiles.SetActiveIdAsync(id);
+        _activeId = id;
+        Notifications.Notify($"Style: {_styles.FirstOrDefault(s => s.Id == id)?.Name ?? id}.", NotificationKind.Success);
+    }
+
+    public void Dispose() => Profiles.StylesChanged -= OnStylesChanged;
+}

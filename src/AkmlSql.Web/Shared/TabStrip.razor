@@ -1,0 +1,146 @@
+@*
+    Spec 041 (research R58, FR-070/FR-071) — the one tab strip: Results/Messages/Problems, the AI panel's
+    Actions/Chat, the style preview's samples. One look (28 px, a 2 px accent bottom border as the active
+    marker, pill badges) and one keyboard behaviour: Left/Right (wrapping) and Home/End move focus AND
+    activate at once; Enter/Space activate (native button click). Only the active tab is a tab stop.
+
+    Controlled by ActiveId + ActiveIdChanged, but shows a key-press selection straight away even before
+    the parent re-renders. Consumers render the panels as role="tabpanel" with id TabStrip.PanelId(...).
+    Trailing content (a close button, result stats) renders BESIDE the tablist — ARIA allows only tabs
+    inside it. Styles: .akml-tabs / .akml-tab / .akml-tab-badge in components/shell.css.
+*@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="akml-tabs @Class" data-testid="@(Name == null ? null : "tabstrip-" + Name)">
+    <div class="akml-tablist" role="tablist" aria-label="@AriaLabel" @ref="_list" @onkeydown="OnKeyDownAsync">
+        @for (int i = 0; i < Tabs.Count; i++)
+        {
+            var index = i;
+            var tab = Tabs[index];
+            var active = tab.Id == _current;
+            <button type="button" role="tab" class="akml-tab"
+                    id="@TabId(IdPrefix, tab.Id)"
+                    aria-selected="@(active ? "true" : "false")"
+                    aria-controls="@PanelId(IdPrefix, tab.Id)"
+                    tabindex="@(active ? 0 : -1)"
+                    title="@tab.Title"
+                    data-testid="@(tab.TestId ?? "tab-" + tab.Id)"
+                    @ref="_tabRefs[index]"
+                    @onclick="@(() => ActivateAsync(tab.Id, focus: false))">
+                <span class="akml-tab-label">@tab.Label</span>
+                @if (!string.IsNullOrEmpty(tab.Badge))
+                {
+                    <span class="akml-tab-badge" data-kind="@tab.BadgeKind" data-testid="@tab.BadgeTestId">@tab.Badge</span>
+                }
+            </button>
+        }
+    </div>
+    @if (Trailing != null)
+    {
+        <div class="akml-tabs-trailing">@Trailing</div>
+    }
+</div>
+
+@code {
+    /// <summary>The tabs, in order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<TabItem> Tabs { get; set; } = Array.Empty<TabItem>();
+
+    /// <summary>The selected tab's id.</summary>
+    [Parameter] public string? ActiveId { get; set; }
+
+    [Parameter] public EventCallback<string> ActiveIdChanged { get; set; }
+
+    /// <summary>The tablist's accessible name, e.g. "Results pane".</summary>
+    [Parameter, EditorRequired] public string AriaLabel { get; set; } = string.Empty;
+
+    /// <summary>Prefix of the tab and panel element ids; unique per strip on a page.</summary>
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "tabs";
+
+    /// <summary>Optional name; the strip's <c>data-testid</c> becomes <c>tabstrip-{Name}</c>.</summary>
+    [Parameter] public string? Name { get; set; }
+
+    /// <summary>Content beside the tablist (close button, stats).</summary>
+    [Parameter] public RenderFragment? Trailing { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>The id of a tab's element.</summary>
+    public static string TabId(string prefix, string tabId) => $"{prefix}-tab-{tabId}";
+
+    /// <summary>The id the consumer gives the matching role="tabpanel" element.</summary>
+    public static string PanelId(string prefix, string tabId) => $"{prefix}-panel-{tabId}";
+
+    private ElementReference _list;
+    private ElementReference[] _tabRefs = Array.Empty<ElementReference>();
+    private string? _current;
+    private string? _focusPending;
+    private IJSObjectReference? _ui;
+
+    protected override void OnParametersSet()
+    {
+        if (_tabRefs.Length != Tabs.Count) _tabRefs = new ElementReference[Tabs.Count];
+        _current = ActiveId ?? (Tabs.Count > 0 ? Tabs[0].Id : null);
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (Tabs.Count == 0) return;
+        int at = IndexOf(_current);
+        int next = e.Key switch
+        {
+            "ArrowRight" => (at + 1) % Tabs.Count,
+            "ArrowLeft" => (at - 1 + Tabs.Count) % Tabs.Count,
+            "Home" => 0,
+            "End" => Tabs.Count - 1,
+            _ => -1,
+        };
+        if (next < 0 || next == at) return;
+        await ActivateAsync(Tabs[next].Id, focus: true);
+    }
+
+    private async Task ActivateAsync(string id, bool focus)
+    {
+        if (focus) _focusPending = id;
+        if (id == _current) return;
+        _current = id;
+        await ActiveIdChanged.InvokeAsync(id);
+    }
+
+    private int IndexOf(string? id)
+    {
+        for (int i = 0; i < Tabs.Count; i++) if (Tabs[i].Id == id) return i;
+        return 0;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                _ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+                if (_ui != null) await _ui.InvokeVoidAsync("trapTabStripKeys", _list);
+            }
+            if (_focusPending != null)
+            {
+                int i = IndexOf(_focusPending);
+                _focusPending = null;
+                if (i < _tabRefs.Length) await _tabRefs[i].FocusAsync();
+            }
+        }
+        catch (JSDisconnectedException) { /* tab closing */ }
+        catch (JSException) { /* element gone — harmless */ }
+        catch (InvalidOperationException) { /* no JS (prerender) — harmless */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+}

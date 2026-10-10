@@ -24,18 +24,19 @@
 @inject ISavedSqlConnectionStore Store
 @inject ISqlConnectionService SqlConn
 @inject IJSRuntime JS
+@inject IDialogService Dialogs
 
 @if (_open)
 {
-    <div class="akml-connmgr-scrim" @onclick="Close" data-testid="connection-manager-scrim">
-        <div class="akml-connmgr-panel" role="dialog" aria-modal="true" aria-label="Connection manager"
+    <div class="akml-scrim akml-connmgr-scrim" @onclick="Close" data-testid="connection-manager-scrim">
+        <div class="akml-dialog akml-connmgr-panel" role="dialog" aria-modal="true" aria-label="Connection manager"
              tabindex="-1" @ref="_panelRef" @onkeydown="OnPanelKeyDown"
              @onclick:stopPropagation="true" data-testid="connection-manager">
 
             <div class="akml-connmgr-header">
                 <span class="akml-connmgr-title">Connect to SQL Server</span>
                 <button type="button" class="akml-connmgr-close" @onclick="Close"
-                        aria-label="Close" data-testid="conn-close-btn">✕</button>
+                        aria-label="Close" data-testid="conn-close-btn"><Icon Name="x" /></button>
             </div>
 
             <div class="akml-connmgr-body">
@@ -70,21 +71,21 @@
 
                 <!-- RIGHT: connect form -->
                 <div class="akml-connmgr-form-pane">
-                    <div class="akml-connmgr-field">
-                        <label for="conn-name">Display name</label>
-                        <input id="conn-name" class="akml-connmgr-input" @bind="_name" @bind:event="oninput"
+                    <div class="akml-field akml-connmgr-field">
+                        <label class="akml-field-label" for="conn-name">Display name</label>
+                        <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
                                placeholder="e.g. Local master" data-testid="conn-name-input" />
                     </div>
-                    <div class="akml-connmgr-field">
-                        <label for="conn-server">Server</label>
-                        <input id="conn-server" class="akml-connmgr-input" @bind="_server" @bind:event="oninput"
+                    <div class="akml-field akml-connmgr-field">
+                        <label class="akml-field-label" for="conn-server">Server</label>
+                        <input id="conn-server" class="akml-input" @bind="_server" @bind:event="oninput"
                                @onchange="OnServerChanged"
                                placeholder="localhost, server\instance, or a remote host,port" data-testid="conn-server-input" />
                     </div>
-                    <div class="akml-connmgr-field">
-                        <label for="conn-database">Database</label>
+                    <div class="akml-field akml-connmgr-field">
+                        <label class="akml-field-label" for="conn-database">Database</label>
                         <div class="akml-connmgr-db-row">
-                            <select id="conn-database" class="akml-connmgr-input akml-connmgr-select"
+                            <select id="conn-database" class="akml-select akml-connmgr-select"
                                     @bind="_database" disabled="@_dbLoading" data-testid="conn-database-select">
                                 @* Always keep the current value selectable — a saved/typed DB may not be
                                    in the freshly-loaded list (or the list may not be loaded yet). *@
@@ -98,7 +99,7 @@
                                     <option value="@db">@db</option>
                                 }
                             </select>
-                            <button type="button" class="akml-connmgr-btn akml-connmgr-db-refresh"
+                            <button type="button" class="akml-btn akml-connmgr-db-refresh"
                                     @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
                                     title="Load the database list from the server"
                                     data-testid="conn-database-refresh">@(_dbLoading ? "…" : "⟳")</button>
@@ -114,8 +115,8 @@
                             Lists databases the engine's service account can access.
                         </span>
                     </div>
-                    <div class="akml-connmgr-field">
-                        <span class="akml-connmgr-field-label">Authentication</span>
+                    <div class="akml-field akml-connmgr-field">
+                        <span class="akml-field-label">Authentication</span>
                         <label class="akml-connmgr-radio">
                             <input type="radio" name="connauth" checked="@_windowsAuth"
                                    @onchange="@(() => SetAuth(true))" data-testid="conn-auth-windows" />
@@ -134,14 +135,14 @@
                     </div>
                     @if (!_windowsAuth)
                     {
-                        <div class="akml-connmgr-field">
-                            <label for="conn-login">Login</label>
-                            <input id="conn-login" class="akml-connmgr-input" @bind="_login" @bind:event="oninput"
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-login">Login</label>
+                            <input id="conn-login" class="akml-input" @bind="_login" @bind:event="oninput"
                                    data-testid="conn-login-input" />
                         </div>
-                        <div class="akml-connmgr-field">
-                            <label for="conn-password">Password</label>
-                            <input id="conn-password" class="akml-connmgr-input" type="password"
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-password">Password</label>
+                            <input id="conn-password" class="akml-input" type="password"
                                    @bind="_password" @bind:event="oninput" data-testid="conn-password-input" />
                             <span class="akml-connmgr-hint">Not saved — re-entered each time you connect.</span>
                         </div>
@@ -167,14 +168,14 @@
             </div>
 
             <div class="akml-connmgr-footer">
-                <button type="button" class="akml-connmgr-btn" @onclick="TestAsync"
+                <button type="button" class="akml-btn" @onclick="TestAsync"
                         disabled="@_busy" data-testid="conn-test-btn">Test</button>
-                <button type="button" class="akml-connmgr-btn" @onclick="SaveAsync"
+                <button type="button" class="akml-btn" @onclick="SaveAsync"
                         disabled="@_busy" data-testid="conn-save-btn">Save</button>
-                <button type="button" class="akml-connmgr-btn" @onclick="DeleteAsync"
+                <button type="button" class="akml-btn" @onclick="DeleteAsync"
                         disabled="@(_busy || string.IsNullOrEmpty(_selectedId))" data-testid="conn-delete-btn">Delete</button>
                 <span class="akml-connmgr-footer-spacer"></span>
-                <button type="button" class="akml-connmgr-btn akml-connmgr-btn-primary" @onclick="ConnectAsync"
+                <button type="button" class="akml-btn akml-btn--primary" @onclick="ConnectAsync"
                         disabled="@_busy" data-testid="conn-connect-btn">Connect</button>
             </div>
         </div>
@@ -186,34 +187,15 @@
        classes (no CSS isolation in this project). The scrim reuses the akml-cmd-fade keyframe
        defined in wwwroot/css/app.css (a Razor style block can't host @@keyframes — nested-brace
        mis-parse), so we never redefine it here. */
-    .akml-connmgr-scrim {
-        position: fixed;
-        inset: 0;
-        z-index: 1000;
-        background-color: rgba(0, 0, 0, 0.45);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: var(--akml-scalar-spacing-l);
-        animation: akml-cmd-fade 120ms ease-out;
-    }
+    /* The shell scrim (.akml-scrim in shell.css), one layer below the in-app dialog so a confirmation opened
+       from here (Delete…) shows above it. */
+    .akml-scrim.akml-connmgr-scrim { z-index: 1000; }
 
+    /* A shell dialog (.akml-dialog in shell.css) sized for the list and the form side by side. */
     .akml-connmgr-panel {
         width: 720px;
-        max-width: calc(100vw - 32px);
         height: 500px;
-        max-height: calc(100vh - 64px);
-        display: flex;
-        flex-direction: column;
-        background-color: var(--akml-surface-panel);
-        border: 1px solid var(--akml-border-strong);
-        border-radius: var(--akml-scalar-radius-m);
-        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
-        color: var(--akml-text-primary);
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
         overflow: hidden;
-        outline: none;
     }
 
     .akml-connmgr-header {
@@ -309,20 +291,7 @@
         min-height: 0;
         background-color: var(--akml-surface-panel);
     }
-    .akml-connmgr-field { display: flex; flex-direction: column; gap: 2px; }
-    .akml-connmgr-field > label,
-    .akml-connmgr-field-label { color: var(--akml-text-secondary); font-size: 12px; }
-    .akml-connmgr-input {
-        box-sizing: border-box;
-        background-color: var(--akml-surface-input, var(--akml-surface-canvas));
-        color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        font-family: inherit; font-size: 13px;
-        outline: none;
-    }
-    .akml-connmgr-input:focus { border-color: var(--akml-border-focus, var(--akml-accent-primary)); }
+    .akml-connmgr-field { margin-bottom: 0; }
     /* Database dropdown + its inline refresh button share one row. */
     .akml-connmgr-db-row { display: flex; gap: var(--akml-scalar-spacing-xs); align-items: stretch; }
     .akml-connmgr-select { flex: 1 1 auto; min-width: 0; cursor: pointer; }
@@ -357,15 +326,6 @@
         background-color: var(--akml-surface-sidebar);
     }
     .akml-connmgr-footer-spacer { flex: 1 1 auto; }
-    .akml-connmgr-btn {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); cursor: pointer;
-    }
-    .akml-connmgr-btn:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
-    .akml-connmgr-btn:disabled { opacity: 0.5; cursor: default; }
-    .akml-connmgr-btn-primary { border-color: var(--akml-accent-primary); }
 </style>
 
 @code {
@@ -599,6 +559,16 @@
     private async Task DeleteAsync()
     {
         if (string.IsNullOrEmpty(_selectedId)) return;
+        // Spec 041 (FR-057, FR-102): deleting a saved connection confirms, naming it.
+        var name = (await Store.GetAsync(_selectedId!))?.Name;
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete saved connection",
+            Message = string.IsNullOrEmpty(name) ? "Delete this saved connection?" : $"Delete the saved connection “{name}”?",
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        });
+        if (!ok) return;
         _busy = true;
         _message = null;
         try

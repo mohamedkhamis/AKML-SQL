@@ -24,6 +24,7 @@
 @inject IConnectionManagerController ConnManager
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject IDialogService Dialogs
 
 @if (_open)
 {
@@ -50,12 +51,24 @@
                         @foreach (var row in group)
                         {
                             var idx = row.Index;
-                            <div class="akml-cmd-row @(idx == _selected ? "selected" : "")"
+                            var action = row.Match.Action;
+                            var available = action.IsAvailable;
+                            <div class="akml-cmd-row @(idx == _selected ? "selected" : "") @(available ? "" : "disabled")"
                                  id="@RowId(idx)" role="option" aria-selected="@(idx == _selected ? "true" : "false")"
+                                 aria-disabled="@(available ? null : "true")"
+                                 aria-checked="@(action.IsChecked == null ? null : action.IsOn ? "true" : "false")"
                                  data-testid="command-palette-row"
-                                 @onclick="@(() => RunAsync(row.Match.Action))"
+                                 @onclick="@(() => RunAsync(action))"
                                  @onmouseenter="@(() => _selected = idx)">
-                                <span class="akml-cmd-icon">@row.Match.Action.Icon</span>
+                                @if (action.IsChecked != null)
+                                {
+                                    @* Spec 041 (R38): a toggle shows a check while it is on (a visible panel). *@
+                                    <span class="akml-cmd-icon">@if (action.IsOn) { <Icon Name="check" Size="14" /> }</span>
+                                }
+                                else
+                                {
+                                    <span class="akml-cmd-icon"><Icon Name="@action.Icon" Size="14" /></span>
+                                }
                                 <span class="akml-cmd-name">
                                     @foreach (var seg in HighlightSegments(row.Match))
                                     {
@@ -84,8 +97,8 @@
             </div>
 
             <div class="akml-cmd-footer">
-                <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
-                <span><kbd>↵</kbd> run</span>
+                <span><kbd aria-label="Up"><Icon Name="arrow-up" Size="12" /></kbd><kbd aria-label="Down"><Icon Name="arrow-down" Size="12" /></kbd> navigate</span>
+                <span><kbd>Enter</kbd> run</span>
                 <span><kbd>Esc</kbd> close</span>
             </div>
         </div>
@@ -189,6 +202,9 @@
         color: var(--akml-text-secondary);
     }
     .akml-cmd-row.selected .akml-cmd-icon { color: var(--akml-text-onaccent); }
+    /* Spec 041 (R38): an unavailable command is shown but greyed and cannot be run. */
+    .akml-cmd-row.disabled { cursor: default; color: var(--akml-text-disabled); }
+    .akml-cmd-row.disabled.selected { color: var(--akml-text-onaccent); opacity: 0.7; }
 
     .akml-cmd-name {
         flex: 1 1 auto;
@@ -359,6 +375,9 @@
 
     private async Task RunAsync(CommandAction action)
     {
+        // Spec 041 (R38, FR-027): an unavailable command (Execute while a query runs) is shown but never
+        // run; the palette stays open so the user sees why nothing happened.
+        if (!action.IsAvailable) return;
         Registry.RecordUsed(action.Id);
         Close();
         try
@@ -384,8 +403,8 @@
         var matches = new List<FuzzyMatch>();
         foreach (var a in actions)
         {
-            // Command mode (Ctrl/Cmd+Shift+P) surfaces Actions only.
-            if (_commandMode && a.Group != CommandGroup.Action) continue;
+            // Command mode (Ctrl/Cmd+Shift+P) surfaces commands only: Actions and View commands.
+            if (_commandMode && a.Group is not (CommandGroup.Action or CommandGroup.View)) continue;
 
             if (FuzzyScorer.TryScore(a.Title, _query, out var score, out var indices))
             {
@@ -458,7 +477,7 @@
                                     {
                                         // No live-editor handle here; route to the editor so the user lands
                                         // on the object's surface. (Click-to-insert lives in the schema tree.)
-                                        Nav.NavigateTo("/editor");
+                                        Nav.NavigateTo("/");
                                         return Task.CompletedTask;
                                     },
                                 });
@@ -485,16 +504,17 @@
     // ── Static (palette-owned) actions ────────────────────────────────────────────────────────
     private IEnumerable<CommandAction> BuildStaticActions()
     {
-        // Navigate to each nav route.
-        var routes = new (string Title, string Route, string Icon)[]
+        // Navigate to each place, and (spec 041 R43) to each Settings section, from the one section table.
+        var routes = new List<(string Title, string Route, string Icon)>
         {
-            ("Go to Editor", "/editor", "📝"),
-            ("Go to Snippets", "/snippets", "✂️"),
-            ("Go to Settings", "/settings", "⚙️"),
-            ("Go to AI providers", "/settings/ai", "🤖"),
-            ("Go to Schema cache", "/settings/schema-cache", "🗄️"),
-            ("Go to Diagnostics", "/diagnostics", "🩺"),
+            ("Go to Editor", "/", "file-code"),
+            ("Go to Snippets", "/snippets", "scissors"),
+            ("Go to Format styles", "/styles", "palette"),
+            ("Go to History", "/history", "history"),
+            ("Go to Settings", "/settings", "settings"),
         };
+        foreach (var section in AkmlSql.Web.Services.Settings.SettingsCatalog.Sections)
+            routes.Add(($"Go to Settings › {section.Title}", $"/settings/{section.Id}", "settings"));
         foreach (var r in routes)
         {
             var route = r.Route;
@@ -525,7 +545,7 @@
                 Id = "theme:" + mode,
                 Title = th.Title,
                 Group = CommandGroup.Action,
-                Icon = "🎨",
+                Icon = "palette",
                 Run = () => Theme.SetAsync(mode),
             };
         }
@@ -537,7 +557,7 @@
             Id = "sql:connect",
             Title = "Connect to SQL Server…",
             Group = CommandGroup.Action,
-            Icon = "🔌",
+            Icon = "plug",
             Run = () => { ConnManager.Open(); return Task.CompletedTask; },
         };
 
@@ -547,8 +567,21 @@
             Id = "schema:clear",
             Title = "Clear schema cache",
             Group = CommandGroup.Action,
-            Icon = "🧹",
-            Run = () => SchemaCache.ClearAllAsync(),
+            Icon = "eraser",
+            // Spec 041 (R59, FR-086): removes every cached schema, so it asks first.
+            Run = async () =>
+            {
+                if (await Dialogs.ConfirmAsync(new DialogRequest
+                {
+                    Title = "Clear schema cache",
+                    Message = "Remove every cached schema from this browser? IntelliSense reloads them from the engine when it next connects.",
+                    ConfirmLabel = "Clear",
+                    Destructive = true,
+                }))
+                {
+                    await SchemaCache.ClearAllAsync();
+                }
+            },
         };
 
         // Insert snippet — routes to the Snippets page (the editor-bound "expand at caret" action is
@@ -558,7 +591,7 @@
             Id = "snippet:browse",
             Title = "Browse snippets…",
             Group = CommandGroup.File,
-            Icon = "✂️",
+            Icon = "scissors",
             Meta = "/snippets",
             Run = () => { Nav.NavigateTo("/snippets"); return Task.CompletedTask; },
         };
@@ -571,6 +604,7 @@
         CommandGroup.Action => "Actions",
         CommandGroup.File => "Files",
         CommandGroup.Object => "Objects",
+        CommandGroup.View => "View",
         _ => g.ToString(),
     };
 
@@ -585,13 +619,14 @@
         _ => "object",
     };
 
+    // Spec 041 (R62): the schema tree's icons, so an object looks the same in both places.
     private static string ObjectIcon(int objectType) => objectType switch
     {
-        0 => "▤",   // table
-        1 => "◫",   // view
-        2 => "⚙",   // procedure
-        3 or 4 or 5 => "ƒ", // function
-        _ => "◇",
+        0 => "table-2",
+        1 => "eye",
+        2 => "scroll-text",
+        3 or 4 or 5 => "square-function",
+        _ => "database",
     };
 
     private string RowId(int idx) => $"akml-cmd-row-{idx}";
