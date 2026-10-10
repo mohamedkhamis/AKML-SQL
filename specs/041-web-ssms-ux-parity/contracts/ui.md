@@ -23,7 +23,7 @@ Exact names, keys and numbers the implementation and the tests share. Planning c
 
 | Constant | Value | Notes |
 |---|---|---|
-| Editor minimum width | 920 px *(validate)* | 120 Consolas-13 characters ≈ 858 px + gutter + scrollbar (SC-003) |
+| Editor minimum width | 920 px *(validated 2026-10-09, T110)* | 120 Consolas-13 characters measured 857.7 px + gutter 35.3 px in Chromium at the default font, leaving ≈ 27 px for the scrollbar and CodeMirror's line padding; a 120-character line fits at 1100 px with no horizontal scroll (`WorkspaceLayoutTests`) (SC-003) |
 | Editor minimum height | 320 px | existing |
 | Schema panel min / default | 180 / 260 px | |
 | AI panel min / default | 300 / 380 px | |
@@ -31,7 +31,7 @@ Exact names, keys and numbers the implementation and the tests share. Planning c
 | Edge strip | 24 px | `<button>` with `writing-mode: vertical-rl`, `title="Show Schema (F8)"` |
 | Splitter track / hit area | 6 px / 12 px | track colour `--akml-border-splitter`, hover/focus `--akml-accent-primary` |
 | Splitter keyboard step | 16 px (Shift: 64 px) | Home/End → min/max; Enter/Space collapse/restore; defaults cancelled by a targeted listener (Tab is never cancelled) |
-| Fold-away rule | measured | when `workspace − visible side widths − splitters < editor minimum`: fold AI first, then Schema; with default sizes Schema folds below ≈ 1210 px, so at 1100 px both are folded; derived, not stored |
+| Fold-away rule | measured | when `workspace − visible side widths − splitters < editor minimum`: fold AI first, then Schema; with default sizes Schema folds below ≈ 1210 px, so at 1100 px both are folded; derived, not stored. **[implementation]** the panel the user last opened by hand (toggle, strip, View menu) folds last — the default panels need 1572 px, so at 1440 px opening AI folds Schema instead of doing nothing; one opened by hand in a window too narrow even for it alone shows (the page scrolls) until the window width changes. A folded panel reads as unchecked in the View menu and the palette |
 | `.akml-main` padding | 0 on the editor route | 12 px elsewhere until FR-085 unifies pages |
 
 Regions and their toggles: navigation bar (`view:toggle-nav`), Schema panel (`view:toggle-schema`,
@@ -67,6 +67,12 @@ Ctrl+C (copy TSV), Ctrl+Shift+C (copy with headers), Ctrl+0 (Set to NULL), Enter
 printable character (edit), Escape (cancel edit), Tab / Shift+Tab (next / previous editable
 cell), Delete (toggle row delete when the row-number cell is focused), Shift+F10 / Menu
 (context menu), Shift+Alt+Left/Right (resize the focused column by 16 px).
+Up from the top row focuses that column's header (its type tooltip; Left/Right move along the
+headers, Down returns, Space/Enter select the column); Left from the first column focuses the row
+number (Up/Down move, Space selects the row, Right returns). Shift+F10 and the Menu key are not
+cancelled: the `contextmenu` event they fire on the grid root is routed to the focused cell. A
+printable key is cancelled on the grid root (the edit starts with it; the browser must not type
+it a second time into the editor that just took focus).
 
 Browser-reserved and not attempted: Ctrl+N, Ctrl+T, Ctrl+W, Ctrl+Tab, Ctrl+Shift+Tab.
 `ShortcutCollisionTests` asserts no duplicate and no collision with CodeMirror's bound keys

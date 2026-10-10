@@ -1,0 +1,1258 @@
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_IsCaseInsensitive
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "-- CREATE TABLE dbo.T")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "DELETE FROM dbo.Orders WHERE Id = 1")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "EXEC dbo.usp_Test")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "INSERT INTO dbo.Orders (Id) VALUES (1)")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "SELECT * FROM dbo.Orders")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "SELECT 'CREATE TABLE' AS Msg")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNonDdl(sql: "UPDATE dbo.Orders SET Col = 1")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNullOrWhitespace(sql: "   ")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNullOrWhitespace(sql: "")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNullOrWhitespace(sql: "\t\n\r")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsFalse_ForNullOrWhitespace(sql: null)
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForAlterStatements(sql: "ALTER FUNCTION dbo.fn_Test() RETURNS INT AS BEGIN "···)
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForAlterStatements(sql: "ALTER INDEX ALL ON dbo.Orders REBUILD")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForAlterStatements(sql: "ALTER PROCEDURE dbo.usp_Test AS RETURN")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForAlterStatements(sql: "ALTER TABLE dbo.Orders ADD Column1 INT")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForAlterStatements(sql: "ALTER TRIGGER trg_Test ON dbo.Orders AFTER INSERT "···)
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForAlterStatements(sql: "ALTER VIEW dbo.vOrders AS SELECT 1")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE FUNCTION dbo.fn_Test() RETURNS INT AS BEGIN"···)
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE INDEX IX_Test ON dbo.Orders (Id)")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE PROC dbo.usp_Test AS RETURN")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE PROCEDURE dbo.usp_Test AS RETURN")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE SCHEMA Sales")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE SEQUENCE dbo.Seq")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE SYNONYM dbo.T FOR dbo.Orders")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE TABLE dbo.Orders (Id INT)")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE TRIGGER trg_Test ON dbo.Orders AFTER INSERT"···)
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE TYPE dbo.OrderId FROM INT")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForCreateStatements(sql: "CREATE VIEW dbo.vOrders AS SELECT 1")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP FUNCTION dbo.fn_Test")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP INDEX IX_Test ON dbo.Orders")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP PROCEDURE dbo.usp_Test")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP SCHEMA Sales")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP SEQUENCE dbo.Seq")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP SYNONYM dbo.T")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP TABLE dbo.Orders")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP TRIGGER trg_Test")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_ForDropStatements(sql: "DROP VIEW dbo.vOrders")
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_WhenDdlIsOnSecondLine
+AkmlSql.Core.Tests.Analysis.ChangeDetectorTests.DetectDdlInQuery_ReturnsTrue_WhenDdlPrecededByWhitespace
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_AreSortedByRuleId
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "BP004")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "DE001")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "DEP001")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "EX001")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "NM002")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "PE001")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "PE003")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "SE001")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "SE002")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_ContainsExpectedRuleId(ruleId: "ST001")
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_HaveNonEmptyCategory
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_HaveNonEmptyRuleId
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.AllRules_HaveUniqueIds
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.Constructor_DiscoversAtLeastOneHundredRules
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.GetEnabledRules_FiltersDisabledRules
+AkmlSql.Core.Tests.Analysis.RuleRegistryTests.GetEnabledRules_ReturnsAllRules_WhenAllEnabled
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.BP004_DoesNotFire_WhenIsNull
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.BP004_FiresOnEqualsNull
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.BP004_FiresOnNotEqualsNull_BracketStyle
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.BP004_FiresOnNotEqualsNull_ExclamationStyle
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.BP004_FixAction_ForNotEquals_ContainsIsNotNull
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.BP004_ProvidesFixAction_WithReplacementText
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DE001_DoesNotFire_WhenInlineColumnPkPresent
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DE001_DoesNotFire_WhenTableConstraintPkPresent
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DE001_FiresOnTableWithoutPrimaryKey
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DEP001_DoesNotFire_OnVarcharMax
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DEP001_FiresOnImageDataType
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DEP001_FiresOnNtextDataType
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DEP001_FiresOnTextDataType
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.DEP001_ProvidesFixAction
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.EX001_DoesNotFire_OnDivisionByVariable
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.EX001_DoesNotFire_OnNormalDivision
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.EX001_FiresOnLiteralDivisionByZero
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.EX006_DoesNotFire_OnRealPredicate
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.EX006_FiresOnAlwaysTrueCondition
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.NM002_DoesNotFire_OnOtherPrefixes
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.NM002_DoesNotFire_OnUspPrefix
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.NM002_FiresOnSpPrefix
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE001_DoesNotFire_OnSelectStarOutsideProcedure
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE001_FiresOnSelectStarInProcedure
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE003_DoesNotFire_WhenDeleteHasWhere
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE003_DoesNotFire_WhenUpdateHasWhere
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE003_FiresForBothDeleteAndUpdate_WhenBothMissingWhere
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE003_FiresOnDeleteWithoutWhere
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.PE003_FiresOnUpdateWithoutWhere
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.Rule_RespectsSeverityOverride_FromResolvedSettings
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.SE001_DoesNotFire_OnExecWithLiteralString
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.SE001_FiresOnExecWithStringConcatenation
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.SE002_DoesNotFire_WhenPasswordIsParameterized
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.SE002_FiresOnDeclareWithHardcodedPassword
+AkmlSql.Core.Tests.Analysis.Rules.AnalysisRuleTests.SE002_FiresOnSetWithPwdVariable
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.Empty_NeverSuppressesAnything
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_BlockTakesPriority_OverLineSuppression
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_HandlesMultipleBlocks
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsFalse_WhenLineNotSuppressed
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsFalse_WhenLineOutsideBlock
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsFalse_WhenRuleNotInLineSet
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsTrue_ForAnyRule_WhenInsideBlock
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsTrue_WhenLineContainsSpecificRule
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsTrue_WhenLineInsideBlock
+AkmlSql.Core.Tests.Analysis.SuppressionMapTests.IsSuppressed_ReturnsTrue_WhenNullSet_SuppressesAllRules
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Entropy_IsSha256Of_AkmlSqlApiKeyV1_ByteForByte
+AkmlSql.Core.Tests.ApiKeyProtectorTests.IsProtected_OnlyForPrefixedValues
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Protect_NullOrEmpty_ReturnsEmpty(value: "")
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Protect_NullOrEmpty_ReturnsEmpty(value: null)
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Protect_PrefixedWithDpapiMarker
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Protect_ThenUnprotect_RoundTrips
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Unprotect_NullOrEmpty_ReturnsEmpty(value: "")
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Unprotect_NullOrEmpty_ReturnsEmpty(value: null)
+AkmlSql.Core.Tests.ApiKeyProtectorTests.Unprotect_PlaintextPassesThroughUnchanged
+AkmlSql.Core.Tests.AppVersionTests.A_stamp_is_utc_to_the_minute
+AkmlSql.Core.Tests.AppVersionTests.A_version_reads_back_as_its_build_instant_in_utc
+AkmlSql.Core.Tests.AppVersionTests.An_assembly_version_reads_back_with_all_four_parts
+AkmlSql.Core.Tests.AppVersionTests.Every_build_also_stamps_its_compile_time
+AkmlSql.Core.Tests.AppVersionTests.Other_version_shapes_have_no_build_instant(version: "")
+AkmlSql.Core.Tests.AppVersionTests.Other_version_shapes_have_no_build_instant(version: "1.0.0")
+AkmlSql.Core.Tests.AppVersionTests.Other_version_shapes_have_no_build_instant(version: "1.26.1307.0429")
+AkmlSql.Core.Tests.AppVersionTests.Other_version_shapes_have_no_build_instant(version: "1.265.04051456")
+AkmlSql.Core.Tests.AppVersionTests.Other_version_shapes_have_no_build_instant(version: null)
+AkmlSql.Core.Tests.AppVersionTests.The_build_date_is_shown_in_local_time
+AkmlSql.Core.Tests.AppVersionTests.The_build_date_is_the_instant_the_version_names
+AkmlSql.Core.Tests.Completion.CompletionClauseTests.AlterTable_AlterColumn_ReturnsColumnCompletions
+AkmlSql.Core.Tests.Completion.CompletionClauseTests.Delete_FromlessForm_Unqualified_WhereClause_ReturnsColumnCompletions
+AkmlSql.Core.Tests.Completion.CompletionClauseTests.Delete_FromlessForm_WhereClause_FiltersOnPartialColumn
+AkmlSql.Core.Tests.Completion.CompletionClauseTests.Delete_FromlessForm_WhereClause_ReturnsColumnCompletions
+AkmlSql.Core.Tests.Completion.CompletionClauseTests.Delete_WithFrom_WhereClause_StillReturnsColumnCompletions
+AkmlSql.Core.Tests.Completion.CompletionClauseTests.Update_SetClause_ReturnsColumnCompletions
+AkmlSql.Core.Tests.Completion.ContextAnalyzerClauseTests.AlterTableAlterColumn_DetectsCorrectClauseType
+AkmlSql.Core.Tests.Completion.ContextAnalyzerClauseTests.AlterTableAlterColumn_PopulatesAliasWithTableName
+AkmlSql.Core.Tests.Completion.ContextAnalyzerClauseTests.UpdateSet_DetectsCorrectClauseType
+AkmlSql.Core.Tests.Config.ActiveProfileScopeTests.ActiveProfile_DefaultIsNonEmptyString
+AkmlSql.Core.Tests.Config.ActiveProfileScopeTests.ActiveProfile_IsSingleString
+AkmlSql.Core.Tests.Config.ActiveProfileScopeTests.FormatterSettings_HasNoPluralActiveProfileForm
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.EmptyConfig_StaysEmpty_WithEnabledFalse(json: "{ \"ai\": {} }")
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.EmptyConfig_StaysEmpty_WithEnabledFalse(json: "{}")
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.LegacyAzureSpelling_MigratesToCanonicalAzure
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.LegacyConfig_MigratesToOneActiveAgent
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Load_AllAgentEntriesMalformed_FlatProviderMigrates
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Load_KitchenSinkMalformedConfig_ReturnsUsableSettings
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Migration_CopiesApiKeyVerbatim_NeverPassedToUnprotect
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Migration_IsIdempotent_AcrossTwoLoads
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Mirroring_ActiveBranch_FlatFieldsOverwrittenFromActiveAgent
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Mirroring_BlankBranch_NonEmptyListNothingActive_BlanksStringsKeepsParams
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Normalize_NeverThrows_OnHandAssembledGarbage_AndEstablishesItsInvariants
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.Normalize_NeverThrows_UnderRandomisedFuzzing
+AkmlSql.Core.Tests.Config.AiAgentMigrationTests.WhitespaceOnlyProvider_DoesNotMigrate
+AkmlSql.Core.Tests.Config.AiAgentModelTests.AgentHealth_Defaults
+AkmlSql.Core.Tests.Config.AiAgentModelTests.AgentHealthStatus_AreStringConstants_NotAnEnum
+AkmlSql.Core.Tests.Config.AiAgentModelTests.AgentModel_JsonPropertyNames_AreCamelCase
+AkmlSql.Core.Tests.Config.AiAgentModelTests.AiAgent_Defaults
+AkmlSql.Core.Tests.Config.AiAgentModelTests.AiFeature_HasExactlyTheSevenAssignableFeatures
+AkmlSql.Core.Tests.Config.AiAgentModelTests.AiSettings_AgentDefaults
+AkmlSql.Core.Tests.Config.AiAgentModelTests.FeatureAgentAssignments_DefaultsAllEmpty
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "anthropic", needsKey: True, needsEndpoint: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "azure", needsKey: True, needsEndpoint: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "custom", needsKey: False, needsEndpoint: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "gemini", needsKey: True, needsEndpoint: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "kimi", needsKey: True, needsEndpoint: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "lmstudio", needsKey: False, needsEndpoint: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "ollama", needsKey: False, needsEndpoint: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.RequiresApiKey_And_Endpoint_PerProvider(provider: "openai", needsKey: True, needsEndpoint: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_DisabledAgent_IsNotUsable
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_EmptyModel_IsNotUsable
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_EndpointProviderWithoutEndpoint_IsNotUsable(provider: "azure")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_EndpointProviderWithoutEndpoint_IsNotUsable(provider: "custom")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "anthropic")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "azure")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "custom")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "gemini")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "kimi")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "lmstudio")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "ollama")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_FullyConfiguredAgent_IsUsable(provider: "openai")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_KeyProviderWithoutKey_IsNotUsable(provider: "anthropic")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_KeyProviderWithoutKey_IsNotUsable(provider: "azure")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_KeyProviderWithoutKey_IsNotUsable(provider: "gemini")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_KeyProviderWithoutKey_IsNotUsable(provider: "kimi")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_KeyProviderWithoutKey_IsNotUsable(provider: "openai")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_LocalProviderNeedsNoKeyNorEndpoint(provider: "lmstudio")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_LocalProviderNeedsNoKeyNorEndpoint(provider: "ollama")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.S1_UnknownProvider_IsNotUsable
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V1_NameEmptyAfterTrim_IsRejected(name: "   ")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V1_NameEmptyAfterTrim_IsRejected(name: "")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V10_AbsoluteEndpoint_Passes(endpoint: "http://localhost:11434")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V10_AbsoluteEndpoint_Passes(endpoint: "https://example.test/v1")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V10_NonAbsoluteEndpoint_IsRejected(endpoint: "endpoint.example.com/path")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V10_NonAbsoluteEndpoint_IsRejected(endpoint: "not a url")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V10_NonAbsoluteEndpoint_IsRejected(endpoint: "path/to/endpoint")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_MaxTokensRange(maxTokens: 255, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_MaxTokensRange(maxTokens: 256, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_MaxTokensRange(maxTokens: 32768, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_MaxTokensRange(maxTokens: 32769, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_RetriesRange(retries: 0, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_RetriesRange(retries: -1, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_RetriesRange(retries: 5, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_RetriesRange(retries: 6, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TemperatureRange(temperature: 0, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TemperatureRange(temperature: -0.10000000000000001, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TemperatureRange(temperature: 2, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TemperatureRange(temperature: 2.1000000000000001, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TimeoutRange(timeout: 300, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TimeoutRange(timeout: 301, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TimeoutRange(timeout: 4, valid: False)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V11_TimeoutRange(timeout: 5, valid: True)
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V12_TwentyAgentCeiling
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V2_NameLongerThan40AfterTrim_IsRejected
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V3_AgentDoesNotCollideWithItself
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V3_DuplicateName_CaseAndTrimInsensitive_IsRejected
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V4_ProviderMustBeCanonical
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V5_DuplicateId_IsRejected
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V5_IdMustBe32HexCharacters(id: "")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V5_IdMustBe32HexCharacters(id: "0123456789abcdef0123456789abcde")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V5_IdMustBe32HexCharacters(id: "0123456789abcdef0123456789abcdeg")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V5_IdMustBe32HexCharacters(id: "abc")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V6_ModelEmpty_IsRejected(model: "   ")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V6_ModelEmpty_IsRejected(model: "")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_ForeignModelFamily_IsRejected(provider: "anthropic", model: "gpt-4o")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_ForeignModelFamily_IsRejected(provider: "gemini", model: "kimi-latest")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_ForeignModelFamily_IsRejected(provider: "kimi", model: "gemini-flash-latest")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_ForeignModelFamily_IsRejected(provider: "openai", model: "claude-sonnet-4-6")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "anthropic", model: "claude-sonnet-4-6")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "azure", model: "gpt-4o")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "custom", model: "claude-x")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "gemini", model: "gemini-flash-latest")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "kimi", model: "kimi-latest")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "lmstudio", model: "claude-x")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "ollama", model: "gpt-4o")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V7_MatchingOrExemptFamily_Passes(provider: "openai", model: "gpt-4o")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_DecryptFailure_KeepsStoredKeyStanding
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_KeyRequiredProviders_RejectEmptyKey(provider: "anthropic")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_KeyRequiredProviders_RejectEmptyKey(provider: "azure")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_KeyRequiredProviders_RejectEmptyKey(provider: "gemini")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_KeyRequiredProviders_RejectEmptyKey(provider: "kimi")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_KeyRequiredProviders_RejectEmptyKey(provider: "openai")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_NoKeyProviders_AcceptEmptyKey(provider: "custom")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_NoKeyProviders_AcceptEmptyKey(provider: "lmstudio")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V8_NoKeyProviders_AcceptEmptyKey(provider: "ollama")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V9_EndpointRequiredProviders_RejectEmptyEndpoint(provider: "azure")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.V9_EndpointRequiredProviders_RejectEmptyEndpoint(provider: "custom")
+AkmlSql.Core.Tests.Config.AiAgentModelTests.Validate_ValidAgent_ReturnsNull
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Active_DanglingId_ReturnsNull
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Active_NoActiveId_ReturnsNull
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Active_UnusableAgent_ReturnsNull
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Active_UsableAgent_ReturnsIt
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.AgentsConverter_RoundTrips_WhatTheTolerantReadKept
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Load_AgentEntryWithATypeMismatchedField_DropsOnlyThatEntry
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Load_MalformedAgentEntries_TheRestLoad_AndTheLogNamesThem
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Load_NonArrayAgents_YieldsAnEmptyList_WithoutThrowing
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Load_TypeMismatchedAgentEntry_IsDropped_TheRestLoad_AndOtherSectionsSurvive
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.MigratedConfig_ProducesFlatFieldsFactoryAcceptsUnchanged
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Mirror_ActiveAgentPresent_OverwritesFlatFields
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Mirror_DoesNotTouchEnabled
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Mirror_EmptyAgentList_LeavesFlatFieldsUntouched
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Mirror_NothingActive_BlanksFlatStrings_KeepsRequestParams
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_ActiveAgentIdNamingAPresentButDisabledAgent_IsKept
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_AgentsBeyondTheTwentieth_AreDropped_WithWarningsNamingTheIndexes
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_AgentWithDuplicateId_IsDropped_KeepingTheFirst
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_AgentWithEmptyId_IsDropped_TheRestSurvive
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingActiveAgentId_BecomesFirstUsableAgent
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingActiveAgentId_NoUsableAgent_BecomesEmpty
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: Chat)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: Explain)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: Fix)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: GhostText)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: IndexSuggestions)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: Optimize)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_ClearedToEmpty(feature: TextToSql)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DanglingFeatureAssignment_RecordsTheClearedFeature_WithoutDuplicates
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DerivesEnabledFromUsability
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_DisplayLmStudioSpelling_Canonicalised_StaysUsable_KeepsDependents
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_EmptyActiveAgentId_StaysEmpty
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_FallbackOrder_RemovesDuplicatesKeepingTheFirst
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_FallbackOrder_RemovesEntriesNamingNoUsableAgent
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_FallbackOrder_RemovesTheActiveAgentsOwnId
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_FeatureAssignmentNamingAnUnusableAgent_ClearedToEmpty
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_KnownHealthStatus_Kept(status: "failed")
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_KnownHealthStatus_Kept(status: "needsKey")
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_KnownHealthStatus_Kept(status: "ready")
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_KnownHealthStatus_Kept(status: "Ready") [#2]
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_KnownHealthStatus_Kept(status: "unknown")
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_LegacyAzureSpelling_Canonicalised_StaysUsable_KeepsDependents
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_NullAgentEntry_IsDropped_TheRestSurvive
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_NullHealth_StaysNull
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_NullHealthStatus_BecomesUnknown
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_PreservesEnabledSemantics_ForCommandVisibility
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_RepairsAreIdempotent
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_RunTwice_IsANoOp
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_UnknownHealthStatus_BecomesUnknown
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Normalize_UsableFeatureAssignment_Kept
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Project_DeepCopiesAgents_MutatingAProjectedAgentLeavesTheGlobalUntouched
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Project_DoesNotAliasMutableMembers
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Project_PreservesGlobalConcerns
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Project_SubstitutesConnectionFieldsAndRequestParams
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_AssignedUsableAgentWins
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: Chat)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: Explain)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: Fix)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: GhostText)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: IndexSuggestions)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: Optimize)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_EveryFeature_ReadsItsOwnAssignmentField(feature: TextToSql)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_NothingUsable_ReturnsNull
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: Chat)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: Explain)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: Fix)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: GhostText)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: IndexSuggestions)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: Optimize)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnassignedFeature_FollowsActiveAgent(feature: TextToSql)
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.ResolveFor_UnusableAssignedFallsBackToActive
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Save_DoesNotNormalize_PersistsEnabledAsHanded
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.Save_MirrorsActiveAgentIntoFlatFieldsOnDisk
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.SuggestCopyName_Conflicts_NumberedUp
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.SuggestCopyName_NoConflict_AppendsCopy
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.SuggestName_ComparisonIsCaseAndTrimInsensitive
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.SuggestName_EmptyList_IsAgent1
+AkmlSql.Core.Tests.Config.AiAgentResolverTests.SuggestName_LowestFreeNWins
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_first_party_providers(provider: "anthropic", expected: "claude-sonnet-4-6")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_first_party_providers(provider: "Anthropic", expected: "claude-sonnet-4-6") [#2]
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_first_party_providers(provider: "Gemini", expected: "gemini-flash-latest")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_first_party_providers(provider: "OpenAI", expected: "gpt-4o")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_has_no_opinion_for_local_or_custom(provider: "(None)")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_has_no_opinion_for_local_or_custom(provider: "Azure OpenAI")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_has_no_opinion_for_local_or_custom(provider: "Custom")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_has_no_opinion_for_local_or_custom(provider: "LM Studio")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_has_no_opinion_for_local_or_custom(provider: "Ollama")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.DefaultModelFor_has_no_opinion_for_local_or_custom(provider: null)
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "chatgpt-4o-latest", family: "openai")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "Claude-Opus-4-8", family: "anthropic")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "claude-sonnet-5", family: "anthropic")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "gemini-flash-latest", family: "gemini")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "gemma-4-31b-it", family: "gemini")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "gpt-4o", family: "openai")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "models/gemini-2.0-flash", family: "gemini")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "o1", family: "openai")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_recognises_first_party_families(model: "o3-mini", family: "openai")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_returns_null_for_unknown_or_local_models(model: "")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_returns_null_for_unknown_or_local_models(model: "llama3.1")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_returns_null_for_unknown_or_local_models(model: "my-azure-deployment")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_returns_null_for_unknown_or_local_models(model: "orca-mini")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_returns_null_for_unknown_or_local_models(model: "qwen2.5-coder")
+AkmlSql.Core.Tests.Config.AiModelFamilyTests.Detect_returns_null_for_unknown_or_local_models(model: null)
+AkmlSql.Core.Tests.Config.AppSettingsTests.AiSettings_Spec014_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.AppSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.AppSettings_HasCompletionPolish
+AkmlSql.Core.Tests.Config.AppSettingsTests.AppSettings_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.CacheSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.CacheSettings_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.CodeAnalysisSettings_Spec014_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.ColoringRule_DatabaseName_DefaultsEmpty
+AkmlSql.Core.Tests.Config.AppSettingsTests.ColoringRule_DatabaseName_Mutation
+AkmlSql.Core.Tests.Config.AppSettingsTests.CommandPaletteSettings_Spec014_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.CompletionPolishSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.CompletionPolishSettings_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.FormatterSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.FormatterSettings_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.GridSettings_Spec014_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.HistorySettings_DisableAutoTrim_DefaultsFalse
+AkmlSql.Core.Tests.Config.AppSettingsTests.HistorySettings_DisableAutoTrim_Mutation
+AkmlSql.Core.Tests.Config.AppSettingsTests.InstalledTarget_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.InstalledTarget_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.IntelliSenseSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.IntelliSenseSettings_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.IntelliSenseSettings_SpecialCharOptions_DefaultNotNull
+AkmlSql.Core.Tests.Config.AppSettingsTests.KeywordCaseOption_AllValues
+AkmlSql.Core.Tests.Config.AppSettingsTests.NavigationSettings_Spec014_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.SafetySettings_EnvironmentSeverity_DevDefault_IsNotDisabled
+AkmlSql.Core.Tests.Config.AppSettingsTests.SafetySettings_Spec014_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.SafetySettings_Spec014_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.SnippetSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.SnippetSettings_Mutations
+AkmlSql.Core.Tests.Config.AppSettingsTests.Spec030T077_Fields_RoundTripJson
+AkmlSql.Core.Tests.Config.AppSettingsTests.Spec030T077_JsonPropertyNames_AreCamelCase
+AkmlSql.Core.Tests.Config.AppSettingsTests.SpecialCharacterSettings_Defaults
+AkmlSql.Core.Tests.Config.AppSettingsTests.SpecialCharacterSettings_Mutations
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Load_WhenFileAbsent_CreatesDefaultsAndSavesFile
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Load_WhenFilePresent_ReturnsDeserializedSettings
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Load_WhenJsonIsMalformed_ReturnsDefaults
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Load_WhenJsonIsNull_ReturnsNewSettings
+AkmlSql.Core.Tests.Config.ConfigManagerTests.RoundTrip_SaveThenLoad_PreservesAllSettings
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Save_CreatesDirectoryIfMissing
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Save_WhenWriteFails_DoesNotThrow
+AkmlSql.Core.Tests.Config.ConfigManagerTests.Save_WritesValidJsonToDisk
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.A_null_or_default_semicolons_or_brackets_value_is_as_the_style_says
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.An_older_config_without_the_new_keys_loads_the_defaults
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Each_switch_maps_to_its_own_field(on: False)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Each_switch_maps_to_its_own_field(on: True)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Format_sql_actions_survive_a_config_round_trip
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Formatter_settings_carry_format_sql_actions_and_an_empty_team_folder_by_default
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Null_settings_map_to_the_defaults
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "", expected: 3)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "Insert", expected: 1)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "insert", expected: 1) [#2]
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "leave", expected: 0)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "REMOVE", expected: 2)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "remove", expected: 2) [#2]
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "sometimes", expected: 3)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "style", expected: 3)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "", expected: 3)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "add", expected: 1)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "Add", expected: 1) [#2]
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "insert", expected: 3)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "leave", expected: 0)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "remove", expected: 2)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "style", expected: 3)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.The_defaults_are_the_common_format_actions_of_the_built_in_styles
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.The_defaults_are_written_with_the_documented_words
+AkmlSql.Core.Tests.Config.PreserveInstallStateTests.Copies_are_independent_of_the_source
+AkmlSql.Core.Tests.Config.PreserveInstallStateTests.Copies_every_install_field
+AkmlSql.Core.Tests.Config.PreserveInstallStateTests.Copies_nothing_else
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationAppDataTests.FirstRun_WritesTheDefaultEnvironments
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationAppDataTests.OlderConfig_Migrates_AndASaveAndReloadIsIdempotent
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.DuplicateLabelWithAnotherColor_BecomesLabelTwo
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.EnvironmentsAreBuiltInRuleOrder_NotListOrder
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.ExistingEnvironments_AreKeptAsTheyAre
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.LoadWithPath_NeverRewritesTheFile
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.Migration_LeavesRuleLabelsColorsAndPatternsUnchanged
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.MissingFile_DefaultsAreMigrated_AndNothingIsWritten
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.NewAppSettings_MigratesToTheFourDefaults
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.NoRules_SeedsTheFourDefaults
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.SecondLoad_IsIdempotent
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.StockRules_BecomeTheFourDefaultEnvironments_WithEveryRuleLinked
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.UnlinkedRule_WithEnvironmentsPresent_IsLinkedToItsPair
+AkmlSql.Core.Tests.Config.TabEnvironmentsMigrationTests.WriteLabelsFromEnvironments_CopiesNameAndColorOntoTheRules
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_relative_path_is_refused(input: "..\\styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_relative_path_is_refused(input: "\\styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_relative_path_is_refused(input: "C:styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_relative_path_is_refused(input: "styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_relative_path_is_refused(input: "team\\styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_rooted_local_or_unc_path_is_accepted_in_its_full_path_form(input: "\\\\server\\share\\styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_rooted_local_or_unc_path_is_accepted_in_its_full_path_form(input: "C:\\Team\\Styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.A_rooted_local_or_unc_path_is_accepted_in_its_full_path_form(input: "D:\\")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Dot_segments_are_resolved_by_the_canonical_form(input: "\\\\server\\share\\team\\..\\styles", expected: "\\\\server\\share\\styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Dot_segments_are_resolved_by_the_canonical_form(input: "C:\\Team\\..\\Shared\\Styles", expected: "C:\\Shared\\Styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Dot_segments_are_resolved_by_the_canonical_form(input: "C:\\Team\\.\\Styles", expected: "C:\\Team\\Styles")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Empty_means_the_team_folder_is_off(input: "   ")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Empty_means_the_team_folder_is_off(input: "")
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Empty_means_the_team_folder_is_off(input: null)
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Illegal_path_characters_are_refused
+AkmlSql.Core.Tests.Config.TeamStyleFolderValidatorTests.Surrounding_spaces_and_quotes_are_ignored
+AkmlSql.Core.Tests.Config.TriggerDelayMigrationTests.A_100_chosen_after_the_move_is_kept
+AkmlSql.Core.Tests.Config.TriggerDelayMigrationTests.An_older_configs_untouched_100_becomes_immediate_once
+AkmlSql.Core.Tests.Config.TriggerDelayMigrationTests.Another_value_in_an_older_config_is_kept
+AkmlSql.Core.Tests.Config.TriggerDelayMigrationTests.The_marker_survives_a_save
+AkmlSql.Core.Tests.Config.WindowTitlesTests.Name_follows_the_product_and_an_en_dash_unchanged(name: "Format styles", expected: "AKML SQL – Format styles")
+AkmlSql.Core.Tests.Config.WindowTitlesTests.Name_follows_the_product_and_an_en_dash_unchanged(name: "Import summary: Khamis Style", expected: "AKML SQL – Import summary: Khamis Style")
+AkmlSql.Core.Tests.Config.WindowTitlesTests.Name_follows_the_product_and_an_en_dash_unchanged(name: "Split table — dbo.Orders", expected: "AKML SQL – Split table — dbo.Orders")
+AkmlSql.Core.Tests.Config.WindowTitlesTests.Options_window_title_is_product_en_dash_name
+AkmlSql.Core.Tests.Config.WindowTitlesTests.Title_is_built_from_the_product_name_with_an_en_dash_not_a_hyphen_or_em_dash
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.A_failing_lookup_leaves_the_name_as_typed
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: " ServerDemo ", expected: "tcp:192.168.4.5,1433")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "LocalMem", expected: "lpc:(local)")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "PipeAlias", expected: "np:\\\\sql03\\pipe\\sql\\query")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "PipeShort", expected: "np:\\\\sql03\\pipe\\sql\\query")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "ReportsDb", expected: "tcp:sql02\\REPORTS")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "ServerDemo", expected: "tcp:192.168.4.5,1433")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "serverdemo", expected: "tcp:192.168.4.5,1433") [#2]
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "(local)")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "192.168.4.5")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "Broken")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "ServerDemo,1433")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "sql01")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "sql01\\INST")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "tcp:ServerDemo")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.IsAlias_tells_a_resolved_name_from_a_direct_one
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Malformed_values_have_no_target(value: "")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Malformed_values_have_no_target(value: "DBMSSOCN")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Malformed_values_have_no_target(value: "DBMSSOCN,")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Malformed_values_have_no_target(value: null)
+AkmlSql.Core.Tests.ConstantsTests.AppDataFolderName
+AkmlSql.Core.Tests.ConstantsTests.AppDataPath_IsRootedAndContainsFolderName
+AkmlSql.Core.Tests.ConstantsTests.AppVersion_Current_MatchesRuntimeVersion
+AkmlSql.Core.Tests.ConstantsTests.BuildDate_is_the_date_this_build_was_made
+AkmlSql.Core.Tests.ConstantsTests.CacheFolderName
+AkmlSql.Core.Tests.ConstantsTests.CachePath_IsUnderLocalAppDataAndEndsWithCache
+AkmlSql.Core.Tests.ConstantsTests.ConfigFileName
+AkmlSql.Core.Tests.ConstantsTests.ConfigFilePath_IsUnderAppDataAndEndsWithConfigJson
+AkmlSql.Core.Tests.ConstantsTests.FeedbackUrl
+AkmlSql.Core.Tests.ConstantsTests.FormatDocumentCommandId
+AkmlSql.Core.Tests.ConstantsTests.FormatSelectionCommandId
+AkmlSql.Core.Tests.ConstantsTests.LocalAppDataPath_IsRootedAndContainsFolderName
+AkmlSql.Core.Tests.ConstantsTests.LogMaxFiles
+AkmlSql.Core.Tests.ConstantsTests.LogMaxFileSize
+AkmlSql.Core.Tests.ConstantsTests.LogsFolderName
+AkmlSql.Core.Tests.ConstantsTests.LogsPath_IsUnderAppDataAndEndsWithLogs
+AkmlSql.Core.Tests.ConstantsTests.ProductName
+AkmlSql.Core.Tests.ConstantsTests.RuntimeVersion_IsNotEmpty
+AkmlSql.Core.Tests.ConstantsTests.UpdateCheckIntervalHours
+AkmlSql.Core.Tests.ConstantsTests.UpdateManifestUrl
+AkmlSql.Core.Tests.ConstantsTests.UpdateManifestUrl_IsHttpsOnTheLiveSiteHost
+AkmlSql.Core.Tests.ConstantsTests.UpdateResultFileName
+AkmlSql.Core.Tests.ConstantsTests.UpdateResultFilePath_IsUnderAppDataAndEndsWithJson
+AkmlSql.Core.Tests.ConstantsTests.Version_ConstIsSet
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_HandlesCte
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_HandlesDdl
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_HandlesEmptyInput
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_HandlesJoinQuery
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_HandlesMultipleBatches
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_HandlesWhitespaceOnlyInput
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_IsIdempotent_ForTypicalQueries
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_PreservesNoformatRegion
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_ReportsElapsedTime
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_ReturnsSuccess_ForValidSql
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_SemanticValidationPasses_ForValidSql
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_SetsWasModified_False_WhenAlreadyFormatted
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_SetsWasModified_WhenTextChanges
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_UppercasesKeywords_ByDefault
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_WithIdempotencyCheckDisabled_StillSucceeds
+AkmlSql.Core.Tests.Formatting.FormatterPipelineTests.Format_WithSkipValidation_StillFormats
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.IsInNoformatRegion_ReturnsFalse_WhenNoRegions
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.IsInNoformatRegion_ReturnsFalse_WhenOffsetAfterRegion
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.IsInNoformatRegion_ReturnsFalse_WhenOffsetBeforeRegion
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.IsInNoformatRegion_ReturnsTrue_WhenOffsetInsideRegion
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_DetectsBlockCommentNoformatRegion
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_DetectsLineCommentNoformatRegion
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_LineComment_RegionStartsAtNoformatTag
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_LineComment_WithHyphens_AndSpaces
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_MultipleRegions_ReturnsAll
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_Region_HasClosingTag_WhenEndnoformatPresent
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_Region_NoClosingTag_WhenEndnoformatAbsent
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_ReturnsEmpty_ForEmptyString
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_ReturnsEmpty_WhenNoMarkers
+AkmlSql.Core.Tests.Formatting.NoformatScannerTests.Scan_UnmatchedOpen_ExtendsToEndOfFile
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.A_future_time_counts_as_today
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2025, mo: 9, d: 30, h: 10, mi: 0, expected: Older)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 8, d: 31, h: 23, mi: 59, expected: Older)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 1, h: 0, mi: 0, expected: ThisMonth)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 20, h: 23, mi: 59, expected: ThisMonth)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 21, h: 0, mi: 0, expected: LastWeek)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 27, h: 23, mi: 59, expected: LastWeek)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 28, h: 0, mi: 0, expected: ThisWeek)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 28, h: 23, mi: 59, expected: ThisWeek)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 29, h: 0, mi: 0, expected: Yesterday)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 29, h: 23, mi: 59, expected: Yesterday)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 30, h: 0, mi: 0, expected: Today)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Each_boundary_falls_in_the_right_group(y: 2026, mo: 9, d: 30, h: 23, mi: 59, expected: Today)
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Labels(group: LastWeek, label: "Last week")
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Labels(group: Older, label: "Older")
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Labels(group: ThisMonth, label: "This month")
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Labels(group: ThisWeek, label: "This week")
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Labels(group: Today, label: "Today")
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Labels(group: Yesterday, label: "Yesterday")
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Last_week_wins_over_this_month_when_both_fit
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.The_culture_overload_uses_the_current_culture_week_start
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.The_week_start_follows_the_culture
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Utc_times_are_compared_in_local_time
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Yesterday_can_be_last_week_territory_and_still_says_yesterday
+AkmlSql.Core.Tests.History.HistoryDateGroupsTests.Yesterday_wins_over_this_week_when_both_fit
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsBP004_OnEqualsNull
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsDE001_OnTableWithoutPrimaryKey
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsDEP001_OnTextDataType
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsEX001_OnDivisionByZero
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsMultipleIssues_InSameBatch
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsNM002_OnSpPrefix
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsPE003_OnDeleteWithoutWhere
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsSE001_OnExecWithConcat
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_DetectsSE002_OnHardcodedPassword
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_Issues_HaveNonEmptyMessages
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_Issues_HaveValidLineAndColumn
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_NoPE003_WhenWherePresent
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_Response_IncludesDocumentVersion
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_Response_IncludesRequestId
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_ReturnsEmptyIssues_ForEmptySql
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_ReturnsEmptyIssues_ForWhitespaceSql
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_ReturnsNoIssues_ForCleanSql
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_ReturnsNoIssues_WhenGlobalSettingsDisabled
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_ReturnsSameIssues_WhenCalledTwiceWithSameSql
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_SetsAutoFixableFalse_ForAdvisoryRule
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_SetsAutoFixableTrue_ForAutoFixableRule
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.AnalyzeAsync_ThrowsOperationCanceled_WhenPreCancelled
+AkmlSql.Core.Tests.Integration.AnalysisEngineIntegrationTests.CodeIssueInfo_AutoFixable_RoundTripsThroughMessagePack
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.BulkFormat_Cancellation_ReturnsPartialResults
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.BulkFormat_CreatesBakFiles_WhenEnabled
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.BulkFormat_FormatsMultipleFiles
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.BulkFormat_PreviewOnly_DoesNotWriteFiles
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.BulkFormat_SkipsInvalidFiles_WhenSkipParseErrorsEnabled
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_CaseExpression_FormatsCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_CommentOnly_DoesNotThrow
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_Cte_FormatsCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_Delete_UppercasesKeywords
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_EmptyString_DoesNotThrow
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_GoSeparator_HandledCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_Insert_UppercasesKeywords
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_IsIdempotent(sql: "DELETE FROM dbo.T WHERE Id = 1")
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_IsIdempotent(sql: "INSERT INTO dbo.T (Col1, Col2) VALUES ('A', 1)")
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_IsIdempotent(sql: "SELECT CASE WHEN Status = 'A' THEN 1 ELSE 0 END AS"···)
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_IsIdempotent(sql: "SELECT Id FROM dbo.T WHERE Status IN ('A', 'B', 'C"···)
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_IsIdempotent(sql: "SELECT Id, Name FROM dbo.Orders WHERE Id > 0 ORDER"···)
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_IsIdempotent(sql: "UPDATE dbo.T SET Col1 = 'X' WHERE Id = 1")
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_MultipleStatements_AllFormatted
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_NoformatBlock_IsPreserved
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_SimpleSelect_UppercasesKeywords
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_SkipValidationProfile_StillProducesOutput
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_SqlWithSqlcmdDirective_PreservesDirective
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_StoredProcedure_FormatsCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_SubQuery_FormatsCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_TryCatch_FormatsCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_Update_UppercasesKeywords
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_VariableDeclarations_FormatCorrectly
+AkmlSql.Core.Tests.Integration.FormatterIntegrationTests.Format_WithLowerCaseProfile_LowercasesKeywords
+AkmlSql.Core.Tests.Ipc.CompletionItemFilterTextTests.FilterText_roundtrips_through_messagepack
+AkmlSql.Core.Tests.Ipc.CompletionItemFilterTextTests.Old_payload_without_key7_deserializes_with_null_filtertext
+AkmlSql.Core.Tests.Ipc.CompletionItemFilterTextTests.Response_with_filtertext_items_roundtrips
+AkmlSql.Core.Tests.Ipc.FormatSelectionResponseTests.An_older_reply_without_key_7_loads_with_no_warning
+AkmlSql.Core.Tests.Ipc.FormatSelectionResponseTests.Profile_fallback_warning_round_trips_as_key_7
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.A_format_request_with_no_actions_serializes_key_5_as_nil
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.A_format_request_without_key_5_has_no_actions
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.A_format_selection_request_without_key_5_has_no_actions
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.A_new_actions_dto_means_todays_formatting
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.An_older_profile_info_without_keys_9_and_10_loads_as_unknown_source_and_writable
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.An_older_profile_list_without_key_1_reports_the_team_folder_as_available
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.Format_request_carries_actions_as_key_5
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.Format_selection_request_carries_actions_as_key_5
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.Format_sql_actions_round_trip_on_keys_0_to_5
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.Profile_info_carries_source_and_read_only_as_keys_9_and_10
+AkmlSql.Core.Tests.Ipc.FormattingContractTests.Profile_list_reports_an_unreachable_team_folder_as_key_1
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_BodyMissing_ReturnsNull
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_BodyTruncated_ReturnsNull
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_ChecksumMismatch_ThrowsInvalidDataException
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_EmptyStream_ReturnsNull
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_LengthExceedsMax_ThrowsInvalidDataException
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_LengthNegative_ThrowsInvalidDataException
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_LengthZero_ThrowsInvalidDataException
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_PartialHeader_ReturnsNull
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.ReadFramed_WithCancellationToken_Succeeds
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.RoundTrip_MultipleMessages
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.RoundTrip_SimpleMessage
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.RoundTrip_WithPayload
+AkmlSql.Core.Tests.Ipc.FrameProtocolTests.WriteFramed_WithCancellationToken_Succeeds
+AkmlSql.Core.Tests.Ipc.HistoryActionContractTests.Action_request_keys_9_to_12_round_trip
+AkmlSql.Core.Tests.Ipc.HistoryActionContractTests.Action_response_keys_8_to_11_round_trip
+AkmlSql.Core.Tests.Ipc.HistoryActionContractTests.An_older_action_request_loads_with_the_new_keys_empty
+AkmlSql.Core.Tests.Ipc.HistoryActionContractTests.An_older_action_response_loads_with_the_new_keys_empty
+AkmlSql.Core.Tests.Ipc.HistoryActionContractTests.An_older_entry_loads_with_no_session_key
+AkmlSql.Core.Tests.Ipc.HistoryActionContractTests.Entry_session_key_round_trips
+AkmlSql.Core.Tests.Ipc.HistoryRecordRequestTests.Missing_session_key_deserializes_as_null
+AkmlSql.Core.Tests.Ipc.HistoryRecordRequestTests.SessionKey_round_trips
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Action_response_filter_values_round_trip
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.An_older_record_request_loads_as_a_real_run
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.An_older_search_request_loads_without_a_path_filter
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Get_filter_values_is_action_12
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Not_executed_is_status_3
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Record_request_is_draft_is_key_12
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Restore_reads_whole_entries_by_id
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Search_request_path_filter_is_key_13
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Search_request_sql_only_is_key_14_and_an_older_request_searches_everything
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Search_response_has_more_is_key_4_and_an_older_engine_leaves_it_unset
+AkmlSql.Core.Tests.Ipc.HistoryUs5ContractTests.Versions_carry_their_server_and_database
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.BulkFormatCancelRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.BulkFormatProgressInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.BulkFormatReportResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.BulkFormatRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.CompletionItem_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.CompletionObjectType_AllValues
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.CompletionRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.CompletionResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ConnectionInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.DocumentChange_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.EncryptedObjectDecryptionRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.EncryptedObjectDecryptionResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.EngineStatusInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ErrorInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FileResult_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FindInvalidObjectsRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FindInvalidObjectsResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FindUnusedVariablesRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FindUnusedVariablesResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatActionRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatActionResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatActionType_AllValues
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatDiagnosticInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatPreviewRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatPreviewResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatSelectionRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.FormatSelectionResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.InvalidObjectRecord_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ParameterInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.PlaceholderInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileDeleteRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileDeleteResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileImportRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileImportResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileListRequest_CanBeInstantiated
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileListResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileSaveRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.ProfileSaveResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.QuickInfoDetail_DefaultConstructorAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.QuickInfoDetail_ParameterizedConstructor
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.QuickInfoRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.QuickInfoResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.RefreshRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.RefreshResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SignatureOverload_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SignatureRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SignatureResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetDeleteRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetDeleteResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetExpandRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetExpandResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetImportRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetImportResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetInfo_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetListRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetListResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetSaveRequest_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.SnippetSaveResponse_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.Spec014_NewMessageTypes_AreAllocated
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.TextChange_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.Messages.IpcMessagesTests.UnusedDeclarationDto_DefaultsAndMutations
+AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.MessageType_constants_match_contract
+AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.Request_defaults_and_round_trip
+AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.Response_defaults_and_round_trip
+AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.Response_failure_round_trip_carries_error
+AkmlSql.Core.Tests.Ipc.ProfileImportOptionReportTests.Old_wire_payload_without_key5_still_deserializes
+AkmlSql.Core.Tests.Ipc.ProfileImportOptionReportTests.Response_with_option_reports_roundtrips_through_messagepack
+AkmlSql.Core.Tests.Ipc.ProfileRenameMessageTests.MessageType_constants_match_contract
+AkmlSql.Core.Tests.Ipc.ProfileRenameMessageTests.Request_defaults_and_round_trip
+AkmlSql.Core.Tests.Ipc.ProfileRenameMessageTests.Request_key_layout_is_positional_0_to_1
+AkmlSql.Core.Tests.Ipc.ProfileRenameMessageTests.Response_round_trips_success_and_failure
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.MessageTypes_EngineToShell
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.MessageTypes_Formatter
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.MessageTypes_FormatterResults
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.MessageTypes_ShellToEngine
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.MessageTypes_SnippetResults
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.MessageTypes_Snippets
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.RpcMessage_Defaults
+AkmlSql.Core.Tests.Ipc.RpcMessageTests.RpcMessage_PropertiesRoundTrip
+AkmlSql.Core.Tests.Logging.LoggerFactoryTests.Initialize_CreatesLogsDirectory
+AkmlSql.Core.Tests.Logging.LoggerFactoryTests.Initialize_IsIdempotent_DoesNotThrow
+AkmlSql.Core.Tests.Logging.LoggerFactoryTests.Shutdown_ResetsState_AllowsReinitialize
+AkmlSql.Core.Tests.Logging.LoggerFactoryTests.Shutdown_WithoutPriorInitialize_DoesNotThrow
+AkmlSql.Core.Tests.Logging.TelemetryClientTests.Dispose_FlushesQueuedEvents
+AkmlSql.Core.Tests.Logging.TelemetryClientTests.Enqueue_PostsBatchToTelemetryEndpoint
+AkmlSql.Core.Tests.Logging.TelemetryClientTests.LevelFiltering_BelowMinimumLevelIsNotSent
+AkmlSql.Core.Tests.Logging.TelemetryClientTests.Message_IsTruncatedToTheServerCap
+AkmlSql.Core.Tests.Logging.TelemetryClientTests.Payload_IsAnonymous_NoUserOrMachineName
+AkmlSql.Core.Tests.Logging.TelemetryClientTests.SendFailure_DropsBatchAndRecovers_WithoutThrowing
+AkmlSql.Core.Tests.Logging.TelemetryIdentityTests.ExistingInstallId_IsReused_AndOtherSettingsSurvive
+AkmlSql.Core.Tests.Logging.TelemetryIdentityTests.MissingConfig_GeneratesAndPersistsInstallId
+AkmlSql.Core.Tests.Logging.TelemetryIdentityTests.UnreadableConfig_ReturnsAnIdWithoutThrowing
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.AConnectionString_LosesEveryIdentifyingValue
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.AddressesAndEmails_AreRedacted(input: "connect to 10.0.0.5 failed", expected: "connect to <ip> failed")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.AddressesAndEmails_AreRedacted(input: "mail jane.doe@example.com now", expected: "mail <email> now")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.AddressesAndEmails_AreRedacted(input: "open \\\\fileserver\\share\\x.sql", expected: "open \\\\<host>\\share\\x.sql")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.AddressesAndEmails_AreRedacted(input: "wss://162.220.54.191:59417/akmlsql", expected: "wss://<ip>:59417/akmlsql")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.DiagnosticDetail_Survives(input: "AKML SQL 1.26.0923.0723 logger initialized")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.DiagnosticDetail_Survives(input: "at AkmlSql.Engine.Execution.ExecuteQueryHandler.Ha"···)
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.DiagnosticDetail_Survives(input: "SqlException 18456, state 8, line 1")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.DiagnosticDetail_Survives(input: "System.InvalidOperationException: Sequence contain"···)
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.NothingIn_NothingOut(input: "")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.NothingIn_NothingOut(input: null)
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.ProfilePaths_LoseTheUserName(input: "at Foo() in C:\\Users\\Jane Doe\\source\\repos\\x."···, expected: "at Foo() in C:\\Users\\<user>\\source\\repos\\x.cs"···)
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.ProfilePaths_LoseTheUserName(input: "D:/Users/someone/file.txt", expected: "D:/Users/<user>/file.txt")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.ProfilePaths_LoseTheUserName(input: "Failed to import SQL Prompt style: C:\\Users\\mkha"···, expected: "Failed to import SQL Prompt style: C:\\Users\\<use"···)
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.SqlServerQuotedNames_AreRedacted(input: "Cannot open database 'Payroll' requested by the lo"···, expected: "Cannot open database '<redacted>' requested by the"···)
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.SqlServerQuotedNames_AreRedacted(input: "Login failed for user 'CORP\\jdoe'.", expected: "Login failed for user '<redacted>'.")
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.TheEnginesConnectionDescription_LosesServerAndDatabase
+AkmlSql.Core.Tests.Logging.TelemetryScrubberTests.ThisMachineAndAccountName_AreRedactedAsWholeWords
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.AlterProcedure_FindsProcedureNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.CteExtraction_WithCte_FindsCteNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.EmptyDocument_ReturnsEmptyArray
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.FunctionDetection_CreateFunction_FindsFunctionNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.MultipleBatchesWithGo_FindsAllObjects
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.MultipleCtes_WrappedInBlock
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.NodeOffsets_AreValid
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.NullDocument_ReturnsEmptyArray
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.ProcedureDetection_CreateProcedure_FindsProcedureNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.ProcedureWithChildStatements_HasChildren
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.RegionDetection_FindsRegionNodes
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.TempTableDetection_CreateTempTable_FindsTempTableNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.TriggerDetection_CreateTrigger_FindsTriggerNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.ViewDetection_CreateView_FindsViewNode
+AkmlSql.Core.Tests.Navigation.DocumentOutlineTests.WhitespaceDocument_ReturnsEmptyArray
+AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_DeserializedLowercaseKey_ResolvesByUppercase
+AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_DeserializedUppercaseKey_ResolvesByLowercase
+AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_LowercaseSet_ResolvesByUppercase
+AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_NewInstance_IsCaseInsensitive
+AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_SetterWithNullValue_ReturnsCaseInsensitiveEmptyDict
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.CanonicalIds_ListsAllEightProviders
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "  kimi  ", expected: "kimi")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Anthropic", expected: "anthropic")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "anthropic", expected: "anthropic") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Azure OpenAI", expected: "azure")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "azure", expected: "azure")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "AzureOpenAI", expected: "azure")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "azureopenai", expected: "azure") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "custom", expected: "custom")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Custom", expected: "custom") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Gemini", expected: "gemini")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "gemini", expected: "gemini") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Kimi (Moonshot)", expected: "kimi")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "kimi", expected: "kimi")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "KIMI", expected: "kimi") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "lm studio", expected: "lmstudio")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "LM Studio", expected: "lmstudio") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "LMStudio", expected: "lmstudio")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "lmstudio", expected: "lmstudio") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "moonshot", expected: "kimi")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Moonshot", expected: "kimi") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "ollama", expected: "ollama")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Ollama", expected: "ollama") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "OpenAI", expected: "openai")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "openai", expected: "openai") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_NullOrWhitespace_IsNone(input: "   ")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_NullOrWhitespace_IsNone(input: "")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_NullOrWhitespace_IsNone(input: "(None)")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_NullOrWhitespace_IsNone(input: null)
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_UnrecognisedInput_PassesThroughLowercased
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_BasicColumns_ProducesTypeComments
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_ComputedColumn_Excluded
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_DecimalType_ShowsPrecisionAndScale
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_DefaultValue_IncludedInComment
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_EmptyList_ReturnsEmptyParens
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_IdentityColumn_AnnotatedAsIdentity
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_LastColumn_NoTrailingComma
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_OnlyComputedColumns_ReturnsEmptyBody
+AkmlSql.Core.Tests.Refactoring.InsertMetadataTests.BuildColumnListWithTypes_VarcharMax_ShowsMaxLength
+AkmlSql.Core.Tests.Refactoring.SafeRenameOperationTests.RenameAlias_FindsAllUsages
+AkmlSql.Core.Tests.Refactoring.SafeRenameOperationTests.RenameColumn_FindsAllReferences
+AkmlSql.Core.Tests.Refactoring.SafeRenameOperationTests.RenamePreview_IncludesLineNumbers
+AkmlSql.Core.Tests.Refactoring.SafeRenameOperationTests.RenamePreview_SetsChangeCategory
+AkmlSql.Core.Tests.Refactoring.SafeRenameOperationTests.RenameTable_FindsReference
+AkmlSql.Core.Tests.Refactoring.SafeRenameOperationTests.RenameWithNoMatches_ReturnsEmptyChanges
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.BasicIntParam_ReplacedWithValue
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.CaseInsensitive_Matching
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.EmptyInput_ReturnsEmpty
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.EscapedQuotes_InTemplate_HandledCorrectly
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.Execute_Keyword_AlsoMatches
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.ExtractStringLiteral_EscapedQuotes_Unescaped
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.ExtractStringLiteral_NotALiteral_ReturnsNull
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.ExtractStringLiteral_NPrefix_Removed
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.InvalidInput_NoSpExecutesql_ReturnsOriginal
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.MultipleCallsInDocument_AllConverted
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.MultipleParams_AllReplaced
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.NoParams_TemplateOnly
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.NullParam_SubstitutesNull
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.ParseParameterDefinitions_MultipleParams
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.ParseParameterValues_MultipleValues
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.SchemaPrefix_SysOrDbo_Supported
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.StringParam_PreservesQuotes
+AkmlSql.Core.Tests.Refactoring.SpExecutesqlConversionTests.SubstituteParameters_LongerNameFirst_NoPartialMatch
+AkmlSql.Core.Tests.Refactoring.SplitTableOperationTests.SplitTable_EnumValueExists
+AkmlSql.Core.Tests.Refactoring.SplitTableOperationTests.SplitTable_MissingNewTableName_ReturnsError
+AkmlSql.Core.Tests.Refactoring.SplitTableOperationTests.SplitTable_MissingSourceTable_ReturnsError
+AkmlSql.Core.Tests.Refactoring.SplitTableOperationTests.SplitTable_NoColumnsSpecified_ReturnsError
+AkmlSql.Core.Tests.Refactoring.SplitTableOperationTests.SplitTable_OperationTypeIsCorrect
+AkmlSql.Core.Tests.Refactoring.SplitTableOperationTests.SplitTable_TableNotInCache_ReturnsError
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.AlterProcWithUpdateNoWhere_DetectsProcWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.CreateProcWithDeleteNoWhere_DetectsProcWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.CreateProcWithSafeDelete_NoProcWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.CreateTriggerWithDeleteNoWhere_DetectsTriggerWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DeleteWithJoinAndWhere_NoJoinWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DeleteWithJoinNoWhere_DetectsJoinWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DeleteWithoutWhere_DetectsWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DeleteWithoutWhere_IncludesTableName
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DeleteWithSubqueryWhere_NoWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DeleteWithWhere_NoWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DropDatabase_DetectsWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DropTable_DetectsWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DropTable_IncludesObjectName
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.DynamicSql_NoWarning_NoCrash
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.EmptyQuery_NoWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.MergeWithoutWhenMatched_DetectsWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.MergeWithWhenMatched_NoMergeWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.MultipleDestructive_AllDetected
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.NonProductionServer_NoProdWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.ProductionServer_DdlWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.ProductionServer_DmlWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.SafeSelect_NoWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.TruncateTable_DetectsWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.UpdateWithJoinNoWhere_DetectsJoinWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.UpdateWithoutWhere_DetectsWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.UpdateWithWhere_NoWarning
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.VariousUnsafePatterns_AllDetected(sql: "DELETE FROM dbo.A", expectedWarningType: 2)
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.VariousUnsafePatterns_AllDetected(sql: "DELETE t FROM dbo.A t JOIN dbo.B b ON t.Id = b.Id", expectedWarningType: 8)
+AkmlSql.Core.Tests.Safety.SafetyCheckHandlerTests.VariousUnsafePatterns_AllDetected(sql: "UPDATE dbo.A SET X = 1", expectedWarningType: 3)
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.AreColumnsLoaded_ReturnsFalse_WhenColumnsLoadedIsFalse
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.AreColumnsLoaded_ReturnsFalse_WhenObjectNotFound
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.AreColumnsLoaded_ReturnsTrue_WhenColumnsLoadedIsTrue
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.FindObject_IsCaseInsensitive_ForSchemaAndObject
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.FindObject_ReturnsNull_WhenObjectNotInSchema
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.FindObject_ReturnsNull_WhenSchemaNotFound
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.FindObject_ReturnsObject_WhenExists
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetAllObjects_ReturnsEmpty_WhenNoSchemas
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetAllObjects_ReturnsObjectsFromAllSchemas
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetForeignKeysForTable_FallsBackToLinearScan_WhenIndexNotBuilt
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetForeignKeysForTable_ReturnsEmpty_WhenNoFKsForTable
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetObjectsInSchema_IsCaseInsensitive
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetObjectsInSchema_ReturnsEmpty_WhenSchemaNotFound
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetObjectsInSchema_ReturnsOnlySchemaObjects
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.GetSchemaNames_ReturnsAllSchemas
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.NewCache_HasNotLoadedPhase
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.RebuildFkIndex_CaseInsensitiveKeyLookup
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.RebuildFkIndex_DoesNotDuplicate_WhenParentAndReferencedAreSameTable
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.RebuildFkIndex_MultipleFksForSameTable
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.RebuildFkIndex_PopulatesParentSide
+AkmlSql.Core.Tests.Schema.DatabaseCacheTests.RebuildFkIndex_PopulatesReferencedSide
+AkmlSql.Core.Tests.Server.SessionManagerTests.GetSession_ReturnsNull_ForUnknownSession
+AkmlSql.Core.Tests.Server.SessionManagerTests.RemoveSession_DeletesSession
+AkmlSql.Core.Tests.Server.SessionManagerTests.RemoveSession_IsIdempotent_ForMissingSession
+AkmlSql.Core.Tests.Server.SessionManagerTests.SessionCount_IsZero_Initially
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateDocument_AcceptsText_ExactlyAtSizeLimit
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateDocument_DoesNotUpdate_WhenChangeTypeIsNotFull
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateDocument_IgnoresUpdate_WhenTextExceedsSizeLimit
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateDocument_IsIgnored_WhenSessionDoesNotExist
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateDocument_SetsDocumentText_WhenSessionExists
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateSession_CreatesNewSession
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateSession_IncrementsSessionCount
+AkmlSql.Core.Tests.Server.SessionManagerTests.UpdateSession_UpdatesExistingSession
+AkmlSql.Core.Tests.Snippets.SnippetImportTests.ImportArray_Succeeds
+AkmlSql.Core.Tests.Snippets.SnippetImportTests.ImportAutoFormat_DetectsAkmlSnippet
+AkmlSql.Core.Tests.Snippets.SnippetImportTests.ImportEmptyContent_Fails
+AkmlSql.Core.Tests.Snippets.SnippetImportTests.ImportEmptyShortcode_Fails
+AkmlSql.Core.Tests.Snippets.SnippetImportTests.ImportInvalidJson_Fails
+AkmlSql.Core.Tests.Snippets.SnippetImportTests.ImportSingleAkmlSnippet_Succeeds
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetAll_ReturnsAllSnippets
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetAll_ReturnsEmpty_WhenIndexIsEmpty
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByContext_ExcludesNormalSnippets_WhenSelectionExists
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByContext_ExcludesSurroundSnippets_WhenNoSelection
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByContext_IncludesAfterClauseSnippets_WhenClauseMatches
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByContext_ReturnsGlobalSnippets_WhenNoSelection
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetById_IsCaseInsensitive
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetById_ReturnsNull_WhenNotFound
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetById_ReturnsSnippetAndSource_WhenFound
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByShortcode_IsCaseInsensitive
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByShortcode_ReturnsHighestPriority_WhenMultipleSources
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByShortcode_ReturnsNull_WhenNotFound
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.GetByShortcode_ReturnsSnippet_WhenFound
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Rebuild_ClearsPreviousData
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Rebuild_FilePath_IsNullWhenNotProvided
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Rebuild_PopulatesCount
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Rebuild_TracksFilePath
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_EmptyQuery_ReturnsAll
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_IsCaseInsensitive
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_MatchesBodyContent
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_MatchesDescription
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_MatchesName
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_MatchesShortcode
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_MatchesTags
+AkmlSql.Core.Tests.Snippets.SnippetIndexTests.Search_ReturnsEmpty_WhenNoMatches
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.DeleteSnippet_ReturnsFalse_WhenFileDoesNotExist
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.DeleteSnippet_ReturnsFalse_WhenPathIsEmpty
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.DeleteSnippet_ReturnsFalse_WhenPathIsRelative
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.DeleteSnippet_ReturnsTrueAndDeletesFile
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadFromDirectory_ReturnsEmpty_WhenDirectoryDoesNotExist
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadFromDirectory_ReturnsSnippets_WhenDirectoryContainsFiles
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadFromDirectory_SetsCorrectSourceType
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadFromDirectory_SkipsFilesWithMissingShortcode
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadFromDirectory_TracksFilePaths
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadSingle_ReturnsNull_WhenFileDoesNotExist
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadSingle_ReturnsNull_WhenJsonIsInvalid
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadSingle_ReturnsNull_WhenPathIsEmpty
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadSingle_ReturnsNull_WhenPathIsRelative
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadSingle_ReturnsNull_WhenPathIsWhitespace
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.LoadSingle_ReturnsSnippet_WhenFileIsValid
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.SaveSnippet_CreatesDirectoryIfAbsent
+AkmlSql.Core.Tests.Snippets.SnippetLoaderTests.SaveSnippet_WritesFileAndCanBeReadBack
+AkmlSql.Core.Tests.SqlCredentialStoreTests.Match_IsCaseInsensitive_OnServerAndLogin
+AkmlSql.Core.Tests.SqlCredentialStoreTests.Remove_DeletesTheEntry
+AkmlSql.Core.Tests.SqlCredentialStoreTests.Save_ReplacesExistingEntry_ForSameKey
+AkmlSql.Core.Tests.SqlCredentialStoreTests.SaveThenTryGet_RoundTripsThePassword
+AkmlSql.Core.Tests.SqlCredentialStoreTests.TryGet_UnknownKey_ReturnsFalse
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.InEvaluationOrder_SortsByOrder_KeepingTiesInListOrder
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.Move_OutOfRange_ChangesNoPosition(index: -1, delta: 1)
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.Move_OutOfRange_ChangesNoPosition(index: 1, delta: 5)
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.Move_OutOfRange_ChangesNoPosition(index: 1, delta: -5)
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.Move_OutOfRange_ChangesNoPosition(index: 3, delta: -1)
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.Move_RenumbersDuplicateOrdersFromOlderConfigs
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.Move_ThatIsIgnored_StillRenumbers
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.MoveDown_OnTheLastRule_IsIgnored
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.MoveDown_SwapsWithTheNextRule
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.MoveUp_OnTheFirstRule_IsIgnored
+AkmlSql.Core.Tests.Tabs.ColoringRuleOrderingTests.MoveUp_SwapsWithThePreviousRule
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRule_DoesNotLeakIntoServerString
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRule_MatchesOnAnyServer(server: "dev-box.corp.net")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRule_MatchesOnAnyServer(server: "localhost")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRule_MatchesOnAnyServer(server: "SQLPROD01")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRule_MatchesOnAnyServer(server: null)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRule_PicksDatabaseTarget_NotServer
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRules_ReturnsExpectedLabel(server: "any-server", database: "ORDERS_LIVE", expectedLabel: "LIVE")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRules_ReturnsExpectedLabel(server: "any-server", database: "proddb", expectedLabel: "PRODUCTION")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRules_ReturnsExpectedLabel(server: "any-server", database: "ProdDb", expectedLabel: "PRODUCTION") [#2]
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRules_ReturnsExpectedLabel(server: "any-server", database: "sales_live", expectedLabel: "LIVE")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_DatabaseRulesIgnoredWhenNoDatabaseProvided
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_NoMatchingDatabase_ReturnsNull(database: "   ")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_NoMatchingDatabase_ReturnsNull(database: "")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_NoMatchingDatabase_ReturnsNull(database: "sales_test")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_NoMatchingDatabase_ReturnsNull(database: "StagingDb")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_NoMatchingDatabase_ReturnsNull(database: null)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.Match_ServerRule_UnaffectedByDatabaseName
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherDatabaseTests.MatchTargetDatabase_HasExpectedConstantValue
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_AcceptsACommaSeparatedDatabaseList
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_DoesNotMatchAnotherDatabase
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_DoesNotMatchAnotherServer
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_IsSkippedByTheServerOnlyOverload
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_RequiresBoth(server: "SQLPROD01", database: "", expected: "PROD")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_RequiresBoth(server: "SQLPROD01", database: "Inventory", expected: "PROD")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_RequiresBoth(server: "sqlprod01", database: "SALES_ARCHIVE", expected: "PROD-SALES")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_RequiresBoth(server: "SQLPROD01", database: "SalesDb", expected: "PROD-SALES")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerAndDatabaseRule_RequiresBoth(server: "SQLPROD01", database: null, expected: "PROD")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherServerDatabaseTests.ServerRule_WithEmptyDatabaseName_StillMatchesOnServerAlone
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "*", value: "anything", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "*.database.windows.net", value: "x.database.windows.net", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "*PROD*", value: "prod-sql", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "*PROD*", value: "SQLPROD01", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "DEV*", value: "DEV-SQL", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "DEV*", value: "PRODUCTION", expected: False)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "localhost", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "LOCALHOST", expected: True) [#2]
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "localhost2", expected: False)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "(local)", expectedLabel: "DEV")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "DEV-SQL01", expectedLabel: "DEV")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "LIVE-SERVER", expectedLabel: "PRODUCTION")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "localhost", expectedLabel: "DEV")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "myserver.database.windows.net", expectedLabel: "AZURE")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "prod-sql.corp.net", expectedLabel: "PRODUCTION")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "SQLPROD01", expectedLabel: "PRODUCTION")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "STG-SQL", expectedLabel: "STAGING")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "UAT-DB", expectedLabel: "STAGING")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_EmptyRules_ReturnsNull
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_NoMatchingRule_ReturnsNull(server: "   ")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_NoMatchingRule_ReturnsNull(server: "")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_NoMatchingRule_ReturnsNull(server: "my-custom-server")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_NoMatchingRule_ReturnsNull(server: "UNKNOWN-SERVER")
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_NoMatchingRule_ReturnsNull(server: null)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_PriorityOrder_LowestOrderWins
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.MatchesPattern_CommaDelimited(pattern: "*PROD*,*LIVE*", value: "DEV-SQL", expected: False)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.MatchesPattern_CommaDelimited(pattern: "*PROD*,*LIVE*", value: "LIVE-SERVER", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.MatchesPattern_CommaDelimited(pattern: "*PROD*,*LIVE*", value: "SQLPROD01", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.MatchesPattern_CommaDelimited(pattern: "localhost,(local)", value: "(local)", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.A_rename_moves_the_severity_to_the_new_name
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.A_stale_severity_under_the_new_name_is_replaced
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.An_environment_that_asks_for_the_server_name_is_production_whatever_it_is_called
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.Production_by_name(label: "", expected: False)
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.Production_by_name(label: "Prod DB", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.Production_by_name(label: "PRODUCTION", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.Production_by_name(label: "STAGING", expected: False)
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.Production_by_name(label: null, expected: False)
+AkmlSql.Core.Tests.Tabs.EnvironmentSafetyTests.Swapped_names_swap_their_severities
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.CanDelete_IsFalseWhenARuleUsesTheEnvironment_AndNamesTheRules
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.CanDelete_IsTrueWhenNoRuleUsesTheEnvironment
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.DeleteRefusedMessage_NamesTheEnvironmentAndTheRules
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#00bCd4")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#FF4444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#ff4444") [#2]
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: " #FF4444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "#AAFF4444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "#F44")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "#FF4444\n")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "#FF44444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "#GG4444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "FF4444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "red")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: null)
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.Validate_AcceptsTheDefaults
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.Validate_RejectsDuplicateNames_IgnoringCaseAndSpaces
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.Validate_ReportsADuplicateOnce
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.Validate_ReportsAnEmptyName
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.Validate_ReportsAnInvalidColor_NamingTheEnvironment
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.Validate_RequiresAtLeastOneEnvironment
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_AcceptsOneToFortyCharacters(name: "  Staging  ")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_AcceptsOneToFortyCharacters(name: "1234567890123456789012345678901234567890")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_AcceptsOneToFortyCharacters(name: "P")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_AcceptsOneToFortyCharacters(name: "PRODUCTION")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_RejectsEmptyOrLongerThanForty(name: "   ")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_RejectsEmptyOrLongerThanForty(name: "")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_RejectsEmptyOrLongerThanForty(name: "12345678901234567890123456789012345678901")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.ValidateName_RejectsEmptyOrLongerThanForty(name: null)
+AkmlSql.Core.Tests.Tabs.Pr247_EnvironmentMatcherFix.DatabaseName_CaseInsensitiveMatch
+AkmlSql.Core.Tests.Tabs.Pr247_EnvironmentMatcherFix.DatabaseName_FallsBackToPattern_WhenDatabaseNameIsEmpty
+AkmlSql.Core.Tests.Tabs.Pr247_EnvironmentMatcherFix.DatabaseName_GlobPattern_DoesNotMatchDifferentDatabase
+AkmlSql.Core.Tests.Tabs.Pr247_EnvironmentMatcherFix.DatabaseName_GlobPattern_MatchesTargetDatabase
+AkmlSql.Core.Tests.Tabs.Pr247_EnvironmentMatcherFix.DatabaseName_MatchesOnAnyServer
+AkmlSql.Core.Tests.Tabs.Pr247_EnvironmentMatcherFix.DatabaseName_TakesPrecedenceOverPattern
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[ text 12 chars]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[binary 12 chars]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[binary bytes]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[text  12 chars]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[text -1 chars]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[text 1.5 chars]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[text 12 bytes]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[text 12 chars")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[text 12 chars] and more")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "[TEXT 12 CHARS]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "hello")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: "x[text 12 chars]")
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Anything_else_is_not_an_indicator(value: null)
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Binary_indicator_is_recognised_with_its_size
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.IsIndicator_matches_TryParse
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Large_sizes_fit
+AkmlSql.Core.Tests.Text.EngineCutIndicatorTests.Text_indicator_is_recognised_with_its_size
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Csv_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_keeps_and_quotes_line_breaks_when_asked
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_a_value_holding_the_delimiter_or_a_quote(delimiter: ',', value: "a,b", expected: "\"a,b\"")
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_a_value_holding_the_delimiter_or_a_quote(delimiter: ',', value: "plain", expected: "plain")
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_a_value_holding_the_delimiter_or_a_quote(delimiter: ',', value: "say \"hi\"", expected: "\"say \"\"hi\"\"\"")
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_a_value_holding_the_delimiter_or_a_quote(delimiter: ',', value: "tab\there", expected: "tab\there")
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_a_value_holding_the_delimiter_or_a_quote(delimiter: '\t', value: "a,b", expected: "a,b")
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_a_value_holding_the_delimiter_or_a_quote(delimiter: '\t', value: "tab\there", expected: "\"tab\there\"")
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_quotes_headers_too
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_replaces_line_breaks_with_a_space_by_default_as_SSMS_does
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_writes_a_header_row_and_CRLF_lines
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Delimited_writes_NULL_as_NULL
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Html_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.InClause_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Insert_can_name_the_table
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Insert_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Json_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Lines_end_in_CRLF_whatever_the_platform
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Markdown_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.QuoteSqlValue_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Tsv_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Tsv_without_a_header_omits_the_first_line
+AkmlSql.Core.Tests.Text.GridTextFormatsTests.Xml_matches_the_SSMS_edition
+AkmlSql.Core.Tests.Text.LineDiffTests.A_long_text_with_one_change_stays_fast_and_exact
+AkmlSql.Core.Tests.Text.LineDiffTests.A_pure_delete
+AkmlSql.Core.Tests.Text.LineDiffTests.A_pure_insert
+AkmlSql.Core.Tests.Text.LineDiffTests.An_edited_line_is_changed_not_removed_and_added
+AkmlSql.Core.Tests.Text.LineDiffTests.Crlf_and_lf_are_the_same_text
+AkmlSql.Core.Tests.Text.LineDiffTests.Empty_left_is_all_added_and_empty_right_all_removed
+AkmlSql.Core.Tests.Text.LineDiffTests.Identical_texts_are_all_same
+AkmlSql.Core.Tests.Text.LineDiffTests.Uneven_edit_runs_pair_what_they_can
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Decimal_carries_precision_and_scale
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Format_normalises_case_and_whitespace
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Format_of_null_or_empty_is_empty
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Fractional_second_types_carry_their_scale(baseName: "datetime2", scale: 3, expected: "datetime2(3)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Fractional_second_types_carry_their_scale(baseName: "datetime2", scale: 7, expected: "datetime2(7)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Fractional_second_types_carry_their_scale(baseName: "datetimeoffset", scale: 7, expected: "datetimeoffset(7)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Fractional_second_types_carry_their_scale(baseName: "time", scale: 0, expected: "time(0)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacter_reads_the_parsed_base_name
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "bit", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "char", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "date", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "dbo.MyType", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "int", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "nchar", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "ntext", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "nvarchar", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "NVARCHAR", expected: True) [#2]
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "sql_variant", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "text", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "uniqueidentifier", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "varbinary", expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "varchar", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: "xml", expected: True)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.IsCharacterType_is_true_exactly_for_character_types(baseName: null, expected: False)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Length_types_carry_their_length(baseName: "binary", size: 2, precision: null, scale: null, expected: "binary(2)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Length_types_carry_their_length(baseName: "char", size: 5, precision: null, scale: null, expected: "char(5)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Length_types_carry_their_length(baseName: "nchar", size: 10, precision: null, scale: null, expected: "nchar(10)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Length_types_carry_their_length(baseName: "nvarchar", size: 50, precision: null, scale: null, expected: "nvarchar(50)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Length_types_carry_their_length(baseName: "varbinary", size: 16, precision: null, scale: null, expected: "varbinary(16)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Length_types_carry_their_length(baseName: "varchar", size: 8000, precision: null, scale: null, expected: "varchar(8000)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Max_length_types_read_max(baseName: "nvarchar", size: -1, expected: "nvarchar(max)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Max_length_types_read_max(baseName: "nvarchar", size: 2147483647, expected: "nvarchar(max)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Max_length_types_read_max(baseName: "varbinary", size: -1, expected: "varbinary(max)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Max_length_types_read_max(baseName: "varbinary", size: 2147483647, expected: "varbinary(max)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Max_length_types_read_max(baseName: "varchar", size: 2147483647, expected: "varchar(max)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Missing_metadata_leaves_the_base_name
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Numeric_is_reported_as_decimal
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "bigint", size: 8, precision: 19, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "bit", size: 1, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "date", size: 3, precision: 10, scale: 0)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "datetime", size: 8, precision: 23, scale: 3)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "float", size: 8, precision: 15, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "image", size: 2147483647, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "int", size: 4, precision: 10, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "money", size: 8, precision: 19, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "ntext", size: 2147483647, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "real", size: 4, precision: 7, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "smalldatetime", size: 4, precision: 16, scale: 0)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "smallint", size: 2, precision: 5, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "smallmoney", size: 4, precision: 10, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "sql_variant", size: 8016, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "text", size: 2147483647, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "timestamp", size: 8, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "tinyint", size: 1, precision: 3, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "uniqueidentifier", size: 16, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Other_types_stay_bare_whatever_the_metadata(baseName: "xml", size: 2147483647, precision: 255, scale: 255)
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_keeps_a_user_defined_type_name
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_of_null_or_empty_is_safe
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_reads_bare_names_from_older_engines
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_reads_the_declared_forms
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_then_ToString_round_trips(declared: "datetime2(3)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_then_ToString_round_trips(declared: "dbo.MyType")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_then_ToString_round_trips(declared: "decimal(10,2)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_then_ToString_round_trips(declared: "int")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_then_ToString_round_trips(declared: "nvarchar(50)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_then_ToString_round_trips(declared: "varbinary(max)")
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.Parse_tolerates_malformed_arguments
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.The_255_sentinel_never_produces_a_suffix
+AkmlSql.Core.Tests.Text.SqlTypeNameTests.User_defined_type_names_stay_as_given
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.A_value_that_does_not_parse_is_shown_as_it_came
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.An_empty_string_stays_empty_and_is_flagged
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.An_engine_cut_value_is_shown_verbatim_and_flagged
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Binary_shows_0x_and_upper_case_hex
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Bit_shows_1_or_0
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Date_shows_the_day
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetime_shows_milliseconds
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetime2_shows_its_declared_fraction(declared: "datetime2", expected: "2025-10-01 23:57:23.8800000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetime2_shows_its_declared_fraction(declared: "datetime2(0)", expected: "2025-10-01 23:57:23")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetime2_shows_its_declared_fraction(declared: "datetime2(3)", expected: "2025-10-01 23:57:23.880")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetime2_shows_its_declared_fraction(declared: "datetime2(7)", expected: "2025-10-01 23:57:23.8800000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetimeoffset_adds_a_space_and_its_offset(declared: "datetimeoffset(0)", wire: "2025-10-01T23:57:23.8800000-05:30", expected: "2025-10-01 23:57:23 -05:30")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Datetimeoffset_adds_a_space_and_its_offset(declared: "datetimeoffset(7)", wire: "2025-10-01T23:57:23.8800000+02:00", expected: "2025-10-01 23:57:23.8800000 +02:00")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Decimal_keeps_the_declared_scale_the_engine_sent
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Large_binary_shows_a_preview_unless_the_full_text_is_asked_for
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Money_shows_four_decimals(declared: "money", wire: "12.5", expected: "12.5000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Money_shows_four_decimals(declared: "money", wire: "-3", expected: "-3.0000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Money_shows_four_decimals(declared: "smallmoney", wire: "0.1", expected: "0.1000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Null_reads_NULL_and_is_flagged
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Other_types_show_the_wire_text
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Smalldatetime_shows_seconds
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Time_shows_its_declared_fraction(declared: "time", wire: "08:05:00.5", expected: "08:05:00.5000000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Time_shows_its_declared_fraction(declared: "time(0)", wire: "13:45:30.1234567", expected: "13:45:30")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Time_shows_its_declared_fraction(declared: "time(3)", wire: "13:45:30", expected: "13:45:30.000")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Time_shows_its_declared_fraction(declared: "time(7)", wire: "13:45:30.1234567", expected: "13:45:30.1234567")
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Uniqueidentifier_is_upper_case
+AkmlSql.Core.Tests.Text.SqlValueDisplayTests.Without_a_declared_type_the_hint_decides
+AkmlSql.Core.Tests.Theme.HardcodedHexScannerTests.NoHardcodedChromeHex_Diagnostic
+AkmlSql.Core.Tests.Update.UpdateManifestTests.Defaults_AreEmptyStrings
+AkmlSql.Core.Tests.Update.UpdateManifestTests.Properties_CanBeSetAndRead
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.Load_InvalidJson_ReturnsNull
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.Load_MissingFile_ReturnsNull
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.Recheck_NewerVersion_StartsClean
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.Recheck_NoExistingResult_BehavesAsBefore
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.Recheck_SameVersion_KeepsVerifiedDownloadState
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.SaveAtomic_CreatesDirectory_AndRoundTrips_AllFields
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.SaveAtomic_LeavesNoTempFile_AndOverwritesCleanly
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.SaveAtomic_PreservesFailureFields
+AkmlSql.Core.Tests.Update.UpdateResultStoreTests.SaveAtomic_WritesCamelCaseJson
+AkmlSql.Core.Tests.Update.UpdateResultTests.Defaults
+AkmlSql.Core.Tests.Update.UpdateResultTests.Properties_CanBeSetAndRead
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_EqualOrOlder_ReturnsFalse(latest: "0.9.9", current: "1.0.0")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_EqualOrOlder_ReturnsFalse(latest: "1.0.0", current: "1.0.1")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_EqualOrOlder_ReturnsFalse(latest: "1.26.0901.1502", current: "1.26.0901.1502")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_EqualOrOlder_ReturnsFalse(latest: "1.26.0901.1502", current: "1.26.0903.0900")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_PreReleaseSuffixes_AreStrippedBeforeComparison(latest: "1.2.3", current: "1.2.4-beta", expected: False)
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_PreReleaseSuffixes_AreStrippedBeforeComparison(latest: "1.2.3-beta", current: "1.2.3", expected: False)
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_PreReleaseSuffixes_AreStrippedBeforeComparison(latest: "1.2.3-rc.1", current: "1.2.3", expected: False)
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_PreReleaseSuffixes_AreStrippedBeforeComparison(latest: "1.2.4-beta", current: "1.2.3", expected: True)
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_StrictlyNewer_ReturnsTrue(latest: "1.0.1", current: "1.0.0")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_StrictlyNewer_ReturnsTrue(latest: "1.26.0903.0900", current: "1.26.0901.1502")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_StrictlyNewer_ReturnsTrue(latest: "2.0.0", current: "1.999.9999.9999")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_UnparseableInput_ReturnsFalse(latest: "", current: "1.0.0")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_UnparseableInput_ReturnsFalse(latest: "1.0.0", current: "")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_UnparseableInput_ReturnsFalse(latest: "1.0.0", current: "junk")
+AkmlSql.Core.Tests.Update.VersionComparerTests.IsNewer_UnparseableInput_ReturnsFalse(latest: "not-a-version", current: "1.0.0")
+AkmlSql.Core.Tests.Update.VersionComparerTests.StripPreRelease_RemovesTheDashSuffix(version: "1.2.3", expected: "1.2.3")
+AkmlSql.Core.Tests.Update.VersionComparerTests.StripPreRelease_RemovesTheDashSuffix(version: "1.2.3.4-nightly", expected: "1.2.3.4")
+AkmlSql.Core.Tests.Update.VersionComparerTests.StripPreRelease_RemovesTheDashSuffix(version: "1.2.3-beta.1", expected: "1.2.3")

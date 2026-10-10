@@ -18,7 +18,7 @@ Debug engine paired to a local SQL Server.
 ```bash
 # Theme gate + solution (regenerates nothing; fails on drift)
 pwsh scripts/generate-theme-css.ps1 -CheckOnly
-MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Insiders/MSBuild/Current/Bin/MSBuild.exe"
 "$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
 "$MSBUILD" AKML-SQL.slnx -t:Build -p:Configuration=Release -m -v:minimal
 
