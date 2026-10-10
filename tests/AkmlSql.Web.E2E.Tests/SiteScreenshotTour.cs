@@ -242,10 +242,13 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
         await page.ClickAsync("nav >> text=Settings");
         await page.WaitForTimeoutAsync(1_500);
 
-        await page.Locator("label", new() { HasTextString = "Dark" }).First.ClickAsync();
+        // Spec 041 (R43): the theme is Settings › General's select; pairing is in Settings › Connections.
+        await page.SelectOptionAsync("#setting-theme-control", "Dark");
         await page.WaitForTimeoutAsync(800);
         output.WriteLine("Theme set to dark.");
 
+        await page.ClickAsync("[data-testid='settings-nav-connections']");
+        await page.WaitForTimeoutAsync(800);
         var addButton = page.Locator("button", new() { HasTextString = "Add" }).First;
         await addButton.ClickAsync();
         await page.WaitForTimeoutAsync(800);

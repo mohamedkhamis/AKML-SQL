@@ -10,7 +10,7 @@ using Xunit.Abstractions;
 namespace AkmlSql.Web.E2E.Tests;
 
 /// <summary>
-/// "Shared with SSMS": a style saved on the web Format styles page while an engine is paired
+/// Engine styles: a style saved on the web Format styles page while an engine is paired
 /// lands in that engine's styles folder — the folder SSMS reads — as a SQL Prompt
 /// style, and edits saved from the web update the same file.
 ///
@@ -120,13 +120,15 @@ public sealed class FormatStylesSharedEngineTests(ITestOutputHelper output)
         catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         await using var browserScope = browser;
         var page = await browser.NewPageAsync();
-        page.Dialog += async (_, d) => { if (d.Type == DialogType.Prompt) await d.AcceptAsync("Shared E2E"); else await d.AcceptAsync(); };
+        await InAppDialogs.AcceptAllAsync(page, "Shared E2E");   // spec 041 (R59, R69): the app's own dialog
         page.Console += (_, m) => { if (m.Type is "error" or "warning") output.WriteLine($"[browser {m.Type}] {m.Text}"); };
 
         // Pair with the sandbox engine (loopback: no PIN).
         await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
         await page.WaitForSelectorAsync("[data-testid='execute-button']", new() { Timeout = 60_000 });
         await page.ClickAsync("nav >> text=Settings");
+        // Spec 041 (R43): pairing lives in Settings › Connections.
+        await page.ClickAsync("[data-testid='settings-nav-connections']");
         await page.WaitForTimeoutAsync(1_200);
         await page.Locator("button", new() { HasTextString = "Add" }).First.ClickAsync();
         await page.WaitForTimeoutAsync(600);
@@ -139,7 +141,8 @@ public sealed class FormatStylesSharedEngineTests(ITestOutputHelper output)
         // The Format styles page now saves on the engine and lists its styles.
         await page.ClickAsync("nav >> text=Format styles");
         await Assertions.Expect(page.Locator("[data-testid=styles-location]")).ToContainTextAsync("engine", new() { Timeout = 30_000 });
-        await Assertions.Expect(page.Locator(".akml-styles-group", new() { HasTextString = "Shared with SSMS" })).ToBeVisibleAsync();
+        // Spec 041 (R29, N28): a --web sandbox engine was not started by SSMS, so its styles are "On this engine".
+        await Assertions.Expect(page.Locator(".akml-styles-group", new() { HasTextString = "On this engine" })).ToBeVisibleAsync();
 
         await page.Locator("[data-testid=style-new]").ClickAsync();
         await Assertions.Expect(page.Locator("[data-testid=style-name]")).ToHaveTextAsync("Shared E2E");

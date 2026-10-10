@@ -135,6 +135,8 @@ public sealed class SqlServerAliasWebTests(ITestOutputHelper output)
         await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
         await page.WaitForSelectorAsync("[data-testid='execute-button']", new() { Timeout = 60_000 });
         await page.ClickAsync("nav >> text=Settings");
+        // Spec 041 (R43): pairing lives in Settings › Connections.
+        await page.ClickAsync("[data-testid='settings-nav-connections']");
         await page.WaitForTimeoutAsync(1_200);
         await page.Locator("button", new() { HasTextString = "Add" }).First.ClickAsync();
         await page.WaitForTimeoutAsync(600);

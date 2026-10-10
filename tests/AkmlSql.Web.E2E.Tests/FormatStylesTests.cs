@@ -30,12 +30,9 @@ public sealed class FormatStylesTests
         catch (PlaywrightException) { pw.Dispose(); throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         var context = await browser.NewContextAsync(new() { AcceptDownloads = true });
         var page = await context.NewPageAsync();
-        // New / Save as / Rename ask for a name; confirmations are accepted.
-        page.Dialog += async (_, dialog) =>
-        {
-            if (dialog.Type == DialogType.Prompt) await dialog.AcceptAsync(answerPromptsWith);
-            else await dialog.AcceptAsync();
-        };
+        // New / Save as / Rename ask for a name; confirmations are accepted. Spec 041 (R59, R69): in the app's own
+        // dialog, not the browser's.
+        await InAppDialogs.AcceptAllAsync(page, answerPromptsWith);
         await page.GotoAsync(web.Url + "styles");
         await page.Locator("[data-testid=style-row]").First.WaitForAsync(new() { Timeout = 60_000 });
         return (pw, browser, page);
