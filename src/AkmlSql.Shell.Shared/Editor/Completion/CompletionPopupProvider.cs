@@ -218,7 +218,10 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                                 Log.Debug(ex, "Refresh via DTE command failed");
                             }
                         }));
-                    });
+                    },
+                    // The shortcuts are ours only in an AKML SQL editor; elsewhere (Object Explorer,
+                    // another program) the keys keep their own meaning.
+                    sqlEditorFocused: () => _activeController != null);
             }
         }
 
