@@ -17,7 +17,7 @@ public sealed class ToolbarTitleTests
     [InlineData("New query", "editor:new", "New query (Ctrl+Alt+N)")]
     [InlineData("Open", "editor:open", "Open (Ctrl+Alt+O)")]
     [InlineData("Save", "editor:save", "Save (Ctrl+S)")]
-    [InlineData("Save as", "editor:saveas", "Save as (Ctrl+Shift+S)")]
+    [InlineData("Save as", "editor:saveas", "Save as (Ctrl+Shift+S or Ctrl+K, Ctrl+A)")]
     public void A_command_with_keys_shows_them(string name, string commandId, string expected) =>
         Assert.Equal(expected, WorkspaceKeyMap.TitleFor(name, commandId));
 

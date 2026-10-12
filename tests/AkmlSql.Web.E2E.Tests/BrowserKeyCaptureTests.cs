@@ -29,7 +29,19 @@ public sealed class BrowserKeyCaptureTests(ITestOutputHelper output)
             if (await page.GetByTestId("dialog-cancel").CountAsync() > 0) await page.GetByTestId("dialog-cancel").ClickAsync();
             await page.Keyboard.PressAsync("Escape");
         }
-        foreach (var key in new[] { "Control+f", "Control+l", "Control+s" })
+        await page.GetByTestId("view-menu").ClickAsync();
+        await Assertions.Expect(page.GetByTestId("view-saveas")).ToContainTextAsync("Ctrl+K, Ctrl+A");
+        await page.GetByTestId("view-saveas").ClickAsync();
+        await Assertions.Expect(page.GetByTestId("dialog-input")).ToBeVisibleAsync();
+        await page.GetByTestId("dialog-cancel").ClickAsync();
+        await page.Keyboard.PressAsync("Control+p");
+        await page.Locator(".akml-cmd-input").FillAsync("Save as");
+        var saveAs = page.GetByTestId("command-palette-row").Filter(new() { HasTextString = "Save as" });
+        await Assertions.Expect(saveAs.Locator(".akml-cmd-shortcut")).ToContainTextAsync("Ctrl+K, Ctrl+A");
+        await saveAs.ClickAsync();
+        await Assertions.Expect(page.GetByTestId("dialog-input")).ToBeVisibleAsync();
+        await page.GetByTestId("dialog-cancel").ClickAsync();
+        foreach (var key in new[] { "Control+f", "Control+l", "Control+s", "Control+a" })
         {
             await Keys.AssertClaimedAsync(page, "Control+k");
             await Keys.AssertClaimedAsync(page, key);
@@ -38,6 +50,11 @@ public sealed class BrowserKeyCaptureTests(ITestOutputHelper output)
             {
                 await Assertions.Expect(page.GetByTestId("surround-picker")).ToBeVisibleAsync();
                 await page.GetByTestId("surround-picker").GetByRole(AriaRole.Button, new() { Name = "Cancel", Exact = true }).ClickAsync();
+            }
+            if (key == "Control+a")
+            {
+                await Assertions.Expect(page.GetByTestId("dialog-input")).ToBeVisibleAsync();
+                await page.GetByTestId("dialog-cancel").ClickAsync();
             }
             await page.Keyboard.PressAsync("Escape");
         }

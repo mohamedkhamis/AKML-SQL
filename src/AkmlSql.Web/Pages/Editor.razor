@@ -1638,6 +1638,8 @@
             Item(WorkspaceViewActions.CyclePanes, "Next pane", "view-cycle-panes", null, () => CyclePanesAsync(false)),
             MenuItem.Separator(),
             Item(WorkspaceViewActions.ResetLayout, "Reset layout", "workspace-reset-layout", null, ResetLayoutAsync),
+            MenuItem.Separator(),
+            Item("editor:saveas", "Save as…", "view-saveas", null, SaveAsAsync),
         };
         _viewMenu = (e.ClientX, e.ClientY + 8, items);
     }

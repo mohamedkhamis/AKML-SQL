@@ -37,14 +37,19 @@ public static class WorkspaceKeyMap
         Chord(ChordK, "KeyS", "editor:surround"),
         Key("KeyS", ctrl: true, shift: false, alt: false, "editor:save"),
         Key("KeyS", ctrl: true, shift: true, alt: false, "editor:saveas"),
+        // Edge reserves Ctrl+Shift+S for Screenshot before the page receives KeyS (T209).
+        Chord(ChordK, "KeyA", "editor:saveas"),
         // Ctrl+N and Ctrl+O are browser-reserved (FR-049(b)): SSMS's keys gain Alt.
         Key("KeyN", ctrl: true, shift: false, alt: true, "editor:new"),
         Key("KeyO", ctrl: true, shift: false, alt: true, "editor:open"),
     };
 
     /// <summary>The key text for a command, or null when it has no key.</summary>
-    public static string? DisplayFor(string commandId) =>
-        Bindings.FirstOrDefault(b => b.CommandId == commandId)?.Display;
+    public static string? DisplayFor(string commandId)
+    {
+        var keys = Bindings.Where(b => b.CommandId == commandId).Select(b => b.Display).ToArray();
+        return keys.Length == 0 ? null : string.Join(" or ", keys);
+    }
 
     /// <summary>Spec 041 (FR-081) — a toolbar tooltip: "Execute (F5)", or the bare name for a command with no key.</summary>
     public static string TitleFor(string name, string commandId) =>

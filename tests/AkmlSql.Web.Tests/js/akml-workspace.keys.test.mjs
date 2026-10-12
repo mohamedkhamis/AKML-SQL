@@ -23,6 +23,7 @@ const bindings = [
     { code: 'KeyF', ctrl: true, shift: false, alt: false, commandId: 'editor:format', chordPrefix: 'Ctrl+KeyK' },
     { code: 'KeyL', ctrl: true, shift: false, alt: false, commandId: 'editor:analyse', chordPrefix: 'Ctrl+KeyK' },
     { code: 'KeyS', ctrl: true, shift: false, alt: false, commandId: 'editor:surround', chordPrefix: 'Ctrl+KeyK' },
+    { code: 'KeyA', ctrl: true, shift: false, alt: false, commandId: 'editor:saveas', chordPrefix: 'Ctrl+KeyK' },
 ];
 
 /** A keydown as the listener describes it to resolveKey. */
@@ -87,6 +88,14 @@ test('an unbound key is left alone', () => {
 test('a lone Ctrl+F is not claimed, so CodeMirror Find still works', () => {
     const r = resolveKey(bindings, fresh(), key('KeyF', { ctrl: true }), 0);
     assert.equal(r.claim, false);
+});
+
+test('Ctrl+K then Ctrl+A offers Save as without taking plain Select all', () => {
+    const start = resolveKey(bindings, fresh(), key('KeyK', { ctrl: true }), 1000);
+    const done = resolveKey(bindings, start.state, key('KeyA', { ctrl: true }), 1200);
+    assert.equal(done.claim, true);
+    assert.equal(done.commandId, 'editor:saveas');
+    assert.equal(resolveKey(bindings, fresh(), key('KeyA', { ctrl: true }), 1200).claim, false);
 });
 
 test('Ctrl+K starts a chord (claimed, no command); Ctrl+F within 1.5 s completes it', () => {

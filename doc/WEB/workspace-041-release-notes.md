@@ -1,5 +1,8 @@
 # Web workspace update
 
+Save as also accepts **Ctrl+K, Ctrl+A** in browsers such as Edge that reserve Ctrl+Shift+S.
+The alternative is shown in the toolbar tooltip, View menu and command palette.
+
 The SQL editor now has resizable result columns, spreadsheet selection, sorting, Copy as,
 full cell values, and CSV or tab-delimited downloads. Results, Messages and Problems share
 one pane. Scripts support `GO` batches and server-side Parse; F5 executes the selection or

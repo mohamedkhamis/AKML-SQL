@@ -107,7 +107,7 @@ public sealed class ShortcutCollisionTests
         Assert.Equal("Ctrl+K, Ctrl+L", WorkspaceKeyMap.DisplayFor("editor:analyse"));
         Assert.Equal("Ctrl+K, Ctrl+S", WorkspaceKeyMap.DisplayFor("editor:surround"));
         Assert.Equal("Ctrl+S", WorkspaceKeyMap.DisplayFor("editor:save"));
-        Assert.Equal("Ctrl+Shift+S", WorkspaceKeyMap.DisplayFor("editor:saveas"));
+        Assert.Equal("Ctrl+Shift+S or Ctrl+K, Ctrl+A", WorkspaceKeyMap.DisplayFor("editor:saveas"));
         Assert.Equal("Ctrl+Alt+N", WorkspaceKeyMap.DisplayFor("editor:new"));
         Assert.Equal("Ctrl+Alt+O", WorkspaceKeyMap.DisplayFor("editor:open"));
         Assert.Null(WorkspaceKeyMap.DisplayFor("editor:refactor"));

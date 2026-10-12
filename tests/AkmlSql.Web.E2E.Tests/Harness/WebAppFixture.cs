@@ -68,7 +68,8 @@ public sealed class WebAppFixture : IAsyncDisposable
         string database = "tempdb",
         BrowserNewContextOptions? contextOptions = null,
         Action<IPage>? configurePage = null,
-        string browserName = "chromium")
+        string browserName = "chromium",
+        bool headless = true)
     {
         Skip.IfNot(await SandboxEngine.LocalSqlServerAnswersAsync(), "No local SQL Server answering on localhost:1433.");
 
@@ -84,8 +85,8 @@ public sealed class WebAppFixture : IAsyncDisposable
             pw = await Playwright.CreateAsync();
             try
             {
-                browser = browserName == "firefox" ? await pw.Firefox.LaunchAsync()
-                    : await pw.Chromium.LaunchAsync(new() { Channel = browserName == "edge" ? "msedge" : null });
+                browser = browserName == "firefox" ? await pw.Firefox.LaunchAsync(new() { Headless = headless })
+                    : await pw.Chromium.LaunchAsync(new() { Channel = browserName == "edge" ? "msedge" : null, Headless = headless });
             }
             catch (PlaywrightException ex) { throw new SkipException($"Could not launch {browserName}: {ex.Message}"); }
 
