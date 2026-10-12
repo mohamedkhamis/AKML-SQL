@@ -101,7 +101,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                     // Track which controller is active based on text view focus.
                     // When Ctrl+Space fires, the hook routes to _activeController.
-                    textView.GotAggregateFocus += (s, e) => _activeController = controller;
+                    textView.GotAggregateFocus += (s, e) =>
+                    {
+                        _activeController = controller;
+                        // The editor has the focus, so SSMS is in front: make sure the Ctrl+K,Y hook is on.
+                        _keyboardHook?.SyncToForeground();
+                    };
                     textView.LostAggregateFocus += (s, e) =>
                     {
                         if (_activeController == controller)

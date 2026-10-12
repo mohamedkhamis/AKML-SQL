@@ -18,10 +18,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
     /// WH_KEYBOARD can see it. The LL hook runs before TranslateAccelerator.
     ///
     /// A low-level hook sees the keyboard of the WHOLE desktop. It is therefore installed only while
-    /// SSMS is the active application (taken off when another program is activated, put back when SSMS
-    /// is), and every key it sees is handed on untouched unless SSMS's own window is in front and an
+    /// SSMS's window is in front (<see cref="ForegroundWatcher"/>: taken off when another program comes
+    /// to the front, put back when SSMS does), and every key it sees is handed on untouched unless SSMS's own window is in front and an
     /// AKML SQL editor has the focus (<see cref="ShortcutRouter"/>). Before this, Visual Studio's
-    /// Ctrl+K chords and Ctrl+D stopped working for as long as SSMS had a query open.
+    /// Ctrl+K chords and Ctrl+D stopped working for as long as SSMS had a query open. In the SQL editor
+    /// a kept Ctrl+K that is not followed by Y is typed again with its second key (SendInput, marked with
+    /// <see cref="Win32Hooks.ReplayMarker"/>), so SSMS's own Ctrl+K chords still reach it.
     ///
     /// Known .NET issue: SetWindowsHookEx(WH_KEYBOARD_LL, ...) requires a valid native
     /// module handle. Using Process.MainModule.BaseAddress fails in managed processes.
@@ -51,6 +53,9 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         internal delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
 
         private const int WM_KEYDOWN = 0x0100;
+        private const int LLKHF_EXTENDED = 0x01;
+
+        private static readonly int[] NoModifiers = new int[0];
 
         private static readonly uint CurrentProcessId = (uint)Process.GetCurrentProcess().Id;
 
@@ -71,7 +76,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private IntPtr _llHookHandle = IntPtr.Zero;
         private HookProc _llHookProc;
 
-        public KeyboardHook() : this(Win32Hooks.Instance, ForegroundIsThisProcess, new WpfAppActivation()) { }
+        public KeyboardHook() : this(Win32Hooks.Instance, ForegroundIsThisProcess, new ForegroundWatcher()) { }
 
         /// <summary>Test seam: the native hook calls, the foreground test and the activation source.</summary>
         internal KeyboardHook(IWindowsHooks hooks, Func<bool> thisProcessInFront, IAppActivation activation)
@@ -121,29 +126,45 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             if (_hookHandle == IntPtr.Zero)
                 Log.Warning("KeyboardHook: WH_KEYBOARD failed with error {Error}", Marshal.GetLastWin32Error());
 
-            // The low-level hook follows SSMS's activation. Without an activation source it stays in
-            // place for the session; the foreground test in the callback still keeps other programs'
-            // keys untouched.
-            _followsActivation = _activation != null && _activation.Attach(OnAppActivated, OnAppDeactivated);
-            if (!_followsActivation || _thisProcessInFront())
+            // The low-level hook follows the foreground: watched first, then checked, so a change in
+            // between is not missed. Without the notification it stays in place for the session; the
+            // foreground test in the callback still keeps other programs' keys untouched.
+            _followsActivation = _activation != null && _activation.Attach(SyncToForeground);
+            if (_followsActivation)
+                SyncToForeground();
+            else
                 InstallLowLevel();
 
             Log.Debug("KeyboardHook: installed (WH_KEYBOARD={K}, WH_KEYBOARD_LL={LL}, followsActivation={F}) on thread {ThreadId}",
                 _hookHandle != IntPtr.Zero, _llHookHandle != IntPtr.Zero, _followsActivation, threadId);
         }
 
-        /// <summary>SSMS became the active application: put the low-level hook back.</summary>
-        internal void OnAppActivated()
+        /// <summary>
+        /// Puts the low-level hook on while SSMS's window is in front and takes it off otherwise, so another
+        /// program's keys never pass through it. Called on every hint that the foreground may have changed
+        /// — Windows' foreground notification, a SQL editor getting the focus, a key reaching SSMS's UI
+        /// thread while the hook is off — and decided by asking who is in front now, not by the hint:
+        /// Windows does not report every switch (one made through attached input queues raises neither the
+        /// foreground notification nor WM_ACTIVATEAPP). Must be called on the UI thread.
+        /// </summary>
+        internal void SyncToForeground()
         {
-            if (_installed && Volatile.Read(ref _disposed) == 0)
-                InstallLowLevel();
-        }
+            if (!_installed || !_followsActivation || Volatile.Read(ref _disposed) != 0)
+                return;
 
-        /// <summary>Another program became active: take the low-level hook off so it never sees its keys.</summary>
-        internal void OnAppDeactivated()
-        {
-            _router.Reset();
-            UninstallLowLevel();
+            bool inFront;
+            try { inFront = _thisProcessInFront(); }
+            catch { inFront = false; }
+
+            if (inFront)
+            {
+                InstallLowLevel();
+            }
+            else
+            {
+                _router.Reset();
+                UninstallLowLevel();
+            }
         }
 
         private void InstallLowLevel()
@@ -222,6 +243,11 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         /// <summary>Ctrl+Space on the UI thread; true when the key is kept from its window.</summary>
         internal bool HandleThreadKeyDown(int vk, bool ctrl)
         {
+            // A key on SSMS's UI thread means SSMS is in front: if the switch went unreported and the
+            // low-level hook is off, put it on now (Ctrl+K,Y then works from the next key).
+            if (_llHookHandle == IntPtr.Zero)
+                SyncToForeground();
+
             if (ShortcutRouter.OnThreadKeyDown(vk, ctrl, SqlEditorFocused()) != ShortcutAction.Complete)
                 return false;
 
@@ -240,15 +266,21 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         {
             try
             {
-                if (nCode >= 0 && wParam.ToInt64() == WM_KEYDOWN)
+                // KBDLLHOOKSTRUCT: vkCode (0), scanCode (4), flags (8), time (12), dwExtraInfo (16).
+                // Keys this hook typed itself (a replayed chord) go straight to SSMS.
+                if (nCode >= 0 && wParam.ToInt64() == WM_KEYDOWN
+                    && Marshal.ReadIntPtr(lParam, 16) != Win32Hooks.ReplayMarker)
                 {
-                    // KBDLLHOOKSTRUCT: first DWORD is vkCode. GetAsyncKeyState: the low-level hook runs
-                    // before any thread's key state is updated.
+                    // GetAsyncKeyState: the low-level hook runs before any thread's key state is updated.
                     int vkCode = Marshal.ReadInt32(lParam);
-                    bool ctrlHeld  = (GetAsyncKeyState(ShortcutRouter.VK_CONTROL) & 0x8000) != 0;
-                    bool shiftHeld = (GetAsyncKeyState(ShortcutRouter.VK_SHIFT) & 0x8000) != 0;
+                    bool ctrlHeld  = Held(ShortcutRouter.VK_CONTROL);
+                    bool shiftHeld = Held(ShortcutRouter.VK_SHIFT);
+                    bool altHeld   = Held(ShortcutRouter.VK_MENU);
 
-                    if (HandleLowLevelKeyDown(vkCode, ctrlHeld, shiftHeld))
+                    if (HandleLowLevelKeyDown(vkCode, ctrlHeld, shiftHeld, altHeld,
+                            scan: Marshal.ReadInt32(lParam, 4),
+                            extended: (Marshal.ReadInt32(lParam, 8) & LLKHF_EXTENDED) != 0,
+                            heldShiftAndAlt: shiftHeld || altHeld ? HeldShiftAndAlt() : null))
                         return (IntPtr)1;
                 }
             }
@@ -257,8 +289,25 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return CallNextHookEx(_llHookHandle, nCode, wParam, lParam);
         }
 
+        private static bool Held(int vk) => (GetAsyncKeyState(vk) & 0x8000) != 0;
+
+        private static int[] HeldShiftAndAlt()
+        {
+            var held = new System.Collections.Generic.List<int>(2);
+            foreach (int vk in SideModifiers)
+                if (Held(vk))
+                    held.Add(vk);
+            return held.ToArray();
+        }
+
+        private static readonly int[] SideModifiers =
+        {
+            ShortcutRouter.VK_LSHIFT, ShortcutRouter.VK_RSHIFT, ShortcutRouter.VK_LMENU, ShortcutRouter.VK_RMENU,
+        };
+
         /// <summary>One desktop key-down; true when the key is kept from its window.</summary>
-        internal bool HandleLowLevelKeyDown(int vk, bool ctrl, bool shift)
+        internal bool HandleLowLevelKeyDown(int vk, bool ctrl, bool shift, bool alt = false,
+            int scan = 0, bool extended = false, int[] heldShiftAndAlt = null)
         {
             // Only a Ctrl chord or the key after Ctrl+K can be ours: everything else (most typing, in
             // every program) passes without asking which window is in front.
@@ -269,8 +318,14 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             try { inFront = _thisProcessInFront(); }
             catch { inFront = false; }
 
-            switch (_router.OnLowLevelKeyDown(vk, ctrl, shift, inFront, inFront && SqlEditorFocused()))
+            switch (_router.OnLowLevelKeyDown(vk, ctrl, shift, alt, inFront, inFront && SqlEditorFocused()))
             {
+                case ShortcutAction.Replay:
+                    // Sent from inside the callback: SendInput queues the keys as one block behind this
+                    // one, so nothing typed later can come between Ctrl+K and its second key.
+                    try { _hooks.Inject(ShortcutRouter.ReplayChord(vk, scan, extended, ctrl, heldShiftAndAlt ?? NoModifiers)); }
+                    catch (Exception ex) { Log.Debug(ex, "KeyboardHook LL: chord replay failed"); }
+                    return true;
                 case ShortcutAction.Swallow:
                     Log.Debug("KeyboardHook LL: Ctrl+K detected, waiting for Y");
                     return true;
@@ -312,13 +367,16 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         IntPtr SetThreadHook(KeyboardHook.HookProc proc, uint threadId);
         IntPtr SetLowLevelHook(KeyboardHook.HookProc proc);
         void Remove(IntPtr handle);
+
+        /// <summary>Types the keys as one block, marked so the hook hands them straight on.</summary>
+        void Inject(KeyStroke[] keys);
     }
 
-    /// <summary>When SSMS becomes, and stops being, the active application.</summary>
+    /// <summary>Reports that the foreground window may have changed (which one is asked separately).</summary>
     internal interface IAppActivation
     {
-        /// <summary>Starts reporting; false when there is nothing to follow (no WPF application).</summary>
-        bool Attach(Action activated, Action deactivated);
+        /// <summary>Starts reporting; false when the notification is unavailable.</summary>
+        bool Attach(Action foregroundChanged);
         void Detach();
     }
 
@@ -334,8 +392,57 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern IntPtr LoadLibrary(string lpFileName);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        [DllImport("user32.dll")]
+        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
         private const int WH_KEYBOARD_LL = 13;
         private const int WH_KEYBOARD = 2;
+        private const uint INPUT_KEYBOARD = 1;
+        private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+        private const uint MAPVK_VK_TO_VSC = 0;
+
+        /// <summary>dwExtraInfo of the keys AKML types itself ("AKML"), so its own hook lets them through.</summary>
+        internal static readonly IntPtr ReplayMarker = new IntPtr(0x414B4D4C);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public uint type;
+            public InputUnion u;
+        }
+
+        // The union must be as large as its largest member (MOUSEINPUT) or SendInput rejects cbSize.
+        [StructLayout(LayoutKind.Explicit)]
+        private struct InputUnion
+        {
+            [FieldOffset(0)] public MOUSEINPUT mi;
+            [FieldOffset(0)] public KEYBDINPUT ki;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct MOUSEINPUT
+        {
+            public int dx;
+            public int dy;
+            public uint mouseData;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
 
         public static readonly Win32Hooks Instance = new Win32Hooks();
 
@@ -356,40 +463,90 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         }
 
         public void Remove(IntPtr handle) => UnhookWindowsHookEx(handle);
+
+        public void Inject(KeyStroke[] keys)
+        {
+            var inputs = new INPUT[keys.Length];
+            for (int i = 0; i < keys.Length; i++)
+            {
+                var key = keys[i];
+                uint scan = key.Scan != 0 ? (uint)key.Scan : MapVirtualKey((uint)key.Vk, MAPVK_VK_TO_VSC);
+                inputs[i].type = INPUT_KEYBOARD;
+                inputs[i].u.ki = new KEYBDINPUT
+                {
+                    wVk = (ushort)key.Vk,
+                    wScan = (ushort)scan,
+                    dwFlags = (key.Up ? KEYEVENTF_KEYUP : 0) | (key.Extended ? KEYEVENTF_EXTENDEDKEY : 0),
+                    dwExtraInfo = ReplayMarker,
+                };
+            }
+
+            uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
+            if (sent != inputs.Length)
+                Log.Debug("KeyboardHook: SendInput sent {Sent} of {Count} keys, error {Error}", sent, inputs.Length, Marshal.GetLastWin32Error());
+        }
     }
 
     /// <summary>
-    /// WPF's Application.Activated / Deactivated: raised when SSMS as a whole gains or loses the
-    /// foreground (WM_ACTIVATEAPP), not when focus moves between SSMS's own windows.
+    /// Windows' foreground-change notification (EVENT_SYSTEM_FOREGROUND, out of context). It intercepts
+    /// nothing, so it costs other programs nothing. WPF's Application.Activated is not used: it can be raised before Windows
+    /// actually gives SSMS the foreground (a window shown while another program holds it), and then no
+    /// later event comes when it does — the hook would stay off while SSMS is in front.
+    /// Callbacks arrive through the message loop of the thread that attached (SSMS's UI thread).
     /// </summary>
-    internal sealed class WpfAppActivation : IAppActivation
+    internal sealed class ForegroundWatcher : IAppActivation
     {
-        private System.Windows.Application _app;
-        private EventHandler _activated;
-        private EventHandler _deactivated;
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
+            WinEventProc lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
 
-        public bool Attach(Action activated, Action deactivated)
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
+        private delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild,
+            uint eventThread, uint eventTime);
+
+        private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+        private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
+
+        private IntPtr _hook;
+        private WinEventProc _proc;   // held: user32 keeps a native pointer to it
+        private Action _changed;
+
+        public bool Attach(Action foregroundChanged)
         {
-            var app = System.Windows.Application.Current;
-            if (app == null || !app.Dispatcher.CheckAccess())
-                return false;
+            if (_hook != IntPtr.Zero)
+                return true;
 
-            _app = app;
-            _activated = (s, e) => activated();
-            _deactivated = (s, e) => deactivated();
-            app.Activated += _activated;
-            app.Deactivated += _deactivated;
-            return true;
+            _changed = foregroundChanged;
+            _proc = OnForegroundChanged;
+            _hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _proc, 0, 0, WINEVENT_OUTOFCONTEXT);
+            if (_hook == IntPtr.Zero)
+                Log.Warning("KeyboardHook: foreground notification unavailable; the low-level hook stays in place");
+            return _hook != IntPtr.Zero;
         }
 
         public void Detach()
         {
-            var app = _app;
-            if (app == null)
-                return;
-            _app = null;
-            app.Activated -= _activated;
-            app.Deactivated -= _deactivated;
+            var hook = _hook;
+            _hook = IntPtr.Zero;
+            if (hook != IntPtr.Zero)
+                UnhookWinEvent(hook);
+        }
+
+        private void OnForegroundChanged(IntPtr hook, uint eventType, IntPtr hwnd, int idObject, int idChild,
+            uint eventThread, uint eventTime)
+        {
+            try
+            {
+                if (_hook != IntPtr.Zero)
+                    _changed?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "KeyboardHook: foreground notification failed");
+            }
         }
     }
 }
