@@ -341,13 +341,12 @@ public sealed class ResultsGridTests
             await s.Page.Keyboard.PressAsync("Enter");
             await Assertions.Expect(s.Page.Locator("[data-testid='results-apply']")).ToBeEnabledAsync();
 
-            // date and money (the old 255-scale failure). The editor holds the engine's round-trip text and
-            // a date is entered in that form (R11: parsing the displayed form back is a deferred follow-up).
+            // PR #255: dates accept the grid's displayed text and round-trip through Apply.
             await Cell(s.Page, 0, 3).ClickAsync();
             await s.Page.Keyboard.PressAsync("F2");
-            await Assertions.Expect(input).ToHaveValueAsync("2025-01-01T00:00:00.0000000");
+            await Assertions.Expect(input).ToHaveValueAsync("2025-01-01");
             await s.Page.Keyboard.PressAsync("Control+A");
-            await s.Page.Keyboard.TypeAsync("2025-10-01T00:00:00.0000000");
+            await s.Page.Keyboard.TypeAsync("2025-10-01");
             await s.Page.Keyboard.PressAsync("Enter");
             await Assertions.Expect(Cell(s.Page, 0, 3)).ToHaveTextAsync("2025-10-01");
             await Cell(s.Page, 0, 4).ClickAsync();

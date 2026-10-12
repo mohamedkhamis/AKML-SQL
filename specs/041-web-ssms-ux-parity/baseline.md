@@ -458,3 +458,63 @@ Saved and visually inspected the workbook. Evidence:
 
 T215 is complete. SC-006 remains pending ten real SSMS users; no study results were
 invented or inferred from automated interaction. No product source changed for this check.
+
+### PR #255 review verification — 2026-10-12
+
+Verified Claude's `759c6e5` review corrections against fresh Debug Web/Engine builds and
+the local SQL Server. Added ten Playwright cases for CREATE OR ALTER, History replacement
+and cancellation, Windows-1252 file loading and dotted names, error underline clearing,
+typed JSON/INSERT copy, and date/time/binary edits applied to their source database after
+a later USE. The existing date-edit browser test now enters the displayed date and still
+verifies the persisted result.
+
+Browser verification exposed two product problems, fixed in this follow-up:
+
+- JSON strings did not escape every U+0000–U+001F control character. The shared formatter
+  now escapes all of them, including in headers. Its unknown-type fallback also keeps
+  NaN, Infinity and overflowing numeric-looking text as strings instead of invalid JSON
+  numbers. Six added Core cases and the browser clipboard check cover these paths.
+- A second click could open an editor before Blazor dispatched dblclick, allowing the
+  late event to move editing to the adjacent cell. The double-click handler now preserves
+  an already-open editor. Both keyboard and double-click Apply/re-query cases pass.
+
+The touch acceptance test now checks whether Schema is already folded at the current
+zoom before toggling it, and verifies that tapping its edge strip restores the panel.
+
+| Suite | Passed | Failed | Skipped |
+|---|---:|---:|---:|
+| Core | 1,345 | 1 | 3 |
+| Engine, full suite | 2,118 | 0 | 0 |
+| Web | 1,152 | 42 | 0 |
+| Shell, serial | 882 | 0 | 0 |
+| Formatting | 1,635 | 0 | 0 |
+| IntelliSense | 25 | 0 | 0 |
+| Site | 904 | 0 | 0 |
+| Analysis | 5 | 0 | 0 |
+| AI | 55 | 0 | 0 |
+| Web JavaScript | 98 | 0 | 0 |
+| Playwright, unique outcomes including follow-ups | 95 | 0 | 10 |
+
+The 23m46s full Playwright run initially returned **92 passed / 3 failed / 10 skipped**.
+Two installed-service reconnect cases encountered a pairing PIN older than its 24-hour
+lifetime. After refreshing the service, all five reconnect cases passed. The third
+failure was the touch-panel timing assumption described above. The seven-case follow-up
+(five reconnect cases, touch, and the extended JSON copy case) passed **7/7**. The updated
+touch test is recorded separately in `NativeAndTouch.Final.trx`. Screenshot-generation
+tours were excluded; the behavioral suite covers themes and supported layouts.
+
+The Core positional-profile-contract failure and all 42 Web formatter-corpus failures
+match the previous baseline by test name. A shell active-style failure under parallel
+execution and a 40ms toast assertion race under load passed in serial reruns; the logs
+retain those exploratory failures. No previously passing browser test regressed. Eight
+database-name refusal cases and one wire-value editor case were intentionally replaced
+in Claude's commit by legal-name/quoting and lossless displayed-text coverage. Other
+previously passing unit/integration cases remain passing. Completion parity remains
+**1,311/1,343 (97.6%)**; no golden corpus was changed.
+
+The full solution passes VS 18 Insiders MSBuild in Release after the corrections.
+Both generated-theme checks pass. Raw logs and TRX files are under
+`%LOCALAPPDATA%/AKML SQL/spec041-review-759c6e5/`; `browser-comparison.json` records the
+deduplicated browser outcomes and zero regressions. This verifies the working-tree
+builds; installed payloads were not updated. The installed bridge service is restored
+to Running after its reconnect tests.

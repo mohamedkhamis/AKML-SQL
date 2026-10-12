@@ -134,6 +134,29 @@ public class GridTextFormatsTests
     // ── PR #255: a known column type decides what is a number ───────────────────────────────────────────
 
     [Theory]
+    [InlineData(GridValueKind.Text)]
+    [InlineData(GridValueKind.Unknown)]
+    public void Json_round_trips_all_control_characters_in_headers_and_values(GridValueKind kind)
+    {
+        var value = new string(Enumerable.Range(0, 32).Select(i => (char)i).ToArray()) + "\"\\café";
+        var text = GridTextFormats.Json(new[] { value }, new List<string[]> { new[] { value } }, new[] { kind });
+        using var json = JsonDocument.Parse(text);
+        Assert.Equal(value, json.RootElement[0].GetProperty(value).GetString());
+    }
+
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    [InlineData("1e999")]
+    public void Json_keeps_nonfinite_numeric_looking_variant_text_as_a_string(string value)
+    {
+        var text = GridTextFormats.Json(new[] { "v" }, new List<string[]> { new[] { value } }, new[] { GridValueKind.Unknown });
+        using var json = JsonDocument.Parse(text);
+        Assert.Equal(value, json.RootElement[0].GetProperty("v").GetString());
+    }
+
+    [Theory]
     [InlineData("00501", GridValueKind.Text, "N'00501'")]
     [InlineData("1,234", GridValueKind.Text, "N'1,234'")]
     [InlineData("1,234", GridValueKind.Number, "N'1,234'")]

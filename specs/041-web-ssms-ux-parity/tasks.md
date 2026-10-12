@@ -1408,7 +1408,7 @@ Recorded here and in `doc/progress.md` (Constitution, Development Workflow), so 
 | Multiple query document tabs | Clarified out of scope 2026-10-08 (spec Clarifications) | A later feature |
 | Interrupting a running statement (a true Cancel) | Needs engine transport work (spec Out of Scope) | Engine follow-up |
 | An engine `CutCells` key for engine-cut values | Engine work is limited to the spec's Dependencies list (R8) | Engine follow-up |
-| Parsing displayed values back on commit | Strict ISO input is accepted for now (R11) | Grid follow-up |
+| Parsing displayed values back on commit | Resolved by PR #255 review fix 759c6e5; date/time/binary display text converts to wire values on commit | Verified by review regression tests (baseline.md) |
 | Navigating errors inside `CREATE PROCEDURE` bodies | The server reports `Procedure`, not a document line (R24) | Messages follow-up |
 | A user setting for the maximum column width | Spec Assumptions: "may become a setting later" | Settings follow-up |
 | Docking, results-to-text, execution plans, column reorder/hide/freeze | Spec Out of Scope | — |

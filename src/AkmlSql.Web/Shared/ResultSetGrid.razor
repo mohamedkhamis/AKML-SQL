@@ -633,7 +633,7 @@
                     <div id="@CellId(d, col)" class="@cellClass" role="gridcell" aria-selected="@(selected ? "true" : "false")"
                          aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(focus && tooltip != null ? TooltipId : null)"
                          title="@CellTitle(v, col, invalid)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col"
-                         @ondblclick="() => BeginEdit(d, col)">
+                         @ondblclick="() => OnCellDoubleClick(d, col)">
                         @if (invalid)
                         {
                             <span class="akml-cell-invalid-glyph" title="@InvalidTitle" data-testid="@($"results-cell-invalid-{r}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
@@ -1392,6 +1392,13 @@
     }
 
     // ── Editing (FR-013) ───────────────────────────────────────────────────────────────────────────
+
+    private void OnCellDoubleClick(int displayRow, int col)
+    {
+        // The second click can already have opened an editor and replaced the cell DOM before
+        // Blazor dispatches dblclick. Do not let that stale event move editing to another cell.
+        if (!IsEditing) BeginEdit(displayRow, col);
+    }
 
     private void BeginEdit(int displayRow, int col, string? replaceWith = null)
     {

@@ -407,12 +407,24 @@ namespace AkmlSql.Core.Text
 
         private static string EscapeJsonString(string value)
         {
-            return value
-                .Replace("\\", "\\\\")
-                .Replace("\"", "\\\"")
-                .Replace("\n", "\\n")
-                .Replace("\r", "\\r")
-                .Replace("\t", "\\t");
+            var escaped = new StringBuilder(value.Length);
+            foreach (char c in value)
+            {
+                switch (c)
+                {
+                    case '\\': escaped.Append("\\\\"); break;
+                    case '"': escaped.Append("\\\""); break;
+                    case '\n': escaped.Append("\\n"); break;
+                    case '\r': escaped.Append("\\r"); break;
+                    case '\t': escaped.Append("\\t"); break;
+                    default:
+                        // JSON forbids every raw U+0000–U+001F character, including SQL CHAR(0/1/8/12).
+                        if (c < ' ') escaped.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
+                        else escaped.Append(c);
+                        break;
+                }
+            }
+            return escaped.ToString();
         }
 
         private static void AppendJsonValue(StringBuilder sb, string value, GridValueKind kind)
@@ -438,7 +450,8 @@ namespace AkmlSql.Core.Text
                 return;
             }
             if (double.TryParse(value, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var dblVal))
+                System.Globalization.CultureInfo.InvariantCulture, out var dblVal)
+                && !double.IsNaN(dblVal) && !double.IsInfinity(dblVal))
             {
                 sb.Append(dblVal.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 return;
