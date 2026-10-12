@@ -40,7 +40,7 @@ dotnet test tests/AkmlSql.Site.Tests/AkmlSql.Site.Tests.csproj --filter ThemeCss
 dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build --filter "Category=BridgeE2E" -- xUnit.ParallelizeTestCollections=false
 
 # Full SC-008 browser suite; run only after all Debug builds have finished
-dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build --filter "FullyQualifiedName!~SiteScreenshotTour&FullyQualifiedName!~WorkspaceScreenshotTour" -- xUnit.ParallelizeTestCollections=false
+dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build --filter "FullyQualifiedName!~SiteScreenshotTour&FullyQualifiedName!~WorkspaceScreenshotTour&Category!=NativeAcceptance" -- xUnit.ParallelizeTestCollections=false
 ```
 
 **Gates:**
@@ -83,6 +83,9 @@ dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build 
 6. Click row number 3, Shift-click row 6, Ctrl+C, paste into a spreadsheet — four rows in
    separate cells, NULL as `NULL`. Click a column header, Ctrl+Shift+C — the column name is
    the first line. Drag across cells — a rectangle is selected; Shift+Arrow extends it.
+   In Calc's Text Import dialog choose **Separated by → Tab only**: automatic detection
+   can split a copied single column at spaces. Disable Detect special numbers when
+   checking exact ISO date text.
 7. Right-click a cell — the menu lists Copy, Copy with headers, Copy as ▸, Select all, View
    value, Set to NULL (only for an editable result), Save results as CSV…; Shift+F10 opens it
    from the keyboard. Copy as › JSON / CSV / Markdown / INSERT paste as expected.
@@ -229,6 +232,22 @@ dotnet test tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj --no-build 
    carry glyphs); with reduced motion on, spinners and fades are static.
 
 ## 7. Record the outcome
+
+Save as also supports **Ctrl+K, Ctrl+A** because Edge reserves Ctrl+Shift+S for Screenshot.
+The alternative appears in the toolbar tooltip, View menu and command palette.
+
+Run the native keyboard acceptance separately on an available Windows interactive desktop,
+with no other process taking foreground focus. It sends real Windows input and temporarily
+changes the test browser's input layout; routine browser runs exclude this category.
+
+```powershell
+$env:AKML_NATIVE_KEY_ACCEPTANCE = '1'
+dotnet test tests/AkmlSql.Web.E2E.Tests -c Debug --no-build --filter 'FullyQualifiedName~NativeKeyAcceptanceTests' -- xUnit.ParallelizeTestCollections=false
+Remove-Item Env:AKML_NATIVE_KEY_ACCEPTANCE
+```
+
+For deployed screenshots, set `AKML_DEPLOYED_WEB_URL` to the actual IIS binding
+(this VM: `http://localhost:59416/`) before running `SiteScreenshotTour`.
 
 Update `baseline.md` with the per-suite table, the SC-008 diff, the list of by-design test
 changes (research R69) and the three-theme check results; refresh the product-site screenshots

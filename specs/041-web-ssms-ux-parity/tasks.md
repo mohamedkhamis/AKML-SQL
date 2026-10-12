@@ -1366,7 +1366,7 @@ and the grid split.
 
 ## Phase 9: Polish & cross-cutting concerns
 
-- [ ] T209 [P] Verify key capture per browser and record it in `specs/041-web-ssms-ux-parity/baseline.md` (FR-049(c), R37).
+- [X] T209 [P] Verify key capture per browser and record it in `specs/041-web-ssms-ux-parity/baseline.md` (FR-049(c), R37).
   - In Chromium, Edge and Firefox, on the editor page, check that each claimed key stops the browser's own action: F5, Ctrl+F5, Ctrl+R, F8, F6/Shift+F6, Ctrl+S, Ctrl+Shift+S, Ctrl+Alt+N, Ctrl+Alt+O, the three Ctrl+K chords, and the grid's Ctrl+Shift+C, Ctrl+0 and Shift+Alt+Arrow. Shift+Alt is the Windows input-language hotkey, so test it with two keyboard layouts installed.
   - With a Polish (Programmers) keyboard layout, typing ó and ń in the editor still works (AltGr arrives as Ctrl+Alt).
   - Record a browser × key table in `specs/041-web-ssms-ux-parity/baseline.md`.
@@ -1394,8 +1394,8 @@ and the grid split.
     - the per-suite table;
     - the SC-008 diff, which must be empty apart from the R69 by-design list (StylesReviewFixTests rewrite, the Pr247 grid test ported to the pane, the `page.Dialog` suites, pairing navigation, the FormatStylesSharedEngineTests label, SiteScreenshotTour);
     - the three-theme results, the FR-049(c) table and the performance numbers.
-- [ ] T215 Run quickstart.md end to end (§0–§7) on the dev VM against Debug web, Debug engine and local SQL Server, and tick each step in `baseline.md`. The SC-006 hallway test (10 SSMS users, six tasks in 4 minutes) cannot be automated; record it as pending the user's availability.
-- [ ] T216 Refresh the product-site screenshots deliberately through `tests/AkmlSql.Web.E2E.Tests/SiteScreenshotTour.cs` after the new UI is deployed. Their images change by design (spec "Visual tests" risk). Record this as pending deployment in `baseline.md` until done.
+- [X] T215 Run quickstart.md end to end (§0–§7) on the dev VM against Debug web, Debug engine and local SQL Server, and tick each step in `baseline.md`. Spreadsheet paste verified in Calc on 2026-10-12; see `baseline.md`. The SC-006 hallway test (10 SSMS users, six tasks in 4 minutes) cannot be automated; recorded as pending the user's availability.
+- [X] T216 Refresh the product-site screenshots deliberately through `tests/AkmlSql.Web.E2E.Tests/SiteScreenshotTour.cs` after the new UI is deployed. Their images change by design (spec "Visual tests" risk). Deployed and visually inspected 2026-10-11; see `baseline.md`.
 
 ---
 

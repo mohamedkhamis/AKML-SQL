@@ -2323,3 +2323,64 @@ Native keyboard/layout acceptance, the full manual quickstart and the ten-user h
 remain external checks; `baseline.md` identifies the browser-replayed steps and remaining variants.
 Product-site screenshots remain pending deployment (T216); local captures do not change
 the deployed site's images.
+
+### Spec 041 acceptance and approved deployment — 2026-10-11
+
+T216 is complete. With explicit user approval, Web and Engine 1.26.1010.2224 now run at
+http://localhost:59416/ (AkmlSqlWeb / AkmlSqlWebEngine). The previous payloads and root
+ACLs are backed up in %LOCALAPPDATA%/AKML SQL/spec041-deployment/backup-20261011-102256.
+Existing web.config, bridge configuration, certificates and user data were preserved.
+An initial port-80 smoke check triggered rollback; using the actual IIS binding resolved it.
+The deployed screenshot tour passed 2/2; its Northwind query returned 50 rows with matching
+versions. Both web product images were visually inspected and refreshed in the repository;
+the separate marketing site was not deployed.
+
+Native input exposed Edge's reserved Ctrl+Shift+S. Save as has the alternative Ctrl+K,
+Ctrl+A, shown in the View menu, palette and toolbar. DOM key tests passed on all three
+browsers, collision tests passed 6/6 and Node passed 98/98. Expanded quickstart/tab replay
+passed 10/10. Web unit results remain 1,131 passed and 42 known formatter failures; the
+SC-008 comparison still has no regressions or missing passes. Release Web publish passed.
+
+Ten of twelve originally unfinished tasks are now complete. T209 remains open because
+the final native run could not acquire foreground focus in two browsers and Firefox timed
+out during setup. T215 still needs the actual SSMS-started-engine style grouping variant and human spreadsheet paste; the hallway study awaits ten participants.
+The earlier five requested commits are complete; subsequent follow-up changes are uncommitted.
+See the spec baseline for the detailed acceptance record.
+
+Follow-up: the final four focused browser cases passed (three-browser Save as menu/palette
+checks and real-engine duplicate-style source labels). The native retry skipped all three
+cases because Windows foreground focus was unavailable; T209 remains open.
+
+### Spec 041 native keyboard gate completed — 2026-10-11
+
+The user made the interactive desktop available. The native Windows input suite passed
+3/3 (Chromium, Edge, Firefox), with no skips, in 66 seconds. Claimed keys retained the
+document; grid Shift+Alt arrows left the input language unchanged; Polish AltGr inserted
+óń. Edge's reserved Screenshot shortcut has the verified Save as alternative Ctrl+K,
+Ctrl+A, advertised in the View menu and palette. The browser-by-key matrix is recorded
+in baseline.md. T209 is now complete; eleven of the original twelve tasks are complete.
+Only T215's actual SSMS-started-engine/manual acceptance remains, with the ten-user
+hallway study pending participant availability. Follow-up changes remain uncommitted.
+
+### Spec 041 actual SSMS engine acceptance — 2026-10-11
+
+SSMS 22 opened and executed the saved Northwind Customers query. Playwright paired
+with the engine actually launched by SSMS. Its private engine was stale (1.26.1006.2219),
+so the initial Shared with SSMS check failed. The user explicitly approved updating that
+separate installed Engine folder. After backup and deployment of 1.26.1010.2224 (319
+file hashes verified), the repeated browser check passed: Shared with SSMS on both
+style screens, distinct duplicate-name labels, Northwind results and a four-row,
+three-column clipboard selection. Zero JavaScript errors. The saved SSMS window remains
+open. Baseline step 4.8 is complete. T215 remains open for a real spreadsheet paste
+(no Excel/LibreOffice installed); the ten-user study still awaits participants.
+
+### Spec 041 final spreadsheet acceptance — 2026-10-12
+
+Completed T215 through actual Windows clipboard paste into LibreOffice Calc Portable
+26.2.4. Four Northwind rows landed in six columns; all 24 cells matched the browser copy,
+including NULL, dates, accents and 2,000-character values. Copy-with-header also passed
+for CompanyName and six full names. Calc's import was explicitly set to Tab only to
+avoid automatic space splitting. Workbook, screenshot and machine-readable cell evidence
+are in baseline/acceptance/. All twelve originally unfinished tasks are checked.
+The ten-SSMS-user SC-006 hallway study remains pending real participants as T215 allows;
+no human-study outcome is claimed. Product code was unchanged in this acceptance step.

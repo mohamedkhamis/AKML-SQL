@@ -558,3 +558,76 @@ change, and verify the affected path with its established tests and UI checks.
   auto-fit includes the cell border; `GridRowBoundary` skips unchanged rows on pointer updates;
   a Live bridge hides stale startup pairing failures. `QuickstartAcceptanceTests` checks schema
   controls, width persistence and loss of the sandbox engine during execution.
+
+## 2026-10-11 — Spec 041 approved deployment follow-up
+
+- User-authorized earlier changes were committed separately as 01150c0, debbbbc,
+  7f21566, f5a7def and 15c3612. Later changes remain uncommitted.
+- Web and Engine 1.26.1010.2224 were deployed with explicit approval to IIS AkmlSqlWeb
+  and service AkmlSqlWebEngine. The actual IIS URL is http://localhost:59416/;
+  bridge port remains 59417. Both previous payloads and root ACLs are backed up under
+  %LOCALAPPDATA%/AKML SQL/spec041-deployment/backup-20261011-102256.
+  Existing IIS web.config, ProgramData configuration, certificates and user data were
+  preserved. The first port-80 smoke check rolled back; the corrected deployment passed.
+- SiteScreenshotTour accepts AKML_DEPLOYED_WEB_URL. It passed 2/2 against the installed
+  release; Northwind returned 50 rows with matching version labels. The two web product
+  images were inspected and refreshed in the repository. The marketing site was not deployed.
+- Native Windows input found that Edge reserves Ctrl+Shift+S. Save as now also accepts
+  Ctrl+K, Ctrl+A, advertised in the toolbar, View menu and palette. The opt-in
+  NativeKeyAcceptanceTests uses guarded Windows SendInput; exclude Category=NativeAcceptance
+  from unattended suites. Final native replay was blocked by foreground focus/setup issues.
+- Expanded quickstart/tab acceptance passed 10/10; DOM browser key checks passed 3/3,
+  collision checks 6/6, Node 98/98. Web retains 1,131 passes and 42 known failures.
+  SC-008 still reports zero regressions/missing prior passes. Release Web publish passed.
+- T216 is now complete: ten of the original twelve unfinished tasks are complete.
+  T209 needs a clean native-input replay. T215 still needs actual SSMS-started style
+  grouping checks and human spreadsheet paste; the hallway study awaits
+  ten participants. See specs/041-web-ssms-ux-parity/baseline.md for precise evidence.
+
+Follow-up: the final four focused browser cases passed (three-browser Save as menu/palette
+checks and real-engine duplicate-style source labels). The native retry skipped all three
+cases because Windows foreground focus was unavailable; T209 remains open.
+
+### Native keyboard acceptance completed — 2026-10-11
+
+After the user confirmed the interactive desktop was unlocked, NativeKeyAcceptanceTests
+passed 3/3 in Chromium, Edge and Firefox, with no failures or skips. Real Windows
+scan-code input verified all claimed keys, unchanged input language for grid Shift+Alt
+arrows with English/Arabic installed, and Polish Programmers AltGr inserting óń.
+Edge reserves Ctrl+Shift+S for Screenshot; Ctrl+K, Ctrl+A opened Save as successfully,
+with the alternative visible in the View menu and palette. Original browser layouts
+were restored. T209 is complete; eleven of the original twelve remaining tasks are done.
+Only T215 remains for actual SSMS-started-engine style grouping and human spreadsheet
+paste; the ten-user hallway study awaits participants. This supersedes the earlier
+native-input foreground-focus blocker. No product code or deployment changed in this replay.
+
+### Actual SSMS/Northwind acceptance — 2026-10-11
+
+Opened a dedicated SSMS 22 instance with isolated AKML app data and a saved read-only
+Northwind query. SSMS executed six Customers rows. Playwright paired with its actual
+child engine and verified a four-row/three-column copy (ANTON through BLAUS).
+The installed extension had a private Engine 1.26.1006.2219, distinct from the web
+service payload; it lacked the expected Shared with SSMS label. With additional explicit
+user approval, backed up that private Engine folder and root ACL to
+%LOCALAPPDATA%/AKML SQL/spec041-deployment/ssms-engine-backup-20261011-203436,
+deployed the verified 1.26.1010.2224 payload (319 hashes match), and reopened SSMS.
+Playwright then passed both Shared with SSMS screens, duplicate style source labels,
+Northwind execution and clipboard checks with zero JavaScript errors. Extension DLLs
+and user data were preserved. SSMS remains open on the saved Northwind script.
+T215 now only lacks actual spreadsheet paste (no Excel/LibreOffice found) and the
+participant-dependent hallway study. Evidence: %TEMP%/spec041-ssms-acceptance/.
+
+### Spreadsheet acceptance completed — 2026-10-12
+
+T215 is complete; all twelve tasks originally open in spec 041 are now checked.
+Playwright copied live Northwind results to the Windows clipboard; LibreOffice Calc
+Portable 26.2.4 pasted them into real cells. Verified four rows by six columns exactly,
+including accented names/cities, literal NULL, ISO date text and all 2,000 characters
+of each long value. A second paste retained the CompanyName header and six complete
+names. Calc requires Tab-only import for a single text column; automatic detection can
+split at spaces. The workbook, screenshot and JSON verification are recorded under
+specs/041-web-ssms-ux-parity/baseline/acceptance/. The portable package checksum and
+signature were verified; its files live under %LOCALAPPDATA%/AKML-Acceptance-Tools.
+SC-006 still awaits ten real participants, explicitly permitted as pending by T215.
+This was automated desktop acceptance, not a claimed human usability study. No product
+source changes or new Git mutations were made for this check.

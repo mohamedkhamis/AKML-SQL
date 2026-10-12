@@ -719,8 +719,8 @@ AkmlSql.Web.Tests.Services.EngineEndpointTests.A_remembered_scheme_is_tried_firs
 AkmlSql.Web.Tests.Services.EngineEndpointTests.An_ipv6_literal_is_bracketed_so_the_url_is_valid
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "::1")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "127.0.0.1")
-AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost")
-AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST") [#2]
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost") [#2]
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "192.168.1.10")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "engine.example.com")
@@ -1001,7 +1001,7 @@ AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "New query", commandId: "editor:new", expected: "New query (Ctrl+Alt+N)")
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Open", commandId: "editor:open", expected: "Open (Ctrl+Alt+O)")
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Parse", commandId: "editor:parse", expected: "Parse (Ctrl+F5)")
-AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Save as", commandId: "editor:saveas", expected: "Save as (Ctrl+Shift+S)")
+AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Save as", commandId: "editor:saveas", expected: "Save as (Ctrl+Shift+S or Ctrl+K, Ctrl+A)")
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Save", commandId: "editor:save", expected: "Save (Ctrl+S)")
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_without_keys_shows_only_its_name
 AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.BuiltIns_include_the_floor_ssf_and_cte

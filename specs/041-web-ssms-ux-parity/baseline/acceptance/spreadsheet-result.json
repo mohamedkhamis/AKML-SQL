@@ -1,0 +1,43 @@
+{
+    "passed":  true,
+    "rows":  4,
+    "columns":  6,
+    "customerIds":  [
+                        "ANTON",
+                        "AROUT",
+                        "BERGS",
+                        "BLAUS"
+                    ],
+    "nulls":  [
+                  "NULL",
+                  "NULL",
+                  "NULL",
+                  "NULL"
+              ],
+    "dates":  [
+                  "1997-01-01",
+                  "1997-01-01",
+                  "1997-01-01",
+                  "1997-01-01"
+              ],
+    "longValueLengths":  [
+                             2000,
+                             2000,
+                             2000,
+                             2000
+                         ],
+    "workbook":  "Northwind-spreadsheet-paste.ods",
+    "headerPaste":  [
+                        "CompanyName",
+                        "Alfreds Futterkiste",
+                        "Ana Trujillo Emparedados y helados",
+                        "Antonio Moreno Taquería",
+                        "Around the Horn",
+                        "Berglunds snabbköp",
+                        "Blauer See Delikatessen"
+                    ],
+    "method":  "Windows clipboard from Playwright Ctrl+C / Ctrl+Shift+C; Calc Ctrl+V and tab import; cells verified through UNO",
+    "spreadsheet":  "LibreOffice Calc Portable 26.2.4",
+    "acceptanceDate":  "2026-10-12",
+    "importSettings":  "Separated by Tab only; Detect special numbers disabled to preserve ISO date text"
+}

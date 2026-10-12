@@ -77,16 +77,15 @@ Snippets and Styles are retained where current handlers and tests still consume 
 
 ### Pending external acceptance
 
-- **T209 native keyboard checks:** browser DOM cancellation is automated separately from
-  native browser accelerators. Real Windows input with two layouts, Polish AltGr and
-  Shift+Alt language switching still needs an interactive check; synthetic Playwright
-  events cannot establish those results.
+- **T209 complete (2026-10-11):** after the user made the interactive desktop available,
+  the native Windows SendInput replay passed **3/3**, with no failures or skips.
+  Earlier foreground-focus skips/setup failures are superseded by this successful run.
 - **SC-006:** the ten-SSMS-user hallway study remains pending participant availability.
-- **T215 manual quickstart:** automated coverage is recorded below. The complete human
-  walkthrough, including the remaining variants identified there, is not being represented
-  as completed by component tests or screenshots.
-- **T216:** product-site screenshots remain pending deployment. The local workspace tour
-  does not replace or overwrite the deployed product-site screenshots.
+- **T215 complete (2026-10-12):** browser replay, actual SSMS engine verification and
+  actual Calc clipboard paste are recorded below. Desktop automation performed the
+  spreadsheet acceptance; this is not a claim of human usability-study participation.
+- **T216 complete (2026-10-11):** approved Web/Engine deployment and the two refreshed
+  product-site screenshots are recorded in the follow-up below.
 
 ### Browser key capture (T209)
 
@@ -105,10 +104,33 @@ targeted run; the final suite repeats these checks.
 | Grid: Ctrl+Shift+C, Ctrl+0, Shift+Alt+Left/Right | Prevented | Prevented | Prevented |
 | Synthetic Polish ó / ń with Ctrl+Alt | Not intercepted | Not intercepted | Not intercepted |
 | F5 on Settings | Not intercepted | Not intercepted | Not intercepted |
-| Native browser accelerators; two installed layouts; physical Polish AltGr | Pending | Pending | Pending |
 
-No alternative binding is justified by these DOM results. T209 stays unchecked until the
-native-input checks establish whether a browser or Windows keeps a claimed key.
+Native input established that Edge keeps Ctrl+Shift+S for Screenshot. Save as now also
+accepts **Ctrl+K, Ctrl+A**, displayed in its toolbar tooltip, View menu and palette.
+Shortcut collision tests (6/6), all three DOM browser cases, and Node tests (98/98) pass.
+The native harness checks scan-code input, unchanged layout on Shift+Alt+arrows with
+English/Arabic installed, and Polish Programmers AltGr inserting `óń`. It refuses to send
+keys when another application owns focus and restores the original test-window layout.
+The final interactive replay passed **3/3** in 66 seconds on 2026-10-11. Native input
+results below are separate from the DOM table above; “Claimed” means the page cancelled
+the trusted input and retained the document. Both menu and palette opened Save as with
+the alternative displayed. Original browser input layouts were restored after testing.
+
+| Native Windows input / context | Chromium | Edge | Firefox |
+|---|---|---|---|
+| F5, Ctrl+F5, Ctrl+R, F8 | Claimed | Claimed | Claimed |
+| F6, Shift+F6 | Claimed | Claimed | Claimed |
+| Ctrl+S | Claimed | Claimed | Claimed |
+| Ctrl+Shift+S | Claimed | Browser Screenshot | Claimed |
+| Ctrl+K, Ctrl+A (Save as alternative) | Opens Save as | Opens Save as | Opens Save as |
+| Ctrl+Alt+N, Ctrl+Alt+O | Claimed | Claimed | Claimed |
+| Ctrl+K then Ctrl+F / Ctrl+L / Ctrl+S | Claimed | Claimed | Claimed |
+| Grid: Ctrl+Shift+C, Ctrl+0 | Claimed | Claimed | Claimed |
+| Grid: Shift+Alt+Left/Right, English/Arabic installed | Claimed; layout unchanged | Claimed; layout unchanged | Claimed; layout unchanged |
+| Polish Programmers AltGr+O / AltGr+N | Inserts óń | Inserts óń | Inserts óń |
+
+Local evidence: `%TEMP%/spec041-native-unlocked/Native.trx` and
+`%TEMP%/spec041-native-unlocked.log`. T209 is complete.
 
 ### Accessibility implementation (T207)
 
@@ -193,8 +215,9 @@ tasks** during the 50-column resize/select (the Long Tasks API reports tasks of 
 The checks below distinguish real-browser replay against Debug web/engine and local SQL
 from variants covered only by unit/integration tests. A checked item means its listed browser
 scenario ran; an unchecked item identifies a remaining manual variant, not an omitted feature.
-The complete manual T215 gate stays unchecked. Clipboard content is inspected directly;
-no claim is made that a human pasted it into a spreadsheet.
+T215 is complete after the actual Calc paste follow-up below. Desktop automation pasted
+the Windows clipboard into a real spreadsheet and verified its cells and saved workbook;
+no claim is made that a human participant performed the walkthrough.
 
 **§0:** Debug builds, published sandbox engine, local SQL, full Release solution build,
 theme drift gates and full test suites. Final SC-008 results are recorded separately below.
@@ -206,29 +229,29 @@ theme drift gates and full test suites. Final SC-008 results are recorded separa
 - [x] 1.3 Drag width and header/body alignment.
 - [x] 1.4 Edge double-click and auto-fit.
 - [x] 1.5 User widths survive virtualization, resize and panel hiding; a new result resets them.
-- [x] 1.6 Row/column selection and tab-separated clipboard content.
+- [x] 1.6 Row/column selection, tab-separated clipboard content and actual Calc paste
+  into separate cells, including NULLs and a copied column header (2026-10-12).
 - [x] 1.7 Pointer/keyboard context menu and Copy as commands; output formats also have goldens.
 - [x] 1.8 Sort cycles and a new query clears sorting.
 - [x] 1.9 Selection/editing, invalid input, NULL, persisted date/money changes.
-- [ ] 1.10 F5 confirmation replayed; repeat pending-edit Open/New/History navigation manually.
+- [x] 1.10 F5, Open, New and History confirm pending edits; cancelling preserves the edits and document.
 - [x] 1.11 Keyboard grid navigation, resize, tooltip and menu dismissal.
 
 **§2 — Results and Messages** (`ResultsMessagesTests`, `QuickstartAcceptanceTests`):
 
 - [x] 2.1 A SELECT shows results and completion messages.
 - [x] 2.2 Multiple SELECT/PRINT/UPDATE messages retain order.
-- [ ] 2.3 Document error navigation replayed; selected-text and later-GO-batch variants have
-  engine/mapper tests but still need the complete manual browser walkthrough.
+- [x] 2.3 Document and selected-text errors in later GO batches navigate to the correct document line.
 - [x] 2.4 Divide-by-zero retains surrounding result sets.
-- [ ] 2.5 GO loops and invalid GO replayed; repeat three batches with the second failing manually
-  (engine integration tests cover continuation).
+- [x] 2.5 GO loops, invalid GO, and three selected batches with the second failing and third returning results.
 - [x] 2.6 CREATE PROCEDURE / GO / EXEC / GO / DROP.
 - [x] 2.7 Timeout skips later work.
 - [x] 2.8 F5 runs from each editor region; Settings leaves its DOM default unclaimed.
 - [x] 2.9 Running state ends on sandbox-engine loss and says the statement may still have run.
 - [x] 2.10 Parse reports syntax without executing the script.
-- [ ] 2.11 Display values replayed; CSV/TSV and truncation confirmation have component tests,
-  but the full manual download/paste walkthrough remains.
+- [x] 2.11 CSV/TSV downloads retain the full 2,000-character value, date and NULL; truncated results
+  require confirmation and export only fetched rows. Actual Calc paste also preserved
+  the full value, date text and NULL in the 2026-10-12 follow-up.
 
 **§3 — Workspace** (`WorkspaceLayoutTests`, `ShellPolishTests`, `QuickstartAcceptanceTests`):
 
@@ -253,8 +276,11 @@ theme drift gates and full test suites. Final SC-008 results are recorded separa
 - [x] 4.5 Suppress everywhere and Undo.
 - [x] 4.6 Restore three providers without resetting other sections.
 - [x] 4.7 Secret-free export, import into another browser context, unknown-setting warning.
-- [ ] 4.8 Active style and standalone-engine sharing replayed; repeat the SSMS-started-engine
-  group and duplicate-name picker variants manually (identity/label component tests pass).
+- [x] 4.8 Active style, standalone-engine sharing and actual SSMS-started-engine sharing
+  replayed. Duplicate-name selection passes for the engine and built-in copies. After
+  the approved SSMS engine update, the picker and Format styles page both show
+  `Shared with SSMS`; closed selections show `Khamis Style (shared with SSMS)` and
+  `Khamis Style (built-in)` correctly. See the installed acceptance record below.
 - [x] 4.9 Live editor preferences survive reload; editor reset confirms the document.
 - [x] 4.10 Settings search retains section context.
 - [x] 4.11 Dark theme loads before first paint.
@@ -262,19 +288,20 @@ theme drift gates and full test suites. Final SC-008 results are recorded separa
 
 **§5 — Documents** (`DocumentFlowTests`, shared `TabStrip` component tests):
 
-- [ ] 5.1 Arrow/Home/End semantics have shared-component tests; repeat across all three visible
-  tab strips manually.
+- [x] 5.1 Arrow/Home/End navigation replayed across Results, AI and style-preview tab strips.
 - [x] 5.2 Modified-document New confirmation and numbering.
-- [ ] 5.3 UTF-16/UTF-8 and modified-document Open replayed; >10 MB refusal has component tests,
-  but that browser-file variant remains in the manual walkthrough.
+- [x] 5.3 UTF-16/UTF-8 and modified-document Open replayed; a browser file above 10 MB is refused
+  with its limit explained and the existing document preserved.
 - [x] 5.4 Named Save/Save as, UTF-8 BOM and title/modified marker.
 - [x] 5.5 History keeps named sessions separate from a new query.
 
 **§6 — Shell polish** (`ShellPolishTests`, three themes with reduced motion): toolbar/icons,
 temporary-table-preserving database switches and USE, status segments, in-app destructive
 confirmations, consistent headers/startup, keyboard diagnostics and theme behavior are
-replayed. The default quickstart uses Windows authentication; repeating the switch with an
-existing SQL-auth login and an SSMS-started engine remains part of manual acceptance.
+replayed. A SQL-authenticated connection also retained its temporary table across the database
+switch without a new password prompt. The randomly named test login and its pooled sessions
+were removed after the check. The actual SSMS-started-engine variant passed in the
+installed acceptance follow-up below.
 
 **§7:** final comparison and local captures are recorded here. The human hallway study and
 post-deployment product-site captures remain pending; no deployment was performed.
@@ -323,6 +350,111 @@ visually inspected: date values fit, the Live pill is readable, and the stale pa
 strip is absent. Theme-change notifications visible in captures are expected transient UI.
 The installed bridge service is Running after verification; no test host remains.
 
-**Continuation outcome:** nine of the twelve originally open tasks are complete. T209,
-T215 and T216 remain unchecked for the specific native-input, manual-acceptance and
-deployment prerequisites recorded above. Previously completed task markers were preserved.
+**Continuation outcome (updated 2026-10-12):** all twelve originally open tasks are
+complete. SC-006's ten-user hallway study remains explicitly pending participant
+availability, as T215 permits. Previously completed task markers were preserved.
+
+### Approved deployment and acceptance follow-up — 2026-10-11
+
+- Earlier work was committed separately as `01150c0`, `debbbbc`, `7f21566`, `f5a7def`
+  and `15c3612`. The subsequent acceptance and Save as changes remain uncommitted.
+- The expanded quickstart/tab browser checks passed **10/10**, covering pending-edit
+  New/Open/History cancellation, selected multi-batch errors, full CSV/TSV values and
+  truncation confirmation, oversized Open, SQL authentication/session preservation,
+  and tab keyboard navigation. These are supplemental results, not a rerun of the full
+  78-pass browser suite. An earlier native-input attempt had one setup timeout and two
+  foreground-focus skips; the final unlocked-desktop replay passed 3/3 as recorded above.
+- Web unit tests: **1,131 passed / 42 unchanged formatter failures**. Node: **98/98**.
+  SC-008 comparison rerun: **zero regressions, missing tests or newly skipped tests**
+  against T003, with no allow-list. Release Web publish succeeded.
+- User explicitly approved deploying the staged Web and Engine. Version **1.26.1010.2224**
+  now runs in IIS `AkmlSqlWeb` at **http://localhost:59416/** and service `AkmlSqlWebEngine`.
+  The initial port-80 check returned 404 and automatically restored the old payload;
+  deployment succeeded after using the actual existing binding. No IIS bindings changed.
+- Both old payload folders and root ACLs are backed up at
+  `%LOCALAPPDATA%/AKML SQL/spec041-deployment/backup-20261011-102256`.
+  All deployed files match the candidate SHA-256 manifest. Existing `web.config` was
+  preserved (URL Rewrite is not installed); ProgramData configuration, certificates
+  and user data were preserved. HTTP returned 200 and the bridge service is Running.
+- `SiteScreenshotTour` passed **2/2** against the installed release. The Northwind query
+  returned **50 rows**, and the screenshot shows matching Web/Engine versions. Visually
+  inspected `query-results.png` (1920×889) and `connect-dialog.png` (720×501), then copied
+  both into `src/AkmlSql.Site/wwwroot/img/screenshots/`. The captures contain sample data;
+  SSMS screenshots were preserved. The separate marketing site was not deployed.
+- Final focused follow-up passed **4/4**: Chromium, Firefox and Edge each opened Save as
+  using the displayed View/palette alternative, and the real-engine style test verified
+  duplicate-name source labels in the closed picker while switching both copies.
+  A native-input retry initially skipped **3/3** because foreground focus was unavailable;
+  after the user unlocked the desktop, the final native replay passed **3/3**.
+- T215 still needs human spreadsheet paste; the actual SSMS-started-engine style grouping
+  variant passed in the follow-up below. SC-006 awaits ten SSMS users. No participant results
+  or manual sign-off are inferred from automated checks. Extension hooks are absent.
+
+### Actual SSMS/Northwind acceptance attempt — 2026-10-11
+
+At the user's request, opened a dedicated SSMS 22 instance with a saved read-only
+Northwind script and an isolated AKML app-data profile. SSMS connected with Windows
+authentication and executed `SELECT TOP (6) CustomerID, CompanyName, City FROM
+dbo.Customers ORDER BY CustomerID;`, returning six sample rows. The screenshot was
+visually inspected; the AKML SQL menu is present.
+
+Playwright paired with the actual child engine launched by that SSMS process, queried
+Northwind successfully, selected rows 3–6, and copied four tab-separated rows with
+three columns (ANTON through BLAUS, including accented customer/city names). There were
+no JavaScript page errors. Local evidence is under `%TEMP%/spec041-ssms-acceptance/`:
+`ssms-northwind-executed.png`, `web-northwind-results.png`, and `browser-result.json`.
+
+The expected **Shared with SSMS** group did not appear: SSMS uses a private engine
+under its extension's `Engine` folder, version **1.26.1006.2219**, rather than the
+**1.26.1010.2224** engine deployed for the web service. The browser showed **On this
+engine**, so this check is recorded as failing on the old installed engine, not passing
+acceptance of the new implementation. A backup/update/retest plan for that separate
+folder is staged in `SSMS-DEPLOYMENT.md` beside the verified deployment candidate;
+additional deployment approval was requested and subsequently granted.
+
+With explicit user approval, backed up the SSMS-private Engine folder and its root ACL
+to `%LOCALAPPDATA%/AKML SQL/spec041-deployment/ssms-engine-backup-20261011-203436`,
+closed only our dedicated saved Northwind window, and deployed the verified
+**1.26.1010.2224** engine. All **319** candidate file hashes match. Extension DLLs,
+the web service, user configuration and databases were not changed by this deployment.
+Reopened SSMS on Northwind and verified that the new engine is its direct child process.
+
+The repeated Playwright check **passed**: both the editor picker and Format styles
+page show **Shared with SSMS**; selecting either duplicate Khamis Style retains the
+correct `(shared with SSMS)` / `(built-in)` suffix. A fresh Northwind query and four-row,
+three-column copy passed with **zero JavaScript errors**. Inspected the styles screenshot.
+The dedicated SSMS Northwind window remains open as requested. Evidence also includes
+`web-ssms-styles.png`, `browser-updated.log` and `ssms-deployment.json` in the local folder.
+
+No Excel or LibreOffice installation was found. Clipboard content is verified, but an
+actual spreadsheet paste and the ten-person hallway study remain unverified.
+
+### Actual spreadsheet acceptance completed — 2026-10-12
+
+Used LibreOffice Calc Portable **26.2.4**, obtained from the Document Foundation's
+[official portable download directory](https://download.documentfoundation.org/libreoffice/portable/26.2.4/).
+The package's SHA-256 matched its published checksum and its Authenticode signature was
+valid. It was extracted under `%LOCALAPPDATA%/AKML-Acceptance-Tools/LibreOfficePortable`,
+with a separate acceptance profile; no system-wide Office installation was required.
+
+Playwright executed a read-only Northwind Customers query, selected rows 3–6 and copied
+them with Ctrl+C. Calc received that actual Windows clipboard using its paste operation
+and Text Import dialog. The saved spreadsheet contains **four rows × six columns**:
+customer ID, company, city, literal `NULL`, ISO date text, and a **2,000-character** value.
+Read all 24 cells back through UNO and compared them exactly with the copied values;
+all passed, including accents and full long-value lengths. Adjacent cells remained empty.
+
+Copied the CompanyName column with Ctrl+Shift+C and pasted it into H1:H7. Verified the
+header plus all six complete names. Calc's automatic single-column delimiter detection
+initially split names at spaces; choosing **Separated by → Tab only** preserved each
+name in one cell. Disabled Detect special numbers to preserve ISO dates as text.
+This is an import-setting requirement in Calc, not truncation in the web clipboard.
+
+Saved and visually inspected the workbook. Evidence:
+
+- [Workbook](baseline/acceptance/Northwind-spreadsheet-paste.ods)
+- [Calc screenshot](baseline/acceptance/calc-verified.png)
+- [Cell verification results](baseline/acceptance/spreadsheet-result.json)
+
+T215 is complete. SC-006 remains pending ten real SSMS users; no study results were
+invented or inferred from automated interaction. No product source changed for this check.
