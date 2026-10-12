@@ -99,15 +99,11 @@ public sealed class SessionDatabaseHandlersTests
     }
 
     [Theory]
-    [InlineData("master;Integrated Security=true")]
-    [InlineData("a=b")]
-    [InlineData("it's")]
-    [InlineData("say \"hi\"")]
     [InlineData("line\nbreak")]
     [InlineData("tab\tchar")]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task A_name_that_could_inject_connection_string_keywords_is_refused(string name)
+    public async Task A_name_SQL_Server_could_not_have_given_a_database_is_refused(string name)
     {
         var ctx = CreateContext();
         Connect(ctx, "web-1", "Server=localhost;Database=Sales;Integrated Security=true;Connect Timeout=1");
@@ -118,6 +114,42 @@ public sealed class SessionDatabaseHandlersTests
         Assert.False(response.Ok);
         Assert.Contains("database name", response.ErrorMessage);
         Assert.Equal("Sales", ctx.Sessions.GetSession("web-1")!.DatabaseName);   // nothing changed
+    }
+
+    [Theory]
+    [InlineData("O'Brien")]
+    [InlineData("Sales;2025")]
+    [InlineData("a=b")]
+    [InlineData("say \"hi\"")]
+    [InlineData(" Archive")]
+    [InlineData("Archive ")]
+    public void A_legal_database_name_with_quotes_semicolons_or_spaces_is_accepted(string name)
+    {
+        Assert.True(ChangeDatabaseHandler.IsSafeDatabaseName(name));
+    }
+
+    [Fact]
+    public void A_name_over_128_characters_is_refused()
+    {
+        Assert.False(ChangeDatabaseHandler.IsSafeDatabaseName(new string('d', 129)));
+        Assert.True(ChangeDatabaseHandler.IsSafeDatabaseName(new string('d', 128)));
+    }
+
+    [Theory]
+    [InlineData("master;Integrated Security=false")]
+    [InlineData("x';Password=p")]
+    [InlineData("say \"hi\";User ID=sa")]
+    public void A_name_holding_connection_string_syntax_stays_one_value(string name)
+    {
+        // Why the name needs no character filter: the builder quotes the value, so it never adds keywords.
+        var built = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(
+            "Server=localhost;Database=Sales;Integrated Security=true") { InitialCatalog = name }.ConnectionString;
+        var back = new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(built);
+
+        Assert.Equal(name, back.InitialCatalog);
+        Assert.True(back.IntegratedSecurity);
+        Assert.Equal(string.Empty, back.Password);
+        Assert.Equal(string.Empty, back.UserID);
     }
 
     [Fact]

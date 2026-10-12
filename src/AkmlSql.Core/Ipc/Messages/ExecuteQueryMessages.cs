@@ -1,3 +1,4 @@
+using System;
 using MessagePack;
 
 namespace AkmlSql.Core.Ipc.Messages
@@ -438,6 +439,41 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Spec 041 — client-only: no reply within the deadline.</summary>
         public const int NoReply = 7;
+    }
+
+    /// <summary>
+    /// The time limits of one execute, shared by the engine (which enforces them) and the web (which waits
+    /// for the reply on the same figure), so the two always agree.
+    /// </summary>
+    public static class ExecuteLimits
+    {
+        /// <summary>The longest one command may run, whatever the request asks.</summary>
+        public const int CommandTimeoutCeilingSeconds = 600;
+
+        /// <summary>The command timeout the engine uses when the request gives none.</summary>
+        public const int CommandTimeoutDefaultSeconds = 30;
+
+        /// <summary>The longest a whole script may run: the engine connection serves one request at a time, so a
+        /// script without an end (<c>WAITFOR … GO 10000</c>) would block completion, schema refresh and Cancel.</summary>
+        public const int ScriptTimeLimitCeilingSeconds = 3600;
+
+        /// <summary>The per-command timeout the engine applies for a requested <paramref name="requestedSeconds"/>.</summary>
+        public static int CommandTimeoutSeconds(int requestedSeconds)
+        {
+            int seconds = requestedSeconds <= 0 ? CommandTimeoutDefaultSeconds : requestedSeconds;
+            return Math.Min(seconds, CommandTimeoutCeilingSeconds);
+        }
+
+        /// <summary>
+        /// How long a whole script may run, start to last row: the command timeout for each command it runs
+        /// (<paramref name="commandRuns"/> = its batches, each as many times as its <c>GO n</c> says), at most
+        /// <see cref="ScriptTimeLimitCeilingSeconds"/>. The engine stops the script there and replies.
+        /// </summary>
+        public static TimeSpan ScriptTimeLimit(int requestedTimeoutSeconds, long commandRuns)
+        {
+            double seconds = (double)CommandTimeoutSeconds(requestedTimeoutSeconds) * Math.Max(1, commandRuns);
+            return TimeSpan.FromSeconds(Math.Min(seconds, ScriptTimeLimitCeilingSeconds));
+        }
     }
 
     /// <summary>Per-column CLR parse hints carried in <see cref="ExecuteResultSet.ClrTypeHints"/>.</summary>

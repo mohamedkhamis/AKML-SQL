@@ -33,6 +33,8 @@ public static class GridClipboard
 
     /// <param name="displayToFetched">The fetched row shown at each display position (the sort permutation).</param>
     /// <param name="textAt">The display text of a cell by fetched row and column; null for SQL NULL.</param>
+    /// <param name="columnKinds">Each grid column's kind (<see cref="GridTextFormats.KindOf"/>): JSON and INSERT
+    /// write a number bare only in a numeric column. Null guesses from the text.</param>
     public static GridCopyResult Build(
         GridSelection selection,
         IReadOnlyList<string> headers,
@@ -42,13 +44,16 @@ public static class GridClipboard
         bool includeHeader,
         bool retainLineBreaks,
         string? tableName = null,
-        int maxChars = MaxCopyChars)
+        int maxChars = MaxCopyChars,
+        IReadOnlyList<GridValueKind>? columnKinds = null)
     {
         var rows = selection.SelectedRows();
         var cols = selection.SelectedColumns();
         if (rows.Count == 0 || cols.Count == 0) return new GridCopyResult(string.Empty, 0, 0, false);
 
         var head = cols.Select(c => c < headers.Count ? headers[c] : string.Empty).ToArray();
+        var kinds = columnKinds == null ? null
+            : cols.Select(c => c < columnKinds.Count ? columnKinds[c] : GridValueKind.Unknown).ToArray();
         var data = new List<string[]>(rows.Count);
         int cut = 0;
         foreach (var r in rows)
@@ -78,9 +83,9 @@ public static class GridClipboard
         string text = format switch
         {
             CopyFormat.Csv => GridTextFormats.Csv(head, data),
-            CopyFormat.Json => GridTextFormats.Json(head, data),
+            CopyFormat.Json => GridTextFormats.Json(head, data, kinds),
             CopyFormat.Markdown => GridTextFormats.Markdown(head, data),
-            CopyFormat.Insert => GridTextFormats.Insert(head, data, string.IsNullOrWhiteSpace(tableName) ? GridTextFormats.PlaceholderTable : tableName),
+            CopyFormat.Insert => GridTextFormats.Insert(head, data, string.IsNullOrWhiteSpace(tableName) ? GridTextFormats.PlaceholderTable : tableName!, kinds),
             _ => GridTextFormats.Tsv(head, data, includeHeader),
         };
 

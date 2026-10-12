@@ -43,6 +43,20 @@ public sealed class EditorDocumentTests
     [InlineData(null, "SQLQuery3")]
     public void A_file_name_is_made_safe_and_loses_its_extension(string? input, string expected)
     {
+        Assert.Equal(expected, EditorDocument.NameFromFile(input, nextDefaultNumber: 3));
+    }
+
+    [Theory]
+    [InlineData("Q3.2025 revenue", "Q3.2025 revenue")]
+    [InlineData("report v1.2", "report v1.2")]
+    [InlineData("orders-audit.sql", "orders-audit")]
+    [InlineData("orders-audit.SQL", "orders-audit")]
+    [InlineData("notes.txt", "notes.txt")]
+    [InlineData("  a/b:c?.sql ", "abc")]
+    [InlineData("...", "SQLQuery3")]
+    [InlineData(null, "SQLQuery3")]
+    public void A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(string? input, string expected)
+    {
         Assert.Equal(expected, EditorDocument.SanitizeFileName(input, nextDefaultNumber: 3));
     }
 
@@ -100,6 +114,27 @@ public sealed class EditorDocumentTests
 
         Assert.Null(result.Text);
         Assert.Contains("10 MB", result.Error);
+    }
+
+    [Fact]
+    public void A_file_without_a_BOM_that_is_not_UTF8_reads_as_Windows_1252()
+    {
+        // SSMS's ANSI save: Caf\xE9, \xA3 and the 0x80\u20139F range (\x80 = \u20AC, \x93 \x94 = curly quotes).
+        var ansi = new byte[] { 0x43, 0x61, 0x66, 0xE9, 0x20, 0xA3, 0x35, 0x20, 0x80, 0x20, 0x93, 0x68, 0x69, 0x94 };
+
+        var result = EditorDocument.DecodeFile(ansi);
+
+        Assert.Null(result.Error);
+        Assert.Equal("Caf\u00e9 \u00a35 \u20ac \u201chi\u201d", result.Text);
+        Assert.DoesNotContain('\uFFFD', result.Text);
+    }
+
+    [Fact]
+    public void Valid_UTF8_without_a_BOM_is_still_read_as_UTF8()
+    {
+        var text = "SELECT N'Caf\u00e9 \u00a3 \u20ac';";
+
+        Assert.Equal(text, EditorDocument.DecodeFile(Encoding.UTF8.GetBytes(text)).Text);
     }
 
     [Fact]

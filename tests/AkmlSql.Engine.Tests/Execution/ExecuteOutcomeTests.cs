@@ -195,11 +195,101 @@ public class ExecuteOutcomeTests
         for (int i = 0; i < ExecuteOutcome.MaxResultSets; i++) Assert.Equal(i, o.BeginSet(Set()));
 
         Assert.Equal(-1, o.BeginSet(Set()));
-        o.AddRowCount(1);   // that set's count belongs to no kept set
+        o.AddRowCount(1);   // that set's count belongs to no kept set — and it is a SELECT's, not DML
 
         var r = o.Build(0);
         Assert.Equal(ExecuteOutcome.MaxResultSets, r.ResultSets.Length);
-        Assert.Equal(1, r.TotalRowsAffected);
+        Assert.Equal(-1, r.TotalRowsAffected);
+        Assert.Equal(-1, r.MessageDetails.Last().ResultSetIndex);
+    }
+
+    [Fact]
+    public void A_DML_count_after_a_dropped_set_is_still_DML()
+    {
+        var o = new ExecuteOutcome();
+        o.BeginBatch(Span(0), 1);
+        for (int i = 0; i < ExecuteOutcome.MaxResultSets; i++) o.BeginSet(Set());
+        o.BeginSet(Set());
+        o.AddRowCount(500);   // the dropped SELECT's rows
+        o.AddRowCount(3);     // an UPDATE after it
+
+        Assert.Equal(3, o.Build(0).TotalRowsAffected);
+    }
+
+    [Fact]
+    public void An_error_after_the_message_cap_still_makes_the_script_an_Error_and_is_shown()
+    {
+        var o = new ExecuteOutcome();
+        o.BeginBatch(Span(0), 10_000);
+        for (int i = 0; i < ExecuteOutcome.MaxMessages + 5; i++) o.AddRowCount(1);   // INSERT …; GO 10000
+        o.EndBatch(1);
+        o.BeginBatch(Span(1), 1);
+        o.AddServerMessage(8134, 16, 1, 1, null, "Divide by zero error encountered.");
+
+        var r = o.Build(0);
+
+        Assert.Equal(ExecuteStatus.Error, r.Status);
+        Assert.Equal("Divide by zero error encountered.", r.ErrorMessage);
+        Assert.Contains(r.MessageDetails, m => m.Kind == ExecuteMessageKind.Error && m.Number == 8134);
+        Assert.Equal(ExecuteStatus.Error, r.Batches[1].Status);
+    }
+
+    [Fact]
+    public void Errors_past_the_caps_are_kept_only_up_to_the_overflow_limit_but_the_first_still_counts()
+    {
+        var o = new ExecuteOutcome(byteBudget: 1_000);
+        o.BeginBatch(Span(0), 1);
+        o.AddServerMessage(0, 0, 1, 1, null, new string('i', 2_000));   // fills nothing: dropped
+        for (int i = 0; i < ExecuteOutcome.MaxOverflowErrors + 50; i++)
+            o.AddServerMessage(50_000 + i, 16, 1, 1, null, "error " + i + new string('e', 400));
+
+        var r = o.Build(0);
+
+        Assert.Equal(ExecuteStatus.Error, r.Status);
+        Assert.StartsWith("error 0", r.ErrorMessage);
+        int keptErrors = r.MessageDetails.Count(m => m.Kind == ExecuteMessageKind.Error);
+        Assert.True(keptErrors <= ExecuteOutcome.MaxOverflowErrors + 2, $"kept {keptErrors}");
+        Assert.True(r.MessagesOmitted >= 50);
+    }
+
+    [Fact]
+    public void The_error_reserve_bounds_what_errors_add_beyond_the_budget()
+    {
+        var o = new ExecuteOutcome(byteBudget: 0);
+        o.BeginBatch(Span(0), 1);
+        // Big errors: only as many as fit the reserve (each is charged twice its UTF-8 size).
+        for (int i = 0; i < 50; i++) o.AddServerMessage(1, 16, 1, 1, null, new string('x', 10_000));
+
+        var r = o.Build(0);
+
+        long errorBytes = r.MessageDetails.Where(m => m.Kind == ExecuteMessageKind.Error).Sum(m => (long)m.Text.Length * 2);
+        Assert.True(errorBytes <= ExecuteOutcome.ErrorReserveBytes, $"{errorBytes} bytes of errors");
+        Assert.True(r.MessagesOmitted > 0);
+        Assert.Equal(ExecuteStatus.Error, r.Status);
+    }
+
+    [Fact]
+    public void Batches_are_charged_to_the_budget_up_front()
+    {
+        var o = new ExecuteOutcome(byteBudget: 1_000_000);
+        o.ReserveBatches(10_000);
+
+        Assert.True(o.BudgetRemaining <= 1_000_000 - 10_000 * 40);
+    }
+
+    [Fact]
+    public void An_engine_error_sets_the_message_and_status_text()
+    {
+        var o = new ExecuteOutcome();
+        o.BeginBatch(Span(0), 1);
+        o.AddEngineError(ExecuteOutcome.ScriptTimeLimitText(System.TimeSpan.FromHours(1)));
+        o.Stop(ExecuteStatus.TimedOut);
+
+        var r = o.Build(0);
+
+        Assert.Equal(ExecuteStatus.TimedOut, r.Status);
+        Assert.Contains("60 minutes", r.ErrorMessage);
+        Assert.Equal(ExecuteStatus.TimedOut, r.Batches.Single().Status);
     }
 
     [Fact]

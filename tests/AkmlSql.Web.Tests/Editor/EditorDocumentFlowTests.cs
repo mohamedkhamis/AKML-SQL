@@ -263,4 +263,49 @@ public sealed class EditorDocumentFlowTests
 
         Assert.Equal(2, changed);
     }
+
+    // ── PR #255: History's Open and Re-execute ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Opening_a_history_query_over_a_modified_document_asks_and_Cancel_keeps_it()
+    {
+        await _store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "edited", IsModified = true, NextDefaultNumber = 4, SessionKey = "k" });
+        _dialogs.ConfirmAnswer = _ => false;
+
+        Assert.False(await _flow.OpenQueryAsync("SELECT 42;", "Open in editor"));
+
+        Assert.Contains("orders-audit", Assert.Single(_dialogs.Confirms).Message);
+        var kept = await _store.RestoreAsync();
+        Assert.Equal("edited", kept!.DocumentText);
+        Assert.Equal("orders-audit", kept.DocumentName);
+        Assert.True(kept.IsModified);
+    }
+
+    [Fact]
+    public async Task A_history_query_opens_as_a_new_default_named_document()
+    {
+        await _store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "SELECT 1;", IsModified = false, NextDefaultNumber = 4, SessionKey = "k" });
+
+        Assert.True(await _flow.OpenQueryAsync("SELECT 42;", "Re-execute"));
+
+        Assert.Empty(_dialogs.Confirms);   // nothing to lose: no question
+        var opened = await _store.RestoreAsync();
+        Assert.Equal("SELECT 42;", opened!.DocumentText);
+        Assert.Equal("SQLQuery4", opened.DocumentName);   // never saved under the old document's name
+        Assert.False(opened.IsModified);
+        Assert.Equal(5, opened.NextDefaultNumber);
+        Assert.NotEqual("k", opened.SessionKey);
+        Assert.Equal("SQLQuery4", _flow.Name);
+    }
+
+    [Fact]
+    public async Task Confirming_the_discard_opens_the_history_query()
+    {
+        await _store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "edited", IsModified = true, NextDefaultNumber = 2 });
+        _dialogs.ConfirmAnswer = _ => true;
+
+        Assert.True(await _flow.OpenQueryAsync("SELECT 42;", "Open in editor"));
+
+        Assert.Equal("SELECT 42;", (await _store.RestoreAsync())!.DocumentText);
+    }
 }

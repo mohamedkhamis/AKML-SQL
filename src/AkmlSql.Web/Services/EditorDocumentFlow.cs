@@ -159,10 +159,44 @@ public sealed class EditorDocumentFlow
             _notifications.Notify($"{fileName} was not opened. {decoded.Error}", NotificationKind.Error);
             return false;
         }
-        var name = EditorDocument.SanitizeFileName(fileName, NextDefaultNumber);
+        var name = EditorDocument.NameFromFile(fileName, NextDefaultNumber);
         if (name == EditorDocument.DefaultName(NextDefaultNumber)) NextDefaultNumber++;   // a nameless file took the number
         await StartAsync(name, decoded.Text!).ConfigureAwait(false);
         _notifications.Notify($"Opened {fileName}.", NotificationKind.Success);
+        return true;
+    }
+
+    /// <summary>
+    /// History's Open and Re-execute: the query becomes a new document (the next default name, a new history session
+    /// key), as Open does — after the same "Discard the changes to {Name}?" a modified document gets. Runs from the
+    /// History page, where the editor is not on screen: the state comes from the saved session (the editor saves it
+    /// on every change), and the editor shows the new document when it next opens. False when the user kept theirs.
+    /// </summary>
+    public async Task<bool> OpenQueryAsync(string text, string action)
+    {
+        var record = await _store.RestoreAsync().ConfigureAwait(false);
+        if (record?.IsModified == true)
+        {
+            var name = string.IsNullOrWhiteSpace(record.DocumentName) ? "the current query" : record.DocumentName;
+            bool discard = await _dialogs.ConfirmAsync(new DialogRequest
+            {
+                Title = action,
+                Message = $"Discard the changes to {name}?",
+                Details = new[] { "Save it first (Ctrl+S) to keep them." },
+                ConfirmLabel = "Discard changes",
+                Destructive = true,
+            }).ConfigureAwait(false);
+            if (!discard) return false;
+        }
+
+        int number = Math.Max(1, record?.NextDefaultNumber ?? NextDefaultNumber);
+        var documentName = EditorDocument.DefaultName(number);
+        SessionKey = await EditorSessionKeys.StartDocumentAsync(_store, documentName, text ?? string.Empty, number + 1).ConfigureAwait(false);
+        Name = documentName;
+        NextDefaultNumber = number + 1;
+        _baseline = text ?? string.Empty;
+        IsModified = false;
+        Changed?.Invoke();
         return true;
     }
 

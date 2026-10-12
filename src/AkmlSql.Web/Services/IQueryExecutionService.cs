@@ -74,15 +74,14 @@ internal sealed class QueryExecutionService : IQueryExecutionService
     }
 
     /// <summary>
-    /// Spec 041 (R22) — how long to wait for the reply: the per-command timeout for every command the script
-    /// runs, plus slack. A heuristic — SqlClient's command timeout resets on every network read — which is
-    /// why running out of it says the statement "may still be running" rather than that it failed.
+    /// Spec 041 (R22) — how long to wait for the reply: the script's time limit, which the engine enforces
+    /// on the whole run (start to last row, <see cref="ExecuteLimits.ScriptTimeLimit"/>) and then replies,
+    /// plus slack for connecting, queueing and the transfer. Running out of it means the engine did not
+    /// answer (an older engine without the limit, or a lost reply), so it says the statement "may still be
+    /// running" rather than that it failed.
     /// </summary>
-    internal TimeSpan ReplyDeadline(string sql, int timeoutSeconds)
-    {
-        double seconds = (double)Math.Max(1, timeoutSeconds) * CountBatchRuns(sql);
-        return TimeSpan.FromSeconds(Math.Min(seconds, TimeSpan.FromDays(1).TotalSeconds)) + DeadlineSlack;
-    }
+    internal TimeSpan ReplyDeadline(string sql, int timeoutSeconds) =>
+        ExecuteLimits.ScriptTimeLimit(timeoutSeconds, CountBatchRuns(sql)) + DeadlineSlack;
 
     public Task<ExecuteQueryResult> ExecuteAsync(string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct) =>
         SendScriptAsync(MessageTypes.ExecuteQuery, sql, maxRows, timeoutSeconds, queryId, ct);

@@ -27,13 +27,15 @@ namespace AkmlSql.Engine.Handlers.Control
         public int ResponseMessageType => MessageTypes.ChangeDatabaseResult;
 
         /// <summary>
-        /// A name that cannot carry connection-string keywords or break out of a quoted identifier: no <c>;</c>,
-        /// <c>=</c>, quotes or control characters, not blank, at most 128 characters (sysname).
+        /// A name SQL Server could have given a database: not blank, at most 128 characters (sysname), no control
+        /// characters. Any other character is legal (<c>O'Brien</c>, <c>Sales;2025</c>) and safe:
+        /// <see cref="SqlConnectionStringBuilder"/> quotes the value it puts in the connection string and
+        /// <c>SqlConnection.ChangeDatabase</c> brackets the identifier it sends.
         /// </summary>
         internal static bool IsSafeDatabaseName(string? name) =>
             !string.IsNullOrWhiteSpace(name)
             && name!.Length <= 128
-            && !name.Any(c => c is ';' or '=' or '\'' or '"' || char.IsControl(c));
+            && !name.Any(char.IsControl);
 
         public async Task<ChangeDatabaseResponse> HandleAsync(ChangeDatabaseRequest request, RpcContext ctx, CancellationToken ct)
         {
@@ -46,7 +48,7 @@ namespace AkmlSql.Engine.Handlers.Control
 
             if (!IsSafeDatabaseName(request.DatabaseName))
                 return Refuse("That is not a valid database name.");
-            var database = request.DatabaseName.Trim();
+            var database = request.DatabaseName!;   // as listed: leading and trailing spaces are part of a name
 
             // The same connection string, pointed at the new database (and its alias resolved), judged by the guard
             // as every other bridge request is.

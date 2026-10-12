@@ -169,5 +169,128 @@ namespace AkmlSql.Core.Text
         }
 
         private static int Clamp(int fraction) => fraction < 0 ? 0 : fraction > 7 ? 7 : fraction;
+
+        // ── Editing ────────────────────────────────────────────────────────────────────────────────
+
+        private static readonly string[] DateTimeInputFormats = BuildDateTimeFormats(string.Empty);
+        private static readonly string[] OffsetInputFormats = BuildOffsetFormats();
+
+        /// <summary>
+        /// What the grid's editor starts with for <paramref name="wire"/>: the text the cell shows, when that text
+        /// turns back into exactly the same wire value (<see cref="ToWire"/>) — a date as 2025-10-01, binary as
+        /// 0x… — else the wire text itself, so an edit never loses precision.
+        /// </summary>
+        public static string? EditText(string? wire, SqlTypeName type, int clrHint)
+        {
+            if (wire == null) return null;
+            var shown = Format(wire, type, clrHint, fullText: true);
+            if (shown.IsNull || shown.IsEngineCut || shown.Text == wire) return wire;
+            return string.Equals(ToWire(shown.Text, type, clrHint), wire, StringComparison.Ordinal) ? shown.Text : wire;
+        }
+
+        /// <summary>
+        /// Spec 041 — the wire text Apply needs for a value the user typed. A date, time or binary value is accepted
+        /// the way the grid shows it (<c>2025-10-02</c>, <c>2025-10-01 23:57:23.880</c>, <c>23:57:23</c>,
+        /// <c>2025-10-01 23:57:23 +02:00</c>, <c>0x1F</c>) as well as in the engine's round-trip form, and is
+        /// returned in the round-trip form (ISO-8601 "o", TimeSpan "c", Base64). Anything else, or a value that
+        /// will not parse, comes back unchanged — Apply then reports it against the column.
+        /// </summary>
+        public static string? ToWire(string? text, SqlTypeName type, int clrHint)
+        {
+            if (text == null) return null;
+            var name = (type ?? SqlTypeName.Parse(null)).BaseName;
+            string trimmed = text.Trim();
+
+            if (IsBinary(name, clrHint)) return HexToBase64(trimmed) ?? text;
+
+            switch (name)
+            {
+                case "date":
+                case "smalldatetime":
+                case "datetime":
+                case "datetime2":
+                    return DateTimeToWire(trimmed) ?? text;
+                case "datetimeoffset":
+                    return OffsetToWire(trimmed) ?? text;
+                case "time":
+                    return TimeToWire(trimmed) ?? text;
+                case "":
+                    break;
+                default:
+                    return text;
+            }
+
+            switch (clrHint)
+            {
+                case ClrTypeHint.DateTime: return DateTimeToWire(trimmed) ?? text;
+                case ClrTypeHint.DateTimeOffset: return OffsetToWire(trimmed) ?? text;
+                default: return text;
+            }
+        }
+
+        private static string? DateTimeToWire(string text)
+        {
+            if (DateTime.TryParseExact(text, "o", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var rt)) return rt.ToString("o", CultureInfo.InvariantCulture);
+            return DateTime.TryParseExact(text, DateTimeInputFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt)
+                ? dt.ToString("o", CultureInfo.InvariantCulture)
+                : null;
+        }
+
+        private static string? OffsetToWire(string text)
+        {
+            if (DateTimeOffset.TryParseExact(text, "o", CultureInfo.InvariantCulture, DateTimeStyles.None, out var rt)) return rt.ToString("o", CultureInfo.InvariantCulture);
+            return DateTimeOffset.TryParseExact(text, OffsetInputFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto)
+                ? dto.ToString("o", CultureInfo.InvariantCulture)
+                : null;
+        }
+
+        private static string? TimeToWire(string text)
+        {
+            if (!TimeSpan.TryParseExact(text, new[] { "c", @"hh\:mm", @"h\:mm" }, CultureInfo.InvariantCulture, out var ts)) return null;
+            return ts >= TimeSpan.Zero && ts < TimeSpan.FromDays(1) ? ts.ToString("c", CultureInfo.InvariantCulture) : null;
+        }
+
+        /// <summary><c>0x</c> and hex digits (an odd count gets a leading zero, as SQL Server reads it) → Base64.</summary>
+        private static string? HexToBase64(string text)
+        {
+            if (text.Length < 2 || text[0] != '0' || (text[1] != 'x' && text[1] != 'X')) return null;
+            string hex = text.Substring(2);
+            if (hex.Length % 2 == 1) hex = "0" + hex;
+            var bytes = new byte[hex.Length / 2];
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                int hi = HexDigit(hex[2 * i]), lo = HexDigit(hex[2 * i + 1]);
+                if (hi < 0 || lo < 0) return null;
+                bytes[i] = (byte)(hi * 16 + lo);
+            }
+            return Convert.ToBase64String(bytes);
+        }
+
+        private static int HexDigit(char c) =>
+            c >= '0' && c <= '9' ? c - '0'
+            : c >= 'a' && c <= 'f' ? c - 'a' + 10
+            : c >= 'A' && c <= 'F' ? c - 'A' + 10
+            : -1;
+
+        /// <summary>yyyy-MM-dd, then a time to the minute or second with 1–7 fractional digits, space- or T-separated.</summary>
+        private static string[] BuildDateTimeFormats(string suffix)
+        {
+            var formats = new System.Collections.Generic.List<string> { "yyyy-MM-dd" + suffix };
+            foreach (var sep in new[] { " ", "'T'" })
+            {
+                formats.Add("yyyy-MM-dd" + sep + "HH:mm" + suffix);
+                formats.Add("yyyy-MM-dd" + sep + "HH:mm:ss" + suffix);
+                for (int f = 1; f <= 7; f++) formats.Add("yyyy-MM-dd" + sep + "HH:mm:ss." + new string('f', f) + suffix);
+            }
+            return formats.ToArray();
+        }
+
+        private static string[] BuildOffsetFormats()
+        {
+            var formats = new System.Collections.Generic.List<string>();
+            formats.AddRange(BuildDateTimeFormats(" zzz"));
+            formats.AddRange(BuildDateTimeFormats("zzz"));
+            return formats.ToArray();
+        }
     }
 }

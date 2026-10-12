@@ -1066,7 +1066,9 @@ ExecuteResultSet
                                         provider type, size, precision and scale (null when not applicable —
                                         SqlClient's 255 sentinel is never sent, so Apply never binds it).
     7  IsEditable             bool      One base table with a key.
-    8  BaseSchema / 9 BaseTable / 10 BaseCatalog   string?
+    8  BaseSchema / 9 BaseTable / 10 BaseCatalog   string?   BaseCatalog is the database the set was read
+                                        from when the name was two-part (a script's USE can move between sets),
+                                        so Apply writes where the rows came from.
     11 BatchIndex             int       execute.v2 — the batch that produced the set.
 
 ExecuteMessageDto (execute.v2)
@@ -1085,10 +1087,15 @@ How a script runs (execute.v2):
 - **Batches** — split on `GO` by ScriptDom's lexer (`TsqlParserService.SplitBatches`): a `GO` at the start of
   a line, never inside a string, a comment or `[GO]`. `GO n` runs the batch n times ("Beginning execution
   loop" … "Batch execution completed n times."). Anything else on a GO line (`GO SELECT 2`, `GO;`, `GO 0`)
-  refuses the whole script with one error and runs nothing.
+  refuses the whole script with one error and runs nothing; so does a script of more than 20,000 batches.
 - **Per batch** — its own command and timeout. `CommandBehavior.KeyInfo` (for provenance) only when the batch
-  selects something and does not start with `CREATE`/`ALTER` of a procedure, view, function, trigger,
-  schema, default or rule (KeyInfo's `SET NO_BROWSETABLE ON` prefix would break those).
+  selects something and does not start with `CREATE`/`ALTER`/`CREATE OR ALTER` of a procedure, view,
+  function, trigger, schema, default or rule (KeyInfo's `SET NO_BROWSETABLE ON` prefix would break those).
+- **Script time limit** — the whole script, start to last row, may run the command timeout once for each
+  command it runs (each batch × its `GO n`), at most one hour (`ExecuteLimits.ScriptTimeLimit`, shared with
+  the web, which waits for the reply that long plus 15 s). Reaching it stops the script as `TimedOut` with an
+  error saying so: the engine connection serves one request at a time, so an endless script would hold up
+  completion, schema refresh and Cancel.
 - **Errors** — severity ≤ 16 arrive as info messages for the duration of the execute
   (`FireInfoMessageEventOnUserErrors`, restored afterwards) and the reader carries on, so the sets before and
   after an error are kept; a failing batch does not stop the script. A closed connection (severity ≥ 20)
@@ -1096,8 +1103,11 @@ How a script runs (execute.v2):
   a timeout or a cancellation stops the script and the remaining batches are `Skipped`.
 - **Counts** — one `RowCount` message per statement (`StatementCompleted`; none under `SET NOCOUNT ON`); a
   SELECT's count names its set.
-- **Budget** — one 15 MB budget for every set and message of the reply (a message's text is counted twice);
-  at most 10,000 messages and 1,000 sets.
+- **Budget** — one 15 MB budget for the batches, sets and messages of the reply (a message's text is counted
+  twice; the batches are charged up front); at most 10,000 messages and 1,000 sets. A set past the cap is
+  drained and its count is still a SELECT's, never DML. An error is never lost to a cap: it always sets
+  `Status` and `ErrorMessage`, and up to 100 errors past the caps are kept, from a 256 KB reserve above the
+  budget, so the reply stays under the 16 MB frame.
 
 ### `ExecuteCancel` (214) — notification
 
@@ -1122,8 +1132,9 @@ for any other request; an unknown or disconnected session gets `Ok = false` with
 ### `ChangeDatabase` (217) → `ChangeDatabaseResult` (218) — session.database.v1
 
 `ChangeDatabaseRequest { 0 SessionId, 1 DatabaseName }` → `ChangeDatabaseResponse { 0 Ok, 1 DatabaseName,
-2 ErrorMessage, 3 ConnectionWasReset }`. The toolbar's database selector: the name is refused when it holds
-`;` `=` quotes or control characters; the session's connection string is pointed at it and judged by the bridge
+2 ErrorMessage, 3 ConnectionWasReset }`. The toolbar's database selector: the name is refused when it is blank, longer than 128 characters or holds
+control characters, and is used exactly as listed (no trimming). Any other character is legal and safe: the
+connection-string builder quotes the value and `ChangeDatabase` brackets the identifier. The session's connection string is pointed at it and judged by the bridge
 guard; then, under the session gate, the persistent connection (opened first if it never was) runs the
 synchronous `SqlConnection.ChangeDatabase` — the same physical connection, so #temp tables and SET options
 survive. The session is re-keyed to the new database (`SessionManager.SetDatabase`, no dispose) and its schema

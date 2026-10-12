@@ -15,6 +15,11 @@ namespace AkmlSql.Web.Tests.History;
 /// </summary>
 public sealed class HistoryDialogTests : BunitContext
 {
+    private sealed class NoDownloads : IFileDownloader
+    {
+        public Task DownloadTextAsync(string fileName, string mimeType, string text, bool withBom) => Task.CompletedTask;
+    }
+
     private sealed class NoopApplier : IThemeApplier
     {
         public Task ApplyAsync(ThemeMode mode) => Task.CompletedTask;
@@ -79,6 +84,8 @@ public sealed class HistoryDialogTests : BunitContext
         Services.AddSingleton<IEditorSessionStore>(new EditorSessionStore(adapter));
         Services.AddSingleton<IDialogService>(_dialogs);
         Services.AddSingleton<INotificationService>(_notes);
+        Services.AddSingleton<IFileDownloader>(new NoDownloads());
+        Services.AddSingleton<EditorDocumentFlow>();
     }
 
     private IRenderedComponent<HistoryPage> OpenFirstEntry()
@@ -245,5 +252,45 @@ public sealed class HistoryDialogTests : BunitContext
         Assert.Contains("akml-empty", empty.ClassList);
         Assert.NotNull(empty.QuerySelector("[data-testid=history-retry]"));
         Assert.Equal("settings/connections", empty.QuerySelector("a[data-testid=history-setup]")!.GetAttribute("href"));
+    }
+
+    // ── PR #255: Open and Re-execute never overwrite a modified document without asking ─────────────────
+
+    [Theory]
+    [InlineData("history-open")]
+    [InlineData("history-reexecute")]
+    public async Task Opening_over_a_modified_document_asks_first_and_Cancel_keeps_it(string button)
+    {
+        var store = Services.GetRequiredService<IEditorSessionStore>();
+        await store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "edited", IsModified = true, NextDefaultNumber = 3, SessionKey = "k" });
+        await store.FlushAsync();
+        var page = OpenFirstEntry();
+        _dialogs.ConfirmAnswer = _ => false;
+
+        page.Find($"[data-testid={button}]").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("orders-audit", Assert.Single(_dialogs.Confirms).Message));
+        var kept = await store.RestoreAsync();
+        Assert.Equal("edited", kept!.DocumentText);
+        Assert.Equal("orders-audit", kept.DocumentName);
+        Assert.DoesNotContain("autorun", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri);
+        NoBrowserPopUp();
+    }
+
+    [Fact]
+    public async Task Opening_an_entry_starts_a_new_default_named_document()
+    {
+        var store = Services.GetRequiredService<IEditorSessionStore>();
+        await store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "SELECT 1;", IsModified = false, NextDefaultNumber = 3, SessionKey = "k" });
+        await store.FlushAsync();
+        var page = OpenFirstEntry();
+
+        page.Find("[data-testid=history-open]").Click();
+
+        await page.InvokeAsync(() => { });
+        var opened = await store.RestoreAsync();
+        Assert.Equal("SQLQuery3", opened!.DocumentName);
+        Assert.False(opened.IsModified);
+        Assert.Empty(_dialogs.Confirms);
     }
 }

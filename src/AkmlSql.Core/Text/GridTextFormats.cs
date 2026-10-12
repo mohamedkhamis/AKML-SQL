@@ -1,9 +1,23 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using AkmlSql.Core.Ipc.Messages;
 
 namespace AkmlSql.Core.Text
 {
+    /// <summary>
+    /// What a column's values are, for the formats that write numbers bare (JSON, INSERT). <see cref="Unknown"/>
+    /// keeps the guess from the text alone (the SSMS edition's pinned behaviour); a known kind decides by the
+    /// column's type, so a varchar <c>'00501'</c> stays text and <c>1,234</c> is never written as two values.
+    /// </summary>
+    public enum GridValueKind
+    {
+        Unknown = 0,
+        Number = 1,
+        Text = 2,
+        Binary = 3,
+    }
+
     /// <summary>
     /// Spec 041 (research R5, R12, R13) — the results-grid text formats both editions share: the SSMS
     /// edition's "Copy As" menu (moved here from <c>Shell.Shared/Productivity/Grid/GridCopyAsMenu</c>,
@@ -49,7 +63,11 @@ namespace AkmlSql.Core.Text
             return sb.ToString();
         }
 
-        public static string Json(string[] headers, IReadOnlyList<string[]> rows)
+        public static string Json(string[] headers, IReadOnlyList<string[]> rows) => Json(headers, rows, null);
+
+        /// <param name="kinds">Each column's kind (by position in <paramref name="headers"/>); null or
+        /// <see cref="GridValueKind.Unknown"/> guesses from the text.</param>
+        public static string Json(string[] headers, IReadOnlyList<string[]> rows, IReadOnlyList<GridValueKind>? kinds)
         {
             var sb = new StringBuilder();
             sb.Append("[").Append(Crlf);
@@ -63,7 +81,7 @@ namespace AkmlSql.Core.Text
                     sb.Append('"');
                     sb.Append(EscapeJsonString(headers[c]));
                     sb.Append("\": ");
-                    AppendJsonValue(sb, row[c]);
+                    AppendJsonValue(sb, row[c], KindAt(kinds, c));
                 }
                 sb.Append('}');
                 if (r < rows.Count - 1) sb.Append(',');
@@ -120,7 +138,12 @@ namespace AkmlSql.Core.Text
         }
 
         /// <summary>One INSERT per row. <paramref name="tableName"/> is written as given (already quoted).</summary>
-        public static string Insert(string[] headers, IReadOnlyList<string[]> rows, string tableName = PlaceholderTable)
+        public static string Insert(string[] headers, IReadOnlyList<string[]> rows, string tableName = PlaceholderTable) =>
+            Insert(headers, rows, tableName, null);
+
+        /// <param name="kinds">Each column's kind (by position in <paramref name="headers"/>); null or
+        /// <see cref="GridValueKind.Unknown"/> guesses from the text.</param>
+        public static string Insert(string[] headers, IReadOnlyList<string[]> rows, string tableName, IReadOnlyList<GridValueKind>? kinds)
         {
             var sb = new StringBuilder();
             var columnList = string.Join(", ", headers.Select(h => "[" + h + "]"));
@@ -132,7 +155,7 @@ namespace AkmlSql.Core.Text
                 for (int c = 0; c < headers.Length && c < row.Length; c++)
                 {
                     if (c > 0) sb.Append(", ");
-                    sb.Append(QuoteSqlValue(row[c]));
+                    sb.Append(QuoteSqlValue(row[c], KindAt(kinds, c)));
                 }
                 sb.Append(");").Append(Crlf);
             }
@@ -250,6 +273,107 @@ namespace AkmlSql.Core.Text
             return "N'" + value.Replace("'", "''") + "'";
         }
 
+        /// <summary>Quote one value as a SQL literal for a column of known <paramref name="kind"/>: NULL; a number
+        /// bare when it reads as one (else as text); binary as its <c>0x</c> literal; anything else as N'…'.</summary>
+        public static string QuoteSqlValue(string value, GridValueKind kind)
+        {
+            if (kind == GridValueKind.Unknown) return QuoteSqlValue(value);
+            if (value == NullText) return NullText;
+            if (kind == GridValueKind.Number && IsPlainNumber(value)) return value;
+            if (kind == GridValueKind.Binary && IsHexLiteral(value)) return value;
+            return "N'" + value.Replace("'", "''") + "'";
+        }
+
+        /// <summary>The kind of a column's values from its declared type, else its CLR hint.</summary>
+        public static GridValueKind KindOf(SqlTypeName? type, int clrHint)
+        {
+            switch (type?.BaseName ?? string.Empty)
+            {
+                case "bit":
+                case "tinyint":
+                case "smallint":
+                case "int":
+                case "bigint":
+                case "decimal":
+                case "numeric":
+                case "money":
+                case "smallmoney":
+                case "float":
+                case "real":
+                    return GridValueKind.Number;
+                case "binary":
+                case "varbinary":
+                case "image":
+                case "timestamp":
+                case "rowversion":
+                    return GridValueKind.Binary;
+                case "sql_variant":
+                    return GridValueKind.Unknown;
+                case "":
+                    break;
+                default:
+                    return GridValueKind.Text;
+            }
+            switch (clrHint)
+            {
+                case ClrTypeHint.Int64:
+                case ClrTypeHint.Double:
+                case ClrTypeHint.Decimal:
+                case ClrTypeHint.Bool:
+                    return GridValueKind.Number;
+                case ClrTypeHint.Binary:
+                    return GridValueKind.Binary;
+                case ClrTypeHint.Variant:
+                    return GridValueKind.Unknown;
+                default:
+                    return GridValueKind.Text;
+            }
+        }
+
+        private static GridValueKind KindAt(IReadOnlyList<GridValueKind>? kinds, int c) =>
+            kinds != null && c < kinds.Count ? kinds[c] : GridValueKind.Unknown;
+
+        /// <summary>A finite number written the invariant way (sign, digits, point, exponent): valid as a T-SQL
+        /// literal and as a JSON number. No group separators, currency, spaces, leading zeros, NaN or Infinity.</summary>
+        internal static bool IsPlainNumber(string value)
+        {
+            int i = 0, n = value.Length;
+            if (i < n && value[i] == '-') i++;
+            int intStart = i;
+            while (i < n && value[i] >= '0' && value[i] <= '9') i++;
+            int intDigits = i - intStart;
+            if (intDigits == 0) return false;
+            if (intDigits > 1 && value[intStart] == '0') return false;
+            if (i < n && value[i] == '.')
+            {
+                i++;
+                int fracStart = i;
+                while (i < n && value[i] >= '0' && value[i] <= '9') i++;
+                if (i == fracStart) return false;
+            }
+            if (i < n && (value[i] == 'e' || value[i] == 'E'))
+            {
+                i++;
+                if (i < n && (value[i] == '+' || value[i] == '-')) i++;
+                int expStart = i;
+                while (i < n && value[i] >= '0' && value[i] <= '9') i++;
+                if (i == expStart) return false;
+            }
+            return i == n;
+        }
+
+        private static bool IsHexLiteral(string value)
+        {
+            if (value.Length < 2 || value[0] != '0' || (value[1] != 'x' && value[1] != 'X')) return false;
+            for (int i = 2; i < value.Length; i++)
+            {
+                char ch = value[i];
+                bool hex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
+                if (!hex) return false;
+            }
+            return true;
+        }
+
         /// <summary>Replace every CR, LF or CRLF in <paramref name="value"/> with one space.</summary>
         public static string FlattenLineBreaks(string value)
         {
@@ -291,11 +415,20 @@ namespace AkmlSql.Core.Text
                 .Replace("\t", "\\t");
         }
 
-        private static void AppendJsonValue(StringBuilder sb, string value)
+        private static void AppendJsonValue(StringBuilder sb, string value, GridValueKind kind)
         {
             if (value == NullText)
             {
                 sb.Append("null");
+                return;
+            }
+
+            if (kind != GridValueKind.Unknown)
+            {
+                // A known number is written as the grid shows it (no trip through double, so decimal(38,10) keeps
+                // its digits); anything that is not a plain number, and every other kind, is a string.
+                if (kind == GridValueKind.Number && IsPlainNumber(value)) sb.Append(value);
+                else sb.Append('"').Append(EscapeJsonString(value)).Append('"');
                 return;
             }
 

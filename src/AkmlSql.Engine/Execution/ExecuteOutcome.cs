@@ -38,8 +38,11 @@ namespace AkmlSql.Engine.Execution
     /// DML and sums into <c>TotalRowsAffected</c> (-1 when none); a truncated set's count reads
     /// "(N rows returned; more exist)".</item>
     /// <item>Caps: <see cref="MaxMessages"/> (then <c>MessagesOmitted</c> and one System line),
-    /// <see cref="MaxResultSets"/>, <see cref="MaxBatchRepeat"/>, and one byte budget for sets and messages
-    /// together (a message's text is charged twice: it travels in both message arrays).</item>
+    /// <see cref="MaxResultSets"/>, <see cref="MaxBatchRepeat"/>, <see cref="MaxBatches"/>, and one byte budget
+    /// for batches, sets and messages together (a message's text is charged twice: it travels in both message
+    /// arrays). Errors are never lost to the caps that hide the rest: past them an error still sets the status
+    /// and <c>ErrorMessage</c>, and up to <see cref="MaxOverflowErrors"/> of them are kept, paid for from
+    /// <see cref="ErrorReserveBytes"/> on top of the budget, so the reply stays under the frame cap.</item>
     /// </list>
     /// </summary>
     public sealed class ExecuteOutcome : IResultSink
@@ -48,6 +51,15 @@ namespace AkmlSql.Engine.Execution
         public const int MaxResultSets = 1_000;
         public const int MaxBatchRepeat = 10_000;
 
+        /// <summary>The most batches one script may have: each is described in the reply.</summary>
+        public const int MaxBatches = 20_000;
+
+        /// <summary>Errors kept beyond <see cref="MaxMessages"/> or the byte budget.</summary>
+        public const int MaxOverflowErrors = 100;
+
+        /// <summary>What the errors kept beyond the byte budget may take (the frame cap is 1 MB above the budget).</summary>
+        public const long ErrorReserveBytes = 256L * 1024;
+
         /// <summary>The reply must serialize under the 16 MB frame cap: stop well below it.</summary>
         public const long DefaultByteBudget = 15L * 1024 * 1024;
 
@@ -55,6 +67,10 @@ namespace AkmlSql.Engine.Execution
         public const string SeparatorErrorText = "A fatal scripting error occurred.\n" + TsqlParserService.GoSeparatorError;
 
         private const long MessageOverheadBytes = 48;   // the DTO's other keys
+        private const long BatchBytes = 48;             // one ExecuteBatchDto, serialized
+
+        /// <summary>A set past <see cref="MaxResultSets"/> is current: its row count is a SELECT's, not DML.</summary>
+        private const int DroppedSet = -2;
 
         private readonly List<ExecuteMessageDto> _messages = new();
         private readonly List<ExecuteBatchDto> _batches = new();
@@ -65,6 +81,9 @@ namespace AkmlSql.Engine.Execution
         private int _setAwaitingCount = -1;
         private int _stoppedStatus = ExecuteStatus.Ok;
         private long _dmlRows = -1;
+        private long _errorReserve = ErrorReserveBytes;
+        private int _overflowErrors;
+        private string? _firstErrorText;
 
         public ExecuteOutcome(long byteBudget = DefaultByteBudget)
         {
@@ -88,7 +107,26 @@ namespace AkmlSql.Engine.Execution
             _budget = Math.Max(0, _budget - bytes);
         }
 
+        /// <summary>The engine's text for a script with more than <see cref="MaxBatches"/> batches.</summary>
+        public static string TooManyBatchesText(int batches) =>
+            $"The script has {batches.ToString("N0", CultureInfo.InvariantCulture)} batches; one run can take at most {MaxBatches.ToString("N0", CultureInfo.InvariantCulture)}. Split it into smaller scripts.";
+
+        /// <summary>The engine's text when a script reaches its time limit (<see cref="ExecuteLimits.ScriptTimeLimit"/>).</summary>
+        public static string ScriptTimeLimitText(TimeSpan limit) =>
+            $"The script was stopped after {FormatDuration(limit)}, the longest it may run (the timeout for each command it runs, at most {FormatDuration(TimeSpan.FromSeconds(ExecuteLimits.ScriptTimeLimitCeilingSeconds))} in all).";
+
+        private static string FormatDuration(TimeSpan t)
+        {
+            if (t.TotalSeconds < 120) return $"{Math.Round(t.TotalSeconds).ToString(CultureInfo.InvariantCulture)} seconds";
+            if (t.TotalMinutes < 120) return $"{Math.Round(t.TotalMinutes).ToString(CultureInfo.InvariantCulture)} minutes";
+            return $"{Math.Round(t.TotalHours, 1).ToString(CultureInfo.InvariantCulture)} hours";
+        }
+
         // ── Batches ────────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>Charge the reply's description of <paramref name="batchCount"/> batches up front, so the sets
+        /// and messages that follow cannot take the room it needs.</summary>
+        public void ReserveBatches(int batchCount) => Consume(Math.Max(0, batchCount) * BatchBytes);
 
         /// <summary>A batch starts running. Returns its index.</summary>
         public int BeginBatch(SqlBatchSpan span, int repeatCount)
@@ -209,7 +247,8 @@ namespace AkmlSql.Engine.Execution
             if (count < 0) return;
             int set = _setAwaitingCount;
             _setAwaitingCount = -1;
-            if (set < 0) _dmlRows = (_dmlRows < 0 ? 0 : _dmlRows) + count;
+            if (set == -1) _dmlRows = (_dmlRows < 0 ? 0 : _dmlRows) + count;
+            if (set < 0) set = -1;
             Add(new ExecuteMessageDto
             {
                 Kind = ExecuteMessageKind.RowCount,
@@ -228,22 +267,32 @@ namespace AkmlSql.Engine.Execution
             Add(new ExecuteMessageDto { Kind = ExecuteMessageKind.Error, Text = text ?? string.Empty });
         }
 
+        /// <summary>An error the engine raises itself (the script reached its time limit).</summary>
+        public void AddEngineError(string text) =>
+            Add(new ExecuteMessageDto { Kind = ExecuteMessageKind.Error, Text = text ?? string.Empty });
+
         private void Add(ExecuteMessageDto message)
         {
             message.BatchIndex = Math.Max(0, _currentBatch);
-            if (_messages.Count >= MaxMessages)
-            {
-                _messagesOmitted++;
-                return;
-            }
+            bool error = message.Kind == ExecuteMessageKind.Error;
+            if (error && _firstErrorText == null) _firstErrorText = message.Text;
+
             long bytes = Encoding.UTF8.GetByteCount(message.Text) * 2L + MessageOverheadBytes;
-            if (bytes > _budget && message.Kind != ExecuteMessageKind.Error)
+            if (_messages.Count < MaxMessages && bytes <= _budget)
             {
-                _messagesOmitted++;
+                Consume(bytes);
+                _messages.Add(message);
                 return;
             }
-            Consume(bytes);
-            _messages.Add(message);
+            // Past the caps an error is still shown (a bounded number of them, paid from the reserve).
+            if (error && _overflowErrors < MaxOverflowErrors && bytes <= _errorReserve)
+            {
+                _overflowErrors++;
+                _errorReserve -= bytes;
+                _messages.Add(message);
+                return;
+            }
+            _messagesOmitted++;
         }
 
         // ── Result sets ────────────────────────────────────────────────────────────────────────────
@@ -253,7 +302,8 @@ namespace AkmlSql.Engine.Execution
             set.BatchIndex = Math.Max(0, _currentBatch);
             if (_sets.Count >= MaxResultSets)
             {
-                _setAwaitingCount = -1;
+                // Not kept, but its row count is still this SELECT's, never DML.
+                _setAwaitingCount = DroppedSet;
                 return -1;
             }
             _sets.Add(set);
@@ -285,15 +335,15 @@ namespace AkmlSql.Engine.Execution
                 });
             }
 
-            var firstError = messages.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
+            // The first error, whether or not a cap kept it out of the message list.
             int status = _stoppedStatus != ExecuteStatus.Ok ? _stoppedStatus
-                : firstError != null ? ExecuteStatus.Error
+                : _firstErrorText != null ? ExecuteStatus.Error
                 : ExecuteStatus.Ok;
 
             return new ExecuteQueryResult
             {
                 Status = status,
-                ErrorMessage = firstError?.Text,
+                ErrorMessage = _firstErrorText,
                 ResultSets = _sets.ToArray(),
                 Messages = messages.Select(SqlMessageText.Format).ToArray(),
                 TotalRowsAffected = _dmlRows > int.MaxValue ? int.MaxValue : (int)_dmlRows,

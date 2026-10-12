@@ -129,6 +129,21 @@ public sealed class QueryExecutionServiceTests
     }
 
     [Fact]
+    public void The_deadline_follows_the_engines_script_limit_not_an_unbounded_product()
+    {
+        var service = Service(new ScriptedBridge());
+
+        // WAITFOR … GO 10000 at 20 s each would be ~55 hours; the engine stops the script at its ceiling.
+        Assert.Equal(TimeSpan.FromSeconds(ExecuteLimits.ScriptTimeLimitCeilingSeconds) + QueryExecutionService.DefaultDeadlineSlack,
+            service.ReplyDeadline("WAITFOR DELAY '00:00:20'\nGO 10000", 20));
+        // The per-command timeout is clamped as the engine clamps it; 0 means the engine's default.
+        Assert.Equal(TimeSpan.FromSeconds(ExecuteLimits.CommandTimeoutCeilingSeconds) + QueryExecutionService.DefaultDeadlineSlack,
+            service.ReplyDeadline("SELECT 1;", 5_000));
+        Assert.Equal(TimeSpan.FromSeconds(ExecuteLimits.CommandTimeoutDefaultSeconds) + QueryExecutionService.DefaultDeadlineSlack,
+            service.ReplyDeadline("SELECT 1;", 0));
+    }
+
+    [Fact]
     public async Task Parse_is_sent_only_to_an_engine_that_advertises_execute_v2()
     {
         var older = new ScriptedBridge();

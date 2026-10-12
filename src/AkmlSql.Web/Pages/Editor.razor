@@ -925,6 +925,7 @@
     /// "Re-execute" autorun. The caller owns the <c>_executing</c> guard.</summary>
     private async Task RunSqlAsync(string sql, int startLine)
     {
+        await ClearErrorMarkAsync();
         _lastExecutedSql = sql;
         _activeQueryId = Guid.NewGuid().ToString("N");
         Workspace.Begin();
@@ -986,6 +987,7 @@
             if (string.IsNullOrWhiteSpace(sql)) return;
             if (!await ConfirmDiscardPendingEditsAsync()) return;
 
+            await ClearErrorMarkAsync();
             _activeQueryId = Guid.NewGuid().ToString("N");
             Workspace.Begin();
             StateHasChanged();
@@ -1010,6 +1012,17 @@
             .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == line);
         var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
         _errorDiagnostic = new EditorDiagnostic(line, 3, text, Source: "execute");
+        await ShowDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// The error mark belongs to the last run and to the text as it was: a new run or parse, or an edit (which can
+    /// move the line it points at), removes it.
+    /// </summary>
+    private async Task ClearErrorMarkAsync()
+    {
+        if (_errorDiagnostic == null) return;
+        _errorDiagnostic = null;
         await ShowDiagnosticsAsync();
     }
 
@@ -1242,6 +1255,7 @@
     {
         _currentText = newText;
         SchemaSync.ReportEditorActive();   // spec 041 (R40, N27): keeps the 30 s schema poll from idling out
+        await ClearErrorMarkAsync();
         if (!_documentLoaded) return;
         Document.OnTextChanged(newText);
         // T051 debounced save (the store applies its own 500 ms debounce). Routed through

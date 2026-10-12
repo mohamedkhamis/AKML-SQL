@@ -132,4 +132,69 @@ public class SqlValueDisplayTests
         Assert.Equal("not a date", Show("not a date", "datetime", ClrTypeHint.DateTime));
         Assert.Equal("%%%", Show("%%%", "varbinary(10)", ClrTypeHint.Binary));
     }
+
+    // ── PR #255: a value typed the way the grid shows it becomes the wire text Apply binds ───────────────
+
+    private static string? ToWire(string? typed, string declared, int hint = ClrTypeHint.String) =>
+        SqlValueDisplay.ToWire(typed, SqlTypeName.Parse(declared), hint);
+
+    [Theory]
+    [InlineData("2025-10-02", "date", "2025-10-02T00:00:00.0000000")]
+    [InlineData("2025-10-01 23:57:23.880", "datetime", "2025-10-01T23:57:23.8800000")]
+    [InlineData("2025-10-01 23:57", "smalldatetime", "2025-10-01T23:57:00.0000000")]
+    [InlineData("2025-10-01T23:57:23.1234567", "datetime2(7)", "2025-10-01T23:57:23.1234567")]
+    [InlineData("2025-10-01T23:57:23.1234567", "datetime2", "2025-10-01T23:57:23.1234567")]
+    [InlineData("2025-10-01 23:57:23.8800000 +02:00", "datetimeoffset(7)", "2025-10-01T23:57:23.8800000+02:00")]
+    [InlineData("23:57:23", "time(7)", "23:57:23")]
+    [InlineData("23:57:23.880", "time(3)", "23:57:23.8800000")]
+    [InlineData("08:30", "time", "08:30:00")]
+    [InlineData("0x1F", "varbinary(10)", "Hw==")]
+    [InlineData("0x1", "binary(1)", "AQ==")]
+    [InlineData("0x", "varbinary(max)", "")]
+    public void A_date_time_or_binary_value_typed_as_the_grid_shows_it_becomes_wire_text(string typed, string declared, string wire)
+    {
+        Assert.Equal(wire, ToWire(typed, declared, declared.StartsWith("varbinary") || declared.StartsWith("binary") ? ClrTypeHint.Binary : ClrTypeHint.String));
+    }
+
+    [Theory]
+    [InlineData("not a date", "date")]
+    [InlineData("2025-13-40", "datetime")]
+    [InlineData("25:00:00", "time")]
+    [InlineData("0xZZ", "varbinary(10)")]
+    [InlineData("00501", "varchar(10)")]
+    [InlineData("  padded  ", "nvarchar(20)")]
+    public void Anything_else_is_kept_as_typed(string typed, string declared)
+    {
+        Assert.Equal(typed, ToWire(typed, declared));
+    }
+
+    [Fact]
+    public void Without_a_declared_type_the_CLR_hint_decides()
+    {
+        Assert.Equal("2025-10-02T00:00:00.0000000", ToWire("2025-10-02", "", ClrTypeHint.DateTime));
+        Assert.Equal("Hw==", ToWire("0x1F", "", ClrTypeHint.Binary));
+        Assert.Equal("2025-10-02", ToWire("2025-10-02", "", ClrTypeHint.String));
+        Assert.Null(ToWire(null, "date"));
+    }
+
+    [Theory]
+    [InlineData("2025-10-01T00:00:00.0000000", "date", "2025-10-01")]
+    [InlineData("2025-10-01T23:57:23.8800000", "datetime", "2025-10-01 23:57:23.880")]
+    [InlineData("Hw==", "varbinary(10)", "0x1F")]
+    [InlineData("23:57:23.8800000", "time(7)", "23:57:23.8800000")]
+    [InlineData("2025-10-01T23:57:23.8800000+02:00", "datetimeoffset(7)", "2025-10-01 23:57:23.8800000 +02:00")]
+    public void The_editor_starts_with_the_shown_text_when_it_converts_back_without_loss(string wire, string declared, string edit)
+    {
+        int hint = declared.StartsWith("varbinary") ? ClrTypeHint.Binary : ClrTypeHint.String;
+        Assert.Equal(edit, SqlValueDisplay.EditText(wire, SqlTypeName.Parse(declared), hint));
+    }
+
+    [Theory]
+    [InlineData("2025-10-01T23:57:23.1234567", "datetime2(3)")]   // shown to 3 digits: editing it would round
+    [InlineData("12.5", "money")]                                  // shown as 12.5000; the wire stays
+    [InlineData("d1b2c3d4-0000-0000-0000-000000000000", "uniqueidentifier")]
+    public void The_editor_keeps_the_wire_text_where_the_shown_text_would_lose_or_change_it(string wire, string declared)
+    {
+        Assert.Equal(wire, SqlValueDisplay.EditText(wire, SqlTypeName.Parse(declared), ClrTypeHint.String));
+    }
 }

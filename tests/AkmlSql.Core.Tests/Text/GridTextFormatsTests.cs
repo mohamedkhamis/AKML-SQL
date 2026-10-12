@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Text;
 using Xunit;
 
@@ -128,5 +129,45 @@ public class GridTextFormatsTests
     {
         var text = GridTextFormats.Delimited(new[] { "a,b" }, new List<string[]>(), ',', retainLineBreaks: false);
         Assert.Equal("\"a,b\"\r\n", text);
+    }
+
+    // ── PR #255: a known column type decides what is a number ───────────────────────────────────────────
+
+    [Theory]
+    [InlineData("00501", GridValueKind.Text, "N'00501'")]
+    [InlineData("1,234", GridValueKind.Text, "N'1,234'")]
+    [InlineData("1,234", GridValueKind.Number, "N'1,234'")]
+    [InlineData("12.5000", GridValueKind.Number, "12.5000")]
+    [InlineData("-7", GridValueKind.Number, "-7")]
+    [InlineData("3.0E5", GridValueKind.Number, "3.0E5")]
+    [InlineData("NaN", GridValueKind.Number, "N'NaN'")]
+    [InlineData("0x0F", GridValueKind.Binary, "0x0F")]
+    [InlineData("0x0F\u2026", GridValueKind.Binary, "N'0x0F\u2026'")]
+    [InlineData("NULL", GridValueKind.Text, "NULL")]
+    [InlineData("True", GridValueKind.Text, "N'True'")]
+    public void A_typed_value_is_quoted_by_its_column_kind(string value, GridValueKind kind, string expected)
+    {
+        Assert.Equal(expected, GridTextFormats.QuoteSqlValue(value, kind));
+    }
+
+    [Fact]
+    public void Unknown_kind_keeps_the_pinned_guess()
+    {
+        Assert.Equal(GridTextFormats.QuoteSqlValue("1,000"), GridTextFormats.QuoteSqlValue("1,000", GridValueKind.Unknown));
+    }
+
+    [Theory]
+    [InlineData("int", ClrTypeHint.String, GridValueKind.Number)]
+    [InlineData("decimal(10,2)", ClrTypeHint.String, GridValueKind.Number)]
+    [InlineData("bit", ClrTypeHint.String, GridValueKind.Number)]
+    [InlineData("varchar(10)", ClrTypeHint.String, GridValueKind.Text)]
+    [InlineData("date", ClrTypeHint.String, GridValueKind.Text)]
+    [InlineData("varbinary(max)", ClrTypeHint.String, GridValueKind.Binary)]
+    [InlineData("sql_variant", ClrTypeHint.Variant, GridValueKind.Unknown)]
+    [InlineData("", ClrTypeHint.Int64, GridValueKind.Number)]
+    [InlineData("", ClrTypeHint.String, GridValueKind.Text)]
+    public void The_kind_comes_from_the_declared_type_then_the_hint(string declared, int hint, GridValueKind expected)
+    {
+        Assert.Equal(expected, GridTextFormats.KindOf(SqlTypeName.Parse(declared), hint));
     }
 }

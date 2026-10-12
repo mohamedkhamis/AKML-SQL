@@ -36,9 +36,9 @@ namespace AkmlSql.Engine.Execution
     {
         // Engine ceilings (DoS protection — clamped regardless of what the request asks).
         public const int MaxRowsCeiling = 100_000;
-        public const int CommandTimeoutCeilingSeconds = 600;
+        public const int CommandTimeoutCeilingSeconds = ExecuteLimits.CommandTimeoutCeilingSeconds;
         private const int MaxRowsDefault = 1000;
-        private const int CommandTimeoutDefaultSeconds = 30;
+        private const int CommandTimeoutDefaultSeconds = ExecuteLimits.CommandTimeoutDefaultSeconds;
 
         // CommandBehavior.KeyInfo makes SqlClient prefix the batch with SET NO_BROWSETABLE ON, which a
         // CREATE/ALTER of these must not follow ("must be the first statement in a query batch", N1).
@@ -93,12 +93,16 @@ namespace AkmlSql.Engine.Execution
                 if (string.IsNullOrEmpty(connStr))
                     return Respond(request.RequestId, replyType, Err(queryId, ExecuteStatus.NoConnection, "No active database connection for this session."));
 
-                // A GO line holding anything but a count refuses the whole script, before anything runs.
+                // A GO line holding anything but a count refuses the whole script, before anything runs; so does a
+                // script with more batches than one reply can describe.
                 var split = _parser.SplitBatches(req.Sql);
-                if (split.SeparatorError != null)
+                string? refusal = split.SeparatorError != null ? ExecuteOutcome.SeparatorErrorText
+                    : split.Batches.Count > ExecuteOutcome.MaxBatches ? ExecuteOutcome.TooManyBatchesText(split.Batches.Count)
+                    : null;
+                if (refusal != null)
                 {
                     var refused = new ExecuteOutcome();
-                    refused.RefuseScript(ExecuteOutcome.SeparatorErrorText);
+                    refused.RefuseScript(refusal);
                     var reply = refused.Build(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     reply.QueryId = queryId;
                     return Respond(request.RequestId, replyType, reply);
@@ -112,7 +116,20 @@ namespace AkmlSql.Engine.Execution
                 _registry.EvictIdle();
 
                 var sessionConn = _registry.GetOrCreate(req.SessionId, connStr!);
-                var dbCache = !string.IsNullOrEmpty(dbName) ? _schemaCache.GetCache(req.SessionId, dbName!) : null;
+                // Spec 041 (R27): a script's USE moves it between databases — each set's primary-key check uses
+                // the schema of the database it was read from (looked up once per database per execute).
+                var caches = new Dictionary<string, DatabaseCache?>(StringComparer.OrdinalIgnoreCase);
+                DatabaseCache? CacheFor(string database)
+                {
+                    if (!caches.TryGetValue(database, out var cache))
+                        caches[database] = cache = _schemaCache.GetCache(req.SessionId, database);
+                    return cache;
+                }
+
+                // The whole script is bounded, not just each command: the engine connection serves one request
+                // at a time, so a script without an end would hold up completion, schema refresh and Cancel.
+                long commandRuns = parseOnly ? split.Batches.Count : split.Batches.Sum(b => (long)Math.Min(Math.Max(1, b.RepeatCount), ExecuteOutcome.MaxBatchRepeat));
+                var scriptLimit = ExecuteLimits.ScriptTimeLimit(timeoutSec, commandRuns);
 
                 // Per-execute CTS — the transport ct is per-CONNECTION, never per-request.
                 // IMPORTANT: RegisterQuery must happen INSIDE the gate (after RunExclusiveAsync
@@ -134,7 +151,7 @@ namespace AkmlSql.Engine.Execution
                             sessionConn.RegisterQuery(queryId, cts);
                             try
                             {
-                                return await RunScriptAsync(conn, req, split.Batches, maxRows, timeoutSec, dbCache, parseOnly, cts.Token).ConfigureAwait(false);
+                                return await RunScriptAsync(conn, req, split.Batches, maxRows, timeoutSec, scriptLimit, CacheFor, parseOnly, cts.Token).ConfigureAwait(false);
                             }
                             finally
                             {
@@ -203,12 +220,21 @@ namespace AkmlSql.Engine.Execution
             IReadOnlyList<SqlBatchSpan> batches,
             int maxRows,
             int timeoutSec,
-            DatabaseCache? dbCache,
+            TimeSpan scriptLimit,
+            Func<string, DatabaseCache?> cacheFor,
             bool parseOnly,
-            CancellationToken ct)
+            CancellationToken cancel)
         {
             var outcome = new ExecuteOutcome();
-            var reader = new ResultSetReader(dbCache);
+            outcome.ReserveBatches(batches.Count);
+            var reader = new ResultSetReader(() => CurrentDatabaseOf(conn), cacheFor);
+
+            // The script's time limit starts once it holds the connection; reaching it stops the script as a
+            // timeout (the user's Cancel stays a cancellation).
+            using var limit = new CancellationTokenSource(scriptLimit);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancel, limit.Token);
+            var ct = linked.Token;
+            bool LimitReached() => limit.IsCancellationRequested && !cancel.IsCancellationRequested;
 
             void OnInfo(object sender, SqlInfoMessageEventArgs e)
             {
@@ -256,6 +282,11 @@ namespace AkmlSql.Engine.Execution
                         outcome.SkipRemaining(remaining);
                         break;
                     }
+                    if (fate == BatchFate.Cancelled && LimitReached())
+                    {
+                        outcome.AddEngineError(ExecuteOutcome.ScriptTimeLimitText(scriptLimit));
+                        fate = BatchFate.TimedOut;
+                    }
                     if (fate == BatchFate.TimedOut || fate == BatchFate.Cancelled)
                     {
                         outcome.Stop(fate == BatchFate.TimedOut ? ExecuteStatus.TimedOut : ExecuteStatus.Cancelled);
@@ -263,6 +294,12 @@ namespace AkmlSql.Engine.Execution
                         break;
                     }
                 }
+            }
+            catch (OperationCanceledException) when (LimitReached())
+            {
+                // Reached the limit outside a batch (SET PARSEONLY ON): the script stops as a timeout.
+                outcome.AddEngineError(ExecuteOutcome.ScriptTimeLimitText(scriptLimit));
+                outcome.Stop(ExecuteStatus.TimedOut);
             }
             finally
             {
@@ -365,23 +402,31 @@ namespace AkmlSql.Engine.Execution
                                                 && t.TokenType != TSqlTokenType.SingleLineComment
                                                 && t.TokenType != TSqlTokenType.MultilineComment
                                                 && t.TokenType != TSqlTokenType.EndOfFile);
-            string? first = null, second = null;
+            // The first four words cover CREATE <object>, ALTER <object> and CREATE OR ALTER <object>.
+            var leading = new List<string>(4);
             bool anySelect = false;
             foreach (var t in significant)
             {
-                if (first == null) first = t.Text;
-                else if (second == null) second = t.Text;
+                if (leading.Count < 4) leading.Add(t.Text);
                 if (t.TokenType == TSqlTokenType.Select) anySelect = true;
-                if (anySelect && second != null) break;
+                if (anySelect && leading.Count == 4) break;
             }
             if (!anySelect) return false;
-            if (first != null && second != null
-                && (first.Equals("CREATE", StringComparison.OrdinalIgnoreCase) || first.Equals("ALTER", StringComparison.OrdinalIgnoreCase))
-                && FirstStatementObjects.Contains(second))
-            {
-                return false;
-            }
-            return true;
+            return !CreatesFirstStatementObject(leading);
+        }
+
+        /// <summary><c>CREATE</c>, <c>ALTER</c> or <c>CREATE OR ALTER</c> of an object that must be first in its batch.</summary>
+        private static bool CreatesFirstStatementObject(IReadOnlyList<string> leading)
+        {
+            if (leading.Count < 2) return false;
+            bool create = leading[0].Equals("CREATE", StringComparison.OrdinalIgnoreCase);
+            bool alter = leading[0].Equals("ALTER", StringComparison.OrdinalIgnoreCase);
+            if (!create && !alter) return false;
+            if (FirstStatementObjects.Contains(leading[1])) return true;
+            return create && leading.Count >= 4
+                && leading[1].Equals("OR", StringComparison.OrdinalIgnoreCase)
+                && leading[2].Equals("ALTER", StringComparison.OrdinalIgnoreCase)
+                && FirstStatementObjects.Contains(leading[3]);
         }
 
         private static int Clamp(int value, int min, int max, int fallbackWhenNonPositive)

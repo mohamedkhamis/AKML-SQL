@@ -30,10 +30,25 @@ namespace AkmlSql.Engine.Execution
         private const int BlobIndicatorThreshold = 64 * 1024;
 
         private readonly DatabaseCache? _dbCache;
+        private readonly Func<string?>? _currentDatabase;
+        private readonly Func<string, DatabaseCache?>? _cacheFor;
 
         public ResultSetReader(DatabaseCache? dbCache)
         {
             _dbCache = dbCache;
+        }
+
+        /// <summary>
+        /// A reader for a script that may change database (<c>USE</c>) between its sets: each set is read
+        /// in the database <paramref name="currentDatabase"/> reports when it begins. A set over a two-part
+        /// name gets that database as its <see cref="ExecuteResultSet.BaseCatalog"/>, so Apply writes where
+        /// the rows came from, and its primary-key cross-check uses that database's schema
+        /// (<paramref name="cacheFor"/>, null when not loaded).
+        /// </summary>
+        public ResultSetReader(Func<string?> currentDatabase, Func<string, DatabaseCache?> cacheFor)
+        {
+            _currentDatabase = currentDatabase ?? throw new ArgumentNullException(nameof(currentDatabase));
+            _cacheFor = cacheFor ?? throw new ArgumentNullException(nameof(cacheFor));
         }
 
         /// <summary>
@@ -124,7 +139,10 @@ namespace AkmlSql.Engine.Execution
             // Provenance FIRST (off the column schema; no rows read yet) — best-effort, never throws out.
             if (includeProvenance)
             {
-                TryPopulateProvenance(cols, displayOrdinals, fieldCount, sqlDbTypes, set);
+                string? sourceDatabase = null;
+                try { sourceDatabase = NullIfEmpty(_currentDatabase?.Invoke()); }
+                catch (Exception ex) { Log.Debug(ex, "ResultSetReader: the connection's database could not be read."); }
+                TryPopulateProvenance(cols, displayOrdinals, fieldCount, sqlDbTypes, set, sourceDatabase);
             }
 
             // Announce the set before its rows: the statement's row count arrives while it is current.
@@ -256,7 +274,8 @@ namespace AkmlSql.Engine.Execution
         /// disturbs the data read.
         /// </summary>
         private void TryPopulateProvenance(
-            ReadOnlyCollection<DbColumn>? cols, int[]? displayOrdinals, int fieldCount, SqlDbType[] sqlDbTypes, ExecuteResultSet set)
+            ReadOnlyCollection<DbColumn>? cols, int[]? displayOrdinals, int fieldCount, SqlDbType[] sqlDbTypes, ExecuteResultSet set,
+            string? sourceDatabase)
         {
             if (cols == null)
             {
@@ -331,9 +350,12 @@ namespace AkmlSql.Engine.Execution
 
                 // Cross-check IsKey columns against the schema cache's declared PRIMARY KEY so the
                 // writer prefers the true PK over an arbitrary unique key KeyInfo may pick.
+                // A two-part name is read from the database the connection is in when the set begins.
+                if (!string.IsNullOrEmpty(baseTable) && baseCatalog == null) baseCatalog = sourceDatabase;
+
                 if (!string.IsNullOrEmpty(baseTable))
                 {
-                    CrossCheckPrimaryKey(prov, baseSchema, baseTable!);
+                    CrossCheckPrimaryKey(SchemaFor(baseCatalog), prov, baseSchema, baseTable!);
                 }
 
                 // CRUD-eligibility predicate: single real base table across non-expression cols,
@@ -355,15 +377,28 @@ namespace AkmlSql.Engine.Execution
             }
         }
 
-        private void CrossCheckPrimaryKey(ColumnProvenanceDto[] prov, string? schema, string table)
+        /// <summary>The schema of <paramref name="catalog"/>; the fixed cache for a single-database reader.</summary>
+        private DatabaseCache? SchemaFor(string? catalog)
         {
-            if (_dbCache == null) return;
+            if (_cacheFor == null) return _dbCache;
+            if (string.IsNullOrEmpty(catalog)) return null;
+            try { return _cacheFor(catalog!); }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "ResultSetReader: no schema cache for {Catalog}.", catalog);
+                return null;
+            }
+        }
+
+        private static void CrossCheckPrimaryKey(DatabaseCache? dbCache, ColumnProvenanceDto[] prov, string? schema, string table)
+        {
+            if (dbCache == null) return;
             try
             {
-                var obj = _dbCache.FindObject(schema ?? string.Empty, table);
+                var obj = dbCache.FindObject(schema ?? string.Empty, table);
                 if (obj == null && !string.IsNullOrEmpty(schema))
                 {
-                    obj = _dbCache.FindObject(string.Empty, table);
+                    obj = dbCache.FindObject(string.Empty, table);
                 }
                 if (obj == null || obj.Columns.Count == 0) return;
 

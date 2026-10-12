@@ -368,8 +368,16 @@
     }
 
     private DisplayValue Format(string? wire, int col, bool fullText) =>
-        SqlValueDisplay.Format(wire, col < _types.Length ? _types[col] : SqlTypeName.Parse(null),
-            Set.ClrTypeHints.ElementAtOrDefault(col), fullText);
+        SqlValueDisplay.Format(wire, TypeOf(col), Set.ClrTypeHints.ElementAtOrDefault(col), fullText);
+
+    private SqlTypeName TypeOf(int col) => col < _types.Length ? _types[col] : SqlTypeName.Parse(null);
+
+    /// <summary>What the editor starts with: the cell's shown text where it converts back without loss (a date as
+    /// 2025-10-01, binary as 0x…), else the wire text.</summary>
+    private string? EditText(string? wire, int col) => SqlValueDisplay.EditText(wire, TypeOf(col), Set.ClrTypeHints.ElementAtOrDefault(col));
+
+    /// <summary>A typed value in the wire form Apply binds (a date typed as the grid shows it becomes ISO-8601).</summary>
+    private string? ToWire(string? typed, int col) => SqlValueDisplay.ToWire(typed, TypeOf(col), Set.ClrTypeHints.ElementAtOrDefault(col));
 
     /// <summary>What a cell shows (a large binary value as a preview). Fetched values are formatted once.</summary>
     private DisplayValue CellDisplay(int row, int col)
@@ -1073,7 +1081,10 @@
     private async Task CopyAsync(CopyFormat format, bool includeHeader)
     {
         if (_selection.IsEmpty) return;
-        var result = GridClipboard.Build(_selection, Headers(), _rowIndexes, DisplayText, format, includeHeader, RetainLineBreaksOnCopy);
+        var kinds = Enumerable.Range(0, ColumnCount)
+            .Select(c => GridTextFormats.KindOf(TypeOf(c), Set.ClrTypeHints.ElementAtOrDefault(c))).ToArray();
+        var result = GridClipboard.Build(_selection, Headers(), _rowIndexes, DisplayText, format, includeHeader, RetainLineBreaksOnCopy,
+            columnKinds: kinds);
         if (result.RowCount == 0) return;
         if (!await CopyTextAsync(result.Text))
         {
@@ -1393,7 +1404,7 @@
         _editCol = col;
         _editInsert = -1;
         _editReplaced = replaceWith != null;
-        _editInitial = replaceWith ?? CurrentWire(row, col) ?? string.Empty;
+        _editInitial = replaceWith ?? EditText(CurrentWire(row, col), col) ?? string.Empty;
         _menu = null;
     }
 
@@ -1407,7 +1418,7 @@
         _editCol = col;
         _editInsert = insIdx;
         _editReplaced = false;
-        _editInitial = (_inserts[insIdx].TryGetValue(col, out var v) ? v : null) ?? string.Empty;
+        _editInitial = EditText(_inserts[insIdx].TryGetValue(col, out var v) ? v : null, col) ?? string.Empty;
     }
 
     private void EndEdit()
@@ -1493,9 +1504,11 @@
     private void CommitEdit(int row, int col, string? value)
     {
         if (row < 0 || row >= Set.Rows.Length) return;
-        // The cell value is stored verbatim (a blank input is kept as an empty string — invalid on a
-        // non-character type until a value or NULL is set); the write path binds it through
+        // The cell value is stored in wire form: a date, time or binary value typed the way the grid shows it is
+        // converted (ToWire); anything else verbatim (a blank input is kept as an empty string — invalid on a
+        // non-character type until a value or NULL is set). The write path binds it through
         // SqlScalarEncoder.Decode for the column's type. null = SQL NULL.
+        value = ToWire(value, col);
         var original = Set.Rows[row].ElementAtOrDefault(col);
         if (!string.Equals(original, value, StringComparison.Ordinal))
         {
@@ -1516,7 +1529,7 @@
 
     private void CommitInsert(int insIdx, int col, string? value)
     {
-        if (insIdx >= 0 && insIdx < _inserts.Count) _inserts[insIdx][col] = value;
+        if (insIdx >= 0 && insIdx < _inserts.Count) _inserts[insIdx][col] = ToWire(value, col);
     }
 
     private void ToggleDelete(int row)
@@ -1723,6 +1736,8 @@
 
         return new ApplyChangesRequest
         {
+            // The engine stamps each set with the database it was read from (a script's USE moves between them);
+            // only an older engine leaves it empty, and then the session's database is all there is to go on.
             BaseCatalog = string.IsNullOrEmpty(set.BaseCatalog) ? FallbackCatalog : set.BaseCatalog,
             BaseSchema = set.BaseSchema ?? string.Empty,
             BaseTable = set.BaseTable ?? string.Empty,

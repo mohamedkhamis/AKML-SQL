@@ -1,3 +1,4 @@
+using AkmlSql.Core.Text;
 using AkmlSql.Web.Shared.Grid;
 using Xunit;
 
@@ -139,5 +140,49 @@ public sealed class GridClipboardTests
         var result = Copy(new GridSelection(3, 3));
         Assert.Equal(string.Empty, result.Text);
         Assert.Equal(0, result.RowCount);
+    }
+
+    // ── PR #255: JSON and INSERT decide numbers by the column's type ────────────────────────────────────
+
+    private static readonly string[] TypedHeaders = { "zip", "amount", "label", "qty", "blob" };
+
+    private static readonly string?[][] TypedData =
+    {
+        new string?[] { "00501", "1,234", "NaN", "12.5000", "0x0F" },
+        new string?[] { "12345", "Infinity", "7", "-3", null },
+    };
+
+    private static readonly GridValueKind[] Kinds =
+    {
+        GridValueKind.Text, GridValueKind.Text, GridValueKind.Text, GridValueKind.Number, GridValueKind.Binary,
+    };
+
+    private static GridCopyResult CopyTyped(CopyFormat format)
+    {
+        var s = new GridSelection(2, 5);
+        s.SelectAll();
+        return GridClipboard.Build(s, TypedHeaders, new[] { 0, 1 }, (r, c) => TypedData[r][c], format, false, false, columnKinds: Kinds);
+    }
+
+    [Fact]
+    public void Copy_as_INSERT_quotes_character_values_that_look_like_numbers()
+    {
+        var text = CopyTyped(CopyFormat.Insert).Text;
+
+        Assert.Contains("VALUES (N'00501', N'1,234', N'NaN', 12.5000, 0x0F);", text);
+        Assert.Contains("VALUES (N'12345', N'Infinity', N'7', -3, NULL);", text);
+    }
+
+    [Fact]
+    public void Copy_as_JSON_keeps_character_values_as_strings_and_writes_valid_JSON()
+    {
+        var text = CopyTyped(CopyFormat.Json).Text;
+
+        Assert.Contains("\"zip\": \"00501\"", text);
+        Assert.Contains("\"label\": \"NaN\"", text);
+        Assert.Contains("\"qty\": 12.5000", text);
+        Assert.Contains("\"blob\": \"0x0F\"", text);
+        using var doc = System.Text.Json.JsonDocument.Parse(text);   // throws on a bare NaN / Infinity
+        Assert.Equal(2, doc.RootElement.GetArrayLength());
     }
 }

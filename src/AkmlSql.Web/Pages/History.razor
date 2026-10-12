@@ -22,6 +22,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject IDialogService Dialogs
+@inject EditorDocumentFlow Document
 @inject INotificationService Notifications
 
 <PageTitle>SQL History — AKML SQL</PageTitle>
@@ -195,7 +196,7 @@
                         <button class="akml-btn" @onclick="@(() => RenameAsync(_selected))" data-testid="history-rename">Rename</button>
                         <button class="akml-btn" @onclick="@(() => DeleteAsync(_selected))" data-testid="history-delete">Delete</button>
                         <button class="akml-btn" @onclick="@(() => RemoveOlderAsync(_selected))" data-testid="history-remove-older">Remove older</button>
-                        <button class="akml-btn" @onclick="ReExecuteAsync">Re-execute</button>
+                        <button class="akml-btn" @onclick="ReExecuteAsync" data-testid="history-reexecute">Re-execute</button>
                         <button class="akml-btn akml-btn--primary" @onclick="OpenInEditorAsync" data-testid="history-open">Open</button>
                     }
                 </div>
@@ -589,12 +590,9 @@
     private async Task OpenInEditorAsync()
     {
         if (_selected == null) return;
-        // T9 fix-round-1: read-modify-write via EditorSessionKeys.SetDocumentTextAsync, not a fresh
-        // EditorSessionRecord -- SaveAsync overwrites the WHOLE persisted record, so constructing one
-        // from scratch here silently dropped SessionKey to null (the same defect class fixed in
-        // Editor.razor's OnTextChangedAsync). Preserving the key keeps this in the SAME editor
-        // session; "Reset editor session" remains the sole boundary that starts a new one.
-        await EditorSessionKeys.SetDocumentTextAsync(SessionStore, _previewSql);
+        // Spec 041 (R64): a past query opens as a new document, as Open does, and never overwrites a modified
+        // document without asking.
+        if (!await Document.OpenQueryAsync(_previewSql, "Open in editor")) return;
         await SessionStore.FlushAsync();
         Nav.NavigateTo("/");
     }
@@ -602,8 +600,7 @@
     private async Task ReExecuteAsync()
     {
         if (_selected == null) return;
-        // T9 fix-round-1: see OpenInEditorAsync above -- same preserve-the-key fix.
-        await EditorSessionKeys.SetDocumentTextAsync(SessionStore, _previewSql);
+        if (!await Document.OpenQueryAsync(_previewSql, "Re-execute")) return;
         await SessionStore.FlushAsync();
         Nav.NavigateTo("/?autorun=1");
     }

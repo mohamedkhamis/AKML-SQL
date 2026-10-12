@@ -802,4 +802,88 @@ public sealed class ExecuteQueryIntegrationTests
             await RunAsync(transport, sid, $"IF OBJECT_ID('tempdb.dbo.[{table}]') IS NOT NULL DROP TABLE tempdb.dbo.[{table}];", 99);
         }
     }
+
+    // ── PR #255 review fixes ─────────────────────────────────────────────────────────────────────────────
+
+    [SkippableFact]
+    public async Task CREATE_OR_ALTER_VIEW_with_a_SELECT_runs_under_provenance()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+        var (t, sid) = await ConnectedAsync();
+        var view = "akml_255_v_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            // KeyInfo would put SET NO_BROWSETABLE ON in front of the CREATE: Msg 111.
+            var r = await RunAsync(t, sid, $"CREATE OR ALTER VIEW dbo.[{view}] AS SELECT 1 AS n;", 1);
+            Assert.Equal(ExecuteStatus.Ok, r.Status);
+            Assert.Null(r.ErrorMessage);
+
+            var again = await RunAsync(t, sid, $"CREATE OR ALTER VIEW dbo.[{view}] AS SELECT 2 AS n;", 2);
+            Assert.Equal(ExecuteStatus.Ok, again.Status);
+        }
+        finally
+        {
+            await RunAsync(t, sid, $"IF OBJECT_ID('dbo.[{view}]') IS NOT NULL DROP VIEW dbo.[{view}];", 99);
+        }
+    }
+
+    [SkippableFact]
+    public async Task A_set_read_before_a_later_USE_carries_the_database_it_came_from_and_Apply_writes_there()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+        var (t, sid) = await ConnectedAsync();
+        var tableName = "akml_255_use_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await RunAsync(t, sid, $"CREATE TABLE dbo.[{tableName}] (Id int PRIMARY KEY, Qty int NOT NULL); INSERT dbo.[{tableName}] VALUES (1, 1);", 1);
+
+            var r = await RunAsync(t, sid, $"USE tempdb;\nSELECT Id, Qty FROM dbo.[{tableName}];\nUSE master;", 2);
+
+            Assert.Equal(ExecuteStatus.Ok, r.Status);
+            Assert.Equal("master", r.CurrentDatabase);
+            var set = r.ResultSets.Single();
+            Assert.True(set.IsEditable);
+            Assert.Equal("tempdb", set.BaseCatalog);
+
+            var apply = new ApplyChangesRequest
+            {
+                SessionId = sid,
+                BaseCatalog = set.BaseCatalog,
+                BaseSchema = set.BaseSchema ?? "dbo",
+                BaseTable = set.BaseTable ?? tableName,
+                Edits = new[]
+                {
+                    new CrudEditDto
+                    {
+                        Op = CrudOp.Update,
+                        SetCells = new[] { new CrudCellDto { BaseColumnName = "Qty", ProviderType = (int)System.Data.SqlDbType.Int, Value = "5" } },
+                        KeyCells = new[] { new CrudCellDto { BaseColumnName = "Id", ProviderType = (int)System.Data.SqlDbType.Int, Value = "1" } },
+                    },
+                },
+            };
+            var resp = await t.SendAsync(new RpcMessage { MessageType = MessageTypes.ApplyChanges, RequestId = 3, Payload = MessagePackSerializer.Serialize(apply) }, CancellationToken.None);
+            var result = MessagePackSerializer.Deserialize<ApplyChangesResult>(resp!.Payload!);
+            Assert.Equal(ExecuteStatus.Ok, result.Status);
+
+            var check = await RunAsync(t, sid, $"SELECT Qty FROM tempdb.dbo.[{tableName}] WHERE Id = 1;", 4);
+            Assert.Equal("5", check.ResultSets[0].Rows[0][0]);
+        }
+        finally
+        {
+            await RunAsync(t, sid, $"IF OBJECT_ID('tempdb.dbo.[{tableName}]') IS NOT NULL DROP TABLE tempdb.dbo.[{tableName}];", 99);
+        }
+    }
+
+    [SkippableFact]
+    public async Task An_error_after_ten_thousand_row_counts_still_fails_the_script()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+        var (t, sid) = await ConnectedAsync();
+
+        var r = await RunAsync(t, sid, "DECLARE @i int = 0; WHILE @i < 10050 BEGIN PRINT 'p'; SET @i += 1; END;\nGO\nSELECT 1/0 AS boom;", 1, timeoutSeconds: 120);
+
+        Assert.Equal(ExecuteStatus.Error, r.Status);
+        Assert.Contains("Divide by zero", r.ErrorMessage);
+        Assert.Contains(r.MessageDetails, m => m.Kind == ExecuteMessageKind.Error && m.Number == 8134);
+    }
 }
