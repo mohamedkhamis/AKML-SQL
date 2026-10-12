@@ -56,6 +56,7 @@ public sealed class ShellPolishTests(ITestOutputHelper output)
         await Assertions.Expect(page.Locator(".cm-line").Nth(6).Locator("[class*='cm-lintRange']").First).ToBeVisibleAsync();
         await page.Locator(".cm-lint-marker").First.FocusAsync();
         await Assertions.Expect(page.Locator(".cm-tooltip-lint")).ToBeVisibleAsync();
+        await AssertSurfaceAsync(page.Locator(".cm-tooltip-lint"), "--akml-surface-panel");
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(page.Locator(".cm-tooltip-lint")).ToHaveCountAsync(0);
         await Assertions.Expect(page.GetByTestId("error-banner")).ToHaveCountAsync(0);
@@ -134,6 +135,58 @@ public sealed class ShellPolishTests(ITestOutputHelper output)
         await page.GetByTestId("dialog-cancel").ClickAsync();
         Assert.Empty(dialogs);
         AssertLocalRequests(requests, s);
+    }
+
+    // CodeMirror's base theme paints its tooltips and panels light (#f5f5f5, white fields) whatever the
+    // AKML theme; the schema filter once carried the label wrapper class and so kept the browser's white.
+    [SkippableTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    [InlineData("HighContrast")]
+    public async Task Editor_popups_find_panel_and_schema_filter_use_the_theme_surfaces(string theme)
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(output, contextOptions: new() { ReducedMotion = ReducedMotion.Reduce });
+        var page = s.Page;
+        await NavigateAsync(page, "settings/general");
+        await page.Locator("#setting-theme-control").SelectOptionAsync(theme);
+        await NavigateAsync(page, "editor");
+
+        var filter = page.GetByTestId("schema-filter");
+        await Assertions.Expect(filter).ToBeVisibleAsync();
+        await AssertSurfaceAsync(filter, "--akml-surface-input");
+
+        await s.SetEditorTextAsync("SELECT 1\nWHERE 1 = 1;");
+        var where = page.Locator(".cm-line").Nth(1);
+        var box = (await where.BoundingBoxAsync())!;
+        await page.Mouse.MoveAsync(box.X + 12, box.Y + box.Height / 2);
+        var hover = page.Locator(".cm-tooltip-hover");
+        await Assertions.Expect(hover).ToBeVisibleAsync();
+        await AssertSurfaceAsync(hover, "--akml-surface-panel");
+        await page.Mouse.MoveAsync(0, 0);
+
+        await page.Locator(".cm-content").ClickAsync();
+        await page.Keyboard.PressAsync("Control+f");
+        var panel = page.Locator(".cm-panels");
+        await Assertions.Expect(panel).ToBeVisibleAsync();
+        await AssertSurfaceAsync(panel, "--akml-surface-panel");
+        await AssertSurfaceAsync(panel.Locator(".cm-textfield").First, "--akml-surface-input");
+        var button = panel.Locator(".cm-button").First;
+        await AssertSurfaceAsync(button, "--akml-surface-panel");
+        Assert.Equal("none", await button.EvaluateAsync<string>("el => getComputedStyle(el).backgroundImage"));
+    }
+
+    /// <summary>The element's background is the theme token's colour (resolved through a probe, so system colours compare too).</summary>
+    private static async Task AssertSurfaceAsync(ILocator element, string token)
+    {
+        var colours = await element.EvaluateAsync<string[]>(@"(el, token) => {
+            const probe = document.createElement('div');
+            probe.style.backgroundColor = `var(${token})`;
+            document.body.appendChild(probe);
+            const want = getComputedStyle(probe).backgroundColor;
+            probe.remove();
+            return [want, getComputedStyle(el).backgroundColor];
+        }", token);
+        Assert.Equal(colours[0], colours[1]);
     }
 
     [SkippableFact]

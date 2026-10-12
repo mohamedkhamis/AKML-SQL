@@ -76,10 +76,40 @@
     .akml-editor .cm-editor .cm-lint-marker-error { border-radius: 50%; background-color: var(--akml-status-danger); }
     .akml-editor .cm-editor .cm-lint-marker-warning { transform: rotate(45deg); background-color: var(--akml-status-warning); }
     .akml-editor .cm-editor .cm-lint-marker-info { border-radius: 50%; border: 2px solid var(--akml-status-info); }
-    .cm-tooltip.cm-tooltip-lint {
+    /* CodeMirror's base theme paints every tooltip and panel light (#f5f5f5 / #bbb, white fields,
+       gradient buttons) and no CodeMirror theme is registered, so the hover hint, signature help and
+       Find panel stayed light in dark mode. Its rules are `.ͼ2 .cm-x` in a style tag inserted first in the
+       document head, so these equal-specificity overrides win. The autocomplete popup is themed in Pages/Editor.razor. */
+    .akml-editor .cm-tooltip {
         background-color: var(--akml-surface-panel);
         border: 1px solid var(--akml-border-strong);
         color: var(--akml-text-primary);
+    }
+    .akml-editor .cm-tooltip-section:not(:first-child) { border-top-color: var(--akml-border-strong); }
+    .akml-editor .cm-panels {
+        background-color: var(--akml-surface-panel);
+        color: var(--akml-text-primary);
+    }
+    .akml-editor .cm-panels-top { border-bottom-color: var(--akml-border-default); }
+    .akml-editor .cm-panels-bottom { border-top-color: var(--akml-border-default); }
+    .akml-editor .cm-textfield {
+        background-color: var(--akml-surface-input);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+    }
+    .akml-editor .cm-textfield::placeholder { color: var(--akml-text-placeholder); }
+    .akml-editor .cm-button,
+    .akml-editor .cm-button:active {
+        background-image: none;
+        background-color: var(--akml-surface-panel);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-strong);
+        border-radius: var(--akml-scalar-radius-xs);
+    }
+    .akml-editor .cm-button:hover { background-color: var(--akml-surface-hover); }
+    [data-akml-theme="high-contrast"] .akml-editor .cm-button:hover { color: var(--akml-text-onaccent); }
+    .cm-tooltip.cm-tooltip-lint {
         font-family: var(--akml-type-chrome-family);
         font-size: 12px;
     }
