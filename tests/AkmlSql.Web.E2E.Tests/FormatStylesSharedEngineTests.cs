@@ -162,5 +162,18 @@ public sealed class FormatStylesSharedEngineTests(ITestOutputHelper output)
         using var updated = JsonDocument.Parse(File.ReadAllText(file));
         Assert.True(updated.RootElement.GetProperty("sqlPrompt").GetProperty("lists").GetProperty("placeCommasBeforeItems").GetBoolean());
         Assert.Equal("leading", updated.RootElement.GetProperty("list").GetProperty("commaPosition").GetString());
+
+        // Built-in names are available both in this browser and on the engine. The closed
+        // picker must retain the source label as either copy becomes the active style.
+        await page.GetByTestId("nav-editor").ClickAsync();
+        var picker = page.GetByTestId("profile-picker");
+        foreach (var label in new[] { "Khamis Style (on this engine)", "Khamis Style (built-in)" })
+        {
+            await Assertions.Expect(picker.Locator("option").Filter(new() { HasTextString = label })).ToHaveCountAsync(1);
+            await picker.SelectOptionAsync(new SelectOptionValue { Label = label });
+            await Assertions.Expect(picker.Locator("option:checked")).ToHaveTextAsync(label);
+        }
+        await Assertions.Expect(picker.Locator("optgroup[label='On this engine']")).ToHaveCountAsync(1);
+        await Assertions.Expect(picker.Locator("optgroup[label='Shared with SSMS']")).ToHaveCountAsync(0);
     }
 }

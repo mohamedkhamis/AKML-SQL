@@ -46,6 +46,10 @@ public sealed class TabStripKeyboardTests
         await Assertions.Expect(Id(page, "ai-tab-chat")).ToHaveAttributeAsync("aria-selected", "true");
         await page.Keyboard.PressAsync("ArrowLeft");
         await Assertions.Expect(Id(page, "ai-tab-actions")).ToHaveAttributeAsync("aria-selected", "true");
+        await page.Keyboard.PressAsync("End");
+        await Assertions.Expect(Id(page, "ai-tab-chat")).ToHaveAttributeAsync("aria-selected", "true");
+        await page.Keyboard.PressAsync("Home");
+        await Assertions.Expect(Id(page, "ai-tab-actions")).ToHaveAttributeAsync("aria-selected", "true");
         var aiMarker = await MarkerAsync(Id(page, "ai-tab-actions"));
 
         // Style preview.
@@ -53,6 +57,10 @@ public sealed class TabStripKeyboardTests
         await page.Locator("[data-testid='style-row']").First.ClickAsync();
         await Id(page, "preview-sample").FocusAsync();
         await page.Keyboard.PressAsync("ArrowRight");
+        await Assertions.Expect(Id(page, "preview-mysql")).ToHaveAttributeAsync("aria-selected", "true");
+        await page.Keyboard.PressAsync("ArrowLeft");
+        await Assertions.Expect(Id(page, "preview-sample")).ToHaveAttributeAsync("aria-selected", "true");
+        await page.Keyboard.PressAsync("End");
         await Assertions.Expect(Id(page, "preview-mysql")).ToHaveAttributeAsync("aria-selected", "true");
         await page.Keyboard.PressAsync("Home");
         await Assertions.Expect(Id(page, "preview-sample")).ToHaveAttributeAsync("aria-selected", "true");
