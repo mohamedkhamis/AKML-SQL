@@ -25,8 +25,8 @@ namespace AkmlSql.Web.E2E.Tests;
 /// </summary>
 public sealed class SiteScreenshotTour(ITestOutputHelper output)
 {
-    /// <summary>The deployed web edition (IIS site "AkmlSqlWeb", bound to port 80 with no host header).</summary>
-    private const string WebUrl = "http://localhost/";
+    /// <summary>The deployed web edition; set AKML_DEPLOYED_WEB_URL to the IIS site's actual binding.</summary>
+    private static string WebUrl => Environment.GetEnvironmentVariable("AKML_DEPLOYED_WEB_URL") ?? "http://localhost/";
 
     /// <summary>Matches the dimensions the site's img tags already declare, so no layout shifts.</summary>
     private const int ShotWidth = 1920;
