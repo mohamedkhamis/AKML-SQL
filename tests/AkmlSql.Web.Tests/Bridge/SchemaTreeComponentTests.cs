@@ -346,6 +346,7 @@ public sealed class SchemaTreeComponentTests : BunitContext
 
         var filter = cut.Find("[data-testid=schema-filter]");
         Assert.Equal("Filter objects", filter.GetAttribute("aria-label"));
+        Assert.Contains("akml-input", filter.ClassList);   // the themed control class, not the akml-field label wrapper
         filter.Input("CUST");
         Assert.Empty(ObjectNames(cut));   // 150 ms debounce: not yet
 
