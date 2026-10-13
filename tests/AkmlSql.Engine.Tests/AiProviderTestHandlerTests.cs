@@ -9,6 +9,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Ai;
 using MessagePack;
 using Xunit;
+using GeminiApiException = Mscc.GenerativeAI.Types.GeminiApiException;
 
 namespace AkmlSql.Engine.Tests.Handlers.Ai;
 
@@ -148,6 +149,212 @@ public class AiProviderTestHandlerTests
         Assert.DoesNotContain("{", msg);
         Assert.DoesNotContain("sk-secret-key", msg);
         Assert.Contains("log", msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ─── Gemini (Mscc.GenerativeAI): GeminiApiException keeps the failed response ───
+    // Bodies are what Google actually returned (2026-10-13 engine log, and a junk-key probe).
+    // Before the status was read off the exception, every one of these mapped to "unexpected
+    // error (GeminiApiException)".
+
+    private static GeminiApiException Gemini(HttpStatusCode status, string body) =>
+        new("The request was not successful. Last API response:\n" + body,
+            new HttpResponseMessage(status), null);
+
+    [Fact]
+    public void Gemini_404_unknown_model_maps_to_the_model_row()
+    {
+        var ex = Gemini(HttpStatusCode.NotFound,
+            "{\"error\":{\"code\":404,\"message\":\"models/gemini-3.8-flash-lite is not found for API version v1beta, " +
+            "or is not supported for generateContent.\",\"status\":\"NOT_FOUND\"}}");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-3.8-flash-lite", null, 30);
+
+        Assert.Contains("gemini-3.8-flash-lite", msg);
+        Assert.Contains("404", msg);
+        Assert.Contains("gemini-flash-latest", msg);          // a valid example is offered
+        Assert.DoesNotContain("GeminiApiException", msg);
+        Assert.DoesNotContain("{", msg);
+    }
+
+    [Fact]
+    public void Gemini_503_high_demand_reads_as_a_provider_outage_not_an_unexpected_error()
+    {
+        var ex = Gemini(HttpStatusCode.ServiceUnavailable,
+            "{\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in " +
+            "demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-3.7-flash", null, 30);
+
+        Assert.Contains("'gemini'", msg);
+        Assert.Contains("503", msg);
+        Assert.Contains("temporarily unavailable", msg);
+        Assert.Contains("Retry", msg);
+        Assert.DoesNotContain("unexpected", msg, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GeminiApiException", msg);
+        Assert.DoesNotContain("{", msg);
+    }
+
+    [Fact]
+    public void Gemini_bad_key_400_API_KEY_INVALID_maps_to_the_rejected_key_row()
+    {
+        // Google never answers a bad key with 401/403 — it is 400 INVALID_ARGUMENT.
+        var ex = Gemini(HttpStatusCode.BadRequest,
+            "{\"error\":{\"code\":400,\"message\":\"API key not valid. Please pass a valid API key.\"," +
+            "\"status\":\"INVALID_ARGUMENT\",\"details\":[{\"@type\":\"type.googleapis.com/google.rpc.ErrorInfo\"," +
+            "\"reason\":\"API_KEY_INVALID\",\"domain\":\"googleapis.com\"}]}}");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-flash-latest", null, 30);
+
+        Assert.Contains("API key", msg);
+        Assert.Contains("rejected", msg);
+        Assert.Contains("'gemini'", msg);
+        Assert.Contains("400", msg);
+        Assert.DoesNotContain("('')", msg);                   // no endpoint to name for Gemini
+        Assert.DoesNotContain("{", msg);
+    }
+
+    [Fact]
+    public void Gemini_429_maps_to_the_quota_row()
+    {
+        var ex = Gemini(HttpStatusCode.TooManyRequests,
+            "{\"error\":{\"code\":429,\"message\":\"You exceeded your current quota.\",\"status\":\"RESOURCE_EXHAUSTED\"}}");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-flash-latest", null, 30);
+
+        Assert.Contains("quota", msg, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("429", msg);
+    }
+
+    [Fact]
+    public void Gemini_other_400_keeps_the_status_and_never_leaks_the_body()
+    {
+        var ex = Gemini(HttpStatusCode.BadRequest,
+            "{\"error\":{\"code\":400,\"message\":\"Invalid value at 'generation_config' AIzaSy-secret-echo\"," +
+            "\"status\":\"INVALID_ARGUMENT\"}}");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-flash-latest", null, 30);
+
+        Assert.Contains("HTTP 400", msg);
+        Assert.Contains("log", msg, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("API key was rejected", msg);
+        Assert.DoesNotContain("AIzaSy-secret-echo", msg);
+        Assert.DoesNotContain("{", msg);
+    }
+
+    [Fact]
+    public void Gemini_exception_without_a_response_falls_back_to_the_generic_row()
+    {
+        var ex = new GeminiApiException("The request was not successful.");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-flash-latest", null, 30);
+
+        Assert.Contains("unexpected error", msg);
+        Assert.Contains("log", msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Gemini_sdk_deadline_wrapped_without_a_response_maps_to_the_timeout_row()
+    {
+        // Mscc's HttpRequestTimeoutHandler throws TimeoutException at the per-request deadline;
+        // BaseModel.SendAsync's catch-all wraps it with Response == null.
+        var ex = new GeminiApiException("The request was not successful.", new TimeoutException());
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-3.7-flash", null, 45);
+
+        Assert.Contains("timed out", msg);
+        Assert.Contains("45", msg);
+        Assert.Contains("'Timeout'", msg);
+        Assert.DoesNotContain("GeminiApiException", msg);
+    }
+
+    [Fact]
+    public void Gemini_wrapped_cancellation_with_a_live_token_maps_to_the_timeout_row()
+    {
+        var ex = new GeminiApiException("The request was not successful.", new TaskCanceledException());
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "gemini", "gemini-flash-latest", null, 30);
+
+        Assert.Contains("timed out", msg);
+        Assert.DoesNotContain("unexpected", msg, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Anthropic_401_AuthenticationException_maps_to_the_rejected_key_row()
+    {
+        // Anthropic.SDK answers 401 with a status-less AuthenticationException whose message
+        // carries the raw response body.
+        var ex = new System.Security.Authentication.AuthenticationException(
+            "Anthropic rejected your authorization, most likely due to an invalid API Key. Full API response follows: " +
+            "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "anthropic", "claude-sonnet-4-6", null, 30);
+
+        Assert.Contains("API key", msg);
+        Assert.Contains("rejected", msg);
+        Assert.Contains("'anthropic'", msg);
+        Assert.Contains("HTTP 401", msg);
+        Assert.DoesNotContain("{", msg);
+        Assert.DoesNotContain("Full API response", msg);
+    }
+
+    [Fact]
+    public void A_TLS_failure_is_an_unreachable_endpoint_not_a_rejected_key()
+    {
+        // TLS handshake failures arrive with AuthenticationException INSIDE an HttpRequestException.
+        var ex = new HttpRequestException("The SSL connection could not be established.",
+            new System.Security.Authentication.AuthenticationException("The remote certificate is invalid."));
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "custom", "my-model", "https://llm.example/v1", 30);
+
+        Assert.Contains("Could not reach", msg);
+        Assert.Contains("https://llm.example/v1", msg);
+        Assert.DoesNotContain("API key", msg);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadGateway)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.GatewayTimeout)]
+    [InlineData((HttpStatusCode)529)]                         // Anthropic "overloaded"
+    public void Server_side_statuses_map_to_the_unavailable_row(HttpStatusCode status)
+    {
+        var ex = new SynthesizedProviderException((int)status, "server error");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "anthropic", "claude-sonnet-4-6", null, 30);
+
+        Assert.Contains("temporarily unavailable", msg);
+        Assert.Contains(((int)status).ToString(), msg);
+    }
+
+    [Fact]
+    public void An_answered_HttpRequestException_never_reads_as_could_not_reach()
+    {
+        // A status code means the server answered — the endpoint was reachable.
+        var answered503 = new HttpRequestException("Service Unavailable", null, HttpStatusCode.ServiceUnavailable);
+        var answered400 = new HttpRequestException("Bad Request", null, HttpStatusCode.BadRequest);
+
+        var msg503 = AiProviderTestHandler.MapFailureMessage(
+            answered503, "custom", "my-model", "https://llm.example/v1", 30);
+        var msg400 = AiProviderTestHandler.MapFailureMessage(
+            answered400, "custom", "my-model", "https://llm.example/v1", 30);
+
+        Assert.DoesNotContain("Could not reach", msg503);
+        Assert.Contains("temporarily unavailable", msg503);
+        Assert.DoesNotContain("Could not reach", msg400);
+        Assert.Contains("HTTP 400", msg400);
+    }
+
+    [Fact]
+    public void Rejected_key_without_a_known_endpoint_does_not_print_empty_quotes()
+    {
+        var ex = new SynthesizedProviderException(401, "unauthorized");
+
+        var msg = AiProviderTestHandler.MapFailureMessage(ex, "openai", "gpt-4o", null, 30);
+
+        Assert.Contains("API key", msg);
+        Assert.Contains("401", msg);
+        Assert.DoesNotContain("('')", msg);
     }
 
     // ─── Handler level (no network — validation and cancellation paths) ───
