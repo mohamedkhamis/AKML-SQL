@@ -96,7 +96,9 @@ try {
     if (Test-Path $trxPath) {
         [xml]$trx = Get-Content -LiteralPath $trxPath -Raw
         $counts = $trx.TestRun.ResultSummary.Counters
-        Write-Host "Passed: $($counts.passed)  Failed: $($counts.failed)  Skipped: $($counts.notExecuted)"
+        # The xUnit adapter can leave Counters.notExecuted at zero despite skipped results.
+        $skipped = @($trx.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'NotExecuted' }).Count
+        Write-Host "Passed: $($counts.passed)  Failed: $($counts.failed)  Skipped: $skipped"
         if ([int]$counts.total -eq 0) { $exitCode = 1; Write-Warning 'No tests matched the filter.' }
     } else {
         $exitCode = 1

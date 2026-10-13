@@ -668,3 +668,23 @@ exit codes and empty test selections are reported; existing reports are not over
 -IncludeNative enables the desktop keyboard checks; -IncludeScreenshots additionally
 runs the image generators. SQL/service/desktop prerequisites and focused-run options
 are documented in the script's Get-Help text. No installed application is deployed.
+
+### Playwright report failure corrected — 2026-10-13
+
+Inspected playwright-results/20261013-105553-385/playwright.html and its TRX:
+97 passed, 1 failed, 13 skipped. Firefox saw two Save as palette rows. The editor's
+asynchronous initialization could resume after navigation disposed the page, then
+register commands whose disposal token was never released. A deterministic lifetime
+regression reproduced the leaked commands before the fix. Initialization now stops
+after awaited loads when the editor is disposed, before attaching more handlers or
+registering commands. The browser's unique-command assertion remains unchanged.
+
+The 13 focused lifetime/command-registry unit tests pass. The headed Playwright rerun
+passes all three browser keyboard cases (Chromium, Edge, Firefox) plus persistent
+browser reopening: 4 passed, 0 failed, 1 expected spike-page skip. The runner now counts
+NotExecuted result entries, since this adapter reported Counters.notExecuted=0 despite
+13 skips in the original report. Its console correctly reports the single follow-up skip.
+The original report is preserved; new HTML/TRX evidence is under
+%LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
+missing alias/spike configuration, and pre-existing scenario placeholders. This was
+a focused fix verification, not another full-suite run.

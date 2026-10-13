@@ -732,6 +732,7 @@
     private IDisposable? _commandRegistration;
     private IReadOnlyList<CommandAction> _contextActions = Array.Empty<CommandAction>();
     private bool _keysInitialized;
+    private bool _disposed;
 
     // Spec 041 (R37) — page-scoped key capture. akml-workspace.js claims the WorkspaceKeyMap keys of the
     // commands this page registered and calls OnWorkspaceKey; removed again on unmount.
@@ -768,14 +769,17 @@
         // for "system" already (index.html runs apply('system') inline), so this is an
         // upgrade only when the user has stored a non-system preference.
         await Theme.InitializeAsync();
+        if (_disposed) return;
 
         // Spec 041 (R36, FR-045) — the remembered workspace: which regions show, their sizes, the tabs.
         Layout.Changed += OnLayoutChanged;
         await Layout.LoadAsync();
+        if (_disposed) return;
         _resultsTab = Layout.Current.ResultsTab;
 
         // T051: restore the last editor session.
         var restored = await SessionStore.RestoreAsync();
+        if (_disposed) return;
         if (restored != null)
         {
             _initialText = restored.DocumentText;
@@ -786,9 +790,11 @@
         // just restored above (avoids a second IndexedDB round-trip) -- mints/persists a fresh
         // key on first use or after a reset.
         _sessionKey = await EditorSessionKeys.GetOrCreateAsync(SessionStore, restored);
+        if (_disposed) return;
 
         // Spec 041 (R64): the document — its name, modified state and default-name counter.
         await Document.LoadAsync(restored);
+        if (_disposed) return;
         Document.AdoptSessionKey(_sessionKey);
         Document.Attach(this, ConfirmDiscardPendingEditsAsync);
         Document.Changed += OnDocumentChanged;
@@ -797,9 +803,11 @@
 
         // T038: load the active profile.
         var activeId = await ProfileStore.GetActiveIdAsync();
+        if (_disposed) return;
         try
         {
             var active = await ProfileStore.GetAsync(activeId);
+            if (_disposed) return;
             _activeProfile = active?.Profile;
         }
         catch (Exception)
@@ -810,13 +818,16 @@
         }
 
         // T044: load analyser settings.
+        if (_disposed) return;
         var settings = await AnalysisSettings.GetAsync();
+        if (_disposed) return;
         _autoAnalyseOnFormat = settings.AutoAnalyseOnFormat;
         _analysisEnabled = settings.Enabled;
         _problemsFilter = settings.ProblemsFilter;
 
         // T048: restore the diagnostics ring buffer.
         await Diagnostics.RestoreAsync();
+        if (_disposed) return;
         Diagnostics.Log(DiagnosticLevel.Info, "editor", "Editor page mounted.");
 
         // Spec 025 US4 / spec 030 loop fix: point the schema tree at the ACTIVE SQL connection's
@@ -832,6 +843,7 @@
         // Spec 041 (R52): the toolbar shows the effective caps — this session's quick-control override, else the
         // defaults saved in Settings › Queries. The grid options come from the saved defaults only.
         var execSettings = await ExecSettings.GetEffectiveAsync();
+        if (_disposed) return;
         _maxRows = execSettings.MaxRows;
         _timeoutSeconds = execSettings.CommandTimeoutSeconds;
         _showColumnTypes = execSettings.ShowColumnTypes;
@@ -1058,6 +1070,7 @@
     /// After a run proceeds the URL flag is stripped so a manual refresh doesn't re-run.</summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_disposed) return;
         // The page's commands are registered at the end of OnInitializedAsync, which can finish after the
         // first render: claim the keys on the first render that has them, so F5 never reaches the browser.
         if (!_keysInitialized && _contextActions.Count > 0)
@@ -1863,6 +1876,10 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Navigation can dispose the first render while initialization is still awaiting stores.
+        // Its continuation must not attach handlers or register commands for this dead page.
+        if (_disposed) return;
+        _disposed = true;
         // Spec 030 — drop our ⌘P palette actions FIRST so a late palette open can't run a closure
         // over the editor we're tearing down.
         _commandRegistration?.Dispose();
