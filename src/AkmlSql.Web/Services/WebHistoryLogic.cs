@@ -71,8 +71,11 @@ public static class WebHistoryLogic
     /// The engine stamps <c>executed_at</c> and <c>content_hash</c> itself. <paramref name="sessionKey"/>
     /// is the persisted <see cref="EditorSessionKeys"/> grouping key (see <see cref="HistoryRecordRequest.SessionKey"/>);
     /// null from callers that don't have one yet, which the engine tolerates.</summary>
+    /// <param name="documentName">Spec 041 (R64, N11): the editor document's name. A name the user chose names the
+    /// history session (<c>TabTitle</c>); a default <c>SQLQuery{n}</c> is not sent, so the session reads
+    /// <c>query-NN</c> as SSMS's unsaved tabs do and can still be upgraded later.</param>
     public static HistoryRecordRequest BuildRecordRequest(
-        string sql, ExecuteQueryResult result, string? server, string? database, string? sessionKey = null) => new()
+        string sql, ExecuteQueryResult result, string? server, string? database, string? sessionKey = null, string? documentName = null) => new()
     {
         SqlText = sql ?? string.Empty,
         Truncated = false,
@@ -84,5 +87,6 @@ public static class WebHistoryLogic
         ErrorMessage = result.ErrorMessage,
         Source = "web",
         SessionKey = sessionKey,
+        TabTitle = string.IsNullOrWhiteSpace(documentName) || EditorDocument.IsDefaultName(documentName) ? null : documentName,
     };
 }

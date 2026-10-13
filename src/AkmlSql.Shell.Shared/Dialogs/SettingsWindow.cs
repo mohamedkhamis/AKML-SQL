@@ -62,19 +62,19 @@ namespace AkmlSql.Shell.Shared.Dialogs
             ["Execution"] = new ExecutionPage(),
             ["Editor"] = new EditorPage(),
             ["History"] = new HistoryPage(),
+            ["HistoryRestore"] = new HistoryRestorePage(),
             ["AI Assistance"] = new AiAssistancePage(),
             ["Formatting"] = new FormattingPage(),
             ["Tabs & UI"] = new TabsPage(),
             ["IntelliSense"] = new IntelliSensePage(),
             ["SuggestionTypes"] = new SuggestionTypesPage(),
-            ["CompletionPolish"] = new CompletionPolishPage(),
             ["Aliases"] = new AliasesPage(),
             ["ConnectionScope"] = new ConnectionScopePage(),
             ["ConnectionsMemory"] = new ConnectionsMemoryPage(),
             ["Qualification"] = new QualificationPage(),
             ["SpecialCharacters"] = new SpecialCharactersPage(),
             ["InsertOptions"] = new InsertStatementsPage(),
-            ["JoinOptions"] = new JoinCompletionPage(),
+            ["JoinOptions"] = new JoinAssistancePage(),
         };
         private readonly Dictionary<string, IPageControls> _pageControlsByKey = new();
 
@@ -203,10 +203,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
         {
             foreach (var page in new CombinedPage[]
             {
-                new SuggestionsBehaviorPage(_pageBuilders["IntelliSense"], _pageBuilders["CompletionPolish"], _pageBuilders["JoinOptions"]),
-                new SuggestionsListsPage(_pageBuilders["SuggestionTypes"], _pageBuilders["ConnectionScope"], _pageBuilders["ConnectionsMemory"], _pageBuilders["Snippets"]),
+                // 2026-10 "rebalanced tree" (design B): warnings under Queries, SQL-auth
+                // connections on General, snippets a leaf of their own, tabs on the long pages.
+                new GeneralAllPage(_pageBuilders["General"], _pageBuilders["ConnectionsMemory"]),
+                new SuggestionsBehaviorPage(_pageBuilders["IntelliSense"], _pageBuilders["JoinOptions"]),
+                new SuggestionsListsPage(_pageBuilders["SuggestionTypes"], _pageBuilders["ConnectionScope"]),
                 new InsertedCodePage(_pageBuilders["InsertOptions"], _pageBuilders["Qualification"], _pageBuilders["Aliases"], _pageBuilders["SpecialCharacters"]),
-                new ResultsExecutionPage(_pageBuilders["Grid"], _pageBuilders["Execution"]),
+                new ResultsExecutionPage(_pageBuilders["Grid"], _pageBuilders["Execution"], _pageBuilders["Safety"]),
+                new HistoryAllPage(_pageBuilders["History"], _pageBuilders["HistoryRestore"]),
                 new EditorAllPage(_pageBuilders["Editor"], _pageBuilders["Refactoring"], _pageBuilders["Navigation"]),
             })
             {
@@ -613,23 +617,27 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // General is the landing page (first node) so the theme / dark-mode selector is the first
             // thing shown when Options opens. It also carries updates, paths and version info. This
             // replaces the old "Miscellaneous ▸ Application" placement (removed below).
-            AddTreeLeaf("General", "General");
+            AddTreeLeaf("General", "GeneralAll");
 
             // Spec 040 (OPT-04) took SQL Prompt's arrangement and names, in sentence case. Many of
             // its pages held one to three settings, so they are sections of fuller pages now
             // (Pages/CombinedPages.cs): twelve pages instead of twenty-three. A section keeps its
             // page key, so links to it open the page that shows it.
+            // 2026-10 "rebalanced tree" (design B of artifacts/options-redesign-demo): the
+            // execution warnings moved under Queries, snippets became a leaf, SQL-auth
+            // connections moved to General, and the long pages became tabs. Top-level names stay
+            // SQL Prompt's.
             AddTreeGroup("Suggestions",
                 ("Behavior", "SuggestionsBehavior"),
-                ("Lists & connections", "SuggestionsLists"),
-                ("Warnings & highlighting", "Safety"));
+                ("Lists & scope", "SuggestionsLists"));
 
             AddTreeLeaf("Inserted code", "InsertedCode");
+            AddTreeLeaf("Snippets", "Snippets");
             AddTreeLeaf("Format", "Formatting");
 
             AddTreeGroup("Queries",
-                ("Results & execution", "ResultsExecution"),
-                ("History", "History"),
+                ("Execution & warnings", "ResultsExecution"),
+                ("History", "HistoryAll"),
                 ("Color", "Tabs & UI"));
 
             AddTreeLeaf("Editor", "EditorAll");
@@ -1269,14 +1277,14 @@ namespace AkmlSql.Shell.Shared.Dialogs
             // IPageBuilder.Display — the single source, no parallel display list to maintain.
             var pages = new[]
             {
-                "General",
+                "GeneralAll",
                 "SuggestionsBehavior",
                 "SuggestionsLists",
-                "Safety",
                 "InsertedCode",
+                "Snippets",
                 "Formatting",
                 "ResultsExecution",
-                "History",
+                "HistoryAll",
                 "Tabs & UI",
                 "EditorAll",
                 "Code Analysis",
@@ -1300,11 +1308,15 @@ namespace AkmlSql.Shell.Shared.Dialogs
                 if (pageBuilder is CombinedPage combined)
                 {
                     // Each section under its own key: its search entries find its controls, and
-                    // Save/Load run once per section.
-                    foreach (var section in combined.Sections)
+                    // Save/Load run once per section. A TabbedPage builds them into its tabs.
+                    foreach (var (sectionKey, sectionControls) in
+                             combined.BuildSections(hostPanel, ctx, section => _currentPageKey = section.Key))
                     {
-                        _currentPageKey = section.Key;
-                        _pageControlsByKey[section.Key] = section.Build(hostPanel, ctx);
+                        _pageControlsByKey[sectionKey] = sectionControls;
+                        // Theme switching closes the dialog and reopens it under the new theme —
+                        // the host's job, wired whichever page holds the General section.
+                        if (sectionControls is GeneralControls sectionGeneral)
+                            sectionGeneral.Theme.SelectionChanged += OnThemeSelectionChanged;
                     }
                 }
                 else

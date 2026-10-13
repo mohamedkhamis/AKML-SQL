@@ -1,0 +1,277 @@
+@*
+    Spec 041 (research R7) — the one pointer-positioned, keyboard-operable menu: the results grid's cell and
+    header menus, the toolbar's View menu. The parent renders it while open and removes it on OnClose.
+
+    Keys (ARIA menu pattern): Up/Down move a roving focus (separators skipped, wrapping), Home/End jump,
+    Right or Enter on a parent opens its submenu, Left or Escape closes the submenu, Escape at the top
+    closes the menu, Enter/Space run the focused item, a letter moves to the next item starting with it.
+    A disabled item stays focusable and says why. Placement (kept inside the window) and the focus
+    lifecycle come from akml-ui.js. Styles: .akml-menu* in components/shell.css.
+*@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="akml-menu-scrim" @onclick="CloseAsync" @oncontextmenu="CloseAsync" @oncontextmenu:preventDefault="true"></div>
+<ul class="akml-menu" role="menu" aria-label="@AriaLabel" data-testid="@TestId" tabindex="-1"
+    style="@($"left:{Px(X)}px;top:{Px(Y)}px")"
+    @ref="_panel" @onkeydown="OnKeyDownAsync" @onkeydown:stopPropagation="true">
+    @for (int i = 0; i < Items.Count; i++)
+    {
+        var index = i;
+        var item = Items[index];
+        if (item.IsSeparator)
+        {
+            <li role="separator" class="akml-menu-sep"></li>
+            continue;
+        }
+        var open = _openSub == index;
+        <li role="none" style="position:relative">
+            <button type="button" class="akml-menu-item"
+                    role="@(item.IsChecked == null ? "menuitem" : "menuitemcheckbox")"
+                    aria-checked="@(item.IsChecked == null ? null : item.IsChecked.Value ? "true" : "false")"
+                    aria-disabled="@(item.Disabled ? "true" : null)"
+                    aria-haspopup="@(item.HasChildren ? "true" : null)"
+                    aria-expanded="@(item.HasChildren ? (open ? "true" : "false") : null)"
+                    title="@(item.Disabled ? item.DisabledReason : null)"
+                    tabindex="@(_openSub < 0 && _focused == index ? 0 : -1)"
+                    data-testid="@item.TestId"
+                    @ref="_itemRefs[index]"
+                    @onclick="@(() => ClickAsync(index))">
+                <span class="akml-menu-check">@if (item.IsChecked == true) { <Icon Name="check" Size="14" /> }</span>
+                <span class="akml-menu-label">@item.Label</span>
+                @if (!string.IsNullOrEmpty(item.Shortcut))
+                {
+                    <span class="akml-menu-shortcut">@item.Shortcut</span>
+                }
+                @if (item.HasChildren)
+                {
+                    <Icon Name="chevron-right" Size="14" Class="akml-menu-submark" />
+                }
+            </button>
+            @if (open && item.Children is { } children)
+            {
+                <ul class="akml-menu" role="menu" aria-label="@item.Label" style="position:absolute;left:100%;top:0">
+                    @for (int j = 0; j < children.Count; j++)
+                    {
+                        var subIndex = j;
+                        var sub = children[subIndex];
+                        if (sub.IsSeparator)
+                        {
+                            <li role="separator" class="akml-menu-sep"></li>
+                            continue;
+                        }
+                        <li role="none">
+                            <button type="button" class="akml-menu-item" role="menuitem"
+                                    aria-disabled="@(sub.Disabled ? "true" : null)"
+                                    title="@(sub.Disabled ? sub.DisabledReason : null)"
+                                    tabindex="@(_subFocused == subIndex ? 0 : -1)"
+                                    data-testid="@sub.TestId"
+                                    @ref="_subRefs[subIndex]"
+                                    @onclick="@(() => RunAsync(sub))">
+                                <span class="akml-menu-check"></span>
+                                <span class="akml-menu-label">@sub.Label</span>
+                                @if (!string.IsNullOrEmpty(sub.Shortcut))
+                                {
+                                    <span class="akml-menu-shortcut">@sub.Shortcut</span>
+                                }
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<MenuItem> Items { get; set; } = Array.Empty<MenuItem>();
+
+    /// <summary>Where the menu opens, in viewport pixels (a pointer position or a cell's corner).</summary>
+    [Parameter] public double X { get; set; }
+
+    [Parameter] public double Y { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public string? TestId { get; set; }
+
+    [Parameter] public string? AriaLabel { get; set; }
+
+    private ElementReference _panel;
+    private ElementReference[] _itemRefs = Array.Empty<ElementReference>();
+    private ElementReference[] _subRefs = Array.Empty<ElementReference>();
+    private int _focused;
+    private int _openSub = -1;
+    private int _subFocused;
+    private bool _focusPending = true;
+    private bool _closed;
+    private IJSObjectReference? _ui;
+
+    protected override void OnParametersSet()
+    {
+        if (_itemRefs.Length != Items.Count) _itemRefs = new ElementReference[Items.Count];
+        if (_focused >= Items.Count || Items.Count > 0 && Items[_focused].IsSeparator) _focused = NextIndex(Items, -1, +1);
+    }
+
+    private static int NextIndex(IReadOnlyList<MenuItem> items, int from, int step)
+    {
+        if (items.Count == 0) return 0;
+        int i = from;
+        for (int n = 0; n < items.Count; n++)
+        {
+            i = (i + step + items.Count) % items.Count;
+            if (!items[i].IsSeparator) return i;
+        }
+        return Math.Max(0, from);
+    }
+
+    private static int Edge(IReadOnlyList<MenuItem> items, bool last) =>
+        last ? NextIndex(items, 0, -1) : NextIndex(items, items.Count - 1, +1);
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        var inSub = _openSub >= 0 && Items[_openSub].Children is { Count: > 0 };
+        var list = inSub ? Items[_openSub].Children! : Items;
+        int at = inSub ? _subFocused : _focused;
+
+        switch (e.Key)
+        {
+            case "ArrowDown": Move(inSub, NextIndex(list, at, +1)); break;
+            case "ArrowUp": Move(inSub, NextIndex(list, at, -1)); break;
+            case "Home": Move(inSub, Edge(list, last: false)); break;
+            case "End": Move(inSub, Edge(list, last: true)); break;
+            case "ArrowRight":
+                if (!inSub && Items[_focused].HasChildren && !Items[_focused].Disabled) OpenSub(_focused);
+                break;
+            case "ArrowLeft":
+                if (inSub) CloseSub();
+                break;
+            case "Escape":
+                if (inSub) CloseSub();
+                else await CloseAsync();
+                break;
+            case "Enter":
+            case " ":
+                if (inSub) await RunAsync(list[at]);
+                else await ClickAsync(_focused);
+                break;
+            default:
+                if (e.Key.Length == 1 && char.IsLetterOrDigit(e.Key[0]) && !e.CtrlKey && !e.AltKey && !e.MetaKey)
+                    TypeAhead(inSub, list, at, e.Key);
+                break;
+        }
+    }
+
+    private void Move(bool inSub, int index)
+    {
+        if (inSub) _subFocused = index; else _focused = index;
+        _focusPending = true;
+    }
+
+    private void TypeAhead(bool inSub, IReadOnlyList<MenuItem> list, int at, string key)
+    {
+        for (int n = 1; n <= list.Count; n++)
+        {
+            int i = (at + n) % list.Count;
+            var item = list[i];
+            if (!item.IsSeparator && item.Label.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+            {
+                Move(inSub, i);
+                return;
+            }
+        }
+    }
+
+    private void OpenSub(int index)
+    {
+        _openSub = index;
+        _focused = index;
+        var children = Items[index].Children!;
+        if (_subRefs.Length != children.Count) _subRefs = new ElementReference[children.Count];
+        _subFocused = NextIndex(children, -1, +1);
+        _focusPending = true;
+    }
+
+    private void CloseSub()
+    {
+        _openSub = -1;
+        _focusPending = true;
+    }
+
+    private async Task ClickAsync(int index)
+    {
+        if (index < 0 || index >= Items.Count) return;
+        var item = Items[index];
+        _focused = index;
+        if (item.Disabled) return;
+        if (item.HasChildren)
+        {
+            if (_openSub == index) CloseSub(); else OpenSub(index);
+            return;
+        }
+        await RunAsync(item);
+    }
+
+    private async Task RunAsync(MenuItem item)
+    {
+        if (item.Disabled || item.IsSeparator || item.HasChildren) return;
+        // Hand focus back to the opener BEFORE the command runs, so a dialog the command opens stashes
+        // the right return target (the focus stash is a stack shared with the dialog host).
+        await CloseAsync();
+        if (item.OnSelect != null) await item.OnSelect();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_closed) return;
+        _closed = true;
+        await RestoreFocusAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task RestoreFocusAsync()
+    {
+        try { if (_ui != null) await _ui.InvokeVoidAsync("restoreFocus"); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                _ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+                if (_ui != null)
+                {
+                    await _ui.InvokeVoidAsync("stashFocus", ".akml-menu");
+                    await _ui.InvokeVoidAsync("placeMenu", _panel, X, Y);
+                }
+            }
+            if (_focusPending && !_closed)
+            {
+                _focusPending = false;
+                if (_openSub >= 0 && _subFocused < _subRefs.Length) await _subRefs[_subFocused].FocusAsync();
+                else if (_focused < _itemRefs.Length) await _itemRefs[_focused].FocusAsync();
+            }
+        }
+        catch (JSDisconnectedException) { /* tab closing */ }
+        catch (JSException) { /* element gone — harmless */ }
+        catch (InvalidOperationException) { /* no JS (prerender) — harmless */ }
+    }
+
+    private static string Px(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    public async ValueTask DisposeAsync()
+    {
+        // Closed by the parent without going through CloseAsync (e.g. a new result replaced the grid).
+        if (!_closed) await RestoreFocusAsync();
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+}

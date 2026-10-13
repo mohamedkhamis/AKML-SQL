@@ -1,8 +1,10 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Parser;
 
 namespace AkmlSql.Web.Services;
 
@@ -24,22 +26,77 @@ public interface IQueryExecutionService
 
     /// <summary>Commit grid edits (parameterized UPDATE/INSERT/DELETE, one transaction). Never null.</summary>
     Task<ApplyChangesResult> ApplyAsync(ApplyChangesRequest request, CancellationToken ct);
+
+    /// <summary>Spec 041 (R21) — check the script's syntax on the server without running it. Sent only to an
+    /// engine that advertises <c>execute.v2</c>; never null.</summary>
+    Task<ExecuteQueryResult> ParseAsync(string sql, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        Task.FromResult(new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Error, ErrorMessage = QueryExecutionService.ParseUnavailable });
 }
 
 internal sealed class QueryExecutionService : IQueryExecutionService
 {
+    /// <summary>The capability an engine advertises when it understands Parse and the structured reply.</summary>
+    public const string CapabilityExecuteV2 = "execute.v2";
+
+    public const string NoReplyMessage = "No result was received within the timeout; the statement may still be running on the engine.";
+    public const string DisconnectedMessage = "The engine connection dropped; the statement may still have run.";
+    public const string ParseUnavailable = "Parse needs a newer engine: this one can only run a script, not check it.";
+
+    /// <summary>Added to the reply deadline beyond the script's own timeouts (connect, queueing, transfer).</summary>
+    internal static readonly TimeSpan DefaultDeadlineSlack = TimeSpan.FromSeconds(15);
+
     private readonly IEngineBridge _bridge;
     private readonly ISqlConnectionService _sqlConn;
     private readonly IDiagnosticsRingBuffer _diagnostics;
+    private readonly TsqlParserService _parser;
 
-    public QueryExecutionService(IEngineBridge bridge, ISqlConnectionService sqlConn, IDiagnosticsRingBuffer diagnostics)
+    public QueryExecutionService(IEngineBridge bridge, ISqlConnectionService sqlConn, IDiagnosticsRingBuffer diagnostics, TsqlParserService? parser = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _sqlConn = sqlConn ?? throw new ArgumentNullException(nameof(sqlConn));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        _parser = parser ?? new TsqlParserService();
     }
 
-    public async Task<ExecuteQueryResult> ExecuteAsync(string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct)
+    /// <summary>Tests shorten the slack so a never-answering engine is noticed quickly.</summary>
+    internal TimeSpan DeadlineSlack { get; set; } = DefaultDeadlineSlack;
+
+    /// <summary>
+    /// How many commands the engine will run for <paramref name="sql"/> — its batches, each as many times as
+    /// its <c>GO n</c> says — split by the same parser the engine uses. At least 1.
+    /// </summary>
+    internal int CountBatchRuns(string sql)
+    {
+        var split = _parser.SplitBatches(sql);
+        if (split.SeparatorError != null || split.Batches.Count == 0) return 1;
+        long runs = split.Batches.Sum(b => (long)Math.Min(Math.Max(1, b.RepeatCount), 10_000));
+        return (int)Math.Min(int.MaxValue, Math.Max(1, runs));
+    }
+
+    /// <summary>
+    /// Spec 041 (R22) — how long to wait for the reply: the script's time limit, which the engine enforces
+    /// on the whole run (start to last row, <see cref="ExecuteLimits.ScriptTimeLimit"/>) and then replies,
+    /// plus slack for connecting, queueing and the transfer. Running out of it means the engine did not
+    /// answer (an older engine without the limit, or a lost reply), so it says the statement "may still be
+    /// running" rather than that it failed.
+    /// </summary>
+    internal TimeSpan ReplyDeadline(string sql, int timeoutSeconds) =>
+        ExecuteLimits.ScriptTimeLimit(timeoutSeconds, CountBatchRuns(sql)) + DeadlineSlack;
+
+    public Task<ExecuteQueryResult> ExecuteAsync(string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        SendScriptAsync(MessageTypes.ExecuteQuery, sql, maxRows, timeoutSeconds, queryId, ct);
+
+    public Task<ExecuteQueryResult> ParseAsync(string sql, int timeoutSeconds, string queryId, CancellationToken ct)
+    {
+        if (Array.IndexOf(_bridge.EngineCapabilities ?? Array.Empty<string>(), CapabilityExecuteV2) < 0)
+        {
+            // An older engine has no Parse: an unknown request type gets no reply at all.
+            return Task.FromResult(new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Error, ErrorMessage = ParseUnavailable });
+        }
+        return SendScriptAsync(MessageTypes.ExecuteParse, sql, 1, timeoutSeconds, queryId, ct);
+    }
+
+    private async Task<ExecuteQueryResult> SendScriptAsync(int messageType, string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct)
     {
         if (_bridge.State != BridgeState.Open || !_sqlConn.IsConnected)
         {
@@ -51,6 +108,8 @@ internal sealed class QueryExecutionService : IQueryExecutionService
             };
         }
 
+        using var deadline = new CancellationTokenSource(ReplyDeadline(sql ?? string.Empty, timeoutSeconds));
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
         try
         {
             var req = new ExecuteQueryRequest
@@ -63,7 +122,10 @@ internal sealed class QueryExecutionService : IQueryExecutionService
                 IncludeProvenance = true,
             };
             var result = await _bridge.SendAsync<ExecuteQueryRequest, ExecuteQueryResult>(
-                MessageTypes.ExecuteQuery, req, ct).ConfigureAwait(false);
+                messageType, req, linked.Token).ConfigureAwait(false);
+
+            // Spec 041 (R27): a script's USE moves the session; the toolbar's database selector follows.
+            if (result != null) _sqlConn.ReportCurrentDatabase(result.CurrentDatabase);
 
             // The bridge returns default! for an empty payload; defend so callers always get a result.
             return result ?? new ExecuteQueryResult
@@ -73,9 +135,23 @@ internal sealed class QueryExecutionService : IQueryExecutionService
                 ErrorMessage = "The engine returned an empty execute response.",
             };
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Cancelled, ErrorMessage = "Cancelled." };
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "execute", "ExecuteQuery: no reply before the deadline.");
+            return new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.NoReply, ErrorMessage = NoReplyMessage };
+        }
         catch (OperationCanceledException)
         {
             return new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Cancelled, ErrorMessage = "Cancelled." };
+        }
+        catch (InvalidOperationException ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "execute", $"ExecuteQuery: the bridge dropped: {ex.Message}");
+            return new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Disconnected, ErrorMessage = DisconnectedMessage };
         }
         catch (Exception ex)
         {

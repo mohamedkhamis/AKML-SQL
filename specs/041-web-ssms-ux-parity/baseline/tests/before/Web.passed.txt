@@ -1,0 +1,503 @@
+AkmlSql.Web.Tests.Ai.AiPanelTests.CapableProvider_ShowsFiveActions
+AkmlSql.Web.Tests.Ai.AiPanelTests.CorsBlockedProvider_ShowsNoticeNotActions
+AkmlSql.Web.Tests.Ai.AiPanelTests.NoProvider_ShowsAddPrompt
+AkmlSql.Web.Tests.Ai.AiPanelTests.RenderedDom_NeverContainsAnApiKey
+AkmlSql.Web.Tests.Ai.AiPreferenceTests.GetActiveAsync_returns_empty_on_a_fresh_store
+AkmlSql.Web.Tests.Ai.AiPreferenceTests.SetActiveAsync_then_GetActiveAsync_returns_the_persisted_id
+AkmlSql.Web.Tests.Ai.AiPreferenceTests.SetActiveAsync_with_empty_clears_active
+AkmlSql.Web.Tests.Ai.AllowListTests.ExtractOrigin_strips_path_and_query
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_matches_azure_subdomain_wildcard(providerId: "azure", origin: "https://my-resource.openai.azure.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_matches_azure_subdomain_wildcard(providerId: "azure", origin: "https://prod-us.openai.azure.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "anthropic", origin: "https://api.openai.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "azure", origin: "https://my.azure.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "gemini", origin: "http://generativelanguage.googleapis.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "ollama", origin: "http://10.0.0.5:11434")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "ollama", origin: "http://localhost:11435")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "openai", origin: "https://api.openai.com.evil.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "openai", origin: "https://api-openai-com.attacker.io")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_rejects_non_listed_origins(providerId: "unknown", origin: "https://api.openai.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "anthropic", origin: "https://api.anthropic.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "gemini", origin: "https://generativelanguage.googleapis.com")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "lmstudio", origin: "http://127.0.0.1:1234")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "lmstudio", origin: "http://localhost:1234")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "ollama", origin: "http://127.0.0.1:11434")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "ollama", origin: "http://localhost:11434")
+AkmlSql.Web.Tests.Ai.AllowListTests.IsOriginAllowed_returns_true_for_documented_origins(providerId: "openai", origin: "https://api.openai.com")
+AkmlSql.Web.Tests.Ai.AnthropicWireTests.ApplyAuth_SetsBrowserDirectHeaders
+AkmlSql.Web.Tests.Ai.AnthropicWireTests.BuildBody_OmitsTemperatureNull_ButKeepsSetValues
+AkmlSql.Web.Tests.Ai.AnthropicWireTests.BuildBody_PutsSystemAtTopLevelAndRequiresMaxTokens
+AkmlSql.Web.Tests.Ai.AnthropicWireTests.ExtractText_ConcatenatesTextBlocks
+AkmlSql.Web.Tests.Ai.AnthropicWireTests.ParseSse_YieldsTextDeltasAndStopsOnMessageStop
+AkmlSql.Web.Tests.Ai.ChatHistoryStoreTests.Clear_LeavesSchemaCacheAndKeysIntact
+AkmlSql.Web.Tests.Ai.ChatHistoryStoreTests.Clear_RemovesConversation
+AkmlSql.Web.Tests.Ai.ChatHistoryStoreTests.Save_then_Get_RoundTripsTurnsAndProvider
+AkmlSql.Web.Tests.Ai.ChatHistoryStoreTests.ToMarkdown_PreservesTurnsAndCodeBlocksVerbatim
+AkmlSql.Web.Tests.Ai.GhostTextControllerTests.CacheHit_DoesNotCallProviderTwice
+AkmlSql.Web.Tests.Ai.GhostTextControllerTests.Disabled_ReturnsNullAndNeverCallsProvider
+AkmlSql.Web.Tests.Ai.GhostTextControllerTests.FullyLocal_WithCloudCapableProvider_SkipsSilently
+AkmlSql.Web.Tests.Ai.GhostTextControllerTests.RateLimit_AllowsAfterWindowElapses
+AkmlSql.Web.Tests.Ai.GhostTextControllerTests.RateLimit_SkipsBeyondMaxWithinWindow
+AkmlSql.Web.Tests.Ai.KeyVaultTests.Aad_persists_with_provider_id_prefix
+AkmlSql.Web.Tests.Ai.KeyVaultTests.GetConfigAsync_returns_config_without_the_key
+AkmlSql.Web.Tests.Ai.KeyVaultTests.HasKeyAsync_returns_false_for_unknown_provider
+AkmlSql.Web.Tests.Ai.KeyVaultTests.ListAsync_returns_every_provider_sorted_by_display_name
+AkmlSql.Web.Tests.Ai.KeyVaultTests.Plaintext_never_appears_in_IndexedDB_after_Set
+AkmlSql.Web.Tests.Ai.KeyVaultTests.RemoveAsync_drops_the_record
+AkmlSql.Web.Tests.Ai.KeyVaultTests.Set_then_Unwrap_returns_the_plaintext
+AkmlSql.Web.Tests.Ai.KeyVaultTests.SetKeyAsync_accepts_empty_key_for_local_providers
+AkmlSql.Web.Tests.Ai.KeyVaultTests.SetKeyAsync_rejects_empty_provider
+AkmlSql.Web.Tests.Ai.KeyVaultTests.UnwrapForCallAsync_throws_clear_error_for_no_key_provider
+AkmlSql.Web.Tests.Ai.KeyVaultTests.UnwrapForCallAsync_throws_for_unknown_provider
+AkmlSql.Web.Tests.Ai.KeyVaultTests.UnwrappedKey_Dispose_clears_the_buffer
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.FullSchema_IncludesColumnsWithRealTypeWidths
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.FullyLocal_StillDisclosesFullSchemaText
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.FullyLocal_WithCloudProvider_RefusesAndDoesNotSend
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.FullyLocal_WithLocalProvider_Sends
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.NoCachedSchema_DegradesToEmpty
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.NoSchema_ReturnsEmptyOnEveryFeature
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.PerFeatureOverride_BeatsGlobalDefault
+AkmlSql.Web.Tests.Ai.PrivacyModeTests.SchemaNamesOnly_HasNamesButNoTypesForeignKeysOrDescriptions
+AkmlSql.Web.Tests.Ai.StreamingParserTests.OpenAi_ApplyAuth_SetsBearer
+AkmlSql.Web.Tests.Ai.StreamingParserTests.OpenAi_BuildBody_OmitsNullOptionals
+AkmlSql.Web.Tests.Ai.StreamingParserTests.OpenAi_ExtractText_ReadsChoiceMessageContent
+AkmlSql.Web.Tests.Ai.StreamingParserTests.OpenAiSse_SkipsMalformedChunks
+AkmlSql.Web.Tests.Ai.StreamingParserTests.OpenAiSse_YieldsContentDeltasAndStopsAtDone
+AkmlSql.Web.Tests.Ai.StreamingParserTests.ParseSse_HonoursCancellation
+AkmlSql.Web.Tests.AiChatPanelComposerTests.CtrlEnter_sends_the_text_typed_so_far
+AkmlSql.Web.Tests.AiChatPanelComposerTests.Send_click_sends_and_renders_the_reply
+AkmlSql.Web.Tests.AiChatPanelComposerTests.Typing_enables_send_without_blur
+AkmlSql.Web.Tests.AiChatPanelComposerTests.Whitespace_only_input_keeps_send_disabled
+AkmlSql.Web.Tests.AiChatPanelCopyTests.Clicking_copy_puts_that_turns_text_on_the_clipboard
+AkmlSql.Web.Tests.AiChatPanelCopyTests.Copy_shows_a_transient_copied_indicator_on_that_turn_only
+AkmlSql.Web.Tests.AiChatPanelCopyTests.Every_nonEmpty_turn_gets_a_copy_button
+AkmlSql.Web.Tests.Analysis.SuppressionEditTests.Global_override_off_suppresses_the_rule_after_the_bugfix
+AkmlSql.Web.Tests.Analysis.SuppressionEditTests.Line_directive_does_not_suppress_the_rule_on_other_lines
+AkmlSql.Web.Tests.Analysis.SuppressionEditTests.Line_directive_in_shared_akml_form_is_parsed_by_the_engine_parser
+AkmlSql.Web.Tests.Analysis.SuppressionEditTests.No_store_wired_leaves_findings_untouched
+AkmlSql.Web.Tests.Analysis.SuppressionEditTests.The_original_noqa_form_still_parses_so_existing_scripts_keep_working
+AkmlSql.Web.Tests.Bridge.BridgeRoutedServicesTests.CompletionService_returns_empty_when_bridge_is_disconnected
+AkmlSql.Web.Tests.Bridge.BridgeRoutedServicesTests.GotoDefinitionService_returns_null_when_bridge_is_disconnected
+AkmlSql.Web.Tests.Bridge.BridgeRoutedServicesTests.QuickInfoService_returns_empty_when_bridge_is_disconnected
+AkmlSql.Web.Tests.Bridge.BridgeRoutedServicesTests.SignatureHelpService_returns_empty_when_bridge_is_disconnected
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_duplicate_id
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_LAN_connection_without_bearer_token
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_port_outside_range
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_then_GetAsync_returns_the_record
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.ListAsync_excludes_internal_active_id_pointer
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.ListAsync_returns_empty_on_a_fresh_store
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.UpdateAsync_replaces_existing_record
+AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.UpdateAsync_throws_on_unknown_id
+AkmlSql.Web.Tests.Bridge.HandshakeClientTests.ConnectAsync_sends_HandshakeRequest_with_browser_label
+AkmlSql.Web.Tests.Bridge.HandshakeClientTests.Happy_path_localhost_handshake_returns_ok_and_capabilities
+AkmlSql.Web.Tests.Bridge.HandshakeClientTests.Pin_invalid_surfaces_as_response_status_and_bridge_is_failed
+AkmlSql.Web.Tests.Bridge.HandshakeClientTests.Pin_required_surfaces_when_engine_rejects_bearer
+AkmlSql.Web.Tests.Bridge.HandshakeClientTests.Protocol_mismatch_is_reported_verbatim
+AkmlSql.Web.Tests.Bridge.HandshakeClientTests.State_transitions_through_Connecting_to_Open_on_happy_path
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.Aad_is_bound_to_connectionId
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.ExistsAsync_returns_false_for_unknown_connection
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.Plaintext_never_appears_in_IndexedDB_after_Store
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.RemoveAsync_drops_the_record
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.RetrieveAsync_throws_when_record_is_missing
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.Store_then_Retrieve_round_trips_the_plaintext
+AkmlSql.Web.Tests.Bridge.PairingTokenVaultTests.Wrapped_record_persists_the_aad_bound_to_the_connectionId
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.BackoffSequenceMatchesContract
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.DisconnectAsyncBypassesRetry
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.InBrowserWorkSurvivesReconnect
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.JitterStaysInRange
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.RetrySucceedsRestoresOpen
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.RevocationTerminatesLoop
+AkmlSql.Web.Tests.Bridge.ReconnectLoopTests.SocketCloseTransitionsToReconnecting
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_assigns_a_guid_when_id_is_empty
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_duplicate_id
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_database
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_name
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_server
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_then_GetAsync_returns_the_record
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.GetActiveId_is_null_until_set
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_returns_empty_on_a_fresh_store
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_skips_a_corrupt_row
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_sorts_by_name_and_excludes_active_pointer_sentinel
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.RemoveAsync_keeps_active_pointer_when_a_different_row_is_removed
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.Serialized_record_never_contains_a_password_field
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.UpdateAsync_replaces_existing_record
+AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.UpdateAsync_throws_on_unknown_id
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.ChecksumDriftRefreshesTreePreservesExpansion
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.ClickOnObjectRaisesQualifiedName
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.EmptyStatePlaceholderWhenNoSnapshot
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.ExpandsTableShowsColumnsFromPhaseB
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.RendersDatabaseSchemaTableHierarchyFromPhaseA
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.StaleBadgeAppearsWhenDisconnected
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.StaleBadgeHiddenWhenOpen
+AkmlSql.Web.Tests.Bridge.SchemaTreeComponentTests.VirtualisationKicksInPastThreshold
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.A_named_pipe_or_UNC_target_is_refused_even_with_sql_auth(server: "\\\\fileserver\\share")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.A_named_pipe_or_UNC_target_is_refused_even_with_sql_auth(server: "lpc:remote-host")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.A_named_pipe_or_UNC_target_is_refused_even_with_sql_auth(server: "np:\\\\remote\\pipe\\sql\\query")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.ConnectAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_explains_why_windows_auth_is_refused_for_a_remote_server
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_identifier_metacharacters_without_touching_the_bridge(server: "master\"")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_identifier_metacharacters_without_touching_the_bridge(server: "server;Integrated Security=false")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "::ffff:10.0.0.5")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "[::ffff:10.0.0.5]")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "\\\\fileserver\\share")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "10.0.0.5")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "127.0.0.1.attacker.com")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "db.database.windows.net")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "evil.com")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_rejects_windows_auth_to_a_remote_target_without_touching_the_bridge(server: "tcp:remote-host,1433")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_with_a_loopback_target_passes_the_guard_and_reaches_the_bridge
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_with_sql_auth_allows_a_remote_server(server: "10.0.0.5")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_with_sql_auth_allows_a_remote_server(server: "162.220.54.191,1433")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_with_sql_auth_allows_a_remote_server(server: "db.database.windows.net")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_with_sql_auth_allows_a_remote_server(server: "evil.com")
+AkmlSql.Web.Tests.Bridge.SqlConnectionServiceGuardTests.TestAsync_with_sql_auth_allows_a_remote_server(server: "tcp:remote-host\\SQLEXPRESS")
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Disconnected_with_cache_shows_Cached
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Disconnected_without_cache_shows_Offline
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Drift_after_cache_seeded_flips_Offline_to_Cached_in_place
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_autorestores_saved_windows_auth_connection
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_with_sql_session_shows_Live
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_without_sql_session_shows_BridgeOnly
+AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Reconnecting_with_cache_holds_Cached_no_flicker
+AkmlSql.Web.Tests.Bridge.TlsFingerprintMismatchBannerTests.AbsentByDefault_NoEventEverFired
+AkmlSql.Web.Tests.Bridge.TlsFingerprintMismatchBannerTests.AppearsOnFirstMismatchEvent_ShowsRedactedThumbprints
+AkmlSql.Web.Tests.Bridge.TlsFingerprintMismatchBannerTests.DismissClearsTheBanner
+AkmlSql.Web.Tests.Bridge.TlsFingerprintMismatchBannerTests.Last12HelperRedactsToTrailingTwelveCharacters
+AkmlSql.Web.Tests.Bridge.TlsFingerprintMismatchBannerTests.SecondMismatchQueuesBehindFirst_RevealsAfterDismiss
+AkmlSql.Web.Tests.Cache.SchemaCacheEvictorTests.EvictAndRetryAsync_does_not_evict_when_error_is_not_quota
+AkmlSql.Web.Tests.Cache.SchemaCacheEvictorTests.EvictAndRetryAsync_emits_a_single_eviction_notice
+AkmlSql.Web.Tests.Cache.SchemaCacheEvictorTests.EvictAndRetryAsync_evicts_oldest_first
+AkmlSql.Web.Tests.Cache.SchemaCacheEvictorTests.EvictAndRetryAsync_no_op_when_retry_succeeds_immediately
+AkmlSql.Web.Tests.Cache.SchemaCacheEvictorTests.EvictAndRetryAsync_stops_at_empty_cache
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.ClearAllAsync_drops_every_entry
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.Composite_key_collapses_two_aliases_into_one_entry
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.Composite_key_rejects_empty_server_or_db
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.EstimatedSizeAsync_returns_non_zero_for_a_known_entry
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.GetAsync_returns_null_for_unknown_key
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.ListAsync_returns_entries_sorted_by_LastUsedAt_ascending
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.RemoveAsync_drops_the_entry
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.SetAsync_then_GetAsync_returns_the_snapshot
+AkmlSql.Web.Tests.Cache.SchemaCacheStoreTests.TouchAsync_updates_LastUsedAt_without_changing_payload
+AkmlSql.Web.Tests.Cache.SchemaSyncTests.PollNowAsync_on_drift_fetches_PhaseA_and_persists_to_cache
+AkmlSql.Web.Tests.Cache.SchemaSyncTests.PollNowAsync_with_closed_bridge_touches_LastUsedAt_only
+AkmlSql.Web.Tests.Cache.SchemaSyncTests.ReportEditorActive_updates_the_last_activity_timestamp
+AkmlSql.Web.Tests.Cache.SchemaSyncTests.StartAsync_fires_an_immediate_initial_poll
+AkmlSql.Web.Tests.Cache.SchemaSyncTests.StartAsync_is_idempotent
+AkmlSql.Web.Tests.Cache.SchemaSyncTests.StartAsync_marks_the_sync_as_running
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Offline_a_table_with_a_space_is_inserted_bracketed_but_listed_plainly
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Offline_columns_are_bracketed_when_they_need_it_in_both_forms
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Phase_B_columns_are_included_when_cached_in_both_bare_and_qualified_forms
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Returns_schemas_and_objects_from_phase_A_blob
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Smart_group_by_item_is_absent_once_a_partial_token_is_typed
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Smart_group_by_item_is_absent_outside_a_GROUP_BY_clause
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Smart_group_by_item_is_absent_when_no_live_document_is_supplied
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Smart_group_by_item_is_offered_first_when_cursor_in_GROUP_BY
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.Uses_most_recently_used_snapshot_when_multiple_exist
+AkmlSql.Web.Tests.Completion.CompletionServiceOfflineTests.With_no_cache_entry_returns_keywords_only
+AkmlSql.Web.Tests.Completion.QuickInfoServiceOfflineTests.Caret_on_unknown_identifier_returns_empty
+AkmlSql.Web.Tests.Completion.QuickInfoServiceOfflineTests.Column_under_caret_resolves_when_prefix_is_unknown_alias
+AkmlSql.Web.Tests.Completion.QuickInfoServiceOfflineTests.Dotted_identifier_resolves_schema_object
+AkmlSql.Web.Tests.Completion.QuickInfoServiceOfflineTests.Schema_name_under_caret_returns_schema_object_count
+AkmlSql.Web.Tests.Completion.QuickInfoServiceOfflineTests.With_no_cache_or_session_returns_empty
+AkmlSql.Web.Tests.Completion.SignatureHelpServiceOfflineTests.Call_for_unknown_procedure_returns_empty
+AkmlSql.Web.Tests.Completion.SignatureHelpServiceOfflineTests.Caret_outside_any_call_returns_empty
+AkmlSql.Web.Tests.Completion.SignatureHelpServiceOfflineTests.Parameter_index_counts_commas_at_depth_zero_only
+AkmlSql.Web.Tests.Completion.SignatureHelpServiceOfflineTests.Paren_call_resolves_procedure_and_parameter_list
+AkmlSql.Web.Tests.Completion.SignatureHelpServiceOfflineTests.With_no_cache_or_session_returns_empty
+AkmlSql.Web.Tests.Diagnostics.RingBufferTests.Buffer_wraps_around_at_the_capacity_bound
+AkmlSql.Web.Tests.Diagnostics.RingBufferTests.Clear_drops_every_entry
+AkmlSql.Web.Tests.Diagnostics.RingBufferTests.FlushAsync_persists_to_IndexedDB_and_RestoreAsync_rehydrates
+AkmlSql.Web.Tests.Diagnostics.RingBufferTests.Log_then_Snapshot_returns_entries_in_chronological_order
+AkmlSql.Web.Tests.Diagnostics.RingBufferTests.Restore_on_a_corrupt_record_does_not_throw
+AkmlSql.Web.Tests.Editor.SessionRestoreTests.ClearAsync_drops_the_persisted_session
+AkmlSql.Web.Tests.Editor.SessionRestoreTests.Multiple_SaveAsync_in_quick_succession_collapse_to_one_record
+AkmlSql.Web.Tests.Editor.SessionRestoreTests.RestoreAsync_returns_null_on_a_fresh_store
+AkmlSql.Web.Tests.Editor.SessionRestoreTests.SaveAsync_then_FlushAsync_persists_and_RestoreAsync_returns_the_record
+AkmlSql.Web.Tests.EditorSessionKeyTests.BuildTextChangeRecord_carries_the_session_key_and_fields
+AkmlSql.Web.Tests.EditorSessionKeyTests.GetOrCreateAsync_with_a_preloaded_record_mints_once_and_stays_stable
+AkmlSql.Web.Tests.EditorSessionKeyTests.Opening_a_history_entry_in_the_editor_preserves_the_session_key
+AkmlSql.Web.Tests.EditorSessionKeyTests.Reset_after_clear_leaves_the_store_genuinely_empty
+AkmlSql.Web.Tests.EditorSessionKeyTests.Reset_mints_a_new_key
+AkmlSql.Web.Tests.EditorSessionKeyTests.Session_key_survives_a_reload
+AkmlSql.Web.Tests.EditorSessionKeyTests.Session_key_survives_a_text_change_save
+AkmlSql.Web.Tests.EditorSessionKeyTests.SetDocumentTextAsync_preserves_an_existing_session_key_and_replaces_only_the_text
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.Classifies_Keyword_String_Comment
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_DropsBooleanOperatorsCaseInsensitive
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_DropsPrefixFiltersAndBooleans
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_DropsQuotedNonTextPrefixValue
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_DropsServerPrefixValue
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_KeepsQuotedPhraseIntact
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_KeepsSqlPrefixValueAndQuotedPrefixValue
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.ExtractTerms_StripsTrailingWildcard
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.NoSearch_HasNoHits
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.SearchTerm_ProducesHitSegment
+AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.Segments_ConcatenateToInputVerbatim
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.BuildRecordRequest_ComposesFields
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DateBucket_Older
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DateBucket_ThisWeek
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DateBucket_Today
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DateBucket_TwoMonths
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DateBucket_Unparseable_Older
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DeriveRowCount_Dml_UsesAffected
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DeriveRowCount_Select_SumsResultRows
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.DeriveSources_DistinctSortedNonEmpty
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.StatusMapping(status: 0, shouldRecord: True, mapped: 0)
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.StatusMapping(status: 1, shouldRecord: True, mapped: 1)
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.StatusMapping(status: 2, shouldRecord: True, mapped: 2)
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.StatusMapping(status: 3, shouldRecord: True, mapped: 1)
+AkmlSql.Web.Tests.History.WebHistoryLogicTests.StatusMapping(status: 4, shouldRecord: False, mapped: 1)
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Display_name_is_the_session_name
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Falls_back_to_sql_only_when_unnamed
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Meta_line_summarises_runs_and_versions(runs: 1, versions: 1, expected: "")
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Meta_line_summarises_runs_and_versions(runs: 276, versions: 1, expected: "×276")
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Meta_line_summarises_runs_and_versions(runs: 276, versions: 12, expected: "×276 · 12 versions")
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Meta_line_summarises_runs_and_versions(runs: 3, versions: 2, expected: "×3 · 2 versions")
+AkmlSql.Web.Tests.HistoryRowDisplayTests.Sql_fallback_collapses_whitespace_and_truncates_around_sixty_chars
+AkmlSql.Web.Tests.Parity.ParityBaselineGenerator.Generate_parity_baselines_for_the_corpus
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Allows_into_inside_string_or_comment(sql: "SELECT 1 -- jump into temp")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Allows_into_inside_string_or_comment(sql: "SELECT 1 /* into */")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Allows_into_inside_string_or_comment(sql: "SELECT 'fall into the trap' AS msg FROM dbo.T")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Allows_into_inside_string_or_comment(sql: "SELECT id FROM t -- insert into log later")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Allows_into_inside_string_or_comment(sql: "SELECT 'it''s into that' AS x")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Allows_into_inside_string_or_comment(sql: "SELECT 'jump into' AS x")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Rejects_genuine_select_into(sql: "SELECT * INTO #t FROM dbo.T")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Rejects_genuine_select_into(sql: "SELECT id INTO newtable FROM dbo.T")
+AkmlSql.Web.Tests.Pr247_QueryRefreshSafetyFix.Rejects_genuine_select_into(sql: "SELECT 'x' INTO #s FROM dbo.T")
+AkmlSql.Web.Tests.Pr247_ResultsGridApplyMessageTests.SuccessfulApply_SurfacesAppliedMessage_EvenAfterPendingEditsCleared
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: AddGroupByColumns)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: ConvertOldStyleJoins)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: ConvertSpExecutesql)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: EncapsulateBeginEnd)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: ExpandExecParameters)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: ExpandInsertColumns)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: ExpandUpdateColumns)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: RemoveSemicolons)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: ReplaceDeprecatedSyntax)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.BrowserApply_matches_direct_engine_operation(kind: Unformat)
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.ConvertOldStyleJoins_golden_emits_inner_join
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.Preview_reports_changed_false_for_a_noop_input
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.RemoveSemicolons_golden_strips_all_terminators
+AkmlSql.Web.Tests.Refactoring.LightweightParityTests.Unparseable_sql_leaves_document_unchanged
+AkmlSql.Web.Tests.Refactoring.RefactoringServiceTests.ApplyAsync_returns_null_when_heavy_is_unavailable
+AkmlSql.Web.Tests.Refactoring.RefactoringServiceTests.FormatSelectionAsync_runs_locally_without_a_bridge
+AkmlSql.Web.Tests.Refactoring.RefactoringServiceTests.HeavyAvailable_is_false_on_a_closed_bridge
+AkmlSql.Web.Tests.Refactoring.RefactoringServiceTests.PreviewAsync_returns_null_when_heavy_is_unavailable
+AkmlSql.Web.Tests.Refactoring.RefactorInputDialogTests.Extract_proc_shows_only_the_unit_name_field
+AkmlSql.Web.Tests.Refactoring.RefactorInputDialogTests.Preview_panel_renders_heavyweight_change_list_and_enables_apply
+AkmlSql.Web.Tests.Refactoring.RefactorInputDialogTests.Preview_panel_shows_errors_and_disables_apply_when_cannot_apply
+AkmlSql.Web.Tests.Refactoring.RefactorInputDialogTests.Smart_rename_shows_identifier_and_newname_fields_only
+AkmlSql.Web.Tests.Refactoring.RefactorInputDialogTests.Submit_blocks_and_does_not_raise_when_a_required_field_is_empty
+AkmlSql.Web.Tests.Refactoring.RefactorInputDialogTests.Submit_raises_with_trimmed_values_when_valid
+AkmlSql.Web.Tests.Refactoring.RefactorPreviewPanelTests.Apply_button_raises_OnApply_when_changed
+AkmlSql.Web.Tests.Refactoring.RefactorPreviewPanelTests.Cancel_raises_OnCancel
+AkmlSql.Web.Tests.Refactoring.RefactorPreviewPanelTests.Shows_before_and_after_when_changed
+AkmlSql.Web.Tests.Refactoring.RefactorPreviewPanelTests.Shows_no_change_state_and_disables_apply_when_not_changed
+AkmlSql.Web.Tests.ScaffoldingTests.Scaffolding_assembly_loads
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.AnalyseAsync_handles_empty_input_without_crashing
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.AnalyseAsync_refuses_oversized_input
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.AnalyseAsync_respects_cancellation_token
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.AnalyseAsync_returns_no_issues_for_clean_sql
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.AnalyseAsync_returns_PE001_for_select_star_in_procedure
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "01-simple-select")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "02-multi-join")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "03-cte-with-columns")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "04-multiple-ctes")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "05-case-searched")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "06-case-simple")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "07-in-list-short")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "08-in-list-long")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "09-between-operators")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "10-ddl-create-table")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "11-stored-procedure")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "12-merge-statement")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "13-subqueries")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-01-select-list")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-02-distinct-top")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-03-where-andor")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-04-between-in")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-05-joins")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-06-subqueries")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-07-case-short")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-08-case-long")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-09-cte-single")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-10-cte-columns")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-11-insert-values")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-12-insert-select")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-13-update-delete")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-14-declare-set")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-15-create-table")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-16-control-flow")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-17-function-calls")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-18-semicolons-go")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-19-comments")
+AkmlSql.Web.Tests.Services.AnalyserServiceTests.Analyser_MatchesIdeBaseline_AcrossCorpus(corpusId: "sp031-20-merge")
+AkmlSql.Web.Tests.Services.AnalysisSettingsStoreTests.Corrupt_persisted_record_falls_back_to_defaults
+AkmlSql.Web.Tests.Services.AnalysisSettingsStoreTests.GetAsync_returns_defaults_on_a_fresh_store
+AkmlSql.Web.Tests.Services.AnalysisSettingsStoreTests.SetAsync_then_GetAsync_in_a_new_instance_returns_the_persisted_record
+AkmlSql.Web.Tests.Services.DocumentSizeLimitTests.EnsureWithinLimit_accepts_content_just_under_limit
+AkmlSql.Web.Tests.Services.DocumentSizeLimitTests.EnsureWithinLimit_accepts_empty_string
+AkmlSql.Web.Tests.Services.DocumentSizeLimitTests.EnsureWithinLimit_accepts_null
+AkmlSql.Web.Tests.Services.DocumentSizeLimitTests.EnsureWithinLimit_throws_when_content_exceeds_limit
+AkmlSql.Web.Tests.Services.DocumentSizeLimitTests.FormatterService_accepts_input_just_under_limit
+AkmlSql.Web.Tests.Services.DocumentSizeLimitTests.FormatterService_refuses_oversized_input_with_DocumentTooLargeException
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.ALocalEngine_ThatDidNotAnswer_PointsAtTheService_NotAtCertificates
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.AnIpv6Engine_GetsAValidTrustUrl
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: " engine-host:59417 ", fallback: 47291, host: "engine-host", port: 59417)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "[fe80::1]:59417", fallback: 47291, host: "fe80::1", port: 59417)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "162.220.54.191", fallback: 47291, host: "162.220.54.191", port: 47291)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "162.220.54.191:59417", fallback: 47291, host: "162.220.54.191", port: 59417)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "fe80::1", fallback: 47291, host: "fe80::1", port: 47291)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "https://engine.example.com:59417/", fallback: 47291, host: "engine.example.com", port: 59417)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "localhost", fallback: 47291, host: "localhost", port: 47291)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "wss://162.220.54.191:59417/akmlsql", fallback: 47291, host: "162.220.54.191", port: 59417)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.APastedAddress_FillsHostAndPort(input: "wss://engine.example.com/akmlsql", fallback: 59417, host: "engine.example.com", port: 59417)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.ARemoteEngine_ThatDidNotAnswer_GetsTheTrustLinkFirst_AndThePortAndPinSteps
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: "   ")
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: "")
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: "[fe80::1")
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: "host name with spaces")
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: "host:70000")
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: "host:notaport")
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.NonsenseIsRejected(input: null)
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.ThePagesOwnPolicy_IsNamed_AndTheFixIsAnUpdate
+AkmlSql.Web.Tests.Services.EngineConnectDiagnosisTests.TheStackTrace_IsKeptOutOfTheMessage
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_blank_host_is_rejected_rather_than_producing_a_nonsense_url
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_custom_port_is_honoured
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_loopback_host_tries_plaintext_first_then_tls
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_named_host_is_never_downgraded_even_if_plaintext_was_remembered
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_named_host_is_tls_only
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_remembered_scheme_does_not_produce_a_duplicate_candidate
+AkmlSql.Web.Tests.Services.EngineEndpointTests.A_remembered_scheme_is_tried_first_so_a_known_good_connection_needs_one_attempt
+AkmlSql.Web.Tests.Services.EngineEndpointTests.An_ipv6_literal_is_bracketed_so_the_url_is_valid
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "::1")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "127.0.0.1")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST") [#2]
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "192.168.1.10")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "engine.example.com")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "my-machine")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: null)
+AkmlSql.Web.Tests.Services.EngineEndpointTests.SchemeOf_reads_the_scheme_back(url: "ws://127.0.0.1:47291/akmlsql", expected: "ws")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.SchemeOf_reads_the_scheme_back(url: "wss://host:47291/akmlsql", expected: "wss")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_already_canonical_text_does_not_modify
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_handles_null_input_gracefully
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_honours_explicit_profile_override
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_records_nonzero_elapsed_time
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_returns_validation_passed_true_for_trivial_input
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_unformatted_select_succeeds_and_modifies_text
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_uses_default_profile_when_none_supplied
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "01-simple-select", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "01-simple-select", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "02-multi-join", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "02-multi-join", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "03-cte-with-columns", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "03-cte-with-columns", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "04-multiple-ctes", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "04-multiple-ctes", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "05-case-searched", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "05-case-searched", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "06-case-simple", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "06-case-simple", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "07-in-list-short", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "07-in-list-short", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "08-in-list-long", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "08-in-list-long", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "09-between-operators", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "09-between-operators", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "10-ddl-create-table", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "10-ddl-create-table", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "11-stored-procedure", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "11-stored-procedure", profileId: "default")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "13-subqueries", profileId: "ansi")
+AkmlSql.Web.Tests.Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles(corpusId: "13-subqueries", profileId: "default")
+AkmlSql.Web.Tests.Services.InMemoryIndexedDbAdapterTests.Clear_drops_every_record_in_the_target_store_only
+AkmlSql.Web.Tests.Services.InMemoryIndexedDbAdapterTests.Delete_removes_the_record
+AkmlSql.Web.Tests.Services.InMemoryIndexedDbAdapterTests.Get_returns_null_for_an_unknown_key
+AkmlSql.Web.Tests.Services.InMemoryIndexedDbAdapterTests.List_returns_every_record_in_the_store
+AkmlSql.Web.Tests.Services.InMemoryIndexedDbAdapterTests.Set_then_Get_returns_the_persisted_value
+AkmlSql.Web.Tests.Services.InMemoryIndexedDbAdapterTests.Stores_are_isolated_from_each_other
+AkmlSql.Web.Tests.Services.ProfileStoreTests.Dangling_active_id_falls_back_to_khamis
+AkmlSql.Web.Tests.Services.ProfileStoreTests.DeleteAsync_rejects_builtin_id
+AkmlSql.Web.Tests.Services.ProfileStoreTests.GetActiveIdAsync_defaults_to_builtin_khamis
+AkmlSql.Web.Tests.Services.ProfileStoreTests.ListAsync_includes_khamis_and_collapsed_builtins
+AkmlSql.Web.Tests.Services.ProfileStoreTests.ListAsync_returns_built_ins_before_user_profiles
+AkmlSql.Web.Tests.Services.ProfileStoreTests.ListAsync_returns_built_ins_on_a_fresh_store
+AkmlSql.Web.Tests.Services.ProfileStoreTests.SaveAsync_rejects_builtin_id
+AkmlSql.Web.Tests.Services.ProfileStoreTests.SaveAsync_user_profile_round_trips_through_the_store
+AkmlSql.Web.Tests.Services.ProfileStoreTests.SetActiveIdAsync_persists_and_GetActiveIdAsync_returns_it
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Allows_single_readonly_select(sql: "   SELECT 1   ")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Allows_single_readonly_select(sql: "select * from t")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Allows_single_readonly_select(sql: "SELECT id, val FROM #t ORDER BY id;")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Allows_single_readonly_select(sql: "SELECT id, val FROM dbo.Customers")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "   ")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "CREATE TABLE #t(id int PRIMARY KEY, val varchar(10"···)
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "DELETE FROM t")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "EXEC dbo.DoThing")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "INSERT INTO t VALUES (1)")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "INSERT INTO t VALUES (1); SELECT * FROM t;")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "SELECT * INTO newtable FROM t")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "SELECT 1; SELECT 2")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "UPDATE t SET x = 1")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: "WITH c AS (SELECT 1 AS n) SELECT n FROM c")
+AkmlSql.Web.Tests.Services.QueryRefreshSafetyTests.Rejects_unsafe_or_multistatement(sql: null)
+AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.BuiltIns_include_the_floor_ssf_and_cte
+AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.BuiltIns_use_engine_native_placeholder_syntax_not_vscode_dialect
+AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.Imported_snippet_with_builtin_id_is_savable_only_after_id_is_cleared
+AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.Non_surround_built_ins_do_not_carry_the_selection_token
+AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.Personal_snippet_round_trips_through_export_import_json_byte_identical
+AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.Surround_capable_built_ins_exist_and_carry_the_selection_token
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.DeleteAsync_drops_user_snippet
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.DeleteAsync_rejects_built_in_id
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.GetByShortcodeAsync_is_case_insensitive
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.GetByShortcodeAsync_resolves_a_built_in
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.ListAsync_returns_built_ins_before_user_snippets
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.ListAsync_returns_built_ins_on_a_fresh_store
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.SaveAsync_generates_id_when_missing
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.SaveAsync_rejects_built_in_id
+AkmlSql.Web.Tests.Snippets.SnippetStoreTests.SaveAsync_user_snippet_round_trips
+AkmlSql.Web.Tests.Spike.SpikeCorpusGoldenTests.Generate_golden_files_for_the_spike_corpus
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.A_new_style_cannot_take_an_existing_name
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.An_active_engine_style_falls_back_while_the_engine_is_away_and_returns_with_it
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.An_engine_without_style_support_is_not_used_for_styles
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Classic_styles_open_as_their_sql_prompt_reading
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Editing_a_built_in_saves_an_edited_copy_and_reset_brings_the_original_back
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Engine_classic_styles_come_back_as_sql_prompt_documents_and_can_be_edited
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Engine_styles_load_edit_and_save_in_place
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Engine_styles_rename_and_delete
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Rename_changes_the_name_everywhere_and_rejects_duplicates
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.The_saved_style_is_what_the_editor_formats_with
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.With_an_engine_new_styles_are_saved_on_the_engine
+AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Without_an_engine_a_new_style_is_saved_in_the_browser_as_a_sql_prompt_style
+AkmlSql.Web.Tests.Styles.StylesPageTests.A_gated_option_is_disabled_until_its_switch_is_on
+AkmlSql.Web.Tests.Styles.StylesPageTests.Changing_an_option_changes_the_preview_and_marks_the_style_unsaved
+AkmlSql.Web.Tests.Styles.StylesPageTests.Classic_styles_say_saving_makes_them_sql_prompt_styles
+AkmlSql.Web.Tests.Styles.StylesPageTests.Editing_a_built_in_saves_an_edited_copy_that_can_be_reset
+AkmlSql.Web.Tests.Styles.StylesPageTests.Every_choice_on_a_page_reaches_the_preview
+AkmlSql.Web.Tests.Styles.StylesPageTests.Every_page_shows_its_options_with_sql_prompts_names
+AkmlSql.Web.Tests.Styles.StylesPageTests.My_sql_previews_what_the_user_pastes
+AkmlSql.Web.Tests.Styles.StylesPageTests.Resetting_an_option_returns_it_to_sql_prompts_default
+AkmlSql.Web.Tests.Styles.StylesPageTests.Saving_keeps_the_change_for_next_time
+AkmlSql.Web.Tests.Styles.StylesPageTests.Shows_sql_prompts_four_categories_and_fourteen_pages
+AkmlSql.Web.Tests.Styles.StylesPageTests.Use_in_editor_makes_the_style_active
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.A_created_style_that_cannot_be_opened_keeps_the_edits_unsaved
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.A_failed_save_as_keeps_the_edits_unsaved
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.A_failing_engine_does_not_take_the_browser_styles_with_it
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.A_listing_failure_keeps_the_engine_styles_last_listed
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.A_new_style_is_not_created_on_the_engine_while_its_styles_cannot_be_listed
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.A_slow_engine_style_does_not_override_a_newer_choice
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.An_engine_that_cannot_list_its_styles_is_reported_and_the_browser_styles_still_show
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.Clicking_the_open_style_keeps_its_unsaved_edits
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.Importing_over_unsaved_edits_asks_first_and_declining_keeps_them
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.Importing_over_unsaved_edits_proceeds_when_confirmed
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.New_engine_styles_are_created_with_create_only_and_edits_are_not
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.On_first_load_an_unlisted_active_engine_style_is_shown_not_replaced
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.Opening_an_engine_style_asks_the_engine_once
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.The_active_engine_style_stays_put_while_the_engine_cannot_list_its_styles
+AkmlSql.Web.Tests.Styles.StylesReviewFixTests.When_the_engine_connects_the_editor_gets_the_engine_style_the_picker_now_shows
+AkmlSql.Web.Tests.Theme.ThemeServiceTests.Changed_event_fires_when_mode_changes
+AkmlSql.Web.Tests.Theme.ThemeServiceTests.Default_mode_on_a_fresh_store_is_System
+AkmlSql.Web.Tests.Theme.ThemeServiceTests.SetAsync_no_op_when_mode_is_unchanged
+AkmlSql.Web.Tests.Theme.ThemeServiceTests.SetAsync_persists_the_choice_so_a_fresh_instance_restores_it
+AkmlSql.Web.Tests.Theme.ThemeServiceTests.SetAsync_updates_Current_and_calls_the_applier

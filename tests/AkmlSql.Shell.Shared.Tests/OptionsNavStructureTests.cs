@@ -21,14 +21,16 @@ namespace AkmlSql.Shell.Shared.Tests
         /// <summary>The tree, top to bottom: (group or null for a top-level leaf, label, page key).</summary>
         private static readonly (string? Group, string Label, string PageKey)[] Expected =
         {
-            (null, "General", "General"),
+            // 2026-10 "rebalanced tree" (design B): warnings sit under Queries, snippets have their
+            // own leaf, SQL-auth connections sit on General, and the long pages are tabs.
+            (null, "General", "GeneralAll"),
             ("Suggestions", "Behavior", "SuggestionsBehavior"),
-            ("Suggestions", "Lists & connections", "SuggestionsLists"),
-            ("Suggestions", "Warnings & highlighting", "Safety"),
+            ("Suggestions", "Lists & scope", "SuggestionsLists"),
             (null, "Inserted code", "InsertedCode"),
+            (null, "Snippets", "Snippets"),
             (null, "Format", "Formatting"),
-            ("Queries", "Results & execution", "ResultsExecution"),
-            ("Queries", "History", "History"),
+            ("Queries", "Execution & warnings", "ResultsExecution"),
+            ("Queries", "History", "HistoryAll"),
             ("Queries", "Color", "Tabs & UI"),
             (null, "Editor", "EditorAll"),
             (null, "Code analysis", "Code Analysis"),
@@ -92,8 +94,9 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal("AI assistance", aiLeaf!.Header);
             Assert.True(aiLeaf.IsSelected, "the deep-linked AI assistance leaf must be selected");
 
-            // The selected page is the one shown: the content host now holds the AI page's rows.
-            Assert.Contains(FindTextBlocks(window), t => t.Text == "AI Provider");
+            // The selected page is the one shown: the content host now holds the AI page's rows
+            // (the "Selected agent" group header of its Agents tab, 2026-10 layout).
+            Assert.Contains(FindTextBlocks(window), t => t.Text == "Selected agent");
         }
 
         private static string Describe((string? Group, string Label, string PageKey) leaf) =>

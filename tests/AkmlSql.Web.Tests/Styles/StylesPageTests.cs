@@ -26,6 +26,7 @@ public sealed class StylesPageTests : BunitContext
         _store.SaveDocumentAsync(null, SqlPromptStyleDocument.CreateDefault(Defaults)).GetAwaiter().GetResult();
         Services.AddSingleton<IProfileStore>(_store);
         Services.AddSingleton<IFormatterService>(new FormatterService());
+        Services.AddSingleton<IDialogService>(new FakeDialogService());   // spec 041: the page asks in the app
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
@@ -46,7 +47,8 @@ public sealed class StylesPageTests : BunitContext
         var page = Open("Khamis Style");
         foreach (var section in SqlPromptOptionCatalog.Sections)
             Assert.NotNull(page.Find($"[data-testid=page-{section.Id}]"));
-        Assert.Equal(14, page.FindAll("[data-testid^=page-]").Count);
+        // (spec 041 T203: the shared page-header / page-title / page-actions ids are not option pages)
+        Assert.Equal(14, page.FindAll("[data-testid^=page-]").Count(e => e.GetAttribute("data-testid") is not ("page-header" or "page-title" or "page-actions")));
     }
 
     [Fact]
@@ -173,5 +175,43 @@ public sealed class StylesPageTests : BunitContext
         var page = Open("Collapsed");
         page.Find("[data-testid=style-set-active]").Click();
         page.WaitForAssertion(() => Assert.Equal("builtin.collapsed", _store.GetActiveIdAsync().Result));
+    }
+
+    [Fact]
+    public void The_preview_tabs_are_the_shared_tab_strip_and_keep_their_ids()
+    {
+        // Spec 041 (T167, R58, FR-070): one tab strip everywhere — role tablist, aria-selected, arrow keys.
+        var page = Open(Defaults);
+
+        var list = page.Find(".akml-styles-preview [role=tablist]");
+        Assert.Contains("akml-tablist", list.ClassName);
+        Assert.Equal("true", page.Find("[data-testid=preview-sample]").GetAttribute("aria-selected"));
+        Assert.Equal("false", page.Find("[data-testid=preview-mysql]").GetAttribute("aria-selected"));
+
+        list.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "ArrowRight" });
+
+        page.WaitForAssertion(() => Assert.Equal("true", page.Find("[data-testid=preview-mysql]").GetAttribute("aria-selected")));
+        Assert.NotNull(page.Find("[data-testid=preview-input]"));
+    }
+
+    // Spec 041 (T203, FR-085) — the one page header every page shares.
+    private static void HasThePageHeader(AngleSharp.Dom.IParentNode page, string title)
+    {
+        var header = page.QuerySelector("[data-testid=page-header]")!;
+        Assert.Contains("akml-page-header", header.ClassList);
+        var h1 = header.QuerySelector("[data-testid=page-title]")!;
+        Assert.Equal("H1", h1.TagName);
+        Assert.Contains("akml-page-title", h1.ClassList);
+        Assert.Equal(title, h1.TextContent.Trim());
+        Assert.Contains("akml-page-actions", header.QuerySelector("[data-testid=page-actions]")!.ClassList);
+    }
+
+    [Fact]
+    public void Format_styles_has_the_shared_page_header()
+    {
+        var page = Open("Khamis Style");
+
+        HasThePageHeader(page.Find("[data-testid=styles-page]"), "Format styles");
+        Assert.NotNull(page.Find("[data-testid=page-actions] [data-testid=style-new]"));
     }
 }

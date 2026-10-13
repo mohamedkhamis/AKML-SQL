@@ -32,7 +32,7 @@ public sealed class UserStory5AiTests
 {
     private static async Task<IBrowser?> TryLaunchAsync(IPlaywright pw)
     {
-        try { return await pw.Chromium.LaunchAsync(); }
+        try { return await pw.Chromium.LaunchForTestsAsync(); }
         catch (PlaywrightException) { return null; } // browsers not installed -> caller skips
     }
 

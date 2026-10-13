@@ -1,0 +1,6 @@
+# Spec 041 (T008, research R74) — literal colours allowed per web-edition stylesheet, from the real
+# inventory on 2026-10-08, lowered 2026-10-09 when T202 moved the dialogs onto shell.css. Columns: path relative to src/AkmlSql.Web <TAB> literals <TAB> var(--x, literal) fallbacks.
+# These counts may only go DOWN. A file not listed may hold none.
+Shared/CommandPalette.razor	2	0
+Shared/EditorComponent.razor	1	0
+Shared/TlsFingerprintMismatchBanner.razor	2	0

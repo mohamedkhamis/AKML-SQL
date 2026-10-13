@@ -17,13 +17,16 @@
 <div class="akml-ai-panel">
     <div class="akml-ai-header">
         <h3>AI assistance</h3>
-        @if (!_hasProvider)
-        {
-            <span class="akml-ai-no-provider">
-                No AI provider configured. <a href="/settings/ai">Add one in Settings</a>.
-            </span>
-        }
     </div>
+
+    @if (!_hasProvider)
+    {
+        @* Spec 041 (T205, FR-088): the shared empty state, with the way to fill it. *@
+        <div class="akml-empty" data-testid="ai-empty">
+            <p class="akml-empty-title">No AI provider configured</p>
+            <p>Add a provider to explain, fix and optimise SQL. <a href="settings/ai-assistance">Add one in Settings</a>.</p>
+        </div>
+    }
 
     @if (_hasProvider && !_providerCapable)
     {
@@ -31,30 +34,30 @@
             <strong>@_activeProvider</strong> can't be used directly from the browser (its API
             doesn't allow cross-origin calls). Use the desktop edition, choose a browser-capable
             provider (Claude, Gemini, Ollama, LM Studio), or point it at an OpenAI-compatible
-            endpoint. <a href="/settings/ai">Open Settings</a>.
+            endpoint. <a href="settings/ai-assistance">Open Settings</a>.
         </p>
     }
     else if (_hasProvider)
     {
         <div class="akml-ai-buttons">
             <div class="akml-ai-action">
-                <button class="akml-tool-button" @onclick="RunExplainAsync" disabled="@_busy">Explain</button>
+                <button class="akml-btn" @onclick="RunExplainAsync" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Explain</button>
                 <AiPrivacyModeBadge FeatureId="explain" />
             </div>
             <div class="akml-ai-action">
-                <button class="akml-tool-button" @onclick="RunFixAsync" disabled="@_busy">Fix</button>
+                <button class="akml-btn" @onclick="RunFixAsync" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Fix</button>
                 <AiPrivacyModeBadge FeatureId="fix" />
             </div>
             <div class="akml-ai-action">
-                <button class="akml-tool-button" @onclick="RunOptimizeAsync" disabled="@_busy">Optimize</button>
+                <button class="akml-btn" @onclick="RunOptimizeAsync" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Optimize</button>
                 <AiPrivacyModeBadge FeatureId="optimize" />
             </div>
             <div class="akml-ai-action">
-                <button class="akml-tool-button" @onclick="RunTextToSqlAsync" disabled="@_busy">NL → SQL</button>
+                <button class="akml-btn" @onclick="RunTextToSqlAsync" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Text to SQL</button>
                 <AiPrivacyModeBadge FeatureId="texttosql" />
             </div>
             <div class="akml-ai-action">
-                <button class="akml-tool-button" @onclick="RunIndexAnalysisAsync" disabled="@_busy">Index Analysis</button>
+                <button class="akml-btn" @onclick="RunIndexAnalysisAsync" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Index Analysis</button>
                 <AiPrivacyModeBadge FeatureId="indexanalysis" />
             </div>
         </div>
@@ -75,8 +78,8 @@
                 <h4>Result</h4>
                 <pre>@_lastResult</pre>
                 <div class="akml-ai-result-buttons">
-                    <button class="akml-tool-button" @onclick="AcceptResult" disabled="@_busy">Accept (copy)</button>
-                    <button class="akml-tool-button" @onclick="DiscardResult" disabled="@_busy">Discard</button>
+                    <button class="akml-btn" @onclick="AcceptResult" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : "Insert the result at the editor's caret")">Insert at caret</button>
+                    <button class="akml-btn" @onclick="DiscardResult" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Discard</button>
                 </div>
             </div>
         }
@@ -86,7 +89,6 @@
 <style>
     .akml-ai-panel { padding: var(--akml-scalar-spacing-m); }
     .akml-ai-header { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-bottom: var(--akml-scalar-spacing-s); }
-    .akml-ai-no-provider { color: var(--akml-status-warning); }
     .akml-ai-notice { color: var(--akml-status-warning); }
     .akml-ai-buttons { display: flex; gap: var(--akml-scalar-spacing-s); flex-wrap: wrap; align-items: flex-start; }
     .akml-ai-action { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -106,14 +108,6 @@
         margin: 0;
     }
     .akml-ai-result-buttons { display: flex; gap: var(--akml-scalar-spacing-s); margin-top: var(--akml-scalar-spacing-s); }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
-    }
-    .akml-tool-button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
 </style>
 
 @code {
@@ -149,7 +143,7 @@
     private Task RunExplainAsync() => RunStreamAsync((sql, ct) => Prompts.ExplainStreamAsync(sql, ct), "Explain");
     private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, "(no error)", 0, ct), "Fix");
     private Task RunOptimizeAsync() => RunStreamAsync((sql, ct) => Prompts.OptimizeStreamAsync(sql, ct), "Optimize");
-    private Task RunTextToSqlAsync() => RunStreamAsync((sql, ct) => Prompts.TextToSqlStreamAsync(sql, ct), "NL → SQL");
+    private Task RunTextToSqlAsync() => RunStreamAsync((sql, ct) => Prompts.TextToSqlStreamAsync(sql, ct), "Text to SQL");
     private Task RunIndexAnalysisAsync() => RunStreamAsync((sql, ct) => Prompts.IndexAnalysisStreamAsync(sql, ct), "Index Analysis");
 
     private async Task RunStreamAsync(Func<string, CancellationToken, IAsyncEnumerable<string>> stream, string label)

@@ -1,0 +1,112 @@
+/*
+  Spec 041 (research R45, FR-050, FR-060) — the Settings page: a section list beside the open section (one
+  column under 900 px), and the simple preference rows every section uses (SettingRow: label | control, help
+  under both). Token-only: every colour reads an --akml-* token.
+*/
+
+.akml-settings-page {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: var(--akml-scalar-spacing-l);
+    align-items: start;
+    max-width: 1100px;
+}
+
+@media (max-width: 900px) {
+    .akml-settings-page { grid-template-columns: minmax(0, 1fr); }
+}
+
+.akml-settings-header { grid-column: 1 / -1; }   /* the page header (shell.css) spans both columns */
+.akml-settings-filter { flex: 1 1 220px; max-width: 360px; }
+
+/* ── The section list ─────────────────────────────────────────────────────── */
+.akml-settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.akml-settings-nav-link {
+    display: block;
+    padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+    color: var(--akml-text-primary);
+    text-decoration: none;
+    border-radius: var(--akml-scalar-radius-xs);
+}
+
+.akml-settings-nav-link:hover { background-color: var(--akml-surface-hover); }
+
+.akml-settings-nav-link[aria-current="page"] {
+    background-color: var(--akml-surface-selection);
+    box-shadow: inset 3px 0 0 var(--akml-accent-primary);   /* the current section's marker */
+    font-weight: 600;
+}
+
+.akml-settings-nav-link[aria-disabled="true"] {
+    color: var(--akml-text-disabled);
+    pointer-events: none;
+}
+
+.akml-settings-nav-count {
+    margin-left: var(--akml-scalar-spacing-xs);
+    color: var(--akml-text-secondary);
+    font-size: var(--akml-type-chrome-size);
+}
+
+/* ── A section ─────────────────────────────────────────────────────────────── */
+.akml-settings-main { min-width: 0; }
+
+.akml-settings-section + .akml-settings-section { margin-top: calc(var(--akml-scalar-spacing-l) * 2); }
+
+.akml-settings-section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--akml-scalar-spacing-s);
+    margin-bottom: var(--akml-scalar-spacing-m);
+    padding-bottom: var(--akml-scalar-spacing-xs);
+    border-bottom: 1px solid var(--akml-border-default);
+}
+
+.akml-settings-section-title { margin: 0; font-size: 16px; font-weight: 600; }
+.akml-settings-section-spacer { flex: 1 1 auto; }
+
+.akml-settings-subtitle { margin: var(--akml-scalar-spacing-l) 0 var(--akml-scalar-spacing-s); font-size: 14px; font-weight: 600; }
+
+/* ── A simple preference ───────────────────────────────────────────────────── */
+.akml-setting {
+    display: grid;
+    grid-template-columns: minmax(160px, 260px) minmax(0, 1fr);
+    column-gap: var(--akml-scalar-spacing-m);
+    row-gap: 2px;
+    align-items: center;
+    padding: var(--akml-scalar-spacing-s) 0;
+    border-bottom: 1px solid var(--akml-border-subtle);
+}
+
+.akml-setting-label { color: var(--akml-text-primary); }
+.akml-setting-control { display: flex; flex-wrap: wrap; align-items: center; gap: var(--akml-scalar-spacing-s); min-width: 0; }
+.akml-setting-help { grid-column: 1 / -1; margin: 0; color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
+
+/* A list, a table or a form that needs the row's whole width, under a heading. */
+.akml-setting--block { grid-template-columns: minmax(0, 1fr); }
+.akml-setting-block { display: block; }
+.akml-setting--block .akml-setting-label { margin: 0 0 var(--akml-scalar-spacing-xs); }
+
+.akml-setting-control .akml-input[type="number"] { width: 7em; }
+
+@media (max-width: 600px) {
+    .akml-setting { grid-template-columns: minmax(0, 1fr); }
+}
+
+.akml-settings-status { color: var(--akml-text-secondary); font-size: var(--akml-type-chrome-size); }
+.akml-settings-badge {
+    display: inline-block;
+    padding: 0 var(--akml-scalar-spacing-xs);
+    border: 1px solid var(--akml-status-warning);
+    border-radius: var(--akml-scalar-radius-xs);
+    color: var(--akml-text-primary);
+    font-size: var(--akml-type-chrome-size);
+}

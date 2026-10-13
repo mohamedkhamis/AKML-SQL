@@ -1,0 +1,33 @@
+@*
+    Spec 041 (research R62) — one icon from the vendored Lucide sprite (wwwroot/lib/icons/akml-icons.svg,
+    built by tools/icons/build-sprite.mjs). Strokes are currentColor, so the icon takes the colour of the
+    text around it in every theme, forced colours included. Decorative by default (hidden from assistive
+    technology); pass Label when the icon carries meaning on its own. Names come from tools/icons/icons.json —
+    IconSpriteCoverageTests fails when a razor file asks for one the sprite lacks.
+*@
+@if (string.IsNullOrEmpty(Label))
+{
+    <svg class="@CssClass" width="@Size" height="@Size" aria-hidden="true" focusable="false"><use href="@Href"></use></svg>
+}
+else
+{
+    <svg class="@CssClass" width="@Size" height="@Size" role="img" aria-label="@Label" focusable="false"><use href="@Href"></use></svg>
+}
+
+@code {
+    /// <summary>The Lucide icon name, e.g. <c>play</c> or <c>circle-alert</c>.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    /// <summary>Width and height in CSS pixels.</summary>
+    [Parameter] public int Size { get; set; } = 16;
+
+    /// <summary>Accessible name. Leave empty for a decorative icon beside visible text.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>Extra CSS classes appended to <c>akml-icon</c>.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    private string Href => "lib/icons/akml-icons.svg#akml-icon-" + Name;
+
+    private string CssClass => string.IsNullOrWhiteSpace(Class) ? "akml-icon" : "akml-icon " + Class;
+}

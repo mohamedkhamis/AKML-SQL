@@ -88,13 +88,16 @@ public class AiProviderTestHandler
                 }, message.RequestId);
             }
 
-            // Build temporary AiSettings from the test request
+            // Build temporary AiSettings from the test request. The configured timeout is the
+            // deadline the provider SDK enforces (Gemini) AND the value the taxonomy's timeout row
+            // quotes — left at the AiSettings default the two could disagree.
             var testSettings = new AiSettings
             {
                 Provider = request.Provider,
                 ApiKey = request.ApiKey,
                 Endpoint = request.Endpoint ?? string.Empty,
-                Model = request.Model
+                Model = request.Model,
+                Timeout = _aiTimeoutSeconds()
             };
 
             // Create client and send test prompt

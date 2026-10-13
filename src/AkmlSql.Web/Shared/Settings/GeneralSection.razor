@@ -1,0 +1,43 @@
+@*
+    Spec 041 (FR-052, contracts/ui.md §6) — Settings › General: the theme. Applies at once, with a notification.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject IThemeService Theme
+@inject INotificationService Notifications
+
+<SettingRow Id="theme">
+    <select id="setting-theme-control" class="akml-select" aria-describedby="setting-theme-help" @onchange="OnThemeChangedAsync">
+        @foreach (var (mode, label) in Modes)
+        {
+            <option value="@mode" selected="@(Theme.Current == mode)">@label</option>
+        }
+    </select>
+</SettingRow>
+
+@code {
+    private static readonly (ThemeMode Mode, string Label)[] Modes =
+    {
+        (ThemeMode.System, "System"),
+        (ThemeMode.Light, "Light"),
+        (ThemeMode.Dark, "Dark"),
+        (ThemeMode.HighContrast, "High contrast"),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Theme.InitializeAsync();
+        Theme.Changed += OnChanged;
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task OnThemeChangedAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<ThemeMode>(e.Value?.ToString(), out var mode)) return;
+        await Theme.SetAsync(mode);
+        Notifications.Notify($"Theme: {Modes.First(m => m.Mode == mode).Label}.", NotificationKind.Success);
+    }
+
+    public void Dispose() => Theme.Changed -= OnChanged;
+}

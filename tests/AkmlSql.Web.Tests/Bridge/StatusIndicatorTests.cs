@@ -67,12 +67,26 @@ public sealed class StatusIndicatorTests : BunitContext
         await _connections.SetActiveIdAsync("c1");
     }
 
+    // Spec 041 (T182): the cache is probed under the SQL connection's (server, database) — the key the schema sync
+    // writes under — not the engine pairing's host:port.
+    private const string SqlServer = "localhost";
+    private const string SqlDatabase = "Sales";
+
+    private async Task ConnectSqlAsync()
+    {
+        var before = _bridge.State;
+        _bridge.SetState(BridgeState.Open);
+        var (ok, error) = await Services.GetRequiredService<ISqlConnectionService>().ConnectAsync(SqlServer, SqlDatabase, true, null, null, CancellationToken.None);
+        Assert.True(ok, error);
+        _bridge.SetState(before);
+    }
+
     private async Task SeedCacheAsync()
     {
         await _cache.SetAsync(new SchemaSnapshot
         {
-            ServerCanonicalIdentity = Server,
-            DatabaseName = "master",
+            ServerCanonicalIdentity = SqlServer,
+            DatabaseName = SqlDatabase,
             PhaseA = new byte[] { 1, 2, 3 },   // non-empty ⇒ "cache present"
             Checksum = "x",
         });
@@ -125,6 +139,7 @@ public sealed class StatusIndicatorTests : BunitContext
     public async Task Disconnected_with_cache_shows_Cached()
     {
         await SeedActiveConnectionAsync();
+        await ConnectSqlAsync();
         await SeedCacheAsync();
 
         var cut = Render<StatusBar>();
@@ -138,6 +153,7 @@ public sealed class StatusIndicatorTests : BunitContext
     public async Task Disconnected_without_cache_shows_Offline()
     {
         await SeedActiveConnectionAsync();   // active connection, but NO snapshot cached
+        await ConnectSqlAsync();
 
         var cut = Render<StatusBar>();
         _bridge.SetState(BridgeState.Disconnected);
@@ -150,6 +166,7 @@ public sealed class StatusIndicatorTests : BunitContext
     public async Task Reconnecting_with_cache_holds_Cached_no_flicker()
     {
         await SeedActiveConnectionAsync();
+        await ConnectSqlAsync();
         await SeedCacheAsync();
 
         var cut = Render<StatusBar>();
@@ -163,6 +180,7 @@ public sealed class StatusIndicatorTests : BunitContext
     public async Task Drift_after_cache_seeded_flips_Offline_to_Cached_in_place()
     {
         await SeedActiveConnectionAsync();
+        await ConnectSqlAsync();
         var cut = Render<StatusBar>();
         _bridge.SetState(BridgeState.Disconnected);
         cut.WaitForAssertion(() =>
@@ -170,7 +188,7 @@ public sealed class StatusIndicatorTests : BunitContext
 
         // Cache lands, then a checksum drift fires — the indicator re-probes and flips.
         await SeedCacheAsync();
-        await _sync.RaiseChecksumDriftedAsync(new ChecksumDriftNotice(Server, "master", "x"));
+        await _sync.RaiseChecksumDriftedAsync(new ChecksumDriftNotice(SqlServer, SqlDatabase, "x"));
 
         cut.WaitForAssertion(() =>
             Assert.Equal("Cached", cut.Find("[data-testid='status-pill']").TextContent));

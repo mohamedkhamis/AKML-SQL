@@ -1,0 +1,13 @@
+{
+  "name": "akml-icons-vendor",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Builds the web edition's icon sprite (wwwroot/lib/icons/akml-icons.svg) from Lucide (ISC) so icons load from 'self', never a CDN. Spec 041 research R62. Run: npm ci && npm run build. Add an icon by adding its Lucide name to icons.json and rebuilding.",
+  "type": "module",
+  "scripts": {
+    "build": "node build-sprite.mjs"
+  },
+  "devDependencies": {
+    "lucide-static": "1.47.0"
+  }
+}

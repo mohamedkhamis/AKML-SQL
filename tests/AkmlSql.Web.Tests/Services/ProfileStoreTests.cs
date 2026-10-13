@@ -119,4 +119,31 @@ public sealed class ProfileStoreTests
         var minUserIndex = users.Min(id => list.ToList().FindIndex(p => p.Id == id));
         Assert.True(maxBuiltInIndex < minUserIndex);
     }
+
+    [Fact]
+    public async Task ResetActiveAsync_returns_to_the_store_default_by_deleting_the_choice()
+    {
+        // Spec 041 (T144, R47): Restore defaults and deleting the active style both fall back to the same default.
+        var db = new RecordingIndexedDbAdapter();
+        var store = new ProfileStore(db);
+        await store.SetActiveIdAsync("builtin.ansi");
+        db.ResetLog();
+
+        await store.ResetActiveAsync();
+
+        Assert.Equal(new[] { (StoreNames.Profiles, "_active") }, db.Deletes);
+        Assert.Equal("builtin.khamis", await store.GetActiveIdAsync());
+        Assert.Null(await db.GetAsync(StoreNames.Profiles, "_active"));
+    }
+
+    [Theory]
+    [InlineData("ide", "Shared with SSMS")]
+    [InlineData("service", "On this engine")]
+    [InlineData("console", "On this engine")]
+    [InlineData(null, "On this engine")]
+    public void The_engine_styles_group_is_Shared_with_SSMS_only_for_an_engine_SSMS_started(string? hostKind, string expected)
+    {
+        // Spec 041 (T182, R29, FR-063): a service engine does not share the SSMS user's styles folder.
+        Assert.Equal(expected, ProfileStore.EngineStylesGroupNameFor(hostKind));
+    }
 }

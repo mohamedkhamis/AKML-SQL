@@ -19,6 +19,12 @@ public interface IAnalysisSettingsStore
 
     /// <summary>Persist a new settings record.</summary>
     Task SetAsync(WebAnalysisSettings settings);
+
+    /// <summary>Spec 041 (R47): Restore defaults — delete the record (key <c>current</c> only).</summary>
+    Task ResetAsync();
+
+    /// <summary>Spec 041: forget the cached record, so the next read sees what another tab saved.</summary>
+    Task ReloadAsync();
 }
 
 /// <summary>
@@ -31,6 +37,18 @@ public sealed class WebAnalysisSettings
     public bool Enabled { get; set; } = true;
     public bool AutoAnalyseOnFormat { get; set; } = true;
     public Dictionary<string, string> RuleOverrides { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>Spec 041 (R51, FR-055) — the severities the Problems tab shows when it opens. Additive: an older
+    /// record reads it as "everything".</summary>
+    public ProblemsFilter ProblemsFilter { get; set; } = new();
+}
+
+/// <summary>Spec 041 (R51) — the Problems tab's default severity filters.</summary>
+public sealed class ProblemsFilter
+{
+    public bool ShowInfo { get; set; } = true;
+    public bool ShowWarning { get; set; } = true;
+    public bool ShowError { get; set; } = true;
 }
 
 internal sealed class AnalysisSettingsStore : IAnalysisSettingsStore
@@ -54,6 +72,8 @@ internal sealed class AnalysisSettingsStore : IAnalysisSettingsStore
             try
             {
                 _cached = JsonSerializer.Deserialize<WebAnalysisSettings>(raw) ?? new WebAnalysisSettings();
+                _cached.ProblemsFilter ??= new ProblemsFilter();   // an explicit null in a hand-edited record
+                _cached.RuleOverrides ??= new Dictionary<string, string>(StringComparer.Ordinal);
                 return _cached;
             }
             catch (JsonException)
@@ -71,5 +91,18 @@ internal sealed class AnalysisSettingsStore : IAnalysisSettingsStore
         _cached = settings;
         await _store.SetAsync(StoreNames.AnalysisSettings, Key,
             JsonSerializer.Serialize(settings)).ConfigureAwait(false);
+    }
+
+    public async Task ResetAsync()
+    {
+        // The analysisSettings store is shared (current, executionSettings, editorSettings): delete our key only.
+        await _store.DeleteAsync(StoreNames.AnalysisSettings, Key).ConfigureAwait(false);
+        _cached = new WebAnalysisSettings();
+    }
+
+    public Task ReloadAsync()
+    {
+        _cached = null;
+        return Task.CompletedTask;
     }
 }

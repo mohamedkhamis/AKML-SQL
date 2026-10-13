@@ -76,6 +76,12 @@ public interface IAiFeatureSettings
 
     /// <summary>Convenience: resolve the effective disclosure mode for a feature id.</summary>
     Task<AiPrivacyMode> ResolveModeAsync(string featureId);
+
+    /// <summary>Spec 041 (R47): Restore defaults — delete the record.</summary>
+    Task ResetAsync();
+
+    /// <summary>Spec 041: forget the cached record, so the next read sees what another tab saved.</summary>
+    Task ReloadAsync();
 }
 
 internal sealed class AiFeatureSettingsStore : IAiFeatureSettings
@@ -128,5 +134,17 @@ internal sealed class AiFeatureSettingsStore : IAiFeatureSettings
     {
         var settings = await GetAsync().ConfigureAwait(false);
         return settings.Resolve(featureId);
+    }
+
+    public async Task ResetAsync()
+    {
+        await _store.DeleteAsync(StoreNames.AiFeatureSettings, Key).ConfigureAwait(false);
+        _cached = new AiFeatureSettings();
+    }
+
+    public Task ReloadAsync()
+    {
+        _cached = null;
+        return Task.CompletedTask;
     }
 }

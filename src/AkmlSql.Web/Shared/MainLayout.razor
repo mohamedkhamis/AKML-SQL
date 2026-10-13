@@ -16,9 +16,11 @@
 @inject ISchemaSync SchemaSync
 @inject IEngineAutoConnect AutoConnect
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <div class="akml-app">
-    <NavMenu />
+    @* Spec 041 (R42): the editor page may hide the navigation bar; a strip brings it back. *@
+    <WorkspaceNav />
     @* Spec 024 T004: error-banner contract — see
        `specs/024-m2-web-closure/contracts/playwright-harness-contract.md`
        §"data-testid contract" (the `error-banner` row, asserted empty in every
@@ -31,9 +33,11 @@
        absent from the DOM when no drift has been seen, identical absence semantics to
        the spec 024 error-banner contract. *@
     <TlsFingerprintMismatchBanner />
-    <main class="akml-main">
+    <main class="@WorkspaceRoutes.MainClass(Nav.ToBaseRelativePath(Nav.Uri))">
         @Body
     </main>
+    @* Spec 041 — the one notification area (transient status messages). position:fixed, like DialogHost. *@
+    <NotificationHost />
     <StatusBar />
     @* Spec 030 — ⌘P command palette. Hosted at the layout level so it overlays every page and its
        global Ctrl/Cmd+P capture-phase listener is alive regardless of which route is mounted. *@
@@ -41,6 +45,9 @@
     @* Phase 4 — the "Connect to SQL Server" modal. App-global (overlays every page) so the command
        palette / Settings / StatusBar can open it from any route via IConnectionManagerController. *@
     <ConnectionManagerModal />
+    @* Spec 041 — the one in-app dialog (confirm / prompt / alert) that replaces every browser pop-up.
+       position:fixed, so it adds no in-flow row to .akml-app's three-row grid. *@
+    <DialogHost />
 </div>
 
 <style>
@@ -63,6 +70,23 @@
         overflow: auto;
         padding: var(--akml-scalar-spacing-m);
     }
+    /* Spec 041 (R33): the editor workspace fills the window — its 12 px went to the editor (SC-003). */
+    .akml-main--workspace { padding: 0; }
+    .akml-edge-nav {
+        display: block;
+        width: 100%;
+        height: 24px;
+        padding: 0 var(--akml-scalar-spacing-m);
+        font: inherit;
+        font-size: var(--akml-type-chrome-size);
+        text-align: left;
+        color: var(--akml-text-secondary);
+        background-color: var(--akml-surface-panel);
+        border: none;
+        border-bottom: 1px solid var(--akml-border-default);
+        cursor: pointer;
+    }
+    .akml-edge-nav:hover { color: var(--akml-text-primary); background-color: var(--akml-surface-hover); }
 
     /* Global tweaks. Theme CSS files are auto-generated -- editing them is forbidden,
        so cross-cutting rules live here instead. Inline style blocks are global

@@ -8,14 +8,18 @@
       * ProblemsListComponent (right side panel)
       * Formatter and analyser services (in-process)
       * Editor session persistence (debounced)
-      * Keybindings: Ctrl+K Ctrl+F (Format), Ctrl+K Ctrl+L (Analyse), Ctrl+S (Save as .sql)
+      * Keybindings: claimed by wwwroot/js/akml-workspace.js from the WorkspaceKeyMap table (spec 041
+        R37) — Ctrl+K Ctrl+F (Format), Ctrl+K Ctrl+L (Analyse), Ctrl+K Ctrl+S (Surround), Ctrl+S (Save)
 *@
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Formatting.Profiles
 @using AkmlSql.Web.Services
 @using AkmlSql.Web.Shared
+@using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
+@implements IWorkspaceViewHost
+@implements IEditorText
 @inject IFormatterService Formatter
 @inject IAnalyserService Analyser
 @inject IProfileStore ProfileStore
@@ -32,29 +36,101 @@
 @inject IExecutionSettingsStore ExecSettings
 @inject IHistoryService History
 @inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject IWorkspaceStatus Workspace
+@inject INotificationService Notifications
+@inject IEngineBridge Bridge
+@inject IWorkspaceLayoutStore Layout
+@inject IConnectionManagerController ConnManager
+@inject EditorDocumentFlow Document
+@inject ISchemaSync SchemaSync
 
-<PageTitle>Editor — AKML SQL</PageTitle>
+@* Spec 041 (R64, FR-089): the title SSMS's window reads like — orders-audit* - SERVER.db - AKML SQL. *@
+<PageTitle>@EditorDocument.TitleFor(Document.Name, Document.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null)</PageTitle>
 
-<div class="akml-editor-page" @onkeydown="OnKeyDownAsync" tabindex="-1">
-    <div class="akml-editor-toolbar">
-        <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
-        <button class="akml-tool-button" @onclick="FormatAsync" title="Ctrl+K, Ctrl+F">Format</button>
-        <button class="akml-tool-button" data-testid="analyse-button" @onclick="AnalyseAsync" title="Ctrl+K, Ctrl+L">Analyse</button>
-        <button class="akml-tool-button" data-testid="refactor-button" @onclick="OpenRefactorMenu">Refactor ▾</button>
-        <button class="akml-tool-button @(_showAiPanel ? "active" : "")" data-testid="ai-button"
-                @onclick="ToggleAiPanel" title="AI assistance">AI ▾</button>
-        <button class="akml-tool-button" @onclick="SaveAsync" title="Ctrl+S">Save</button>
-        @* Spec 030 — Phase 5: Execute + advisory resource caps. Mod-Enter (CM6 keymap) also runs it. *@
-        <button class="akml-tool-button akml-tool-button-run" data-testid="execute-button"
+@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. *@
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" />
+
+<div class="akml-editor-page">
+    @* Spec 041 (FR-081): SSMS's grouping — database | Execute, Parse | Format, Analyse | Refactor, AI | documents |
+       View — each button an icon, a label and a "Name (Keys)" tooltip from WorkspaceKeyMap. The aria-labels are
+       load-bearing: tests and assistive technology find "Format" by that exact name. *@
+    <div class="akml-editor-toolbar" role="toolbar" aria-label="Editor">
+        @* Spec 041 (R28, FR-082): the database, first — as SSMS's "Available Databases" box. *@
+        <DatabaseSelectorComponent IsRunning="_executing" />
+        <span class="akml-toolbar-sep" aria-hidden="true"></span>
+
+        @* Spec 030 — Phase 5: Execute + advisory resource caps. F5 (spec 041) and Mod-Enter (CM6 keymap)
+           also run it; while a query runs Execute is not offered (FR-027). *@
+        <button type="button" class="akml-btn akml-tool-button-run" data-testid="execute-button"
+                aria-label="@(_executing ? "Running" : "Execute")"
                 @onclick="ExecuteAsync" disabled="@(_executing || !SqlConn.IsConnected)"
-                title="Ctrl+Enter — run the selection or the whole document">
-            @(_executing ? "Running…" : "▶ Execute")
+                title="@(_executing ? "A query is running" : SqlConn.IsConnected ? WorkspaceKeyMap.TitleFor("Execute", "editor:execute") + " — runs the selection or the whole document" : "Execute needs a SQL Server connection")">
+            <Icon Name="@(_executing ? "loader-circle" : "play")" Class="@(_executing ? "akml-spin akml-run-icon" : "akml-run-icon")" />
+            <span>@(_executing ? "Running…" : "Execute")</span>
+        </button>
+        @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
+        <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
+                @onclick="ParseAsync" disabled="@(!CanParse)"
+                title="@(_executing ? "A query is running" : !SqlConn.IsConnected ? "Parse needs a SQL Server connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
+            <Icon Name="file-check" /><span>Parse</span>
         </button>
         @if (_executing)
         {
-            <button class="akml-tool-button" data-testid="execute-cancel" @onclick="CancelExecuteAsync"
-                    title="Cancel a queued query">Cancel</button>
+            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync"
+                    title="Stops the query only if the engine has not started it. A running statement cannot be interrupted.">
+                <Icon Name="x" /><span>Cancel if not started</span>
+            </button>
         }
+        <span class="akml-toolbar-sep" aria-hidden="true"></span>
+
+        <button type="button" class="akml-btn" data-testid="format-button" aria-label="Format" @onclick="FormatAsync"
+                title="@WorkspaceKeyMap.TitleFor("Format", "editor:format")">
+            <Icon Name="wand-sparkles" /><span>Format</span>
+        </button>
+        <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
+        <button type="button" class="akml-btn" data-testid="analyse-button" aria-label="Analyse" @onclick="AnalyseAsync"
+                title="@WorkspaceKeyMap.TitleFor("Analyse", "editor:analyse")">
+            <Icon Name="search-check" /><span>Analyse</span>
+        </button>
+        <span class="akml-toolbar-sep" aria-hidden="true"></span>
+
+        <button type="button" class="akml-btn" data-testid="refactor-button" aria-label="Refactor" aria-haspopup="menu"
+                @onclick="OpenRefactorMenu" title="@WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor")">
+            <Icon Name="replace" /><span>Refactor</span><Icon Name="chevron-down" Size="12" />
+        </button>
+        <button type="button" class="akml-btn @(AiShown ? "is-active" : null)" data-testid="ai-button" aria-label="AI"
+                aria-pressed="@(AiShown ? "true" : "false")" @onclick="ToggleAiAsync" title="AI assistance">
+            <Icon Name="bot" /><span>AI</span><Icon Name="chevron-down" Size="12" />
+        </button>
+        @* Spec 041 (R64, FR-072): documents as SSMS has them. Ctrl+N / Ctrl+O are the browser's: the keys gain Alt. *@
+        <span class="akml-toolbar-sep" aria-hidden="true"></span>
+
+        <button type="button" class="akml-btn" data-testid="doc-new" aria-label="New" @onclick="NewDocumentAsync"
+                title="@WorkspaceKeyMap.TitleFor("New query", "editor:new")">
+            <Icon Name="file-plus" /><span>New</span>
+        </button>
+        @* The Snippets idiom: the label opens the file picker; the Open command clicks the input (akml-ui.js). *@
+        <label class="akml-btn" data-testid="doc-open" title="@(WorkspaceKeyMap.TitleFor("Open", "editor:open") + " — a .sql file")">
+            <Icon Name="folder-open" /><span>Open</span>
+            <InputFile id="akml-doc-open-input" class="akml-visually-hidden" accept=".sql,.txt"
+                       data-testid="doc-open-input" OnChange="OpenFileAsync" />
+        </label>
+        <button type="button" class="akml-btn" data-testid="doc-save" aria-label="Save" @onclick="SaveAsync"
+                title="@WorkspaceKeyMap.TitleFor("Save", "editor:save")">
+            <Icon Name="save" /><span>Save</span>
+        </button>
+        <button type="button" class="akml-btn" data-testid="doc-saveas" aria-label="Save as" @onclick="SaveAsAsync"
+                title="@WorkspaceKeyMap.TitleFor("Save as", "editor:saveas")">
+            <Icon Name="save-all" /><span>Save as</span>
+        </button>
+        <span class="akml-toolbar-sep" aria-hidden="true"></span>
+
+        @* Spec 041 (R38, FR-042) — every panel toggle, with its key; the same commands as the palette. *@
+        <button type="button" class="akml-btn" data-testid="view-menu" aria-label="View" @onclick="OpenViewMenu" aria-haspopup="menu"
+                title="View — show or hide panels">
+            <Icon Name="panel-bottom" /><span>View</span><Icon Name="chevron-down" Size="12" />
+        </button>
         <span class="akml-caps">
             <label title="Maximum rows to fetch (the engine re-clamps to its ceiling)">rows
                 <input type="number" class="akml-caps-input" data-testid="caps-maxrows" min="1" max="100000"
@@ -71,48 +147,141 @@
             <span class="akml-editor-status">@_status</span>
         }
     </div>
-    <div class="akml-editor-grid" style="grid-template-columns: @GridColumns;">
-        <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
-        @if (_showSchemaTree)
-        {
+    @* Spec 041 (R33, FR-040–FR-046) — one CSS grid: Schema left, editor centre, results under the editor, AI
+       right. Every size is a CSS variable written from the remembered layout fitted to the window; a hidden or
+       folded side panel leaves an edge strip; the results host is always mounted (hidden by class) so its
+       pending edits survive. *@
+    <div @ref="_workspaceEl" class="@WorkspaceClass" style="@WorkspaceStyle" data-testid="workspace" data-splitter-host>
+        @* The side panels stay mounted while hidden, so the tree keeps what was expanded and the chat its
+           conversation; the AI dock mounts the first time it is shown. *@
+        <div class="akml-ws-schema @(SchemaShown ? null : "akml-ws-hidden")" id="akml-ws-schema" data-testid="workspace-schema"
+             role="region" aria-label="Schema" tabindex="-1">
             <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
                                  DatabaseName="@_activeDatabaseName"
-                                 OnObjectClicked="OnSchemaObjectClickedAsync" />
-        }
-        <ProblemsListComponent Findings="@_findings" OnJumpToIssue="OnJumpToIssueAsync"
-                               OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync" />
-        @* Spec 028 (M6) — editor-adjacent AI dock. Toggled by the "AI ▾" toolbar button; two
-           tabs (Actions / Chat). The action panel operates on the live editor selection (or the
-           whole document when nothing is selected); Accept inserts the result at the caret. This
-           is what surfaces the M6 AI feature set to a user — the panels existed since 021 T131
-           but were wired into no reachable page until this closure. *@
-        @if (_showAiPanel)
+                                 SessionId="@(SqlConn.IsConnected ? SqlConn.SessionId : null)"
+                                 OnObjectClicked="OnSchemaObjectClickedAsync"
+                                 OnConnectRequested="() => ConnManager.Open()" />
+        </div>
+        @if (SchemaShown)
         {
-            <div class="akml-ai-dock" data-testid="ai-dock">
-                <div class="akml-ai-tabs">
-                    <button class="akml-ai-tab @(_aiTab == AiTab.Actions ? "active" : "")"
-                            data-testid="ai-tab-actions" @onclick="@(() => _aiTab = AiTab.Actions)">Actions</button>
-                    <button class="akml-ai-tab @(_aiTab == AiTab.Chat ? "active" : "")"
-                            data-testid="ai-tab-chat" @onclick="@(() => _aiTab = AiTab.Chat)">Chat</button>
-                    <span class="akml-ai-dock-spacer"></span>
-                    <button class="akml-ai-tab" data-testid="ai-close" @onclick="ToggleAiPanel" title="Close AI panel">✕</button>
+            <div class="akml-ws-sl">
+                <SplitterComponent Id="left" Side="left" Value="Fitted.SchemaWidth" Min="Limits.SchemaMinWidth" Max="SchemaMax"
+                                   Controls="akml-ws-schema" Label="Resize the Schema panel" CssVar="--akml-ws-left" Host="_workspaceEl"
+                                   TestId="workspace-splitter-left"
+                                   OnCommitted="px => Layout.SetAsync(WorkspaceLayoutFields.SchemaWidth, px)"
+                                   OnReset="() => Layout.SetAsync(WorkspaceLayoutFields.SchemaWidth, Limits.SchemaDefaultWidth)"
+                                   OnCollapseToggled="@(() => CollapseFromSplitterAsync(WorkspacePanel.Schema))" />
+            </div>
+        }
+        else
+        {
+            <button type="button" class="akml-ws-edge akml-ws-edge--left" data-testid="workspace-edge-left"
+                    title="Show Schema (F8)" @onclick="@(() => RestoreFromStripAsync(WorkspacePanel.Schema))">Schema</button>
+        }
+
+        <div class="akml-ws-centre" id="akml-ws-centre">
+            @* Spec 041 (FR-073): the document bar — its name, and * while it has unsaved changes. *@
+            <div class="akml-docbar" data-testid="doc-bar">
+                <Icon Name="file-code" Size="14" />
+                <span class="akml-docbar-name" data-testid="doc-name">@Document.Name</span>
+                @if (Document.IsModified)
+                {
+                    <span class="akml-docbar-modified" data-testid="doc-modified" title="Unsaved changes">*</span>
+                }
+            </div>
+            <div class="akml-ws-editor">
+                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
+            </div>
+        </div>
+
+        @if (Fitted.ResultsVisible && !Fitted.ResultsMaximised)
+        {
+            <div class="akml-ws-hsplit">
+                <SplitterComponent Id="bottom" Side="bottom" Value="ResultsPx" Min="Limits.ResultsMinHeight" Max="ResultsMax"
+                                   Controls="akml-ws-results" Label="Resize the results pane" CssVar="--akml-ws-results" Host="_workspaceEl"
+                                   TestId="workspace-splitter-bottom"
+                                   OnCommitted="px => Layout.SetAsync(WorkspaceLayoutFields.ResultsHeight, px)"
+                                   OnReset="ResetResultsHeightAsync"
+                                   OnCollapseToggled="@(() => CollapseFromSplitterAsync(WorkspacePanel.None))" />
+            </div>
+        }
+        <div class="akml-ws-results" id="akml-ws-results">
+            @if (!Fitted.ResultsVisible)
+            {
+                <button type="button" class="akml-ws-edge akml-ws-edge--bottom" data-testid="workspace-edge-bottom"
+                        title="Show results (Ctrl+R)" @onclick="@(() => RestoreFromStripAsync(WorkspacePanel.None))">Results</button>
+            }
+            @* Spec 030 — Phase 5 / spec 041 (R34): Results, Messages and Problems tabs. Always mounted. *@
+            <div class="akml-ws-results-host @(Fitted.ResultsVisible ? null : "akml-ws-hidden")" data-testid="workspace-results"
+                 role="region" aria-label="Results" tabindex="-1">
+                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
+                                      Findings="_findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
+                                      OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
+                                      SelectionStartLine="_selectionStartLine" ReceivedAt="_resultReceivedAt" OnNavigateToLine="OnNavigateToLineAsync"
+                                      OnApplied="OnAppliedReExecuteAsync" DocumentName="@Document.Name"
+                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy" />
+            </div>
+        </div>
+
+        @if (AiShown)
+        {
+            <div class="akml-ws-sr">
+                <SplitterComponent Id="right" Side="right" Value="Fitted.AiWidth" Min="Limits.AiMinWidth" Max="AiMax"
+                                   Controls="akml-ws-ai" Label="Resize the AI panel" CssVar="--akml-ws-right" Host="_workspaceEl"
+                                   TestId="workspace-splitter-right"
+                                   OnCommitted="px => Layout.SetAsync(WorkspaceLayoutFields.AiWidth, px)"
+                                   OnReset="() => Layout.SetAsync(WorkspaceLayoutFields.AiWidth, Limits.AiDefaultWidth)"
+                                   OnCollapseToggled="@(() => CollapseFromSplitterAsync(WorkspacePanel.Ai))" />
+            </div>
+        }
+        else
+        {
+            <button type="button" class="akml-ws-edge akml-ws-edge--right" data-testid="workspace-edge-right"
+                    title="Show AI panel" @onclick="@(() => RestoreFromStripAsync(WorkspacePanel.Ai))">AI</button>
+        }
+        @{ _aiMounted |= AiShown; }
+        @if (_aiMounted)
+        {
+            @* Spec 028 (M6) — the AI dock: Actions / Chat. The action panel operates on the live editor selection
+               (or the whole document); Accept inserts the result at the caret. *@
+            <div class="akml-ws-ai akml-ai-dock @(AiShown ? null : "akml-ws-hidden")" id="akml-ws-ai" data-testid="workspace-ai"
+                 role="region" aria-label="AI assistance" tabindex="-1">
+                @* Spec 041 (R58, FR-070): the one tab strip; the close button sits beside the tablist (ARIA allows only
+                   tabs inside it). *@
+                <div class="akml-ai-tabs" data-testid="ai-dock">
+                    <TabStrip Tabs="AiTabs" ActiveId="@Layout.Current.AiTab" ActiveIdChanged="@(id => Layout.SetAsync(WorkspaceLayoutFields.AiTab, id))"
+                              AriaLabel="AI assistance" IdPrefix="ai" Name="ai">
+                        <Trailing>
+                            <button type="button" class="akml-btn akml-btn--icon akml-btn--ghost" data-testid="ai-close" @onclick="ToggleAiAsync"
+                                    title="Close AI panel" aria-label="Close AI panel"><Icon Name="x" Size="14" /></button>
+                        </Trailing>
+                    </TabStrip>
                 </div>
-                <div class="akml-ai-dock-body">
-                    @if (_aiTab == AiTab.Actions)
+                <div class="akml-ai-dock-body" role="tabpanel" id="@TabStrip.PanelId("ai", Layout.Current.AiTab)"
+                     aria-labelledby="@TabStrip.TabId("ai", Layout.Current.AiTab)">
+                    @if (Layout.Current.AiTab == WorkspaceLayout.AiTabChat)
                     {
-                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
+                        <AiChatPanel />
                     }
                     else
                     {
-                        <AiChatPanel />
+                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
                     }
                 </div>
             </div>
         }
     </div>
-    @* Spec 030 — Phase 5: the results pane is a THIRD flex-column sibling AFTER .akml-editor-grid,
-       inside the flex-column .akml-editor-page, so it occupies the full-width bottom slot. *@
-    <ResultsGridComponent @ref="_resultsGrid" OnApplied="OnAppliedReExecuteAsync" />
+
+    @if (_viewMenu != null)
+    {
+        <ContextMenu Items="_viewMenu.Value.Items" X="_viewMenu.Value.X" Y="_viewMenu.Value.Y" OnClose="() => _viewMenu = null"
+                     TestId="view-menu-list" AriaLabel="View" />
+    }
+
+    @* Spec 041 — execute markers for Playwright: execute-complete's data-version grows per finished run
+       (data-status = its ExecuteStatus); execute-running exists while one runs. *@
+    @if (_executeVersion > 0) { <span data-testid="execute-complete" data-version="@_executeVersion" data-status="@_lastExecuteStatus" hidden></span> }
+    @if (_executing) { <span data-testid="execute-running" hidden></span> }
 
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
@@ -129,9 +298,9 @@
        surround-capable snippets and wraps the current selection on pick. *@
     @if (_showSurroundPicker)
     {
-        <div class="akml-overlay" @onclick="CloseSurroundPicker">
-            <div class="akml-picker" @onclick:stopPropagation="true" data-testid="surround-picker">
-                <div class="akml-picker-header">Surround selection with…</div>
+        <div class="akml-scrim" @onclick="CloseSurroundPicker">
+            <div class="akml-dialog akml-picker" role="dialog" aria-modal="true" aria-label="Surround selection with…" @onclick:stopPropagation="true" data-testid="surround-picker">
+                <div class="akml-dialog-header"><h2 class="akml-dialog-title">Surround selection with…</h2></div>
                 @if (_surroundSnippets.Count == 0)
                 {
                     <p class="akml-picker-empty">No surround-with snippets available.</p>
@@ -148,8 +317,8 @@
                         }
                     </ul>
                 }
-                <div class="akml-picker-footer">
-                    <button class="akml-tool-button" @onclick="CloseSurroundPicker">Cancel</button>
+                <div class="akml-dialog-footer">
+                    <button class="akml-btn" @onclick="CloseSurroundPicker">Cancel</button>
                 </div>
             </div>
         </div>
@@ -160,9 +329,9 @@
        (US3 / T020) entries are appended to this menu, gated by the bridge capability. *@
     @if (_showRefactorMenu)
     {
-        <div class="akml-overlay" @onclick="CloseRefactorMenu">
-            <div class="akml-picker" @onclick:stopPropagation="true" data-testid="refactor-menu">
-                <div class="akml-picker-header">Refactor</div>
+        <div class="akml-scrim" @onclick="CloseRefactorMenu">
+            <div class="akml-dialog akml-picker" role="dialog" aria-modal="true" aria-label="Refactor" @onclick:stopPropagation="true" data-testid="refactor-menu">
+                <div class="akml-dialog-header"><h2 class="akml-dialog-title">Refactor</h2></div>
                 <ul class="akml-picker-list">
                     @foreach (var op in LightweightOps)
                     {
@@ -192,8 +361,8 @@
                         }
                     }
                 </ul>
-                <div class="akml-picker-footer">
-                    <button class="akml-tool-button" @onclick="CloseRefactorMenu">Cancel</button>
+                <div class="akml-dialog-footer">
+                    <button class="akml-btn" @onclick="CloseRefactorMenu">Cancel</button>
                 </div>
             </div>
         </div>
@@ -239,6 +408,7 @@
     }
     .akml-editor-toolbar {
         display: flex;
+        flex-wrap: wrap;   /* a narrow window gets a second row, never a button out of view (spec 041) */
         align-items: center;
         gap: var(--akml-scalar-spacing-s);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
@@ -250,20 +420,10 @@
         color: var(--akml-text-secondary);
         font-size: var(--akml-type-chrome-size);
     }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel);
-        color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        cursor: pointer;
-    }
-    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
-    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
     /* Spec 030 — Phase 5: Execute button (accent-bordered) + advisory resource-cap inputs. */
     .akml-tool-button-run { border-color: var(--akml-accent-primary); color: var(--akml-text-primary); }
+    .akml-run-icon { color: var(--akml-status-success); }
+    .akml-btn:disabled .akml-run-icon { color: inherit; }
     .akml-caps {
         display: flex;
         align-items: center;
@@ -282,14 +442,67 @@
         border-radius: var(--akml-scalar-radius-xs);
         padding: 1px 4px;
     }
-    .akml-editor-grid {
+    /* Spec 041 (R33) — the workspace: one grid with named areas. Schema and AI run full height; the
+       results pane sits under the editor only. The sizes are CSS variables written inline (WorkspaceStyle);
+       a splitter drag rewrites one of them at frame rate. */
+    .akml-workspace {
         flex: 1 1 auto;
-        display: grid;
         min-height: 0;
+        display: grid;
+        grid-template-columns: var(--akml-ws-left) var(--akml-ws-vsplit-l) minmax(var(--akml-ws-editor-min), 1fr) var(--akml-ws-vsplit-r) var(--akml-ws-right);
+        grid-template-rows: minmax(var(--akml-ws-editor-min-h), 1fr) var(--akml-ws-hsplit) var(--akml-ws-results);
+        grid-template-areas:
+            "schema sl centre sr ai"
+            "schema sl hsplit sr ai"
+            "schema sl results sr ai";
     }
-    /* Columns are computed in @GridColumns: editor (1fr) | [schema 240px] | problems 320px |
-       [AI dock 380px]. Spec 025 US4 added the optional schema column (only with an active
-       connection); spec 028 (M6) adds the optional AI dock (toggled by the "AI ▾" button). */
+    .akml-workspace--maximised { grid-template-rows: 0 0 minmax(0, 1fr); }
+    .akml-workspace--maximised .akml-ws-centre { visibility: hidden; }
+    .akml-workspace--maximised .akml-editor { min-height: 0; }
+    .akml-ws-schema, .akml-ws-edge--left { grid-area: schema; min-height: 0; overflow: hidden; }
+    .akml-ws-sl { grid-area: sl; }
+    .akml-ws-centre { grid-area: centre; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .akml-ws-editor { flex: 1 1 auto; min-height: 0; }
+    .akml-docbar {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        height: 26px;
+        padding: 0 var(--akml-scalar-spacing-s);
+        flex: 0 0 auto;
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-primary);
+        background-color: var(--akml-surface-panel);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-docbar-modified { font-weight: 600; }
+    .akml-ws-hsplit { grid-area: hsplit; }
+    .akml-ws-results { grid-area: results; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .akml-ws-results-host { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .akml-workspace .akml-ws-hidden { display: none; }   /* beats a panel's own display (the AI dock's flex) */
+    .akml-ws-sr { grid-area: sr; }
+    .akml-ws-ai, .akml-ws-edge--right { grid-area: ai; min-height: 0; overflow: hidden; }
+    /* Edge strips: a hidden side panel's name, a click away (FR-043). */
+    .akml-ws-edge {
+        padding: var(--akml-scalar-spacing-s) 0;
+        font: inherit;
+        font-size: var(--akml-type-chrome-size);
+        color: var(--akml-text-secondary);
+        background-color: var(--akml-surface-panel);
+        border: none;
+        cursor: pointer;
+    }
+    .akml-ws-edge:hover, .akml-ws-edge:focus-visible { color: var(--akml-text-primary); background-color: var(--akml-surface-hover); }
+    /* A pane F6 focused (when it has nothing focusable inside), and a focused strip, show where focus is. */
+    .akml-ws-edge:focus-visible,
+    .akml-ws-schema:focus-visible, .akml-ws-ai:focus-visible, .akml-ws-results-host:focus-visible {
+        outline: 2px solid var(--akml-accent-primary);
+        outline-offset: -2px;
+    }
+    .akml-ws-edge--left, .akml-ws-edge--right { writing-mode: vertical-rl; text-align: start; }
+    .akml-ws-edge--left { border-right: 1px solid var(--akml-border-default); }
+    .akml-ws-edge--right { border-left: 1px solid var(--akml-border-default); }
+    .akml-ws-edge--bottom { height: 24px; padding: 0 var(--akml-scalar-spacing-m); text-align: left; border-top: 1px solid var(--akml-border-default); }
 
     /* Spec 028 (M6) — editor-adjacent AI dock (Actions / Chat tabs). */
     .akml-ai-dock {
@@ -299,61 +512,14 @@
         border-left: 1px solid var(--akml-border-default);
         background-color: var(--akml-surface-canvas);
     }
-    .akml-ai-tabs {
-        display: flex;
-        align-items: center;
-        gap: var(--akml-scalar-spacing-xs);
-        padding: var(--akml-scalar-spacing-xs);
-        background-color: var(--akml-surface-panel);
-        border-bottom: 1px solid var(--akml-border-default);
-    }
-    .akml-ai-tab {
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
-        background-color: transparent;
-        color: var(--akml-text-secondary);
-        border: 1px solid transparent;
-        border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        cursor: pointer;
-    }
-    .akml-ai-tab:hover { background-color: var(--akml-surface-hover); }
-    .akml-ai-tab.active {
-        color: var(--akml-text-primary);
-        border-color: var(--akml-border-default);
-        background-color: var(--akml-surface-canvas);
-    }
-    .akml-ai-dock-spacer { flex: 1 1 auto; }
+    /* Spec 041 (R58): the tabs are the shared TabStrip (.akml-tabs in shell.css). */
+    .akml-ai-tabs { background-color: var(--akml-surface-panel); }
     .akml-ai-dock-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
     /* The toolbar "AI ▾" toggle shows an active state while the dock is open. */
-    .akml-tool-button.active {
-        background-color: var(--akml-surface-hover);
-        border-color: var(--akml-accent-primary);
-    }
 
     /* Spec 027 T012 — surround-with picker overlay (also reused by the refactoring menu). */
-    .akml-overlay {
-        position: absolute; inset: 0;
-        background-color: rgba(0, 0, 0, 0.35);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 50;
-    }
-    .akml-picker {
-        min-width: 320px; max-width: 480px; max-height: 70%;
-        display: flex; flex-direction: column;
-        background-color: var(--akml-surface-panel);
-        border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-xs);
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
-        color: var(--akml-text-primary);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    }
-    .akml-picker-header {
-        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
-        border-bottom: 1px solid var(--akml-border-default);
-        font-weight: bold;
-    }
+    /* The pickers are shell dialogs (.akml-scrim/.akml-dialog in shell.css) with a list body. */
+    .akml-picker { max-height: 70vh; }
     .akml-picker-empty {
         padding: var(--akml-scalar-spacing-m);
         color: var(--akml-text-secondary);
@@ -373,11 +539,6 @@
         min-width: 64px;
     }
     .akml-picker-title { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .akml-picker-footer {
-        display: flex; justify-content: flex-end;
-        padding: var(--akml-scalar-spacing-s);
-        border-top: 1px solid var(--akml-border-default);
-    }
     /* Spec 027 T020 — heavyweight section header + gated (engine-required) entries. */
     .akml-picker-sep {
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
@@ -435,14 +596,19 @@
     // then threaded through every debounced session save and every history record so a reload keeps
     // landing in the SAME history session.
     private string _sessionKey = string.Empty;
+
+    /// <summary>The history session key: the document's, which New and Open renew (spec 041 R64).</summary>
+    private string SessionKey => Document.SessionKey ?? _sessionKey;
+
+    // Text changes before the document is loaded (the editor's first, empty change) are not the user's.
+    private bool _documentLoaded;
+    private IJSObjectReference? _uiModule;
     private CodeAnalysisResponse? _findings;
+    private EditorDiagnostic? _errorDiagnostic;   // spec 041 (FR-023): the error line the user last went to
     private FormattingProfile? _activeProfile;
     private string? _status;
-    private bool _waitingForChord;
-    private DateTime _chordExpiresAt;
     private CancellationTokenSource? _analyseCts;
     private bool _autoAnalyseOnFormat = true;
-    private IJSObjectReference? _downloadModule;
     // Spec 024 T004: completion markers for the Playwright suite. The `_has*` flags
     // attach the data-testid span; the `_*Version` counters increment per success so
     // a repeat-operation test (Scenario 4 in playwright-harness-contract.md) can wait
@@ -455,23 +621,67 @@
     // database name drive the cache lookup; both refresh on OnInitializedAsync.
     private string? _activeServerIdentity;
     private string? _activeDatabaseName;
-    private bool _showSchemaTree => !string.IsNullOrEmpty(_activeServerIdentity) && !string.IsNullOrEmpty(_activeDatabaseName);
 
-    // Spec 028 (M6) — editor-adjacent AI dock state. The dock surfaces the AI action panel
-    // (Explain/Fix/Optimize/NL→SQL/Index Analysis) and the chat panel as two tabs; the panels
-    // existed since 021 T131 but were not hosted by any reachable page until this closure.
-    private bool _showAiPanel;
-    private enum AiTab { Actions, Chat }
-    private AiTab _aiTab = AiTab.Actions;
+    // Spec 041 (R33–R38) — the workspace: the remembered layout (IWorkspaceLayoutStore) fitted to the measured
+    // workspace, and the side panels a narrow window folds away (derived, never stored). The AI dock's open
+    // state and tab are part of the layout now (they were page-only before).
+    private static readonly WorkspaceLayoutLimits Limits = WorkspaceLayoutLimits.Default;
+    private ElementReference _workspaceEl;
+    private int _wsWidth;
+    private int _wsHeight;
+    // The side panel the user last opened by hand folds last (so opening AI at 1440 px folds Schema rather than
+    // doing nothing); one opened by hand in a window too narrow even for it alone shows until the width changes.
+    private WorkspacePanel _keep;
+    private WorkspacePanel _forced;
+    private bool _aiMounted;
+    private static readonly IReadOnlyList<TabItem> AiTabs = new[]
+    {
+        new TabItem(WorkspaceLayout.AiTabActions, "Actions", TestId: "ai-tab-actions"),
+        new TabItem(WorkspaceLayout.AiTabChat, "Chat", TestId: "ai-tab-chat"),
+    };
+    // A splitter's Enter collapses its panel and puts focus on the strip; the strip's Enter puts it back on the
+    // splitter — so the keyboard can collapse and restore without hunting for focus.
+    private string? _focusAfterRender;
+    private (double X, double Y, IReadOnlyList<MenuItem> Items)? _viewMenu;
 
-    // Column track list, computed so the optional schema (Spec 025 US4) and AI (Spec 028) columns
-    // append in DOM order: editor | [schema] | problems | [AI]. minmax(0,1fr) lets the editor
-    // shrink instead of overflowing when several side panels are open.
-    private string GridColumns =>
-        "minmax(0, 1fr)"
-        + (_showSchemaTree ? " 240px" : string.Empty)
-        + " 320px"
-        + (_showAiPanel ? " 380px" : string.Empty);
+    /// <summary>The remembered layout corrected for the workspace as measured (until measured: as remembered).</summary>
+    private WorkspaceLayout Fitted => _wsWidth > 0
+        ? WorkspaceLayout.Fit(Layout.Current, _wsWidth, _wsHeight, Limits)
+        : Layout.Current;
+
+    private WorkspaceFold Fold => _wsWidth > 0 ? WorkspaceLayout.Fold(Fitted, _wsWidth, Limits, _keep) : WorkspaceFold.None;
+
+    private bool SchemaShown => Fitted.SchemaVisible && (!Fold.SchemaFolded || _forced == WorkspacePanel.Schema);
+
+    private bool AiShown => Fitted.AiVisible && (!Fold.AiFolded || _forced == WorkspacePanel.Ai);
+
+    private int SchemaMax => Math.Max(Limits.SchemaMinWidth,
+        (_wsWidth > 0 ? _wsWidth : 1600) - Limits.EditorMinWidth - Limits.SplitterTrack - (AiShown ? Fitted.AiWidth + Limits.SplitterTrack : Limits.EdgeStrip));
+
+    private int AiMax => Math.Max(Limits.AiMinWidth,
+        (_wsWidth > 0 ? _wsWidth : 1600) - Limits.EditorMinWidth - Limits.SplitterTrack - (SchemaShown ? Fitted.SchemaWidth + Limits.SplitterTrack : Limits.EdgeStrip));
+
+    private int ResultsMax => Math.Max(Limits.ResultsMinHeight, (_wsHeight > 0 ? _wsHeight : 900) - Limits.EditorMinHeight - Limits.SplitterTrack);
+
+    /// <summary>The results pane's height: as sized, or 38 % of the workspace until the user sizes it.</summary>
+    private int ResultsPx => Fitted.ResultsHeight ?? (int)Math.Round((_wsHeight > 0 ? _wsHeight : 600) * Limits.ResultsDefaultFraction);
+
+    private string WorkspaceClass => Fitted.ResultsVisible && Fitted.ResultsMaximised ? "akml-workspace akml-workspace--maximised" : "akml-workspace";
+
+    private string WorkspaceStyle
+    {
+        get
+        {
+            var f = Fitted;
+            string left = SchemaShown ? $"{f.SchemaWidth}px" : $"{Limits.EdgeStrip}px";
+            string right = AiShown ? $"{f.AiWidth}px" : $"{Limits.EdgeStrip}px";
+            string results = f.ResultsVisible ? $"{ResultsPx}px" : $"{Limits.EdgeStrip}px";
+            return $"--akml-ws-left:{left};--akml-ws-vsplit-l:{(SchemaShown ? Limits.SplitterTrack : 0)}px;"
+                + $"--akml-ws-right:{right};--akml-ws-vsplit-r:{(AiShown ? Limits.SplitterTrack : 0)}px;"
+                + $"--akml-ws-results:{results};--akml-ws-hsplit:{(f.ResultsVisible && !f.ResultsMaximised ? Limits.SplitterTrack : 0)}px;"
+                + $"--akml-ws-editor-min:{Limits.EditorMinWidth}px;--akml-ws-editor-min-h:{(f.ResultsMaximised ? 0 : Limits.EditorMinHeight)}px";
+        }
+    }
 
     // Spec 027 T012 (US1) — surround-with picker state.
     private bool _showSurroundPicker;
@@ -520,12 +730,30 @@
     // state (the editor, the snippet store). Disposed on unmount so the palette can never run a
     // command against a torn-down editor.
     private IDisposable? _commandRegistration;
+    private IReadOnlyList<CommandAction> _contextActions = Array.Empty<CommandAction>();
+    private bool _keysInitialized;
+    private bool _disposed;
+
+    // Spec 041 (R37) — page-scoped key capture. akml-workspace.js claims the WorkspaceKeyMap keys of the
+    // commands this page registered and calls OnWorkspaceKey; removed again on unmount.
+    private IJSObjectReference? _workspaceModule;
+    private DotNetObjectReference<Editor>? _selfRef;
 
     // Spec 030 — Phase 5: query execution + results pane state.
-    private ResultsGridComponent? _resultsGrid;
+    private ResultsPaneComponent? _resultsPane;
+    private ExecuteQueryResult? _result;
+    private string _resultsTab = ResultsPaneComponent.ResultsTab;
+    private DateTimeOffset _resultReceivedAt = DateTimeOffset.Now;
+    private int _selectionStartLine = 1;
+    private int _executeVersion;
+    private int _lastExecuteStatus;
+    private bool _analysisEnabled = true;
+    private ProblemsFilter? _problemsFilter;
     private bool _executing;
     private int _maxRows = 1000;
     private int _timeoutSeconds = 30;
+    private bool _showColumnTypes;
+    private bool _retainLineBreaksOnCopy;
     private string? _activeQueryId;
     private string _lastExecutedSql = string.Empty;
     // web History "Re-execute": set from the ?autorun=1 query flag; consumed once the restored
@@ -541,9 +769,17 @@
         // for "system" already (index.html runs apply('system') inline), so this is an
         // upgrade only when the user has stored a non-system preference.
         await Theme.InitializeAsync();
+        if (_disposed) return;
+
+        // Spec 041 (R36, FR-045) — the remembered workspace: which regions show, their sizes, the tabs.
+        Layout.Changed += OnLayoutChanged;
+        await Layout.LoadAsync();
+        if (_disposed) return;
+        _resultsTab = Layout.Current.ResultsTab;
 
         // T051: restore the last editor session.
         var restored = await SessionStore.RestoreAsync();
+        if (_disposed) return;
         if (restored != null)
         {
             _initialText = restored.DocumentText;
@@ -554,12 +790,24 @@
         // just restored above (avoids a second IndexedDB round-trip) -- mints/persists a fresh
         // key on first use or after a reset.
         _sessionKey = await EditorSessionKeys.GetOrCreateAsync(SessionStore, restored);
+        if (_disposed) return;
+
+        // Spec 041 (R64): the document — its name, modified state and default-name counter.
+        await Document.LoadAsync(restored);
+        if (_disposed) return;
+        Document.AdoptSessionKey(_sessionKey);
+        Document.Attach(this, ConfirmDiscardPendingEditsAsync);
+        Document.Changed += OnDocumentChanged;
+        _documentLoaded = true;
+        Workspace.SetDocument(Document.Name, Document.IsModified);
 
         // T038: load the active profile.
         var activeId = await ProfileStore.GetActiveIdAsync();
+        if (_disposed) return;
         try
         {
             var active = await ProfileStore.GetAsync(activeId);
+            if (_disposed) return;
             _activeProfile = active?.Profile;
         }
         catch (Exception)
@@ -570,11 +818,16 @@
         }
 
         // T044: load analyser settings.
+        if (_disposed) return;
         var settings = await AnalysisSettings.GetAsync();
+        if (_disposed) return;
         _autoAnalyseOnFormat = settings.AutoAnalyseOnFormat;
+        _analysisEnabled = settings.Enabled;
+        _problemsFilter = settings.ProblemsFilter;
 
         // T048: restore the diagnostics ring buffer.
         await Diagnostics.RestoreAsync();
+        if (_disposed) return;
         Diagnostics.Log(DiagnosticLevel.Info, "editor", "Editor page mounted.");
 
         // Spec 025 US4 / spec 030 loop fix: point the schema tree at the ACTIVE SQL connection's
@@ -587,14 +840,20 @@
 
         // Spec 030 — Phase 5: seed the execute caps from the store, and re-render the Execute button's
         // enabled state when the SQL connection comes/goes.
-        var execSettings = await ExecSettings.GetAsync();
+        // Spec 041 (R52): the toolbar shows the effective caps — this session's quick-control override, else the
+        // defaults saved in Settings › Queries. The grid options come from the saved defaults only.
+        var execSettings = await ExecSettings.GetEffectiveAsync();
+        if (_disposed) return;
         _maxRows = execSettings.MaxRows;
         _timeoutSeconds = execSettings.CommandTimeoutSeconds;
+        _showColumnTypes = execSettings.ShowColumnTypes;
+        _retainLineBreaksOnCopy = execSettings.RetainLineBreaksOnCopy;
         SqlConn.StateChanged += OnSqlConnStateChanged;
 
         // Spec 030 — register this page's context actions with the ⌘P palette. These close over the
         // live editor + page handlers; the registration token is disposed in DisposeAsync.
-        _commandRegistration = Commands.Register(BuildContextActions());
+        _contextActions = BuildContextActions().Concat(WorkspaceViewActions.Build(this)).ToList();
+        _commandRegistration = Commands.Register(_contextActions);
     }
 
     private void OnSqlConnStateChanged()
@@ -606,8 +865,8 @@
     /// <summary>
     /// Align the schema-tree target with the live SQL connection so its (server, database) lookup key
     /// matches what MainLayout passes to <c>SchemaSync.StartAsync</c> (<c>SqlConn.Server</c> /
-    /// <c>SqlConn.Database</c>). Cleared when no SQL connection is open — the tree then hides via
-    /// <c>_showSchemaTree</c>.
+    /// <c>SqlConn.Database</c>). Cleared when no SQL connection is open — the tree then offers to connect
+    /// (spec 041 FR-048).
     /// </summary>
     private void RefreshSchemaTarget()
     {
@@ -645,12 +904,15 @@
                 return;
             }
 
-            // LIVE text — selection if any, else the whole document.
-            var selection = await _editor.GetSelectedTextAsync();
-            var sql = string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
+            // LIVE text — selection if any, else the whole document — and where it starts, so an error's
+            // line maps back to the document (spec 041 R24).
+            var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
 
-            await RunSqlAsync(sql);
+            // Spec 041 (FR-015): a new result replaces the grid, so its pending edits go — ask first.
+            if (!await ConfirmDiscardPendingEditsAsync()) return;
+
+            await RunSqlAsync(sql, startLine);
         }
         finally
         {
@@ -660,33 +922,140 @@
         }
     }
 
-    /// <summary>Runs <paramref name="sql"/> through the engine, shows the result, and records it in
-    /// SQL History (best-effort). Shared by the toolbar/Mod-Enter execute and the web History
-    /// "Re-execute" autorun. The caller owns the <c>_executing</c> guard.</summary>
-    private async Task RunSqlAsync(string sql)
+    /// <summary>The selection, or the whole document when it is empty or only whitespace, and the document
+    /// line it starts on.</summary>
+    private async Task<(string Sql, int StartLine)> ReadExecuteTextAsync()
     {
+        if (_editor == null) return (string.Empty, 1);
+        var selection = await _editor.GetSelectionInfoAsync();
+        if (!string.IsNullOrWhiteSpace(selection.Text)) return (selection.Text, Math.Max(1, selection.StartLine));
+        return (await _editor.GetTextAsync(), 1);
+    }
+
+    /// <summary>Runs <paramref name="sql"/> through the engine, shows the result, and records it in
+    /// SQL History (best-effort). Shared by the toolbar/F5/Mod-Enter execute and the web History
+    /// "Re-execute" autorun. The caller owns the <c>_executing</c> guard.</summary>
+    private async Task RunSqlAsync(string sql, int startLine)
+    {
+        await ClearErrorMarkAsync();
         _lastExecutedSql = sql;
         _activeQueryId = Guid.NewGuid().ToString("N");
-        _status = "Running…";
+        Workspace.Begin();
+        if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
         StateHasChanged();
 
         var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-        _resultsGrid?.ShowResult(result);
+        ShowResult(result, startLine, chooseTab: true);
 
         // Record into SQL History (fire-and-forget) — NoConnection isn't recorded (nothing ran).
         if (WebHistoryLogic.ShouldRecord(result.Status))
         {
-            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, SqlConn.Database, _sessionKey);
+            // Spec 041 (R27): the database the script ended in (a USE moves it).
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name);
             _ = History.RecordAsync(rec, CancellationToken.None);
         }
 
-        _status = result.Status == ExecuteStatus.Ok
-            ? $"Done in {result.ElapsedMs} ms"
-            : null;
         if (result.Status != ExecuteStatus.Ok)
         {
             Diagnostics.Log(DiagnosticLevel.Warn, "execute", $"Execute status {result.Status}: {result.ErrorMessage}");
         }
+    }
+
+    /// <summary>
+    /// Spec 041 (FR-020) — hand a reply to the results pane and the status bar. With
+    /// <paramref name="chooseTab"/> the pane shows Results when there is at least one set and no error,
+    /// otherwise Messages.
+    /// </summary>
+    private void ShowResult(ExecuteQueryResult result, int startLine, bool chooseTab)
+    {
+        _result = result;
+        _resultReceivedAt = DateTimeOffset.Now;
+        _selectionStartLine = startLine;
+        if (chooseTab)
+        {
+            _resultsTab = result.ResultSets.Length > 0 && result.Status == ExecuteStatus.Ok
+                ? ResultsPaneComponent.ResultsTab
+                : ResultsPaneComponent.MessagesTab;
+        }
+        Workspace.Complete(result);
+        _executeVersion++;
+        _lastExecuteStatus = result.Status;
+    }
+
+    /// <summary>The engine understands Parse (it advertises execute.v2).</summary>
+    private bool SupportsParse => Array.IndexOf(Bridge.EngineCapabilities ?? Array.Empty<string>(), "execute.v2") >= 0;
+
+    private bool CanParse => !_executing && SqlConn.IsConnected && SupportsParse;
+
+    /// <summary>Spec 041 (R21, FR-035) — the server checks the script's syntax; nothing runs, nothing is
+    /// recorded in History. The Messages tab says how it went.</summary>
+    private async Task ParseAsync()
+    {
+        if (_executing || _editor == null || !CanParse) return;
+        _executing = true;
+        try
+        {
+            var (sql, startLine) = await ReadExecuteTextAsync();
+            if (string.IsNullOrWhiteSpace(sql)) return;
+            if (!await ConfirmDiscardPendingEditsAsync()) return;
+
+            await ClearErrorMarkAsync();
+            _activeQueryId = Guid.NewGuid().ToString("N");
+            Workspace.Begin();
+            StateHasChanged();
+            var result = await QueryExec.ParseAsync(sql, _timeoutSeconds, _activeQueryId, CancellationToken.None);
+            ShowResult(result, startLine, chooseTab: false);
+            _resultsTab = ResultsPaneComponent.MessagesTab;
+        }
+        finally
+        {
+            _executing = false;
+            _activeQueryId = null;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Spec 041 (FR-023) — an error message was clicked: go to its line and mark it.</summary>
+    private async Task OnNavigateToLineAsync(int line)
+    {
+        if (_editor == null) return;
+        await _editor.GotoLineAsync(line);
+        var message = _result?.MessageDetails?
+            .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == line);
+        var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
+        _errorDiagnostic = new EditorDiagnostic(line, 3, text, Source: "execute");
+        await ShowDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// The error mark belongs to the last run and to the text as it was: a new run or parse, or an edit (which can
+    /// move the line it points at), removes it.
+    /// </summary>
+    private async Task ClearErrorMarkAsync()
+    {
+        if (_errorDiagnostic == null) return;
+        _errorDiagnostic = null;
+        await ShowDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// Spec 041 (T200, R39, FR-087) — the editor shows every analyser finding (the Problems tab's filters are a view
+    /// of the list) and the error line the user last went to, as underlines with gutter markers.
+    /// </summary>
+    private async Task ShowDiagnosticsAsync()
+    {
+        if (_editor == null) return;
+        var shown = new List<EditorDiagnostic>(EditorDiagnostics.FromIssues(_findings?.Issues));
+        if (_errorDiagnostic != null) shown.Add(_errorDiagnostic);
+        await _editor.SetDiagnosticsAsync(shown);
+    }
+
+    /// <summary>Spec 041 (R39) — the palette's Next problem / Previous problem (lintKeymap's F8 is the Schema panel's).</summary>
+    private async Task GoToProblemAsync(bool forward)
+    {
+        if (_editor == null) return;
+        if (!await _editor.GoToProblemAsync(forward))
+            Notifications.Notify(_findings?.Issues is { Length: > 0 } ? "No more problems." : "No problems to go to. Run Analyse (Ctrl+K, Ctrl+L).", NotificationKind.Info);
     }
 
     /// <summary>web History "Re-execute": when navigated to with <c>?autorun=1</c>, run the restored
@@ -701,6 +1070,23 @@
     /// After a run proceeds the URL flag is stripped so a manual refresh doesn't re-run.</summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_disposed) return;
+        // The page's commands are registered at the end of OnInitializedAsync, which can finish after the
+        // first render: claim the keys on the first render that has them, so F5 never reaches the browser.
+        if (!_keysInitialized && _contextActions.Count > 0)
+        {
+            _keysInitialized = true;
+            await InitWorkspaceKeysAsync();
+        }
+
+        if (_focusAfterRender is { } focusId && _workspaceModule != null)
+        {
+            _focusAfterRender = null;
+            try { await _workspaceModule.InvokeVoidAsync("focusTestId", focusId); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+
         // Wait for the async restore to populate the document; don't consume the flag until it has.
         if (!_autorunPending || string.IsNullOrWhiteSpace(_initialText)) return;
         if (!SqlConn.IsConnected) return;   // stay pending until the connection is up
@@ -708,7 +1094,7 @@
         if (_executing) return;             // a manual run is already in flight -> don't double-run
 
         _executing = true;
-        try { await RunSqlAsync(_initialText); }
+        try { await RunSqlAsync(_initialText, 1); }
         finally { _executing = false; _activeQueryId = null; }
 
         Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
@@ -746,8 +1132,9 @@
         try
         {
             _activeQueryId = Guid.NewGuid().ToString("N");
+            Workspace.Begin();
             var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-            _resultsGrid?.ShowResult(result, preserveActiveTab: true); // keep the user on the set they applied to.
+            ShowResult(result, _selectionStartLine, chooseTab: false); // keep the user on the tab they are on.
         }
         finally
         {
@@ -757,71 +1144,209 @@
         }
     }
 
-    private async Task OnMaxRowsChanged(ChangeEventArgs e)
+    // Spec 041 (R52, FR-052): the quick control changes this session only; the saved defaults live in
+    // Settings › Queries (saving one there clears the override).
+    private void OnMaxRowsChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out var v) && v > 0)
         {
             _maxRows = Math.Clamp(v, 1, 100_000);
-            await PersistCapsAsync();
+            ExecSettings.SessionOverride = new SessionOverride
+            {
+                MaxRows = _maxRows,
+                CommandTimeoutSeconds = ExecSettings.SessionOverride?.CommandTimeoutSeconds,
+            };
         }
     }
 
-    private async Task OnTimeoutChanged(ChangeEventArgs e)
+    private void OnTimeoutChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out var v) && v > 0)
         {
             _timeoutSeconds = Math.Clamp(v, 1, 600);
-            await PersistCapsAsync();
+            ExecSettings.SessionOverride = new SessionOverride
+            {
+                MaxRows = ExecSettings.SessionOverride?.MaxRows,
+                CommandTimeoutSeconds = _timeoutSeconds,
+            };
         }
     }
 
-    private Task PersistCapsAsync() =>
-        ExecSettings.SetAsync(new ExecutionSettings { MaxRows = _maxRows, CommandTimeoutSeconds = _timeoutSeconds });
+    /// <summary>
+    /// Spec 041 (FR-015) — ask before an action that would drop the results grid's pending edits (Execute,
+    /// leaving the page; New and Open in US5). True when there are none, or the user chose to discard them.
+    /// </summary>
+    private async Task<bool> ConfirmDiscardPendingEditsAsync()
+    {
+        int n = _resultsPane?.PendingEditCount ?? 0;
+        if (n == 0) return true;
+        return await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = $"Discard {n} pending edit{(n == 1 ? "" : "s")}?",
+            Message = "The changes in the results grid have not been applied. Discard them?",
+            ConfirmLabel = "Discard",
+            CancelLabel = "Keep editing",
+            Destructive = true,
+        });
+    }
+
+    private async Task OnBeforeInternalNavigationAsync(LocationChangingContext context)
+    {
+        if (!await ConfirmDiscardPendingEditsAsync()) context.PreventNavigation();
+    }
 
     /// <summary>Spec 030 — the editor's context-action contributions to the ⌘P palette.</summary>
     private IEnumerable<CommandAction> BuildContextActions()
     {
+        // Spec 041 (R37, FR-028): F5 and Ctrl+F5. While a query runs neither is offered (the key does nothing).
+        yield return new CommandAction
+        {
+            Id = "editor:execute", Title = "Execute", Group = CommandGroup.Action,
+            Icon = "play", Shortcut = "F5", Run = ExecuteAsync,
+            IsEnabled = () => !_executing && SqlConn.IsConnected,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:parse", Title = "Parse (check syntax on the server)", Group = CommandGroup.Action,
+            Icon = "file-check", Shortcut = "Ctrl+F5", Run = ParseAsync,
+            IsEnabled = () => CanParse,
+        };
         yield return new CommandAction
         {
             Id = "editor:format", Title = "Format SQL", Group = CommandGroup.Action,
-            Icon = "🧱", Shortcut = "Ctrl+K Ctrl+F", Run = FormatAsync,
+            Icon = "wand-sparkles", Shortcut = "Ctrl+K Ctrl+F", Run = FormatAsync,
         };
         yield return new CommandAction
         {
             Id = "editor:analyse", Title = "Analyse SQL", Group = CommandGroup.Action,
-            Icon = "🔍", Shortcut = "Ctrl+K Ctrl+L", Run = AnalyseAsync,
+            Icon = "search-check", Shortcut = "Ctrl+K Ctrl+L", Run = AnalyseAsync,
+        };
+        // Spec 041 (T200, R39): through the palette — CodeMirror's own F8 for this is the Schema panel's key.
+        yield return new CommandAction
+        {
+            Id = "editor:next-problem", Title = "Next problem", Group = CommandGroup.Action,
+            Icon = "arrow-down", Run = () => GoToProblemAsync(forward: true),
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:previous-problem", Title = "Previous problem", Group = CommandGroup.Action,
+            Icon = "arrow-up", Run = () => GoToProblemAsync(forward: false),
         };
         yield return new CommandAction
         {
             Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
-            Icon = "🔧", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+            Icon = "replace", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
         };
         yield return new CommandAction
         {
-            Id = "editor:save", Title = "Save as .sql", Group = CommandGroup.Action,
-            Icon = "💾", Shortcut = "Ctrl+S", Run = SaveAsync,
+            Id = "editor:new", Title = "New query", Group = CommandGroup.File,
+            Icon = "file-plus", Shortcut = WorkspaceKeyMap.DisplayFor("editor:new"), Run = NewDocumentAsync,
         };
         yield return new CommandAction
         {
-            Id = "editor:ai", Title = "Toggle AI panel", Group = CommandGroup.Action,
-            Icon = "🤖", Run = () => { ToggleAiPanel(); StateHasChanged(); return Task.CompletedTask; },
+            Id = "editor:open", Title = "Open file…", Group = CommandGroup.File,
+            Icon = "folder-open", Shortcut = WorkspaceKeyMap.DisplayFor("editor:open"), Run = OpenFilePickerAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:save", Title = "Save", Group = CommandGroup.File,
+            Icon = "save", Shortcut = WorkspaceKeyMap.DisplayFor("editor:save"), Run = SaveAsync,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:saveas", Title = "Save as…", Group = CommandGroup.File,
+            Icon = "save-all", Shortcut = WorkspaceKeyMap.DisplayFor("editor:saveas"), Run = SaveAsAsync,
         };
         yield return new CommandAction
         {
             Id = "editor:surround", Title = "Surround selection with…", Group = CommandGroup.Action,
-            Icon = "🎁", Shortcut = "Ctrl+K Ctrl+S", Run = OpenSurroundPickerAsync,
+            Icon = "brackets", Shortcut = "Ctrl+K Ctrl+S", Run = OpenSurroundPickerAsync,
         };
     }
 
     private async Task OnTextChangedAsync(string newText)
     {
         _currentText = newText;
+        SchemaSync.ReportEditorActive();   // spec 041 (R40, N27): keeps the 30 s schema poll from idling out
+        await ClearErrorMarkAsync();
+        if (!_documentLoaded) return;
+        Document.OnTextChanged(newText);
         // T051 debounced save (the store applies its own 500 ms debounce). Routed through
-        // EditorSessionKeys.BuildTextChangeRecord so _sessionKey is carried forward -- SaveAsync
-        // overwrites the whole persisted record, so omitting it here would wipe the key on the very
-        // next keystroke and defeat GetOrCreateAsync's persistence (see that helper's doc comment).
+        // EditorSessionKeys.BuildTextChangeRecord so the session key — and (spec 041) the document's name,
+        // modified state and counter — are carried forward: SaveAsync overwrites the whole persisted record.
         await SessionStore.SaveAsync(EditorSessionKeys.BuildTextChangeRecord(
-            _sessionKey, newText, await ProfileStore.GetActiveIdAsync()));
+            SessionKey, newText, await ProfileStore.GetActiveIdAsync(),
+            Document.Name, Document.IsModified, Document.NextDefaultNumber));
+    }
+
+    // ── Spec 041 (R64, FR-072) — documents: New, Open, Save, Save as ────────────────────────────────────
+
+    async Task<string> IEditorText.GetTextAsync() => _editor != null ? await _editor.GetTextAsync() : _currentText;
+
+    async Task IEditorText.SetTextAsync(string text)
+    {
+        // Keep the page's copy in step, or the editor's InitialText guard would skip an equal value later.
+        _initialText = text;
+        _currentText = text;
+        if (_editor != null) await _editor.SetTextAsync(text);
+    }
+
+    private void OnDocumentChanged()
+    {
+        Workspace.SetDocument(Document.Name, Document.IsModified);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task NewDocumentAsync()
+    {
+        if (!await Document.NewAsync()) return;
+        await AfterDocumentReplacedAsync();
+    }
+
+    /// <summary>The Open command (Ctrl+Alt+O, the palette): the same file picker as the toolbar's Open.</summary>
+    private async Task OpenFilePickerAsync()
+    {
+        try
+        {
+            _uiModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            await _uiModule.InvokeVoidAsync("clickElement", "akml-doc-open-input");
+        }
+        catch (JSException ex) { Diagnostics.Log(DiagnosticLevel.Warn, "editor", $"Open: {ex.Message}"); }
+        catch (JSDisconnectedException) { }
+    }
+
+    private async Task OpenFileAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file.Size > EditorDocumentFlow.MaxFileBytes)
+        {
+            Document.RefuseTooLarge(file.Name);
+            return;
+        }
+        byte[] bytes;
+        try
+        {
+            await using var stream = file.OpenReadStream(EditorDocumentFlow.MaxFileBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+        catch (IOException ex)
+        {
+            Notifications.Notify($"{file.Name} could not be read: {ex.Message}", NotificationKind.Error);
+            return;
+        }
+        if (!await Document.OpenAsync(bytes, file.Name)) return;
+        await AfterDocumentReplacedAsync();
+    }
+
+    /// <summary>A new document: the old one's findings and results do not belong to it.</summary>
+    private async Task AfterDocumentReplacedAsync()
+    {
+        if (_editor != null) await _editor.ClearDiagnosticsAsync();
+        _findings = null;
+        _errorDiagnostic = null;
+        StateHasChanged();
     }
 
     private async Task OnProfileChangedAsync(ProfileRecord record)
@@ -845,7 +1370,7 @@
                 _hasFormatted = true;
                 _formatVersion++;
                 Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
-                if (_autoAnalyseOnFormat)
+                if (_autoAnalyseOnFormat && _analysisEnabled)   // a format never announces that analysis is off
                 {
                     await AnalyseAsync();
                 }
@@ -871,6 +1396,23 @@
 
     private async Task AnalyseAsync()
     {
+        // Spec 041 (FR-034, FR-055): with code analysis off, Analyse says so (the Problems tab offers to turn
+        // it on) — never "No problems found", which would be a claim about a document nobody analysed.
+        var analysis = await AnalysisSettings.GetAsync();
+        _analysisEnabled = analysis.Enabled;
+        if (!_analysisEnabled)
+        {
+            _findings = null;
+            await ShowDiagnosticsAsync();
+            _hasAnalysed = true;
+            _analyseVersion++;
+            _resultsTab = ResultsPaneComponent.ProblemsTab;
+            if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+            Notifications.Notify("Code analysis is off.", NotificationKind.Info);
+            StateHasChanged();
+            return;
+        }
+
         _analyseCts?.Cancel();
         _analyseCts = new CancellationTokenSource();
         try
@@ -878,11 +1420,16 @@
             _findings = await Analyser.AnalyseAsync(_currentText, null, _analyseCts.Token);
             _hasAnalysed = true;
             _analyseVersion++;
+            await ShowDiagnosticsAsync();
             var issueCount = _findings.Issues?.Length ?? 0;
-            // Problem count is shown in the Problems panel header; only surface a
-            // toolbar status for the "no problems" case so the user sees confirmation
-            // that the analyser actually ran.
-            _status = issueCount == 0 ? "No problems." : null;
+            // Spec 041 (FR-034): findings open the Problems tab (its badge counts them); none says so in a
+            // notification, so the user knows the analyser ran.
+            if (issueCount > 0)
+            {
+                _resultsTab = ResultsPaneComponent.ProblemsTab;
+                if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+            }
+            else Notifications.Notify("No problems found.", NotificationKind.Success);
             Diagnostics.Log(DiagnosticLevel.Info, "analyser",
                 issueCount == 0 ? "No problems." : $"{issueCount} problem(s) found.");
         }
@@ -903,24 +1450,17 @@
         StateHasChanged();
     }
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SaveWithAsync(Document.SaveAsync);
+
+    private Task SaveAsAsync() => SaveWithAsync(Document.SaveAsAsync);
+
+    private async Task SaveWithAsync(Func<Task<bool>> save)
     {
-        try
+        try { await save(); }
+        catch (JSException ex)
         {
-            _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>(
-                "import", "./js/akml-download.js");
-            var bytes = System.Text.Encoding.UTF8.GetBytes(_currentText);
-            await _downloadModule.InvokeVoidAsync(
-                "downloadBase64",
-                "akml-sql.sql",
-                "application/sql",
-                Convert.ToBase64String(bytes));
-            _status = "Saved.";
-        }
-        catch (Exception ex)
-        {
-            _status = $"Save failed: {ex.Message}";
-            Diagnostics.Log(DiagnosticLevel.Error, "editor", _status);
+            Notifications.Notify($"The file could not be saved: {ex.Message}", NotificationKind.Error);
+            Diagnostics.Log(DiagnosticLevel.Error, "editor", $"Save failed: {ex.Message}");
         }
         StateHasChanged();
     }
@@ -938,6 +1478,16 @@
         if (_editor == null) return;
         _currentText = await _editor.InsertAtLineEndAsync(loc.Line, $" -- akml-disable-line {loc.RuleId}");
         Diagnostics.Log(DiagnosticLevel.Info, "suppress", $"Suppressed {loc.RuleId} on line {loc.Line}.");
+        await AnalyseAsync();
+    }
+
+    /// <summary>Spec 041 (FR-034): "Turn on" in the Problems tab — switch analysis on and analyse.</summary>
+    private async Task EnableAnalysisAsync()
+    {
+        var settings = await AnalysisSettings.GetAsync();
+        settings.Enabled = true;
+        await AnalysisSettings.SetAsync(settings);
+        _analysisEnabled = true;
         await AnalyseAsync();
     }
 
@@ -985,8 +1535,141 @@
         Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Surrounded with '{snippet.Metadata.Shortcode}'.");
     }
 
-    // ── Spec 028 (M6) — editor-adjacent AI dock ──────────────────────────────────────────
-    private void ToggleAiPanel() => _showAiPanel = !_showAiPanel;
+    // ── Spec 041 (R33–R38) — the workspace: View commands, splitters, folding ──────────────────────
+
+    // The palette's check marks say what is on screen, like the View menu: a folded panel is not checked.
+    WorkspaceLayout IWorkspaceViewHost.Layout => Layout.Current with { SchemaVisible = SchemaShown, AiVisible = AiShown };
+
+    public Task ToggleNavAsync() => Layout.SetAsync(WorkspaceLayoutFields.NavVisible, !Layout.Current.NavVisible);
+
+    public Task ToggleSchemaAsync() => SchemaShown ? HidePanelAsync(WorkspacePanel.Schema) : ShowPanelAsync(WorkspacePanel.Schema);
+
+    public Task ToggleAiAsync() => AiShown ? HidePanelAsync(WorkspacePanel.Ai) : ShowPanelAsync(WorkspacePanel.Ai);
+
+    public Task ToggleResultsAsync() => Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, !Layout.Current.ResultsVisible);
+
+    /// <summary>
+    /// Show a side panel at its previous size (FR-043): it becomes the panel that folds last, and when the
+    /// window is too narrow even for it alone it shows anyway until the width changes — a click is never a no-op.
+    /// </summary>
+    private async Task ShowPanelAsync(WorkspacePanel panel)
+    {
+        _keep = panel;
+        string field = panel == WorkspacePanel.Schema ? WorkspaceLayoutFields.SchemaVisible : WorkspaceLayoutFields.AiVisible;
+        bool visible = panel == WorkspacePanel.Schema ? Layout.Current.SchemaVisible : Layout.Current.AiVisible;
+        if (!visible) await Layout.SetAsync(field, true);
+        var fold = Fold;
+        if (panel == WorkspacePanel.Schema ? fold.SchemaFolded : fold.AiFolded) _forced = panel;
+        else if (_forced != panel) _forced = WorkspacePanel.None;
+        StateHasChanged();
+    }
+
+    private Task HidePanelAsync(WorkspacePanel panel)
+    {
+        if (_keep == panel) _keep = WorkspacePanel.None;
+        if (_forced == panel) _forced = WorkspacePanel.None;
+        return Layout.SetAsync(panel == WorkspacePanel.Schema ? WorkspaceLayoutFields.SchemaVisible : WorkspaceLayoutFields.AiVisible, false);
+    }
+
+    /// <summary>Enter/Space on a splitter: collapse its region (<see cref="WorkspacePanel.None"/> = results) and
+    /// move focus to the strip it leaves.</summary>
+    private async Task CollapseFromSplitterAsync(WorkspacePanel panel)
+    {
+        if (panel == WorkspacePanel.None) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, false);
+        else await HidePanelAsync(panel);
+        _focusAfterRender = panel switch
+        {
+            WorkspacePanel.Schema => "workspace-edge-left",
+            WorkspacePanel.Ai => "workspace-edge-right",
+            _ => "workspace-edge-bottom",
+        };
+        StateHasChanged();
+    }
+
+    /// <summary>An edge strip: its region back at its previous size, and focus on the splitter beside it.</summary>
+    private async Task RestoreFromStripAsync(WorkspacePanel panel)
+    {
+        if (panel == WorkspacePanel.None) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+        else await ShowPanelAsync(panel);
+        _focusAfterRender = panel switch
+        {
+            WorkspacePanel.Schema => "workspace-splitter-left",
+            WorkspacePanel.Ai => "workspace-splitter-right",
+            _ => "workspace-splitter-bottom",
+        };
+        StateHasChanged();
+    }
+
+    public async Task ToggleMaximiseResultsAsync()
+    {
+        if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+        await Layout.SetAsync(WorkspaceLayoutFields.ResultsMaximised, !Layout.Current.ResultsMaximised);
+    }
+
+    public async Task ResetLayoutAsync()
+    {
+        _keep = _forced = WorkspacePanel.None;
+        await Layout.ResetAsync();
+        _resultsTab = Layout.Current.ResultsTab;
+        Notifications.Notify("Layout reset.", NotificationKind.Success);
+    }
+
+    /// <summary>Double-click on the results splitter: back to 38 % of the workspace (forgets the sized height).</summary>
+    private Task ResetResultsHeightAsync() => Layout.SetAsync<int?>(WorkspaceLayoutFields.ResultsHeight, null);
+
+    /// <summary>F6 / Shift+F6: focus the next (previous) region — editor, results, Schema, AI, toolbar.</summary>
+    public async Task CyclePanesAsync(bool backwards)
+    {
+        if (_workspaceModule == null) return;
+        try { await _workspaceModule.InvokeVoidAsync("cyclePanes", backwards); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+    }
+
+    /// <summary>The user picked a results tab: remembered until the next run chooses one (FR-020, FR-045).</summary>
+    private async Task OnResultsTabChangedAsync(string tab)
+    {
+        _resultsTab = tab;
+        await Layout.SetAsync(WorkspaceLayoutFields.ResultsTab, tab);
+    }
+
+    /// <summary>The workspace was measured (akml-workspace.js observeWorkspace): fit the layout, fold panels.</summary>
+    [JSInvokable]
+    public Task OnWorkspaceResized(int width, int height)
+    {
+        if (width == _wsWidth && height == _wsHeight) return Task.CompletedTask;
+        if (width != _wsWidth) _forced = WorkspacePanel.None;   // a new width re-applies the fold rule (FR-046)
+        _wsWidth = width;
+        _wsHeight = height;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void OnLayoutChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OpenViewMenu(MouseEventArgs e)
+    {
+        var l = Layout.Current;
+        MenuItem Item(string id, string label, string testId, bool? isChecked, Func<Task> run) => new()
+        {
+            Label = label, TestId = testId, IsChecked = isChecked, Shortcut = WorkspaceKeyMap.DisplayFor(id),
+            OnSelect = async () => { await run(); StateHasChanged(); },
+        };
+        var items = new List<MenuItem>
+        {
+            Item(WorkspaceViewActions.ToggleNav, "Navigation bar", "view-toggle-nav", l.NavVisible, ToggleNavAsync),
+            Item(WorkspaceViewActions.ToggleSchema, "Schema panel", "view-toggle-schema", SchemaShown, ToggleSchemaAsync),
+            Item(WorkspaceViewActions.ToggleResults, "Results pane", "view-toggle-results", l.ResultsVisible, ToggleResultsAsync),
+            Item(WorkspaceViewActions.ToggleAi, "AI panel", "view-toggle-ai", AiShown, ToggleAiAsync),
+            MenuItem.Separator(),
+            Item(WorkspaceViewActions.MaximiseResults, l.ResultsMaximised ? "Restore results" : "Maximise results", "view-toggle-maximise", null, ToggleMaximiseResultsAsync),
+            Item(WorkspaceViewActions.CyclePanes, "Next pane", "view-cycle-panes", null, () => CyclePanesAsync(false)),
+            MenuItem.Separator(),
+            Item(WorkspaceViewActions.ResetLayout, "Reset layout", "workspace-reset-layout", null, ResetLayoutAsync),
+            MenuItem.Separator(),
+            Item("editor:saveas", "Save as…", "view-saveas", null, SaveAsAsync),
+        };
+        _viewMenu = (e.ClientX, e.ClientY + 8, items);
+    }
 
     /// <summary>Resolve the SQL the AI actions operate on: the live editor selection, falling
     /// back to the whole document when nothing is selected (so a user can run Explain on the
@@ -1156,50 +1839,74 @@
         StateHasChanged();
     }
 
-    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    // ── Spec 041 (R37) — page-scoped keys ─────────────────────────────────────────────────────────
+
+    /// <summary>Install the document-level key listener for the commands this page registered. Only
+    /// those keys are claimed, so a key whose command is not built yet still does what the browser does.</summary>
+    private async Task InitWorkspaceKeysAsync()
     {
-        // Chord state machine: first Ctrl+K starts the chord; second key within 1.5 s
-        // completes it. Pressing any other key cancels.
-        if (e.CtrlKey && e.Key == "k")
+        try
         {
-            _waitingForChord = true;
-            _chordExpiresAt = DateTime.UtcNow.AddMilliseconds(1500);
-            return;
+            _workspaceModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-workspace.js");
+            _selfRef = DotNetObjectReference.Create(this);
+            var bindings = WorkspaceKeyMap.For(_contextActions.Select(a => a.Id));
+            await _workspaceModule.InvokeVoidAsync("initKeys", _selfRef, bindings);
+            await _workspaceModule.InvokeVoidAsync("observeWorkspace", _workspaceEl, _selfRef);
+            _uiModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            await _uiModule.InvokeVoidAsync("installHelpTooltips");
         }
-
-        if (_waitingForChord)
+        catch (JSDisconnectedException) { /* tab closing */ }
+        catch (JSException ex)
         {
-            _waitingForChord = false;
-            if (DateTime.UtcNow > _chordExpiresAt) return;
-
-            if (e.CtrlKey && e.Key == "f") { await FormatAsync(); return; }
-            if (e.CtrlKey && e.Key == "l") { await AnalyseAsync(); return; }
-            // Spec 027 T012 — Ctrl+K, Ctrl+S opens the surround-with picker.
-            if (e.CtrlKey && e.Key == "s") { await OpenSurroundPickerAsync(); return; }
+            Diagnostics.Log(DiagnosticLevel.Warn, "editor", $"Keyboard shortcuts unavailable: {ex.Message}");
         }
+    }
 
-        // Ctrl+S — save.
-        if (e.CtrlKey && e.Key == "s")
-        {
-            await SaveAsync();
-        }
+    /// <summary>Called by akml-workspace.js for a claimed key. Runs the registered command, unless it
+    /// says it is not available right now (Execute while a query runs).</summary>
+    [JSInvokable]
+    public async Task OnWorkspaceKey(string commandId)
+    {
+        var action = _contextActions.FirstOrDefault(a => a.Id == commandId)
+                     ?? Commands.Snapshot().FirstOrDefault(a => a.Id == commandId);
+        if (action == null || !action.IsAvailable) return;
+        await action.Run();
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()
     {
+        // Navigation can dispose the first render while initialization is still awaiting stores.
+        // Its continuation must not attach handlers or register commands for this dead page.
+        if (_disposed) return;
+        _disposed = true;
         // Spec 030 — drop our ⌘P palette actions FIRST so a late palette open can't run a closure
         // over the editor we're tearing down.
         _commandRegistration?.Dispose();
+        // Spec 041 — stop claiming the editor page's keys before anything else is torn down.
+        if (_workspaceModule != null)
+        {
+            try
+            {
+                await _workspaceModule.InvokeVoidAsync("disposeKeys");
+                await _workspaceModule.InvokeVoidAsync("unobserveWorkspace");
+                await _workspaceModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+        _selfRef?.Dispose();
         // Spec 030 — Phase 5: drop the connection-state subscription so the disposed page isn't
         // re-rendered on a later connect/disconnect.
         SqlConn.StateChanged -= OnSqlConnStateChanged;
+        Layout.Changed -= OnLayoutChanged;
+        Document.Changed -= OnDocumentChanged;
         _analyseCts?.Cancel();
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();
         await Diagnostics.FlushAsync();
-        if (_downloadModule != null)
+        if (_uiModule != null)
         {
-            try { await _downloadModule.DisposeAsync(); }
+            try { await _uiModule.InvokeVoidAsync("disposeHelpTooltips"); await _uiModule.DisposeAsync(); }
             catch (JSDisconnectedException) { /* tab closing */ }
         }
     }

@@ -12,6 +12,9 @@
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- AKML's UI is English: skip the dependencies' translated resources (13 language folders). -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Spec 041: the dev-time vendoring folders (tools/codemirror, tools/icons) hold npm installs; their
+         node_modules must never be picked up as content and copied into bin or the published site. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);tools\**\node_modules\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

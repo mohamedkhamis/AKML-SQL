@@ -173,4 +173,40 @@ public sealed class KeyVaultTests
         // After dispose the Value getter returns an empty string.
         Assert.Equal(string.Empty, k.Value);
     }
+
+    // ── Spec 041 (T131, research R49) — an imported provider keeps a stored key, never brings one ──
+
+    [Fact]
+    public async Task UpsertConfig_rewrites_name_model_and_endpoint_and_keeps_an_existing_wrapped_key()
+    {
+        var (vault, _) = Build();
+        await vault.SetKeyAsync("openai", new AiProviderConfig { DisplayName = "OpenAI", Model = "gpt-4o" }, "sk-keep-me");
+
+        await vault.UpsertConfigAsync(new AiProviderConfig { ProviderId = "openai", DisplayName = "OpenAI (work)", Model = "gpt-5", Endpoint = "https://example.invalid" });
+
+        var config = await vault.GetConfigAsync("openai");
+        Assert.NotNull(config);
+        Assert.Equal("OpenAI (work)", config!.DisplayName);
+        Assert.Equal("gpt-5", config.Model);
+        Assert.Equal("https://example.invalid", config.Endpoint);
+        Assert.True(config.HasKey);
+        using var key = await vault.UnwrapForCallAsync("openai");
+        Assert.Equal("sk-keep-me", key.Value);
+    }
+
+    [Fact]
+    public async Task UpsertConfig_creates_a_provider_without_a_key_even_when_the_import_claims_one()
+    {
+        var (vault, db) = Build();
+
+        await vault.UpsertConfigAsync(new AiProviderConfig { ProviderId = "anthropic", DisplayName = "Claude", Model = "claude-opus-5-5", HasKey = true });
+
+        var config = await vault.GetConfigAsync("anthropic");
+        Assert.NotNull(config);
+        Assert.False(config!.HasKey);
+        Assert.False(await vault.HasKeyAsync("anthropic"));
+        var (_, raw) = Assert.Single(await db.ListAsync(StoreNames.AiKeys));
+        using var doc = JsonDocument.Parse(raw);
+        Assert.Equal(string.Empty, doc.RootElement.GetProperty("Ciphertext").GetString());
+    }
 }

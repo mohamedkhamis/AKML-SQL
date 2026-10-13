@@ -1,0 +1,121 @@
+@*
+    Spec 041 (R44, R57) — Settings › Schema cache, extracted from the old /settings/schema-cache page (spec 021
+    T111): every cached database with its size and last use, Refresh, Clear one and Clear all. Every clear confirms
+    (Clear all names how many databases and how much space); Restore defaults is Clear all.
+*@
+@using AkmlSql.Web.Services
+@inject ISchemaCacheStore Cache
+@inject IDiagnosticsRingBuffer Diagnostics
+@inject IDialogService Dialogs
+@inject INotificationService Notifications
+
+<SettingRow Id="schema-cache-databases" Kind="block">
+    <div class="akml-btn-group">
+        <button type="button" class="akml-btn" @onclick="RefreshAsync">Refresh</button>
+        @if (_snapshots is { Count: > 0 })
+        {
+            <button type="button" class="akml-btn akml-btn--danger" data-testid="schema-cache-clear-all" @onclick="ClearAllAsync">Clear all…</button>
+        }
+    </div>
+
+    @if (_snapshots == null)
+    {
+        <p class="akml-settings-status">Loading…</p>
+    }
+    else if (_snapshots.Count == 0)
+    {
+        <p class="akml-settings-status">
+            No cached databases yet. The cache fills as you use IntelliSense against a paired engine; the formatter and
+            the analyser do not need it.
+        </p>
+    }
+    else
+    {
+        <table class="akml-table">
+            <thead><tr><th>Server</th><th>Database</th><th>Last used</th><th>Size</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var entry in _snapshots.OrderByDescending(s => s.LastUsedAt))
+                {
+                    <tr>
+                        <td>@entry.ServerCanonicalIdentity</td>
+                        <td>@entry.DatabaseName</td>
+                        <td>@entry.LastUsedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@FormatBytes(_sizes.GetValueOrDefault(entry.CompositeKey))</td>
+                        <td>
+                            <button type="button" class="akml-btn" aria-label="@($"Clear {entry.ServerCanonicalIdentity} / {entry.DatabaseName}")"
+                                    @onclick="@(() => ClearOneAsync(entry))">Clear…</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</SettingRow>
+
+@code {
+    private IReadOnlyList<SchemaSnapshot>? _snapshots;
+    private readonly Dictionary<string, long> _sizes = new();
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _snapshots = await Cache.ListAsync();
+        _sizes.Clear();
+        foreach (var entry in _snapshots)
+            _sizes[entry.CompositeKey] = await Cache.EstimatedSizeAsync(entry.ServerCanonicalIdentity, entry.DatabaseName);
+        StateHasChanged();
+    }
+
+    /// <summary>Restore defaults for this section: Clear all.</summary>
+    public async Task<bool> ClearAllAsync()
+    {
+        _snapshots ??= await Cache.ListAsync();
+        if (_snapshots.Count == 0)
+        {
+            Notifications.Notify("The schema cache is already empty.", NotificationKind.Info);
+            return false;
+        }
+        long total = _sizes.Values.Sum();
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Clear the schema cache",
+            Message = _snapshots.Count == 1
+                ? $"Clear the cached schema of 1 database ({FormatBytes(total)})?"
+                : $"Clear the cached schemas of {_snapshots.Count} databases ({FormatBytes(total)})?",
+            Details = new[] { "IntelliSense fetches a database's schema again the next time it is used." },
+            ConfirmLabel = "Clear all",
+            Destructive = true,
+        });
+        if (!ok) return false;
+        await Cache.ClearAllAsync();
+        Diagnostics.Log(DiagnosticLevel.Info, "schema-cache", "User cleared the entire schema cache.");
+        Notifications.Notify("Cleared all cached schemas.", NotificationKind.Success);
+        await RefreshAsync();
+        return true;
+    }
+
+    private async Task ClearOneAsync(SchemaSnapshot entry)
+    {
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Clear a cached schema",
+            Message = $"Clear the cached schema of {entry.ServerCanonicalIdentity} / {entry.DatabaseName} ({FormatBytes(_sizes.GetValueOrDefault(entry.CompositeKey))})?",
+            ConfirmLabel = "Clear",
+            Destructive = true,
+        });
+        if (!ok) return;
+        await Cache.RemoveAsync(entry.ServerCanonicalIdentity, entry.DatabaseName);
+        Diagnostics.Log(DiagnosticLevel.Info, "schema-cache", $"User cleared {entry.ServerCanonicalIdentity}/{entry.DatabaseName}");
+        Notifications.Notify($"Cleared {entry.DatabaseName}.", NotificationKind.Success);
+        await RefreshAsync();
+    }
+
+    internal static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0) return "0 KB";
+        if (bytes < 1024) return $"{bytes} B";
+        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / (1024.0 * 1024.0):F1} MB";
+    }
+}

@@ -15,6 +15,8 @@ namespace AkmlSql.Web.Tests;
 /// which is removed the moment a successful apply clears the pending edits — so the success message
 /// could never render (only an apply *failure*, which keeps the pending edits, ever showed it). The
 /// message now lives in the always-present results footer.
+/// Spec 041 (T108): ported from the retired ResultsGridComponent to the results pane, with the same ids
+/// selected inside <c>results-set-0</c>.
 /// </summary>
 public sealed class Pr247_ResultsGridApplyMessageTests
 {
@@ -49,18 +51,18 @@ public sealed class Pr247_ResultsGridApplyMessageTests
     public void SuccessfulApply_SurfacesAppliedMessage_EvenAfterPendingEditsCleared()
     {
         using var ctx = new BunitContext();
+        // Spec 041 (T037): Loose JS interop, as every grid test now runs (research R68).
+        ctx.JSInterop.Mode = JSRuntimeMode.Loose;
         ctx.Services.AddSingleton<IQueryExecutionService>(new OkApplyStub());
-        var cut = ctx.Render<ResultsGridComponent>();
-
-        cut.InvokeAsync(() => cut.Instance.ShowResult(EditableResult()));
+        var cut = ctx.Render<ResultsPaneComponent>(p => p.Add(x => x.Result, EditableResult()));
 
         // Edit the 'name' cell (row 0, col 1): double-click opens the inline editor; change commits it.
-        cut.Find("[data-testid=results-cell-0-1]").DoubleClick();
-        cut.Find("[data-testid=results-cell-input]").Change("ALPHA");
+        cut.Find("[data-testid=results-set-0] [data-testid=results-cell-0-1]").DoubleClick();
+        cut.Find("[data-testid=results-set-0] [data-testid=results-cell-input]").Change("ALPHA");
 
         // A pending edit now exists → Apply. The Ok stub clears the pending edits, so HasPendingEdits
         // becomes false and the apply-bar is removed.
-        cut.Find("[data-testid=results-apply]").Click();
+        cut.Find("[data-testid=results-set-0] [data-testid=results-apply]").Click();
 
         // The success confirmation must still be visible (it now lives in the footer, not the apply-bar).
         cut.WaitForAssertion(() =>

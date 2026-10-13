@@ -29,6 +29,17 @@ namespace AkmlSql.Engine.Handlers.Control
             ListDatabasesRequest request, RpcContext ctx, CancellationToken ct)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
+
+            // Spec 041 (R25): the database selector lists with the connection the engine already holds, so the
+            // browser never resends a password. The alias and the guard below judge it like any other request.
+            if (string.IsNullOrEmpty(request.ConnectionString) && !string.IsNullOrEmpty(request.SessionId))
+            {
+                var session = ctx?.Sessions.GetSession(request.SessionId!);
+                if (session == null || !session.IsConnected || string.IsNullOrEmpty(session.ConnectionString))
+                    return new ListDatabasesResponse { Ok = false, ErrorMessage = "The session is not connected to SQL Server." };
+                request.ConnectionString = session.ConnectionString;
+            }
+
             if (string.IsNullOrEmpty(request.ConnectionString))
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = "No connection string supplied." };
 

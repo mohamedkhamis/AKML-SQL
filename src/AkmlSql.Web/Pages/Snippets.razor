@@ -15,19 +15,23 @@
 @inject ISnippetStore SnippetStore
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IJSRuntime JS
+@inject IDialogService Dialogs
 
 <PageTitle>Snippets — AKML SQL</PageTitle>
 
-<div class="akml-snippets">
-    <div class="akml-snippets-header">
-        <h2>Snippets</h2>
-        <span class="akml-snippets-spacer"></span>
-        <button class="akml-tool-button" @onclick="NewSnippet" data-testid="snippet-new">New</button>
-        <label class="akml-tool-button">
-            Import
-            <InputFile OnChange="OnImportAsync" accept=".akmlsnippet" class="akml-hidden-file" />
-        </label>
-        <button class="akml-tool-button" @onclick="RefreshAsync">Refresh</button>
+<div class="akml-page akml-snippets">
+    @* Spec 041 (T203, FR-085): the one page header. *@
+    <div class="akml-page-header akml-snippets-header" data-testid="page-header">
+        <h1 class="akml-page-title" data-testid="page-title">Snippets</h1>
+        <span class="akml-page-spacer"></span>
+        <div class="akml-page-actions" data-testid="page-actions">
+            <button type="button" class="akml-btn" @onclick="NewSnippet" data-testid="snippet-new">New</button>
+            <label class="akml-btn">
+                Import
+                <InputFile OnChange="OnImportAsync" accept=".akmlsnippet" class="akml-hidden-file" />
+            </label>
+            <button type="button" class="akml-btn" @onclick="RefreshAsync">Refresh</button>
+        </div>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
@@ -36,10 +40,15 @@
     }
 
     <div class="akml-snippets-body">
-        <ul class="akml-snippets-list" data-testid="snippet-list">
+        <ul class="akml-snippets-list" data-testid="snippet-list" role="listbox" aria-label="Snippets" aria-busy="@(_loaded ? "false" : "true")">
+            @if (!_loaded)
+            {
+                <li class="akml-empty" data-testid="snippet-loading" role="status"><Icon Name="loader-circle" Class="akml-spin" /><span>Loading snippets…</span></li>
+            }
             @foreach (var s in _all)
             {
-                <li class="akml-snippets-row @(IsSelected(s) ? "selected" : "")"
+                <li class="akml-list-row akml-snippets-row @(IsSelected(s) ? "is-selected" : null)" role="option" aria-selected="@(IsSelected(s) ? "true" : "false")"
+                    data-testid="snippet-row" data-shortcode="@s.Metadata.Shortcode"
                     @onclick="@(() => SelectSnippet(s))">
                     <span class="akml-snippets-code">@s.Metadata.Shortcode</span>
                     <span class="akml-snippets-name">@s.Metadata.Title</span>
@@ -54,30 +63,33 @@
         <div class="akml-snippets-editor">
             @if (_selected == null)
             {
-                <p class="akml-snippets-empty">Select a snippet, or click <strong>New</strong>.</p>
+                <div class="akml-empty" data-testid="snippet-editor-empty">
+                    <p class="akml-empty-title">No snippet selected</p>
+                    <p>Select a snippet on the left, or click <strong>New</strong> to write one.</p>
+                </div>
             }
             else
             {
                 <div class="akml-field">
-                    <label>Shortcode</label>
-                    <input value="@_editShortcode" @oninput="@(e => _editShortcode = e.Value?.ToString() ?? "")"
-                           disabled="@_selected.IsBuiltIn" />
+                    <label class="akml-field-label" for="akml-snippet-shortcode">Shortcode</label>
+                    <input id="akml-snippet-shortcode" class="akml-input" value="@_editShortcode" @oninput="@(e => _editShortcode = e.Value?.ToString() ?? "")"
+                           disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)" />
                 </div>
                 <div class="akml-field">
-                    <label>Title</label>
-                    <input value="@_editTitle" @oninput="@(e => _editTitle = e.Value?.ToString() ?? "")"
-                           disabled="@_selected.IsBuiltIn" />
+                    <label class="akml-field-label" for="akml-snippet-title">Title</label>
+                    <input id="akml-snippet-title" class="akml-input" value="@_editTitle" @oninput="@(e => _editTitle = e.Value?.ToString() ?? "")"
+                           disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)" />
                 </div>
                 <div class="akml-field">
-                    <label>Description</label>
-                    <input value="@_editDescription" @oninput="@(e => _editDescription = e.Value?.ToString() ?? "")"
-                           disabled="@_selected.IsBuiltIn" />
+                    <label class="akml-field-label" for="akml-snippet-description">Description</label>
+                    <input id="akml-snippet-description" class="akml-input" value="@_editDescription" @oninput="@(e => _editDescription = e.Value?.ToString() ?? "")"
+                           disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)" />
                 </div>
                 <div class="akml-field akml-field-grow">
-                    <label>Body</label>
-                    <textarea class="akml-snippets-bodyedit" spellcheck="false"
+                    <label class="akml-field-label" for="akml-snippet-body">Body</label>
+                    <textarea id="akml-snippet-body" class="akml-textarea akml-snippets-bodyedit" spellcheck="false"
                               value="@_editBody" @oninput="@(e => _editBody = e.Value?.ToString() ?? "")"
-                              disabled="@_selected.IsBuiltIn"></textarea>
+                              disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)"></textarea>
                     <p class="akml-snippets-hint">
                         Placeholders use <code>$name$</code>; final caret <code>$CURSOR$</code>;
                         selection slot <code>$SELECTEDTEXT$</code>.
@@ -86,14 +98,14 @@
                 <div class="akml-snippets-actions">
                     @if (!_selected.IsBuiltIn)
                     {
-                        <button class="akml-tool-button" @onclick="SaveAsync" data-testid="snippet-save">Save</button>
-                        <button class="akml-tool-button" @onclick="DeleteAsync">Delete</button>
+                        <button class="akml-btn" @onclick="SaveAsync" data-testid="snippet-save">Save</button>
+                        <button class="akml-btn" @onclick="DeleteAsync" data-testid="snippet-delete">Delete</button>
                     }
                     else
                     {
                         <span class="akml-snippets-readonly">Built-in snippets cannot be edited or deleted.</span>
                     }
-                    <button class="akml-tool-button" @onclick="ExportAsync">Export</button>
+                    <button class="akml-btn" @onclick="ExportAsync">Export</button>
                 </div>
             }
         </div>
@@ -107,14 +119,8 @@
         font-size: var(--akml-type-chrome-size);
         color: var(--akml-text-primary);
     }
-    .akml-snippets-header {
-        display: flex; align-items: center; gap: var(--akml-scalar-spacing-s);
-        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
-        background-color: var(--akml-surface-panel);
-        border-bottom: 1px solid var(--akml-border-default);
-    }
-    .akml-snippets-header h2 { margin: 0; font-size: var(--akml-type-chrometitle-size); }
-    .akml-snippets-spacer { flex: 1 1 auto; }
+    .akml-snippets { height: 100%; }
+    .akml-snippets-header { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-xs); }
     .akml-snippets-status { padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-status-info); font-style: italic; margin: 0; }
     .akml-snippets-body { flex: 1 1 auto; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
     .akml-snippets-list {
@@ -127,8 +133,6 @@
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
         cursor: pointer; border-bottom: 1px solid var(--akml-border-subtle);
     }
-    .akml-snippets-row:hover { background-color: var(--akml-surface-hover); }
-    .akml-snippets-row.selected { background-color: var(--akml-surface-hover); }
     .akml-snippets-code { font-family: var(--akml-type-editor-family); color: var(--akml-text-secondary); min-width: 64px; }
     .akml-snippets-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-snippets-badge {
@@ -137,28 +141,13 @@
         padding: 0 var(--akml-scalar-spacing-xs);
     }
     .akml-snippets-editor { display: flex; flex-direction: column; padding: var(--akml-scalar-spacing-m); gap: var(--akml-scalar-spacing-s); overflow: auto; }
-    .akml-snippets-empty { color: var(--akml-text-secondary); font-style: italic; }
-    .akml-field { display: flex; flex-direction: column; gap: 2px; }
     .akml-field-grow { flex: 1 1 auto; min-height: 0; }
-    .akml-field label { color: var(--akml-text-secondary); font-size: 12px; }
-    .akml-field input, .akml-snippets-bodyedit {
-        background-color: var(--akml-surface-input); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs); font-family: inherit; font-size: inherit;
-    }
     .akml-snippets-bodyedit { flex: 1 1 auto; min-height: 160px; resize: vertical; font-family: var(--akml-type-editor-family); white-space: pre; }
     .akml-snippets-hint { color: var(--akml-text-secondary); font-size: 11px; margin: 2px 0 0; }
     .akml-snippets-hint code { font-family: var(--akml-type-editor-family); color: var(--akml-text-primary); }
     .akml-snippets-actions { display: flex; gap: var(--akml-scalar-spacing-s); align-items: center; }
     .akml-snippets-readonly { color: var(--akml-text-secondary); font-style: italic; }
     .akml-hidden-file { display: none; }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
-    }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
 </style>
 
 @code {
@@ -177,9 +166,12 @@
 
     protected override async Task OnInitializedAsync() => await RefreshAsync();
 
+    private bool _loaded;
+
     private async Task RefreshAsync()
     {
         _all = await SnippetStore.ListAsync();
+        _loaded = true;
         // Keep the current selection if it still exists; else clear the editor.
         if (_selected != null)
         {
@@ -245,6 +237,14 @@
     private async Task DeleteAsync()
     {
         if (_selected == null || _selected.IsBuiltIn || string.IsNullOrEmpty(_selected.Metadata.Id)) return;
+        // Spec 041 (R59, FR-086): deleting asks first, in the app.
+        if (!await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete snippet",
+            Message = $"Delete the snippet “{_selected.Metadata.Shortcode}”? This cannot be undone.",
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        })) return;
         try
         {
             await SnippetStore.DeleteAsync(_selected.Metadata.Id!);

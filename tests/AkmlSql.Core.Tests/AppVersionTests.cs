@@ -72,6 +72,25 @@ namespace AkmlSql.Core.Tests
             Assert.Null(AppVersion.ParseTimestamp(null));
         }
 
+        // Spec 041 (T181, research R31) — the status bar shows versions without their build metadata.
+        [Theory]
+        [InlineData("1.26.1007.0613+abc123def", "1.26.1007.0613")]
+        [InlineData("1.26.1007.0613", "1.26.1007.0613")]
+        [InlineData("1.0.0+", "1.0.0")]
+        [InlineData("", "")]
+        [InlineData(null, null)]
+        public void Build_metadata_is_stripped(string? raw, string? expected)
+        {
+            Assert.Equal(expected, AppVersion.StripBuildMetadata(raw));
+        }
+
+        [Fact]
+        public void Informational_is_the_raw_string_and_Current_its_stripped_form()
+        {
+            Assert.False(string.IsNullOrEmpty(AppVersion.Informational));
+            Assert.Equal(AppVersion.StripBuildMetadata(AppVersion.Informational), AppVersion.Current);
+        }
+
         [Fact]
         public void The_build_date_is_shown_in_local_time()
         {

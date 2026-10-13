@@ -1,10 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using AkmlSql.Core.Config;
 using AkmlSql.Shell.Shared.Ui;
@@ -14,28 +11,13 @@ namespace AkmlSql.Shell.Shared.Dialogs
 {
     /// <summary>
     /// In-IDE log viewer: parses Serilog rolling log files, displays them in a
-    /// paginated grid with level-based colouring, text search, and one-click copy
-    /// of the full entry (including any attached exception / stack trace).
+    /// paginated grid (newest first) with level-based colouring, text search, and
+    /// one-click copy of the full entry (including any attached exception / stack
+    /// trace). Opens on the newest day with every process's file merged — see
+    /// <see cref="LogFileSet"/> for why one file is not enough.
     /// </summary>
     internal sealed class LogViewerDialog : Form
     {
-        // ─── Data model ───────────────────────────────────────────────────────
-
-        private sealed class LogEntry
-        {
-            public string Timestamp { get; set; } = string.Empty;
-            public string Level     { get; set; } = string.Empty;
-            public string Message   { get; set; } = string.Empty;
-            /// <summary>Full raw text including any attached exception / stack trace.</summary>
-            public string FullText  { get; set; } = string.Empty;
-        }
-
-        // Matches the Serilog output template:
-        // {Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message}
-        private static readonly Regex EntryPattern = new Regex(
-            @"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3} [+\-]\d{2}:\d{2}) \[([A-Z]{3})\] (.*)$",
-            RegexOptions.Compiled);
-
         private const int PageSize = 200;
 
         // ─── State ────────────────────────────────────────────────────────────
@@ -92,7 +74,8 @@ namespace AkmlSql.Shell.Shared.Dialogs
             _cboFile = new ComboBox
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Width = 220, Top = 10, Left = 44
+                Width = 220, Top = 10, Left = 44,
+                DropDownWidth = 300
             };
             _cboFile.SelectedIndexChanged += (_, __) => ReloadFile();
 
@@ -253,6 +236,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             });
             _grid.Columns.Add(new DataGridViewTextBoxColumn
             {
+                HeaderText = "Source", Width = 80, Name = "Source"
+            });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn
+            {
                 HeaderText   = "Message",
                 AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
                 Name         = "Message"
@@ -273,15 +260,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private void LoadLogFiles()
         {
             _cboFile.Items.Clear();
-            var logsPath = Constants.LogsPath;
-            if (!Directory.Exists(logsPath)) return;
 
-            var files = Directory.GetFiles(logsPath, "akmlsql*.log")
-                                 .OrderByDescending(f => f)
-                                 .ToArray();
-
-            foreach (var f in files)
-                _cboFile.Items.Add(Path.GetFileName(f));
+            // Newest day first; index 0 merges every process's file of that day.
+            foreach (var selection in LogFileSet.ListSelections(Constants.LogsPath))
+                _cboFile.Items.Add(selection);
 
             if (_cboFile.Items.Count > 0)
                 _cboFile.SelectedIndex = 0; // triggers ReloadFile via event
@@ -290,68 +272,25 @@ namespace AkmlSql.Shell.Shared.Dialogs
         private void ReloadFile()
         {
             _all.Clear();
-            if (_cboFile.SelectedItem == null) { ApplyFilter(); return; }
+            if (!(_cboFile.SelectedItem is LogSelection selection)) { ApplyFilter(); return; }
 
-            var path = Path.Combine(Constants.LogsPath, _cboFile.SelectedItem.ToString()!);
-            if (!File.Exists(path)) { ApplyFilter(); return; }
-
+            var previousCursor = Cursor.Current;
+            Cursor.Current = Cursors.WaitCursor;
             try
             {
-                // FileShare.ReadWrite so we can read while Serilog still has the file open
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                using var sr = new StreamReader(fs, Encoding.UTF8);
-                ParseLogEntries(sr);
+                _all.AddRange(LogFileSet.Read(selection.Paths, (path, ex) =>
+                    Serilog.Log.Warning(ex, "LogViewerDialog: could not read log file {Path}", path)));
             }
             catch (Exception ex)
             {
-                Serilog.Log.Warning(ex, "LogViewerDialog: could not read log file {Path}", path);
+                Serilog.Log.Warning(ex, "LogViewerDialog: could not read {Selection}", selection.Label);
+            }
+            finally
+            {
+                Cursor.Current = previousCursor;
             }
 
             ApplyFilter();
-        }
-
-        private void ParseLogEntries(StreamReader sr)
-        {
-            LogEntry?     current    = null;
-            var           extra      = new StringBuilder();
-
-            void Flush()
-            {
-                if (current == null) return;
-                var tail = extra.ToString().TrimEnd();
-                current.FullText = string.IsNullOrEmpty(tail)
-                    ? $"{current.Timestamp} [{current.Level}] {current.Message}"
-                    : $"{current.Timestamp} [{current.Level}] {current.Message}\n{tail}";
-                _all.Add(current);
-                extra.Clear();
-            }
-
-            while (true)
-            {
-                var line = sr.ReadLine();
-                if (line == null)
-                {
-                    Flush();
-                    break;
-                }
-
-                var m = EntryPattern.Match(line);
-                if (m.Success)
-                {
-                    Flush();
-                    current = new LogEntry
-                    {
-                        Timestamp = m.Groups[1].Value,
-                        Level     = m.Groups[2].Value,
-                        Message   = m.Groups[3].Value
-                    };
-                }
-                else if (current != null)
-                {
-                    if (extra.Length > 0) extra.AppendLine();
-                    extra.Append(line);
-                }
-            }
         }
 
         // ─── Filtering ────────────────────────────────────────────────────────
@@ -394,9 +333,10 @@ namespace AkmlSql.Shell.Shared.Dialogs
             for (int i = start; i < end; i++)
             {
                 var e   = _filtered[i];
-                var idx = _grid.Rows.Add(e.Timestamp, e.Level, e.Message);
+                var idx = _grid.Rows.Add(e.Timestamp, e.Level, e.Source, e.Message);
                 var row = _grid.Rows[idx];
                 row.Tag = e;
+                row.Cells["Source"].ToolTipText = e.FileName;
 
                 row.DefaultCellStyle.ForeColor = e.Level switch
                 {

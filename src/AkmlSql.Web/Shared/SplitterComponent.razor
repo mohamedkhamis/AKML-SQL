@@ -1,0 +1,135 @@
+@*
+    Spec 041 (research R35, FR-044) — one workspace splitter: an ARIA separator between a side panel (or the
+    results pane) and the editor. The pointer drag is akml-workspace.js's (pointer capture, the workspace's CSS
+    variable rewritten at frame rate, OnSplitterCommitted once on release, a double-click resets); the
+    keyboard is this component's: Arrow keys move the splitter 16 px (Shift: 64), Home / End go to the panel's
+    minimum / maximum, Enter and Space collapse and restore it. The module cancels only those keys' browser
+    defaults, never Tab. Looks: a 6 px track in --akml-border-splitter inside a 12 px hit area, the accent on
+    hover and focus (components/shell.css .akml-splitter).
+*@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div @ref="_el" class="akml-splitter akml-splitter--@(Vertical ? "vertical" : "horizontal")" role="separator" tabindex="0"
+     aria-orientation="@(Vertical ? "vertical" : "horizontal")" aria-valuenow="@Value" aria-valuemin="@Min" aria-valuemax="@Max"
+     aria-controls="@Controls" aria-label="@Label" title="@Label" data-testid="@TestId"
+     @onkeydown="OnKeyDownAsync"></div>
+
+@code {
+    /// <summary>The splitter's id, echoed in OnSplitterCommitted / OnSplitterReset.</summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = string.Empty;
+
+    /// <summary>Where the panel it sizes is: <c>left</c>, <c>right</c> or <c>bottom</c>.</summary>
+    [Parameter, EditorRequired] public string Side { get; set; } = "left";
+
+    /// <summary>The panel's size now (px).</summary>
+    [Parameter] public int Value { get; set; }
+
+    [Parameter] public int Min { get; set; }
+    [Parameter] public int Max { get; set; }
+
+    /// <summary>The id of the panel it sizes (<c>aria-controls</c>).</summary>
+    [Parameter] public string? Controls { get; set; }
+
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+
+    /// <summary>The CSS variable on <see cref="Host"/> that holds the panel's size.</summary>
+    [Parameter, EditorRequired] public string CssVar { get; set; } = string.Empty;
+
+    /// <summary>The element the CSS variable lives on (the workspace grid). A parent's <c>@ref</c> is not set
+    /// yet on this component's first render, so the JS side falls back to the nearest ancestor marked
+    /// <c>data-splitter-host</c> — mark the host with it.</summary>
+    [Parameter] public ElementReference Host { get; set; }
+
+    [Parameter] public string? TestId { get; set; }
+
+    /// <summary>A new size the user chose (a drag ended, or a key moved the splitter).</summary>
+    [Parameter] public EventCallback<int> OnCommitted { get; set; }
+
+    /// <summary>The splitter was double-clicked: back to the default size.</summary>
+    [Parameter] public EventCallback OnReset { get; set; }
+
+    /// <summary>Enter or Space: collapse the panel, or bring it back.</summary>
+    [Parameter] public EventCallback OnCollapseToggled { get; set; }
+
+    public const int Step = 16;
+    public const int BigStep = 64;
+
+    private ElementReference _el;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<SplitterComponent>? _self;
+    private (int Min, int Max) _attachedLimits;
+
+    private bool Vertical => Side != "bottom";
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        int step = e.ShiftKey ? BigStep : Step;
+        int? next = (e.Key, Side) switch
+        {
+            ("Home", _) => Min,
+            ("End", _) => Max,
+            ("ArrowRight", "left") => Value + step,
+            ("ArrowLeft", "left") => Value - step,
+            ("ArrowLeft", "right") => Value + step,
+            ("ArrowRight", "right") => Value - step,
+            ("ArrowUp", "bottom") => Value + step,
+            ("ArrowDown", "bottom") => Value - step,
+            _ => null,
+        };
+        if (next is int px)
+        {
+            await OnCommitted.InvokeAsync(Math.Clamp(px, Min, Math.Max(Min, Max)));
+            return;
+        }
+        if (e.Key is "Enter" or " ") await OnCollapseToggled.InvokeAsync();
+    }
+
+    /// <summary>Called by akml-workspace.js when a drag ends.</summary>
+    [JSInvokable]
+    public Task OnSplitterCommitted(string id, int px) => OnCommitted.InvokeAsync(Math.Clamp(px, Min, Math.Max(Min, Max)));
+
+    /// <summary>Called by akml-workspace.js on a double-click.</summary>
+    [JSInvokable]
+    public Task OnSplitterReset(string id) => OnReset.InvokeAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-workspace.js");
+                if (_module == null) return;
+                _self = DotNetObjectReference.Create(this);
+                await _module.InvokeVoidAsync("attachSplitter", _el, Host, CssVar, Side, Min, Max, _self, Id);
+                await _module.InvokeVoidAsync("trapSeparatorKeys", _el);
+                _attachedLimits = (Min, Max);
+            }
+            else if (_module != null && _attachedLimits != (Min, Max))
+            {
+                _attachedLimits = (Min, Max);
+                await _module.InvokeVoidAsync("updateSplitter", _el, Min, Max);
+            }
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("detachSplitter", _el);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+            catch (JSException) { }
+        }
+        _self?.Dispose();
+    }
+}

@@ -65,6 +65,13 @@ public interface IEngineBridge : IAsyncDisposable
     /// <summary>Engine version from the most recent handshake.</summary>
     string? EngineVersion { get; }
 
+    /// <summary>Spec 041 (R29): how the engine runs — <c>ide</c>, <c>service</c> or <c>console</c>; null from an older
+    /// engine or when disconnected.</summary>
+    string? EngineHostKind => null;
+
+    /// <summary>Spec 041 (R29): the account the engine runs as; null when unknown or disconnected.</summary>
+    string? EngineRunsAs => null;
+
     /// <summary>
     /// Connect + handshake against <paramref name="connection"/>. When LAN mode, the
     /// caller has supplied the unwrapped <paramref name="bearerToken"/> (the bridge
@@ -200,6 +207,8 @@ internal sealed class EngineBridge : IEngineBridge
 
     public string[] EngineCapabilities { get; private set; } = Array.Empty<string>();
     public string? EngineVersion { get; private set; }
+    public string? EngineHostKind { get; private set; }
+    public string? EngineRunsAs { get; private set; }
 
     public async Task<HandshakeResponse> ConnectAsync(
         EngineConnection connection,
@@ -282,6 +291,8 @@ internal sealed class EngineBridge : IEngineBridge
 
         EngineCapabilities = response.EngineCapabilities ?? Array.Empty<string>();
         EngineVersion = response.EngineVersion;
+        EngineHostKind = response.HostKind;
+        EngineRunsAs = response.RunsAs;
 
         // Spec 025 (M3 bridge closure) FR-006: TLS fingerprint diagnostic.
         // The engine populates ServerTlsThumbprint only for non-loopback transports;
@@ -599,6 +610,8 @@ internal sealed class EngineBridge : IEngineBridge
         State = BridgeState.Disconnected;
         EngineCapabilities = Array.Empty<string>();
         EngineVersion = null;
+        EngineHostKind = null;
+        EngineRunsAs = null;
         RetryScheduled?.Invoke(null);
     }
 

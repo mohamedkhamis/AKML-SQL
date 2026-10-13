@@ -9,9 +9,10 @@
 
 const DB_NAME = 'AkmlSqlWeb';
 // Phase 4 (web connection manager) added the 'savedSqlConnections' bucket: 2 -> 3.
-const DB_VERSION = 3;
+// Spec 041 (R36) added the 'workspaceLayout' bucket: 3 -> 4.
+export const DB_VERSION = 4;
 
-const STORES = [
+export const STORES = [
     'profiles',
     'analysisSettings',
     'editorSession',
@@ -32,14 +33,21 @@ const STORES = [
     // Phase 4 (web connection manager) -- saved SQL-Server connections (DB_VERSION 2->3).
     // Non-secret metadata only (name/server/database/auth/login) — never a password.
     'savedSqlConnections',
+    // Spec 041 (R36) -- the editor workspace layout, one record per field (DB_VERSION 3->4).
+    'workspaceLayout',
 ];
 
 let _dbPromise = null;
+// Set when another tab upgraded the database under this one (N26).
+let _reopenWithoutVersion = false;
 
-function openDb() {
+/** Open (once) the app's database. Exported for the node tests. */
+export function openDb() {
     if (_dbPromise) return _dbPromise;
     _dbPromise = new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        // After another tab upgraded the database, reopen at the version it now has: asking for this
+        // tab's lower DB_VERSION would fail with a VersionError (spec 041 N26).
+        const req = _reopenWithoutVersion ? indexedDB.open(DB_NAME) : indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = (event) => {
             const db = event.target.result;
             for (const name of STORES) {
@@ -49,10 +57,16 @@ function openDb() {
             }
         };
         req.onsuccess = () => {
-            // If a later version bump is requested while this connection is open in another
-            // tab, close so that tab's upgrade isn't blocked (pairs with onblocked below).
-            req.result.onversionchange = () => req.result.close();
-            resolve(req.result);
+            const db = req.result;
+            // If a later version bump is requested while this connection is open in another tab, close
+            // so that tab's upgrade isn't blocked (pairs with onblocked below), and forget this
+            // connection: the next operation reopens instead of using a closed database.
+            db.onversionchange = () => {
+                db.close();
+                _dbPromise = null;
+                _reopenWithoutVersion = true;
+            };
+            resolve(db);
         };
         req.onerror = () => reject(req.error);
         // Spec 028 (M6): the v1->2 bump can be blocked by another tab still holding the old
@@ -137,4 +151,10 @@ export async function estimate() {
     }
     const { usage, quota } = await navigator.storage.estimate();
     return { usage: usage ?? null, quota: quota ?? null };
+}
+
+/** Node tests only: forget the open connection and the reopen state. */
+export function _resetForTests() {
+    _dbPromise = null;
+    _reopenWithoutVersion = false;
 }

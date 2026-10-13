@@ -1951,3 +1951,588 @@ caches are still per tab (one cache per server and database would share them).
   browser checks and 8 API-down restart checks. The actual GitHub EXE matched its
   expected name, size and SHA-256. Mobile checks used emulation. No production deployment.
 - [Root cause, evidence and limitations](../reports/site-audit-2026-10-06/04-download-fix.md).
+
+## Spec 041 — SSMS-grade workspace for the web edition (in progress, from 2026-10-08)
+
+Request: give the web edition SSMS's workspace — a results grid that behaves like SSMS's, Results and
+Messages tabs, a workspace the user can shape, one Settings page, document tabs and one consistent
+shell. Spec: `specs/041-web-ssms-ux-parity/spec.md`; plan and task list: `plan.md`, `tasks.md`; baseline
+record: `baseline.md` there. Branch `041-web-ssms-ux-parity`.
+
+| Phase | Tasks | State |
+|---|---|---|
+| 1 Setup (baseline) | T001–T003 | done — every suite's pass list recorded before any change |
+| 2 Foundational | T004–T037 | done — tokens, icons, dialogs, notifications, tab strip, context menu, page keys, editor diagnostics, Core type helpers, the per-set grid split |
+| 3 US1 Result columns | T038–T074 | done (gate 2026-10-09) |
+| 4 US2 Results and Messages | T075–T109 | done (gate 2026-10-09) |
+| 5 US3 Workspace | T110–T129 | done (gate 2026-10-09) |
+| 6 US4 Settings | T130–T162 | done (gate 2026-10-09) |
+| 7 US5 Tabs and documents | T163–T176 | done (gate 2026-10-09) |
+| 8 US6 Shell polish | T177–T208 | complete; automated story gate passed (2026-10-10) |
+| 9 Polish | T209–T216 | native keyboard (T209), full manual quickstart (T215) and deployed screenshots (T216) remain; hallway study pending participants |
+
+### US1 — what was built
+
+- **One grid per result set** (`Shared/ResultSetGrid.razor`) over pure helpers in `Shared/Grid/`:
+  `GridColumnLayout` (fit to header and widest value, 48–480 px, one `--akml-grid-cols` track list on
+  the grid root so widths never reflow), `GridSelection` (include/exclude rectangles in display
+  coordinates — select-all allocates nothing per cell), `GridSortComparer` (SQL Server order on the wire
+  values; sorting permutes display order only, so edits and Apply stay on the fetched row),
+  `GridClipboard`, `GridCellText`, `GridCellEditor`.
+- **Resize** by edge drag (pointer capture in `akml-results-grid.js`, one .NET call on release), edge
+  double-click and Shift+Alt+Left/Right; header menu: auto-fit one / all, reset widths, copy name, sort.
+- **Selection and keys**: row numbers, header and corner selection, Shift/Ctrl, drag-select, spreadsheet
+  keys; the grid root is the only tab stop (`aria-activedescendant`); Up from the top row reaches the
+  header (type tooltip), Left from the first column the row number (Delete toggles the row's delete).
+- **Copy** (Ctrl+C, Ctrl+Shift+C, Copy as CSV / JSON / Markdown / INSERT) through Core
+  `GridTextFormats` — the formatters moved out of SSMS's `GridCopyAsMenu`, pinned byte for byte by goldens
+  captured before the move — with an http-safe clipboard fallback and a count of engine-cut values.
+- **Editing like SSMS's Edit Rows**: one click selects; a second click, double-click, Enter, F2 or typing
+  edits; Escape cancels; Tab/Shift+Tab move; Ctrl+0 sets NULL (disabled with the reason on NOT NULL
+  columns); an emptied non-character cell is invalid and blocks Apply; glyphs as well as colours.
+  Pending edits are confirmed before Execute, leaving the page, switching result set or Discard.
+- **View value** (`CellValueDialog`), **Save results as CSV / tab-delimited** (UTF-8 with BOM, named after
+  the document, warning first on a truncated or engine-cut result), the column type on hover and the
+  "show column types" option (`ExecutionSettings.ShowColumnTypes`, `RetainLineBreaksOnCopy`).
+- **Values read as SSMS shows them** (Core `SqlValueDisplay`: `datetime` with milliseconds,
+  `datetime2(n)`/`time(n)` with n digits, `datetimeoffset` with a spaced offset, binary as `0x…` with a
+  preview past 1,024 bytes, upper-case GUIDs, money with four decimals). The editor and Apply keep the
+  engine's round-trip text.
+- **Engine**: `ResultSetReader` maps SqlClient's 255 "not applicable" precision/scale to null and
+  `CrudWriteGenerator` never sets it, so Apply on `date` and `money` columns no longer fails.
+
+### US1 — verification
+
+- Suites (2026-10-09, Debug; Web E2E serial): Web 770 passed (the 42 `FormatterServiceTests` failures
+  are the known pre-existing ones, unchanged); Core 1,258 (1 known); Engine 2,011; Formatting 1,635;
+  Site 904; Shell 882; IntelliSense 25; Web E2E 26 passed, 10 skipped by design; Node 67.
+  `scripts/compare-test-results.ps1` against the T003 baseline: no test that passed before stopped
+  passing (pass lists in `specs/041-web-ssms-ux-parity/baseline/tests/us1/`).
+- One-pass MSBuild restore + Release build of the solution: 0 errors. Theme CSS drift check green for the
+  web and site folders.
+- Quickstart §1 in a browser: `ResultsGridTests` (9 E2E: fitted widths, drag and double-click resize,
+  row / column / drag selection and clipboard text, the menus and Shift+F10, sort, editing with Ctrl+0
+  and the invalid `int`, Apply on `date` and `money`, the pending-edits confirmation, the keyboard-only
+  path). Light, Dark and High contrast checked from screenshots of the grid, its menu and View value.
+- Not caused by this work, reported: `QuerySessionStoreTests.Concurrent_creation_with_same_key_returns_one_session`
+  (SQLite, History) fails about 4 runs in 5 when run alone on this machine (`ObjectDisposedException` on the
+  `sqlite3` handle) and passed in the counted full runs. No History code changed on this branch.
+
+### US1 — issues hit
+
+- **A Blazor handler per cell** would be re-diffed on every render (thousands per click on a
+  200-row result). Cell presses and clicks are reported from one delegated listener in `akml-results-grid.js`;
+  only row numbers, headers and editable cells' double-click keep Blazor handlers.
+- **A typed first character could land twice**: the edit starts with it, and if the inline input takes
+  focus while that keydown is still being handled the browser types it again. The module cancels
+  printable keys on the grid root, and keys that arrive before the input has focus are appended in .NET.
+- **A failed Apply showed "Rolled back — edit 1 failed."** instead of the reason: the engine marks every
+  other edit with that note and the grid took the first error. It now skips the notes.
+- **View value's text area was two lines tall**: `shell.css` loads after `results-grid.css`, so its
+  `.akml-input` rules won at equal specificity. Scoped under `.akml-dialog`.
+- **An empty `varbinary` showed as an empty string**; SSMS shows `0x`.
+- **An Escape pressed straight after Shift+F10 left the menu open**: the menu takes focus a moment after
+  it opens, so the key reached the grid, which ignored keys while a menu was open. The grid now closes
+  its menu on that Escape.
+- **The browser run found the date parse limit**: the engine decodes a date only from its round-trip
+  form, so `2025-10-01` typed into a date cell fails Apply. Recorded as the deferred "parse displayed
+  values back on commit" (tasks.md › Deferred); the E2E edits the round-trip text.
+
+### US2 — what was built
+
+- **Scripts run as SSMS runs them** (engine): `TsqlParserService.SplitBatches` splits on `GO` over
+  ScriptDom's token stream (never inside a string, a comment or `[GO]`; `GO n` repeats; anything else on a
+  GO line refuses the script with SSMS's message). `ExecuteQueryHandler` runs each batch as its own command
+  inside the one session gate; errors up to severity 16 arrive as info messages
+  (`FireInfoMessageEventOnUserErrors`, scoped to the execute), so the sets before and after an error are
+  kept and a failing batch does not stop the script; a closed connection skips the remaining batches; a
+  timeout or cancellation stops it. `CommandBehavior.KeyInfo` is used only where it cannot break a
+  `CREATE PROCEDURE` batch.
+- **The reply** (`ExecuteOutcome`, append-only keys): every message in stream order (`ExecuteMessageDto`:
+  number, severity, state, batch-relative line, procedure), one `(N rows affected)` per statement with a
+  SELECT's count on its set, batches (`ExecuteBatchDto`), the completion time, one 15 MB budget, caps of
+  10,000 messages and 1,000 sets; the legacy `Messages[]` worded as SSMS words them (Core
+  `SqlMessageText`), so an older web bundle still reads them. Declared column types (`nvarchar(max)`,
+  `decimal(10,2)`, `datetime2(3)`) from the column schema.
+- **Parse** (`ExecuteParse` 219 → 220, capability `execute.v2`): the same batches under `SET PARSEONLY ON`.
+- **Web**: `ResultsPaneComponent` — Results, Messages and Problems tabs that are always there (Problems
+  moved out of its side column, with a badge), the empty and running states, every result set stacked
+  with its own header and its own Apply / Discard; `MessagesView` with errors that jump to their document
+  line and mark it (`ExecuteLineMapper`, the selection's start line from `getSelectionInfo`); the status
+  bar's "Executing query… / Query executed successfully. / Query completed with errors." and rows · ms;
+  `QueryExecutionService` waits for a reply only as long as the script's commands may take (NoReply,
+  Disconnected); F5 and Ctrl+F5 run Execute and Parse wherever the focus is on the editor page and are not
+  offered while a query runs.
+
+### US2 — issues hit
+
+- **F5 (and every page key) was never claimed**: the editor installed its key listener on the first
+  render, but registers its commands at the end of `OnInitializedAsync`, which finishes after that render —
+  the listener was given an empty key list, so F5 reached the browser. Present since the page keys were
+  added (the Ctrl+K chords were affected the same way). The keys are now installed on the first render
+  that has the commands.
+
+### US2 — verification
+
+- Suites (2026-10-09, Debug; Web E2E serial): Engine 2,068 passed; Core 1,279 (1 known); Web 818 (the 42
+  known `FormatterServiceTests` failures, unchanged); Formatting 1,635; Site 904; Shell 882; IntelliSense 25;
+  Web E2E 36 passed, 10 skipped by design; Node 69. `scripts/compare-test-results.ps1` against the T003
+  baseline: no test that passed before stopped passing (pass lists in
+  `specs/041-web-ssms-ux-parity/baseline/tests/us2/`).
+- Quickstart §2 in a browser: `ResultsMessagesTests` (10 E2E: the tab chosen after a run, stacked sets and
+  messages in order, an error that jumps to its document line, the sets around a divide by zero, GO
+  batches and `GO n`, the timeout path, the running state, F5 wherever the focus is and not on Settings,
+  Parse, values shown as SSMS shows them) and the 21 execution integration tests against the local SQL
+  Server.
+- One-pass MSBuild restore + Release build of the solution: 0 errors. Theme CSS drift check green for the
+  web and site folders.
+
+### US3 — what was built
+
+- **One workspace grid** (`Pages/Editor.razor`): Schema on the left and AI on the right run full height,
+  the results pane sits under the editor only; every size is a CSS variable on the grid
+  (`--akml-ws-left/-right/-results`, the splitter tracks, the editor minimums), written from the
+  remembered layout fitted to the measured workspace (`WorkspaceLayout.Fit`). The results host and the
+  Schema panel stay mounted while hidden (pending edits, the tree's expansion and the chat survive); the AI
+  dock mounts the first time it is shown.
+- **Splitters** (`SplitterComponent` + `attachSplitter` in `akml-workspace.js`): pointer capture with
+  frame-rate CSS-variable writes and one commit on release, double-click resets, Arrow ±16 / Shift ±64,
+  Home/End, Enter/Space collapses — focus then lands on the strip the panel leaves, and the strip's Enter
+  puts it back on the splitter. Tab is never cancelled.
+- **Edge strips** for a hidden or folded panel (`workspace-edge-left/-right/-bottom`, `title="Show Schema
+  (F8)"`), and a navigation-bar strip on the editor page (`WorkspaceNav`).
+- **Folding** (`observeWorkspace` → `OnWorkspaceResized` → `WorkspaceLayout.Fold`): AI folds first, then
+  Schema; the panel the user last opened by hand folds last.
+- **View menu and commands** (`WorkspaceViewActions`, one table for the menu, the palette and the keys):
+  navigation bar, Schema (F8), results (Ctrl+R), AI, maximise / restore results, next / previous pane
+  (F6 / Shift+F6: editor → results → Schema → AI → toolbar, skipping hidden regions), Reset layout.
+  `view:toggle-ai` replaces `editor:ai`.
+- **Persistence** (`IWorkspaceLayoutStore`, IndexedDB store `workspaceLayout`, DB version 4): one record per
+  field, written only when the user changes it; another layout version is ignored; Reset clears it. The
+  results tab is restored until the next run picks one; Execute, and an Analyse that finds something,
+  bring a hidden results pane back.
+- **Schema panel without a connection** shows "Connect to SQL Server…", which opens the connection manager.
+
+### US3 — issues hit
+
+- **At 1440 px the default panels do not fit together** (260 + 380 + the 920 px editor minimum + two
+  splitters = 1572 px). With "AI folds first" as the only rule, opening AI at that width folded it straight
+  back to its strip — the click did nothing. The panel opened by hand now folds last (Schema folds instead),
+  and one opened in a window too narrow even for it alone shows until the width changes. Recorded in
+  `contracts/ui.md` §1.
+- **A hidden AI dock would still show**: its own `display: flex` comes later in the page's styles than the
+  hidden class at the same specificity. The hidden rule is scoped under `.akml-workspace`.
+- **Forgetting the results height did nothing**: a stored `null` was read as "no value" and the old height
+  kept. `null` now means "38 % of the workspace again".
+- **The Schema and AI splitters could not be grabbed** (found by `WorkspaceLayoutTests`; the bUnit tests passed):
+  a vertical splitter holds only an absolutely positioned `::before`, so in its grid cell it collapsed to
+  12 × 0 px — invisible and unhittable. It now fills the cell's height. Behind it, a second fault: a
+  child's first render receives its parent's `@ref` before Blazor has set it, so `attachSplitter` got no
+  host element; it now falls back to the nearest ancestor marked `data-splitter-host`.
+- **With the nav, Schema and AI hidden, Ctrl+R could not hide the results pane** (and hiding the nav brought
+  Schema back): the "every region hidden → default regions" correction lived in `WorkspaceLayout.Fit`,
+  which the page applies on every render. FR-045 asks for it on load only; it is now
+  `WorkspaceLayout.Corrected`, applied in memory by `WorkspaceLayoutStore.LoadAsync` (still no write).
+- **F6 skipped the Schema panel** when the tree had nothing focusable (an empty `tempdb`). The side panels
+  and the results host are labelled regions with `tabindex="-1"`, and a pane with nothing focusable
+  inside takes focus itself (with a focus outline).
+
+### US3 — verification
+
+- Suites (2026-10-09, Debug; Web E2E serial): Engine 2,068 passed; Core 1,279 (1 known); Web 872 (the 42
+  known `FormatterServiceTests` failures, unchanged); Formatting 1,635; Site 904; Shell 882; IntelliSense 25;
+  Web E2E 48 passed, 10 skipped by design; Node 86. `scripts/compare-test-results.ps1` against the T003
+  baseline: no test that passed before stopped passing (pass lists in
+  `specs/041-web-ssms-ux-parity/baseline/tests/us3/`). The Web and Web E2E suites were re-run after the
+  load-time correction fix; the other suites ran on the same code minus that Web-only change.
+- Quickstart §3 in a browser: `WorkspaceLayoutTests` (12 E2E: toggles by click, F8 and Ctrl+R with the keys
+  claimed; edge strips; pointer and keyboard splitters with their minimums and Tab leaving; maximise and
+  restore; reload and browser-restart persistence; Reset layout surviving a reload; 1100 px folding with a
+  120-character line and no horizontal scroll; 800 px page scroll with Execute visible; 150 % zoom; the View
+  menu and the palette; F6 / Shift+F6; every region hidden then Execute; Schema without a connection).
+  T110: 120 characters measured 857.7 px and the gutter 35.3 px, so the 920 px editor minimum stands.
+- One-pass MSBuild restore + Release build of the solution: 0 errors (run before the load-time correction
+  fix, a Web-only change built and tested in Debug). Theme CSS drift check green for the web and site folders.
+
+### US4 — what was built
+
+- **One Settings page** (`Pages/Settings.razor`): routes `/settings`, `/settings/{section}` and `/diagnostics`
+  (the old `/settings/ai`, `/settings/schema-cache` and `/diagnostics` pages are sections now and their pages
+  are gone); the sections in SSMS's Options order (`Services/Settings/SettingsCatalog.cs`); a filter over every
+  section (`SettingsFilter`, cascaded to each `Shared/Settings/SettingRow.razor`; sections with no match are
+  greyed in the list); Restore defaults per section (Schema cache = Clear all, Diagnostics = the level filters,
+  Connections none), Restore all, Export and Import. Styles in `wwwroot/css/components/settings.css`.
+- **Sections** (`Shared/Settings/*Section.razor`): General (theme), Editor (font size, word wrap, tab size —
+  live through CodeMirror compartments, `setEditorOptions`; Reset editor session confirms naming the document),
+  Format (the active style, labelled "Style"), Queries (the saved defaults), Code analysis (the switch,
+  re-analyse after format, default Problems filters, suppressed rules with Undo), AI assistance (extracted from the
+  old page; a "Needs key" badge; Remove confirms), Connections (engine connections with Remove confirmed and
+  Re-pair with a new PIN; saved SQL Server connections with Connect / Delete, a reason in place for one the web
+  app cannot use, never a password field), Schema cache and Diagnostics (extracted; every clear confirms).
+- **Stores**: `ResetAsync` / `ReloadAsync` on every preference store (each deletes only its own key);
+  `IEditorSettingsStore` (key `editorSettings` in the `analysisSettings` store); the toolbar's row limit and
+  timeout are a session-only `SessionOverride` (saving a default clears it); `WebAnalysisSettings.ProblemsFilter`;
+  `IAiKeyVault.UpsertConfigAsync` (an import never brings a key); `IProfileStore.ResetActiveAsync`, and an active
+  style change raises `StylesChanged` so the toolbar picker and Settings › Format agree.
+- **Portability** (`ISettingsSection` ×7 + `SettingsPortabilityService`): the data-model §1.5 envelope built
+  from the preference stores only; import counts unknown properties (nested ones too, via `[JsonExtensionData]`)
+  and unknown sections, re-applies the fully-local guard, sets the active provider only if it exists.
+- **Code analysis off really is off**: `AnalyserService` returns nothing without running; Analyse goes to the
+  Problems tab, which says so and offers "Turn on"; the badge hides.
+- **Theme before the first paint**: `akml-theme-boot.js` is a classic script straight after the theme link,
+  reading the mode `akml-theme.js` mirrors to `localStorage['akml.theme']`.
+- Navigation: five places; the palette's navigation comes from the section table; the status pill opens
+  Settings › Diagnostics, "Set up engine" Settings › Connections.
+
+### US4 — issues hit
+
+- **The style picker's Delete went back to a different default** (`builtin.default`) than the store's
+  (`builtin.khamis`), so the editor and Settings could disagree after a delete. Both now use
+  `ResetActiveAsync`.
+- **A labelled wrapper would have broken the AI E2E suites**: Playwright's `GetByLabel("Provider")` also matches
+  elements named through `aria-labelledby`, by substring — a group labelled "Providers" would have been a second
+  match. Block rows (tables, forms) carry a heading, not a label.
+- **`ExecutionSettings` and the analysis settings share one IndexedDB object store** with the editor options:
+  every reset deletes its own key only (a `ClearAsync` would have wiped the others); the tests assert it.
+
+### US4 — verification
+
+- Suites (2026-10-09, Debug; Web E2E serial): Engine 2,068 passed; Core 1,279 (1 known); Web 980 (the 42
+  known `FormatterServiceTests` failures, unchanged); Formatting 1,635; Site 904; Shell 882; IntelliSense 25;
+  Web E2E 58 passed, 10 skipped by design; Node 95. `scripts/compare-test-results.ps1` against the T003
+  baseline: no test that passed before stopped passing (pass lists in
+  `specs/041-web-ssms-ux-parity/baseline/tests/us4/`).
+- Quickstart §4 in a browser: `SettingsPageTests` (10 E2E: five places and the old routes, the nine sections,
+  the row-limit default against the toolbar's session value across a reload, analysis off and "Turn on", a rule
+  suppressed everywhere and undone, the AI reset confirmation for three providers leaving General and
+  Connections, an export with no secret imported into a fresh browser with "1 setting skipped" and "Needs key",
+  editor options live and after a reload, the filter, dark.css set before the first paint, two tabs). The
+  pairing flows of `EngineAutoConnectTests`, `FormatStylesSharedEngineTests`, `SqlServerAliasWebTests` and the
+  AI suites, moved to Settings › Connections / `/settings/ai`, pass. Step 8's "On this engine" wording belongs to
+  US6 (T194).
+- bUnit: 71 settings tests (routing, sections, reset, portability, filter, catalog consistency).
+- One-pass MSBuild restore + Release build of the solution: 0 errors, no warning in a changed file. Theme CSS
+  drift check green for the web and site folders.
+
+### US5 — what was built
+
+- **Documents as SSMS has them** (`Services/EditorDocument.cs`, pure; `Services/EditorDocumentFlow.cs`): a name
+  (`SQLQuery{n}`, counted up and never reused), a modified marker (text ≠ the text at New / Open / Save; a
+  programmatic set-text moves the baseline first, so it never marks the document modified), New query, Open
+  (UTF-8 with or without BOM, UTF-16 LE/BE with BOM; refused above 10 MB counted in characters and UTF-8
+  bytes), Save (asks for a name only while the name is a default) and Save as (always asks, same history
+  session), downloading `{name}.sql` in UTF-8 with a BOM. New and Open confirm pending grid edits, then a
+  modified document, and start a new history session key.
+- **The session record** carries `DocumentName`, `IsModified`, `NextDefaultNumber` through both writers;
+  `EditorSessionKeys.StartDocumentAsync`; `EditorSessionStore.RestoreAsync` now returns a save still in its
+  debounce, so a read-modify-write never loses the last keystroke.
+- **Editor page**: the document bar (`doc-name`, `doc-modified`), New / Open / Save / Save as on the toolbar
+  and as commands (Ctrl+Alt+N, Ctrl+Alt+O, Ctrl+S, Ctrl+Shift+S), the page title
+  `orders-audit* - SERVER.db - AKML SQL`, Save results named after the document, History's `TabTitle` = the
+  name unless it is a default one (N11).
+- **One tab strip**: the AI dock's Actions / Chat and the style preview's tabs are the shared `TabStrip`
+  (arrow keys, Home/End, the same marker as the results pane).
+
+### US5 — issues hit
+
+- **The wider toolbar broke two workspace checks** (found by the gate's `WorkspaceLayoutTests`): with New / Open /
+  Save / Save as added, the toolbar's buttons shrank until their labels wrapped onto two lines, so the toolbar
+  grew taller (squeezing the results pane to its maximum at 150 % zoom) and, at 800 px, Execute was pushed
+  past the right edge. The toolbar now wraps onto a second row and its labels never wrap; the toolbar regroup
+  of US6 (T196) makes it compact.
+- **`EditorSessionStore.RestoreAsync` ignored a save still in its 500 ms debounce**, so a read-modify-write
+  right after a keystroke (New, Open, History's "Open in editor") worked on the older record. It returns the
+  pending record now.
+- **A programmatic set-text fires the editor's change listener**, which would mark the document modified; the
+  flow moves its baseline before setting the text, and the page ignores changes until the document is loaded.
+
+### US5 — verification
+
+- Suites (2026-10-09, Debug; Web E2E serial): Engine 2,068 passed; Core 1,279 (1 known); Web 1,029 (the 42
+  known `FormatterServiceTests` failures, unchanged); Formatting 1,635; Site 904; Shell 882; IntelliSense 25;
+  Web E2E 62 passed, 10 skipped by design; Node 96. `scripts/compare-test-results.ps1` against the T003
+  baseline: no test that passed before stopped passing (pass lists in
+  `specs/041-web-ssms-ux-parity/baseline/tests/us5/`). The full E2E run's one failure,
+  `WorkspaceLayoutTests.At_150_percent_zoom…`, was the test reading the pane's height before the resize had
+  re-rendered (it passed alone); it now waits for the height, and passes.
+- Quickstart §5 in a browser: `TabStripKeyboardTests` (the results, AI and style-preview strips move with the
+  arrow keys and Home/End, and their active markers compute the same) and `DocumentFlowTests` (New query
+  confirming a modified document then `SQLQuery2`; Open of a UTF-16 and a UTF-8 file, named after the file, a
+  modified document asked first; Save asking for a name, `orders-audit.sql` with a UTF-8 BOM, the page title
+  with and without `*`, Save again without a prompt, Save as asking again; History naming the session
+  `orders-audit` and a new query's run separately). `AiChatComposerKeysTests` pass on the new AI tab strip.
+- One-pass MSBuild restore + Release build of the solution: 0 errors, no warning in a changed file (the unused
+  download field the old Save left behind removed). Theme CSS drift check green for the web and site folders.
+
+### US6 and final verification — continuation on 2026-10-10
+
+Resumed T186 and T206–T216 without changing the completed task markers or the staged index.
+The implemented US6 work now has browser checks for the toolbar, a database switch retaining
+`#temp` state, `USE` updating the selector/schema/status, status versions/caret, analyser
+underlines and keyboard gutter help, in-app confirmations, consistent headers and startup
+styling. Style E2E uses in-app dialogs and the sandbox engine's “On this engine” label.
+
+The final control audit removed the unsupported Entra/Future option, explained disabled
+controls and moved History's remaining status messages to notifications. Keyboard toolbar
+help is dismissible with Escape; lint gutter markers open CodeMirror's own tooltip from
+focus. High-contrast hover text and focus treatment were audited across shell controls.
+`WorkspaceAccessibilityTests` covers token contrast, reduced motion and touch dragging at
+100% and 150% scale. `BrowserKeyCaptureTests` separates browser DOM cancellation from native
+Windows accelerator/layout checks. The grid performance case covers 1,000 × 30 values,
+50-column drags and 200-column auto-fit. Auto-fit includes the cell border (a one-pixel
+omission clipped dates), and pointer updates skip unchanged rows through `GridRowBoundary`.
+The strict sizing replay fitted 1,000 × 30 tracks in 14.7 ms without clipping, reported no
+50 ms long tasks during the drag, and completed 200-column auto-fit. Web-only badge and
+status-text tokens fix contrast without changing desktop hex values. A Live bridge now hides
+stale startup pairing failures. `QuickstartAcceptanceTests` adds width persistence, schema
+controls/navigation and sandbox-engine-loss checks.
+
+`WorkspaceScreenshotTour` writes 90 local captures (15 surfaces × three themes × two sizes)
+to `specs/041-web-ssms-ux-parity/baseline/after/`. It is deliberately excluded from SC-008,
+like the deployed `SiteScreenshotTour`. Release notes are in
+`doc/WEB/workspace-041-release-notes.md`, including the one-time blocked-upgrade message
+with two tabs and developer-build version mismatch markers.
+
+Full engine verification: **2,091 passed**. Completion corpus: **1,311 / 1,343 (97.6%)**,
+unchanged from T003. Formatting: **1,635 passed**, with no golden changes. Shell: **882
+passed**. The baseline file records the final suite comparison, browser measurements and
+remaining acceptance prerequisites; no deployment or Git mutation was performed.
+
+Final gate: Release solution restore/build and both theme drift checks passed. The clean
+full browser suite passed **78**, with **10 existing skips**; the final color adjustment
+then passed **10/10** focused shell/accessibility/screenshot cases. All **90** local images
+were refreshed and representative views inspected. Web passed **1,131** with the same
+42 baseline formatter failures; Core passed **1,285** with its same positional-key failure
+and three skips; Site passed **904**, IntelliSense **25**, Node **97**. SC-008 reports
+zero regressions or missing previously passing tests, without an allow-list. Nine of the
+twelve tasks open at resumption are complete; T209, T215 and T216 remain as recorded below.
+
+### Spec 041 deferred scope
+
+| Item | Reason | Goes to |
+|---|---|---|
+| Multiple query document tabs | Clarified out of scope 2026-10-08 | A later feature |
+| Interrupting a running statement (true Cancel) | Needs engine transport work | Engine follow-up |
+| Engine `CutCells` key for cut values | Engine work limited to the spec's Dependencies list | Engine follow-up |
+| Parsing displayed values back on commit | Strict ISO input accepted for now | Grid follow-up |
+| Errors inside `CREATE PROCEDURE` bodies | Server reports `Procedure`, not a document line | Messages follow-up |
+| User setting for maximum column width | A possible later setting | Settings follow-up |
+| Docking, results-to-text, execution plans, column reorder/hide/freeze | Spec Out of Scope | — |
+
+Native keyboard/layout acceptance, the full manual quickstart and the ten-user hallway study
+remain external checks; `baseline.md` identifies the browser-replayed steps and remaining variants.
+Product-site screenshots remain pending deployment (T216); local captures do not change
+the deployed site's images.
+
+### Spec 041 acceptance and approved deployment — 2026-10-11
+
+T216 is complete. With explicit user approval, Web and Engine 1.26.1010.2224 now run at
+http://localhost:59416/ (AkmlSqlWeb / AkmlSqlWebEngine). The previous payloads and root
+ACLs are backed up in %LOCALAPPDATA%/AKML SQL/spec041-deployment/backup-20261011-102256.
+Existing web.config, bridge configuration, certificates and user data were preserved.
+An initial port-80 smoke check triggered rollback; using the actual IIS binding resolved it.
+The deployed screenshot tour passed 2/2; its Northwind query returned 50 rows with matching
+versions. Both web product images were visually inspected and refreshed in the repository;
+the separate marketing site was not deployed.
+
+Native input exposed Edge's reserved Ctrl+Shift+S. Save as has the alternative Ctrl+K,
+Ctrl+A, shown in the View menu, palette and toolbar. DOM key tests passed on all three
+browsers, collision tests passed 6/6 and Node passed 98/98. Expanded quickstart/tab replay
+passed 10/10. Web unit results remain 1,131 passed and 42 known formatter failures; the
+SC-008 comparison still has no regressions or missing passes. Release Web publish passed.
+
+Ten of twelve originally unfinished tasks are now complete. T209 remains open because
+the final native run could not acquire foreground focus in two browsers and Firefox timed
+out during setup. T215 still needs the actual SSMS-started-engine style grouping variant and human spreadsheet paste; the hallway study awaits ten participants.
+The earlier five requested commits are complete; subsequent follow-up changes are uncommitted.
+See the spec baseline for the detailed acceptance record.
+
+Follow-up: the final four focused browser cases passed (three-browser Save as menu/palette
+checks and real-engine duplicate-style source labels). The native retry skipped all three
+cases because Windows foreground focus was unavailable; T209 remains open.
+
+### Spec 041 native keyboard gate completed — 2026-10-11
+
+The user made the interactive desktop available. The native Windows input suite passed
+3/3 (Chromium, Edge, Firefox), with no skips, in 66 seconds. Claimed keys retained the
+document; grid Shift+Alt arrows left the input language unchanged; Polish AltGr inserted
+óń. Edge's reserved Screenshot shortcut has the verified Save as alternative Ctrl+K,
+Ctrl+A, advertised in the View menu and palette. The browser-by-key matrix is recorded
+in baseline.md. T209 is now complete; eleven of the original twelve tasks are complete.
+Only T215's actual SSMS-started-engine/manual acceptance remains, with the ten-user
+hallway study pending participant availability. Follow-up changes remain uncommitted.
+
+### Spec 041 actual SSMS engine acceptance — 2026-10-11
+
+SSMS 22 opened and executed the saved Northwind Customers query. Playwright paired
+with the engine actually launched by SSMS. Its private engine was stale (1.26.1006.2219),
+so the initial Shared with SSMS check failed. The user explicitly approved updating that
+separate installed Engine folder. After backup and deployment of 1.26.1010.2224 (319
+file hashes verified), the repeated browser check passed: Shared with SSMS on both
+style screens, distinct duplicate-name labels, Northwind results and a four-row,
+three-column clipboard selection. Zero JavaScript errors. The saved SSMS window remains
+open. Baseline step 4.8 is complete. T215 remains open for a real spreadsheet paste
+(no Excel/LibreOffice installed); the ten-user study still awaits participants.
+
+### Spec 041 final spreadsheet acceptance — 2026-10-12
+
+Completed T215 through actual Windows clipboard paste into LibreOffice Calc Portable
+26.2.4. Four Northwind rows landed in six columns; all 24 cells matched the browser copy,
+including NULL, dates, accents and 2,000-character values. Copy-with-header also passed
+for CompanyName and six full names. Calc's import was explicitly set to Tab only to
+avoid automatic space splitting. Workbook, screenshot and machine-readable cell evidence
+are in baseline/acceptance/. All twelve originally unfinished tasks are checked.
+The ten-SSMS-user SC-006 hallway study remains pending real participants as T215 allows;
+no human-study outcome is claimed. Product code was unchanged in this acceptance step.
+
+### PR #255 review verification follow-up — 2026-10-13
+
+Verified review commit 759c6e5 with fresh Debug Web/Engine builds, live SQL and the
+full Playwright behavioral cycle. Browser checks found and fixed JSON control-character
+escaping/nonfinite fallback and a late double-click changing the active grid editor;
+those corrections and ten review regression cases are now in the branch. The full
+Engine suite passed 2,118 cases. Core's one positional-contract failure and Web's 42
+formatter failures match the prior baseline; no goldens were changed. Detailed suite
+counts and evidence are in specs/041-web-ssms-ux-parity/baseline.md.
+
+The stronger touch test exposed an input-generation issue reproduced outside AKML:
+a burst of CDP drag moves can suppress the next tap. Pacing the drag steps restores
+normal taps. Both splitter and column resizing, followed by actual Schema restoration,
+pass at 100% and 150%. Removed temporary event tracing. Current native keyboard checks
+skipped because Windows refused foreground focus; the earlier 2026-10-11 native pass
+is historical evidence only. Installed payloads were not updated during this review.
+
+Final updated-branch checks: Playwright review/theme/touch follow-up 14/14; deduplicated
+browser outcomes 98 passed, 0 failed, 10 existing skips; shell suite 927/927; schema
+components 16/16; updater unit checks 43/43. Full Release solution build and both theme
+drift checks pass. Raw evidence is under %LOCALAPPDATA%/AKML SQL/spec041-review-759c6e5/.
+The three native cases remain skipped due to unavailable foreground focus. This
+follow-up changes the touch test and verification records only; no Git mutations or
+new deployment were performed by this agent.
+
+### Local Playwright runner — 2026-10-13
+
+Added scripts/run-playwright.ps1. Running it from any working directory builds Debug
+Engine, Web and E2E tests, installs the bundled Playwright Chromium/Firefox versions,
+runs the behavioral suite serially, and opens an HTML report. TRX/HTML results use a
+new timestamped directory under %LOCALAPPDATA%/AKML SQL/playwright-results. Failure
+exit codes and empty test selections are reported; existing reports are not overwritten.
+-Headed uses the shared BrowserLaunch helper for regular and persistent browser launches.
+-IncludeNative enables the desktop keyboard checks; -IncludeScreenshots additionally
+runs the image generators. SQL/service/desktop prerequisites and focused-run options
+are documented in the script's Get-Help text. No installed application is deployed.
+
+Runner validation: SQL-backed smoke passed headless and headed; two headed regular/persistent-browser cases passed; an empty filter correctly exited 1. HTML/TRX reports were generated. Full Release solution build passed. The full suite was not repeated for this runner-only change.
+### Options › AI assistance page redesign — 2026-10-13
+
+The AI assistance Options page (SSMS) was rearranged after the user rejected its layout:
+Test connection sat between the API key and an always-open key-help block, above the
+Endpoint URL it tests; the per-agent request parameters rendered under a global-looking
+"Parameters" header after Privacy; the seven features were listed twice (toggles and
+agent assignments); the API key was shown in plain text (the password flag only set a
+Tag); the test-result brushes were light-theme hex in both themes; the page ran more
+than five screens. Four arrangements were shown in a local demo
+(`artifacts/ai-assistance-demo`, gitignored) and the user chose **B**: three in-page
+tabs. **Agents**: the list with Add / Duplicate / Remove / Set as active on its
+group-header line, a fitted Selected agent form (Name + Enabled, Provider + Model, API
+key masked with Show and a "Where do I get a key?" link, Endpoint URL), then the Test
+connection box with the outcome inline and the last recorded check while idle.
+**Features**: one table of feature / on / answering agent (Auto-fix stays a child of Fix
+errors), then the fallback order. **Privacy & data**: privacy mode, consent, and the
+request parameters, which are now ONE set for every agent (the user's decision): Save
+writes them to every agent and the flat mirror, so config format and engine are
+untouched; a still-blank placeholder agent is still dropped unless the parameters were
+edited. New `OptionsTabStrip` (programmatic WPF, PageTheme brushes) switches to a row's
+tab when the Options search or the Command Palette brings it into view. RowFactory
+gained stretch inputs, a fixed-width dropdown, a header overload with chip/trailing
+slots and `WrapRow`. Seams, automation names and search labels kept; the spec 037
+contract carries a superseded note.
+
+Verification: 12 new `AiAssistanceTabsLayoutTests` (tabs, reveal hook, reading order,
+key help, masked key sync, theme brush, shared parameters, feature-row pairing and label
+trimming, no sideways list scroll) green; `OptionsNavStructureTests` now looks for the
+"Selected agent" header. A render at the dialog's 720 px minimum width exposed two fits
+that are now fixed: feature labels trim with a tooltip, and the agent and fallback lists
+no longer grow a horizontal scrollbar (rows compress; the badge stays visible). Full
+shell suite 938 of 940 passed; the two failures are clipboard timeouts in
+`AiChatPanelCopyButtonTests`, which pass on rerun (the known clipboard flake). Debug
+test build and Release MSBuild of `AkmlSql.Ssms22` succeed; the real page was rendered to
+PNG in both themes and at 720 px and matches the approved demo. SSMS runtime check and
+deployment pending.
+
+### Options dialog "rebalanced tree" (design B) — 2026-10-13
+
+After the AI page, the user asked for the whole Options dialog. Renders of all twelve pages
+at the default window size showed two pages near three screens (Suggestions › Behavior,
+Inserted code), a description under nearly every row, nine one-item groups, execution
+warnings under Suggestions and snippets plus SQL passwords under "Lists & connections".
+A data-driven local demo (`artifacts/options-redesign-demo`, gitignored) showed the current
+dialog and three arrangements with a per-page scroll meter and a "where each setting goes"
+table; the user chose **B, the rebalanced tree**. Plan:
+`docs/superpowers/plans/2026-10-13-options-rebalanced-tree.md`.
+
+What changed. Tree: General (`GeneralAll` = General + SQL Server connections, moved from
+Suggestions) · Suggestions › Behavior (tabs Completion, JOIN assistance) · Suggestions ›
+Lists & scope · Inserted code (tabs Statements, Aliases, Closing characters) · Snippets (own
+leaf) · Format · Queries › Execution & warnings (tabs Results & execution, Warnings — the
+warnings and transaction reminder moved from Suggestions) · Queries › History (`HistoryAll`,
+tabs Recording, Restoring queries) · Queries › Color · Editor · Code analysis · AI
+assistance. Top-level names stay SQL Prompt's. New `TabbedPage` (a `CombinedPage` whose
+sections sit on `OptionsTabStrip` tabs; `OnSectionBuilt` hands a master switch across
+tabs so JOIN and restore rows still grey with Enable IntelliSense / Enable SQL history);
+`CombinedPage.BuildSections` with a before-section callback keeps the host's search
+attribution. RowFactory: `AddColumns` (two equal columns), `Tip` (the long explanation as a
+tooltip), `stretch` on multiline inputs, wrapping toggle and slider labels. Every page is
+fitted: one short line under a row only where the label does not say it all, runs of
+toggles in two columns, number fields and dropdowns paired, one-item groups merged. The
+one-row Tooltips page folded into Completion (`CompletionPolish` key retired); the
+Join conditions page and the two JOIN rows of Completion became `JoinAssistancePage`
+(key `JoinOptions`; the "Related" row that pointed at its own page is gone); bracket policy
+and function parentheses moved from Special characters (now Closing characters) to
+Qualification & brackets; the restore rows of History became `HistoryRestorePage`
+(`HistoryRestore`). Section keys, automation names, search labels and F1 anchors are
+otherwise unchanged; the spec 040 UI contract carries a superseded note.
+
+Verification: new `RowFactoryColumnsTests`, `TabbedPageTests`,
+`SuggestionsBehaviorLayoutTests`, `InsertedCodeLayoutTests`, `QueriesLayoutTests`,
+`HistoryLayoutTests`, `GeneralLayoutTests` and the fit gate `OptionsPageFitTests` (no page
+or tab over one and a half screens at 591 × 495 px); `OptionsNavStructureTests`,
+`OptionsCombinedPagesTests`, `HelpRoutingTests`, `OptionsLiveSettingsTests`,
+`OptionsPaletteTests`, `OptionsConnectionsHelpTests`, `SpecialCharactersPageTests` and
+`OptionsDarkComboTests` follow the new keys and labels. Options-related suites 305/305; full
+shell suite 964/964 on the final build (an earlier run had the foreground-dependent
+`KeyboardHookIsolationTests` as its one failure). Release MSBuild of `AkmlSql.Ssms22`
+succeeds. Every page
+and tab was rendered to PNG in both themes and at the 720 px minimum width (long labels now
+wrap instead of clipping).
+
+Runtime check (2026-10-13, after commit ef85bb9): the Release shell (1.26.1013.1742) and a
+full engine publish were deployed into the installed SSMS 22 and the shared Engine folder
+with the elevated local-deploy script (web engine service stopped and restarted, MEF cache
+cleared). A throwaway FlaUI tour launched SSMS against Northwind, opened AKML SQL › Options
+and captured all twelve pages and every tab: the tree, tabs, fitted rows, moved settings and
+the user's real agents and values all render as designed; the tour closed SSMS. The web
+edition at localhost:8083 still serves its own Settings page (untouched by this work; its
+installed build is 1.26.1012.2246) with no console errors.
+
+
+
+### Playwright report failure corrected — 2026-10-13
+
+Inspected playwright-results/20261013-105553-385/playwright.html and its TRX:
+97 passed, 1 failed, 13 skipped. Firefox saw two Save as palette rows. The editor's
+asynchronous initialization could resume after navigation disposed the page, then
+register commands whose disposal token was never released. A deterministic lifetime
+regression reproduced the leaked commands before the fix. Initialization now stops
+after awaited loads when the editor is disposed, before attaching more handlers or
+registering commands. The browser's unique-command assertion remains unchanged.
+
+The 13 focused lifetime/command-registry unit tests pass. The headed Playwright rerun
+passes all three browser keyboard cases (Chromium, Edge, Firefox) plus persistent
+browser reopening: 4 passed, 0 failed, 1 expected spike-page skip. The runner now counts
+NotExecuted result entries, since this adapter reported Counters.notExecuted=0 despite
+13 skips in the original report. Its console correctly reports the single follow-up skip.
+The original report is preserved; new HTML/TRX evidence is under
+%LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
+missing alias/spike configuration, and pre-existing scenario placeholders. This was
+a focused fix verification, not another full-suite run.

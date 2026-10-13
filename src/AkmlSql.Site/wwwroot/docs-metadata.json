@@ -1,9 +1,9 @@
 {
-    "generatedAt":  "2026-10-07T03:16:18Z",
+    "generatedAt":  "2026-10-07T04:17:32Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
-                                           "updated":  "2026-08-31"
+                                           "updated":  "2026-10-07"
                                        },
                  "configuration.md":  {
                                           "added":  "2026-03-24",
@@ -11,15 +11,15 @@
                                       },
                  "formatting.md":  {
                                        "added":  "2026-03-24",
-                                       "updated":  "2026-09-24"
+                                       "updated":  "2026-10-07"
                                    },
                  "topics/ai-assistance.md":  {
                                                  "added":  "2026-08-29",
-                                                 "updated":  "2026-09-03"
+                                                 "updated":  "2026-10-07"
                                              },
                  "topics/connecting.md":  {
                                               "added":  "2026-08-29",
-                                              "updated":  "2026-09-24"
+                                              "updated":  "2026-10-07"
                                           },
                  "topics/formatting.md":  {
                                               "added":  "2026-08-29",
@@ -27,11 +27,11 @@
                                           },
                  "topics/getting-started.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-10-01"
+                                                   "updated":  "2026-10-07"
                                                },
                  "topics/intellisense.md":  {
                                                 "added":  "2026-08-29",
-                                                "updated":  "2026-08-29"
+                                                "updated":  "2026-10-07"
                                             },
                  "topics/options.md":  {
                                            "added":  "2026-10-01",
@@ -39,11 +39,11 @@
                                        },
                  "topics/refactoring.md":  {
                                                "added":  "2026-08-29",
-                                               "updated":  "2026-08-29"
+                                               "updated":  "2026-10-07"
                                            },
                  "topics/snippets.md":  {
                                             "added":  "2026-08-29",
-                                            "updated":  "2026-08-29"
+                                            "updated":  "2026-10-07"
                                         },
                  "topics/sql-history.md":  {
                                                "added":  "2026-08-29",
@@ -51,11 +51,11 @@
                                            },
                  "topics/static-analysis.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-09-24"
+                                                   "updated":  "2026-10-07"
                                                },
                  "topics/troubleshooting.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-09-24"
+                                                   "updated":  "2026-10-07"
                                                }
              }
 }

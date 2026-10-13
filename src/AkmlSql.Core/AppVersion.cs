@@ -17,6 +17,22 @@ namespace AkmlSql.Core
         public static string Current { get; } = ResolveVersion();
 
         /// <summary>
+        /// Spec 041 (R31): the raw informational version, build metadata included (<c>1.26.1007.0613+abc…</c>) —
+        /// shown on hover beside the short one. Falls back to <see cref="Current"/> when the assembly has none.
+        /// </summary>
+        public static string Informational { get; } =
+            typeof(AppVersion).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? Current;
+
+        /// <summary>Spec 041 (R31): a version without its build metadata (everything from <c>+</c>).</summary>
+        public static string? StripBuildMetadata(string? version)
+        {
+            if (string.IsNullOrEmpty(version)) return version;
+            var plusIndex = version!.IndexOf('+');
+            return plusIndex >= 0 ? version.Substring(0, plusIndex) : version;
+        }
+
+        /// <summary>
         /// When this build was made, in UTC (to the minute): read back from <see cref="Current"/>,
         /// which every build writes as its date and time, so the date shown always agrees with the
         /// version shown; for a version of another shape, the assembly's <c>BuildTimestamp</c>
@@ -45,8 +61,7 @@ namespace AkmlSql.Core
             if (!string.IsNullOrEmpty(infoVersion))
             {
                 // Strip git hash suffix if present (e.g. "1.26.1007.0429+abc123")
-                var plusIndex = infoVersion!.IndexOf('+');
-                return plusIndex >= 0 ? infoVersion.Substring(0, plusIndex) : infoVersion;
+                return StripBuildMetadata(infoVersion)!;
             }
 
             // Fallback: AssemblyVersion (survives trimming)

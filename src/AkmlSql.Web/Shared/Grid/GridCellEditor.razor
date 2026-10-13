@@ -1,0 +1,71 @@
+@*
+    Spec 041 (research R4, FR-013) — the results grid's inline cell editor. A component of its own so that
+    typing re-renders only this input, never the whole grid. It reports what the user did and owns nothing
+    else: the grid decides what a commit means (an edit, an invalid cell, no change).
+
+    Keys: Enter commits; Escape cancels — after it no change/blur may commit, so the fetched value comes
+    back; Tab / Shift+Tab commit and ask for the next / previous editable cell. akml-results-grid.js cancels
+    the browser defaults of exactly those three keys while the input has focus, and the input stops
+    contextmenu so its native cut/copy/paste menu still works. Leaving the input any other way (a click
+    elsewhere) commits, as SSMS does.
+*@
+@using Microsoft.JSInterop
+
+<input @ref="_input" class="akml-cell-input" type="text" spellcheck="false" autocomplete="off"
+       data-testid="results-cell-input" aria-label="@Label" value="@_value"
+       @oninput="OnInput" @onchange="OnChangeAsync" @onblur="OnBlurAsync"
+       @onkeydown="OnKeyDownAsync" @onkeydown:stopPropagation="true"
+       @onmousedown:stopPropagation="true" @onclick:stopPropagation="true" @ondblclick:stopPropagation="true"
+       @oncontextmenu:stopPropagation="true" />
+
+@code {
+    /// <summary>The text the input starts with.</summary>
+    [Parameter] public string? InitialValue { get; set; }
+
+    /// <summary>The input's accessible name, e.g. "Edit name, row 3".</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>The user is done with the value: Enter, Tab, a change or leaving the input.</summary>
+    [Parameter] public EventCallback<GridEditorResult> OnDone { get; set; }
+
+    private ElementReference _input;
+    private string _value = string.Empty;
+    private bool _done;
+
+    protected override void OnInitialized() => _value = InitialValue ?? string.Empty;
+
+    private void OnInput(ChangeEventArgs e) => _value = e.Value?.ToString() ?? string.Empty;
+
+    private Task OnChangeAsync(ChangeEventArgs e)
+    {
+        _value = e.Value?.ToString() ?? string.Empty;
+        return FinishAsync(GridEditorExit.Commit);
+    }
+
+    private Task OnBlurAsync(FocusEventArgs _) => FinishAsync(GridEditorExit.Commit);
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) => e.Key switch
+    {
+        "Enter" => FinishAsync(GridEditorExit.Enter),
+        "Escape" => FinishAsync(GridEditorExit.Cancel),
+        "Tab" => FinishAsync(e.ShiftKey ? GridEditorExit.TabBack : GridEditorExit.Tab),
+        _ => Task.CompletedTask,
+    };
+
+    private async Task FinishAsync(GridEditorExit exit)
+    {
+        if (_done) return;
+        _done = true;
+        await OnDone.InvokeAsync(new GridEditorResult(exit, _value));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // `autofocus` is ignored on an element Blazor inserts, so focus it explicitly. Setting the value
+        // through the DOM property already put the caret at the end, so a typed first character continues.
+        try { await _input.FocusAsync(); }
+        catch (JSException) { /* gone before the focus call — harmless */ }
+        catch (InvalidOperationException) { /* no JS (tests, prerender) */ }
+    }
+}

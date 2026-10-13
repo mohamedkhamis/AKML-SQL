@@ -9,8 +9,8 @@
 @using AkmlSql.Web.Services
 @using AkmlSql.Core.Ipc.Messages
 
-<div class="akml-overlay" @onclick="OnCancel" data-testid="refactor-preview">
-    <div class="akml-rpv" @onclick:stopPropagation="true">
+<div class="akml-scrim" @onclick="OnCancel" data-testid="refactor-preview">
+    <div class="akml-dialog akml-dialog--wide akml-rpv" role="dialog" aria-modal="true" aria-label="@Title" @onclick:stopPropagation="true">
         <div class="akml-rpv-header">
             <span class="akml-rpv-title">@Title</span>
             @if (Preview is { Changed: false })
@@ -27,7 +27,7 @@
                 <ul class="akml-rpv-errors" data-testid="refactor-errors">
                     @foreach (var err in Heavy.Errors)
                     {
-                        <li>❌ @err</li>
+                        <li><Icon Name="circle-x" Size="14" /> @err</li>
                     }
                 </ul>
             }
@@ -66,7 +66,7 @@
                 <ul class="akml-rpv-warnings">
                     @foreach (var w in Heavy.Warnings)
                     {
-                        <li>⚠ @w</li>
+                        <li><Icon Name="triangle-alert" Size="14" /> @w</li>
                     }
                 </ul>
             }
@@ -99,7 +99,7 @@
                 <ul class="akml-rpv-warnings">
                     @foreach (var w in Preview.Warnings)
                     {
-                        <li>⚠ @w</li>
+                        <li><Icon Name="triangle-alert" Size="14" /> @w</li>
                     }
                 </ul>
             }
@@ -109,30 +109,15 @@
             <button class="akml-tool-button" @onclick="OnCancel">Cancel</button>
             <button class="akml-tool-button akml-rpv-apply"
                     data-testid="refactor-apply"
-                    disabled="@(!CanApply)"
+                    disabled="@(!CanApply)" title="@(CanApply ? null : Heavy is { CanApply: false } ? "Resolve the preview conflicts before applying changes" : "There are no changes to apply")"
                     @onclick="OnApply">Apply</button>
         </div>
     </div>
 </div>
 
 <style>
-    .akml-overlay {
-        position: absolute; inset: 0;
-        background-color: rgba(0, 0, 0, 0.35);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 50;
-    }
-    .akml-rpv {
-        display: flex; flex-direction: column;
-        width: 80%; max-width: 920px; max-height: 80%;
-        background-color: var(--akml-surface-panel);
-        border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-m);
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
-        color: var(--akml-text-primary);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    }
+    /* A shell dialog (.akml-scrim/.akml-dialog in shell.css), wider for the before/after panes. */
+    .akml-rpv { width: 80%; max-width: 920px; max-height: 80vh; }
     .akml-rpv-header {
         display: flex; align-items: center; gap: var(--akml-scalar-spacing-s);
         padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
@@ -165,14 +150,6 @@
         padding: var(--akml-scalar-spacing-s);
         border-top: 1px solid var(--akml-border-default);
     }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
-    }
-    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
-    .akml-tool-button:disabled { opacity: 0.5; cursor: default; }
     .akml-rpv-apply { border-color: var(--akml-accent-primary); }
 
     /* Heavyweight (bridge) preview — change list + diff lines + messages. */

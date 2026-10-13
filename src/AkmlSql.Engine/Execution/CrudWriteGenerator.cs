@@ -199,8 +199,10 @@ namespace AkmlSql.Engine.Execution
                                           or SqlDbType.Char or SqlDbType.NChar or SqlDbType.Binary
                                           or SqlDbType.Text or SqlDbType.NText or SqlDbType.Image or SqlDbType.Xml;
             if (!lengthBearing && cell.Size is int sz && sz > 0) p.Size = sz;
-            if (cell.Precision is int pr && pr > 0) p.Precision = (byte)Math.Min(pr, byte.MaxValue);
-            if (cell.Scale is int sc && sc >= 0) p.Scale = (byte)Math.Min(sc, byte.MaxValue);
+            // Spec 041 (N2): 255 is SqlClient's "not applicable" sentinel; an older web bundle may still send
+            // it, and as a parameter Scale it fails a date edit and overflows a money one. Never apply it.
+            if (cell.Precision is int pr && pr > 0 && pr < 255) p.Precision = (byte)pr;
+            if (cell.Scale is int sc && sc >= 0 && sc < 255) p.Scale = (byte)sc;
             return p;
         }
     }

@@ -14,6 +14,8 @@ The history window has three panels:
 2. **Versions** — the saved versions of the selected query, newest first. A new version is captured when you run the query or close its tab, so you can see how the query evolved.
 3. **Preview** — the full SQL text of the selected version, with syntax highlighting. You can select and copy text in it.
 
+![AKML SQL History shows starred Northwind queries grouped under Today and previews a top customers by revenue query.](../images/screenshots/01-sql-history-crop.png "Search, starred queries and SQL preview")
+
 A bar on the left edge of a row means the query is **open** in a tab right now.
 
 The window updates by itself: a query you run shows up within about a second, and the selection and scroll position are kept. If AKML SQL's background service isn't running, the window says *History is unavailable* and offers **Retry**.

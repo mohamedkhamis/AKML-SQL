@@ -41,6 +41,8 @@ internal sealed class FakeAiFeatureSettings : IAiFeatureSettings
     public Task<AiFeatureSettings> GetAsync() => Task.FromResult(_settings);
     public Task SetAsync(AiFeatureSettings settings) { _settings = settings; return Task.CompletedTask; }
     public Task<AiPrivacyMode> ResolveModeAsync(string featureId) => Task.FromResult(_settings.Resolve(featureId));
+    public Task ResetAsync() { _settings = new(); return Task.CompletedTask; }
+    public Task ReloadAsync() => Task.CompletedTask;
 }
 
 internal sealed class FakeChatHistoryStore : IChatHistoryStore

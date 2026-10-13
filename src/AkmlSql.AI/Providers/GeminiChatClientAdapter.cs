@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Mscc.GenerativeAI;
 using Serilog;
+using GeminiApiException = Mscc.GenerativeAI.Types.GeminiApiException;
 using GeminiContent = Mscc.GenerativeAI.Types.Content;
 using GeminiFinishReason = Mscc.GenerativeAI.Types.FinishReason;
 using GeminiGenerateContentRequest = Mscc.GenerativeAI.Types.GenerateContentRequest;
@@ -98,6 +99,14 @@ public sealed class GeminiChatClientAdapter : IChatClient
             var response = await _model.GenerateContent(request, _requestOptions, cancellationToken);
 
             return MapResponse(response);
+        }
+        catch (GeminiApiException ex) when (
+            cancellationToken.IsCancellationRequested && ex.InnerException is OperationCanceledException inner)
+        {
+            // The SDK wraps every non-HTTP failure — the caller's cancellation included — in a
+            // GeminiApiException. IChatClient callers (the provider test, the fallback chain,
+            // whose contract is that cancellation never falls back) expect the cancellation.
+            throw new OperationCanceledException(inner.Message, ex, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

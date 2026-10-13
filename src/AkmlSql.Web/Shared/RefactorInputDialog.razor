@@ -5,92 +5,46 @@
     into a RefactorPreviewRequest and runs the bridge preview/apply.
 *@
 
-<div class="akml-overlay" @onclick="OnCancel" data-testid="refactor-input">
-    <div class="akml-rid" @onclick:stopPropagation="true">
-        <div class="akml-rid-header">@Title</div>
-        <div class="akml-rid-body">
+<div class="akml-scrim" @onclick="OnCancel" data-testid="refactor-input">
+    <div class="akml-dialog akml-rid" role="dialog" aria-modal="true" aria-labelledby="akml-rid-title" @onclick:stopPropagation="true">
+        <div class="akml-dialog-header"><h2 class="akml-dialog-title" id="akml-rid-title">@Title</h2></div>
+        <div class="akml-dialog-body">
             @if (NeedsOriginalIdentifier)
             {
                 <div class="akml-field">
-                    <label>Identifier to rename</label>
-                    <input data-testid="rid-original" value="@_original"
+                    <label class="akml-field-label" for="akml-rid-original">Identifier to rename</label>
+                    <input id="akml-rid-original" class="akml-input" data-testid="rid-original" value="@_original"
                            @oninput="@(e => _original = e.Value?.ToString() ?? "")" />
                 </div>
             }
             @if (NeedsNewName)
             {
                 <div class="akml-field">
-                    <label>New name</label>
-                    <input data-testid="rid-newname" value="@_newName"
+                    <label class="akml-field-label" for="akml-rid-newname">New name</label>
+                    <input id="akml-rid-newname" class="akml-input" data-testid="rid-newname" value="@_newName"
                            @oninput="@(e => _newName = e.Value?.ToString() ?? "")" />
                 </div>
             }
             @if (NeedsUnitName)
             {
                 <div class="akml-field">
-                    <label>Procedure name</label>
-                    <input data-testid="rid-unitname" value="@_unitName"
+                    <label class="akml-field-label" for="akml-rid-unitname">Procedure name</label>
+                    <input id="akml-rid-unitname" class="akml-input" data-testid="rid-unitname" value="@_unitName"
                            @oninput="@(e => _unitName = e.Value?.ToString() ?? "")" />
                 </div>
             }
             @if (!string.IsNullOrEmpty(_error))
             {
-                <p class="akml-rid-error">@_error</p>
+                <p class="akml-field-error" role="alert">@_error</p>
             }
         </div>
-        <div class="akml-rid-footer">
-            <button class="akml-tool-button" @onclick="OnCancel">Cancel</button>
-            <button class="akml-tool-button akml-rid-ok" data-testid="rid-preview" @onclick="SubmitAsync">Preview</button>
+        <div class="akml-dialog-footer">
+            <button type="button" class="akml-btn" @onclick="OnCancel">Cancel</button>
+            <button type="button" class="akml-btn akml-btn--primary" data-testid="rid-preview" @onclick="SubmitAsync">Preview</button>
         </div>
     </div>
 </div>
 
-<style>
-    .akml-overlay {
-        position: absolute; inset: 0;
-        background-color: rgba(0, 0, 0, 0.35);
-        display: flex; align-items: center; justify-content: center;
-        z-index: 50;
-    }
-    .akml-rid {
-        min-width: 360px; max-width: 480px;
-        display: flex; flex-direction: column;
-        background-color: var(--akml-surface-panel);
-        border: 1px solid var(--akml-border-default);
-        border-radius: var(--akml-scalar-radius-m);
-        font-family: var(--akml-type-chrome-family);
-        font-size: var(--akml-type-chrome-size);
-        color: var(--akml-text-primary);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-    }
-    .akml-rid-header {
-        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
-        border-bottom: 1px solid var(--akml-border-default);
-        font-weight: bold;
-    }
-    .akml-rid-body { display: flex; flex-direction: column; gap: var(--akml-scalar-spacing-s); padding: var(--akml-scalar-spacing-m); }
-    .akml-field { display: flex; flex-direction: column; gap: 2px; }
-    .akml-field label { color: var(--akml-text-secondary); font-size: 12px; }
-    .akml-field input {
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs); font-family: inherit; font-size: inherit;
-    }
-    .akml-rid-error { color: var(--akml-status-danger); margin: 0; }
-    .akml-rid-footer {
-        display: flex; justify-content: flex-end; gap: var(--akml-scalar-spacing-s);
-        padding: var(--akml-scalar-spacing-s);
-        border-top: 1px solid var(--akml-border-default);
-    }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
-    }
-    .akml-tool-button:hover { background-color: var(--akml-surface-hover); }
-    .akml-rid-ok { border-color: var(--akml-accent-primary); }
-</style>
 
 @code {
     /// <summary>Dialog title (the operation name).</summary>

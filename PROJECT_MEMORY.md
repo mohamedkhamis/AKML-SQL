@@ -523,3 +523,168 @@ change, and verify the affected path with its established tests and UI checks.
   [download implementation report](reports/site-audit-2026-10-06/04-download-fix.md).
   No deployment or Git mutation. Tracking remains best-effort; direct no-JS/context-menu
   downloads have no beacon. Broader security remediation and desktop telemetry remain pending.
+
+## 2026-10-10 — Spec 041 web workspace continuation
+
+- Current feature: `specs/041-web-ssms-ux-parity/`. US1–US5 were already complete when this
+  continuation resumed T186 and T206–T216. Preserve that staged work; consult the current
+  task ledger and baseline for the final verification state.
+- The earlier web map is superseded in these places: results now use
+  `Shared/ResultsPaneComponent.razor` and `Shared/ResultSetGrid.razor`, with helpers in
+  `Shared/Grid/`; Settings is one routed page with sections in `Shared/Settings/` and
+  contracts/catalog in `Services/Settings/`. IndexedDB is v4 (`workspaceLayout`).
+- The editor has named documents, persisted panel layout, page-scoped keys, server Parse,
+  GO batches, structured Messages and a session-preserving database selector. Engine host
+  identity determines whether styles say “Shared with SSMS” or “On this engine”.
+- Shared web helpers: `akml-ui.js` (dialogs/focus/clipboard/keyboard help),
+  `akml-results-grid.js` (grid pointer/keyboard/measurement), and `akml-workspace.js`
+  (page keys/splitters). Lint gutter markers now expose their existing tooltip on focus.
+- Verification on 2026-10-10: full Engine 2,091 passed; Formatting 1,635; Shell 882;
+  completion corpus unchanged at 1,311/1,343. Full Web E2E: 78 passed, 10 existing skips;
+  final color/screenshot follow-up: 10/10 passed. Web: 1,131 passed with 42 known formatter
+  failures; Core: 1,285 passed with one known failure and three skips. Site: 904;
+  IntelliSense: 25; Node: 97. Release solution build and both theme drift checks passed;
+  SC-008 found no regressions or missing prior passes. Build Debug web and engine before E2E, finish builds
+  before starting sandbox engines, and run browser classes serially. Exclude both screenshot
+  tours from routine suite comparisons.
+- The local workspace screenshot tour captures three themes at 1440×900 and 1100×700.
+  All 90 images were refreshed; nine of the twelve tasks open at resumption are complete.
+  T209, T215 and T216 remain unchecked for the acceptance prerequisites below.
+  Native Windows keyboard/layout checks, the full manual quickstart, the hallway study and
+  post-deployment product-site screenshots are separate acceptance items. No installed application
+  files were changed. The existing full E2E suite also exercises the installed bridge's service
+  restart/reconnect path and restores it to Running; spec 041 browser tests use sandbox engines.
+- Final audit fixes: web-only status-text/badge tokens and inverse high-contrast system colors;
+  auto-fit includes the cell border; `GridRowBoundary` skips unchanged rows on pointer updates;
+  a Live bridge hides stale startup pairing failures. `QuickstartAcceptanceTests` checks schema
+  controls, width persistence and loss of the sandbox engine during execution.
+
+## 2026-10-11 — Spec 041 approved deployment follow-up
+
+- User-authorized earlier changes were committed separately as 01150c0, debbbbc,
+  7f21566, f5a7def and 15c3612. Later changes remain uncommitted.
+- Web and Engine 1.26.1010.2224 were deployed with explicit approval to IIS AkmlSqlWeb
+  and service AkmlSqlWebEngine. The actual IIS URL is http://localhost:59416/;
+  bridge port remains 59417. Both previous payloads and root ACLs are backed up under
+  %LOCALAPPDATA%/AKML SQL/spec041-deployment/backup-20261011-102256.
+  Existing IIS web.config, ProgramData configuration, certificates and user data were
+  preserved. The first port-80 smoke check rolled back; the corrected deployment passed.
+- SiteScreenshotTour accepts AKML_DEPLOYED_WEB_URL. It passed 2/2 against the installed
+  release; Northwind returned 50 rows with matching version labels. The two web product
+  images were inspected and refreshed in the repository. The marketing site was not deployed.
+- Native Windows input found that Edge reserves Ctrl+Shift+S. Save as now also accepts
+  Ctrl+K, Ctrl+A, advertised in the toolbar, View menu and palette. The opt-in
+  NativeKeyAcceptanceTests uses guarded Windows SendInput; exclude Category=NativeAcceptance
+  from unattended suites. Final native replay was blocked by foreground focus/setup issues.
+- Expanded quickstart/tab acceptance passed 10/10; DOM browser key checks passed 3/3,
+  collision checks 6/6, Node 98/98. Web retains 1,131 passes and 42 known failures.
+  SC-008 still reports zero regressions/missing prior passes. Release Web publish passed.
+- T216 is now complete: ten of the original twelve unfinished tasks are complete.
+  T209 needs a clean native-input replay. T215 still needs actual SSMS-started style
+  grouping checks and human spreadsheet paste; the hallway study awaits
+  ten participants. See specs/041-web-ssms-ux-parity/baseline.md for precise evidence.
+
+Follow-up: the final four focused browser cases passed (three-browser Save as menu/palette
+checks and real-engine duplicate-style source labels). The native retry skipped all three
+cases because Windows foreground focus was unavailable; T209 remains open.
+
+### Native keyboard acceptance completed — 2026-10-11
+
+After the user confirmed the interactive desktop was unlocked, NativeKeyAcceptanceTests
+passed 3/3 in Chromium, Edge and Firefox, with no failures or skips. Real Windows
+scan-code input verified all claimed keys, unchanged input language for grid Shift+Alt
+arrows with English/Arabic installed, and Polish Programmers AltGr inserting óń.
+Edge reserves Ctrl+Shift+S for Screenshot; Ctrl+K, Ctrl+A opened Save as successfully,
+with the alternative visible in the View menu and palette. Original browser layouts
+were restored. T209 is complete; eleven of the original twelve remaining tasks are done.
+Only T215 remains for actual SSMS-started-engine style grouping and human spreadsheet
+paste; the ten-user hallway study awaits participants. This supersedes the earlier
+native-input foreground-focus blocker. No product code or deployment changed in this replay.
+
+### Actual SSMS/Northwind acceptance — 2026-10-11
+
+Opened a dedicated SSMS 22 instance with isolated AKML app data and a saved read-only
+Northwind query. SSMS executed six Customers rows. Playwright paired with its actual
+child engine and verified a four-row/three-column copy (ANTON through BLAUS).
+The installed extension had a private Engine 1.26.1006.2219, distinct from the web
+service payload; it lacked the expected Shared with SSMS label. With additional explicit
+user approval, backed up that private Engine folder and root ACL to
+%LOCALAPPDATA%/AKML SQL/spec041-deployment/ssms-engine-backup-20261011-203436,
+deployed the verified 1.26.1010.2224 payload (319 hashes match), and reopened SSMS.
+Playwright then passed both Shared with SSMS screens, duplicate style source labels,
+Northwind execution and clipboard checks with zero JavaScript errors. Extension DLLs
+and user data were preserved. SSMS remains open on the saved Northwind script.
+T215 now only lacks actual spreadsheet paste (no Excel/LibreOffice found) and the
+participant-dependent hallway study. Evidence: %TEMP%/spec041-ssms-acceptance/.
+
+### Spreadsheet acceptance completed — 2026-10-12
+
+T215 is complete; all twelve tasks originally open in spec 041 are now checked.
+Playwright copied live Northwind results to the Windows clipboard; LibreOffice Calc
+Portable 26.2.4 pasted them into real cells. Verified four rows by six columns exactly,
+including accented names/cities, literal NULL, ISO date text and all 2,000 characters
+of each long value. A second paste retained the CompanyName header and six complete
+names. Calc requires Tab-only import for a single text column; automatic detection can
+split at spaces. The workbook, screenshot and JSON verification are recorded under
+specs/041-web-ssms-ux-parity/baseline/acceptance/. The portable package checksum and
+signature were verified; its files live under %LOCALAPPDATA%/AKML-Acceptance-Tools.
+SC-006 still awaits ten real participants, explicitly permitted as pending by T215.
+This was automated desktop acceptance, not a claimed human usability study. No product
+source changes or new Git mutations were made for this check.
+
+### PR #255 review verification follow-up — 2026-10-13
+
+Verified review commit 759c6e5 with fresh Debug Web/Engine builds, live SQL and the
+full Playwright behavioral cycle. Browser checks found and fixed JSON control-character
+escaping/nonfinite fallback and a late double-click changing the active grid editor;
+those corrections and ten review regression cases are now in the branch. The full
+Engine suite passed 2,118 cases. Core's one positional-contract failure and Web's 42
+formatter failures match the prior baseline; no goldens were changed. Detailed suite
+counts and evidence are in specs/041-web-ssms-ux-parity/baseline.md.
+
+The stronger touch test exposed an input-generation issue reproduced outside AKML:
+a burst of CDP drag moves can suppress the next tap. Pacing the drag steps restores
+normal taps. Both splitter and column resizing, followed by actual Schema restoration,
+pass at 100% and 150%. Removed temporary event tracing. Current native keyboard checks
+skipped because Windows refused foreground focus; the earlier 2026-10-11 native pass
+is historical evidence only. Installed payloads were not updated during this review.
+
+Final updated-branch checks: Playwright review/theme/touch follow-up 14/14; deduplicated
+browser outcomes 98 passed, 0 failed, 10 existing skips; shell suite 927/927; schema
+components 16/16; updater unit checks 43/43. Full Release solution build and both theme
+drift checks pass. Raw evidence is under %LOCALAPPDATA%/AKML SQL/spec041-review-759c6e5/.
+The three native cases remain skipped due to unavailable foreground focus. This
+follow-up changes the touch test and verification records only; no Git mutations or
+new deployment were performed by this agent.
+
+### Local Playwright runner — 2026-10-13
+
+Added scripts/run-playwright.ps1. Running it from any working directory builds Debug
+Engine, Web and E2E tests, installs the bundled Playwright Chromium/Firefox versions,
+runs the behavioral suite serially, and opens an HTML report. TRX/HTML results use a
+new timestamped directory under %LOCALAPPDATA%/AKML SQL/playwright-results. Failure
+exit codes and empty test selections are reported; existing reports are not overwritten.
+-Headed uses the shared BrowserLaunch helper for regular and persistent browser launches.
+-IncludeNative enables the desktop keyboard checks; -IncludeScreenshots additionally
+runs the image generators. SQL/service/desktop prerequisites and focused-run options
+are documented in the script's Get-Help text. No installed application is deployed.
+
+### Playwright report failure corrected — 2026-10-13
+
+Inspected playwright-results/20261013-105553-385/playwright.html and its TRX:
+97 passed, 1 failed, 13 skipped. Firefox saw two Save as palette rows. The editor's
+asynchronous initialization could resume after navigation disposed the page, then
+register commands whose disposal token was never released. A deterministic lifetime
+regression reproduced the leaked commands before the fix. Initialization now stops
+after awaited loads when the editor is disposed, before attaching more handlers or
+registering commands. The browser's unique-command assertion remains unchanged.
+
+The 13 focused lifetime/command-registry unit tests pass. The headed Playwright rerun
+passes all three browser keyboard cases (Chromium, Edge, Firefox) plus persistent
+browser reopening: 4 passed, 0 failed, 1 expected spike-page skip. The runner now counts
+NotExecuted result entries, since this adapter reported Counters.notExecuted=0 despite
+13 skips in the original report. Its console correctly reports the single follow-up skip.
+The original report is preserved; new HTML/TRX evidence is under
+%LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
+missing alias/spike configuration, and pre-existing scenario placeholders. This was
+a focused fix verification, not another full-suite run.

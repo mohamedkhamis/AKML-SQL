@@ -50,4 +50,60 @@ public sealed class AnalysisSettingsStoreTests
 
         Assert.True(current.Enabled);   // back to default
     }
+
+    // ── Spec 041 (T131, research R47, R51) ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task The_default_Problems_filter_shows_every_severity()
+    {
+        var current = await new AnalysisSettingsStore(new InMemoryIndexedDbAdapter()).GetAsync();
+
+        Assert.NotNull(current.ProblemsFilter);
+        Assert.True(current.ProblemsFilter.ShowInfo);
+        Assert.True(current.ProblemsFilter.ShowWarning);
+        Assert.True(current.ProblemsFilter.ShowError);
+    }
+
+    [Fact]
+    public async Task A_record_written_before_the_filter_existed_still_reads()
+    {
+        var store = new InMemoryIndexedDbAdapter();
+        store.Seed(StoreNames.AnalysisSettings, "current", "{\"Enabled\":false,\"AutoAnalyseOnFormat\":true,\"RuleOverrides\":{\"PE001\":\"off\"}}");
+
+        var current = await new AnalysisSettingsStore(store).GetAsync();
+
+        Assert.False(current.Enabled);
+        Assert.Equal("off", current.RuleOverrides["PE001"]);
+        Assert.True(current.ProblemsFilter.ShowWarning);
+    }
+
+    [Fact]
+    public async Task Restore_defaults_deletes_only_the_current_key()
+    {
+        var db = new RecordingIndexedDbAdapter();
+        db.Seed(StoreNames.AnalysisSettings, "executionSettings", "{}");
+        var settings = new AnalysisSettingsStore(db);
+        await settings.SetAsync(new WebAnalysisSettings { Enabled = false });
+        db.ResetLog();
+
+        await settings.ResetAsync();
+
+        Assert.Equal(new[] { (StoreNames.AnalysisSettings, "current") }, db.Deletes);
+        Assert.Empty(db.Clears);
+        Assert.True((await settings.GetAsync()).Enabled);
+        Assert.NotNull(await db.GetAsync(StoreNames.AnalysisSettings, "executionSettings"));
+    }
+
+    [Fact]
+    public async Task Reload_reads_what_another_tab_saved()
+    {
+        var store = new InMemoryIndexedDbAdapter();
+        var first = new AnalysisSettingsStore(store);
+        await first.GetAsync();
+        await new AnalysisSettingsStore(store).SetAsync(new WebAnalysisSettings { Enabled = false });
+
+        await first.ReloadAsync();
+
+        Assert.False((await first.GetAsync()).Enabled);
+    }
 }

@@ -1,0 +1,410 @@
+@*
+    Spec 041 (R44, R49, FR-056) — Settings › AI assistance, extracted from the old /settings/ai page (spec 021
+    T135, spec 028 T011/T012): the providers (active radio, a "Needs key" badge on a provider without its key —
+    one imported from a settings file), the add / edit form with its explicit Save, the privacy modes and ghost
+    text. Status lines are notifications; Remove confirms. The labels and roles the E2E suites select ("Provider",
+    "Model", "Endpoint", "Save", the active radios, "Enable ghost text") are unchanged.
+*@
+@using AkmlSql.Web.Services
+@inject IAiKeyVault Vault
+@inject IAiPreference Preference
+@inject IAiFeatureSettings FeatureSettings
+@inject IAiClientFactory Client
+@inject IDialogService Dialogs
+@inject INotificationService Notifications
+
+<p class="akml-hint">
+    AKML SQL never sees your API keys. They live encrypted in your browser via Web Crypto (AES-GCM 256). When you
+    invoke an AI action the key is unwrapped for the duration of one fetch to the provider's own endpoint, then
+    dropped.
+</p>
+
+<SettingRow Id="ai-providers" Kind="block">
+    @if (_configs == null)
+    {
+        <p class="akml-settings-status">Loading…</p>
+    }
+    else if (_configs.Count == 0)
+    {
+        <p class="akml-settings-status">No providers configured yet.</p>
+    }
+    else
+    {
+        <table class="akml-table">
+            <thead><tr><th>Active</th><th>Provider</th><th>Model</th><th>Key</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _configs)
+                {
+                    <tr>
+                        <td>
+                            <input type="radio" name="active" checked="@(_activeId == c.ProviderId)"
+                                   aria-label="@($"Use {c.DisplayName}")" @onchange="@(() => SetActiveAsync(c.ProviderId))" />
+                        </td>
+                        <td>@c.DisplayName (@c.ProviderId)</td>
+                        <td>@c.Model</td>
+                        <td>
+                            @if (NeedsKey(c))
+                            {
+                                <span class="akml-settings-badge" data-testid="@($"provider-needs-key-{c.ProviderId}")"
+                                      title="Imported without its key — Edit and enter the key">Needs key</span>
+                            }
+                            else
+                            {
+                                @(c.HasKey ? "Stored (wrapped)" : "Not needed")
+                            }
+                        </td>
+                        <td>
+                            <button type="button" class="akml-btn" @onclick="@(() => Edit(c))">Edit</button>
+                            <button type="button" class="akml-btn akml-btn--danger" @onclick="@(() => RemoveAsync(c))">Remove</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h4 class="akml-settings-subtitle">Add or edit a provider</h4>
+    <form class="akml-ai-form" @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
+        <label class="akml-field">Provider
+            <select class="akml-select" @bind="_form.ProviderId">
+                @foreach (var (id, label) in ProviderLabels)
+                {
+                    <option value="@id">@label</option>
+                }
+            </select>
+        </label>
+        <label class="akml-field">Display name <input class="akml-input" @bind="_form.DisplayName" placeholder="@DefaultDisplayName(_form.ProviderId)" /></label>
+        <label class="akml-field">Model <input class="akml-input" @bind="_form.Model" placeholder="@ModelPlaceholder(_form.ProviderId)" /></label>
+        @if (RequiresEndpoint(_form.ProviderId))
+        {
+            <label class="akml-field">Endpoint
+                <input class="akml-input" @bind="_form.Endpoint" placeholder="@EndpointPlaceholder(_form.ProviderId)" />
+            </label>
+        }
+        else
+        {
+            @* Only the providers that need one show the field (FR-056: the hints match what the form allows). *@
+            <label class="akml-field">Endpoint
+                <input class="akml-input" @bind="_form.Endpoint" disabled title="This provider uses its standard endpoint" placeholder="Not used by this provider" />
+            </label>
+        }
+        @if (RequiresApiKey(_form.ProviderId))
+        {
+            <label class="akml-field">API key
+                <input class="akml-input" type="password" @bind="_form.ApiKey" autocomplete="new-password"
+                       placeholder="Enter or paste your key (stored wrapped)" />
+            </label>
+        }
+        else
+        {
+            <p class="akml-hint">@DefaultDisplayName(_form.ProviderId) runs locally and does not use an API key.</p>
+        }
+
+        @if (!Client.IsBrowserDirectCapable(_form.ProviderId))
+        {
+            <p class="akml-hint">
+                @DefaultDisplayName(_form.ProviderId) can't be used directly from the browser — its API doesn't send
+                CORS headers. You can configure it here, but it runs only in the desktop edition or via an
+                OpenAI-compatible endpoint. Claude, Gemini, Ollama and LM Studio work browser-direct.
+            </p>
+        }
+
+        <div class="akml-btn-group">
+            <button type="submit" class="akml-btn akml-btn--primary">Save</button>
+            <button type="button" class="akml-btn" @onclick="ClearForm">Clear</button>
+        </div>
+
+        @if (_errors.Count > 0)
+        {
+            <ul class="akml-field-error">
+                @foreach (var err in _errors)
+                {
+                    <li>@err</li>
+                }
+            </ul>
+        }
+    </form>
+</SettingRow>
+
+<SettingRow Id="ai-privacy" Kind="block">
+    @if (_aiSettings != null)
+    {
+        @if (_aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal)
+        {
+            <p class="akml-hint">Fully local is on — only Ollama or LM Studio can be the active provider.</p>
+        }
+        <label class="akml-field">Global default
+            <select class="akml-select" @onchange="OnGlobalModeChanged">
+                @foreach (var m in AllModes)
+                {
+                    <option value="@m" selected="@(_aiSettings.GlobalDefaultMode == m)">@ModeLabel(m)</option>
+                }
+            </select>
+        </label>
+        <table class="akml-table">
+            <thead><tr><th>Feature</th><th>Mode</th></tr></thead>
+            <tbody>
+                @foreach (var (id, label) in Features)
+                {
+                    <tr>
+                        <td>@label</td>
+                        <td>
+                            <select class="akml-select" aria-label="@($"{label} privacy mode")" @onchange="@(e => OnFeatureModeChanged(id, e))">
+                                <option value="" selected="@(!_aiSettings.FeatureModeOverrides.ContainsKey(id))">Use the default</option>
+                                @foreach (var m in AllModes)
+                                {
+                                    <option value="@m" selected="@(_aiSettings.FeatureModeOverrides.TryGetValue(id, out var fm) && fm == m)">@ModeLabel(m)</option>
+                                }
+                            </select>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</SettingRow>
+
+<SettingRow Id="ai-ghost-text" Kind="block">
+    @if (_aiSettings != null)
+    {
+        <label class="akml-field-inline">
+            <input type="checkbox" checked="@_aiSettings.GhostTextEnabled" @onchange="OnGhostEnabledChanged" />
+            Enable ghost text
+        </label>
+        <label class="akml-field">Wait after typing (ms)
+            <input class="akml-input" type="number" min="100" step="50" value="@_aiSettings.GhostTextDelayMs" @onchange="OnGhostDelayChanged" />
+        </label>
+        <label class="akml-field">Most requests per 3 seconds
+            <input class="akml-input" type="number" min="1" value="@_aiSettings.GhostTextMaxRequestsPer3s" @onchange="OnGhostRateChanged" />
+        </label>
+    }
+</SettingRow>
+
+<style>
+    .akml-ai-form { display: flex; flex-direction: column; gap: var(--akml-scalar-spacing-s); max-width: 480px; }
+</style>
+
+@code {
+    private IReadOnlyList<AiProviderConfig>? _configs;
+    private string _activeId = string.Empty;
+    private ProviderForm _form = new();
+    private List<string> _errors = new();
+
+    private static readonly (string Id, string Label)[] ProviderLabels =
+    {
+        ("openai",    "OpenAI"),
+        ("anthropic", "Anthropic"),
+        ("gemini",    "Google Gemini"),
+        ("azure",     "Azure OpenAI"),
+        ("ollama",    "Ollama (local)"),
+        ("lmstudio",  "LM Studio (local)"),
+    };
+
+    private static string DefaultDisplayName(string id) =>
+        ProviderLabels.FirstOrDefault(p => p.Id == id).Label ?? id;
+
+    private static string ModelPlaceholder(string id) => id switch
+    {
+        "openai"    => "gpt-4.1",
+        "anthropic" => "claude-sonnet-4-6",
+        "gemini"    => "gemini-flash-latest",   // as the desktop default: the pinned 2.5-flash is refused for new keys
+        "azure"     => "gpt-4.1 (your deployment name)",
+        "ollama"    => "llama3.1:8b",
+        "lmstudio"  => "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
+        _ => string.Empty,
+    };
+
+    private static bool RequiresEndpoint(string id) => id is "azure" or "ollama" or "lmstudio";
+
+    // Local providers (Ollama, LM Studio) authenticate by network reachability, not a key.
+    private static bool RequiresApiKey(string id) => id is not ("ollama" or "lmstudio");
+
+    /// <summary>R49: a cloud provider with no key stored (imported from a settings file).</summary>
+    private static bool NeedsKey(AiProviderConfig c) => !c.HasKey && !AiProviders.IsLocal(c.ProviderId);
+
+    private static string EndpointPlaceholder(string id) => id switch
+    {
+        "azure"    => "https://your-resource.openai.azure.com/",
+        "ollama"   => "http://localhost:11434",
+        "lmstudio" => "http://localhost:1234/v1",
+        _ => string.Empty,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await FeatureSettings.ReloadAsync();
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _configs = await Vault.ListAsync();
+        _activeId = await Preference.GetActiveAsync();
+        _aiSettings = await FeatureSettings.GetAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetActiveAsync(string providerId)
+    {
+        // Spec 028 T012: fully-local mode forbids a cloud provider as the active one.
+        if (_aiSettings != null && _aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(providerId))
+        {
+            Notifications.Notify($"Fully local is on — {DefaultDisplayName(providerId)} is a cloud provider and can't be active. " +
+                                 "Choose Ollama or LM Studio, or change the global privacy mode.", NotificationKind.Warning);
+            StateHasChanged();
+            return;
+        }
+        _activeId = providerId;
+        await Preference.SetActiveAsync(providerId);
+        Notifications.Notify($"Active provider: {DefaultDisplayName(providerId)}.", NotificationKind.Success);
+        StateHasChanged();
+    }
+
+    private void Edit(AiProviderConfig c)
+    {
+        _form = new ProviderForm
+        {
+            ProviderId = c.ProviderId,
+            DisplayName = c.DisplayName,
+            Model = c.Model,
+            Endpoint = c.Endpoint ?? string.Empty,
+            ApiKey = string.Empty,   // never read back -- the user re-enters it
+        };
+        _errors.Clear();
+        Notifications.Notify($"Editing {c.DisplayName}. Enter the API key again to change it.", NotificationKind.Info);
+    }
+
+    private async Task RemoveAsync(AiProviderConfig c)
+    {
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Remove provider",
+            Message = $"Remove {c.DisplayName} and its stored key?",
+            Details = _activeId == c.ProviderId ? new[] { "It is the active provider: AI features stop until you choose another." } : null,
+            ConfirmLabel = "Remove",
+            Destructive = true,
+        });
+        if (!ok) return;
+        await Vault.RemoveAsync(c.ProviderId);
+        if (_activeId == c.ProviderId) await Preference.SetActiveAsync(string.Empty);
+        Notifications.Notify($"Removed {c.DisplayName}.", NotificationKind.Success);
+        await ReloadAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        _errors = new List<string>();
+        if (string.IsNullOrEmpty(_form.ProviderId)) _errors.Add("Provider is required.");
+        if (string.IsNullOrEmpty(_form.Model)) _errors.Add("Model is required.");
+        if (RequiresApiKey(_form.ProviderId) && string.IsNullOrEmpty(_form.ApiKey)) _errors.Add("API key is required.");
+        if (RequiresEndpoint(_form.ProviderId) && string.IsNullOrEmpty(_form.Endpoint))
+            _errors.Add($"Endpoint is required for {DefaultDisplayName(_form.ProviderId)}.");
+        if (_errors.Count > 0) return;
+
+        await Vault.SetKeyAsync(_form.ProviderId, new AiProviderConfig
+        {
+            ProviderId = _form.ProviderId,
+            DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? DefaultDisplayName(_form.ProviderId) : _form.DisplayName,
+            Model = _form.Model,
+            Endpoint = string.IsNullOrEmpty(_form.Endpoint) || !RequiresEndpoint(_form.ProviderId) ? null : _form.Endpoint,
+        }, _form.ApiKey);
+        _form.ApiKey = string.Empty;   // tighten the residual exposure window
+        Notifications.Notify($"Saved {DefaultDisplayName(_form.ProviderId)}.", NotificationKind.Success);
+        await ReloadAsync();
+    }
+
+    private void ClearForm()
+    {
+        _form = new ProviderForm();
+        _errors.Clear();
+    }
+
+    // Spec 028 (M6) T011/T012 -- privacy disclosure modes (global + per-feature) + fully-local gating.
+    private AiFeatureSettings? _aiSettings;
+
+    private static readonly AiPrivacyMode[] AllModes =
+        { AiPrivacyMode.FullSchema, AiPrivacyMode.SchemaNamesOnly, AiPrivacyMode.NoSchema, AiPrivacyMode.FullyLocal };
+
+    private static readonly (string Id, string Label)[] Features =
+    {
+        ("explain", "Explain"),
+        ("fix", "Fix"),
+        ("optimize", "Optimize"),
+        ("texttosql", "Text-to-SQL"),
+        ("indexanalysis", "Index Analysis"),
+        ("chat", "Chat"),
+        ("ghosttext", "Ghost Text"),
+    };
+
+    private static string ModeLabel(AiPrivacyMode m) => m switch
+    {
+        AiPrivacyMode.FullSchema => "Full schema",
+        AiPrivacyMode.SchemaNamesOnly => "Schema names only",
+        AiPrivacyMode.NoSchema => "No schema",
+        AiPrivacyMode.FullyLocal => "Fully local",
+        _ => m.ToString(),
+    };
+
+    private async Task OnGlobalModeChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null || !Enum.TryParse<AiPrivacyMode>(e.Value?.ToString(), out var mode)) return;
+        _aiSettings.GlobalDefaultMode = mode;
+        await FeatureSettings.SetAsync(_aiSettings);
+        var message = $"Global privacy mode: {ModeLabel(mode)}.";
+
+        // T012: switching to Fully local must not leave a cloud provider active.
+        if (mode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(_activeId) && !AiProviders.IsLocal(_activeId))
+        {
+            await Preference.SetActiveAsync(string.Empty);
+            _activeId = string.Empty;
+            message = "Fully local is on — the cloud provider is no longer active. Choose Ollama or LM Studio.";
+        }
+        Notifications.Notify(message, NotificationKind.Success);
+        StateHasChanged();
+    }
+
+    private async Task OnFeatureModeChanged(string featureId, ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        var raw = e.Value?.ToString();
+        if (string.IsNullOrEmpty(raw)) _aiSettings.FeatureModeOverrides.Remove(featureId);
+        else if (Enum.TryParse<AiPrivacyMode>(raw, out var mode)) _aiSettings.FeatureModeOverrides[featureId] = mode;
+        await FeatureSettings.SetAsync(_aiSettings);
+        Notifications.Notify("Privacy mode saved.", NotificationKind.Success);
+        StateHasChanged();
+    }
+
+    private async Task OnGhostEnabledChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null) return;
+        _aiSettings.GhostTextEnabled = e.Value is bool b && b;
+        await FeatureSettings.SetAsync(_aiSettings);
+        Notifications.Notify(_aiSettings.GhostTextEnabled ? "Ghost text is on." : "Ghost text is off.", NotificationKind.Success);
+        StateHasChanged();
+    }
+
+    private async Task OnGhostDelayChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null || !int.TryParse(e.Value?.ToString(), out var v) || v < 100) return;
+        _aiSettings.GhostTextDelayMs = v;
+        await FeatureSettings.SetAsync(_aiSettings);
+        Notifications.Notify($"Ghost text waits {v} ms.", NotificationKind.Success);
+    }
+
+    private async Task OnGhostRateChanged(ChangeEventArgs e)
+    {
+        if (_aiSettings == null || !int.TryParse(e.Value?.ToString(), out var v) || v < 1) return;
+        _aiSettings.GhostTextMaxRequestsPer3s = v;
+        await FeatureSettings.SetAsync(_aiSettings);
+        Notifications.Notify($"Ghost text: at most {v} requests per 3 seconds.", NotificationKind.Success);
+    }
+
+    private sealed class ProviderForm
+    {
+        public string ProviderId { get; set; } = "openai";
+        public string DisplayName { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string Endpoint { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+    }
+}

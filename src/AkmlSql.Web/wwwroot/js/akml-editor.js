@@ -34,13 +34,51 @@ function loadCm() {
 const _instances = new Map();
 
 /**
+ * Spec 041 (R65) — pure: the 1-based line and column of offset `head` in a CodeMirror Text, as the status bar
+ * shows them. The column counts characters (a tab is one), as SSMS's "Col" does.
+ */
+export function caretPosition(doc, head) {
+    const at = Math.max(0, Math.min(head, doc.length));
+    const line = doc.lineAt(at);
+    return { line: line.number, column: at - line.from + 1 };
+}
+
+// ── Spec 041 (research R53, FR-053) — editor options ─────────────────────────────────────────────────────
+
+/** The editor options within their limits (Settings › Editor): font size 9–32 px, tab size 1–8. */
+export function normaliseEditorOptions(opts) {
+    const o = opts || {};
+    const int = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : d);
+    return {
+        fontSize: Math.min(32, Math.max(9, int(o.fontSize, 13))),
+        wordWrap: !!o.wordWrap,
+        tabSize: Math.min(8, Math.max(1, int(o.tabSize, 4))),
+    };
+}
+
+/** The CodeMirror extensions for the options, one per compartment (pure; `cm` is the bundle). */
+export function optionExtensions(cm, opts) {
+    const o = normaliseEditorOptions(opts);
+    return {
+        wrap: o.wordWrap ? cm.view.EditorView.lineWrapping : [],
+        tab: [cm.state.EditorState.tabSize.of(o.tabSize), cm.language.indentUnit.of(' '.repeat(o.tabSize))],
+    };
+}
+
+/** The font size is CSS only: a variable on the host the editor's font-size reads. */
+function applyFontSize(host, opts) {
+    if (host && host.style) host.style.setProperty('--akml-editor-font-size', `${normaliseEditorOptions(opts).fontSize}px`);
+}
+
+/**
  * Create a CodeMirror editor inside the given host element.
  * @param {string} hostElementId  The DOM id of the container div.
  * @param {string} initialText    Initial document text.
  * @param {object} dotNetRef      Blazor DotNetObjectReference for OnTextChanged callback.
+ * @param {{fontSize?:number, wordWrap?:boolean, tabSize?:number}} [options]  Spec 041 — the editor options.
  * @returns {Promise<void>}
  */
-export async function create(hostElementId, initialText, dotNetRef) {
+export async function create(hostElementId, initialText, dotNetRef, options) {
     const host = document.getElementById(hostElementId);
     if (!host) {
         throw new Error(`akml-editor: host element '${hostElementId}' not found.`);
@@ -98,7 +136,21 @@ export async function create(hostElementId, initialText, dotNetRef) {
     const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|update|insert(?:\s+into)?|into|delete(?:\s+from)?|exec(?:ute)?)\s+$/i;
     const DOT_MEMBER_TRIGGER = /(?:[A-Za-z_\]"][\w$]*|\]|")\.$/;
 
+    // Spec 041 (R65, FR-083): the caret for the status bar ("Ln 1, Col 12"), throttled to one report per 100 ms.
+    let caretTimer = 0;
+    let caretState = null;
+    const reportCaret = (state) => {
+        caretState = state;
+        if (caretTimer) return;
+        caretTimer = setTimeout(() => {
+            caretTimer = 0;
+            const pos = caretPosition(caretState.doc, caretState.selection.main.head);
+            dotNetRef.invokeMethodAsync('OnSelectionChangedFromJs', pos.line, pos.column).catch(() => { /* page gone */ });
+        }, 100);
+    };
+
     const updateListener = cm.view.EditorView.updateListener.of((update) => {
+        if (dotNetRef && (update.selectionSet || update.docChanged)) reportCaret(update.state);
         if (!update.docChanged || !dotNetRef) return;
 
         const text = update.state.doc.toString();
@@ -588,8 +640,9 @@ export async function create(hostElementId, initialText, dotNetRef) {
 
     // Spec 030 — Phase 5: Ctrl/Cmd+Enter runs the query. Registered INSIDE the CM6 keymap (not just
     // the Blazor page handler) because CM6 has focus and swallows Mod-Enter. The Blazor side surfaces
-    // it via EditorComponent.ExecuteFromJs → OnExecute → Editor.ExecuteAsync. F5 is deliberately NOT
-    // bound (browser refresh) — the toolbar Execute button covers that muscle memory.
+    // it via EditorComponent.ExecuteFromJs → OnExecute → Editor.ExecuteAsync. F5 is NOT bound here:
+    // since spec 041 (R37) the editor page claims F5, Ctrl+F5, Ctrl+R and the Ctrl+K chords in
+    // akml-workspace.js's document-level capture listener, before CodeMirror or the browser see them.
     function runExecute(view) {
         if (!dotNetRef) return false;
         dotNetRef.invokeMethodAsync('ExecuteFromJs')
@@ -605,9 +658,18 @@ export async function create(hostElementId, initialText, dotNetRef) {
         // own Mod-Enter → insertBlankLine, leaving no keyboard execute at all (campaign finding 4).
     ]);
 
+    // Spec 041 (R53): word wrap and tab size live in compartments, so Settings › Editor reconfigures the open
+    // editor (setEditorOptions) instead of recreating it.
+    const wrapCompartment = new cm.state.Compartment();
+    const tabCompartment = new cm.state.Compartment();
+    const optionExt = optionExtensions(cm, options);
+    applyFontSize(host, options);
+
     const state = cm.state.EditorState.create({
         doc: initialText ?? '',
         extensions: [
+            wrapCompartment.of(optionExt.wrap),
+            tabCompartment.of(optionExt.tab),
             cm.view.lineNumbers(),
             cm.view.highlightActiveLine(),
             ghostKeymap,
@@ -649,7 +711,59 @@ export async function create(hostElementId, initialText, dotNetRef) {
         parent: host,
     });
 
-    _instances.set(hostElementId, { view, cm, dotNetRef, ghost });
+    const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
+    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, disposeLintKeyboard });
+}
+
+// CodeMirror's lint gutter opens its own tooltip on mouseover. Give its markers the same
+// interaction from the keyboard, and let its existing mouse-leave logic dismiss it on Escape.
+function installLintKeyboard(view, hostElementId) {
+    if (typeof MutationObserver === 'undefined' || !view.dom) return () => {};
+    let focused = null;
+    const close = () => {
+        focused?.dispatchEvent(new MouseEvent('mouseout'));
+        focused?.removeAttribute('aria-describedby');
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: -100, clientY: -100 }));
+    };
+    const decorate = () => {
+        for (const marker of view.dom.querySelectorAll('.cm-lint-marker')) {
+            marker.tabIndex = 0;
+            marker.setAttribute('aria-label', 'SQL diagnostics');
+        }
+        const tip = view.dom.querySelector('.cm-tooltip-lint');
+        if (focused && tip) {
+            tip.id = `${hostElementId}-lint-help`;
+            tip.setAttribute('role', 'tooltip');
+            focused.setAttribute('aria-describedby', tip.id);
+        }
+    };
+    const focus = e => {
+        if (!e.target.matches('.cm-lint-marker')) return;
+        focused = e.target;
+        focused.dispatchEvent(new MouseEvent('mouseover'));
+    };
+    const blur = () => { close(); focused = null; };
+    const key = e => { if (e.key === 'Escape') close(); };
+    const observer = new MutationObserver(decorate);
+    observer.observe(view.dom, { childList: true, subtree: true });
+    view.dom.addEventListener('focusin', focus);
+    view.dom.addEventListener('focusout', blur);
+    view.dom.addEventListener('keydown', key);
+    return () => {
+        close(); observer.disconnect();
+        view.dom.removeEventListener('focusin', focus);
+        view.dom.removeEventListener('focusout', blur);
+        view.dom.removeEventListener('keydown', key);
+    };
+}
+
+/** Spec 041 (R53) — apply changed editor options to an open editor. */
+export function setEditorOptions(hostElementId, options) {
+    const inst = _instances.get(hostElementId);
+    if (!inst) return;
+    const ext = optionExtensions(inst.cm, options);
+    inst.view.dispatch({ effects: [inst.wrapCompartment.reconfigure(ext.wrap), inst.tabCompartment.reconfigure(ext.tab)] });
+    applyFontSize(document.getElementById(hostElementId), options);
 }
 
 /**
@@ -680,6 +794,30 @@ export function getSelectedText(hostElementId) {
     if (!inst) return '';
     const sel = inst.view.state.selection.main;
     return inst.view.state.sliceDoc(sel.from, sel.to);
+}
+
+/**
+ * Spec 041 (R24) — pure: the 1-based document line the executed text starts on. Execute runs the
+ * selection, or the whole document when the selection is empty or only whitespace — then line 1.
+ * @param {{lineAt:(pos:number)=>{number:number}, sliceString:(from:number,to:number)=>string}} doc  a CM Text
+ * @param {{from:number, to:number}} range  the main selection
+ */
+export function selectionStartLine(doc, range) {
+    if (!range || range.to <= range.from) return 1;
+    if (doc.sliceString(range.from, range.to).trim().length === 0) return 1;
+    return doc.lineAt(range.from).number;
+}
+
+/**
+ * Spec 041 (R24) — the selected text and the line it starts on, read together so an error's server line
+ * can be mapped back to the document line it came from.
+ */
+export function getSelectionInfo(hostElementId) {
+    const inst = _instances.get(hostElementId);
+    if (!inst) return { text: '', startLine: 1 };
+    const state = inst.view.state;
+    const sel = state.selection.main;
+    return { text: state.sliceDoc(sel.from, sel.to), startLine: selectionStartLine(state.doc, sel) };
 }
 
 /** Replace the entire document. */
@@ -858,6 +996,78 @@ export function gotoLine(hostElementId, lineNumber1Based) {
     inst.view.focus();
 }
 
+// ── Spec 041 (R39) — findings in the editor ──────────────────────────────────────────────────────
+//
+// Analyser findings (FR-087) and the line of an execution error (FR-023) are shown through CodeMirror's
+// lint state: lintGutter() is installed at create time; these exports feed it. lintKeymap is NOT
+// installed — it binds F8, which the editor page uses for the Schema panel.
+
+const LINT_SEVERITY = ['hint', 'info', 'warning', 'error'];
+
+/**
+ * Pure: translate line-based findings into CodeMirror diagnostics, clamped to the document.
+ * @param {{lines:number, length:number, line:(n:number)=>{from:number,to:number}}} doc  a CM Text
+ * @param {Array<{line:number, startColumn?:number|null, endColumn?:number|null, severity:number, message:string, source?:string}>} diags
+ *        1-based line and columns; severity 0..3 = hint/info/warning/error.
+ * @returns {Array<{from:number, to:number, severity:string, message:string, source:string}>}
+ */
+export function toLintDiagnostics(doc, diags) {
+    if (!Array.isArray(diags) || !doc) return [];
+    const out = [];
+    for (const d of diags) {
+        if (!d || typeof d.line !== 'number' || d.line < 1 || d.line > doc.lines) continue;
+        const line = doc.line(d.line);
+        let from = line.from;
+        let to = line.to;
+        if (typeof d.startColumn === 'number' && d.startColumn >= 1) {
+            from = Math.min(line.to, line.from + d.startColumn - 1);
+        }
+        if (typeof d.endColumn === 'number' && d.endColumn >= 1) {
+            to = Math.min(line.to, line.from + d.endColumn - 1);
+        }
+        // An end at or before the start (or a missing end) underlines the whole line.
+        if (to <= from) {
+            from = line.from;
+            to = line.to;
+        }
+        out.push({
+            from,
+            to,
+            severity: LINT_SEVERITY[d.severity] ?? 'info',
+            message: String(d.message ?? ''),
+            source: d.source || 'AKML SQL',
+        });
+    }
+    return out;
+}
+
+/** Show `diags` (see toLintDiagnostics) as underlines + gutter markers, replacing any shown before. */
+export function setDiagnostics(hostElementId, diags) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !inst.cm.lint || typeof inst.cm.lint.setDiagnostics !== 'function') return;
+    const mapped = toLintDiagnostics(inst.view.state.doc, diags);
+    inst.view.dispatch(inst.cm.lint.setDiagnostics(inst.view.state, mapped));
+}
+
+/** Remove every finding shown in the editor. */
+export function clearDiagnostics(hostElementId) {
+    setDiagnostics(hostElementId, []);
+}
+
+/**
+ * Spec 041 (T200) — select the next (forward) or previous finding, wrapping, as the palette's Next/Previous
+ * problem. False when the editor shows none.
+ */
+export function goToProblem(hostElementId, forward) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !inst.cm.lint) return false;
+    if (typeof inst.cm.lint.diagnosticCount === 'function' && inst.cm.lint.diagnosticCount(inst.view.state) === 0) return false;
+    const command = forward ? inst.cm.lint.nextDiagnostic : inst.cm.lint.previousDiagnostic;
+    if (typeof command !== 'function') return false;
+    inst.view.focus();
+    return command(inst.view) === true;
+}
+
 /**
  * Spec 027 T025 (US4) — append text at the end of a 1-based line. Used by the suppression
  * "this line" action to insert ` -- noqa: RULEID` at the finding's line end (matching the
@@ -893,6 +1103,7 @@ export function dispose(hostElementId) {
     }
     const host = document.getElementById(hostElementId);
     if (host && host._akmlPeek) { host._akmlPeek.remove(); host._akmlPeek = null; }
+    inst.disposeLintKeyboard?.();
     inst.view.destroy();
     if (inst.dotNetRef && typeof inst.dotNetRef.dispose === 'function') {
         inst.dotNetRef.dispose();

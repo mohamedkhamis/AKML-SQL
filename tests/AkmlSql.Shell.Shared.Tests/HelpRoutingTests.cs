@@ -31,10 +31,10 @@ namespace AkmlSql.Shell.Shared.Tests
         /// <summary>Page key → F1 topic: a page's own heading, a section's heading under its page.</summary>
         private static readonly Dictionary<string, string> ContractTopics = new()
         {
+            ["GeneralAll"] = "topics/options#general",
             ["General"] = "topics/options#general",
             ["SuggestionsBehavior"] = "topics/options#suggestions-behavior",
             ["IntelliSense"] = "topics/options#completion",
-            ["CompletionPolish"] = "topics/options#tooltips",
             ["JoinOptions"] = "topics/options#join-conditions",
             ["SuggestionsLists"] = "topics/options#suggestions-lists-connections",
             ["SuggestionTypes"] = "topics/options#types-of-suggestion",
@@ -51,7 +51,9 @@ namespace AkmlSql.Shell.Shared.Tests
             ["ResultsExecution"] = "topics/options#queries-results-execution",
             ["Grid"] = "topics/options#query-results",
             ["Execution"] = "topics/options#execution",
+            ["HistoryAll"] = "topics/options#queries-history",
             ["History"] = "topics/options#queries-history",
+            ["HistoryRestore"] = "topics/options#queries-history",
             ["Tabs & UI"] = "topics/options#queries-color",
             ["EditorAll"] = "topics/options#editor",
             ["Editor"] = "topics/options#productivity",

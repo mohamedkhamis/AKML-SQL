@@ -1,0 +1,10 @@
+@ChildContent
+
+@code {
+    [Parameter, EditorRequired] public string StateKey { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = default!;
+
+    private string? _renderedKey;
+    protected override bool ShouldRender() => _renderedKey != StateKey;
+    protected override void OnAfterRender(bool firstRender) => _renderedKey = StateKey;
+}

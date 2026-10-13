@@ -623,7 +623,18 @@ html[data-akml-theme="high-contrast"] .theme-toggle-moon {
     text-align: left;
 }
 
+/* Primary text, not the link colour: link blue on the elevated caption bar is ~4.1:1 at this
+   size in both themes, under the 4.5:1 AA floor. The icon keeps the accent. */
 .screenshot-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--akml-text-primary);
+    white-space: nowrap;
+}
+
+.screenshot-hint-icon {
+    flex: none;
     color: var(--akml-text-link);
 }
 
@@ -652,6 +663,339 @@ html[data-akml-theme="light"] .screenshot-light {
     display: block;
     width: 100%;
     height: auto;
+}
+
+/* --- Screenshot viewer (js/screenshot-viewer.js) -----------------------------
+   Clicking a screenshot opens it in a modal <dialog> instead of a new tab; on a page with
+   several screenshots it is a gallery: arrows, thumbnails, and the section's heading and text
+   beside the picture. The picture keeps the page's screenshot frame, so it reads as the same
+   object, larger. Sizes are set by the script through the CSSOM (CSP forbids style=""). */
+
+/* Locking the scroll removes the scrollbar; keeping its gutter stops the page behind the
+   viewer jumping sideways. */
+html.screenshot-viewer-open {
+    overflow: hidden;
+    scrollbar-gutter: stable;
+}
+
+.viewer {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: var(--akml-text-primary);
+    background:
+        radial-gradient(60rem 30rem at 50% -10%, color-mix(in srgb, var(--akml-accent-primary) 14%, transparent), transparent 70%),
+        color-mix(in srgb, var(--akml-surface-canvas) 94%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    overscroll-behavior: contain;
+}
+
+.viewer::backdrop {
+    background: transparent;
+}
+
+.viewer-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+        "top"
+        "fig";
+    width: 100%;
+    height: 100%;
+    padding: 0.75rem clamp(0.75rem, 3vw, 2rem) clamp(1rem, 3vw, 2rem);
+}
+
+.viewer-top {
+    grid-area: top;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    min-height: 44px;
+}
+
+.viewer-count {
+    margin: 0 auto 0 0;
+    color: var(--akml-text-secondary);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.viewer-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    color: var(--akml-text-primary);
+    background: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-strong);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.viewer-btn:hover {
+    border-color: var(--akml-accent-primary);
+    background: var(--akml-surface-hover);
+}
+
+/* aria-disabled (not disabled) keeps a focused arrow focusable at either end of the gallery. */
+.viewer-btn[aria-disabled="true"] {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.viewer-figure {
+    grid-area: fig;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    margin: 0;
+}
+
+.viewer-figure > * {
+    width: 100%;
+}
+
+.viewer-frame {
+    overflow: hidden;
+    background: var(--akml-surface-panel);
+    border: 1px solid var(--akml-border-strong);
+    border-radius: var(--akml-scalar-radius-m) var(--akml-scalar-radius-m) 0 0;
+    box-shadow:
+        0 30px 80px color-mix(in srgb, var(--akml-accent-primary) 18%, transparent),
+        0 8px 30px color-mix(in srgb, var(--akml-text-primary) 14%, transparent);
+    /* One-finger swipes belong to the viewer; pinch still zooms the page. */
+    touch-action: pinch-zoom;
+}
+
+.viewer-img {
+    display: block;
+    height: auto;
+    max-width: 100%;
+}
+
+.viewer-caption {
+    margin: 0 auto;
+    padding: 0.7rem 1rem;
+    color: var(--akml-text-primary);
+    font-size: 0.875rem;
+    background: var(--akml-surface-elevated);
+    border: 1px solid var(--akml-border-strong);
+    border-top: 0;
+    border-radius: 0 0 var(--akml-scalar-radius-m) var(--akml-scalar-radius-m);
+}
+
+.viewer-nav,
+.viewer-notes,
+.viewer-strip {
+    display: none;
+}
+
+/* Gallery: arrows either side, the section's text beside the picture, thumbnails below. */
+.viewer.is-gallery .viewer-stage {
+    grid-template-columns: 56px minmax(0, 1fr) minmax(220px, 300px) 56px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+        "top   top   top   top"
+        "prev  fig   notes next"
+        "strip strip strip strip";
+    column-gap: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.viewer.is-gallery .viewer-nav {
+    display: inline-grid;
+    align-self: center;
+    width: 52px;
+    height: 52px;
+}
+
+/* No notes to show (docs images): the picture takes the notes column too. */
+.viewer.is-gallery:not(.has-notes) .viewer-stage {
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    grid-template-areas:
+        "top   top   top"
+        "prev  fig   next"
+        "strip strip strip";
+}
+
+.viewer.is-gallery:not(.has-notes) .viewer-notes {
+    display: none;
+}
+
+.viewer.is-gallery .viewer-prev {
+    grid-area: prev;
+}
+
+.viewer.is-gallery .viewer-next {
+    grid-area: next;
+}
+
+.viewer.is-gallery .viewer-notes {
+    grid-area: notes;
+    display: block;
+    align-self: center;
+    max-height: 100%;
+    overflow-y: auto;
+}
+
+.viewer-notes h2 {
+    margin: 0 0 0.6rem;
+    font-size: var(--t-xl);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+.viewer-notes .viewer-text {
+    margin: 0;
+    color: var(--akml-text-secondary);
+    line-height: 1.6;
+}
+
+/* position: relative so a thumbnail's offsetLeft is measured from the strip (the script scrolls
+   the strip itself); the side/bottom padding keeps focus rings from being clipped. */
+.viewer.is-gallery .viewer-strip {
+    grid-area: strip;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1rem 4px 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.viewer-thumb {
+    flex: none;
+    width: 76px;
+    height: 50px;
+    padding: 0;
+    overflow: hidden;
+    background: var(--akml-surface-panel);
+    border: 2px solid var(--akml-border-default);
+    border-radius: var(--akml-scalar-radius-xs);
+    opacity: 0.6;
+    cursor: pointer;
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.viewer-thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top left;
+}
+
+.viewer-thumb:hover,
+.viewer-thumb:focus-visible {
+    opacity: 1;
+}
+
+.viewer-thumb[aria-current="true"] {
+    opacity: 1;
+    border-color: var(--akml-accent-primary);
+}
+
+/* Narrow screens: the text under the picture, arrows side by side above the strip. Rows are
+   max-content and the stage scrolls, so a short (landscape) phone never squeezes the picture
+   over the controls — with `auto` rows the frame (overflow: hidden) and the notes (a scroll
+   box) have a zero automatic minimum height and were crushed to fit the screen. */
+@media (max-width: 900px) {
+    .viewer.is-gallery .viewer-stage {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: repeat(5, max-content);
+        grid-template-areas:
+            "top   top"
+            "fig   fig"
+            "notes notes"
+            "prev  next"
+            "strip strip";
+        row-gap: 0.75rem;
+        overflow-y: auto;
+    }
+
+    .viewer.is-gallery:not(.has-notes) .viewer-stage {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: repeat(4, max-content);
+        grid-template-areas:
+            "top   top"
+            "fig   fig"
+            "prev  next"
+            "strip strip";
+    }
+
+    /* The stage scrolls here, so vertical drags on the picture must scroll it too. */
+    .viewer.is-gallery .viewer-frame {
+        touch-action: pan-y pinch-zoom;
+    }
+
+    .viewer.is-gallery .viewer-notes {
+        align-self: start;
+        max-height: none;
+        overflow: visible;
+    }
+
+    .viewer.is-gallery .viewer-frame,
+    .viewer.is-gallery .viewer-caption {
+        flex-shrink: 0;
+    }
+
+    .viewer-notes h2 {
+        font-size: var(--t-lg);
+    }
+
+    .viewer.is-gallery .viewer-prev {
+        justify-self: end;
+    }
+
+    .viewer.is-gallery .viewer-next {
+        justify-self: start;
+    }
+
+    .viewer.is-gallery .viewer-strip {
+        justify-content: flex-start;
+        padding-top: 0;
+    }
+}
+
+/* High contrast: solid system colours, no glow or blur. */
+html[data-akml-theme="high-contrast"] .viewer {
+    background: Canvas;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+html[data-akml-theme="high-contrast"] .viewer-frame {
+    box-shadow: none;
+}
+
+/* The theme's hover surface is CanvasText — the same as the icon colour, which would vanish. */
+html[data-akml-theme="high-contrast"] .viewer-btn:hover {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+}
+
+/* Opacity alone does not mark the current thumbnail in high contrast. */
+html[data-akml-theme="high-contrast"] .viewer-thumb {
+    opacity: 1;
+    border-color: GrayText;
+}
+
+html[data-akml-theme="high-contrast"] .viewer-thumb[aria-current="true"] {
+    border-color: Highlight;
+    outline: 2px solid Highlight;
 }
 
 /* --- Feature cards (Home + /features) ------------------------------------------
@@ -1217,6 +1561,21 @@ html.js .docs-search {
     height: auto;
 }
 
+/* Content images open in the screenshot viewer (js/screenshot-viewer.js); MarkdownRenderer
+   wraps each one in a link to itself. */
+.doc-body .doc-image-link {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+    border-radius: var(--akml-scalar-radius-s);
+    cursor: zoom-in;
+}
+
+.doc-body .doc-image-link img {
+    display: block;
+    border-radius: inherit;
+}
+
 .doc-body blockquote {
     margin: 1.25rem 0;
     padding: 0.75rem 1rem;
@@ -1550,7 +1909,7 @@ html[data-akml-theme="light"] .card:hover {
     }
 
     /* Supplied screenshots are already cropped. Keep the complete screen visible on phones;
-       the image link opens the original crop for reading smaller option labels. */
+       a tap opens the screenshot viewer for reading smaller option labels. */
     .hero-visual {
         margin-top: var(--s-6);
     }
@@ -1620,12 +1979,19 @@ html[data-akml-theme="light"] .card:hover {
     }
 
     .screenshot-frame,
+    .viewer-frame,
     .card,
     .cta-banner,
     .btn-primary,
     .release-card-latest,
     .site-nav-links {
         box-shadow: none;
+    }
+
+    .viewer {
+        background: Canvas;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
     }
 }
 

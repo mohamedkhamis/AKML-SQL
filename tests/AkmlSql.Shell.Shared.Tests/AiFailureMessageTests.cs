@@ -203,6 +203,8 @@ namespace AkmlSql.Shell.Shared.Tests
         [InlineData("Model 'claude-sonnet-5' is a Anthropic model, but the AI provider is set to 'Gemini'.")]
         [InlineData("Model \"claude-sonnet-5\" is a anthropic model, not a gemini model.")]
         [InlineData("Unknown AI provider: 'azureopenai'. Supported providers: anthropic, openai, azure, gemini, kimi, ollama, lmstudio, custom.")]
+        // Google answers a bad key with HTTP 400 (API_KEY_INVALID), mapped to the key row.
+        [InlineData("The API key was rejected by 'gemini' (HTTP 400). Check the key: a key issued for a different service will be rejected.")]
         public void Configuration_causes_are_classified_as_such(string error)
             => Assert.True(AiIpcTimeouts.IsConfigurationCaused(error));
 
@@ -214,6 +216,10 @@ namespace AkmlSql.Shell.Shared.Tests
         [InlineData("AI assistance is disabled")]
         [InlineData("Request was cancelled")]
         [InlineData("")]
+        // A provider-side outage (Gemini 503 "high demand") — the agent's settings cannot fix it,
+        // even though the text mentions a model and Options.
+        [InlineData("The AI provider 'gemini' is temporarily unavailable or overloaded (HTTP 503). Retry in a few minutes, or choose a different model in Options → AI Assistance.")]
+        [InlineData("The AI provider did not respond within the timeout (30s) — it timed out. Increase 'Timeout' under Options → AI Assistance, or retry when the provider is less loaded.")]
         public void Momentary_states_are_not_configuration_caused(string error)
             => Assert.False(AiIpcTimeouts.IsConfigurationCaused(error));
 

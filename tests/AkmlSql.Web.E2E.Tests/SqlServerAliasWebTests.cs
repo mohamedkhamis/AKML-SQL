@@ -125,7 +125,7 @@ public sealed class SqlServerAliasWebTests(ITestOutputHelper output)
 
         using var pw = await Playwright.CreateAsync();
         IBrowser browser;
-        try { browser = await pw.Chromium.LaunchAsync(); }
+        try { browser = await pw.Chromium.LaunchForTestsAsync(); }
         catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         await using var browserScope = browser;
         var page = await browser.NewPageAsync();
@@ -135,6 +135,8 @@ public sealed class SqlServerAliasWebTests(ITestOutputHelper output)
         await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
         await page.WaitForSelectorAsync("[data-testid='execute-button']", new() { Timeout = 60_000 });
         await page.ClickAsync("nav >> text=Settings");
+        // Spec 041 (R43): pairing lives in Settings › Connections.
+        await page.ClickAsync("[data-testid='settings-nav-connections']");
         await page.WaitForTimeoutAsync(1_200);
         await page.Locator("button", new() { HasTextString = "Add" }).First.ClickAsync();
         await page.WaitForTimeoutAsync(600);

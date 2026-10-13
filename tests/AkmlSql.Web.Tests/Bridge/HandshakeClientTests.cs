@@ -152,4 +152,23 @@ public sealed class HandshakeClientTests
         Assert.Contains(BridgeState.Connecting, states);
         Assert.Contains(BridgeState.Open, states);
     }
+
+    [Fact]
+    public async Task The_engines_host_kind_and_account_are_kept_and_cleared_on_disconnect()
+    {
+        // Spec 041 (T182, R29): the web names the engine's styles from how it runs.
+        var bridge = BuildBridge(_ => new HandshakeResponse
+        {
+            Status = HandshakeStatus.Ok, EngineVersion = "1.0.0", ChosenProtocolVersion = 1,
+            EngineCapabilities = Array.Empty<string>(), HostKind = "ide", RunsAs = @"CONTOSO\ana",
+        }, out _);
+
+        await bridge.ConnectAsync(Localhost(), null, null, CancellationToken.None);
+        Assert.Equal("ide", bridge.EngineHostKind);
+        Assert.Equal(@"CONTOSO\ana", bridge.EngineRunsAs);
+
+        await bridge.DisconnectAsync();
+        Assert.Null(bridge.EngineHostKind);
+        Assert.Null(bridge.EngineRunsAs);
+    }
 }

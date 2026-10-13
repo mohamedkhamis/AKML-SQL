@@ -1,0 +1,257 @@
+@*
+    Spec 041 (FR-062) — Settings › Diagnostics, extracted from the old /diagnostics page (spec 021 T049, T077):
+    level filters, the log table (newest first), Export (a ZIP with the log, a manifest and, when the engine offers
+    it, the tail of engine.log) and Clear, which confirms. Restore defaults resets the level filters.
+*@
+@using System.IO.Compression
+@using System.Text
+@using System.Text.Json
+@using AkmlSql.Core.Ipc
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IDiagnosticsRingBuffer Ring
+@inject IEngineBridge Bridge
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject INotificationService Notifications
+
+@* Spec 041 (R29): how the paired engine runs, and as whom (also on hover in the status bar). *@
+<SettingRow Id="diagnostics-engine" Kind="block">
+    <p class="akml-settings-status" data-testid="diagnostics-engine">
+        @if (Bridge.State != BridgeState.Open)
+        {
+            <text>No engine is connected.</text>
+        }
+        else
+        {
+            <text>AKML SQL engine @(AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion) ?? "(version unknown)") — @HostKindText(Bridge.EngineHostKind)@(string.IsNullOrEmpty(Bridge.EngineRunsAs) ? "" : $", running as {Bridge.EngineRunsAs}").</text>
+        }
+    </p>
+</SettingRow>
+
+<SettingRow Id="diagnostics-levels" Kind="block">
+    <span role="group" aria-label="Levels shown" aria-describedby="setting-diagnostics-levels-help" class="akml-setting-control">
+        <label><input type="checkbox" checked="@_showTrace" @onchange="ToggleTrace" /> Trace</label>
+        <label><input type="checkbox" checked="@_showInfo" @onchange="ToggleInfo" /> Info</label>
+        <label><input type="checkbox" checked="@_showWarn" @onchange="ToggleWarn" /> Warn</label>
+        <label><input type="checkbox" checked="@_showError" @onchange="ToggleError" /> Error</label>
+    </span>
+</SettingRow>
+
+<SettingRow Id="diagnostics-log" Kind="block">
+    <div class="akml-btn-group">
+        <span class="akml-settings-status">@(_snapshot?.Count ?? 0) entries</span>
+        <button type="button" class="akml-btn" @onclick="ExportBundleAsync">Export diagnostics</button>
+        <button type="button" class="akml-btn akml-btn--danger" @onclick="ClearAsync">Clear…</button>
+        <button type="button" class="akml-btn" @onclick="RefreshAsync">Refresh</button>
+    </div>
+
+    @if (_snapshot == null || _filtered.Count == 0)
+    {
+        <p class="akml-settings-status">No diagnostics in the current filter.</p>
+    }
+    else
+    {
+        <table class="akml-table akml-diag-table">
+            <thead><tr><th>Time</th><th>Level</th><th>Source</th><th>Message</th></tr></thead>
+            <tbody>
+                @foreach (var e in _filtered)
+                {
+                    var isLong = (e.Message?.Length ?? 0) > MessagePreviewLimit || (e.Message?.Contains('\n') ?? false);
+                    var expanded = _expanded.Contains(e);
+                    <tr class="akml-level-@e.Level.ToString().ToLowerInvariant()">
+                        <td>@e.Timestamp.ToString("HH:mm:ss.fff")</td>
+                        <td>@e.Level</td>
+                        <td>@e.Source</td>
+                        <td>
+                            @if (isLong && !expanded)
+                            {
+                                <span class="akml-diag-message-preview">@TruncateForPreview(e.Message)</span>
+                                <button type="button" class="akml-btn akml-btn--ghost" @onclick="@(() => _expanded.Add(e))">Show full</button>
+                            }
+                            else if (isLong)
+                            {
+                                <pre class="akml-diag-message-full">@e.Message</pre>
+                                <button type="button" class="akml-btn akml-btn--ghost" @onclick="@(() => _expanded.Remove(e))">Collapse</button>
+                            }
+                            else
+                            {
+                                @e.Message
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</SettingRow>
+
+<style>
+    .akml-diag-table { font-family: var(--akml-type-editor-family); font-size: 12px; }
+    .akml-level-error td { color: var(--akml-status-danger); }
+    .akml-level-warn td { color: var(--akml-status-warning); }
+    .akml-level-trace td { color: var(--akml-text-secondary); }
+    .akml-diag-message-preview { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80ch; display: inline-block; vertical-align: middle; }
+    .akml-diag-message-full { margin: 0; padding: var(--akml-scalar-spacing-xs) 0; white-space: pre-wrap; word-break: break-word; font-family: var(--akml-type-editor-family); font-size: 11px; }
+</style>
+
+@code {
+    private IReadOnlyList<DiagnosticEntry>? _snapshot;
+    private List<DiagnosticEntry> _filtered = new();
+    private bool _showTrace, _showInfo = true, _showWarn = true, _showError = true;
+    private IJSObjectReference? _downloadModule;
+    private readonly HashSet<DiagnosticEntry> _expanded = new();
+    private const int MessagePreviewLimit = 160;
+
+    private static string HostKindText(string? kind) => kind switch
+    {
+        "ide" => "started by SSMS",
+        "service" => "a Windows service",
+        "console" => "started from a console",
+        _ => "an older engine that does not say how it runs",
+    };
+
+    private static string TruncateForPreview(string? message)
+    {
+        if (string.IsNullOrEmpty(message)) return string.Empty;
+        var firstLine = message.IndexOf('\n') is var nl && nl > 0 ? message.Substring(0, nl) : message;
+        return firstLine.Length > MessagePreviewLimit
+            ? firstLine.Substring(0, MessagePreviewLimit) + "…"
+            : firstLine + (message.Contains('\n') ? " …" : string.Empty);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Ring.RestoreAsync();   // idempotent (N20): the editor restores too
+        RefreshSnapshot();
+    }
+
+    /// <summary>Restore defaults for this section: the level filters.</summary>
+    public void ResetFilters()
+    {
+        _showTrace = false;
+        _showInfo = _showWarn = _showError = true;
+        Recompute();
+        StateHasChanged();
+        Notifications.Notify("Diagnostics shows Info, Warn and Error again.", NotificationKind.Success);
+    }
+
+    private async Task RefreshAsync() { await Task.Yield(); RefreshSnapshot(); }
+
+    private async Task ClearAsync()
+    {
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Clear diagnostics",
+            Message = $"Clear the {_snapshot?.Count ?? 0} diagnostic entries kept in this browser?",
+            Details = new[] { "Export them first if you need them for a support request." },
+            ConfirmLabel = "Clear",
+            Destructive = true,
+        });
+        if (!ok) return;
+        Ring.Clear();
+        await Ring.FlushAsync();
+        RefreshSnapshot();
+        Notifications.Notify("Diagnostics cleared.", NotificationKind.Success);
+    }
+
+    private void RefreshSnapshot()
+    {
+        _snapshot = Ring.Snapshot();
+        Recompute();
+        StateHasChanged();
+    }
+
+    private void Recompute()
+    {
+        if (_snapshot == null) { _filtered.Clear(); return; }
+        _filtered = _snapshot.Where(e => MatchesFilter(e.Level)).OrderByDescending(e => e.Timestamp).ToList();
+    }
+
+    private bool MatchesFilter(DiagnosticLevel level) => level switch
+    {
+        DiagnosticLevel.Trace => _showTrace,
+        DiagnosticLevel.Info => _showInfo,
+        DiagnosticLevel.Warn => _showWarn,
+        DiagnosticLevel.Error => _showError,
+        _ => true,
+    };
+
+    private void ToggleTrace() { _showTrace = !_showTrace; Recompute(); }
+    private void ToggleInfo() { _showInfo = !_showInfo; Recompute(); }
+    private void ToggleWarn() { _showWarn = !_showWarn; Recompute(); }
+    private void ToggleError() { _showError = !_showError; Recompute(); }
+
+    private async Task ExportBundleAsync()
+    {
+        // A ZIP built in memory: diagnostics.json + manifest.json + (T077) engine.log when the bridge is reachable
+        // and the engine advertises diagnostics.engine-log-tail.v1.
+        var entries = _snapshot ?? Array.Empty<DiagnosticEntry>();
+
+        string? engineLogText = null;
+        string? engineLogSource = null;
+        bool engineLogTruncated = false;
+        bool bridgeReachable = Bridge.State == BridgeState.Open;
+        bool engineLogCapability = bridgeReachable && Array.IndexOf(Bridge.EngineCapabilities, "diagnostics.engine-log-tail.v1") >= 0;
+
+        if (engineLogCapability)
+        {
+            try
+            {
+                var response = await Bridge.SendAsync<EngineLogTailRequest, EngineLogTailResponse>(
+                    MessageTypes.EngineLogTailRequest, new EngineLogTailRequest { MaxBytes = 256 * 1024 }, CancellationToken.None);
+                engineLogText = response.LogText;
+                engineLogSource = response.SourcePath;
+                engineLogTruncated = response.Truncated;
+            }
+            catch (Exception ex)
+            {
+                Ring.Log(DiagnosticLevel.Warn, "diagnostics", $"engine.log tail failed: {ex.Message}");
+            }
+        }
+
+        var manifest = new
+        {
+            schema = 1,
+            generatedAt = DateTimeOffset.UtcNow,
+            entryCount = entries.Count,
+            bridgeReachable,
+            engineVersion = Bridge.EngineVersion,
+            engineLogIncluded = engineLogText != null,
+            engineLogSource,
+            engineLogTruncated,
+            webVersion = AkmlSql.Core.AppVersion.Current,
+        };
+
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            await WriteZipEntryAsync(zip, "diagnostics.json", JsonSerializer.Serialize(entries));
+            await WriteZipEntryAsync(zip, "manifest.json", JsonSerializer.Serialize(manifest));
+            if (engineLogText != null) await WriteZipEntryAsync(zip, "engine.log", engineLogText);
+        }
+        ms.Position = 0;
+
+        _downloadModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-download.js");
+        await _downloadModule.InvokeVoidAsync("downloadBase64", "akmlsql-diagnostics.zip", "application/zip", Convert.ToBase64String(ms.ToArray()));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_downloadModule != null)
+        {
+            try { await _downloadModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+
+    private static async Task WriteZipEntryAsync(ZipArchive zip, string name, string text)
+    {
+        var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
+        await using var s = entry.Open();
+        await using var sw = new StreamWriter(s, new UTF8Encoding(false));
+        await sw.WriteAsync(text);
+    }
+}

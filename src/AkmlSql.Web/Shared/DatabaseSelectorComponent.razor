@@ -1,0 +1,107 @@
+@*
+    Spec 041 (research R28, FR-082) — the toolbar's database selector, as SSMS's "Available Databases" box: the
+    current database, a list loaded when it opens (the current one checked, even when the list lacks it), and a
+    switch on the same connection (#temp tables and SET options survive). Disabled without the engine's
+    session.database.v1, without a connection, or while a query runs; it follows a script's USE.
+*@
+@using AkmlSql.Web.Services
+@implements IDisposable
+@inject ISqlConnectionService Sql
+@inject INotificationService Notifications
+
+<span class="akml-db-selector">
+    <button type="button" class="akml-btn" data-testid="db-selector" disabled="@Disabled" title="@Title"
+            aria-haspopup="menu" aria-label="@($"Database: {Current}")" @onclick="OpenAsync">
+        <Icon Name="database" Size="14" />
+        <span class="akml-db-selector-name">@Current</span>
+        <Icon Name="chevron-down" Size="12" />
+    </button>
+    @if (_busy)
+    {
+        <span class="akml-db-selector-busy" data-testid="db-selector-busy" role="status" aria-label="Loading databases">
+            <Icon Name="loader-circle" Size="14" Class="akml-spin" />
+        </span>
+    }
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <span class="akml-field-error" data-testid="db-selector-error" role="alert">@_error</span>
+    }
+</span>
+
+@if (_menu != null)
+{
+    <ContextMenu Items="_menu" X="_x" Y="_y" OnClose="() => _menu = null" TestId="db-selector-list" AriaLabel="Database" />
+}
+
+<style>
+    .akml-db-selector { display: inline-flex; align-items: center; gap: var(--akml-scalar-spacing-xs); }
+    .akml-db-selector-name { max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+</style>
+
+@code {
+    /// <summary>A query is running: the database cannot change under it.</summary>
+    [Parameter] public bool IsRunning { get; set; }
+
+    private bool _busy;
+    private string? _error;
+    private IReadOnlyList<MenuItem>? _menu;
+    private double _x, _y;
+
+    private string Current => string.IsNullOrEmpty(Sql.Database) ? "No database" : Sql.Database!;
+
+    private bool Disabled => !Sql.IsConnected || !Sql.CanChangeDatabase || IsRunning || _busy;
+
+    private string Title =>
+        !Sql.IsConnected ? "Connect to SQL Server to choose a database"
+        : !Sql.CanChangeDatabase ? "Switching database needs a newer engine"
+        : IsRunning ? "The database cannot change while a query runs"
+        : "Change the database (the connection, its #temp tables and SET options are kept)";
+
+    protected override void OnInitialized() => Sql.StateChanged += OnStateChanged;
+
+    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task OpenAsync(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
+    {
+        if (Disabled) return;
+        _error = null;
+        _busy = true;
+        _x = e.ClientX;
+        _y = e.ClientY + 12;
+        StateHasChanged();
+        var (ok, databases, error) = await Sql.ListDatabasesForSessionAsync(CancellationToken.None);
+        _busy = false;
+        if (!ok)
+        {
+            _error = error ?? "Could not list databases.";
+            StateHasChanged();
+            return;
+        }
+        var current = Sql.Database;
+        var names = new List<string>();
+        if (!string.IsNullOrEmpty(current) && !databases.Contains(current, StringComparer.OrdinalIgnoreCase)) names.Add(current!);
+        names.AddRange(databases);
+        _menu = names.Select(name => new MenuItem
+        {
+            Label = name,
+            IsChecked = string.Equals(name, current, StringComparison.OrdinalIgnoreCase),
+            OnSelect = () => SwitchAsync(name),
+        }).ToList();
+        StateHasChanged();
+    }
+
+    private async Task SwitchAsync(string database)
+    {
+        _menu = null;
+        if (string.Equals(database, Sql.Database, StringComparison.OrdinalIgnoreCase)) return;
+        _busy = true;
+        StateHasChanged();
+        var (ok, error, wasReset) = await Sql.ChangeDatabaseAsync(database, CancellationToken.None);
+        _busy = false;
+        if (!ok) _error = error ?? "Could not switch database.";
+        else if (wasReset) Notifications.Notify($"Switched to {database}. The connection was reopened: #temp tables and SET options were lost.", NotificationKind.Warning);
+        StateHasChanged();
+    }
+
+    public void Dispose() => Sql.StateChanged -= OnStateChanged;
+}

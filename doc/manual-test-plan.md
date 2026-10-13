@@ -259,10 +259,10 @@
 | Field | Value |
 |---|---|
 | **TC-ID** | TC-LOG-001 |
-| **Description** | Log Viewer dialog opens and loads latest log file |
+| **Description** | Log Viewer dialog opens on the newest day with every process's log merged |
 | **Steps** | 1. Click Tools → AKML SQL → View Logs. |
-| **Test Data** | AKML SQL must have been used (log entries exist in `%AppData%\AKML SQL\logs\`) |
-| **Expected Result** | LogViewerDialog opens. Dropdown shows available log files. Grid populated with timestamped entries. |
+| **Test Data** | AKML SQL must have been used (log entries exist in `%AppData%\AKML SQL\logs\`), ideally after an engine error such as a failed AI provider test |
+| **Expected Result** | LogViewerDialog opens. The File dropdown is preselected on "All logs — YYYY-MM-DD (n files)" when the day has several files, followed by each file. Grid is newest first; the Source column shows SSMS / Engine / Updater (or the file name for entries written by older builds). The engine's error is on the first page with Level = ERR. |
 | **Actual Result** | |
 | **Pass/Fail** | |
 

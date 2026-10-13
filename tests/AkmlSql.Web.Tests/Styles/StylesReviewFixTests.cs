@@ -17,16 +17,24 @@ namespace AkmlSql.Web.Tests.Styles;
 /// work or show the wrong thing: a click on the open style, a failed "Save as", an import over
 /// unsaved edits, an engine that fails to list its styles, and an engine that connects after the
 /// editor has already picked its style.
+/// Spec 041 (T185, R59, SC-012): the page asks through the in-app dialog, never the browser's confirm/prompt.
 /// </summary>
 public sealed class StylesReviewFixTests : BunitContext
 {
     private const string Mine = "Mine";
 
+    // Confirmations are declined and prompts cancelled unless a test answers them.
+    private readonly FakeDialogService _dialogs = new() { ConfirmAnswer = _ => false, PromptAnswer = _ => null };
+
     public StylesReviewFixTests()
     {
         Services.AddSingleton<IFormatterService>(new FormatterService());
-        JSInterop.Mode = JSRuntimeMode.Loose;   // confirm() answers false, prompt() null, unless set up
+        Services.AddSingleton<IDialogService>(_dialogs);
+        JSInterop.Mode = JSRuntimeMode.Loose;
     }
+
+    private void NoBrowserPopUp() =>
+        Assert.DoesNotContain(JSInterop.Invocations, i => i.Identifier is "confirm" or "prompt" or "alert");
 
     private ProfileStore BrowserStore()
     {
@@ -63,17 +71,26 @@ public sealed class StylesReviewFixTests : BunitContext
 
         Assert.NotEmpty(page.FindAll("[data-testid=style-dirty]"));
         Assert.True(page.Find("[data-testid='option-lists.placeCommasBeforeItems']").HasAttribute("checked"));
-        Assert.Empty(JSInterop.Invocations.Where(i => i.Identifier == "confirm"));
+        Assert.Empty(_dialogs.Confirms);
+        NoBrowserPopUp();
     }
 
     [Fact]
     public void A_failed_save_as_keeps_the_edits_unsaved()
     {
         BrowserStore();
-        JSInterop.Setup<string?>("prompt", _ => true).SetResult("Khamis Style");   // a name that is taken
+        _dialogs.PromptAnswer = _ => "Khamis Style";   // a name that is taken
         var page = OpenWithEdit(Mine);
 
         page.Find("[data-testid=style-saveas]").Click();
+
+        var prompt = Assert.Single(_dialogs.Prompts);
+        Assert.Equal("Save style as", prompt.Title);
+        Assert.Equal("Name", prompt.Label);
+        Assert.Equal("Save", prompt.ConfirmLabel);
+        Assert.Equal("Enter a name.", prompt.Validate!("  "));
+        Assert.Null(prompt.Validate("Copy"));
+        NoBrowserPopUp();
 
         page.WaitForAssertion(() => Assert.Contains("already", page.Find("[data-testid=styles-status]").TextContent));
         Assert.NotEmpty(page.FindAll("[data-testid=style-dirty]"));
@@ -91,7 +108,11 @@ public sealed class StylesReviewFixTests : BunitContext
         var json = SqlPromptStyleDocument.CreateDefault("Imported").ToJson();
         page.FindComponent<InputFile>().UploadFiles(InputFileContent.CreateFromText(json, "imported.json"));
 
-        page.WaitForAssertion(() => Assert.Single(JSInterop.Invocations.Where(i => i.Identifier == "confirm")));
+        page.WaitForAssertion(() => Assert.Single(_dialogs.Confirms));
+        var confirm = _dialogs.Confirms[0];
+        Assert.Equal("Discard", confirm.ConfirmLabel);
+        Assert.True(confirm.Destructive);
+        NoBrowserPopUp();
         Assert.Equal(before, (await store.ListAsync()).Count);
         Assert.Equal(Mine, page.Find("[data-testid=style-name]").TextContent);
         Assert.NotEmpty(page.FindAll("[data-testid=style-dirty]"));
@@ -101,7 +122,7 @@ public sealed class StylesReviewFixTests : BunitContext
     public void Importing_over_unsaved_edits_proceeds_when_confirmed()
     {
         BrowserStore();
-        JSInterop.Setup<bool>("confirm", _ => true).SetResult(true);
+        _dialogs.ConfirmAnswer = _ => true;
         var page = OpenWithEdit(Mine);
 
         var json = SqlPromptStyleDocument.CreateDefault("Imported").ToJson();
@@ -294,7 +315,7 @@ public sealed class StylesReviewFixTests : BunitContext
     {
         var (engine, store, _) = await EngineWithStyleAsync(Mine);
         Services.AddSingleton<IProfileStore>(store);
-        JSInterop.Setup<string?>("prompt", _ => true).SetResult("Copy");
+        _dialogs.PromptAnswer = _ => "Copy";
         var page = OpenWithEdit(Mine);
 
         // The copy is saved and read back, then opening it times out.
@@ -306,5 +327,45 @@ public sealed class StylesReviewFixTests : BunitContext
         Assert.Contains("Created", page.Find("[data-testid=styles-status]").TextContent);
         Assert.Equal(Mine, page.Find("[data-testid=style-name]").TextContent);
         Assert.NotEmpty(page.FindAll("[data-testid=style-dirty]"));
+    }
+
+    // ── spec 041 (T185): every style action asks in the app ──────────────────
+
+    [Fact]
+    public async Task Deleting_a_style_asks_a_destructive_question_and_declining_keeps_it()
+    {
+        var store = BrowserStore();
+        var page = Render<StylesPage>();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("[data-testid=style-row]")));
+        Row(page, Mine).Click();
+        page.WaitForAssertion(() => Assert.Equal(Mine, page.Find("[data-testid=style-name]").TextContent));
+
+        page.Find("[data-testid=style-delete]").Click();
+
+        var confirm = Assert.Single(_dialogs.Confirms);
+        Assert.Equal("Delete style", confirm.Title);
+        Assert.Contains("“Mine”", confirm.Message);
+        Assert.Equal("Delete", confirm.ConfirmLabel);
+        Assert.True(confirm.Destructive);
+        Assert.Contains(await store.ListAsync(), r => r.Name == Mine);
+        NoBrowserPopUp();
+    }
+
+    [Fact]
+    public void A_new_style_is_named_in_the_app_and_cancelling_creates_nothing()
+    {
+        BrowserStore();
+        var page = Render<StylesPage>();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("[data-testid=style-row]")));
+        var rows = page.FindAll("[data-testid=style-row]").Count;
+
+        page.Find("[data-testid=style-new]").Click();
+
+        var prompt = Assert.Single(_dialogs.Prompts);
+        Assert.Equal("New style", prompt.Title);
+        Assert.Equal("Create", prompt.ConfirmLabel);
+        Assert.Equal("My style", prompt.InitialValue);
+        Assert.Equal(rows, page.FindAll("[data-testid=style-row]").Count);
+        NoBrowserPopUp();
     }
 }

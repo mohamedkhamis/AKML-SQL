@@ -65,14 +65,42 @@ internal static class EditorSessionKeys
     /// helper (mirrors <c>WebHistoryLogic</c>) so this exact failure mode is unit-testable without
     /// standing up a full render of the Editor page.
     /// </summary>
-    internal static EditorSessionRecord BuildTextChangeRecord(string sessionKey, string documentText, string? activeProfileId) =>
+    /// <para>Spec 041 (R64): the document's name, modified state and default-name counter are threaded through
+    /// the same way.</para>
+    internal static EditorSessionRecord BuildTextChangeRecord(string sessionKey, string documentText, string? activeProfileId,
+        string? documentName = null, bool isModified = false, int nextDefaultNumber = 1) =>
         new()
         {
             DocumentText = documentText,
             CursorOffset = 0,
             ActiveProfileId = activeProfileId,
             SessionKey = sessionKey,
+            DocumentName = documentName,
+            IsModified = isModified,
+            NextDefaultNumber = nextDefaultNumber,
         };
+
+    /// <summary>
+    /// Spec 041 (R64, FR-072) — New query and Open: a fresh record for a new document, with a NEW session key (the
+    /// document boundary, so earlier history entries keep their names). "Reset editor session" keeps
+    /// <see cref="IEditorSessionStore.ClearAsync"/>. Returns the new key.
+    /// </summary>
+    internal static async Task<string> StartDocumentAsync(IEditorSessionStore store, string name, string text, int nextDefaultNumber)
+    {
+        var previous = await store.RestoreAsync().ConfigureAwait(false);
+        var key = Guid.NewGuid().ToString("N");
+        await store.SaveAsync(new EditorSessionRecord
+        {
+            DocumentText = text ?? string.Empty,
+            CursorOffset = 0,
+            ActiveProfileId = previous?.ActiveProfileId,
+            SessionKey = key,
+            DocumentName = name,
+            IsModified = false,
+            NextDefaultNumber = Math.Max(1, nextDefaultNumber),
+        }).ConfigureAwait(false);
+        return key;
+    }
 
     /// <summary>
     /// Rewrites the persisted DocumentText via read-modify-write, preserving whatever SessionKey (and

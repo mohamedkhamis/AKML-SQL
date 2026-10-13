@@ -69,6 +69,29 @@ public interface ISqlConnectionService
     /// has the live document. No-op when not connected or the bridge is closed.
     /// </summary>
     Task SendDocumentAsync(string documentText, CancellationToken ct);
+
+    // ── Spec 041 (research R25–R28) — the toolbar's database selector ────────────────────────────────────
+    // Default members: a fake that does not implement them reads "not available", as an older engine does.
+
+    /// <summary>The connection uses Windows authentication (kept from connect; the guard needs it).</summary>
+    bool WindowsAuth => true;
+
+    /// <summary>The SQL Server login for SQL Server authentication, null for Windows; never the password.</summary>
+    string? Login => null;
+
+    /// <summary>The database selector can work: connected, and the engine advertises <c>session.database.v1</c>.</summary>
+    bool CanChangeDatabase => false;
+
+    /// <summary>The databases of the connected server, listed with the connection the engine holds.</summary>
+    Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesForSessionAsync(CancellationToken ct) =>
+        Task.FromResult<(bool, IReadOnlyList<string>, string?)>((false, Array.Empty<string>(), "Switching database needs a newer engine."));
+
+    /// <summary>Switch the session's database on its connection (#temp tables and SET options survive).</summary>
+    Task<(bool Ok, string? Error, bool ConnectionWasReset)> ChangeDatabaseAsync(string database, CancellationToken ct) =>
+        Task.FromResult<(bool, string?, bool)>((false, "Switching database needs a newer engine.", false));
+
+    /// <summary>The database an execute ended in (a script's <c>USE</c>); raises <see cref="StateChanged"/> on a change.</summary>
+    void ReportCurrentDatabase(string? database) { }
 }
 
 internal sealed class SqlConnectionService : ISqlConnectionService
@@ -88,6 +111,18 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     public bool IsConnected { get; private set; }
     public string? Server { get; private set; }
     public string? Database { get; private set; }
+
+    /// <summary>Spec 041: kept from connect — the guard judges a switch with the same authentication.</summary>
+    public bool WindowsAuth { get; private set; } = true;
+
+    /// <summary>Spec 041: the SQL Server login (shown in the status bar); never the password.</summary>
+    public string? Login { get; private set; }
+
+    /// <summary>The engine capability the database selector needs (contracts/ipc.md).</summary>
+    public const string CapabilitySessionDatabase = "session.database.v1";
+
+    public bool CanChangeDatabase =>
+        IsConnected && _bridge.State == BridgeState.Open && Array.IndexOf(_bridge.EngineCapabilities ?? Array.Empty<string>(), CapabilitySessionDatabase) >= 0;
 
     public event Action? StateChanged;
 
@@ -126,6 +161,8 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
         Server = server.Trim();
         Database = database.Trim();
+        WindowsAuth = windowsAuth;
+        Login = windowsAuth ? null : user?.Trim();
         IsConnected = true;
         _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
             $"Requested engine connect to {Server}/{Database} (auth={(windowsAuth ? "Windows" : "SQL")}). Schema loads asynchronously.");
@@ -218,8 +255,66 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         IsConnected = false;
         Server = null;
         Database = null;
+        Login = null;
+        WindowsAuth = true;
         StateChanged?.Invoke();
         return Task.CompletedTask;
+    }
+
+    // ── Spec 041 (research R25–R28) — the database selector ─────────────────────────────────────────────
+
+    public async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesForSessionAsync(CancellationToken ct)
+    {
+        if (!IsConnected || Server == null) return (false, Array.Empty<string>(), "Connect to SQL Server first.");
+        // The same guard as connect, first — the engine lists under the session's identity.
+        var (ok, error) = ValidateTarget(Server, Database ?? "master", WindowsAuth);
+        if (!ok) return (false, Array.Empty<string>(), error);
+        if (!CanChangeDatabase) return (false, Array.Empty<string>(), "Switching database needs a newer engine.");
+        try
+        {
+            var response = await _bridge.SendAsync<ListDatabasesRequest, ListDatabasesResponse>(
+                MessageTypes.ListDatabases, new ListDatabasesRequest { SessionId = SessionId }, ct).ConfigureAwait(false);
+            if (response == null) return (false, Array.Empty<string>(), "The engine did not return a database list.");
+            return response.Ok
+                ? (true, response.Databases ?? new List<string>(), null)
+                : (false, Array.Empty<string>(), string.IsNullOrEmpty(response.ErrorMessage) ? "Could not list databases." : response.ErrorMessage);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"ListDatabases (session) failed: {ex.Message}");
+            return (false, Array.Empty<string>(), "Could not reach the engine: " + ex.Message);
+        }
+    }
+
+    public async Task<(bool Ok, string? Error, bool ConnectionWasReset)> ChangeDatabaseAsync(string database, CancellationToken ct)
+    {
+        if (!IsConnected || Server == null) return (false, "Connect to SQL Server first.", false);
+        var (ok, error) = ValidateTarget(Server, database ?? string.Empty, WindowsAuth);
+        if (!ok) return (false, error, false);
+        if (!CanChangeDatabase) return (false, "Switching database needs a newer engine.", false);
+        try
+        {
+            var response = await _bridge.SendAsync<ChangeDatabaseRequest, ChangeDatabaseResponse>(
+                MessageTypes.ChangeDatabase, new ChangeDatabaseRequest { SessionId = SessionId, DatabaseName = database!.Trim() }, ct).ConfigureAwait(false);
+            if (response == null) return (false, "The engine did not answer.", false);
+            if (!response.Ok) return (false, string.IsNullOrEmpty(response.ErrorMessage) ? "Could not switch database." : response.ErrorMessage, false);
+            _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Switched to {response.DatabaseName}" + (response.ConnectionWasReset ? " (the connection was reopened)." : "."));
+            ReportCurrentDatabase(string.IsNullOrEmpty(response.DatabaseName) ? database!.Trim() : response.DatabaseName);
+            return (true, null, response.ConnectionWasReset);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"ChangeDatabase failed: {ex.Message}");
+            return (false, "Could not reach the engine: " + ex.Message, false);
+        }
+    }
+
+    public void ReportCurrentDatabase(string? database)
+    {
+        if (!IsConnected || string.IsNullOrEmpty(database)) return;
+        if (string.Equals(Database, database, StringComparison.Ordinal)) return;
+        Database = database;
+        StateChanged?.Invoke();
     }
 
     public async Task SendDocumentAsync(string documentText, CancellationToken ct)
@@ -259,7 +354,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     /// (<c>BridgeSqlTargetGuard</c>); this copy exists to explain the refusal before a round trip.
     /// </para>
     /// </summary>
-    private static (bool Ok, string? Error) ValidateTarget(string server, string database, bool windowsAuth)
+    internal static (bool Ok, string? Error) ValidateTarget(string server, string database, bool windowsAuth)
     {
         if (string.IsNullOrWhiteSpace(server))
             return (false, "Server is required.");

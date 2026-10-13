@@ -25,8 +25,8 @@ namespace AkmlSql.Web.E2E.Tests;
 /// </summary>
 public sealed class SiteScreenshotTour(ITestOutputHelper output)
 {
-    /// <summary>The deployed web edition (IIS site "AkmlSqlWeb", bound to port 80 with no host header).</summary>
-    private const string WebUrl = "http://localhost/";
+    /// <summary>The deployed web edition; set AKML_DEPLOYED_WEB_URL to the IIS site's actual binding.</summary>
+    private static string WebUrl => Environment.GetEnvironmentVariable("AKML_DEPLOYED_WEB_URL") ?? "http://localhost/";
 
     /// <summary>Matches the dimensions the site's img tags already declare, so no layout shifts.</summary>
     private const int ShotWidth = 1920;
@@ -39,7 +39,7 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
     public async Task Explore_the_deployed_web_edition()
     {
         using var playwright = await Playwright.CreateAsync();
-        await using var browser = await playwright.Chromium.LaunchAsync();
+        await using var browser = await playwright.Chromium.LaunchForTestsAsync();
         var context = await browser.NewContextAsync(new()
         {
             ViewportSize = new ViewportSize { Width = ShotWidth, Height = ShotHeight },
@@ -96,7 +96,7 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
         // this Chromium refuses the wss:// upgrade and the handshake sits at "Connecting" forever
         // with nothing in the UI to say why. A real user clicks through the browser's warning once;
         // an automated browser has to be told.
-        await using var browser = await playwright.Chromium.LaunchAsync(new()
+        await using var browser = await playwright.Chromium.LaunchForTestsAsync(new()
         {
             Args = ["--ignore-certificate-errors"],
         });
@@ -242,10 +242,13 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
         await page.ClickAsync("nav >> text=Settings");
         await page.WaitForTimeoutAsync(1_500);
 
-        await page.Locator("label", new() { HasTextString = "Dark" }).First.ClickAsync();
+        // Spec 041 (R43): the theme is Settings › General's select; pairing is in Settings › Connections.
+        await page.SelectOptionAsync("#setting-theme-control", "Dark");
         await page.WaitForTimeoutAsync(800);
         output.WriteLine("Theme set to dark.");
 
+        await page.ClickAsync("[data-testid='settings-nav-connections']");
+        await page.WaitForTimeoutAsync(800);
         var addButton = page.Locator("button", new() { HasTextString = "Add" }).First;
         await addButton.ClickAsync();
         await page.WaitForTimeoutAsync(800);

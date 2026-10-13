@@ -50,6 +50,16 @@ namespace AkmlSql.Core.Ipc.Messages
         /// records nothing, preserving the existing localhost-only behaviour.
         /// </summary>
         [Key(7)] public string? ServerTlsThumbprint { get; set; }
+
+        /// <summary>
+        /// Spec 041 (R29, FR-063): how the engine runs — <c>ide</c> (started by SSMS over the named pipe, as the
+        /// signed-in user), <c>service</c> (the Windows service), <c>console</c> (an interactive <c>--web</c>); null
+        /// from an older engine. The web calls the engine's styles "Shared with SSMS" only for <c>ide</c>.
+        /// </summary>
+        [Key(8)] public string? HostKind { get; set; }
+
+        /// <summary>Spec 041 (R29): the account the engine runs as (shown on hover and in Diagnostics).</summary>
+        [Key(9)] public string? RunsAs { get; set; }
     }
 
     /// <summary>

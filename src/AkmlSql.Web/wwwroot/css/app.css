@@ -8,6 +8,10 @@
 /* Spec 030 — Phase 5: results grid + inline-CRUD chrome (token-only). @import must
    precede all rules, so it sits at the very top of the stylesheet body. */
 @import url("components/results-grid.css");
+/* Spec 041 (R61): one shell style — buttons, dialogs, fields, page headers, tables, tabs, menus, toasts. */
+@import url("components/shell.css");
+/* Spec 041 (R45): the Settings page layout and its preference rows. */
+@import url("components/settings.css");
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
 html, body {
@@ -38,14 +42,8 @@ a:hover { color: var(--akml-accent-primaryhover); }
 /* Don't double-ring elements that already paint their own focus treatment. */
 .cm-editor.cm-focused { outline: none; }
 
-/* ── Semantic aliases (theme-delegating; keep the codegen'd theme files untouched) ──
-   The editor-surface token several components reference (EditorComponent .akml-editor,
-   RefactorPreviewPanel) was never defined → an undefined var() with no fallback rendered the
-   editor wrapper transparent. Alias it to the panel surface so it resolves in every theme
-   (light/dark/HC) via surface-panel; CodeMirror still paints its own background on top. */
-:root {
-    --akml-surface-editor: var(--akml-surface-panel);
-}
+/* --akml-surface-editor (EditorComponent .akml-editor, RefactorPreviewPanel) is a real token since
+   spec 041 (docs/theme-tokens.json Surface.Editor); the alias that used to stand in for it is gone. */
 
 /* ── Motion (spec: 100-150ms micro, 200-250ms panel slides; reduced-motion off) ── */
 :root {
@@ -54,7 +52,7 @@ a:hover { color: var(--akml-accent-primaryhover); }
     --akml-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 /* ── ⌘P command palette (spec 030) ─────────────────────────────────────────
@@ -71,3 +69,59 @@ a:hover { color: var(--akml-accent-primaryhover); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--akml-border-strong); border-radius: var(--akml-scalar-radius-pill); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* Spec 041 (T205, R66, FR-088) — the start-up screen index.html shows until Blazor renders, and the crash bar
+   Blazor shows on an unhandled error. Here, not in a razor <style> block: they exist before Blazor does. */
+.akml-boot {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--akml-scalar-spacing-m);
+    background-color: var(--akml-surface-canvas);
+    color: var(--akml-text-secondary);
+    font-family: var(--akml-type-chrome-family);
+    font-size: var(--akml-type-chrome-size);
+}
+.akml-boot-title {
+    margin: 0;
+    color: var(--akml-text-primary);
+    font-family: var(--akml-type-chrometitle-family);
+    font-size: 18px;
+    font-weight: var(--akml-type-chrometitle-weight);
+}
+.akml-boot-text { margin: 0; }
+.akml-boot-spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--akml-border-subtle);
+    border-top-color: var(--akml-accent-primary);
+    border-radius: 50%;
+    animation: akml-boot-spin 0.9s linear infinite;
+}
+@keyframes akml-boot-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .akml-boot-spinner { animation: none; }
+}
+
+/* Blazor sets an inline display:block on this element when it fails; until then it is hidden. */
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2000;
+    padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-l);
+    color: var(--akml-text-ondanger);
+    background-color: var(--akml-status-danger);
+    font-family: var(--akml-type-chrome-family);
+    font-size: var(--akml-type-chrome-size);
+}
+#blazor-error-ui .reload {
+    margin-left: var(--akml-scalar-spacing-m);
+    color: inherit;
+    font-weight: var(--akml-type-chrometitle-weight);
+}

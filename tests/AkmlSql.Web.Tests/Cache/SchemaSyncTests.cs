@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
@@ -237,5 +238,102 @@ public sealed class SchemaSyncTests
         Assert.NotNull(after.PhaseB);
         Assert.Equal(phaseBBlob, after.PhaseB);
         Assert.Equal("PhaseB:1", after.Checksum);
+    }
+
+    // ── Spec 041 (T184, research R40, N27, FR-093) — Refresh reloads from the server ─────────────────────
+
+    /// <summary>An open bridge over a fake engine whose checksum answers come from <paramref name="checksums"/> in
+    /// turn (the last repeats); every request type is recorded in order.</summary>
+    private static async Task<(EngineBridge Bridge, List<int> Requests)> OpenEngineAsync(params string[] checksums)
+    {
+        var requests = new List<int>();
+        var answered = 0;
+        byte[] Reply(RpcMessage envelope, int type, object payload) => MessagePackSerializer.Serialize(new RpcMessage
+        {
+            MessageType = type, RequestId = envelope.RequestId, Payload = MessagePackSerializer.Serialize(payload.GetType(), payload),
+        });
+        var phase = MessagePackSerializer.Serialize(new SchemaPhasePayload { DatabaseName = "db", Phase = 2 });
+        var socket = new FakeBridgeWebSocket(frame =>
+        {
+            var envelope = MessagePackSerializer.Deserialize<RpcMessage>(frame);
+            lock (requests) requests.Add(envelope.MessageType);
+            return envelope.MessageType switch
+            {
+                MessageTypes.HandshakeRequest => Reply(envelope, MessageTypes.HandshakeResponse,
+                    new HandshakeResponse { Status = HandshakeStatus.Ok, EngineVersion = "1.0.0", ChosenProtocolVersion = 1 }),
+                MessageTypes.SchemaChecksumRequest => Reply(envelope, MessageTypes.SchemaChecksumResponse,
+                    new SchemaChecksumResponse { HasConnection = true, Checksum = checksums[Math.Min(answered++, checksums.Length - 1)] }),
+                MessageTypes.SchemaPhaseARequest => Reply(envelope, MessageTypes.SchemaPhaseAResponse,
+                    new SchemaPhaseAResponse { HasConnection = true, PhaseA = phase, Checksum = "PhaseB:1" }),
+                MessageTypes.SchemaPhaseBRequest => Reply(envelope, MessageTypes.SchemaPhaseBResponse,
+                    new SchemaPhaseBResponse { HasConnection = true, PhaseB = phase, Checksum = "PhaseB:1" }),
+                _ => null!,
+            };
+        });
+        var bridge = new EngineBridge(() => socket, new DiagnosticsRingBuffer(new InMemoryIndexedDbAdapter()));
+        await bridge.ConnectAsync(new EngineConnection { Id = "c1", Host = "127.0.0.1", Port = 5081, IsLocalhost = true },
+            bearerToken: null, pairingPin: null, ct: CancellationToken.None);
+        return (bridge, requests);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_waits_for_the_engine_to_settle_then_fetches_both_phases_and_raises_drift_even_without_a_change()
+    {
+        var (bridge, requests) = await OpenEngineAsync("PhaseB:1", "NotLoaded:0", "PhaseA:1", "PhaseB:1");   // the first answers the set-up poll
+        var cache = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
+        await cache.SetAsync(new SchemaSnapshot { ServerCanonicalIdentity = "s", DatabaseName = "db", Checksum = "PhaseB:1" });
+        var sync = new SchemaSync(cache, bridge, new DiagnosticsRingBuffer(new InMemoryIndexedDbAdapter())) { SettlePollInterval = TimeSpan.FromMilliseconds(1) };
+        await sync.PollNowAsync("s1", "s", "db");   // same checksum: no drift, nothing fetched
+        requests.Clear();
+        ChecksumDriftNotice? raised = null;
+        sync.ChecksumDrifted += n => raised = n;
+
+        await sync.RefreshAsync();
+
+        Assert.Equal(new[]
+        {
+            MessageTypes.SchemaChecksumRequest, MessageTypes.SchemaChecksumRequest, MessageTypes.SchemaChecksumRequest,
+            MessageTypes.SchemaPhaseARequest, MessageTypes.SchemaPhaseBRequest,
+        }, requests);
+        var after = await cache.GetAsync("s", "db");
+        Assert.NotNull(after!.PhaseA);
+        Assert.NotNull(after.PhaseB);
+        Assert.Equal(new ChecksumDriftNotice("s", "db", "PhaseB:1"), raised);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_stops_waiting_after_its_limit_and_fetches_anyway()
+    {
+        var (bridge, requests) = await OpenEngineAsync("PhaseA:1");   // never settles
+        var cache = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
+        var sync = new SchemaSync(cache, bridge, new DiagnosticsRingBuffer(new InMemoryIndexedDbAdapter()))
+        {
+            SettlePollInterval = TimeSpan.FromMilliseconds(1),
+            SettleTimeout = TimeSpan.FromMilliseconds(30),
+        };
+        await sync.PollNowAsync("s1", "s", "db");
+        requests.Clear();
+
+        await sync.RefreshAsync();
+
+        Assert.Contains(MessageTypes.SchemaPhaseARequest, requests);
+        Assert.Contains(MessageTypes.SchemaPhaseBRequest, requests);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_re_arms_the_poll_and_does_nothing_else_when_not_started_or_offline()
+    {
+        var (sync, raw, _) = Build();   // closed bridge
+        var before = raw.LastEditorActivity;
+        await Task.Delay(5);
+        var raised = 0;
+        sync.ChecksumDrifted += _ => raised++;
+
+        await sync.RefreshAsync();
+        await raw.PollNowAsync("s1", "s", "db");
+        await sync.RefreshAsync();
+
+        Assert.True(raw.LastEditorActivity > before);
+        Assert.Equal(0, raised);
     }
 }

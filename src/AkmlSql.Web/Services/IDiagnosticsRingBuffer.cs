@@ -49,6 +49,8 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
     private readonly IIndexedDbAdapter _store;
     private readonly ConcurrentQueue<DiagnosticEntry> _entries = new();
     private int _pendingFlushes;
+    // Spec 041 (N20): the editor and Settings › Diagnostics both restore; only the first restore appends.
+    private int _restored;
 
     public DiagnosticsRingBuffer(IIndexedDbAdapter store)
     {
@@ -87,6 +89,7 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
 
     public async Task RestoreAsync()
     {
+        if (Interlocked.Exchange(ref _restored, 1) != 0) return;
         try
         {
             var raw = await _store.GetAsync(StoreNames.Diagnostics, PersistenceKey).ConfigureAwait(false);

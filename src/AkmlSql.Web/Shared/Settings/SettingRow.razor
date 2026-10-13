@@ -1,0 +1,72 @@
+@*
+    Spec 041 (research R45, R55, FR-060) — one simple preference on the Settings page: its label, the control
+    (child content) and a line of help under both. Hidden while the cascading SettingsFilter does not match it
+    (by its catalog entry when it has one, else by its own label and help).
+*@
+@using AkmlSql.Web.Services.Settings
+
+@if (Visible)
+{
+    <div class="akml-setting akml-setting--@Kind" data-setting="@Id" data-testid="@($"setting-{Id}")">
+        @if (Kind == "block")
+        {
+            @* A table or a form: a heading over it, not a <label> for one control. Deliberately no aria-labelledby
+               on the block: its controls carry their own labels, and a labelled wrapper would answer label
+               lookups meant for them ("Providers" would also match a search for the "Provider" select). *@
+            <h3 class="akml-setting-label akml-settings-subtitle" id="@LabelId">@LabelText</h3>
+            <div class="akml-setting-control akml-setting-block">@ChildContent</div>
+        }
+        else
+        {
+            <label class="akml-setting-label" for="@ControlId">@LabelText</label>
+            <div class="akml-setting-control">@ChildContent</div>
+        }
+        @if (!string.IsNullOrEmpty(HelpText))
+        {
+            <p class="akml-setting-help" id="@HelpId">@HelpText</p>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The catalog id; the row is <c>setting-{Id}</c>.</summary>
+    [Parameter, EditorRequired] public string Id { get; set; } = string.Empty;
+
+    /// <summary>The label; the catalog entry's when not given (one wording for the row and the filter).</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>The help line; the catalog entry's when not given.</summary>
+    [Parameter] public string? Help { get; set; }
+
+    private string LabelText => Label ?? SettingsCatalog.Find(Id)?.Label ?? Id;
+
+    private string? HelpText => Help ?? SettingsCatalog.Find(Id)?.Help;
+
+    /// <summary>A layout hint: <c>switch</c>, <c>number</c>, <c>select</c>, <c>action</c> or <c>block</c>
+    /// (a list or table spanning the row).</summary>
+    [Parameter] public string Kind { get; set; } = "select";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [CascadingParameter] public SettingsFilter? Filter { get; set; }
+
+    /// <summary>The id of the control inside, for the label's <c>for</c>: <c>setting-{Id}-control</c>.</summary>
+    public string ControlId => $"setting-{Id}-control";
+
+    private string LabelId => $"setting-{Id}-label";
+
+    /// <summary>The help line's id, for the control's <c>aria-describedby</c>.</summary>
+    public string HelpId => $"setting-{Id}-help";
+
+    private bool Visible
+    {
+        get
+        {
+            var filter = Filter ?? SettingsFilter.None;
+            if (!filter.IsActive) return true;
+            var entry = SettingsCatalog.Find(Id);
+            if (entry != null && filter.TitleMatches(SettingsCatalog.Resolve(entry.SectionId))) return true;
+            return entry != null ? filter.Matches(entry) : filter.Matches(LabelText, HelpText);
+        }
+    }
+}

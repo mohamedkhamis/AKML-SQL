@@ -60,7 +60,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// filling the rest of the line ("Brackets ───────"). Rows added after the header are
         /// indented until the next page build resets the factory.
         /// </summary>
-        public void AddGroupHeader(StackPanel panel, string text)
+        public void AddGroupHeader(StackPanel panel, string text) => AddGroupHeader(panel, text, null, null);
+
+        /// <summary>
+        /// As <see cref="AddGroupHeader(StackPanel, string)"/>, with an optional element right
+        /// after the label (a status chip) and an optional element at the line's right end (a
+        /// button row); the rule fills whatever is left between them. The 2026-10 AI page puts
+        /// the agent list's actions on its "AI agents" header line this way.
+        /// </summary>
+        public void AddGroupHeader(StackPanel panel, string text, UIElement? afterLabel, UIElement? trailing)
         {
             var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 16, 0, 8) };
 
@@ -68,22 +76,78 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 Text = text,
                 FontSize = 12,
-                Foreground = _theme.FgPrimary
+                Foreground = _theme.FgPrimary,
+                VerticalAlignment = VerticalAlignment.Center
             };
             DockPanel.SetDock(label, Dock.Left);
             header.Children.Add(label);
+
+            if (afterLabel != null)
+            {
+                DockPanel.SetDock(afterLabel, Dock.Left);
+                header.Children.Add(afterLabel);
+            }
+
+            if (trailing != null)
+            {
+                DockPanel.SetDock(trailing, Dock.Right);
+                header.Children.Add(trailing);
+            }
 
             header.Children.Add(new Border
             {
                 Height = 1,
                 Background = _theme.Sep,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 2, 0, 0)
+                Margin = new Thickness(8, 2, trailing != null ? 8 : 0, 0)
             });
 
             panel.Children.Add(header);
-            _groupIndent = 20;
+            _groupIndent = GroupIndentWidth;
         }
+
+        /// <summary>SQL Prompt's indent of the rows under a group header.</summary>
+        internal const double GroupIndentWidth = 20;
+
+        /// <summary>The indent rows take under a group header (0 before the first header).</summary>
+        internal double GroupIndent => _groupIndent;
+
+        /// <summary>
+        /// Two equal columns for runs of short rows (the 2026-10 "fitted pages"): a Grid appended
+        /// to <paramref name="panel"/>. Rows added to either column keep the group indent, so a
+        /// builder alternates its Add* calls between <c>Left</c> and <c>Right</c>.
+        /// </summary>
+        public (StackPanel Left, StackPanel Right) AddColumns(StackPanel panel)
+        {
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var left = new StackPanel();
+            var right = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
+            Grid.SetColumn(right, 1);
+            grid.Children.Add(left);
+            grid.Children.Add(right);
+            panel.Children.Add(grid);
+            return (left, right);
+        }
+
+        /// <summary>
+        /// The long explanation a short description no longer carries, as the row's tooltip
+        /// (shown on disabled rows too, so a greyed child still explains itself).
+        /// </summary>
+        public void Tip(FrameworkElement row, string text)
+        {
+            row.ToolTip = text;
+            ToolTipService.SetShowOnDisabled(row, true);
+        }
+
+        /// <summary>
+        /// A row <see cref="Border"/> with explicit padding, for table-style rows that manage
+        /// their own indent (the AI page's feature table). Flashable and searchable like
+        /// <see cref="WrapZebraRow"/>'s rows.
+        /// </summary>
+        internal Border WrapRow(UIElement content, Thickness padding)
+            => new Border { Background = _theme.Transparent, Padding = padding, Child = content };
 
         /// <summary>Vertical whitespace between groups — the group header's inline rule (SQL
         /// Prompt style) replaced the old full-width separator line.</summary>
@@ -94,7 +158,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         /// <summary>Secondary description line under a control — plain weight (the SQL Prompt
         /// reference uses no italics).</summary>
-        private TextBlock MakeDescription(string description) => new TextBlock
+        internal TextBlock MakeDescription(string description) => new TextBlock
         {
             Text = description,
             Foreground = _theme.FgSecondary,
@@ -117,7 +181,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 Text = label,
                 Foreground = _theme.FgPrimary,
-                FontSize = 13
+                FontSize = 13,
+                // A long label in a half-width column (AddColumns) or at the window's 720 px
+                // minimum wraps to a second line instead of clipping.
+                TextWrapping = TextWrapping.Wrap
             };
             contentPanel.Children.Add(labelText);
             TextBlock? descriptionText = null;
@@ -194,7 +261,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 Text = label,
                 Foreground = _theme.FgPrimary,
-                FontSize = 13
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap   // a long label in a half-width column wraps
             };
             headerRow.Children.Add(sliderLabel);
             container.Children.Add(headerRow);
@@ -228,7 +296,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return (container, slider, valueLabel);
         }
 
-        public (StackPanel Row, ComboBox Control) AddDropdown(StackPanel panel, string label, string[] items, string description = "", CheckBox? parent = null)
+        public (StackPanel Row, ComboBox Control) AddDropdown(StackPanel panel, string label, string[] items, string description = "", CheckBox? parent = null, double width = 0)
         {
             var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
@@ -246,6 +314,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             StyleComboBox(combo);
+            if (width > 0)
+            {
+                combo.Width = width;
+                combo.MaxWidth = width;
+            }
 
             // Plain string items — NEVER pre-built ComboBoxItem/TextBlock content. A UIElement as
             // item content makes WPF render the closed selection box as a Rectangle+VisualBrush
@@ -270,7 +343,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return (container, combo);
         }
 
-        public (StackPanel Row, TextBox Control) AddTextInput(StackPanel panel, string label, string description = "", bool isPassword = false, CheckBox? parent = null)
+        public (StackPanel Row, TextBox Control) AddTextInput(StackPanel panel, string label, string description = "", bool isPassword = false, CheckBox? parent = null, bool stretch = false)
         {
             var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
@@ -292,6 +365,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 MinWidth = 300
             };
             if (isPassword) textBox.Tag = "password";
+            if (stretch)
+            {
+                // Fitted form (the 2026-10 AI page): the box ends on the column's right edge
+                // instead of the fixed 300 px, so stacked fields share one edge.
+                textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+                textBox.MinWidth = 0;
+                textBox.MaxWidth = double.PositiveInfinity;
+            }
 
             container.Children.Add(textBox);
 
@@ -313,7 +394,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// matches <see cref="AddTextInput"/>; used for list-style settings edited one entry per line.
         /// </summary>
         public (StackPanel Row, TextBox Control) AddMultilineTextInput(
-            StackPanel panel, string label, string description = "", double height = 90, CheckBox? parent = null)
+            StackPanel panel, string label, string description = "", double height = 90, CheckBox? parent = null, bool stretch = false)
         {
             var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
@@ -338,6 +419,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
             };
+            if (stretch)
+            {
+                // Fitted form: the box fills its column (two boxes side by side on Aliases).
+                textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+                textBox.MinWidth = 0;
+                textBox.MaxWidth = double.PositiveInfinity;
+            }
 
             container.Children.Add(textBox);
 
@@ -409,7 +497,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         }
 
         /// <summary>The label above a dropdown, text or number field.</summary>
-        private TextBlock MakeFieldLabel(string label) => new TextBlock
+        internal TextBlock MakeFieldLabel(string label) => new TextBlock
         {
             Text = label,
             Foreground = _theme.FgPrimary,
@@ -429,7 +517,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// parent. It follows the parent's Checked/Unchecked events, so a page's Load, Restore defaults
         /// and Import all keep it right. No-op without a parent.
         /// </summary>
-        private void ApplyParent(FrameworkElement row, CheckBox? parent, params TextBlock?[] labels)
+        internal void ApplyParent(FrameworkElement row, CheckBox? parent, params TextBlock?[] labels)
         {
             if (parent == null) return;
 

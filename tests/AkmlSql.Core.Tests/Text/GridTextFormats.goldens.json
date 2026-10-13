@@ -1,0 +1,91 @@
+{
+  "headers": [
+    "id",
+    "name",
+    "note",
+    "amount",
+    "name",
+    "flag"
+  ],
+  "rows": [
+    [
+      "1",
+      "alpha",
+      "plain",
+      "12.50",
+      "dup",
+      "True"
+    ],
+    [
+      "2",
+      "O\u0027Brien",
+      "say \u0022hi\u0022",
+      "1,000",
+      "",
+      "false"
+    ],
+    [
+      "3",
+      "comma, inside",
+      "tab\there",
+      "-7",
+      "x",
+      "NULL"
+    ],
+    [
+      "4",
+      "line\r\nbreak",
+      "pipe | bar",
+      "3.0E5",
+      "\u00FCn\u00EFc\u00F6d\u00E9 \u20AC",
+      "0"
+    ],
+    [
+      "NULL",
+      "\u003Ctag\u003E\u0026",
+      "back\\slash",
+      "0x0F",
+      "NULL",
+      "1"
+    ]
+  ],
+  "csv": "id,name,note,amount,name,flag\r\n1,alpha,plain,12.50,dup,True\r\n2,O\u0027Brien,\u0022say \u0022\u0022hi\u0022\u0022\u0022,\u00221,000\u0022,,false\r\n3,\u0022comma, inside\u0022,tab\there,-7,x,NULL\r\n4,\u0022line\r\nbreak\u0022,pipe | bar,3.0E5,\u00FCn\u00EFc\u00F6d\u00E9 \u20AC,0\r\nNULL,\u003Ctag\u003E\u0026,back\\slash,0x0F,NULL,1\r\n",
+  "tsv": "id\tname\tnote\tamount\tname\tflag\r\n1\talpha\tplain\t12.50\tdup\tTrue\r\n2\tO\u0027Brien\tsay \u0022hi\u0022\t1,000\t\tfalse\r\n3\tcomma, inside\ttab\there\t-7\tx\tNULL\r\n4\tline\r\nbreak\tpipe | bar\t3.0E5\t\u00FCn\u00EFc\u00F6d\u00E9 \u20AC\t0\r\nNULL\t\u003Ctag\u003E\u0026\tback\\slash\t0x0F\tNULL\t1\r\n",
+  "json": "[\r\n  {\u0022id\u0022: 1, \u0022name\u0022: \u0022alpha\u0022, \u0022note\u0022: \u0022plain\u0022, \u0022amount\u0022: 12.5, \u0022name\u0022: \u0022dup\u0022, \u0022flag\u0022: true},\r\n  {\u0022id\u0022: 2, \u0022name\u0022: \u0022O\u0027Brien\u0022, \u0022note\u0022: \u0022say \\\u0022hi\\\u0022\u0022, \u0022amount\u0022: 1000, \u0022name\u0022: \u0022\u0022, \u0022flag\u0022: false},\r\n  {\u0022id\u0022: 3, \u0022name\u0022: \u0022comma, inside\u0022, \u0022note\u0022: \u0022tab\\there\u0022, \u0022amount\u0022: -7, \u0022name\u0022: \u0022x\u0022, \u0022flag\u0022: null},\r\n  {\u0022id\u0022: 4, \u0022name\u0022: \u0022line\\r\\nbreak\u0022, \u0022note\u0022: \u0022pipe | bar\u0022, \u0022amount\u0022: 300000, \u0022name\u0022: \u0022\u00FCn\u00EFc\u00F6d\u00E9 \u20AC\u0022, \u0022flag\u0022: 0},\r\n  {\u0022id\u0022: null, \u0022name\u0022: \u0022\u003Ctag\u003E\u0026\u0022, \u0022note\u0022: \u0022back\\\\slash\u0022, \u0022amount\u0022: \u00220x0F\u0022, \u0022name\u0022: null, \u0022flag\u0022: 1}\r\n]",
+  "xml": "\u003C?xml version=\u00221.0\u0022 encoding=\u0022utf-8\u0022?\u003E\r\n\u003Crows\u003E\r\n  \u003Crow\u003E\u003Cid\u003E1\u003C/id\u003E\u003Cname\u003Ealpha\u003C/name\u003E\u003Cnote\u003Eplain\u003C/note\u003E\u003Camount\u003E12.50\u003C/amount\u003E\u003Cname\u003Edup\u003C/name\u003E\u003Cflag\u003ETrue\u003C/flag\u003E\u003C/row\u003E\r\n  \u003Crow\u003E\u003Cid\u003E2\u003C/id\u003E\u003Cname\u003EO\u0026apos;Brien\u003C/name\u003E\u003Cnote\u003Esay \u0026quot;hi\u0026quot;\u003C/note\u003E\u003Camount\u003E1,000\u003C/amount\u003E\u003Cname\u003E\u003C/name\u003E\u003Cflag\u003Efalse\u003C/flag\u003E\u003C/row\u003E\r\n  \u003Crow\u003E\u003Cid\u003E3\u003C/id\u003E\u003Cname\u003Ecomma, inside\u003C/name\u003E\u003Cnote\u003Etab\there\u003C/note\u003E\u003Camount\u003E-7\u003C/amount\u003E\u003Cname\u003Ex\u003C/name\u003E\u003Cflag\u003ENULL\u003C/flag\u003E\u003C/row\u003E\r\n  \u003Crow\u003E\u003Cid\u003E4\u003C/id\u003E\u003Cname\u003Eline\r\nbreak\u003C/name\u003E\u003Cnote\u003Epipe | bar\u003C/note\u003E\u003Camount\u003E3.0E5\u003C/amount\u003E\u003Cname\u003E\u00FCn\u00EFc\u00F6d\u00E9 \u20AC\u003C/name\u003E\u003Cflag\u003E0\u003C/flag\u003E\u003C/row\u003E\r\n  \u003Crow\u003E\u003Cid\u003ENULL\u003C/id\u003E\u003Cname\u003E\u0026lt;tag\u0026gt;\u0026amp;\u003C/name\u003E\u003Cnote\u003Eback\\slash\u003C/note\u003E\u003Camount\u003E0x0F\u003C/amount\u003E\u003Cname\u003ENULL\u003C/name\u003E\u003Cflag\u003E1\u003C/flag\u003E\u003C/row\u003E\r\n\u003C/rows\u003E",
+  "html": "\u003Ctable\u003E\r\n  \u003Cthead\u003E\u003Ctr\u003E\u003Cth\u003Eid\u003C/th\u003E\u003Cth\u003Ename\u003C/th\u003E\u003Cth\u003Enote\u003C/th\u003E\u003Cth\u003Eamount\u003C/th\u003E\u003Cth\u003Ename\u003C/th\u003E\u003Cth\u003Eflag\u003C/th\u003E\u003C/tr\u003E\u003C/thead\u003E\r\n  \u003Ctbody\u003E\r\n    \u003Ctr\u003E\u003Ctd\u003E1\u003C/td\u003E\u003Ctd\u003Ealpha\u003C/td\u003E\u003Ctd\u003Eplain\u003C/td\u003E\u003Ctd\u003E12.50\u003C/td\u003E\u003Ctd\u003Edup\u003C/td\u003E\u003Ctd\u003ETrue\u003C/td\u003E\u003C/tr\u003E\r\n    \u003Ctr\u003E\u003Ctd\u003E2\u003C/td\u003E\u003Ctd\u003EO\u0027Brien\u003C/td\u003E\u003Ctd\u003Esay \u0026quot;hi\u0026quot;\u003C/td\u003E\u003Ctd\u003E1,000\u003C/td\u003E\u003Ctd\u003E\u003C/td\u003E\u003Ctd\u003Efalse\u003C/td\u003E\u003C/tr\u003E\r\n    \u003Ctr\u003E\u003Ctd\u003E3\u003C/td\u003E\u003Ctd\u003Ecomma, inside\u003C/td\u003E\u003Ctd\u003Etab\there\u003C/td\u003E\u003Ctd\u003E-7\u003C/td\u003E\u003Ctd\u003Ex\u003C/td\u003E\u003Ctd\u003ENULL\u003C/td\u003E\u003C/tr\u003E\r\n    \u003Ctr\u003E\u003Ctd\u003E4\u003C/td\u003E\u003Ctd\u003Eline\r\nbreak\u003C/td\u003E\u003Ctd\u003Epipe | bar\u003C/td\u003E\u003Ctd\u003E3.0E5\u003C/td\u003E\u003Ctd\u003E\u00FCn\u00EFc\u00F6d\u00E9 \u20AC\u003C/td\u003E\u003Ctd\u003E0\u003C/td\u003E\u003C/tr\u003E\r\n    \u003Ctr\u003E\u003Ctd\u003ENULL\u003C/td\u003E\u003Ctd\u003E\u0026lt;tag\u0026gt;\u0026amp;\u003C/td\u003E\u003Ctd\u003Eback\\slash\u003C/td\u003E\u003Ctd\u003E0x0F\u003C/td\u003E\u003Ctd\u003ENULL\u003C/td\u003E\u003Ctd\u003E1\u003C/td\u003E\u003C/tr\u003E\r\n  \u003C/tbody\u003E\r\n\u003C/table\u003E",
+  "insert": "INSERT INTO [TableName] ([id], [name], [note], [amount], [name], [flag]) VALUES (1, N\u0027alpha\u0027, N\u0027plain\u0027, 12.50, N\u0027dup\u0027, 1);\r\nINSERT INTO [TableName] ([id], [name], [note], [amount], [name], [flag]) VALUES (2, N\u0027O\u0027\u0027Brien\u0027, N\u0027say \u0022hi\u0022\u0027, 1,000, N\u0027\u0027, 0);\r\nINSERT INTO [TableName] ([id], [name], [note], [amount], [name], [flag]) VALUES (3, N\u0027comma, inside\u0027, N\u0027tab\there\u0027, -7, N\u0027x\u0027, NULL);\r\nINSERT INTO [TableName] ([id], [name], [note], [amount], [name], [flag]) VALUES (4, N\u0027line\r\nbreak\u0027, N\u0027pipe | bar\u0027, 3.0E5, N\u0027\u00FCn\u00EFc\u00F6d\u00E9 \u20AC\u0027, 0);\r\nINSERT INTO [TableName] ([id], [name], [note], [amount], [name], [flag]) VALUES (NULL, N\u0027\u003Ctag\u003E\u0026\u0027, N\u0027back\\slash\u0027, N\u00270x0F\u0027, NULL, 1);\r\n",
+  "markdown": "| id | name | note | amount | name | flag |\r\n| --- | --- | --- | --- | --- | --- |\r\n| 1 | alpha | plain | 12.50 | dup | True |\r\n| 2 | O\u0027Brien | say \u0022hi\u0022 | 1,000 |  | false |\r\n| 3 | comma, inside | tab\there | -7 | x | NULL |\r\n| 4 | line\r\nbreak | pipe \\| bar | 3.0E5 | \u00FCn\u00EFc\u00F6d\u00E9 \u20AC | 0 |\r\n| NULL | \u003Ctag\u003E\u0026 | back\\slash | 0x0F | NULL | 1 |\r\n",
+  "inClauseRows": [
+    [
+      "10"
+    ],
+    [
+      "NULL"
+    ],
+    [
+      "2.5"
+    ],
+    [
+      "it\u0027s"
+    ],
+    [
+      "abc"
+    ]
+  ],
+  "inClause": "WHERE [code] IN (10, 2.5, \u0027it\u0027\u0027s\u0027, \u0027abc\u0027)\r\n-- NULL values excluded\r\n",
+  "quote": {
+    "NULL": "NULL",
+    "42": "42",
+    "-3": "-3",
+    "12.50": "12.50",
+    "1,000": "1,000",
+    "1e3": "1e3",
+    "True": "1",
+    "false": "0",
+    "O\u0027Brien": "N\u0027O\u0027\u0027Brien\u0027",
+    "": "N\u0027\u0027",
+    "\u00FCn\u00EFc\u00F6d\u00E9": "N\u0027\u00FCn\u00EFc\u00F6d\u00E9\u0027",
+    "0x0F": "N\u00270x0F\u0027"
+  }
+}

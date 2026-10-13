@@ -16,9 +16,16 @@ public sealed class ThemeServiceTests
     private sealed class RecordingApplier : IThemeApplier
     {
         public List<ThemeMode> Applied { get; } = new();
+        public int Forgets { get; private set; }
         public Task ApplyAsync(ThemeMode mode)
         {
             Applied.Add(mode);
+            return Task.CompletedTask;
+        }
+
+        public Task ForgetAsync()
+        {
+            Forgets++;
             return Task.CompletedTask;
         }
     }
@@ -98,5 +105,43 @@ public sealed class ThemeServiceTests
         await service.SetAsync(ThemeMode.Dark);
 
         Assert.Equal(2, fired);
+    }
+
+    // ── Spec 041 (T131, research R47, R54) — Restore defaults ──────────────────────────────────
+
+    [Fact]
+    public async Task Reset_deletes_the_record_even_when_already_on_System_and_forgets_the_boot_mirror()
+    {
+        var store = new InMemoryIndexedDbAdapter();
+        store.Seed(StoreNames.ThemePreference, "current", "{\"Mode\":0}");   // a stored System
+        var applier = new RecordingApplier();
+        var service = new ThemeService(store, applier);
+        await service.InitializeAsync();
+        Assert.Equal(ThemeMode.System, service.Current);
+        int changed = 0;
+        service.Changed += () => changed++;
+
+        await service.ResetAsync();
+
+        Assert.Null(await store.GetAsync(StoreNames.ThemePreference, "current"));
+        Assert.Equal(1, applier.Forgets);
+        Assert.Equal(1, changed);
+    }
+
+    [Fact]
+    public async Task Reset_from_Dark_goes_back_to_System()
+    {
+        var store = new InMemoryIndexedDbAdapter();
+        var applier = new RecordingApplier();
+        var service = new ThemeService(store, applier);
+        await service.InitializeAsync();
+        await service.SetAsync(ThemeMode.Dark);
+        applier.Applied.Clear();
+
+        await service.ResetAsync();
+
+        Assert.Equal(ThemeMode.System, service.Current);
+        Assert.Equal(new[] { ThemeMode.System }, applier.Applied);
+        Assert.Null(await store.GetAsync(StoreNames.ThemePreference, "current"));
     }
 }

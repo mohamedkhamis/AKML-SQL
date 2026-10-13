@@ -14,6 +14,9 @@
 @inject ICompletionService Completion
 @inject IAiGhostTextService GhostText
 @inject IAiFeatureSettings AiFeatures
+@inject IEditorSettingsStore EditorSettings
+@inject IServiceProvider Services
+@using Microsoft.Extensions.DependencyInjection
 @inject ISqlConnectionService SqlConn
 @inject IQuickInfoService QuickInfo
 @inject ISignatureHelpService SignatureHelp
@@ -29,7 +32,7 @@
         position: relative; /* anchors the go-to-definition peek panel */
         background-color: var(--akml-surface-editor);
         font-family: var(--akml-type-editor-family);
-        font-size: var(--akml-type-editor-size);
+        font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));   /* Settings › Editor (spec 041 R53) */
     }
     .akml-editor .cm-editor { height: 100%; }
     .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; }
@@ -45,6 +48,77 @@
         background-color: var(--akml-surface-hover);
         color: var(--akml-text-primary);
     }
+
+    /* Spec 041 (R39) — findings in the editor (analyser issues, the line of an execution error). The
+       lint extension injects hard-coded colours under a generated class at runtime, so these overrides
+       are scoped under .akml-editor .cm-editor (higher specificity) and drawn from the theme tokens.
+       Severity is told by shape as well as colour: error ●, warning ◆, info/hint ○. */
+    .akml-editor .cm-editor .cm-lintRange {
+        background-image: none;
+        text-decoration-line: underline;
+        text-decoration-style: wavy;
+        text-decoration-skip-ink: none;
+        text-underline-offset: 3px;
+        padding-bottom: 0;
+    }
+    .akml-editor .cm-editor .cm-lintRange-error { text-decoration-color: var(--akml-status-danger); }
+    .akml-editor .cm-editor .cm-lintRange-warning { text-decoration-color: var(--akml-status-warning); }
+    .akml-editor .cm-editor .cm-lintRange-info { text-decoration-color: var(--akml-status-info); }
+    .akml-editor .cm-editor .cm-lintRange-hint { text-decoration-color: var(--akml-text-secondary); }
+    .akml-editor .cm-editor .cm-gutter-lint { width: 1.1em; }
+    .akml-editor .cm-editor .cm-lint-marker {
+        content: none;
+        width: 0.55em;
+        height: 0.55em;
+        margin: 0.35em auto 0;
+        box-sizing: border-box;
+    }
+    .akml-editor .cm-editor .cm-lint-marker-error { border-radius: 50%; background-color: var(--akml-status-danger); }
+    .akml-editor .cm-editor .cm-lint-marker-warning { transform: rotate(45deg); background-color: var(--akml-status-warning); }
+    .akml-editor .cm-editor .cm-lint-marker-info { border-radius: 50%; border: 2px solid var(--akml-status-info); }
+    /* CodeMirror's base theme paints every tooltip and panel light (#f5f5f5 / #bbb, white fields,
+       gradient buttons) and no CodeMirror theme is registered, so the hover hint, signature help and
+       Find panel stayed light in dark mode. Its rules are `.ͼ2 .cm-x` in a style tag inserted first in the
+       document head, so these equal-specificity overrides win. The autocomplete popup is themed in Pages/Editor.razor. */
+    .akml-editor .cm-tooltip {
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-strong);
+        color: var(--akml-text-primary);
+    }
+    .akml-editor .cm-tooltip-section:not(:first-child) { border-top-color: var(--akml-border-strong); }
+    .akml-editor .cm-panels {
+        background-color: var(--akml-surface-panel);
+        color: var(--akml-text-primary);
+    }
+    .akml-editor .cm-panels-top { border-bottom-color: var(--akml-border-default); }
+    .akml-editor .cm-panels-bottom { border-top-color: var(--akml-border-default); }
+    .akml-editor .cm-textfield {
+        background-color: var(--akml-surface-input);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+    }
+    .akml-editor .cm-textfield::placeholder { color: var(--akml-text-placeholder); }
+    .akml-editor .cm-button,
+    .akml-editor .cm-button:active {
+        background-image: none;
+        background-color: var(--akml-surface-panel);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-strong);
+        border-radius: var(--akml-scalar-radius-xs);
+    }
+    .akml-editor .cm-button:hover { background-color: var(--akml-surface-hover); }
+    [data-akml-theme="high-contrast"] .akml-editor .cm-button:hover { color: var(--akml-text-onaccent); }
+    .cm-tooltip.cm-tooltip-lint {
+        font-family: var(--akml-type-chrome-family);
+        font-size: 12px;
+    }
+    .cm-tooltip-lint .cm-diagnostic { padding: 4px 8px; }
+    .cm-tooltip-lint .cm-diagnostic-error { border-left: 4px solid var(--akml-status-danger); }
+    .cm-tooltip-lint .cm-diagnostic-warning { border-left: 4px solid var(--akml-status-warning); }
+    .cm-tooltip-lint .cm-diagnostic-info { border-left: 4px solid var(--akml-status-info); }
+    .cm-tooltip-lint .cm-diagnostic-hint { border-left: 4px solid var(--akml-text-secondary); }
+    .cm-tooltip-lint .cm-diagnosticSource { color: var(--akml-text-secondary); font-size: 11px; }
 
     /* Spec 030 (web Phase 1) — quick-info hover + signature tooltip content. */
     .akml-qi-tooltip, .akml-sig-tooltip {
@@ -121,8 +195,12 @@
         _module = module;
         _selfRef = DotNetObjectReference.Create(this);
         var seed = InitialText;
-        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef);
+        // Spec 041 (R53): the editor options from Settings › Editor, applied at create and on every change.
+        var options = await EditorSettings.GetAsync();
+        if (_disposed) return;
+        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options));
         _appliedInitialText = seed;
+        EditorSettings.Changed += OnEditorSettingsChanged;
 
         // Spec 028 (M6) US5: tell the editor whether ghost text is enabled + the debounce.
         // The JS only requests a completion when enabled, so disabling it costs no interop.
@@ -161,6 +239,11 @@
     {
         return OnTextChanged.InvokeAsync(text);
     }
+
+    /// <summary>Spec 041 (R65, FR-083): the caret moved (throttled in akml-editor.js) — the status bar shows it.</summary>
+    [JSInvokable]
+    public void OnSelectionChangedFromJs(int line, int column) =>
+        Services.GetService<IWorkspaceStatus>()?.SetCaret(Math.Max(1, line), Math.Max(1, column));
 
     /// <summary>Spec 030 — Phase 5. JS-invokable Execute bridge (CM6 Mod-Enter keymap). Surfaces the
     /// <see cref="OnExecute"/> EventCallback up to the page, which reads the LIVE editor text.</summary>
@@ -508,9 +591,20 @@
         return await _module.InvokeAsync<string>("getSelectedText", HostId);
     }
 
+    /// <summary>Spec 041 (R24) — the selected text and the document line it starts on (1 when the selection
+    /// is empty or only whitespace, which runs the whole document).</summary>
+    public async Task<EditorSelectionInfo> GetSelectionInfoAsync()
+    {
+        if (_module == null) return new EditorSelectionInfo(string.Empty, 1);
+        var info = await _module.InvokeAsync<EditorSelectionInfo?>("getSelectionInfo", HostId);
+        return info ?? new EditorSelectionInfo(string.Empty, 1);
+    }
+
     public async Task SetTextAsync(string text)
     {
         if (_module == null) { InitialText = text; return; }
+        // Spec 041: what was applied, so a page that keeps InitialText in step does not push it twice.
+        _appliedInitialText = text;
         await _module.InvokeVoidAsync("setText", HostId, text);
     }
 
@@ -524,6 +618,28 @@
     {
         if (_module == null) return;
         await _module.InvokeVoidAsync("gotoLine", HostId, lineNumber);
+    }
+
+    /// <summary>Spec 041 (R39) — show findings in the editor (underline, gutter marker, message on hover),
+    /// replacing any shown before. Lines past the end of the document are ignored.</summary>
+    public async Task SetDiagnosticsAsync(IReadOnlyList<EditorDiagnostic> diagnostics)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>());
+    }
+
+    /// <summary>Spec 041 (R39) — remove every finding shown in the editor.</summary>
+    public async Task ClearDiagnosticsAsync()
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("clearDiagnostics", HostId);
+    }
+
+    /// <summary>Spec 041 (T200, R39) — select the next (or previous) finding, wrapping; false when there is none.</summary>
+    public async Task<bool> GoToProblemAsync(bool forward)
+    {
+        if (_module == null) return false;
+        return await _module.InvokeAsync<bool>("goToProblem", HostId, forward);
     }
 
     /// <summary>Spec 025 (M3 closure) US4 — insert <paramref name="text"/> at the caret.
@@ -562,9 +678,20 @@
         return await _module.InvokeAsync<string>("getText", HostId);
     }
 
+    private static object ToJs(EditorSettings o) => new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize };
+
+    private void OnEditorSettingsChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_disposed || _module == null) return;
+        try { await _module.InvokeVoidAsync("setEditorOptions", HostId, ToJs(await EditorSettings.GetAsync())); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    });
+
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        EditorSettings.Changed -= OnEditorSettingsChanged;
         try
         {
             if (_module != null)

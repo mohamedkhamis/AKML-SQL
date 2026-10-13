@@ -177,4 +177,54 @@ public sealed class HandshakeHandlerTests
         Assert.Contains(Capabilities.CoreAnalysisV1, Capabilities.Current);
         Assert.Contains(Capabilities.SchemaV2, Capabilities.Current);
     }
+
+    [Fact]
+    public async Task The_handshake_advertises_execute_v2()
+    {
+        // Spec 041 (T081, contracts/ipc.md): the web sends Parse and reads the structured execute reply
+        // only when the engine says it understands them.
+        Assert.Equal("execute.v2", Capabilities.ExecuteV2);
+        Assert.Contains(Capabilities.ExecuteV2, Capabilities.Current);
+        var response = await new HandshakeHandler().HandleAsync(MakeRequest(), CreateContext(), CancellationToken.None);
+        Assert.Contains(Capabilities.ExecuteV2, response.EngineCapabilities);
+    }
+
+    // ── Spec 041 (T179, research R29, X4) — how the engine runs, and the database selector's capability ──
+
+    [Fact]
+    public async Task Every_ok_handshake_says_how_the_engine_runs_and_as_whom()
+    {
+        var (kind, runsAs) = (EngineIdentity.HostKind, EngineIdentity.RunsAs);
+        try
+        {
+            EngineIdentity.HostKind = "service";
+            EngineIdentity.RunsAs = @"NT SERVICE\AkmlSqlWeb";
+
+            var localhost = await new HandshakeHandler().HandleAsync(MakeRequest(), CreateContext(), CancellationToken.None);
+            var pin = await new HandshakeHandler(() => true, p => p == "123456", _ => false, _ => "minted", () => null)
+                .HandleAsync(MakeRequest(pin: "123456"), CreateContext(), CancellationToken.None);
+            var bearer = await new HandshakeHandler(() => true, _ => false, t => t == "good", _ => null, () => null)
+                .HandleAsync(MakeRequest(bearer: "good"), CreateContext(), CancellationToken.None);
+
+            foreach (var response in new[] { localhost, pin, bearer })
+            {
+                Assert.Equal(HandshakeStatus.Ok, response.Status);
+                Assert.Equal("service", response.HostKind);
+                Assert.Equal(@"NT SERVICE\AkmlSqlWeb", response.RunsAs);
+                Assert.Contains(Capabilities.SessionDatabaseV1, response.EngineCapabilities);
+            }
+        }
+        finally
+        {
+            EngineIdentity.HostKind = kind;
+            EngineIdentity.RunsAs = runsAs;
+        }
+    }
+
+    [Fact]
+    public void The_database_selector_capability_is_advertised()
+    {
+        Assert.Equal("session.database.v1", Capabilities.SessionDatabaseV1);
+        Assert.Contains(Capabilities.SessionDatabaseV1, Capabilities.Current);
+    }
 }

@@ -6,8 +6,15 @@
     Database → Schema → Object-Kind → Object → Column. Click on Object inserts the
     bracketed qualifier into the editor via the OnObjectClicked EventCallback.
     Stale-indicator badge shows when bridge != Open. Virtualises children > 200.
+
+    Spec 041 (research R40, N27, FR-093): the header names the server and database listed; Refresh asks the
+    engine to reload (SchemaRefreshRequest, 6) and then fetches the schema again through ISchemaSync.RefreshAsync;
+    a filter narrows the tree by object name (150 ms after typing, parents kept, matches opened, empty kinds hidden
+    only while filtering); every node carries its icon; a loading row shows while the schema loads.
 *@
 @using System.Collections.Generic
+@using System.Threading
+@using AkmlSql.Core.Ipc
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Web.Services
 @using MessagePack
@@ -18,13 +25,44 @@
 
 <div class="akml-schema-tree" data-testid="schema-tree">
     <div class="akml-schema-tree-header">
-        <span>Schema</span>
-        @if (_serverIdentity != null && _databaseName != null)
+        @if (IsTargeted)
         {
-            <span class="akml-schema-tree-target" title="@_serverIdentity">@_databaseName</span>
+            <span class="akml-schema-tree-target" data-testid="schema-header" title="@($"{_serverIdentity} · {_databaseName}")">@_serverIdentity · @_databaseName</span>
+        }
+        else
+        {
+            <span class="akml-schema-tree-target">Schema</span>
         }
         <span class="akml-schema-tree-spacer"></span>
+        @if (IsTargeted)
+        {
+            <button type="button" class="akml-btn akml-btn--icon" data-testid="schema-refresh" aria-label="Refresh schema"
+                    title="@RefreshTitle" disabled="@(!CanRefresh)" @onclick="RefreshAsync">
+                <Icon Name="refresh-cw" Size="14" />
+            </button>
+        }
     </div>
+
+    @if (IsTargeted && _payload != null)
+    {
+        <div class="akml-schema-tree-filter">
+            <Icon Name="filter" Size="14" />
+            <input type="search" class="akml-input" data-testid="schema-filter" aria-label="Filter objects" placeholder="Filter objects"
+                   value="@_filterInput" @oninput="OnFilterInput" />
+        </div>
+    }
+
+    @if (_refreshing || (IsTargeted && _payload == null && IsEngineLive))
+    {
+        <div class="akml-schema-tree-loading" data-testid="schema-loading" role="status">
+            <Icon Name="loader-circle" Size="14" Class="akml-spin" />
+            <span>@(_refreshing ? "Refreshing schema…" : "Loading schema…")</span>
+        </div>
+    }
+    @if (_refreshError != null)
+    {
+        <div class="akml-schema-tree-error" data-testid="schema-refresh-error" role="alert">Refresh failed: @_refreshError</div>
+    }
 
     @if (_showStaleBadge)
     {
@@ -33,39 +71,53 @@
         </div>
     }
 
-    @if (_payload == null)
+    @if (!IsTargeted)
     {
-        <p class="akml-schema-tree-empty">Schema not yet loaded — waiting for engine.</p>
+        @* Spec 041 (FR-048): the panel stays, and says how to fill it. *@
+        <div class="akml-schema-tree-empty">
+            <p>Not connected to a SQL Server.</p>
+            <button type="button" class="akml-btn" data-testid="schema-connect" @onclick="OnConnectRequested">Connect to SQL Server…</button>
+        </div>
+    }
+    else if (_payload == null)
+    {
+        @if (!IsEngineLive)
+        {
+            <p class="akml-schema-tree-empty">Schema not yet loaded — waiting for engine.</p>
+        }
     }
     else
     {
+        var filtering = _filter.Length > 0;
         <ul class="akml-schema-tree-list" data-testid="schema-tree-root">
             <li class="akml-schema-tree-node akml-schema-tree-db">
-                <span class="akml-schema-tree-expand"
-                      @onclick="@(() => Toggle(DbPath))">@(IsExpanded(DbPath) ? "▼" : "▶")</span>
+                <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(DbPath))"><Icon Name="@Chevron(IsOpen(DbPath))" Size="12" Class="akml-schema-chevron" /></span>
+                <Icon Name="database" Size="14" Class="akml-schema-icon akml-schema-icon--database" />
                 <span class="akml-schema-tree-label">Database "@_databaseName"</span>
             </li>
-            @if (IsExpanded(DbPath))
+            @if (IsOpen(DbPath))
             {
                 @foreach (var schema in _payload.Schemas ?? Array.Empty<SchemaPhaseSchema>())
                 {
                     var schemaPath = DbPath + "/" + schema.Name;
+                    var kinds = EnumerateKinds(schema, _filter).Where(k => !filtering || k.Objects.Count > 0).ToList();
+                    if (filtering && kinds.Count == 0) continue;
                     <li class="akml-schema-tree-node akml-schema-tree-schema">
-                        <span class="akml-schema-tree-expand"
-                              @onclick="@(() => Toggle(schemaPath))">@(IsExpanded(schemaPath) ? "▼" : "▶")</span>
+                        <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(schemaPath))"><Icon Name="@Chevron(IsOpen(schemaPath))" Size="12" Class="akml-schema-chevron" /></span>
+                        <Icon Name="folder-open" Size="14" Class="akml-schema-icon akml-schema-icon--schema" />
                         <span class="akml-schema-tree-label">Schema "@schema.Name"</span>
                     </li>
-                    @if (IsExpanded(schemaPath))
+                    @if (IsOpen(schemaPath))
                     {
-                        @foreach (var kind in EnumerateKinds(schema))
+                        @foreach (var kind in kinds)
                         {
                             var kindPath = schemaPath + "/" + kind.Label;
                             <li class="akml-schema-tree-node akml-schema-tree-kind">
-                                <span class="akml-schema-tree-expand"
-                                      @onclick="@(() => Toggle(kindPath))">@(IsExpanded(kindPath) ? "▼" : "▶")</span>
+                                <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(kindPath))"><Icon Name="@Chevron(IsOpen(kindPath))" Size="12" Class="akml-schema-chevron" /></span>
+                                <Icon Name="@kind.Icon" Size="14" Class="@("akml-schema-icon akml-schema-icon--" + kind.Badge)" />
                                 <span class="akml-schema-tree-label">@kind.Label (@kind.Objects.Count)</span>
                             </li>
-                            @if (IsExpanded(kindPath))
+                            @if (IsOpen(kindPath))
                             {
                                 if (kind.Objects.Count > VirtualizeThreshold)
                                 {
@@ -98,7 +150,7 @@
         flex-direction: column;
         height: 100%;
         background-color: var(--akml-surface-panel);
-        border-left: 1px solid var(--akml-border-default);
+        border-right: 1px solid var(--akml-border-default);
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
         color: var(--akml-text-primary);
@@ -118,6 +170,41 @@
         font-size: 11px;
     }
     .akml-schema-tree-spacer { flex: 1 1 auto; }
+    .akml-schema-tree-header .akml-schema-tree-target {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+    }
+    .akml-schema-tree-filter {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        border-bottom: 1px solid var(--akml-border-default);
+        color: var(--akml-text-secondary);
+    }
+    .akml-schema-tree-filter input { flex: 1 1 auto; min-width: 0; }
+    .akml-schema-tree-loading {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        color: var(--akml-text-secondary);
+    }
+    .akml-schema-tree-error {
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        color: var(--akml-status-danger);
+    }
+    .akml-schema-icon { flex: 0 0 auto; }
+    .akml-schema-icon--database { color: var(--akml-iconbadge-database); }
+    .akml-schema-icon--schema { color: var(--akml-iconbadge-schema); }
+    .akml-schema-icon--table { color: var(--akml-iconbadge-table); }
+    .akml-schema-icon--view { color: var(--akml-iconbadge-view); }
+    .akml-schema-icon--storedproc { color: var(--akml-iconbadge-storedproc); }
+    .akml-schema-icon--function { color: var(--akml-iconbadge-function); }
+    .akml-schema-icon--column { color: var(--akml-iconbadge-column); }
+    .akml-schema-icon--index { color: var(--akml-iconbadge-index); }
     .akml-schema-tree-stale {
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
         background-color: var(--akml-status-warning);
@@ -145,11 +232,13 @@
     }
     .akml-schema-tree-node:hover { background-color: var(--akml-surface-hover); }
     .akml-schema-tree-expand {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
         color: var(--akml-text-secondary);
-        font-size: 10px;
         width: 12px;
-        text-align: center;
+        flex: 0 0 12px;
     }
     .akml-schema-tree-label { flex: 1 1 auto; }
     .akml-schema-tree-schema { padding-left: 16px; }
@@ -173,7 +262,78 @@
     /// identifier "[schema].[name]"; subscribers insert it at the editor caret.</summary>
     [Parameter] public EventCallback<string> OnObjectClicked { get; set; }
 
+    /// <summary>Spec 041 (FR-048) — the "Connect to SQL Server…" button of a panel with no connection.</summary>
+    [Parameter] public EventCallback OnConnectRequested { get; set; }
+
+    /// <summary>Spec 041 (R40) — the engine session whose schema Refresh reloads.</summary>
+    [Parameter] public string? SessionId { get; set; }
+
     private const int VirtualizeThreshold = 200;
+    private const int FilterDelayMs = 150;
+
+    private string _filterInput = string.Empty;
+    private string _filter = string.Empty;
+    private CancellationTokenSource? _filterCts;
+    private bool _refreshing;
+    private string? _refreshError;
+
+    private bool IsTargeted => !string.IsNullOrEmpty(_serverIdentity) && !string.IsNullOrEmpty(_databaseName);
+    private bool IsEngineLive => _bridgeState == BridgeState.Open || _bridgeState == BridgeState.Connecting;
+    private bool CanRefresh => !_refreshing && _bridgeState == BridgeState.Open && !string.IsNullOrEmpty(SessionId);
+
+    private string RefreshTitle =>
+        _refreshing ? "Refreshing…"
+        : _bridgeState != BridgeState.Open ? "Refresh needs a connected engine"
+        : string.IsNullOrEmpty(SessionId) ? "Refresh needs a SQL Server connection"
+        : "Refresh schema from the server";
+
+    private static string Chevron(bool open) => open ? "chevron-down" : "chevron-right";
+
+    // While filtering, every level that leads to a match is open; the user's own expansion comes back afterwards.
+    private bool IsOpen(string path) => _filter.Length > 0 || IsExpanded(path);
+
+    private void OnFilterInput(ChangeEventArgs e)
+    {
+        _filterInput = e.Value?.ToString() ?? string.Empty;
+        _filterCts?.Cancel();
+        _filterCts = new CancellationTokenSource();
+        _ = ApplyFilterLaterAsync(_filterInput, _filterCts.Token);
+    }
+
+    private async Task ApplyFilterLaterAsync(string text, CancellationToken ct)
+    {
+        try { await Task.Delay(FilterDelayMs, ct); }
+        catch (TaskCanceledException) { return; }
+        await InvokeAsync(() =>
+        {
+            _filter = text.Trim();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (!CanRefresh) return;
+        _refreshing = true;
+        _refreshError = null;
+        StateHasChanged();
+        try
+        {
+            // The engine's reload is a notification (no reply); the sync then waits for it and fetches the result.
+            await Bridge.SendNotificationAsync(MessageTypes.SchemaRefreshRequest, new RefreshRequest { SessionId = SessionId! }, CancellationToken.None);
+            await Sync.RefreshAsync();
+            await LoadSnapshotAsync();
+            UpdateStaleBadge();
+        }
+        catch (Exception ex)
+        {
+            _refreshError = ex.Message;
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
 
     private string? _serverIdentity;
     private string? _databaseName;
@@ -268,8 +428,9 @@
     /// <summary>The contract groups objects under fixed kind headers — Tables / Views /
     /// Stored Procedures / Functions. ObjectType maps to DbObjectType (see
     /// SchemaPhasePayload doc-comment). Kinds with zero objects are still rendered so
-    /// the user sees the full taxonomy even on sparse schemas.</summary>
-    private static IEnumerable<KindGroup> EnumerateKinds(SchemaPhaseSchema schema)
+    /// the user sees the full taxonomy even on sparse schemas (spec 041: the caller hides them while filtering).
+    /// A non-empty <paramref name="filter"/> keeps only objects whose name contains it, ignoring case.</summary>
+    private static IEnumerable<KindGroup> EnumerateKinds(SchemaPhaseSchema schema, string filter)
     {
         var byKind = new Dictionary<string, List<SchemaPhaseObject>>(StringComparer.Ordinal)
         {
@@ -280,6 +441,7 @@
         };
         foreach (var obj in schema.Objects ?? Array.Empty<SchemaPhaseObject>())
         {
+            if (filter.Length > 0 && obj.ObjectName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
             switch ((DbObjectType)obj.ObjectType)
             {
                 case DbObjectType.Table: byKind["Tables"].Add(obj); break;
@@ -294,9 +456,27 @@
         }
         foreach (var (label, objs) in byKind)
         {
-            yield return new KindGroup(label, objs);
+            var (icon, badge) = KindIcons[label];
+            yield return new KindGroup(label, objs, icon, badge);
         }
     }
+
+    // Spec 041 (R40, R62) — one icon per kind from the sprite, coloured by its --akml-iconbadge-* token.
+    private static readonly Dictionary<string, (string Icon, string Badge)> KindIcons = new(StringComparer.Ordinal)
+    {
+        ["Tables"] = ("table-2", "table"),
+        ["Views"] = ("eye", "view"),
+        ["Stored Procedures"] = ("scroll-text", "storedproc"),
+        ["Functions"] = ("square-function", "function"),
+    };
+
+    private static (string Icon, string Badge) ObjectIcon(int objectType) => (DbObjectType)objectType switch
+    {
+        DbObjectType.View => KindIcons["Views"],
+        DbObjectType.Procedure => KindIcons["Stored Procedures"],
+        DbObjectType.ScalarFunction or DbObjectType.TableFunction or DbObjectType.InlineFunction => KindIcons["Functions"],
+        _ => KindIcons["Tables"],
+    };
 
     /// <summary>The contract talks about ObjectType enum codes; the value maps to
     /// engine's DbObjectType: 0=Table, 1=View, 2=Procedure, 3/4/5=Functions.
@@ -305,7 +485,7 @@
     /// dependencies we don't need in WASM.</summary>
     private enum DbObjectType { Table = 0, View = 1, Procedure = 2, ScalarFunction = 3, TableFunction = 4, InlineFunction = 5, Synonym = 6, Sequence = 7 }
 
-    private record KindGroup(string Label, List<SchemaPhaseObject> Objects);
+    private record KindGroup(string Label, List<SchemaPhaseObject> Objects, string Icon, string Badge);
 
     private RenderFragment RenderObject(SchemaPhaseObject obj, string objPath, string schemaName) => builder =>
     {
@@ -321,12 +501,26 @@
 
         builder.OpenElement(6, "span");
         builder.AddAttribute(7, "class", "akml-schema-tree-expand");
-        builder.AddContent(8, hasColumns ? (IsExpanded(objPath) ? "▼" : "▶") : " ");
+        if (hasColumns)
+        {
+            builder.OpenComponent<Icon>(8);
+            builder.AddComponentParameter(9, nameof(Icon.Name), Chevron(IsExpanded(objPath)));
+            builder.AddComponentParameter(10, nameof(Icon.Size), 12);
+            builder.AddComponentParameter(11, nameof(Icon.Class), "akml-schema-chevron");
+            builder.CloseComponent();
+        }
         builder.CloseElement();
 
-        builder.OpenElement(9, "span");
-        builder.AddAttribute(10, "class", "akml-schema-tree-label");
-        builder.AddContent(11, qualifier);
+        var (icon, badge) = ObjectIcon(obj.ObjectType);
+        builder.OpenComponent<Icon>(12);
+        builder.AddComponentParameter(13, nameof(Icon.Name), icon);
+        builder.AddComponentParameter(14, nameof(Icon.Size), 14);
+        builder.AddComponentParameter(15, nameof(Icon.Class), "akml-schema-icon akml-schema-icon--" + badge);
+        builder.CloseComponent();
+
+        builder.OpenElement(16, "span");
+        builder.AddAttribute(17, "class", "akml-schema-tree-label");
+        builder.AddContent(18, qualifier);
         builder.CloseElement();
         builder.CloseElement();
 
@@ -334,12 +528,18 @@
         {
             foreach (var col in obj.Columns)
             {
-                builder.OpenElement(12, "li");
-                builder.AddAttribute(13, "class", "akml-schema-tree-node akml-schema-tree-column");
-                builder.AddAttribute(14, "data-testid", "schema-tree-column");
-                builder.OpenElement(15, "span");
-                builder.AddAttribute(16, "class", "akml-schema-tree-label");
-                builder.AddContent(17, $"{col.Name}  ({col.TypeName})");
+                builder.OpenElement(19, "li");
+                builder.AddAttribute(20, "class", "akml-schema-tree-node akml-schema-tree-column");
+                builder.AddAttribute(21, "data-testid", "schema-tree-column");
+                builder.OpenComponent<Icon>(22);
+                builder.AddComponentParameter(23, nameof(Icon.Name), col.IsPrimaryKey ? "key-round" : "columns-3");
+                builder.AddComponentParameter(24, nameof(Icon.Size), 14);
+                builder.AddComponentParameter(25, nameof(Icon.Class), col.IsPrimaryKey ? "akml-schema-icon akml-schema-icon--index" : "akml-schema-icon akml-schema-icon--column");
+                builder.AddComponentParameter(26, nameof(Icon.Label), col.IsPrimaryKey ? "Primary key" : null);
+                builder.CloseComponent();
+                builder.OpenElement(27, "span");
+                builder.AddAttribute(28, "class", "akml-schema-tree-label");
+                builder.AddContent(29, $"{col.Name}  ({col.TypeName})");
                 builder.CloseElement();
                 builder.CloseElement();
             }
@@ -372,6 +572,7 @@
 
     public void Dispose()
     {
+        _filterCts?.Cancel();
         Bridge.StateChanged -= OnBridgeStateChanged;
         Sync.ChecksumDrifted -= OnChecksumDrifted;
     }

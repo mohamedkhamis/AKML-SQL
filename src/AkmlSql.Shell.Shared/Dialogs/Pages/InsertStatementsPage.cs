@@ -5,8 +5,8 @@ using AkmlSql.Core.Config;
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
-    /// Inserted Code › INSERT statements (Phase 2 C.3). Surfaces
-    /// <see cref="InsertOptionsSettings"/>. The flags are read by the lightweight
+    /// Inserted code › Objects &amp; statements (Phase 2 C.3; fitted in the 2026-10 design B).
+    /// Surfaces <see cref="InsertOptionsSettings"/>. The flags are read by the lightweight
     /// refactoring operations <c>ExpandInsertColumnsOperation</c> (IncludeColumns,
     /// IncludeDefaultsAsComments) and <c>ExpandExecParametersOperation</c>
     /// (IncludeProcParamInfo) — wired in A.3.
@@ -21,24 +21,23 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "When expanding INSERT INTO ...");
+            ctx.Rows.AddGroupHeader(panel, "Statements");
 
-            var (rowColumns, chkColumns) = ctx.Rows.AddToggle(panel,
-                "Insert column names",
-                "Replace the bare INSERT INTO target with an explicit column list (Id, Name, ...).");
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowColumns, chkColumns) = ctx.Rows.AddToggle(left,
+                "Insert column names", "INSERT INTO t (Id, Name, …)");
+            ctx.Rows.Tip(rowColumns, "Replace the bare INSERT INTO target with an explicit column list (Id, Name, ...).");
             ctx.RegisterSearch("Insert column names", "Replace the bare INSERT INTO target with an explicit column list", "Toggle", rowColumns);
 
-            var (rowDefaults, chkDefaults) = ctx.Rows.AddToggle(panel,
-                "Insert default values as comments",
-                "Annotate each column with its default expression as an inline comment.");
+            var (rowDefaults, chkDefaults) = ctx.Rows.AddToggle(right,
+                "Insert default values as comments", "Each column's default as an inline comment");
+            ctx.Rows.Tip(rowDefaults, "Annotate each column with its default expression as an inline comment.");
             ctx.RegisterSearch("Insert default values as comments", "Annotate each column with its default expression as an inline comment", "Toggle", rowDefaults);
 
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "When expanding EXEC ...");
-
-            var (rowProcParams, chkProcParams) = ctx.Rows.AddToggle(panel,
-                "Convert positional parameters to named",
-                "Rewrite EXEC dbo.proc 1, 'x' as EXEC dbo.proc @id = 1, @name = 'x' using procedure parameter names.");
+            var (rowProcParams, chkProcParams) = ctx.Rows.AddToggle(left,
+                "Convert positional parameters to named", "EXEC dbo.proc @id = 1, @name = …");
+            ctx.Rows.Tip(rowProcParams, "Rewrite EXEC dbo.proc 1, 'x' as EXEC dbo.proc @id = 1, @name = 'x' using procedure parameter names.");
             ctx.RegisterSearch("Convert positional parameters to named", "Rewrite EXEC positional parameters to named form", "Toggle", rowProcParams);
 
             return new InsertStatementsControls(chkColumns, chkDefaults, chkProcParams);

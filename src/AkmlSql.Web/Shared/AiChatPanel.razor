@@ -15,6 +15,7 @@
 @inject IChatHistoryStore History
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IJSRuntime JS
+@inject INotificationService Notifications
 
 <div class="akml-chat">
     <div class="akml-chat-header">
@@ -22,13 +23,13 @@
         @if (!_hasProvider)
         {
             <span class="akml-chat-no-provider">
-                No AI provider configured. <a href="/settings/ai">Add one in Settings</a>.
+                No AI provider configured. <a href="settings/ai-assistance">Add one in Settings</a>.
             </span>
         }
         else if (_conversation.Turns.Count > 0)
         {
-            <button class="akml-tool-button" @onclick="ExportAsync" disabled="@_busy">Export</button>
-            <button class="akml-tool-button" @onclick="ClearAsync" disabled="@_busy">Clear</button>
+            <button class="akml-btn" @onclick="ExportAsync" disabled="@_busy" title="@(_busy ? "Wait for the answer to finish" : null)">Export</button>
+            <button class="akml-btn" @onclick="ClearAsync" disabled="@_busy" title="@(_busy ? "Wait for the answer to finish" : null)">Clear</button>
         }
     </div>
 
@@ -37,10 +38,10 @@
         <div class="akml-chat-log">
             @if (_conversation.Turns.Count == 0)
             {
-                <p class="akml-chat-empty">
-                    Multi-turn chat. Type a question below. The conversation is stored only in
-                    this browser and sent only to your chosen provider.
-                </p>
+                <div class="akml-empty akml-chat-empty" data-testid="chat-empty">
+                    <p class="akml-empty-title">Type a question below to start</p>
+                    <p>The conversation is stored only in this browser and sent only to your chosen provider.</p>
+                </div>
             }
             else
             {
@@ -53,7 +54,7 @@
                             {
                                 <button type="button" class="akml-chat-copy" title="Copy message"
                                         aria-label="Copy message" @onclick="() => CopyTurnAsync(turn)">
-                                    @(_copiedTurn == turn ? "✓ Copied" : "⧉")
+                                    <Icon Name="@(_copiedTurn == turn ? "check" : "copy")" Size="12" />@if (_copiedTurn == turn) { <span>Copied</span> }
                                 </button>
                             }
                         </div>
@@ -82,8 +83,10 @@
             <textarea class="akml-chat-input" @bind="_pending" @bind:event="oninput"
                       placeholder="Ask anything about your SQL…  (Enter sends · Shift+Enter for a new line)" rows="3"
                       @onkeydown="OnKeyDown" @onkeypress="OnKeyPress"
-                      @onkeypress:preventDefault="_suppressEnterNewline" disabled="@_busy"></textarea>
-            <button class="akml-chat-send" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))">
+                      @onkeypress:preventDefault="_suppressEnterNewline" disabled="@_busy" aria-label="Question"
+                      title="@(_busy ? "Wait for the answer to finish" : null)"></textarea>
+            <button class="akml-chat-send" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))"
+                    title="@(_busy ? "Wait for the answer to finish" : string.IsNullOrWhiteSpace(_pending) ? "Type a question first" : "Send (Enter)")">
                 Send
             </button>
         </div>
@@ -103,7 +106,6 @@
         padding: var(--akml-scalar-spacing-s);
         min-height: 240px;
     }
-    .akml-chat-empty { color: var(--akml-text-secondary); font-style: italic; }
     .akml-chat-turn {
         margin-bottom: var(--akml-scalar-spacing-m);
         width: fit-content;
@@ -193,14 +195,6 @@
     }
     .akml-chat-send:hover:not(:disabled) { background-color: var(--akml-accent-primaryhover); }
     .akml-chat-send:disabled { opacity: 0.6; cursor: not-allowed; }
-    .akml-tool-button {
-        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
-        background-color: var(--akml-surface-panel); color: var(--akml-text-primary);
-        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
-    }
-    .akml-tool-button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .akml-tool-button:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
 </style>
 
 @code {
@@ -384,15 +378,25 @@
     private ChatTurn? _copiedTurn;
     private int _copyStamp;   // a newer copy must not have its indicator cleared by an older timer
 
+    private IJSObjectReference? _ui;
+
     private async Task CopyTurnAsync(ChatTurn turn)
     {
+        // Spec 041 (T201, R5, N14): copyText also works on the http LAN deployment, where navigator.clipboard is absent.
+        bool copied;
         try
         {
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", turn.Content);
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            copied = await _ui.InvokeAsync<bool>("copyText", turn.Content);
         }
         catch (Exception ex)
         {
             Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Copy failed: {ex.Message}");
+            copied = false;
+        }
+        if (!copied)
+        {
+            Notifications.Notify("Copy failed — select the text and press Ctrl+C.", NotificationKind.Error);
             return;
         }
 
@@ -429,5 +433,12 @@
         _disposed = true;
         _cts?.Cancel();
         _cts?.Dispose();
+        if (_ui != null) _ = ReleaseUiAsync(_ui);
+    }
+
+    private static async Task ReleaseUiAsync(IJSObjectReference ui)
+    {
+        try { await ui.DisposeAsync(); }
+        catch (JSDisconnectedException) { /* the page is gone */ }
     }
 }

@@ -36,6 +36,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         internal Button RemoveButton { get; }
         internal Button SetActiveButton { get; }
 
+        /// <summary>
+        /// The Add / Duplicate / Remove / Set-active row, for a host that places it itself — the
+        /// 2026-10 page puts it on the "AI agents" group-header line (see <see cref="AddListTo"/>).
+        /// </summary>
+        internal StackPanel ButtonRow => _buttonRow;
+
         private readonly StackPanel _buttonRow;
         private readonly Brush _hoverForeground;
         private readonly Brush _selectedForeground;
@@ -60,6 +66,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
             };
             AutomationProperties.SetName(List, "AI agents");
+            // Rows compress to the list's width (name and detail trim) instead of growing past it
+            // behind a horizontal scrollbar — at the dialog's 720 px minimum the badge was cut off.
+            ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
             List.ItemContainerStyle = BuildItemStyle(theme);
 
             AddButton = MakeButton("Add", "Add a new AI agent", theme);
@@ -85,6 +94,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             panel.Children.Add(List);
             panel.Children.Add(_buttonRow);
         }
+
+        /// <summary>Appends only the list; the host places <see cref="ButtonRow"/> itself.</summary>
+        internal void AddListTo(StackPanel panel) => panel.Children.Add(List);
 
         /// <summary>
         /// Rebuilds the rows from the working copy, marking <paramref name="activeId"/> with ●

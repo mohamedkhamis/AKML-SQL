@@ -119,6 +119,42 @@ public sealed class AllMessageTypesInProcessTests
     }
 
     [Fact]
+    public async Task Execute_parse_is_registered_and_its_result_code_is_not()
+    {
+        // Spec 041 (T081, R21, N25): 219 is a request the router answers; 220 is only ever sent.
+        var composition = EngineComposition.Build();
+        var registered = new HashSet<int>(composition.Router.RegisteredMessageTypes);
+        Assert.Contains(MessageTypes.ExecuteParse, registered);
+        Assert.DoesNotContain(MessageTypes.ExecuteParseResult, registered);
+
+        // Without a connection the parse answers like an execute does: a NoConnection envelope, typed 220.
+        var request = BuildEmptyRequest(MessageTypes.ExecuteParse)!;
+        var response = await composition.Router.RouteAsync(request, composition.Context, CancellationToken.None);
+        Assert.NotNull(response);
+        Assert.Equal(MessageTypes.ExecuteParseResult, response!.MessageType);
+        var result = MessagePack.MessagePackSerializer.Deserialize<AkmlSql.Core.Ipc.Messages.ExecuteQueryResult>(response.Payload!);
+        Assert.Equal(AkmlSql.Core.Ipc.Messages.ExecuteStatus.NoConnection, result.Status);
+    }
+
+    [Fact]
+    public async Task Change_database_is_registered_and_its_result_code_is_not()
+    {
+        // Spec 041 (T179, R26): 217 is a request the router answers; 218 is only ever sent.
+        var composition = EngineComposition.Build();
+        var registered = new HashSet<int>(composition.Router.RegisteredMessageTypes);
+        Assert.Contains(MessageTypes.ChangeDatabase, registered);
+        Assert.DoesNotContain(MessageTypes.ChangeDatabaseResult, registered);
+
+        // An unknown session: an error reply, typed 218.
+        var request = BuildEmptyRequest(MessageTypes.ChangeDatabase)!;
+        var response = await composition.Router.RouteAsync(request, composition.Context, CancellationToken.None);
+        Assert.NotNull(response);
+        Assert.Equal(MessageTypes.ChangeDatabaseResult, response!.MessageType);
+        var result = MessagePack.MessagePackSerializer.Deserialize<AkmlSql.Core.Ipc.Messages.ChangeDatabaseResponse>(response.Payload!);
+        Assert.False(result.Ok);
+    }
+
+    [Fact]
     public void Expected_unwired_list_only_references_real_message_type_codes()
     {
         // Guard against typos / stale entries in ExpectedUnwired: every code must
@@ -273,6 +309,10 @@ public sealed class AllMessageTypesInProcessTests
                 ProtocolVersionMin = Capabilities.ProtocolVersionMin,
                 ProtocolVersionMax = Capabilities.ProtocolVersionMax,
             },
+            // Spec 041 (T081): Parse shares ExecuteQuery's request class.
+            MessageTypes.ExecuteParse => new AkmlSql.Core.Ipc.Messages.ExecuteQueryRequest { SessionId = "test", Sql = "SELECT 1;" },
+            // Spec 041 (T179): the database selector's switch.
+            MessageTypes.ChangeDatabase => new AkmlSql.Core.Ipc.Messages.ChangeDatabaseRequest { SessionId = "test", DatabaseName = "master" },
             _ => null!,
         };
         if (payload == null) return null;

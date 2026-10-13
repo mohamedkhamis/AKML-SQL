@@ -364,7 +364,7 @@ public sealed class EngineAutoConnectTests(ITestOutputHelper output) : IAsyncLif
         || pill.Contains("Online", StringComparison.OrdinalIgnoreCase);
 
     private static Task<IBrowserContext> LaunchAsync(IPlaywright pw) =>
-        pw.Chromium.LaunchPersistentContextAsync(ProfileDir, new()
+        pw.Chromium.LaunchPersistentForTestsAsync(ProfileDir, new()
         {
             Args = ["--ignore-certificate-errors"],
             IgnoreHTTPSErrors = true,
@@ -393,6 +393,8 @@ public sealed class EngineAutoConnectTests(ITestOutputHelper output) : IAsyncLif
     private async Task PairAsync(IPage page)
     {
         await page.ClickAsync("nav >> text=Settings");
+        // Spec 041 (R43): pairing lives in Settings › Connections.
+        await page.ClickAsync("[data-testid='settings-nav-connections']");
         await page.WaitForTimeoutAsync(1_200);
         await page.Locator("button", new() { HasTextString = "Add" }).First.ClickAsync();
         await page.WaitForTimeoutAsync(600);

@@ -8,7 +8,8 @@
 // changes to keep the page in sync when the override is "System".
 
 const THEME_LINK_ID = 'akml-theme-css';
-const THEMES = { light: 'css/themes/light.css', dark: 'css/themes/dark.css', 'high-contrast': 'css/themes/high-contrast.css' };
+// Exported for the parity test: akml-theme-boot.js (a classic script) carries the same map.
+export const THEMES = { light: 'css/themes/light.css', dark: 'css/themes/dark.css', 'high-contrast': 'css/themes/high-contrast.css' };
 
 let _osListener = null;
 let _currentMode = 'system';
@@ -34,12 +35,29 @@ function applyTheme(theme) {
 }
 
 /**
+ * Spec 041 (R54) — the mode is mirrored to localStorage so akml-theme-boot.js can set the theme before the
+ * first paint (IndexedDB is asynchronous; the boot script cannot wait for it). Best effort: storage may be
+ * unavailable (a private window, blocked site data).
+ */
+export const MIRROR_KEY = 'akml.theme';
+
+function remember(mode) {
+    try { window.localStorage.setItem(MIRROR_KEY, mode); } catch { /* storage unavailable */ }
+}
+
+/** Forget the mirror (Restore defaults): the next first paint follows the system. */
+export function forget() {
+    try { window.localStorage.removeItem(MIRROR_KEY); } catch { /* storage unavailable */ }
+}
+
+/**
  * Apply a theme mode. Modes: "system" | "light" | "dark" | "high-contrast".
  * When "system" is selected, the page follows prefers-color-scheme and reacts to OS
- * changes until a different mode is chosen.
+ * changes until a different mode is chosen. With `rememberMode` the mode is mirrored for the next first paint.
  */
-export function apply(mode) {
+export function apply(mode, rememberMode = false) {
     _currentMode = mode ?? 'system';
+    if (rememberMode) remember(_currentMode);
 
     // Drop any existing OS listener.
     if (_osListener) {

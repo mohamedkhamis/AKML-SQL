@@ -1,3 +1,4 @@
+using System;
 using MessagePack;
 
 namespace AkmlSql.Core.Ipc.Messages
@@ -87,9 +88,12 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(8)]
         public int? ColumnSize { get; set; }
 
+        /// <summary>Numeric precision; null when not applicable (spec 041: SqlClient's 255 "not applicable"
+        /// sentinel is sent as null, so a write never binds it).</summary>
         [Key(9)]
         public int? Precision { get; set; }
 
+        /// <summary>Numeric scale; null when not applicable (the 255 sentinel, as for <see cref="Precision"/>).</summary>
         [Key(10)]
         public int? Scale { get; set; }
 
@@ -105,7 +109,12 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(0)]
         public string[] ColumnNames { get; set; } = System.Array.Empty<string>();
 
-        /// <summary>SQL type names, e.g. "int", "nvarchar(50)".</summary>
+        /// <summary>
+        /// The declared SQL type of each column (spec 041 R10): <c>nvarchar(50)</c>, <c>nvarchar(max)</c>,
+        /// <c>decimal(10,2)</c>, <c>datetime2(3)</c>, <c>time(0)</c>; bare for types without a length or scale
+        /// (<c>int</c>, <c>date</c>, <c>money</c>, <c>uniqueidentifier</c>, UDT names). Older engines send bare
+        /// names for every type; <c>SqlTypeName.Parse</c> reads both forms.
+        /// </summary>
         [Key(1)]
         public string[] ColumnSqlTypes { get; set; } = System.Array.Empty<string>();
 
@@ -140,6 +149,10 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(10)]
         public string? BaseCatalog { get; set; }
+
+        /// <summary>Spec 041 — the batch (0-based, after GO splitting) that produced this set; 0 from older engines.</summary>
+        [Key(11)]
+        public int BatchIndex { get; set; }
     }
 
     /// <summary>Engine → Browser: the full execute outcome (NEVER null — a missing frame hangs the bridge).</summary>
@@ -149,23 +162,30 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(0)]
         public string QueryId { get; set; } = string.Empty;
 
-        /// <summary>See <see cref="ExecuteStatus"/>: 0 Ok, 1 Error, 2 Cancelled, 3 TimedOut, 4 NoConnection.</summary>
+        /// <summary>See <see cref="ExecuteStatus"/>. Ok when no batch reported an error; Error when any did
+        /// (the script still ran on); TimedOut / Cancelled when the script stopped for that reason.</summary>
         [Key(1)]
         public int Status { get; set; }
 
+        /// <summary>The first error's text, or null.</summary>
         [Key(2)]
         public string? ErrorMessage { get; set; }
 
+        /// <summary>Every set the script returned (also when a later batch failed); possibly empty.</summary>
         [Key(3)]
         public ExecuteResultSet[] ResultSets { get; set; } = System.Array.Empty<ExecuteResultSet>();
 
-        /// <summary>PRINT / low-severity RAISERROR / rows-affected message lines.</summary>
+        /// <summary>The messages as SSMS words them, one string each (<c>Msg 208, Level 16, State 1, Line 4</c> +
+        /// newline + text; <c>(N rows affected)</c>; PRINT text; system lines). <see cref="MessageDetails"/>
+        /// carries the same messages structured; this array serves older web bundles.</summary>
         [Key(4)]
         public string[] Messages { get; set; } = System.Array.Empty<string>();
 
+        /// <summary>The whole script's elapsed time.</summary>
         [Key(5)]
         public long ElapsedMs { get; set; }
 
+        /// <summary>The sum of the DML row counts; -1 when no statement reported one (spec 041).</summary>
         [Key(6)]
         public int TotalRowsAffected { get; set; }
 
@@ -173,6 +193,120 @@ namespace AkmlSql.Core.Ipc.Messages
         /// (the SSMS-like persistence guarantee was broken; surfaced, not silently swallowed).</summary>
         [Key(7)]
         public bool ConnectionWasReset { get; set; }
+
+        /// <summary>Spec 041 (execute.v2) — every message in stream order; empty from older engines.</summary>
+        [Key(8)]
+        public ExecuteMessageDto[] MessageDetails { get; set; } = System.Array.Empty<ExecuteMessageDto>();
+
+        /// <summary>Spec 041 (execute.v2) — one entry per batch (a <c>GO n</c> loop is one entry).</summary>
+        [Key(9)]
+        public ExecuteBatchDto[] Batches { get; set; } = System.Array.Empty<ExecuteBatchDto>();
+
+        /// <summary>Spec 041 (execute.v2) — when the script ended, UTC Unix milliseconds; 0 from older engines.</summary>
+        [Key(10)]
+        public long CompletedAtUnixMs { get; set; }
+
+        /// <summary>Spec 041 (execute.v2) — messages dropped beyond the engine's cap (10,000).</summary>
+        [Key(11)]
+        public int MessagesOmitted { get; set; }
+
+        /// <summary>Spec 041 (session.database.v1) — the connection's database after the script, on every
+        /// reply; null from older engines.</summary>
+        [Key(12)]
+        public string? CurrentDatabase { get; set; }
+    }
+
+    /// <summary>Spec 041 (R20) — one server or engine message of an execute, in stream order.</summary>
+    [MessagePackObject]
+    public sealed class ExecuteMessageDto
+    {
+        /// <summary>See <see cref="ExecuteMessageKind"/>.</summary>
+        [Key(0)]
+        public int Kind { get; set; }
+
+        /// <summary>The message text as the server sent it (no "Msg …" header).</summary>
+        [Key(1)]
+        public string Text { get; set; } = string.Empty;
+
+        /// <summary>The batch (0-based) the message belongs to.</summary>
+        [Key(2)]
+        public int BatchIndex { get; set; }
+
+        /// <summary>The error number; 0 for PRINT and engine messages.</summary>
+        [Key(3)]
+        public int Number { get; set; }
+
+        /// <summary>The severity (<c>SqlError.Class</c>).</summary>
+        [Key(4)]
+        public int Severity { get; set; }
+
+        [Key(5)]
+        public int State { get; set; }
+
+        /// <summary>The line within the batch (1-based); 0 when the server gave none.</summary>
+        [Key(6)]
+        public int Line { get; set; }
+
+        /// <summary>The procedure the error was raised in, or null.</summary>
+        [Key(7)]
+        public string? Procedure { get; set; }
+
+        /// <summary>The result set a row count belongs to; -1 for none.</summary>
+        [Key(8)]
+        public int ResultSetIndex { get; set; } = -1;
+
+        /// <summary>The statement's row count (RowCount messages); -1 for none.</summary>
+        [Key(9)]
+        public long RowCount { get; set; } = -1;
+    }
+
+    /// <summary>Spec 041 (R20) — one batch of an execute, after GO splitting.</summary>
+    [MessagePackObject]
+    public sealed class ExecuteBatchDto
+    {
+        [Key(0)]
+        public int Index { get; set; }
+
+        /// <summary>The 1-based line of the submitted SQL where the batch text starts; the batch is sent
+        /// verbatim, so the server's line 1 is this line.</summary>
+        [Key(1)]
+        public int StartLine { get; set; } = 1;
+
+        [Key(2)]
+        public int StartOffset { get; set; }
+
+        [Key(3)]
+        public int EndOffset { get; set; }
+
+        /// <summary>See <see cref="ExecuteStatus"/> (Skipped when the batch never ran).</summary>
+        [Key(4)]
+        public int Status { get; set; }
+
+        [Key(5)]
+        public long ElapsedMs { get; set; }
+
+        /// <summary>How many times the batch ran (<c>GO n</c>), at least 1; clamped by the engine.</summary>
+        [Key(6)]
+        public int RepeatCount { get; set; } = 1;
+
+        [Key(7)]
+        public int ErrorCount { get; set; }
+    }
+
+    /// <summary>Values of <see cref="ExecuteMessageDto.Kind"/>.</summary>
+    public static class ExecuteMessageKind
+    {
+        /// <summary>PRINT, or a server message of severity 10 or lower.</summary>
+        public const int Info = 0;
+
+        /// <summary>A statement's row count.</summary>
+        public const int RowCount = 1;
+
+        /// <summary>A server error (severity 11 or higher).</summary>
+        public const int Error = 2;
+
+        /// <summary>A line the engine adds (loop start and end, skipped batches, omitted messages).</summary>
+        public const int System = 3;
     }
 
     /// <summary>Browser → Engine: cancel a (possibly queued) execute by QueryId. NOTIFICATION — no reply.</summary>
@@ -296,6 +430,50 @@ namespace AkmlSql.Core.Ipc.Messages
         public const int Cancelled = 2;
         public const int TimedOut = 3;
         public const int NoConnection = 4;
+
+        /// <summary>Spec 041 — a batch that never ran (the connection closed, or an earlier batch timed out).</summary>
+        public const int Skipped = 5;
+
+        /// <summary>Spec 041 — client-only: the bridge dropped before the reply came.</summary>
+        public const int Disconnected = 6;
+
+        /// <summary>Spec 041 — client-only: no reply within the deadline.</summary>
+        public const int NoReply = 7;
+    }
+
+    /// <summary>
+    /// The time limits of one execute, shared by the engine (which enforces them) and the web (which waits
+    /// for the reply on the same figure), so the two always agree.
+    /// </summary>
+    public static class ExecuteLimits
+    {
+        /// <summary>The longest one command may run, whatever the request asks.</summary>
+        public const int CommandTimeoutCeilingSeconds = 600;
+
+        /// <summary>The command timeout the engine uses when the request gives none.</summary>
+        public const int CommandTimeoutDefaultSeconds = 30;
+
+        /// <summary>The longest a whole script may run: the engine connection serves one request at a time, so a
+        /// script without an end (<c>WAITFOR … GO 10000</c>) would block completion, schema refresh and Cancel.</summary>
+        public const int ScriptTimeLimitCeilingSeconds = 3600;
+
+        /// <summary>The per-command timeout the engine applies for a requested <paramref name="requestedSeconds"/>.</summary>
+        public static int CommandTimeoutSeconds(int requestedSeconds)
+        {
+            int seconds = requestedSeconds <= 0 ? CommandTimeoutDefaultSeconds : requestedSeconds;
+            return Math.Min(seconds, CommandTimeoutCeilingSeconds);
+        }
+
+        /// <summary>
+        /// How long a whole script may run, start to last row: the command timeout for each command it runs
+        /// (<paramref name="commandRuns"/> = its batches, each as many times as its <c>GO n</c> says), at most
+        /// <see cref="ScriptTimeLimitCeilingSeconds"/>. The engine stops the script there and replies.
+        /// </summary>
+        public static TimeSpan ScriptTimeLimit(int requestedTimeoutSeconds, long commandRuns)
+        {
+            double seconds = (double)CommandTimeoutSeconds(requestedTimeoutSeconds) * Math.Max(1, commandRuns);
+            return TimeSpan.FromSeconds(Math.Min(seconds, ScriptTimeLimitCeilingSeconds));
+        }
     }
 
     /// <summary>Per-column CLR parse hints carried in <see cref="ExecuteResultSet.ClrTypeHints"/>.</summary>

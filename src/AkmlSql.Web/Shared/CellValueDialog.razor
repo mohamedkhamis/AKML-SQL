@@ -1,0 +1,165 @@
+@*
+    Spec 041 (research R8, FR-002, FR-017) — "View value": one result value in full, in an in-app dialog.
+    The header names the column and its declared type with NULL / NOT NULL; the body gives the size and the
+    whole value in a read-only, wrapping text area; Copy puts it on the clipboard. A value the engine itself
+    cut (very large text or binary) has no content to show: the dialog says so and suggests a shorter
+    projection instead of pretending. It needs a scrollable body and a Copy button, which IDialogService's
+    confirm/prompt dialogs cannot express. Styles: .akml-scrim / .akml-dialog (components/shell.css).
+*@
+@using AkmlSql.Web.Shared.Grid
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="akml-scrim" @onclick="CloseAsync">
+    <div @ref="_panel" class="akml-dialog akml-dialog--wide akml-cellvalue" role="dialog" aria-modal="true" tabindex="-1"
+         aria-labelledby="akml-cellvalue-title" aria-describedby="akml-cellvalue-size"
+         data-testid="results-view-value" @onclick:stopPropagation="true" @onkeydown="OnKeyDownAsync">
+        <div class="akml-dialog-header">
+            <h2 class="akml-dialog-title" id="akml-cellvalue-title" data-testid="results-view-value-title">@ColumnName</h2>
+            <span class="akml-cellvalue-type" data-testid="results-view-value-type">@TypeLine</span>
+        </div>
+        <div class="akml-dialog-body">
+            <p class="akml-dialog-message" id="akml-cellvalue-size" data-testid="results-view-value-size">@GridCellText.DescribeSize(Value)</p>
+            @if (IsEngineCut)
+            {
+                <p class="akml-dialog-message" data-testid="results-view-value-cut">
+                    The engine returned only this value's size, so its content is not available here. To see part
+                    of it, run the query again selecting a shorter projection, for example
+                    <code>@Projection</code>.
+                </p>
+            }
+            else
+            {
+                <textarea @ref="_text" class="akml-textarea akml-cellvalue-text" readonly spellcheck="false" wrap="soft"
+                          aria-label="@($"Value of {ColumnName}")" data-testid="results-view-value-text">@Value</textarea>
+            }
+        </div>
+        <div class="akml-dialog-footer">
+            @if (_copied)
+            {
+                <span class="akml-cellvalue-status" role="status" data-testid="results-view-value-copied">Copied.</span>
+            }
+            @if (!IsEngineCut)
+            {
+                <button type="button" class="akml-btn" data-testid="results-view-value-copy" @onclick="CopyAsync">
+                    <Icon Name="copy" Size="14" /> Copy
+                </button>
+            }
+            <button @ref="_close" type="button" class="akml-btn akml-btn--primary" data-testid="results-view-value-close"
+                    @onclick="CloseAsync">Close</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>The column's name as the grid shows it.</summary>
+    [Parameter, EditorRequired] public string ColumnName { get; set; } = string.Empty;
+
+    /// <summary>The declared type, e.g. <c>nvarchar(max)</c>; empty when the engine did not send one.</summary>
+    [Parameter] public string? DeclaredType { get; set; }
+
+    /// <summary>Whether the column allows NULL; null when not known (a computed column).</summary>
+    [Parameter] public bool? AllowsNull { get; set; }
+
+    /// <summary>The whole value as the grid shows it (never NULL — View value is disabled for NULL).</summary>
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+
+    /// <summary>The engine sent only the value's size (<c>[text N chars]</c> / <c>[binary N bytes]</c>).</summary>
+    [Parameter] public bool IsEngineCut { get; set; }
+
+    /// <summary>The value is binary (the suggested projection uses SUBSTRING instead of LEFT).</summary>
+    [Parameter] public bool IsBinary { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference _panel;
+    private ElementReference _text;
+    private ElementReference _close;
+    private IJSObjectReference? _ui;
+    private bool _copied;
+    private bool _closed;
+
+    private string TypeLine
+    {
+        get
+        {
+            var type = string.IsNullOrWhiteSpace(DeclaredType) ? "unknown type" : DeclaredType!;
+            return AllowsNull switch
+            {
+                true => type + ", NULL",
+                false => type + ", NOT NULL",
+                _ => type,
+            };
+        }
+    }
+
+    private string Projection
+    {
+        get
+        {
+            var col = "[" + ColumnName.Replace("]", "]]") + "]";
+            return IsBinary ? $"SUBSTRING({col}, 1, 8000)" : $"LEFT({col}, 8000)";
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            _copied = _ui != null && await _ui.InvokeAsync<bool>("copyText", Value);
+        }
+        catch (JSException) { _copied = false; }
+        catch (JSDisconnectedException) { _copied = false; }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_closed) return;
+        _closed = true;
+        await RestoreFocusAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task RestoreFocusAsync()
+    {
+        try { if (_ui != null) await _ui.InvokeVoidAsync("restoreFocus"); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            if (_ui != null)
+            {
+                await _ui.InvokeVoidAsync("stashFocus", ".akml-dialog");
+                await _ui.InvokeVoidAsync("trapTab", _panel);
+            }
+            // The text first, so the keyboard can scroll and select it; Close when there is none.
+            await (IsEngineCut ? _close : _text).FocusAsync();
+        }
+        catch (JSDisconnectedException) { /* tab closing */ }
+        catch (JSException) { /* element gone — harmless */ }
+        catch (InvalidOperationException) { /* no JS (prerender) — harmless */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_closed) await RestoreFocusAsync();
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+}

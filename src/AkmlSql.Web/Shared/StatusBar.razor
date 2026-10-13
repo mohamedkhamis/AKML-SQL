@@ -7,9 +7,9 @@
     still work" reads as **Cached**, distinct from **Offline** (keyword-only).
 *@
 @using AkmlSql.Web.Services
+@using Microsoft.Extensions.DependencyInjection
 @implements IDisposable
 @inject IEngineBridge Bridge
-@inject IConnectionStore Connections
 @inject ISchemaCacheStore SchemaCache
 @inject ISchemaSync SchemaSync
 @inject ISqlConnectionService SqlConn
@@ -17,28 +17,53 @@
 @inject IConnectionManagerController ConnManager
 @inject IEngineAutoConnect AutoConnect
 @inject NavigationManager Nav
+@inject IServiceProvider Services
 
 <div class="akml-status">
-    <span class="akml-status-pill @PillClass" data-testid="status-pill">@PillLabel</span>
+    @* Spec 041 (T160): the engine indicator opens Settings › Diagnostics, where the engine's log is. *@
+    <a class="akml-status-pill @PillClass" href="settings/diagnostics" data-testid="status-pill"
+       title="Engine status — open Diagnostics">@PillLabel</a>
     <span class="akml-status-text" title="@StatusText">@StatusText</span>
+
+    @* Spec 041 (R41, FR-027) — how the last execute went, as SSMS's status bar says it. Always rendered so a
+       screen reader announces each change of the live region. *@
+    <span class="akml-status-outcome @OutcomeClass" role="status" aria-live="polite" data-testid="status-outcome"
+          title="@(Workspace?.ErrorMessage)">
+        @if (Workspace?.Outcome is { } outcome)
+        {
+            @if (Workspace.Phase == ExecutionPhase.Running)
+            {
+                <Icon Name="loader-circle" Size="14" Class="akml-status-spin" />
+            }
+            else if (Workspace.Phase == ExecutionPhase.Succeeded)
+            {
+                <Icon Name="circle-check" Size="14" />
+            }
+            else
+            {
+                <Icon Name="circle-alert" Size="14" />
+            }
+            <span>@outcome</span>
+        }
+    </span>
 
     @* A stalled bridge used to be a dead end: the pill said "Offline" and nothing said why or what
        to do, so the only way forward was knowing to open Settings. The reason and the way out now
        sit next to the pill, and only appear when there is actually something wrong. *@
-    @if (AutoConnect.LastFailure is { } failure)
+    @if (_bridgeState != BridgeState.Open && AutoConnect.LastFailure is { } failure)
     {
         <span class="akml-status-issue" data-testid="engine-issue">
             <span class="akml-status-issue-text">@failure.Message</span>
             @if (failure.Kind == EngineConnectFailureKind.NotPaired
                  || failure.Kind == EngineConnectFailureKind.PairingRequired)
             {
-                <button type="button" class="akml-status-action"
-                        @onclick="@(() => Nav.NavigateTo("/settings"))"
+                <button type="button" class="akml-btn akml-btn--compact"
+                        @onclick="@(() => Nav.NavigateTo("settings/connections"))"
                         data-testid="engine-setup">Set up engine</button>
             }
             else
             {
-                <button type="button" class="akml-status-action"
+                <button type="button" class="akml-btn akml-btn--compact"
                         @onclick="RetryEngineAsync" data-testid="engine-retry">
                     @RetryLabel
                 </button>
@@ -47,16 +72,37 @@
     }
 
     <span class="akml-status-spacer"></span>
+    @if (RowsText is { } rows)
+    {
+        <span class="akml-status-text akml-status-rows" data-testid="status-rows">@rows</span>
+    }
+    @* Spec 041 (R65, FR-083): the caret, as SSMS's status bar shows it. *@
+    @if (Workspace != null)
+    {
+        <span class="akml-status-text" data-testid="status-caret">Ln @Workspace.CaretLine, Col @Workspace.CaretColumn</span>
+    }
     <button type="button" class="akml-status-conn" @onclick="@(() => ConnManager.Open())"
             aria-label="Manage SQL connection" title="@ConnTooltip" data-testid="status-connection">
-        <span class="akml-status-conn-icon">🔌</span>
+        <span class="akml-status-conn-icon"><Icon Name="plug" Size="12" /></span>
         <span>@ConnLabel</span>
     </button>
+    @if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Login))
+    {
+        <span class="akml-status-text" data-testid="status-login" title="SQL Server login">@SqlConn.Login</span>
+    }
+    @* Short versions; the full build string on hover; a marker when the web app and the engine are different builds. *@
     @if (!string.IsNullOrEmpty(Bridge.EngineVersion))
     {
-        <span class="akml-status-text">Engine @Bridge.EngineVersion</span>
+        <span class="akml-status-text" data-testid="status-version-engine" title="@Bridge.EngineVersion">Engine @AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion)</span>
+        @if (VersionsDiffer)
+        {
+            <span class="akml-status-mismatch" data-testid="status-version-mismatch" role="img" aria-label="The web app and the engine are different builds"
+                  title="The web app and the engine are different builds. Update the older one so they match.">
+                <Icon Name="triangle-alert" Size="14" />
+            </span>
+        }
     }
-    <span class="akml-status-text">Web @AkmlSql.Core.AppVersion.Current</span>
+    <span class="akml-status-text" data-testid="status-version-web" title="@AkmlSql.Core.AppVersion.Informational">Web @AkmlSql.Core.AppVersion.Current</span>
 </div>
 
 <style>
@@ -87,37 +133,31 @@
         text-overflow: ellipsis;
         max-width: 42ch;
     }
-    .akml-status-action {
-        background: none;
-        border: 1px solid var(--akml-border-default);
-        border-radius: 3px;
-        color: var(--akml-text-link);
-        cursor: pointer;
-        font: inherit;
-        padding: 0 var(--akml-scalar-spacing-xs);
-        white-space: nowrap;
-    }
-    .akml-status-action:hover { background-color: var(--akml-surface-hover); }
-    .akml-status-action:focus-visible {
-        outline: 2px solid var(--akml-accent-primary);
-        outline-offset: 1px;
-    }
-    .akml-status-action[disabled] { color: var(--akml-text-secondary); cursor: default; }
 
+    .akml-status-outcome { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .akml-status-outcome--ok { color: var(--akml-statustext-success); }
+    .akml-status-outcome--failed { color: var(--akml-statustext-danger); }
+    .akml-status-rows { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .akml-status-spin { animation: akml-status-spin 1.1s linear infinite; }
+    @@keyframes akml-status-spin { to { transform: rotate(360deg); } }
+    @@media (prefers-reduced-motion: reduce) { .akml-status-spin { animation: none; } }
+
+    .akml-status-mismatch { display: inline-flex; color: var(--akml-statustext-warning); }
     .akml-status-pill {
+        text-decoration: none;
         padding: 1px var(--akml-scalar-spacing-xs);
         border-radius: var(--akml-scalar-radius-xs);
         color: var(--akml-text-onaccent);
         font-size: 11px;
     }
-    .akml-status-pill-live { background-color: var(--akml-status-success); }
-    .akml-status-pill-bridgeonly { background-color: var(--akml-status-warning); }
-    .akml-status-pill-cached { background-color: var(--akml-status-info); }
-    .akml-status-pill-offline { background-color: var(--akml-border-strong); }
-    .akml-status-pill-disconnected { background-color: var(--akml-border-strong); }
-    .akml-status-pill-connecting { background-color: var(--akml-status-info); }
-    .akml-status-pill-reconnecting { background-color: var(--akml-status-warning); }
-    .akml-status-pill-failed { background-color: var(--akml-status-danger); }
+    .akml-status-pill-live { background-color: var(--akml-badge-success); }
+    .akml-status-pill-bridgeonly { background-color: var(--akml-badge-warning); }
+    .akml-status-pill-cached { background-color: var(--akml-accent-primary); }
+    .akml-status-pill-offline,
+    .akml-status-pill-disconnected { background-color: var(--akml-badge-neutral); color: var(--akml-badge-neutraltext); }
+    .akml-status-pill-connecting { background-color: var(--akml-accent-primary); }
+    .akml-status-pill-reconnecting { background-color: var(--akml-badge-warning); }
+    .akml-status-pill-failed { background-color: var(--akml-badge-error); }
     /* Shrinks with an ellipsis when the bar runs out of room (a phone): a fixed-width status
        line used to make every page wider than the screen. The full text is its tooltip. */
     .akml-status-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -144,14 +184,14 @@
         color: var(--akml-text-primary);
         border-color: var(--akml-border-default);
     }
-    .akml-status-conn-icon { font-size: 11px; }
-    .akml-status-action { flex: 0 0 auto; }
+    .akml-status-conn-icon { display: inline-flex; }
 
     /* A phone: the bar wraps onto a second line rather than squeezing its buttons into each other. */
     @@media (max-width: 600px) {
         .akml-status { flex-wrap: wrap; row-gap: 2px; }
         .akml-status-spacer { display: none; }
     }
+    .akml-status .akml-btn--compact { flex: 0 0 auto; }
 </style>
 
 @code {
@@ -162,6 +202,40 @@
     /// after an F5 reload the bridge auto-reconnects while the SQL session is gone, and the old
     /// binary state showed a full-green "Live" while completions silently degraded.</summary>
     private enum Availability { Live, BridgeOnly, Cached, Offline, Disconnected, Connecting, Reconnecting, Failed }
+
+    // Spec 041 (R41) — the execute outcome. Resolved optionally so a host without it keeps working.
+    private IWorkspaceStatus? Workspace => _workspace ??= Services.GetService<IWorkspaceStatus>();
+    private IWorkspaceStatus? _workspace;
+    private System.Threading.Timer? _elapsedTimer;
+
+    private string? OutcomeClass => Workspace?.Phase switch
+    {
+        ExecutionPhase.Succeeded => "akml-status-outcome--ok",
+        ExecutionPhase.Failed => "akml-status-outcome--failed",
+        _ => null,
+    };
+
+    /// <summary>"16 rows · 87 ms" after a run; the elapsed time (hh:mm:ss) while one runs.</summary>
+    private string? RowsText
+    {
+        get
+        {
+            var w = Workspace;
+            if (w == null || w.Phase == ExecutionPhase.Idle) return null;
+            if (w.Phase == ExecutionPhase.Running)
+                return TimeSpan.FromMilliseconds(w.ElapsedMs).ToString(@"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture);
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            return $"{w.RowCount.ToString("N0", inv)} row{(w.RowCount == 1 ? "" : "s")} · {w.ElapsedMs.ToString("N0", inv)} ms";
+        }
+    }
+
+    private void OnWorkspaceChanged() => _ = InvokeAsync(() =>
+    {
+        // The elapsed clock ticks on its own timer, only while a query runs.
+        bool running = Workspace?.Phase == ExecutionPhase.Running;
+        _elapsedTimer?.Change(running ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
+        StateHasChanged();
+    });
 
     private BridgeState _bridgeState = BridgeState.Disconnected;
     private bool _cachePresent;
@@ -240,6 +314,12 @@
         SqlConn.StateChanged += OnSqlConnChanged;
         _countdownTimer = new System.Threading.Timer(_ => TickCountdown(), null,
             System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+        if (Workspace != null)
+        {
+            Workspace.Changed += OnWorkspaceChanged;
+            _elapsedTimer = new System.Threading.Timer(_ => TickCountdown(), null,
+                System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -255,13 +335,14 @@
     {
         try
         {
-            var connId = await Connections.GetActiveIdAsync();
-            if (string.IsNullOrEmpty(connId)) { _cachePresent = false; return; }
-            var conn = await Connections.GetAsync(connId);
-            if (conn == null) { _cachePresent = false; return; }
-            // Matches Editor.razor's active-session derivation (db is the "master" placeholder
-            // until the per-connection db picker lands).
-            var snapshot = await SchemaCache.GetAsync($"{conn.Host}:{conn.Port}", "master");
+            // Spec 041 (T195): the SAME key the schema sync writes under — the SQL connection's (server, database),
+            // not the engine pairing's host:port with a "master" placeholder, which never matched.
+            if (!SqlConn.IsConnected || string.IsNullOrEmpty(SqlConn.Server) || string.IsNullOrEmpty(SqlConn.Database))
+            {
+                _cachePresent = false;
+                return;
+            }
+            var snapshot = await SchemaCache.GetAsync(SqlConn.Server!, SqlConn.Database!);
             _cachePresent = snapshot?.PhaseA is { Length: > 0 };
         }
         catch
@@ -357,13 +438,19 @@
     // SQL-connection indicator: reflects ISqlConnectionService (the SQL session), distinct from the
     // bridge/cache pill above. Clicking opens the connection manager. Spec 032: the pill itself
     // now also depends on the SQL session (Live vs BridgeOnly) — recompute, don't just repaint.
-    private void OnSqlConnChanged() => InvokeAsync(() =>
+    private void OnSqlConnChanged() => InvokeAsync(async () =>
     {
+        await ProbeCacheAsync();   // spec 041: the cache key is the SQL connection's (server, database)
         Recompute();
         StateHasChanged();
     });
 
     private string ConnLabel => SqlConn.IsConnected ? $"{SqlConn.Server}/{SqlConn.Database}" : "Connect";
+
+    /// <summary>Spec 041 (R65): the web app and the engine are different builds (build metadata aside).</summary>
+    private bool VersionsDiffer =>
+        !string.IsNullOrEmpty(Bridge.EngineVersion)
+        && !string.Equals(AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion), AkmlSql.Core.AppVersion.Current, StringComparison.Ordinal);
 
     private string ConnTooltip => SqlConn.IsConnected
         ? $"Connected to {SqlConn.Server} / {SqlConn.Database} — click to manage connections"
@@ -412,5 +499,7 @@
         SchemaSync.ChecksumDrifted -= OnChecksumDrifted;
         SqlConn.StateChanged -= OnSqlConnChanged;
         _countdownTimer?.Dispose();
+        if (_workspace != null) _workspace.Changed -= OnWorkspaceChanged;
+        _elapsedTimer?.Dispose();
     }
 }

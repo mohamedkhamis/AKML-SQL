@@ -25,6 +25,12 @@ public interface IThemeService
 
     /// <summary>Update the user override; persists to IndexedDB and re-applies.</summary>
     Task SetAsync(ThemeMode mode);
+
+    /// <summary>
+    /// Spec 041 (R47, R54): Restore defaults — delete the stored override (also when it already says System),
+    /// forget the boot mirror the first paint reads, and follow the system again.
+    /// </summary>
+    Task ResetAsync();
 }
 
 public enum ThemeMode { System, Light, Dark, HighContrast }
@@ -36,7 +42,11 @@ public enum ThemeMode { System, Light, Dark, HighContrast }
 /// </summary>
 public interface IThemeApplier
 {
+    /// <summary>Apply <paramref name="mode"/> and remember it for the next first paint (the boot mirror).</summary>
     Task ApplyAsync(ThemeMode mode);
+
+    /// <summary>Spec 041 (R54): forget the boot mirror, so the next first paint follows the system.</summary>
+    Task ForgetAsync();
 }
 
 internal sealed class JsThemeApplier : IThemeApplier
@@ -54,7 +64,13 @@ internal sealed class JsThemeApplier : IThemeApplier
     public async Task ApplyAsync(ThemeMode mode)
     {
         var mod = await _moduleLoader.Value.ConfigureAwait(false);
-        await mod.InvokeVoidAsync("apply", ToToken(mode)).ConfigureAwait(false);
+        await mod.InvokeVoidAsync("apply", ToToken(mode), true).ConfigureAwait(false);
+    }
+
+    public async Task ForgetAsync()
+    {
+        var mod = await _moduleLoader.Value.ConfigureAwait(false);
+        await mod.InvokeVoidAsync("forget").ConfigureAwait(false);
     }
 
     internal static string ToToken(ThemeMode mode) => mode switch
@@ -114,6 +130,16 @@ internal sealed class ThemeService : IThemeService
         await _store.SetAsync(StoreNames.ThemePreference, PreferenceKey,
             JsonSerializer.Serialize(new ThemePreferenceRecord { Mode = mode })).ConfigureAwait(false);
         await _applier.ApplyAsync(mode).ConfigureAwait(false);
+        Changed?.Invoke();
+    }
+
+    public async Task ResetAsync()
+    {
+        // Not through SetAsync: its "unchanged → return" would keep a stored System record.
+        await _store.DeleteAsync(StoreNames.ThemePreference, PreferenceKey).ConfigureAwait(false);
+        Current = ThemeMode.System;
+        await _applier.ApplyAsync(ThemeMode.System).ConfigureAwait(false);
+        await _applier.ForgetAsync().ConfigureAwait(false);   // after Apply, which writes the mirror
         Changed?.Invoke();
     }
 

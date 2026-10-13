@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using Microsoft.Playwright;
+using Xunit;
+using Xunit.Abstractions;
 
 namespace AkmlSql.Web.E2E.Tests.Harness;
 
@@ -51,6 +54,102 @@ public sealed class WebAppFixture : IAsyncDisposable
         }
         await fixture.DisposeAsync().ConfigureAwait(false);
         throw new TimeoutException($"Web app did not start at {fixture.Url} within 90s.");
+    }
+
+    /// <summary>
+    /// Spec 041 (T005, research R70) — the starting point of the grid, messages, workspace and shell
+    /// suites: the Debug web app, a <see cref="SandboxEngine"/> paired over loopback (no PIN), and a
+    /// connection to the local SQL Server's <paramref name="database"/> with Windows authentication.
+    /// Skips the test when there is no local SQL Server, no Debug build, or no Playwright Chromium.
+    /// The key recorder (<see cref="Keys"/>) is installed on the browser context.
+    /// </summary>
+    public static async Task<SqlSession> WithSqlOrSkipAsync(
+        ITestOutputHelper? output = null,
+        string database = "tempdb",
+        BrowserNewContextOptions? contextOptions = null,
+        Action<IPage>? configurePage = null,
+        string browserName = "chromium",
+        bool headless = true)
+    {
+        Skip.IfNot(await SandboxEngine.LocalSqlServerAnswersAsync(), "No local SQL Server answering on localhost:1433.");
+
+        var engine = await SandboxEngine.StartAsync();
+        WebAppFixture? web = null;
+        IPlaywright? pw = null;
+        IBrowser? browser = null;
+        try
+        {
+            try { web = await StartAsync(); }
+            catch (Exception ex) { throw new SkipException($"Web app could not start (build it Debug first): {ex.Message}"); }
+
+            pw = await Playwright.CreateAsync();
+            try
+            {
+                browser = browserName == "firefox" ? await pw.Firefox.LaunchForTestsAsync(new() { Headless = headless })
+                    : await pw.Chromium.LaunchForTestsAsync(new() { Channel = browserName == "edge" ? "msedge" : null, Headless = headless });
+            }
+            catch (PlaywrightException ex) { throw new SkipException($"Could not launch {browserName}: {ex.Message}"); }
+
+            var context = await browser.NewContextAsync(contextOptions ?? new BrowserNewContextOptions { ViewportSize = new() { Width = 1440, Height = 900 } });
+            await Keys.InstallAsync(context);
+            var page = await context.NewPageAsync();
+            configurePage?.Invoke(page);
+            page.Console += (_, m) => { if (m.Type is "error") SqlSession.Log(output, $"[browser {m.Type}] {m.Text}"); };
+
+            await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
+            await page.WaitForSelectorAsync("[data-testid='execute-button']", new() { Timeout = 60_000 });
+
+            await PairAsync(page, engine.Port);
+            await ConnectAsync(page, database);
+
+            await page.ClickAsync("nav >> text=Editor");
+            await page.WaitForSelectorAsync("[data-testid='sql-editor'] .cm-content", new() { Timeout = 30_000 });
+            return new SqlSession(engine, web, pw, browser, context, page);
+        }
+        catch
+        {
+            if (browser != null) await browser.DisposeAsync();
+            pw?.Dispose();
+            if (web != null) await web.DisposeAsync();
+            await engine.DisposeAsync();
+            throw;
+        }
+    }
+
+    /// <summary>Pair the page with an engine on 127.0.0.1 (loopback needs no PIN). Works with the
+    /// single Settings page and with spec 041's Settings › Connections section.</summary>
+    public static async Task PairAsync(IPage page, int port)
+    {
+        await page.ClickAsync("nav >> text=Settings");
+        var connections = page.Locator("[data-testid='settings-nav-connections']");
+        try { await connections.WaitForAsync(new() { Timeout = 3_000 }); await connections.ClickAsync(); }
+        catch (TimeoutException) { /* the pre-041 Settings page shows the engine list directly */ }
+        await page.WaitForTimeoutAsync(800);
+        await page.Locator("button", new() { HasTextString = "Add" }).First.ClickAsync();
+        await page.WaitForTimeoutAsync(400);
+        await page.FillAsync("[data-testid='engine-add-name']", "Sandbox engine");
+        await page.FillAsync("[data-testid='engine-add-host']", "127.0.0.1");
+        await page.FillAsync("[data-testid='engine-add-port']", port.ToString());
+        await page.ClickAsync("[data-testid='engine-add-pair']");
+        await Assertions.Expect(page.Locator("[data-testid='status-pill']")).ToContainTextAsync("Live", new() { Timeout = 60_000 });
+    }
+
+    /// <summary>Connect to localhost/<paramref name="database"/> with Windows authentication through the
+    /// connection manager.</summary>
+    public static async Task ConnectAsync(IPage page, string database)
+    {
+        await page.ClickAsync("[data-testid='status-connection']");
+        await page.WaitForSelectorAsync("[data-testid='connection-manager']");
+        await page.FillAsync("[data-testid='conn-server-input']", "localhost");
+        await page.Locator("[data-testid='conn-server-input']").DispatchEventAsync("change");
+        await page.CheckAsync("[data-testid='conn-auth-windows']");
+        await page.ClickAsync("[data-testid='conn-database-refresh']");
+        await Assertions.Expect(page.Locator($"[data-testid='conn-database-select'] option[value='{database}']"))
+            .ToHaveCountAsync(1, new() { Timeout = 30_000 });
+        await page.SelectOptionAsync("[data-testid='conn-database-select']", database);
+        await page.ClickAsync("[data-testid='conn-connect-btn']");
+        await Assertions.Expect(page.Locator("[data-testid='status-connection']"))
+            .ToContainTextAsync($"localhost/{database}", new() { Timeout = 30_000 });
     }
 
     private static string FindRepoRoot()

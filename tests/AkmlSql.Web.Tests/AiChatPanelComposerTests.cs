@@ -25,6 +25,7 @@ public sealed class AiChatPanelComposerTests : BunitContext
         Services.AddSingleton<IAiFeatureSettings>(new FakeAiFeatureSettings());
         Services.AddSingleton<IChatHistoryStore>(new FakeChatHistoryStore());
         Services.AddSingleton<IDiagnosticsRingBuffer>(new FakeDiagnosticsRingBuffer());
+        Services.AddSingleton<INotificationService>(new FakeNotificationService());
     }
 
     private static string SendButtonMarkup(IRenderedComponent<AiChatPanel> cut) =>
@@ -82,4 +83,14 @@ public sealed class AiChatPanelComposerTests : BunitContext
         });
     }
 
+    // Spec 041 (T205, FR-088) — an empty conversation is the shared empty state, saying what to do.
+    [Fact]
+    public void An_empty_conversation_says_what_to_do()
+    {
+        var cut = Render<AiChatPanel>();
+
+        var empty = cut.WaitForElement("[data-testid=chat-empty]");
+        Assert.Contains("akml-empty", empty.ClassList);
+        Assert.Contains("Type a question", empty.TextContent);
+    }
 }

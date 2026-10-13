@@ -1,0 +1,209 @@
+@*
+    Spec 041 (research R59, FR-086) — renders IDialogService's current dialog: confirmations, prompts and
+    alerts, one at a time. Mounted once in MainLayout; position:fixed, so it adds no in-flow row to the
+    layout's three-row grid. Styles: .akml-scrim / .akml-dialog in wwwroot/css/components/shell.css.
+
+    Safety convention (the WPF FR-005 rule): Cancel is focused on open and is the Escape target; a
+    destructive confirm button is never the Enter target — Enter is acted on only inside a prompt's input.
+*@
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+
+@if (_entry != null)
+{
+    var confirm = _entry.Confirm;
+    var prompt = _entry.Prompt;
+    var title = prompt?.Title ?? confirm?.Title ?? string.Empty;
+    var message = prompt?.Message ?? confirm?.Message ?? string.Empty;
+    var invalid = _entry.Kind == DialogKind.Prompt && _error != null;
+
+    <div class="akml-scrim" data-testid="dialog-scrim">
+        <div @ref="_panel" class="akml-dialog" role="dialog" aria-modal="true" tabindex="-1"
+             aria-labelledby="akml-dialog-title" aria-describedby="akml-dialog-message"
+             data-testid="dialog" @onkeydown="OnKeyDownAsync">
+            <div class="akml-dialog-header">
+                <h2 class="akml-dialog-title" id="akml-dialog-title" data-testid="dialog-title">@title</h2>
+            </div>
+            <div class="akml-dialog-body">
+                <p class="akml-dialog-message" id="akml-dialog-message" data-testid="dialog-message">@message</p>
+                @if (confirm?.Details is { Count: > 0 } details)
+                {
+                    <ul class="akml-dialog-details" data-testid="dialog-details">
+                        @foreach (var line in details)
+                        {
+                            <li>@line</li>
+                        }
+                    </ul>
+                }
+                @if (prompt != null)
+                {
+                    <label class="akml-field">
+                        <span class="akml-field-label">@prompt.Label</span>
+                        <input @ref="_input" class="akml-input" type="text" spellcheck="false"
+                               data-testid="dialog-input" value="@_value" placeholder="@prompt.Placeholder"
+                               maxlength="@prompt.MaxLength"
+                               aria-invalid="@(invalid ? "true" : "false")"
+                               aria-describedby="@(invalid ? "akml-dialog-error" : null)"
+                               @oninput="OnInput" @onkeydown="OnInputKeyDownAsync" />
+                    </label>
+                    @if (invalid && _touched)
+                    {
+                        <p class="akml-field-error" id="akml-dialog-error" role="alert" data-testid="dialog-error">@_error</p>
+                    }
+                }
+            </div>
+            <div class="akml-dialog-footer">
+                @if (_entry.Kind != DialogKind.Alert)
+                {
+                    <button @ref="_cancel" type="button" class="akml-btn" data-testid="dialog-cancel"
+                            @onclick="CancelAsync">@(prompt?.CancelLabel ?? confirm?.CancelLabel ?? "Cancel")</button>
+                }
+                <button @ref="_ok" type="button" data-testid="dialog-confirm"
+                        class="akml-btn @(confirm is { Destructive: true } ? "akml-btn--danger" : "akml-btn--primary")"
+                        disabled="@invalid" title="@(invalid ? _error : null)" @onclick="ConfirmAsync">@(_entry.Kind == DialogKind.Alert ? "OK" : prompt?.ConfirmLabel ?? confirm?.ConfirmLabel ?? "OK")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private DialogEntry? _entry;
+    private ElementReference _panel;
+    private ElementReference _input;
+    private ElementReference _cancel;
+    private ElementReference _ok;
+    private IJSObjectReference? _ui;
+
+    private string _value = string.Empty;
+    private string? _error;
+    private bool _touched;
+
+    // Set when a dialog appears / disappears; acted on after the render that shows / hides it.
+    private bool _openPending;
+    private bool _restorePending;
+
+    protected override void OnInitialized()
+    {
+        Dialogs.Changed += OnDialogsChanged;
+        Show(Dialogs.Current);
+    }
+
+    private void OnDialogsChanged() => _ = InvokeAsync(() =>
+    {
+        Show(Dialogs.Current);
+        StateHasChanged();
+    });
+
+    private void Show(DialogEntry? next)
+    {
+        if (ReferenceEquals(next, _entry)) return;
+        if (_entry != null) _restorePending = true;
+        _entry = next;
+        _touched = false;
+        _value = next?.Prompt?.InitialValue ?? string.Empty;
+        _error = Validate(_value);
+        _openPending = next != null;
+    }
+
+    private string? Validate(string value) =>
+        _entry?.Kind == DialogKind.Prompt ? _entry.Prompt!.Validate?.Invoke(value) : null;
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _value = e.Value?.ToString() ?? string.Empty;
+        _touched = true;
+        _error = Validate(_value);
+    }
+
+    private async Task OnInputKeyDownAsync(KeyboardEventArgs e)
+    {
+        // Enter confirms a valid prompt from its input — the only place Enter acts.
+        if (e.Key == "Enter" && _error == null) await ConfirmAsync();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CancelAsync();
+    }
+
+    private Task ConfirmAsync()
+    {
+        var entry = _entry;
+        if (entry == null) return Task.CompletedTask;
+        switch (entry.Kind)
+        {
+            case DialogKind.Prompt:
+                _touched = true;
+                _error = Validate(_value);
+                if (_error != null) return Task.CompletedTask;
+                Dialogs.Complete(entry, _value);
+                break;
+            case DialogKind.Confirm:
+                Dialogs.Complete(entry, true);
+                break;
+            default:
+                Dialogs.Complete(entry, null);
+                break;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task CancelAsync()
+    {
+        var entry = _entry;
+        if (entry == null) return Task.CompletedTask;
+        Dialogs.Complete(entry, entry.Kind switch
+        {
+            DialogKind.Confirm => false,
+            _ => null,
+        });
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_restorePending && !_openPending) return;
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            if (_restorePending)
+            {
+                _restorePending = false;
+                if (_ui != null) await _ui.InvokeVoidAsync("restoreFocus");
+            }
+            if (_openPending && _entry != null)
+            {
+                _openPending = false;
+                if (_ui != null)
+                {
+                    await _ui.InvokeVoidAsync("stashFocus", ".akml-dialog");
+                    await _ui.InvokeVoidAsync("trapTab", _panel);
+                }
+                // Cancel first (the safe default); a prompt's input; an alert's only button.
+                var target = _entry.Kind switch
+                {
+                    DialogKind.Prompt => _input,
+                    DialogKind.Alert => _ok,
+                    _ => _cancel,
+                };
+                await target.FocusAsync();
+            }
+        }
+        catch (JSDisconnectedException) { /* tab closing */ }
+        catch (JSException) { /* element gone between render and interop — harmless */ }
+        catch (InvalidOperationException) { /* prerender / no JS — harmless */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Dialogs.Changed -= OnDialogsChanged;
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
+    }
+}
