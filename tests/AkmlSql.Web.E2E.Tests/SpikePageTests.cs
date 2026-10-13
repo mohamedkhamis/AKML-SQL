@@ -31,7 +31,7 @@ public sealed class SpikePageTests
             + "to run this test. See quickstart.md §8.");
 
         using var playwright = await Playwright.CreateAsync();
-        await using var browser = await playwright.Chromium.LaunchAsync();
+        await using var browser = await playwright.Chromium.LaunchForTestsAsync();
         var page = await browser.NewPageAsync();
 
         // Capture any uncaught JS/WASM error. The spike catches and renders handled

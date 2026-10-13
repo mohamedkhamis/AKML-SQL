@@ -39,7 +39,7 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
     public async Task Explore_the_deployed_web_edition()
     {
         using var playwright = await Playwright.CreateAsync();
-        await using var browser = await playwright.Chromium.LaunchAsync();
+        await using var browser = await playwright.Chromium.LaunchForTestsAsync();
         var context = await browser.NewContextAsync(new()
         {
             ViewportSize = new ViewportSize { Width = ShotWidth, Height = ShotHeight },
@@ -96,7 +96,7 @@ public sealed class SiteScreenshotTour(ITestOutputHelper output)
         // this Chromium refuses the wss:// upgrade and the handshake sits at "Connecting" forever
         // with nothing in the UI to say why. A real user clicks through the browser's warning once;
         // an automated browser has to be told.
-        await using var browser = await playwright.Chromium.LaunchAsync(new()
+        await using var browser = await playwright.Chromium.LaunchForTestsAsync(new()
         {
             Args = ["--ignore-certificate-errors"],
         });

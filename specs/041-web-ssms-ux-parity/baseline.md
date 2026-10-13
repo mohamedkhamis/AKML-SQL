@@ -480,6 +480,10 @@ Browser verification exposed two product problems, fixed in this follow-up:
 
 The touch acceptance test now checks whether Schema is already folded at the current
 zoom before toggling it, and verifies that tapping its edge strip restores the panel.
+The stronger assertion initially failed: an unpaced burst of CDP drag moves suppressed
+the next tap, also reproduced on a plain HTML page without application handlers.
+Pacing the eight drag steps at 100ms resolves that test-input problem. Both splitter
+and column resizing remain covered at 100% and 150%; temporary tracing was removed.
 
 | Suite | Passed | Failed | Skipped |
 |---|---:|---:|---:|
@@ -493,14 +497,18 @@ zoom before toggling it, and verifies that tapping its edge strip restores the p
 | Analysis | 5 | 0 | 0 |
 | AI | 55 | 0 | 0 |
 | Web JavaScript | 98 | 0 | 0 |
-| Playwright, unique outcomes including follow-ups | 95 | 0 | 10 |
+| Playwright, unique outcomes including follow-ups through 2026-10-13 | 98 | 0 | 10 |
 
 The 23m46s full Playwright run initially returned **92 passed / 3 failed / 10 skipped**.
 Two installed-service reconnect cases encountered a pairing PIN older than its 24-hour
 lifetime. After refreshing the service, all five reconnect cases passed. The third
-failure was the touch-panel timing assumption described above. The seven-case follow-up
+failure was the touch interaction described above. The seven-case follow-up
 (five reconnect cases, touch, and the extended JSON copy case) passed **7/7**. The updated
-touch test is recorded separately in `NativeAndTouch.Final.trx`. Screenshot-generation
+touch assertion failed in `NativeAndTouch.Final.trx`; after correcting gesture timing,
+both accessibility tests passed in `Accessibility.Final.trx` on 2026-10-13.
+The three native keyboard cases in `NativeAndTouch.Final.trx` skipped because Windows
+refused browser foreground focus; no native input was sent. The prior 2026-10-11 native
+pass remains historical evidence, not a claimed pass for this review run. Screenshot-generation
 tours were excluded; the behavioral suite covers themes and supported layouts.
 
 The Core positional-profile-contract failure and all 42 Web formatter-corpus failures
@@ -518,3 +526,25 @@ Both generated-theme checks pass. Raw logs and TRX files are under
 deduplicated browser outcomes and zero regressions. This verifies the working-tree
 builds; installed payloads were not updated. The installed bridge service is restored
 to Running after its reconnect tests.
+
+### Verification of the updated branch — 2026-10-13
+
+The checkout advanced to `d360022` during the review, incorporating the earlier grid
+corrections plus separate SSMS shortcut, updater and web-theme commits. Rebuilt the
+Debug Web bundle before browser verification and rebuilt the complete solution in
+Release with VS 18 Insiders MSBuild. Both generated-theme checks pass.
+
+`Review.Current.trx` passes **14/14**: all ten review regression cases, the three new
+Light/Dark/HighContrast popup/filter cases, and a second run of the corrected touch
+case. `Accessibility.Final.trx` also passes **2/2**. Combining these with the full cycle
+and reconnect follow-up gives **98 passed / 0 failed / 10 existing skips**, with no lost
+previously passing browser cases. These are deduplicated results across the recorded
+runs, not a claim that the complete suite was rerun after every later commit.
+
+The updated schema component checks pass **16/16** and updater download/scheduling
+unit checks pass **43/43**. The built updater PE subsystem is Windows GUI (2), verifying
+the console-free executable setting without running an installation. No installer
+smoke tests or deployment were performed. The bridge service is Running, and zero
+`akml_review_*` tables/views remain in tempdb after the final browser run.
+
+The full updated shell suite passes **927/927** (Shell.Current.trx), including the new shortcut isolation cases.

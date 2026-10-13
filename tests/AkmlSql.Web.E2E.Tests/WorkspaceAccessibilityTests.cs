@@ -87,29 +87,27 @@ public sealed class WorkspaceAccessibilityTests(ITestOutputHelper output)
             contextOptions: new() { ViewportSize = new() { Width = 1800, Height = 1200 }, HasTouch = true });
         var page = s.Page;
         var cdp = await s.Context.NewCDPSessionAsync(page);
-        await page.EvaluateAsync("""
-            () => { window.__touchTrace = []; const prevent = Event.prototype.preventDefault;
-                Event.prototype.preventDefault = function() { window.__touchTrace.push({prevent:this.type, target:this.target?.getAttribute?.('data-testid'), stack:new Error().stack}); return prevent.call(this); };
-                for (const type of ['pointerdown', 'pointerup', 'touchstart', 'touchend', 'mousedown', 'mouseup', 'click']) document.addEventListener(type,
-                    e => window.__touchTrace.push({type, prevented:e.defaultPrevented, probe:e.target.__tapProbe, target: e.target.getAttribute('data-testid') || e.target.tagName, x:e.clientX, y:e.clientY}), false); }
-            """);
         foreach (var zoom in new[] { 1.0, 1.5 })
         {
             await page.EvaluateAsync("zoom => { document.body.style.zoom = zoom; }", zoom);
             await s.ExecuteAsync("SELECT 1 AS n, 'touch resize' AS label;");
-            foreach (var (id, minimum, vertical) in new[] { ("workspace-splitter-bottom", 12, true) })
+            foreach (var (id, minimum, vertical) in new[] { ("workspace-splitter-bottom", 12, true), ("results-col-resizer-0", 8, false) })
             {
                 var target = page.GetByTestId(id);
                 await target.ScrollIntoViewIfNeededAsync();
                 var box = (await target.BoundingBoxAsync())!;
-                output.WriteLine($"{id}: {box.X},{box.Y} {box.Width}x{box.Height}");
                 Assert.True((vertical ? box.Height : box.Width) >= minimum * zoom - 1);
                 float x = box.X + box.Width / 2, y = box.Y + box.Height / 2;
                 var measured = vertical ? page.GetByTestId("workspace-results") : page.GetByTestId("results-col-0");
                 var before = (await measured.BoundingBoxAsync())!;
                 await cdp.SendAsync("Input.dispatchTouchEvent", new() { ["type"] = "touchStart", ["touchPoints"] = new[] { new { x, y } } });
                 for (var step = 1; step <= 8; step++)
+                {
+                    // Pace the gesture as a deliberate resize. A burst of CDP moves can leave
+                    // Chromium suppressing the next tap after a fast drag, even on a plain page.
+                    await page.WaitForTimeoutAsync(100);
                     await cdp.SendAsync("Input.dispatchTouchEvent", new() { ["type"] = "touchMove", ["touchPoints"] = new[] { new { x = x + (vertical ? 0 : step * 8), y = y - (vertical ? step * 8 : 0) } } });
+                }
                 await cdp.SendAsync("Input.dispatchTouchEvent", new() { ["type"] = "touchEnd", ["touchPoints"] = Array.Empty<object>() });
                 await page.WaitForTimeoutAsync(250);
                 var after = (await measured.BoundingBoxAsync())!;
@@ -123,11 +121,7 @@ public sealed class WorkspaceAccessibilityTests(ITestOutputHelper output)
             var strip = page.GetByTestId("workspace-edge-left");
             await Assertions.Expect(strip).ToBeVisibleAsync();
             Assert.True((await strip.BoundingBoxAsync())!.Width >= 24 * zoom - 1);
-            output.WriteLine(await strip.EvaluateAsync<string>("el => JSON.stringify({rect:el.getBoundingClientRect(), zoom:document.body.style.zoom})"));
-            await page.EvaluateAsync("window.__touchTrace = []");
-            await strip.EvaluateAsync("el => el.__tapProbe = 'original'");
             await strip.TapAsync();
-            output.WriteLine(await page.EvaluateAsync<string>("JSON.stringify(window.__touchTrace)"));
             await Assertions.Expect(schema).ToBeVisibleAsync();
         }
     }

@@ -76,6 +76,11 @@ dotnet publish src/AkmlSql.Updater/AkmlSql.Updater.csproj -c Release
 # Tests
 dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
 
+# Web Playwright: build Debug prerequisites, run serially, open HTML results
+powershell -ExecutionPolicy Bypass -File scripts/run-playwright.ps1
+# Add -Headed to watch browsers; -IncludeNative for native keys;
+# -IncludeScreenshots also regenerates repository images (requires deployed Web/Northwind).
+
 # Web edition JS unit tests (Node 24 needs the glob, not the folder)
 node --test "tests/AkmlSql.Web.Tests/js/*.test.mjs"
 ```

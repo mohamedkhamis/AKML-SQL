@@ -125,7 +125,7 @@ public sealed class SqlServerAliasWebTests(ITestOutputHelper output)
 
         using var pw = await Playwright.CreateAsync();
         IBrowser browser;
-        try { browser = await pw.Chromium.LaunchAsync(); }
+        try { browser = await pw.Chromium.LaunchForTestsAsync(); }
         catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         await using var browserScope = browser;
         var page = await browser.NewPageAsync();

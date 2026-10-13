@@ -26,7 +26,7 @@ public sealed class FormatStylesTests
     {
         var pw = await Playwright.CreateAsync();
         IBrowser browser;
-        try { browser = await pw.Chromium.LaunchAsync(); }
+        try { browser = await pw.Chromium.LaunchForTestsAsync(); }
         catch (PlaywrightException) { pw.Dispose(); throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         var context = await browser.NewContextAsync(new() { AcceptDownloads = true });
         var page = await context.NewPageAsync();
@@ -231,7 +231,7 @@ public sealed class FormatStylesTests
         await using var web = await StartWebOrSkipAsync();
         using var pw = await Playwright.CreateAsync();
         IBrowser browser;
-        try { browser = await pw.Chromium.LaunchAsync(); }
+        try { browser = await pw.Chromium.LaunchForTestsAsync(); }
         catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         await using var __ = browser;
         var page = await (await browser.NewContextAsync(new() { ViewportSize = new ViewportSize { Width = 390, Height = 844 } })).NewPageAsync();

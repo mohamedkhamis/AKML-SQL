@@ -265,7 +265,7 @@ public sealed class WorkspaceLayoutTests
         try
         {
             IBrowserContext context;
-            try { context = await pw.Chromium.LaunchPersistentContextAsync(profile, options); }
+            try { context = await pw.Chromium.LaunchPersistentForTestsAsync(profile, options); }
             catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
 
             var page = context.Pages.Count > 0 ? context.Pages[0] : await context.NewPageAsync();
@@ -277,7 +277,7 @@ public sealed class WorkspaceLayoutTests
             await page.WaitForTimeoutAsync(300);
             await context.CloseAsync();
 
-            context = await pw.Chromium.LaunchPersistentContextAsync(profile, options);
+            context = await pw.Chromium.LaunchPersistentForTestsAsync(profile, options);
             page = context.Pages.Count > 0 ? context.Pages[0] : await context.NewPageAsync();
             await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
             await WaitForEditorAsync(page);
@@ -430,7 +430,7 @@ public sealed class WorkspaceLayoutTests
         await using var _ = web;
         using var pw = await Playwright.CreateAsync();
         IBrowser browser;
-        try { browser = await pw.Chromium.LaunchAsync(); }
+        try { browser = await pw.Chromium.LaunchForTestsAsync(); }
         catch (PlaywrightException) { throw new SkipException("Playwright Chromium not installed (run playwright.ps1 install chromium)."); }
         await using var __ = browser;
 

@@ -631,3 +631,40 @@ signature were verified; its files live under %LOCALAPPDATA%/AKML-Acceptance-Too
 SC-006 still awaits ten real participants, explicitly permitted as pending by T215.
 This was automated desktop acceptance, not a claimed human usability study. No product
 source changes or new Git mutations were made for this check.
+
+### PR #255 review verification follow-up — 2026-10-13
+
+Verified review commit 759c6e5 with fresh Debug Web/Engine builds, live SQL and the
+full Playwright behavioral cycle. Browser checks found and fixed JSON control-character
+escaping/nonfinite fallback and a late double-click changing the active grid editor;
+those corrections and ten review regression cases are now in the branch. The full
+Engine suite passed 2,118 cases. Core's one positional-contract failure and Web's 42
+formatter failures match the prior baseline; no goldens were changed. Detailed suite
+counts and evidence are in specs/041-web-ssms-ux-parity/baseline.md.
+
+The stronger touch test exposed an input-generation issue reproduced outside AKML:
+a burst of CDP drag moves can suppress the next tap. Pacing the drag steps restores
+normal taps. Both splitter and column resizing, followed by actual Schema restoration,
+pass at 100% and 150%. Removed temporary event tracing. Current native keyboard checks
+skipped because Windows refused foreground focus; the earlier 2026-10-11 native pass
+is historical evidence only. Installed payloads were not updated during this review.
+
+Final updated-branch checks: Playwright review/theme/touch follow-up 14/14; deduplicated
+browser outcomes 98 passed, 0 failed, 10 existing skips; shell suite 927/927; schema
+components 16/16; updater unit checks 43/43. Full Release solution build and both theme
+drift checks pass. Raw evidence is under %LOCALAPPDATA%/AKML SQL/spec041-review-759c6e5/.
+The three native cases remain skipped due to unavailable foreground focus. This
+follow-up changes the touch test and verification records only; no Git mutations or
+new deployment were performed by this agent.
+
+### Local Playwright runner — 2026-10-13
+
+Added scripts/run-playwright.ps1. Running it from any working directory builds Debug
+Engine, Web and E2E tests, installs the bundled Playwright Chromium/Firefox versions,
+runs the behavioral suite serially, and opens an HTML report. TRX/HTML results use a
+new timestamped directory under %LOCALAPPDATA%/AKML SQL/playwright-results. Failure
+exit codes and empty test selections are reported; existing reports are not overwritten.
+-Headed uses the shared BrowserLaunch helper for regular and persistent browser launches.
+-IncludeNative enables the desktop keyboard checks; -IncludeScreenshots additionally
+runs the image generators. SQL/service/desktop prerequisites and focused-run options
+are documented in the script's Get-Help text. No installed application is deployed.

@@ -85,8 +85,8 @@ public sealed class WebAppFixture : IAsyncDisposable
             pw = await Playwright.CreateAsync();
             try
             {
-                browser = browserName == "firefox" ? await pw.Firefox.LaunchAsync(new() { Headless = headless })
-                    : await pw.Chromium.LaunchAsync(new() { Channel = browserName == "edge" ? "msedge" : null, Headless = headless });
+                browser = browserName == "firefox" ? await pw.Firefox.LaunchForTestsAsync(new() { Headless = headless })
+                    : await pw.Chromium.LaunchForTestsAsync(new() { Channel = browserName == "edge" ? "msedge" : null, Headless = headless });
             }
             catch (PlaywrightException ex) { throw new SkipException($"Could not launch {browserName}: {ex.Message}"); }
 
