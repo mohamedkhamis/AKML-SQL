@@ -2505,4 +2505,13 @@ shell suite 964/964 on the final build (an earlier run had the foreground-depend
 `KeyboardHookIsolationTests` as its one failure). Release MSBuild of `AkmlSql.Ssms22`
 succeeds. Every page
 and tab was rendered to PNG in both themes and at the 720 px minimum width (long labels now
-wrap instead of clipping). SSMS runtime check and deployment pending.
+wrap instead of clipping).
+
+Runtime check (2026-10-13, after commit ef85bb9): the Release shell (1.26.1013.1742) and a
+full engine publish were deployed into the installed SSMS 22 and the shared Engine folder
+with the elevated local-deploy script (web engine service stopped and restarted, MEF cache
+cleared). A throwaway FlaUI tour launched SSMS against Northwind, opened AKML SQL › Options
+and captured all twelve pages and every tab: the tree, tabs, fitted rows, moved settings and
+the user's real agents and values all render as designed; the tour closed SSMS. The web
+edition at localhost:8083 still serves its own Settings page (untouched by this work; its
+installed build is 1.26.1012.2246) with no console errors.
