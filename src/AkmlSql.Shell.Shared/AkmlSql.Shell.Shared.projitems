@@ -71,6 +71,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\HistoryPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAssistancePage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\AiAgentListView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\OptionsTabStrip.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\FormattingPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\TabsPage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IntelliSensePage.cs" />

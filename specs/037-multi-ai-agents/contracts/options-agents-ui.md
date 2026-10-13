@@ -8,6 +8,15 @@ Satisfies **FR-024 – FR-036** and **FR-053 – FR-058**. Shell-side, WPF, prog
 
 ## Layout
 
+> **Superseded 2026-10-13** (user-approved redesign, design B of `artifacts/ai-assistance-demo`):
+> the page is three in-page tabs — **Agents** (the list with its actions on the group-header
+> line, the selected agent's fitted editor, Test connection directly under the four fields it
+> tests, the API key masked with Show), **Features** (one table of feature / on / answering
+> agent, then the fallback order) and **Privacy & data** (privacy mode, consent, and the request
+> parameters, which are now ONE set written to every agent on Save). The diagram below is the
+> spec-037 layout it replaced; the working-copy, CRUD, validation, key-protection and health
+> contracts that follow are unchanged. Tests: `AiAssistanceTabsLayoutTests`.
+
 The page keeps its current structure and gains a list above the provider rows. The provider rows
 become the **editor for the selected agent**.
 

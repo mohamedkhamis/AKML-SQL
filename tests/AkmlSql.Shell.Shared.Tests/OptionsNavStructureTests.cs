@@ -92,8 +92,9 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal("AI assistance", aiLeaf!.Header);
             Assert.True(aiLeaf.IsSelected, "the deep-linked AI assistance leaf must be selected");
 
-            // The selected page is the one shown: the content host now holds the AI page's rows.
-            Assert.Contains(FindTextBlocks(window), t => t.Text == "AI Provider");
+            // The selected page is the one shown: the content host now holds the AI page's rows
+            // (the "Selected agent" group header of its Agents tab, 2026-10 layout).
+            Assert.Contains(FindTextBlocks(window), t => t.Text == "Selected agent");
         }
 
         private static string Describe((string? Group, string Label, string PageKey) leaf) =>

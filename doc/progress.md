@@ -2423,3 +2423,40 @@ runs the image generators. SQL/service/desktop prerequisites and focused-run opt
 are documented in the script's Get-Help text. No installed application is deployed.
 
 Runner validation: SQL-backed smoke passed headless and headed; two headed regular/persistent-browser cases passed; an empty filter correctly exited 1. HTML/TRX reports were generated. Full Release solution build passed. The full suite was not repeated for this runner-only change.
+
+### Options › AI assistance page redesign — 2026-10-13
+
+The AI assistance Options page (SSMS) was rearranged after the user rejected its layout:
+Test connection sat between the API key and an always-open key-help block, above the
+Endpoint URL it tests; the per-agent request parameters rendered under a global-looking
+"Parameters" header after Privacy; the seven features were listed twice (toggles and
+agent assignments); the API key was shown in plain text (the password flag only set a
+Tag); the test-result brushes were light-theme hex in both themes; the page ran more
+than five screens. Four arrangements were shown in a local demo
+(`artifacts/ai-assistance-demo`, gitignored) and the user chose **B**: three in-page
+tabs. **Agents**: the list with Add / Duplicate / Remove / Set as active on its
+group-header line, a fitted Selected agent form (Name + Enabled, Provider + Model, API
+key masked with Show and a "Where do I get a key?" link, Endpoint URL), then the Test
+connection box with the outcome inline and the last recorded check while idle.
+**Features**: one table of feature / on / answering agent (Auto-fix stays a child of Fix
+errors), then the fallback order. **Privacy & data**: privacy mode, consent, and the
+request parameters, which are now ONE set for every agent (the user's decision): Save
+writes them to every agent and the flat mirror, so config format and engine are
+untouched; a still-blank placeholder agent is still dropped unless the parameters were
+edited. New `OptionsTabStrip` (programmatic WPF, PageTheme brushes) switches to a row's
+tab when the Options search or the Command Palette brings it into view. RowFactory
+gained stretch inputs, a fixed-width dropdown, a header overload with chip/trailing
+slots and `WrapRow`. Seams, automation names and search labels kept; the spec 037
+contract carries a superseded note.
+
+Verification: 12 new `AiAssistanceTabsLayoutTests` (tabs, reveal hook, reading order,
+key help, masked key sync, theme brush, shared parameters, feature-row pairing and label
+trimming, no sideways list scroll) green; `OptionsNavStructureTests` now looks for the
+"Selected agent" header. A render at the dialog's 720 px minimum width exposed two fits
+that are now fixed: feature labels trim with a tooltip, and the agent and fallback lists
+no longer grow a horizontal scrollbar (rows compress; the badge stays visible). Full
+shell suite 938 of 940 passed; the two failures are clipboard timeouts in
+`AiChatPanelCopyButtonTests`, which pass on rerun (the known clipboard flake). Debug
+test build and Release MSBuild of `AkmlSql.Ssms22` succeed; the real page was rendered to
+PNG in both themes and at 720 px and matches the approved demo. SSMS runtime check and
+deployment pending.
