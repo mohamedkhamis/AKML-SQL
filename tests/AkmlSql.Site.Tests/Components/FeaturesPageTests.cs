@@ -55,6 +55,40 @@ public sealed class FeaturesPageTests
     }
 
     [Fact]
+    public void Screenshots_OpenInThePageViewer_NotANewTab()
+    {
+        // A click used to open the bare PNG in a new browser tab. js/screenshot-viewer.js now
+        // opens an in-page gallery; the markup keeps a real href (no-JS and Ctrl-click still open
+        // the image), opts the link out of Blazor's enhanced navigation, and no longer claims a
+        // new tab.
+        using var ctx = new BunitContext();
+
+        var cut = ctx.Render<Features>();
+
+        var links = cut.FindAll(".media-row .screenshot-frame .screenshot-variant");
+        Assert.Equal(14, links.Count);
+        foreach (var link in links)
+        {
+            Assert.Null(link.GetAttribute("target"));
+            Assert.Equal("false", link.GetAttribute("data-enhance-nav"));
+            Assert.Equal(link.QuerySelector("img")!.GetAttribute("src"), link.GetAttribute("href"));
+            // The link's name is the screenshot's alt plus the action — an aria-label would
+            // replace the descriptive alt for screen-reader users.
+            Assert.Null(link.GetAttribute("aria-label"));
+            Assert.False(string.IsNullOrWhiteSpace(link.QuerySelector("img")!.GetAttribute("alt")));
+            Assert.Equal("View larger", link.QuerySelector(".visually-hidden")!.TextContent);
+        }
+
+        foreach (var frame in cut.FindAll(".media-row .screenshot-frame"))
+        {
+            // The viewer reads the caption from this hook and the section text around it.
+            Assert.False(string.IsNullOrWhiteSpace(frame.QuerySelector(".screenshot-caption-text")?.TextContent));
+            Assert.Equal("Click to enlarge", frame.QuerySelector(".screenshot-hint")!.TextContent.Trim());
+            Assert.NotNull(frame.Closest(".media-row")!.QuerySelector(".media-text h2"));
+        }
+    }
+
+    [Fact]
     public void CapabilityCards_RenderStrokeIcons()
     {
         using var ctx = new BunitContext();

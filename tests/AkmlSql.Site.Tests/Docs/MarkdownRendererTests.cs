@@ -265,6 +265,55 @@ public sealed class MarkdownRendererTests : IDisposable
     }
 
     [Fact]
+    public void PublishedImages_OpenInTheScreenshotViewer()
+    {
+        var renderer = CreateRenderer();
+        var markdown = "Before ![Architecture diagram](images/diagram.png \"The engine and the shell\") after.";
+
+        var result = renderer.Render(markdown, "architecture.md");
+
+        // Wrapped in a real link to the image (no-JS and Ctrl-click still open it), opted out
+        // of Blazor's enhanced navigation; js/screenshot-viewer.js intercepts the click.
+        Assert.Contains(
+            "<a href=\"/docs-assets/images/diagram.png\" class=\"doc-image-link\" data-enhance-nav=\"false\">" +
+            "<img src=\"/docs-assets/images/diagram.png\"",
+            result.Html);
+        // The image keeps its alt and title (the viewer's caption); the link's name is the alt
+        // plus a visually hidden action — no aria-label to hide the alt.
+        Assert.Contains("alt=\"Architecture diagram\"", result.Html);
+        Assert.Contains("title=\"The engine and the shell\"", result.Html);
+        Assert.Contains("<span class=\"visually-hidden\">View larger</span></a>", result.Html);
+        Assert.DoesNotContain("aria-label", result.Html);
+        Assert.DoesNotContain("target=", result.Html);
+        Assert.Contains("Before ", result.Html);
+        Assert.Contains(" after.", result.Html);
+    }
+
+    [Fact]
+    public void ImagesThatAreAlreadyLinks_AreNotWrappedTwice()
+    {
+        var renderer = CreateRenderer();
+
+        var result = renderer.Render("[![Diagram](images/diagram.png)](https://example.com/details)", "architecture.md");
+
+        Assert.Contains("<a href=\"https://example.com/details\"><img src=\"/docs-assets/images/diagram.png\"", result.Html);
+        Assert.DoesNotContain("doc-image-link", result.Html);
+    }
+
+    [Theory]
+    [InlineData("![Missing](images/missing.png)")]          // not published: left as written
+    [InlineData("![Remote](https://example.com/remote.png)")] // blocked by the site's CSP anyway
+    public void UnpublishedImages_AreNotWrapped(string markdown)
+    {
+        var renderer = CreateRenderer();
+
+        var result = renderer.Render(markdown, "architecture.md");
+
+        Assert.Contains("<img src=", result.Html);
+        Assert.DoesNotContain("doc-image-link", result.Html);
+    }
+
+    [Fact]
     public void Sanitization_NeutralizesFileProtocolUrls()
     {
         var renderer = CreateRenderer();

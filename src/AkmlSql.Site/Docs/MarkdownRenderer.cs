@@ -258,6 +258,8 @@ public sealed class MarkdownRenderer
     private void SanitizeAndRewriteLinks(MarkdownDocument document, string sourceRelativePath)
     {
         var sourceFolder = FolderOf(sourceRelativePath);
+        // Wrapped after the walk: replacing nodes while Descendants() enumerates is unsafe.
+        var viewable = new List<LinkInline>();
 
         foreach (var link in document.Descendants<LinkInline>())
         {
@@ -284,7 +286,57 @@ public sealed class MarkdownRenderer
             link.Url = link.IsImage
                 ? RewriteImageUrl(link.Url, sourceFolder)
                 : RewriteLinkUrl(link.Url, sourceFolder);
+
+            if (link.IsImage
+                && link.Url is { } imageUrl
+                && imageUrl.StartsWith(DocsContentService.AssetsRequestPath + "/", StringComparison.Ordinal)
+                && !IsInsideLink(link))
+            {
+                viewable.Add(link);
+            }
         }
+
+        foreach (var image in viewable)
+        {
+            WrapInViewerLink(image);
+        }
+    }
+
+    /// <summary>
+    /// Content images open in the site's screenshot viewer (js/screenshot-viewer.js), like the
+    /// product screenshots on Home and Features: the image is wrapped in a link to itself, which
+    /// the viewer intercepts — and which still opens the image without JavaScript.
+    /// <c>data-enhance-nav="false"</c> keeps Blazor from fetching the image as a page. The link's
+    /// accessible name is the image's alt plus a visually hidden "View larger" (an aria-label
+    /// would replace the alt). Only published assets (<c>/docs-assets/…</c>) are wrapped: an
+    /// external or missing image does not render under the site's CSP anyway.
+    /// </summary>
+    private static void WrapInViewerLink(LinkInline image)
+    {
+        var wrapper = new LinkInline(image.Url!, string.Empty);
+        var attributes = wrapper.GetAttributes();
+        attributes.AddClass("doc-image-link");
+        attributes.AddProperty("data-enhance-nav", "false");
+
+        // copyChildren: false — the image's children are its alt text and must stay with it.
+        image.ReplaceBy(wrapper, copyChildren: false);
+        wrapper.AppendChild(image);
+        // Programmatic, constant markup: DisableHtml only stops HTML in the SOURCE being parsed.
+        wrapper.AppendChild(new HtmlInline("<span class=\"visually-hidden\">View larger</span>"));
+    }
+
+    /// <summary>True when an image is already the content of a link (<c>[![alt](img)](url)</c>).</summary>
+    private static bool IsInsideLink(Inline inline)
+    {
+        for (var parent = inline.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent is LinkInline { IsImage: false })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Relative links to included docs become site routes; everything else is left as-is.</summary>

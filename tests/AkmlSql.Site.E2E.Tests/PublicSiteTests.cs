@@ -368,6 +368,107 @@ public sealed class PublicSiteTests(SiteFixture site)
         }
     }
 
+    // --- Screenshot viewer: an in-page gallery, not a new tab ---------------
+
+    [SkippableFact]
+    public async Task Screenshots_OpenInAnInPageGallery_NotANewTab()
+    {
+        SkipIfUnavailable();
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+        var newTabs = 0;
+        context.Page += (_, _) => newTabs++;
+        await page.GotoAsync(SiteFixture.BaseUrl + "/features");
+
+        var link = page.Locator("section:has(#media-styles-heading) .screenshot-variant:visible");
+        await link.ScrollIntoViewIfNeededAsync();
+        await link.ClickAsync();
+
+        // The page stays put; a modal gallery opens on the clicked screenshot.
+        var viewer = page.Locator("dialog#screenshot-viewer");
+        await Assertions.Expect(viewer).ToHaveAttributeAsync("open", "");
+        Assert.Equal(0, newTabs);
+        Assert.EndsWith("/features", page.Url);
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("3 of 7");
+        await Assertions.Expect(viewer.Locator(".viewer-heading")).ToHaveTextAsync("Shape your SQL, see every change");
+        await Assertions.Expect(viewer.Locator(".viewer-thumb")).ToHaveCountAsync(7);
+        await Assertions.Expect(page.Locator(".viewer-close")).ToBeFocusedAsync();
+
+        // The capture follows the theme, and never stretches past its own pixels.
+        var theme = await page.GetAttributeAsync("html", "data-akml-theme") == "light" ? "light" : "dark";
+        Assert.Equal($"img/screenshots/{theme}/02-format-styles-crop.png",
+            await viewer.Locator(".viewer-img").GetAttributeAsync("src"));
+        var shownWidth = await viewer.Locator(".viewer-img").EvaluateAsync<double>("e => e.getBoundingClientRect().width");
+        Assert.True(shownWidth <= 1046.5, $"Viewer upscaled a 1046px capture to {shownWidth}px.");
+
+        // Keyboard: arrows step through the page's screenshots.
+        await page.Keyboard.PressAsync("ArrowRight");
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("4 of 7");
+        await page.Keyboard.PressAsync("End");
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("7 of 7");
+        // aria-disabled, not disabled: a disabled button would drop the keyboard user's focus.
+        await Assertions.Expect(viewer.Locator(".viewer-next")).ToHaveAttributeAsync("aria-disabled", "true");
+
+        // Escape closes it, unlocks the page and puts focus back on the screenshot you opened.
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(viewer).Not.ToHaveAttributeAsync("open", "");
+        Assert.False(await page.EvaluateAsync<bool>("document.documentElement.classList.contains('screenshot-viewer-open')"));
+        await Assertions.Expect(link).ToBeFocusedAsync();
+    }
+
+    [SkippableFact]
+    public async Task HomeScreenshot_OpensWithoutGalleryControls_AndClosesOnOutsideClick()
+    {
+        SkipIfUnavailable();
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(SiteFixture.BaseUrl);
+
+        // The hero floats (animation), so Playwright never sees it as "stable" — force the click.
+        await page.Locator(".hero-screenshot .screenshot-variant:visible").ClickAsync(new LocatorClickOptions { Force = true });
+
+        var viewer = page.Locator("dialog#screenshot-viewer");
+        await Assertions.Expect(viewer).ToHaveAttributeAsync("open", "");
+        // One screenshot on the page: a plain viewer, no arrows, strip or count.
+        await Assertions.Expect(viewer.Locator(".viewer-prev")).ToBeHiddenAsync();
+        await Assertions.Expect(viewer.Locator(".viewer-strip")).ToBeHiddenAsync();
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("");
+
+        await page.Mouse.ClickAsync(10, 450);
+        await Assertions.Expect(viewer).Not.ToHaveAttributeAsync("open", "");
+    }
+
+    [SkippableFact]
+    public async Task DocsImages_OpenInTheViewer_AsTheirOwnGallery()
+    {
+        SkipIfUnavailable();
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(SiteFixture.BaseUrl + "/docs/topics/intellisense");
+
+        // MarkdownRenderer wraps each published image in a link the viewer intercepts.
+        var images = page.Locator(".doc-body a.doc-image-link");
+        await Assertions.Expect(images).ToHaveCountAsync(2);
+        var first = images.First;
+        await first.ScrollIntoViewIfNeededAsync();
+        await first.ClickAsync();
+
+        var viewer = page.Locator("dialog#screenshot-viewer");
+        await Assertions.Expect(viewer).ToHaveAttributeAsync("open", "");
+        Assert.EndsWith("/docs/topics/intellisense", page.Url);
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("1 of 2");
+        // The image's title is the caption; docs images have no section notes beside them.
+        await Assertions.Expect(viewer.Locator(".viewer-caption")).ToHaveTextAsync("Related tables and JOIN conditions");
+        await Assertions.Expect(viewer.Locator(".viewer-notes")).ToBeHiddenAsync();
+
+        await page.Keyboard.PressAsync("ArrowRight");
+        await Assertions.Expect(viewer.Locator(".viewer-caption")).ToHaveTextAsync("Choose columns before expanding a wildcard");
+
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(viewer).Not.ToHaveAttributeAsync("open", "");
+        await Assertions.Expect(first).ToBeFocusedAsync();
+    }
+
     // --- SC-003: the mobile viewport --------------------------------------
 
     [SkippableFact]

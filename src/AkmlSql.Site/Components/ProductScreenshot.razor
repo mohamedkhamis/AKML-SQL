@@ -1,20 +1,32 @@
 @* Follow the site's selected theme, including saved preferences and enhanced navigation.
    CSS hides the inactive link from both the layout and the accessibility tree. High contrast
-   uses the dark capture because the supplied set has no high-contrast variant. *@
+   uses the dark capture because the supplied set has no high-contrast variant.
+   A click opens js/screenshot-viewer.js's in-page viewer — a gallery of every screenshot
+   on the page, with the section's heading and text beside each — instead of a new browser tab.
+   The href stays the real PNG, so without JavaScript (or with Ctrl/Cmd-click) the browser still
+   opens the image itself; data-enhance-nav="false" keeps Blazor from fetching a PNG as a page. *@
 <figure class="screenshot-frame @Class">
-    <a class="screenshot-variant screenshot-dark" href="@ImagePath("dark")" target="_blank" rel="noopener"
-       aria-label="@(Caption + " — view full-size screenshot (opens in a new tab)")">
+    @* No aria-label: it would replace the descriptive alt as the link's name. The name is the
+       alt followed by the visually hidden action. *@
+    <a class="screenshot-variant screenshot-dark" href="@ImagePath("dark")" data-enhance-nav="false">
         <img src="@ImagePath("dark")" width="@Width" height="@Height" alt="@Alt"
              loading="@(Priority ? "eager" : "lazy")" fetchpriority="@(Priority ? "high" : "auto")" />
+        <span class="visually-hidden">View larger</span>
     </a>
-    <a class="screenshot-variant screenshot-light" href="@ImagePath("light")" target="_blank" rel="noopener"
-       aria-label="@(Caption + " — view full-size screenshot (opens in a new tab)")">
+    <a class="screenshot-variant screenshot-light" href="@ImagePath("light")" data-enhance-nav="false">
         <img src="@ImagePath("light")" width="@Width" height="@Height" alt="@Alt"
              loading="@(Priority ? "eager" : "lazy")" fetchpriority="@(Priority ? "high" : "auto")" />
+        <span class="visually-hidden">View larger</span>
     </a>
     <figcaption class="screenshot-caption">
-        <span>@Caption</span>
-        <span class="screenshot-hint">Click image to enlarge <span aria-hidden="true">↗</span></span>
+        <span class="screenshot-caption-text">@Caption</span>
+        <span class="screenshot-hint">
+            <svg class="screenshot-hint-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <path d="M10.4 10.4L14 14M7 5v4M5 7h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+            Click to enlarge
+        </span>
     </figcaption>
 </figure>
 

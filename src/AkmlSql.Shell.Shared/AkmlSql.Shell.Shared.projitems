@@ -54,6 +54,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\SettingsWindow.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\EditEnvironmentsDialog.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogViewerDialog.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Dialogs\LogFileSet.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Ui\Theme\PageTheme.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\IPageBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Dialogs\Pages\CombinedPages.cs" />

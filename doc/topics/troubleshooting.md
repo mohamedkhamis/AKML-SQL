@@ -10,7 +10,7 @@ AKML SQL writes daily log files to:
 %AppData%\AKML SQL\logs\
 ```
 
-Open the newest file and search for `Error`. You can also use **AKML SQL** -> **View Logs**. For more detail, set `logMinimumLevel` to `"Debug"` or `"Verbose"` in `config.json` and restart the IDE.
+Each AKML SQL process — the SSMS extension, the engine (IntelliSense, formatting, AI) and the updater — writes its own file, so one day's log is spread over `akmlsql-YYYYMMDD.log`, `akmlsql-YYYYMMDD_001.log`, `_002` and so on. The easiest way to read them is **AKML SQL** -> **View Logs**: it opens on the newest day with every file merged, newest entries first, and a **Source** column naming the process. Set **Level** to `ERR` to see only errors. If you open the files by hand, search all of the day's files for `ERR` — the highest-numbered file is just the process that started last. For more detail, set `logMinimumLevel` to `"Debug"` or `"Verbose"` in `config.json` and restart the IDE.
 
 ## Where settings live
 

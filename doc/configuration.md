@@ -391,6 +391,7 @@ Logs are written to:
 - Max file size: 5 MB (rolls on size limit)
 - Retained files: 10
 - Format: `{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}`
+- One file per process: the file sink holds its file exclusively, so when the SSMS extension, the engine and the updater run at the same time, each one after the first rolls to the next free name — `akmlsql-YYYYMMDD_001.log`, `_002`, … After a size or day roll a process can also append to a file another process wrote earlier and has closed. Every time a process opens a log file it first writes `AKML SQL {Version} log file opened by {Process} (pid {Pid})` (`ProcessHeaderHooks`), which is how **View Logs** labels the **Source** of each entry; its default view merges all of the newest day's files, newest first.
 
 To change the log level without editing JSON directly, set `logMinimumLevel` in `config.json`:
 ```json

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -43,6 +44,7 @@ namespace AkmlSql.Core.Logging
             }
             catch { /* use defaults */ }
 
+            var (processName, processId) = CurrentProcess();
             var configuration = new LoggerConfiguration()
                 .MinimumLevel.Is(minLevel)
                 .WriteTo.File(
@@ -54,7 +56,10 @@ namespace AkmlSql.Core.Logging
                     // Flush the file sink's buffer every 250ms so a UI-thread hang
                     // cannot swallow the last breadcrumb before the process dies.
                     flushToDiskInterval: TimeSpan.FromMilliseconds(250),
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}");
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+                    // Each process rolls its own akmlsql-YYYYMMDD_NNN.log and may reopen another
+                    // process's closed file after a roll — the header names who writes next.
+                    hooks: new ProcessHeaderHooks(processName, processId));
 
             if (telemetryEnabled)
             {
@@ -71,6 +76,19 @@ namespace AkmlSql.Core.Logging
             Log.Logger = configuration.CreateLogger();
 
             Log.Information("AKML SQL {Version} logger initialized", Constants.RuntimeVersion);
+        }
+
+        private static (string Name, int Id) CurrentProcess()
+        {
+            try
+            {
+                using var process = Process.GetCurrentProcess();
+                return (process.ProcessName, process.Id);
+            }
+            catch
+            {
+                return ("unknown", 0);
+            }
         }
 
         public static void Shutdown()

@@ -44,6 +44,8 @@ The new style is used straight away. The active style's name is shown in the sta
 
 Open the Format Styles window from the **AKML SQL** menu -> **Active Style** -> **Edit Styles…**, or from **Options** -> **Format** -> **Edit formatting styles…**.
 
+![The AKML SQL Format styles window with Khamis Style selected, a searchable options tree, JOIN settings and SQL preview.](../images/screenshots/02-format-styles-crop.png "Style options alongside a live preview")
+
 - **Left: the style list.** Your own styles come first, then team styles, then the built-in styles. Click a style to edit it; **Set as active style** makes it the one Format SQL uses. The **⋮** button (or a right-click) on a style offers Set Active, Copy, Rename, Delete, Reset to built-in and Export.
 - **Middle: the option pages**, grouped the way SQL Prompt groups them (lists, joins, casing, and so on).
 - **Right: the options of the selected page and a live preview.** The preview reformats the sample a moment after each change and briefly highlights the lines whose layout changed. By default each page previews code its own options act on (**Page sample**); choose **My sample** to preview your own SQL, and **Edit sample** to change it.
