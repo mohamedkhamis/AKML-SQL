@@ -4,10 +4,14 @@ using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
+    /// <summary>
+    /// Queries › Execution &amp; warnings › Execution (fitted in the 2026-10 design B): the two
+    /// execution switches side by side and the long-running notification threshold.
+    /// </summary>
     internal sealed class ExecutionPage : IPageBuilder
     {
         public string Key     => "Execution";
-        public string Display => "Queries › Results & execution › Execution";
+        public string Display => "Queries › Execution & warnings › Execution";
         public string Title   => "Execution";
         public string HelpTopic => "topics/options#execution";
         public string Help    => "Configure query execution behavior: toggle the status-bar execution timer, enable multi-database execution, and set how many seconds a query must run before a long-running notification appears.";
@@ -15,18 +19,20 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
             ctx.Rows.AddGroupHeader(panel, "Execution");
-            var (rowTimer, chkTimer) = ctx.Rows.AddToggle(panel,
-                "Execution timer", "Show execution timer in status bar");
+
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowTimer, chkTimer) = ctx.Rows.AddToggle(left, "Execution timer", "In the status bar");
             ctx.RegisterSearch("Execution timer", "Show execution timer in status bar", "Toggle", rowTimer);
 
-            var (rowMulti, chkMulti) = ctx.Rows.AddToggle(panel,
-                "Multi-database execution", "Enable multi-database execution mode");
+            var (rowMulti, chkMulti) = ctx.Rows.AddToggle(right, "Multi-database execution", "");
+            ctx.Rows.Tip(rowMulti, "Enable multi-database execution mode");
             ctx.RegisterSearch("Multi-database execution", "Enable multi-database execution mode", "Toggle", rowMulti);
 
-            ctx.Rows.AddGroupHeader(panel, "Notifications");
             var (rowThreshold, numThreshold) = ctx.Rows.AddNumber(panel,
                 "Notification threshold", 5, 300, 5, "seconds",
-                "How long a query runs before the long-running query notification appears");
+                "Long-running query notification");
+            ctx.Rows.Tip(rowThreshold, "How long a query runs before the long-running query notification appears");
             ctx.RegisterSearch("Notification threshold", "How long a query runs before the long-running query notification appears", "Number", rowThreshold);
 
             return new ExecutionControls(chkTimer, chkMulti, numThreshold);

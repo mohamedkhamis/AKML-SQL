@@ -21,14 +21,16 @@ namespace AkmlSql.Shell.Shared.Tests
         /// <summary>The tree, top to bottom: (group or null for a top-level leaf, label, page key).</summary>
         private static readonly (string? Group, string Label, string PageKey)[] Expected =
         {
-            (null, "General", "General"),
+            // 2026-10 "rebalanced tree" (design B): warnings sit under Queries, snippets have their
+            // own leaf, SQL-auth connections sit on General, and the long pages are tabs.
+            (null, "General", "GeneralAll"),
             ("Suggestions", "Behavior", "SuggestionsBehavior"),
-            ("Suggestions", "Lists & connections", "SuggestionsLists"),
-            ("Suggestions", "Warnings & highlighting", "Safety"),
+            ("Suggestions", "Lists & scope", "SuggestionsLists"),
             (null, "Inserted code", "InsertedCode"),
+            (null, "Snippets", "Snippets"),
             (null, "Format", "Formatting"),
-            ("Queries", "Results & execution", "ResultsExecution"),
-            ("Queries", "History", "History"),
+            ("Queries", "Execution & warnings", "ResultsExecution"),
+            ("Queries", "History", "HistoryAll"),
             ("Queries", "Color", "Tabs & UI"),
             (null, "Editor", "EditorAll"),
             (null, "Code analysis", "Code Analysis"),

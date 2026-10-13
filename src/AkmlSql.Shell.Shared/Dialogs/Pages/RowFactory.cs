@@ -103,11 +103,43 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             });
 
             panel.Children.Add(header);
-            _groupIndent = 20;
+            _groupIndent = GroupIndentWidth;
         }
+
+        /// <summary>SQL Prompt's indent of the rows under a group header.</summary>
+        internal const double GroupIndentWidth = 20;
 
         /// <summary>The indent rows take under a group header (0 before the first header).</summary>
         internal double GroupIndent => _groupIndent;
+
+        /// <summary>
+        /// Two equal columns for runs of short rows (the 2026-10 "fitted pages"): a Grid appended
+        /// to <paramref name="panel"/>. Rows added to either column keep the group indent, so a
+        /// builder alternates its Add* calls between <c>Left</c> and <c>Right</c>.
+        /// </summary>
+        public (StackPanel Left, StackPanel Right) AddColumns(StackPanel panel)
+        {
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var left = new StackPanel();
+            var right = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
+            Grid.SetColumn(right, 1);
+            grid.Children.Add(left);
+            grid.Children.Add(right);
+            panel.Children.Add(grid);
+            return (left, right);
+        }
+
+        /// <summary>
+        /// The long explanation a short description no longer carries, as the row's tooltip
+        /// (shown on disabled rows too, so a greyed child still explains itself).
+        /// </summary>
+        public void Tip(FrameworkElement row, string text)
+        {
+            row.ToolTip = text;
+            ToolTipService.SetShowOnDisabled(row, true);
+        }
 
         /// <summary>
         /// A row <see cref="Border"/> with explicit padding, for table-style rows that manage
@@ -149,7 +181,10 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 Text = label,
                 Foreground = _theme.FgPrimary,
-                FontSize = 13
+                FontSize = 13,
+                // A long label in a half-width column (AddColumns) or at the window's 720 px
+                // minimum wraps to a second line instead of clipping.
+                TextWrapping = TextWrapping.Wrap
             };
             contentPanel.Children.Add(labelText);
             TextBlock? descriptionText = null;
@@ -226,7 +261,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             {
                 Text = label,
                 Foreground = _theme.FgPrimary,
-                FontSize = 13
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap   // a long label in a half-width column wraps
             };
             headerRow.Children.Add(sliderLabel);
             container.Children.Add(headerRow);
@@ -358,7 +394,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// matches <see cref="AddTextInput"/>; used for list-style settings edited one entry per line.
         /// </summary>
         public (StackPanel Row, TextBox Control) AddMultilineTextInput(
-            StackPanel panel, string label, string description = "", double height = 90, CheckBox? parent = null)
+            StackPanel panel, string label, string description = "", double height = 90, CheckBox? parent = null, bool stretch = false)
         {
             var container = new StackPanel { Margin = new Thickness(_groupIndent, 0, 0, 12) };
 
@@ -383,6 +419,13 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto
             };
+            if (stretch)
+            {
+                // Fitted form: the box fills its column (two boxes side by side on Aliases).
+                textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+                textBox.MinWidth = 0;
+                textBox.MaxWidth = double.PositiveInfinity;
+            }
 
             container.Children.Add(textBox);
 

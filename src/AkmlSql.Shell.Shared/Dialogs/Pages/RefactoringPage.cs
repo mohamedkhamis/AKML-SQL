@@ -19,11 +19,11 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "Rename options");
+            ctx.Rows.AddGroupHeader(panel, "Rename");
 
             var (rowComments, chkComments) = ctx.Rows.AddToggle(panel,
                 "Include comments in rename scope",
-                "Also rename occurrences found inside SQL comments");
+                "Also the occurrences inside SQL comments");
             ctx.RegisterSearch("Include comments in rename scope", "Also rename occurrences found inside SQL comments", "Toggle", rowComments);
 
             return new RefactoringControls(chkComments);

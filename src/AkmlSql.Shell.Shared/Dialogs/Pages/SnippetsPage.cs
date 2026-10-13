@@ -5,7 +5,8 @@ using AkmlSql.Core.Config;
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
-    /// Snippets page (Phase 2 B.2 — first migration). Spec 040 (OPT-01): the duplicate "Show in
+    /// Snippets — its own tree leaf since the 2026-10 "rebalanced tree" (design B); once a
+    /// section of Suggestions › Lists &amp; connections. Spec 040 (OPT-01): the duplicate "Show in
     /// IntelliSense completions" (the working switch is on Suggestions › Behavior), "Filter by SQL
     /// context", "Track usage for ranking" and "Personal folder" changed nothing and are hidden;
     /// their saved values are kept.
@@ -13,7 +14,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class SnippetsPage : IPageBuilder
     {
         public string Key     => "Snippets";
-        public string Display => "Suggestions › Lists & connections › Snippets";
+        public string Display => "Snippets";
         public string Title   => "Snippets";
         public string HelpTopic => "topics/options#snippets";
         public string Help    => "Configure the snippet engine: enable snippets and format them after expansion. Set the team folder where shared .akmlsnippet files live. Whether snippets appear in the suggestions box is set on Suggestions › Behavior.";
@@ -22,14 +23,15 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         {
             ctx.Rows.AddGroupHeader(panel, "Snippet manager");
 
-            var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
-                "Enable snippets",
-                "Master switch for the snippet engine");
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(left,
+                "Enable snippets", "Master switch");
             ctx.RegisterSearch("Enable snippets", "Master switch for the snippet engine", "Toggle", rowEnabled);
 
-            var (rowFormatOnExpand, chkFormatOnExpand) = ctx.Rows.AddToggle(panel,
-                "Format after expansion",
-                "Apply SQL formatting after expanding a snippet", chkEnabled);
+            var (rowFormatOnExpand, chkFormatOnExpand) = ctx.Rows.AddToggle(right,
+                "Format after expansion", "", chkEnabled);
+            ctx.Rows.Tip(rowFormatOnExpand, "Apply SQL formatting after expanding a snippet");
             ctx.RegisterSearch("Format after expansion", "Apply SQL formatting after expanding a snippet", "Toggle", rowFormatOnExpand);
 
             ctx.Rows.AddGroupSeparator(panel);
@@ -37,7 +39,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowTeamFolder, txtTeamFolder) = ctx.Rows.AddTextInput(panel,
                 "Team folder",
-                "Shared folder for team snippet distribution. Takes effect after SSMS restarts.", parent: chkEnabled);
+                "Shared snippets; takes effect after SSMS restarts", parent: chkEnabled, stretch: true);
+            ctx.Rows.Tip(rowTeamFolder, "Shared folder for team snippet distribution. Takes effect after SSMS restarts.");
             ctx.RegisterSearch("Team folder", "Shared folder for team snippet distribution. Takes effect after SSMS restarts.", "Text", rowTeamFolder);
 
             return new SnippetsControls(chkEnabled, chkFormatOnExpand, txtTeamFolder);

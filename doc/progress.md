@@ -2460,3 +2460,49 @@ shell suite 938 of 940 passed; the two failures are clipboard timeouts in
 test build and Release MSBuild of `AkmlSql.Ssms22` succeed; the real page was rendered to
 PNG in both themes and at 720 px and matches the approved demo. SSMS runtime check and
 deployment pending.
+
+### Options dialog "rebalanced tree" (design B) — 2026-10-13
+
+After the AI page, the user asked for the whole Options dialog. Renders of all twelve pages
+at the default window size showed two pages near three screens (Suggestions › Behavior,
+Inserted code), a description under nearly every row, nine one-item groups, execution
+warnings under Suggestions and snippets plus SQL passwords under "Lists & connections".
+A data-driven local demo (`artifacts/options-redesign-demo`, gitignored) showed the current
+dialog and three arrangements with a per-page scroll meter and a "where each setting goes"
+table; the user chose **B, the rebalanced tree**. Plan:
+`docs/superpowers/plans/2026-10-13-options-rebalanced-tree.md`.
+
+What changed. Tree: General (`GeneralAll` = General + SQL Server connections, moved from
+Suggestions) · Suggestions › Behavior (tabs Completion, JOIN assistance) · Suggestions ›
+Lists & scope · Inserted code (tabs Statements, Aliases, Closing characters) · Snippets (own
+leaf) · Format · Queries › Execution & warnings (tabs Results & execution, Warnings — the
+warnings and transaction reminder moved from Suggestions) · Queries › History (`HistoryAll`,
+tabs Recording, Restoring queries) · Queries › Color · Editor · Code analysis · AI
+assistance. Top-level names stay SQL Prompt's. New `TabbedPage` (a `CombinedPage` whose
+sections sit on `OptionsTabStrip` tabs; `OnSectionBuilt` hands a master switch across
+tabs so JOIN and restore rows still grey with Enable IntelliSense / Enable SQL history);
+`CombinedPage.BuildSections` with a before-section callback keeps the host's search
+attribution. RowFactory: `AddColumns` (two equal columns), `Tip` (the long explanation as a
+tooltip), `stretch` on multiline inputs, wrapping toggle and slider labels. Every page is
+fitted: one short line under a row only where the label does not say it all, runs of
+toggles in two columns, number fields and dropdowns paired, one-item groups merged. The
+one-row Tooltips page folded into Completion (`CompletionPolish` key retired); the
+Join conditions page and the two JOIN rows of Completion became `JoinAssistancePage`
+(key `JoinOptions`; the "Related" row that pointed at its own page is gone); bracket policy
+and function parentheses moved from Special characters (now Closing characters) to
+Qualification & brackets; the restore rows of History became `HistoryRestorePage`
+(`HistoryRestore`). Section keys, automation names, search labels and F1 anchors are
+otherwise unchanged; the spec 040 UI contract carries a superseded note.
+
+Verification: new `RowFactoryColumnsTests`, `TabbedPageTests`,
+`SuggestionsBehaviorLayoutTests`, `InsertedCodeLayoutTests`, `QueriesLayoutTests`,
+`HistoryLayoutTests`, `GeneralLayoutTests` and the fit gate `OptionsPageFitTests` (no page
+or tab over one and a half screens at 591 × 495 px); `OptionsNavStructureTests`,
+`OptionsCombinedPagesTests`, `HelpRoutingTests`, `OptionsLiveSettingsTests`,
+`OptionsPaletteTests`, `OptionsConnectionsHelpTests`, `SpecialCharactersPageTests` and
+`OptionsDarkComboTests` follow the new keys and labels. Options-related suites 305/305; full
+shell suite 964/964 on the final build (an earlier run had the foreground-dependent
+`KeyboardHookIsolationTests` as its one failure). Release MSBuild of `AkmlSql.Ssms22`
+succeeds. Every page
+and tab was rendered to PNG in both themes and at the 720 px minimum width (long labels now
+wrap instead of clipping). SSMS runtime check and deployment pending.

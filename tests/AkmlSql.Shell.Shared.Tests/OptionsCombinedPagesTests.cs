@@ -20,18 +20,20 @@ namespace AkmlSql.Shell.Shared.Tests
     {
         [StaTheory]
         [InlineData("IntelliSense", "SuggestionsBehavior")]
-        [InlineData("CompletionPolish", "SuggestionsBehavior")]
         [InlineData("JoinOptions", "SuggestionsBehavior")]
         [InlineData("SuggestionTypes", "SuggestionsLists")]
         [InlineData("ConnectionScope", "SuggestionsLists")]
-        [InlineData("ConnectionsMemory", "SuggestionsLists")]
-        [InlineData("Snippets", "SuggestionsLists")]
+        [InlineData("General", "GeneralAll")]
+        [InlineData("ConnectionsMemory", "GeneralAll")]
         [InlineData("InsertOptions", "InsertedCode")]
         [InlineData("Qualification", "InsertedCode")]
         [InlineData("Aliases", "InsertedCode")]
         [InlineData("SpecialCharacters", "InsertedCode")]
         [InlineData("Grid", "ResultsExecution")]
         [InlineData("Execution", "ResultsExecution")]
+        [InlineData("Safety", "ResultsExecution")]
+        [InlineData("History", "HistoryAll")]
+        [InlineData("HistoryRestore", "HistoryAll")]
         [InlineData("Editor", "EditorAll")]
         [InlineData("Refactoring", "EditorAll")]
         [InlineData("Navigation", "EditorAll")]
@@ -60,7 +62,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 var texts = LogicalTree.Descendants<TextBlock>(window).Select(t => t.Text).ToList();
                 Assert.Contains("Inserted code", texts);                 // the page band
                 Assert.Contains("Insert column names", texts);           // Objects & statements
-                Assert.Contains("Schema qualification", texts);          // Qualification
+                Assert.Contains("Qualification & brackets", texts);      // Qualification (Statements tab)
                 Assert.Contains("Include the AS keyword", texts);        // Aliases
                 Assert.Contains("Closing characters", texts);            // Special characters
             }
@@ -74,8 +76,8 @@ namespace AkmlSql.Shell.Shared.Tests
         public void Restore_defaults_on_a_combined_page_resets_every_section()
         {
             var settings = new AppSettings();
-            settings.Snippets.Enabled = false;                                     // Snippets section
-            settings.IntelliSense.ConnectionScope.IncludeLinkedServers = true;     // Connections section
+            settings.IntelliSense.SuggestionTypes.IncludeSystemObjects = true;    // Types section
+            settings.IntelliSense.ConnectionScope.IncludeLinkedServers = true;     // Scope section
             settings.Formatter.ActiveProfile = "Collapsed";                        // another page
             var dialog = new SettingsWindow(settings);
             var window = dialog.TestBuildWindowForRenderTest();
@@ -84,10 +86,10 @@ namespace AkmlSql.Shell.Shared.Tests
                 dialog.ResetPageToDefaultsCore("SuggestionsLists");
                 var s = dialog.GetSettings();
 
-                Assert.True(s.Snippets.Enabled);
+                Assert.False(s.IntelliSense.SuggestionTypes.IncludeSystemObjects);
                 Assert.False(s.IntelliSense.ConnectionScope.IncludeLinkedServers);
                 Assert.Equal("Collapsed", s.Formatter.ActiveProfile);
-                Assert.StartsWith("Reset the settings on Suggestions › Lists & connections?", dialog.ResetConfirmationText("SuggestionsLists"));
+                Assert.StartsWith("Reset the settings on Suggestions › Lists & scope?", dialog.ResetConfirmationText("SuggestionsLists"));
             }
             finally
             {
@@ -103,7 +105,7 @@ namespace AkmlSql.Shell.Shared.Tests
             {
                 var snippets = Assert.Single(catalog, e => e.Label == "Enable snippets");
                 Assert.Equal("Snippets", snippets.PageKey);
-                Assert.Equal("Suggestions › Lists & connections", snippets.PageDisplay);
+                Assert.Equal("Snippets", snippets.PageDisplay);   // its own leaf since design B
                 Assert.NotNull(snippets.Controls);
                 Assert.NotNull(snippets.Toggle);
             }

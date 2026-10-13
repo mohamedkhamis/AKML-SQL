@@ -4,54 +4,58 @@ using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
+    /// <summary>
+    /// Queries › Execution &amp; warnings › Warnings (the 2026-10 "rebalanced tree", design B):
+    /// the five execution warnings in two columns and the transaction reminder. Once the
+    /// "Warnings &amp; highlighting" leaf under Suggestions; the key stays <c>Safety</c> so
+    /// links, search and F1 keep resolving.
+    /// </summary>
     internal sealed class SafetyPage : IPageBuilder
     {
         public string Key     => "Safety";
-        public string Display => "Suggestions › Warnings & highlighting";
-        public string Title   => "Warnings & highlighting";
+        public string Display => "Queries › Execution & warnings › Warnings";
+        public string Title   => "Warnings";
         public string HelpTopic => "topics/options#suggestions-warnings-highlighting";
-        public string Help    => "Configure confirmation prompts and warnings for risky T-SQL execution, including production-server alerts, unguarded DELETE/UPDATE, DROP and TRUNCATE confirmations, and periodic open-transaction reminders.";
+        public string Help    => "Confirmations and warnings before risky T-SQL runs — production-server alerts, unguarded DELETE and UPDATE, DROP and TRUNCATE — and the periodic open-transaction reminder.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "Warnings");
+            ctx.Rows.AddGroupHeader(panel, "Warnings before running");
 
-            var (rowProd, chkProd) = ctx.Rows.AddToggle(panel,
-                "Production server warning",
-                "Show a warning banner when connected to production environments");
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowProd, chkProd) = ctx.Rows.AddToggle(left,
+                "Production server warning", "Banner on production connections");
+            ctx.Rows.Tip(rowProd, "Show a warning banner when connected to production environments");
             ctx.RegisterSearch("Production server warning", "Show a warning banner when connected to production environments", "Toggle", rowProd);
 
-            var (rowDel, chkDel) = ctx.Rows.AddToggle(panel,
-                "DELETE without WHERE",
-                "Warn before executing DELETE statements with no WHERE clause");
+            var (rowDel, chkDel) = ctx.Rows.AddToggle(right, "DELETE without WHERE", "");
+            ctx.Rows.Tip(rowDel, "Warn before executing DELETE statements with no WHERE clause");
             ctx.RegisterSearch("DELETE without WHERE", "Warn before executing DELETE statements with no WHERE clause", "Toggle", rowDel);
 
-            var (rowUpd, chkUpd) = ctx.Rows.AddToggle(panel,
-                "UPDATE without WHERE",
-                "Warn before executing UPDATE statements with no WHERE clause");
+            var (rowUpd, chkUpd) = ctx.Rows.AddToggle(left, "UPDATE without WHERE", "");
+            ctx.Rows.Tip(rowUpd, "Warn before executing UPDATE statements with no WHERE clause");
             ctx.RegisterSearch("UPDATE without WHERE", "Warn before executing UPDATE statements with no WHERE clause", "Toggle", rowUpd);
 
-            var (rowDrop, chkDrop) = ctx.Rows.AddToggle(panel,
-                "DROP confirmation",
-                "Require confirmation before executing DROP statements");
+            var (rowDrop, chkDrop) = ctx.Rows.AddToggle(right, "DROP confirmation", "");
+            ctx.Rows.Tip(rowDrop, "Require confirmation before executing DROP statements");
             ctx.RegisterSearch("DROP confirmation", "Require confirmation before executing DROP statements", "Toggle", rowDrop);
 
-            var (rowTrunc, chkTrunc) = ctx.Rows.AddToggle(panel,
-                "TRUNCATE confirmation",
-                "Require confirmation before executing TRUNCATE statements");
+            var (rowTrunc, chkTrunc) = ctx.Rows.AddToggle(left, "TRUNCATE confirmation", "");
+            ctx.Rows.Tip(rowTrunc, "Require confirmation before executing TRUNCATE statements");
             ctx.RegisterSearch("TRUNCATE confirmation", "Require confirmation before executing TRUNCATE statements", "Toggle", rowTrunc);
 
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Transaction reminder");
 
             var (rowTxRem, chkTxRem) = ctx.Rows.AddToggle(panel,
-                "Enable transaction reminder",
-                "Periodically remind about open transactions on production servers");
+                "Enable transaction reminder", "Open transactions on production servers");
+            ctx.Rows.Tip(rowTxRem, "Periodically remind about open transactions on production servers");
             ctx.RegisterSearch("Enable transaction reminder", "Periodically remind about open transactions on production servers", "Toggle", rowTxRem);
 
             var (rowInterval, numInterval) = ctx.Rows.AddNumber(panel,
-                "Reminder interval", 30, 3600, 30, "seconds",
-                "Time between transaction reminder notifications", chkTxRem);
+                "Reminder interval", 30, 3600, 30, "seconds", "", chkTxRem);
+            ctx.Rows.Tip(rowInterval, "Time between transaction reminder notifications");
             ctx.RegisterSearch("Reminder interval", "Time between transaction reminder notifications", "Number", rowInterval);
 
             return new SafetyControls(chkProd, chkDel, chkUpd, chkDrop, chkTrunc, chkTxRem, numInterval);

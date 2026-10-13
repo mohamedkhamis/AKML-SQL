@@ -97,12 +97,13 @@ namespace AkmlSql.Shell.Shared.Tests
             var dialog = new SettingsWindow(new AppSettings());
             _ = dialog.TestBuildWindowForRenderTest();
 
-            // The three consolidated settings must now be attributed to the
-            // SpecialCharacters page in the search index, not their old homes.
-            // (Labels follow SQL Prompt's wording per the reference screenshot.)
-            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Add parentheses ( ) when inserting a function or data type"));
+            // 2026-10 (design B): the Inserted code page is three tabs. The closing characters
+            // keep the SpecialCharacters section; bracket policy and function parentheses sit
+            // with schema qualification on the Statements tab (the Qualification section) —
+            // none of them is back on the Suggestions › Behavior page.
+            Assert.Equal("Qualification", PageKeyForSearchLabel(dialog, "Add parentheses ( ) when inserting a function or data type"));
             Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Automatically insert the corresponding closing character"));
-            Assert.Equal("SpecialCharacters", PageKeyForSearchLabel(dialog, "Bracket identifiers"));
+            Assert.Equal("Qualification", PageKeyForSearchLabel(dialog, "Bracket identifiers"));
         }
 
         // ─── reflection helpers ──────────────────────────────────────────────

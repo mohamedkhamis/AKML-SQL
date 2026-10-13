@@ -17,29 +17,34 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.Rows.AddGroupHeader(panel, "Analysis engine");
 
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
-                "Enable code analysis",
-                "Master switch for all code analysis rules");
+                "Enable code analysis", "Master switch");
             ctx.RegisterSearch("Enable code analysis", "Master switch for all code analysis rules", "Toggle", rowEnabled);
 
-            var (rowRunOnType, chkRunOnType) = ctx.Rows.AddToggle(panel,
-                "Analyze while typing",
-                "Run analysis rules in real-time as you type", chkEnabled);
+            // Design B (2026-10): the two children side by side.
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowRunOnType, chkRunOnType) = ctx.Rows.AddToggle(left,
+                "Analyze while typing", "", chkEnabled);
+            ctx.Rows.Tip(rowRunOnType, "Run analysis rules in real-time as you type");
             ctx.RegisterSearch("Analyze while typing", "Run analysis rules in real-time as you type", "Toggle", rowRunOnType);
 
             // Spec 040 (OPT-01): "Analyze on save" changed nothing and is hidden; the saved value is kept.
 
-            var (rowShowInErrorList, chkShowInErrorList) = ctx.Rows.AddToggle(panel,
-                "Show in Error List",
-                "Report analysis issues in the VS/SSMS Error List window", chkEnabled);
+            var (rowShowInErrorList, chkShowInErrorList) = ctx.Rows.AddToggle(right,
+                "Show in Error List", "", chkEnabled);
+            ctx.Rows.Tip(rowShowInErrorList, "Report analysis issues in the VS/SSMS Error List window");
             ctx.RegisterSearch("Show in Error List", "Report analysis issues in the VS/SSMS Error List window", "Toggle", rowShowInErrorList);
 
-            ctx.Rows.AddGroupSeparator(panel);
             // Spec 040 (T168, OPT-09) — the "Rules" row opens the Code analysis rules window. The
             // window saves the overrides itself; the page then takes them from disk (see
             // CodeAnalysisControls.RefreshRuleOverridesFromDisk) so OK here can't write stale ones.
             const string rulesHint = "Rules in 8 categories (PE, BP, SE, ST, DE, DEP, EX, NM): turn each on or off and set its severity";
-            var (rulesRow, btnManageRules) = ctx.Rows.AddButton(panel, "Rules", "Manage rules…", rulesHint);
+            var (rulesRow, btnManageRules) = ctx.Rows.AddButton(panel, "Rules", "Manage rules…", "8 categories; each on or off, with its severity");
+            ctx.Rows.Tip(rulesRow, rulesHint);
             ctx.RegisterSearch("Rules", rulesHint, "Button", rulesRow);
+
+            ctx.Rows.AddGroupSeparator(panel);
+            ctx.Rows.AddGroupHeader(panel, "Suppressing rules");
             var perProjectRow = ctx.Rows.AddInfoRow(panel, "Per-project config", ".casettings JSON file searched upward from file");
             ctx.RegisterSearch("Per-project config", ".casettings JSON file searched upward from file", "Info", perProjectRow);
             const string suppressHint =
