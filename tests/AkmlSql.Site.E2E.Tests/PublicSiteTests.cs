@@ -438,6 +438,37 @@ public sealed class PublicSiteTests(SiteFixture site)
         await Assertions.Expect(viewer).Not.ToHaveAttributeAsync("open", "");
     }
 
+    [SkippableFact]
+    public async Task DocsImages_OpenInTheViewer_AsTheirOwnGallery()
+    {
+        SkipIfUnavailable();
+        await using var context = await site.NewContextAsync();
+        var page = await context.NewPageAsync();
+        await page.GotoAsync(SiteFixture.BaseUrl + "/docs/topics/intellisense");
+
+        // MarkdownRenderer wraps each published image in a link the viewer intercepts.
+        var images = page.Locator(".doc-body a.doc-image-link");
+        await Assertions.Expect(images).ToHaveCountAsync(2);
+        var first = images.First;
+        await first.ScrollIntoViewIfNeededAsync();
+        await first.ClickAsync();
+
+        var viewer = page.Locator("dialog#screenshot-viewer");
+        await Assertions.Expect(viewer).ToHaveAttributeAsync("open", "");
+        Assert.EndsWith("/docs/topics/intellisense", page.Url);
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("1 of 2");
+        // The image's title is the caption; docs images have no section notes beside them.
+        await Assertions.Expect(viewer.Locator(".viewer-caption")).ToHaveTextAsync("Related tables and JOIN conditions");
+        await Assertions.Expect(viewer.Locator(".viewer-notes")).ToBeHiddenAsync();
+
+        await page.Keyboard.PressAsync("ArrowRight");
+        await Assertions.Expect(viewer.Locator(".viewer-caption")).ToHaveTextAsync("Choose columns before expanding a wildcard");
+
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(viewer).Not.ToHaveAttributeAsync("open", "");
+        await Assertions.Expect(first).ToBeFocusedAsync();
+    }
+
     // --- SC-003: the mobile viewport --------------------------------------
 
     [SkippableFact]

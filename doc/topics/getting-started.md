@@ -27,6 +27,8 @@ AKML SQL adds its own **AKML SQL** menu to the SSMS 22 menu bar. Format Document
 
 The editor's right-click menu has **Format Document** and **Active Style**, and the Command Palette (**Ctrl+Shift+P**) finds any command or option by name.
 
+![The AKML SQL command palette filtered by format, listing Format Styles, Format SQL Document, Format Selection and related actions.](../images/screenshots/10-command-palette-crop.png "Formatting commands, one search away")
+
 ## Open the Options dialog
 
 1. Open **AKML SQL** -> **Options…**.

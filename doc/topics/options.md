@@ -6,6 +6,8 @@ Every AKML SQL setting lives in one Options window. This page walks through it p
 
 Open it from the **AKML SQL** menu -> **Options…**.
 
+![AKML SQL Options on Suggestions, Behavior, showing completion toggles, maximum suggestions and trigger delay.](../images/screenshots/11-options-crop.png "Searchable settings for your workflow")
+
 - **Pages.** The tree on the left has twelve pages: General; Suggestions (Behavior, Lists & connections, Warnings & highlighting); Inserted code; Format; Queries (Results & execution, History, Color); Editor; Code analysis; and AI assistance. A page is divided into titled sections. The band at the top of each page shows where you are, for example **Suggestions › Behavior**.
 - **Find a setting.** Type in **Search options…** (or press **Ctrl+E** or **Ctrl+F**) and pick a result. The window jumps to that setting and highlights it.
 - **What's on this page?** The **?** button in the page band shows a short description of the page.
@@ -88,6 +90,8 @@ See [Snippets](snippets.md) for how to use and write snippets.
 ## Suggestions › Warnings & highlighting
 
 Warnings before you run something risky.
+
+![An AKML SQL execution warning highlights an UPDATE without WHERE against dbo.Products and offers Execute Anyway or Cancel.](../images/screenshots/12-safety-prompt-crop.png "An explicit warning before execution")
 
 - **Production server warning** — show a warning when the query window is connected to a production server.
 - **DELETE without WHERE** and **UPDATE without WHERE** — warn before running a `DELETE` or `UPDATE` that would change every row.
