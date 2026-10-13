@@ -820,6 +820,19 @@ html.screenshot-viewer-open {
     height: 52px;
 }
 
+/* No notes to show (docs images): the picture takes the notes column too. */
+.viewer.is-gallery:not(.has-notes) .viewer-stage {
+    grid-template-columns: 56px minmax(0, 1fr) 56px;
+    grid-template-areas:
+        "top   top   top"
+        "prev  fig   next"
+        "strip strip strip";
+}
+
+.viewer.is-gallery:not(.has-notes) .viewer-notes {
+    display: none;
+}
+
 .viewer.is-gallery .viewer-prev {
     grid-area: prev;
 }
@@ -910,6 +923,16 @@ html.screenshot-viewer-open {
             "strip strip";
         row-gap: 0.75rem;
         overflow-y: auto;
+    }
+
+    .viewer.is-gallery:not(.has-notes) .viewer-stage {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: repeat(4, max-content);
+        grid-template-areas:
+            "top   top"
+            "fig   fig"
+            "prev  next"
+            "strip strip";
     }
 
     /* The stage scrolls here, so vertical drags on the picture must scroll it too. */
@@ -1536,6 +1559,21 @@ html.js .docs-search {
 .doc-body img {
     max-width: 100%;
     height: auto;
+}
+
+/* Content images open in the screenshot viewer (js/screenshot-viewer.js); MarkdownRenderer
+   wraps each one in a link to itself. */
+.doc-body .doc-image-link {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: top;
+    border-radius: var(--akml-scalar-radius-s);
+    cursor: zoom-in;
+}
+
+.doc-body .doc-image-link img {
+    display: block;
+    border-radius: inherit;
 }
 
 .doc-body blockquote {

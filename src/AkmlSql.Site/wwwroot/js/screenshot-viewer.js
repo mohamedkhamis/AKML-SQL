@@ -1,5 +1,6 @@
 /*
- * Screenshot viewer for ProductScreenshot (Home hero, /features media rows).
+ * Screenshot viewer for ProductScreenshot (Home hero, /features media rows) and for the images
+ * in the docs (MarkdownRenderer wraps each published content image in a .doc-image-link).
  *
  * A click on a screenshot used to open the bare PNG in a new browser tab: the reader left the
  * page, lost the caption and the text explaining it, and the tab ignored their theme. It now
@@ -102,12 +103,23 @@
         return el ? el.textContent.replace(/\s+/g, ' ').trim() : '';
     }
 
-    function shownLink(fig) {
-        return fig ? fig.querySelector('.screenshot-' + variant()) : null;
+    // What the viewer can open: a ProductScreenshot <figure> (one link per theme variant) or a
+    // docs content image, which MarkdownRenderer wraps in a .doc-image-link to itself.
+    var VIEWABLE = '.screenshot-frame, .doc-image-link';
+
+    function isDocImage(el) {
+        return !!el && el.classList.contains('doc-image-link');
     }
 
-    function shownImg(fig) {
-        var link = shownLink(fig);
+    function shownLink(el) {
+        if (!el) {
+            return null;
+        }
+        return isDocImage(el) ? el : el.querySelector('.screenshot-' + variant());
+    }
+
+    function shownImg(el) {
+        var link = shownLink(el);
         return link ? link.querySelector('img') : null;
     }
 
@@ -121,6 +133,24 @@
     }
 
     function describe(fig) {
+        if (isDocImage(fig)) {
+            // One image for every theme; its size is known only once it has loaded (content
+            // images are lazy and carry no width/height) — layout() fills it in.
+            var docImg = fig.querySelector('img');
+            var href = fig.getAttribute('href');
+            return {
+                fig: fig,
+                kind: 'Image',
+                src: { dark: href, light: href },
+                w: docImg.naturalWidth || 0,
+                h: docImg.naturalHeight || 0,
+                alt: docImg.getAttribute('alt') || '',
+                caption: docImg.getAttribute('title') || docImg.getAttribute('alt') || 'Image',
+                eyebrow: '',
+                heading: '',
+                body: ''
+            };
+        }
         var img = fig.querySelector('.screenshot-variant img');
         var row = fig.closest('.media-row');
         var paras = row ? row.querySelectorAll('.media-text p:not(.eyebrow)') : [];
@@ -128,6 +158,7 @@
         var light = fig.querySelector('.screenshot-light');
         return {
             fig: fig,
+            kind: 'Screenshot',
             src: {
                 dark: dark ? dark.getAttribute('href') : img.getAttribute('src'),
                 light: light ? light.getAttribute('href') : img.getAttribute('src')
@@ -193,7 +224,7 @@
             var b = document.createElement('button');
             b.type = 'button';
             b.className = 'viewer-thumb';
-            b.setAttribute('aria-label', 'Screenshot ' + (i + 1) + ': ' + item.caption);
+            b.setAttribute('aria-label', item.kind + ' ' + (i + 1) + ': ' + item.caption);
             b.setAttribute('data-index', String(i));
             var t = document.createElement('img');
             t.alt = '';
@@ -209,6 +240,9 @@
         ui.img.src = item.src[variant()];
         ui.img.alt = item.alt;
         ui.caption.textContent = item.caption;
+        // The notes column only when there is text to put in it (Features sections, not docs
+        // images) — otherwise the picture gets that width.
+        dlg.classList.toggle('has-notes', !!item.body);
         if (!isGallery()) {
             ui.count.textContent = '';
             return;
@@ -256,9 +290,27 @@
             ? Infinity
             : cell.height - captionH - 2;
         // offsetWidth, not the bounding box: the Home hero's perspective tilt inflates the latter.
-        var onPage = item.fig.offsetWidth - 2;
-        var cap = Math.max(item.w, onPage);
-        var w = Math.min(availW, cap, availH * item.w / item.h);
+        var onPage = isDocImage(item.fig)
+            ? (shownImg(item.fig) || item.fig).offsetWidth
+            : item.fig.offsetWidth - 2;
+        var natW = item.w || ui.img.naturalWidth;
+        var natH = item.h || ui.img.naturalHeight;
+        if (!natW || !natH) {
+            // A lazy docs image not loaded yet: lay out provisionally, then again once it is.
+            natW = Math.max(onPage, 640);
+            natH = natW * 0.625;
+            if (ui.img.decode) {
+                ui.img.decode().then(function () {
+                    if (dlg.open && items[index] === item && ui.img.naturalWidth) {
+                        item.w = ui.img.naturalWidth;
+                        item.h = ui.img.naturalHeight;
+                        layout();
+                    }
+                }, function () { /* broken image: keep the provisional size */ });
+            }
+        }
+        var cap = Math.max(natW, onPage);
+        var w = Math.min(availW, cap, availH * natW / natH);
         w = Math.max(120, Math.floor(w));
         ui.img.style.width = w + 'px';
         ui.frame.style.width = (w + 2) + 'px';
@@ -289,7 +341,7 @@
         if (dlg.open) {
             return;
         }
-        var all = Array.prototype.slice.call(document.querySelectorAll('.screenshot-frame'));
+        var all = Array.prototype.slice.call(document.querySelectorAll(VIEWABLE));
         items = all.map(describe);
         index = Math.max(0, all.indexOf(fig));
         openerFig = fig;
@@ -364,7 +416,7 @@
         index = i;
         cancelAnimations(ui.frame);
         // The picture changed under the reader's focus: say which one it is now.
-        ui.status.textContent = 'Screenshot ' + (i + 1) + ' of ' + items.length + ': ' + items[i].caption;
+        ui.status.textContent = items[i].kind + ' ' + (i + 1) + ' of ' + items.length + ': ' + items[i].caption;
         if (reduced()) {
             render();
             layout();
@@ -484,16 +536,19 @@
 
     // Capture phase: runs before blazor.web.js's document-level link interception.
     document.addEventListener('click', function (event) {
-        var link = event.target && event.target.closest ? event.target.closest('.screenshot-variant') : null;
-        if (!link || !link.closest('.screenshot-frame')) {
+        var link = event.target && event.target.closest
+            ? event.target.closest('.screenshot-variant, .doc-image-link')
+            : null;
+        var item = !link ? null : isDocImage(link) ? link : link.closest('.screenshot-frame');
+        if (!item) {
             return;
         }
-        // A modifier or middle click keeps the browser's own behaviour (open the PNG).
+        // A modifier or middle click keeps the browser's own behaviour (open the image).
         if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
             return;
         }
         event.preventDefault();
-        open(link.closest('.screenshot-frame'));
+        open(item);
     }, true);
 
     // The viewer follows a theme change made while it is open (header theme picker).
