@@ -103,7 +103,8 @@ namespace AkmlSql.Shell.Shared.Tests
             var dialog = new SettingsWindow(settings);
             _ = dialog.TestBuildWindowForRenderTest();
 
-            Assert.Equal("CompletionPolish", PageKeyForSearchLabel(dialog, "Show the object definition box"));
+            // 2026-10 (design B): the definition box sits on the Completion tab of Suggestions › Behavior.
+            Assert.Equal("IntelliSense", PageKeyForSearchLabel(dialog, "Show the object definition box"));
             Assert.False(dialog.GetSettings().CompletionPolish.ShowObjectDefinitionBox);
         }
 

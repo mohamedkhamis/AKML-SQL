@@ -5,8 +5,9 @@ using AkmlSql.Core.Config;
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
-    /// Editor › Productivity. Spec 040 (OPT-01): "Named regions" and "Document Outline" changed
-    /// nothing and are hidden; their saved values are kept.
+    /// Editor › Productivity (fitted in the 2026-10 design B: the four aids in two columns).
+    /// Spec 040 (OPT-01): "Named regions" and "Document Outline" changed nothing and are hidden;
+    /// their saved values are kept.
     /// </summary>
     internal sealed class EditorPage : IPageBuilder
     {
@@ -19,20 +20,19 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
             ctx.Rows.AddGroupHeader(panel, "Productivity");
-            var (rowHl, chkHl) = ctx.Rows.AddToggle(panel,
-                "Highlight occurrences", "Highlight all occurrences of selected identifier");
+
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowHl, chkHl) = ctx.Rows.AddToggle(left, "Highlight occurrences", "Of the selected identifier");
             ctx.RegisterSearch("Highlight occurrences", "Highlight all occurrences of selected identifier", "Toggle", rowHl);
 
-            var (rowBracket, chkBracket) = ctx.Rows.AddToggle(panel,
-                "Bracket matching", "Highlight matching BEGIN/END and parenthesis pairs");
+            var (rowBracket, chkBracket) = ctx.Rows.AddToggle(right, "Bracket matching", "BEGIN/END and parenthesis pairs");
             ctx.RegisterSearch("Bracket matching", "Highlight matching BEGIN/END and parenthesis pairs", "Toggle", rowBracket);
 
-            var (rowSticky, chkSticky) = ctx.Rows.AddToggle(panel,
-                "Sticky scroll", "Pin parent scope headers while scrolling");
+            var (rowSticky, chkSticky) = ctx.Rows.AddToggle(left, "Sticky scroll", "Pin parent scope headers");
             ctx.RegisterSearch("Sticky scroll", "Pin parent scope headers while scrolling", "Toggle", rowSticky);
 
-            var (rowMinimap, chkMinimap) = ctx.Rows.AddToggle(panel,
-                "Code minimap", "Show code minimap in editor margin");
+            var (rowMinimap, chkMinimap) = ctx.Rows.AddToggle(right, "Code minimap", "In the editor margin");
             ctx.RegisterSearch("Code minimap", "Show code minimap in editor margin", "Toggle", rowMinimap);
 
             return new EditorControls(chkHl, chkBracket, chkSticky, chkMinimap);

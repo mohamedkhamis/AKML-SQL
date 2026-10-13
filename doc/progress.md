@@ -2423,6 +2423,99 @@ runs the image generators. SQL/service/desktop prerequisites and focused-run opt
 are documented in the script's Get-Help text. No installed application is deployed.
 
 Runner validation: SQL-backed smoke passed headless and headed; two headed regular/persistent-browser cases passed; an empty filter correctly exited 1. HTML/TRX reports were generated. Full Release solution build passed. The full suite was not repeated for this runner-only change.
+### Options › AI assistance page redesign — 2026-10-13
+
+The AI assistance Options page (SSMS) was rearranged after the user rejected its layout:
+Test connection sat between the API key and an always-open key-help block, above the
+Endpoint URL it tests; the per-agent request parameters rendered under a global-looking
+"Parameters" header after Privacy; the seven features were listed twice (toggles and
+agent assignments); the API key was shown in plain text (the password flag only set a
+Tag); the test-result brushes were light-theme hex in both themes; the page ran more
+than five screens. Four arrangements were shown in a local demo
+(`artifacts/ai-assistance-demo`, gitignored) and the user chose **B**: three in-page
+tabs. **Agents**: the list with Add / Duplicate / Remove / Set as active on its
+group-header line, a fitted Selected agent form (Name + Enabled, Provider + Model, API
+key masked with Show and a "Where do I get a key?" link, Endpoint URL), then the Test
+connection box with the outcome inline and the last recorded check while idle.
+**Features**: one table of feature / on / answering agent (Auto-fix stays a child of Fix
+errors), then the fallback order. **Privacy & data**: privacy mode, consent, and the
+request parameters, which are now ONE set for every agent (the user's decision): Save
+writes them to every agent and the flat mirror, so config format and engine are
+untouched; a still-blank placeholder agent is still dropped unless the parameters were
+edited. New `OptionsTabStrip` (programmatic WPF, PageTheme brushes) switches to a row's
+tab when the Options search or the Command Palette brings it into view. RowFactory
+gained stretch inputs, a fixed-width dropdown, a header overload with chip/trailing
+slots and `WrapRow`. Seams, automation names and search labels kept; the spec 037
+contract carries a superseded note.
+
+Verification: 12 new `AiAssistanceTabsLayoutTests` (tabs, reveal hook, reading order,
+key help, masked key sync, theme brush, shared parameters, feature-row pairing and label
+trimming, no sideways list scroll) green; `OptionsNavStructureTests` now looks for the
+"Selected agent" header. A render at the dialog's 720 px minimum width exposed two fits
+that are now fixed: feature labels trim with a tooltip, and the agent and fallback lists
+no longer grow a horizontal scrollbar (rows compress; the badge stays visible). Full
+shell suite 938 of 940 passed; the two failures are clipboard timeouts in
+`AiChatPanelCopyButtonTests`, which pass on rerun (the known clipboard flake). Debug
+test build and Release MSBuild of `AkmlSql.Ssms22` succeed; the real page was rendered to
+PNG in both themes and at 720 px and matches the approved demo. SSMS runtime check and
+deployment pending.
+
+### Options dialog "rebalanced tree" (design B) — 2026-10-13
+
+After the AI page, the user asked for the whole Options dialog. Renders of all twelve pages
+at the default window size showed two pages near three screens (Suggestions › Behavior,
+Inserted code), a description under nearly every row, nine one-item groups, execution
+warnings under Suggestions and snippets plus SQL passwords under "Lists & connections".
+A data-driven local demo (`artifacts/options-redesign-demo`, gitignored) showed the current
+dialog and three arrangements with a per-page scroll meter and a "where each setting goes"
+table; the user chose **B, the rebalanced tree**. Plan:
+`docs/superpowers/plans/2026-10-13-options-rebalanced-tree.md`.
+
+What changed. Tree: General (`GeneralAll` = General + SQL Server connections, moved from
+Suggestions) · Suggestions › Behavior (tabs Completion, JOIN assistance) · Suggestions ›
+Lists & scope · Inserted code (tabs Statements, Aliases, Closing characters) · Snippets (own
+leaf) · Format · Queries › Execution & warnings (tabs Results & execution, Warnings — the
+warnings and transaction reminder moved from Suggestions) · Queries › History (`HistoryAll`,
+tabs Recording, Restoring queries) · Queries › Color · Editor · Code analysis · AI
+assistance. Top-level names stay SQL Prompt's. New `TabbedPage` (a `CombinedPage` whose
+sections sit on `OptionsTabStrip` tabs; `OnSectionBuilt` hands a master switch across
+tabs so JOIN and restore rows still grey with Enable IntelliSense / Enable SQL history);
+`CombinedPage.BuildSections` with a before-section callback keeps the host's search
+attribution. RowFactory: `AddColumns` (two equal columns), `Tip` (the long explanation as a
+tooltip), `stretch` on multiline inputs, wrapping toggle and slider labels. Every page is
+fitted: one short line under a row only where the label does not say it all, runs of
+toggles in two columns, number fields and dropdowns paired, one-item groups merged. The
+one-row Tooltips page folded into Completion (`CompletionPolish` key retired); the
+Join conditions page and the two JOIN rows of Completion became `JoinAssistancePage`
+(key `JoinOptions`; the "Related" row that pointed at its own page is gone); bracket policy
+and function parentheses moved from Special characters (now Closing characters) to
+Qualification & brackets; the restore rows of History became `HistoryRestorePage`
+(`HistoryRestore`). Section keys, automation names, search labels and F1 anchors are
+otherwise unchanged; the spec 040 UI contract carries a superseded note.
+
+Verification: new `RowFactoryColumnsTests`, `TabbedPageTests`,
+`SuggestionsBehaviorLayoutTests`, `InsertedCodeLayoutTests`, `QueriesLayoutTests`,
+`HistoryLayoutTests`, `GeneralLayoutTests` and the fit gate `OptionsPageFitTests` (no page
+or tab over one and a half screens at 591 × 495 px); `OptionsNavStructureTests`,
+`OptionsCombinedPagesTests`, `HelpRoutingTests`, `OptionsLiveSettingsTests`,
+`OptionsPaletteTests`, `OptionsConnectionsHelpTests`, `SpecialCharactersPageTests` and
+`OptionsDarkComboTests` follow the new keys and labels. Options-related suites 305/305; full
+shell suite 964/964 on the final build (an earlier run had the foreground-dependent
+`KeyboardHookIsolationTests` as its one failure). Release MSBuild of `AkmlSql.Ssms22`
+succeeds. Every page
+and tab was rendered to PNG in both themes and at the 720 px minimum width (long labels now
+wrap instead of clipping).
+
+Runtime check (2026-10-13, after commit ef85bb9): the Release shell (1.26.1013.1742) and a
+full engine publish were deployed into the installed SSMS 22 and the shared Engine folder
+with the elevated local-deploy script (web engine service stopped and restarted, MEF cache
+cleared). A throwaway FlaUI tour launched SSMS against Northwind, opened AKML SQL › Options
+and captured all twelve pages and every tab: the tree, tabs, fitted rows, moved settings and
+the user's real agents and values all render as designed; the tour closed SSMS. The web
+edition at localhost:8083 still serves its own Settings page (untouched by this work; its
+installed build is 1.26.1012.2246) with no console errors.
+
+
 
 ### Playwright report failure corrected — 2026-10-13
 

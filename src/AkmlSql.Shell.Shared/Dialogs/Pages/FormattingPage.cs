@@ -25,26 +25,30 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             // Spec 040 (OPT-05): the master switch leads the page; every other row is its child,
             // greyed while it is off.
             var (rowEnabled, chkEnabled) = ctx.Rows.AddToggle(panel,
-                "Enable SQL formatter", "Master switch for all formatting features");
+                "Enable SQL formatter", "Master switch");
             ctx.RegisterSearch("Enable SQL formatter", "Master switch for all formatting features", "Toggle", rowEnabled);
 
+            // Design B (2026-10): the active style and its editor launcher share one line.
+            var (styleLeft, styleRight) = ctx.Rows.AddColumns(panel);
+
             // Spec 030 T021 / FR-006 — see + switch the active formatting style.
-            var (rowActive, cboActive) = ctx.Rows.AddDropdown(panel,
+            var (rowActive, cboActive) = ctx.Rows.AddDropdown(styleLeft,
                 "Active style",
                 System.Array.Empty<string>(),
-                "The formatting style Format SQL applies. Edit styles in Format Styles editor.", chkEnabled);
+                "What Format SQL applies", chkEnabled);
+            ctx.Rows.Tip(rowActive, "The formatting style Format SQL applies. Edit styles in the Format Styles window.");
             ctx.RegisterSearch("Active style", "The formatting style Format SQL applies", "Dropdown", rowActive);
 
             // Spec 033 (T038 / US4) — the SQL Prompt-exact launcher: all layout/casing editing
             // happens in the dedicated window; this page only selects + launches.
-            var (rowEdit, btnEdit) = ctx.Rows.AddButton(panel,
+            var (rowEdit, btnEdit) = ctx.Rows.AddButton(styleRight,
                 "Formatting styles",
                 "Edit formatting styles…",
-                "Open the Edit Formatting Styles window (layout, casing, lists, parentheses…)", chkEnabled);
+                "Layout, casing, lists, parentheses…", chkEnabled);
             ctx.RegisterSearch("Formatting styles", "Open the Edit Formatting Styles window", "Button", rowEdit);
 
             var (rowShowProfile, chkShowProfile) = ctx.Rows.AddToggle(panel,
-                "Show active style in status bar", "Display the active formatting style in the status bar", chkEnabled);
+                "Show active style in status bar", "", chkEnabled);
             ctx.RegisterSearch("Show active style in status bar", "Display the active formatting style in the status bar", "Toggle", rowShowProfile);
 
             // Spec 040 (T187, T190 — STY-10, STY-11): the team style folder row and the
@@ -60,7 +64,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             var (rowBackups, chkBackups) = ctx.Rows.AddToggle(panel,
                 "Create backups before formatting",
-                "Save a backup copy of files before applying format changes", chkEnabled);
+                "Bulk format saves a copy of each file first", chkEnabled);
             ctx.RegisterSearch("Create backups before formatting", "Save a backup copy of files before applying format changes", "Toggle", rowBackups);
 
             var controls = new FormattingControls(cboActive, chkShowProfile, chkEnabled, chkBackups);
@@ -289,7 +293,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             const string teamDescription =
                 "A shared folder of styles. They are listed under TEAM STYLES for everyone who points here, " +
                 "and are read-only unless the folder can be written to. Leave empty to turn team styles off.";
-            var (teamRow, teamBox) = ctx.Rows.AddTextInput(panel, TeamFolderLabel, teamDescription, parent: parent);
+            var (teamRow, teamBox) = ctx.Rows.AddTextInput(panel, TeamFolderLabel,
+                "Listed under TEAM STYLES; empty turns team styles off", parent: parent);
+            ctx.Rows.Tip(teamRow, teamDescription);
             ctx.RegisterSearch(TeamFolderLabel, "A shared folder of formatting styles for your team", "Text", teamRow);
 
             // The box gets a "…" folder picker beside it, and an error line under it.
@@ -324,29 +330,38 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, ActionsHeader);
 
-            var (layoutRow, layout) = ctx.Rows.AddToggle(panel, "Apply layout",
-                "Lay out line breaks and indentation with the active style. Off keeps your own spacing.", parent);
+            // Design B (2026-10): the four switches in two columns, the two dropdowns on one line.
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (layoutRow, layout) = ctx.Rows.AddToggle(left, "Apply layout",
+                "Line breaks and indentation", parent);
+            ctx.Rows.Tip(layoutRow, "Lay out line breaks and indentation with the active style. Off keeps your own spacing.");
             ctx.RegisterSearch("Apply layout", "Lay out line breaks and indentation when you run Format SQL", "Toggle", layoutRow);
 
-            var (casingRow, casing) = ctx.Rows.AddToggle(panel, "Apply casing",
-                "Change keywords, functions and data types to the active style's casing.", parent);
+            var (casingRow, casing) = ctx.Rows.AddToggle(right, "Apply casing",
+                "Keywords, functions, data types", parent);
+            ctx.Rows.Tip(casingRow, "Change keywords, functions and data types to the active style's casing.");
             ctx.RegisterSearch("Apply casing", "Change keyword, function and data type case when you run Format SQL", "Toggle", casingRow);
 
-            var (semicolonsRow, semicolons) = ctx.Rows.AddDropdown(panel, "Semicolons", SemicolonItems,
-                "Insert a semicolon after each statement, remove them, or leave them as written.", parent);
-            ctx.RegisterSearch("Semicolons", "Insert or remove statement-terminating semicolons when you run Format SQL", "Dropdown", semicolonsRow);
-
-            var (bracketsRow, brackets) = ctx.Rows.AddDropdown(panel, "Square brackets", BracketItems,
-                "Put square brackets around names, remove the brackets names don't need, or leave them as written.", parent);
-            ctx.RegisterSearch("Square brackets", "Add or remove square brackets around names when you run Format SQL", "Dropdown", bracketsRow);
-
-            var (expandRow, expand) = ctx.Rows.AddToggle(panel, "Expand wildcards",
-                "Replace SELECT * with the table's columns. Needs a query window connected to the database.", parent);
+            var (expandRow, expand) = ctx.Rows.AddToggle(left, "Expand wildcards",
+                "SELECT * → the columns; needs a connection", parent);
+            ctx.Rows.Tip(expandRow, "Replace SELECT * with the table's columns. Needs a query window connected to the database.");
             ctx.RegisterSearch("Expand wildcards", "Replace SELECT * with the column list when you run Format SQL", "Toggle", expandRow);
 
-            var (qualifyRow, qualify) = ctx.Rows.AddToggle(panel, "Qualify object names",
-                "Add the schema to table names (Products → dbo.Products). Needs a query window connected to the database.", parent);
+            var (qualifyRow, qualify) = ctx.Rows.AddToggle(right, "Qualify object names",
+                "Products → dbo.Products; needs a connection", parent);
+            ctx.Rows.Tip(qualifyRow, "Add the schema to table names (Products → dbo.Products). Needs a query window connected to the database.");
             ctx.RegisterSearch("Qualify object names", "Add the schema to table names when you run Format SQL", "Toggle", qualifyRow);
+
+            var (dropLeft, dropRight) = ctx.Rows.AddColumns(panel);
+
+            var (semicolonsRow, semicolons) = ctx.Rows.AddDropdown(dropLeft, "Semicolons", SemicolonItems, "", parent);
+            ctx.Rows.Tip(semicolonsRow, "Insert a semicolon after each statement, remove them, or leave them as written.");
+            ctx.RegisterSearch("Semicolons", "Insert or remove statement-terminating semicolons when you run Format SQL", "Dropdown", semicolonsRow);
+
+            var (bracketsRow, brackets) = ctx.Rows.AddDropdown(dropRight, "Square brackets", BracketItems, "", parent);
+            ctx.Rows.Tip(bracketsRow, "Put square brackets around names, remove the brackets names don't need, or leave them as written.");
+            ctx.RegisterSearch("Square brackets", "Add or remove square brackets around names when you run Format SQL", "Dropdown", bracketsRow);
 
             var rows = new FormatSqlRows(teamBox, error, layout, casing, semicolons, brackets, expand, qualify);
             browse.Click += (_, _) => rows.BrowseForTeamFolder();

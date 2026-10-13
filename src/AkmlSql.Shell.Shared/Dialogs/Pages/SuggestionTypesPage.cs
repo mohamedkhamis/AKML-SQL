@@ -12,35 +12,36 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     internal sealed class SuggestionTypesPage : IPageBuilder
     {
         public string Key     => "SuggestionTypes";
-        public string Display => "Suggestions › Lists & connections › Types of suggestion";
+        public string Display => "Suggestions › Lists & scope › Types of suggestion";
         public string Title   => "Types of suggestion";
         public string HelpTopic => "topics/options#types-of-suggestion";
         public string Help    => "Controls which kinds of items appear in the completion list, including system objects and SQL keywords, and whether column suggestions are scoped to referenced tables only or every table in the database.";
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
+            // Design B (2026-10): one group, fitted rows.
             ctx.Rows.AddGroupHeader(panel, "What appears in the suggestion list");
 
-            var (rowSysObjs, chkSysObjs) = ctx.Rows.AddToggle(panel,
-                "List system objects",
-                "Include system stored procs and functions (sp_*, sys.*) in suggestions.");
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowSysObjs, chkSysObjs) = ctx.Rows.AddToggle(left,
+                "List system objects", "sp_* and sys.* objects");
+            ctx.Rows.Tip(rowSysObjs, "Include system stored procs and functions (sp_*, sys.*) in suggestions.");
             ctx.RegisterSearch("List system objects", "Include system stored procs and functions in suggestions", "Toggle", rowSysObjs);
 
             // Spec 040 (OPT-01): "List all database columns after SELECT" is hidden — nothing reads
             // it (use "Suggest columns from: All tables"); the saved value is kept.
 
-            var (rowKeywords, chkKeywords) = ctx.Rows.AddToggle(panel,
-                "Show keywords in suggestions",
-                "Include SQL keywords (SELECT, FROM, etc.) in the list.");
+            var (rowKeywords, chkKeywords) = ctx.Rows.AddToggle(right,
+                "Show keywords in suggestions", "");
+            ctx.Rows.Tip(rowKeywords, "Include SQL keywords (SELECT, FROM, etc.) in the list.");
             ctx.RegisterSearch("Show keywords in suggestions", "Include SQL keywords in the completion list", "Toggle", rowKeywords);
-
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Column suggestions");
 
             var (rowScope, cboScope) = ctx.Rows.AddDropdown(panel,
                 "Suggest columns from",
                 new[] { "Referenced tables only", "All tables" },
-                "Whether typing in WHERE/SELECT shows columns from only the FROM-clause tables, or every table in the database.");
+                "In WHERE and SELECT: the FROM-clause tables only, or every table");
+            ctx.Rows.Tip(rowScope, "Whether typing in WHERE/SELECT shows columns from only the FROM-clause tables, or every table in the database.");
             ctx.RegisterSearch("Suggest columns from", "Scope of column suggestions", "Dropdown", rowScope);
 
             return new SuggestionTypesControls(chkSysObjs, chkKeywords, cboScope);

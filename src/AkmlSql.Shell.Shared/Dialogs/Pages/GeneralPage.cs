@@ -22,27 +22,25 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 "UI color theme for AKML SQL dialogs");
             ctx.RegisterSearch("Theme", "UI color theme for AKML SQL dialogs", "Dropdown", rowTheme);
 
+            // Design B (2026-10): the two switches side by side; paths and version in one group.
             ctx.Rows.AddGroupSeparator(panel);
             ctx.Rows.AddGroupHeader(panel, "Updates & telemetry");
-            var (rowAutoUpdate, chkAutoUpdate) = ctx.Rows.AddToggle(panel,
-                "Check for updates automatically",
-                "Checks for new versions every 24 hours on startup");
+            var (left, right) = ctx.Rows.AddColumns(panel);
+            var (rowAutoUpdate, chkAutoUpdate) = ctx.Rows.AddToggle(left,
+                "Check for updates automatically", "Every 24 hours on startup");
             ctx.RegisterSearch("Check for updates automatically", "Checks for new versions every 24 hours on startup", "Toggle", rowAutoUpdate);
 
-            var (rowTelemetry, chkTelemetry) = ctx.Rows.AddToggle(panel,
-                "Send anonymous error reports",
-                "Error-level log entries only — no personal data, machine name or IP is collected");
+            var (rowTelemetry, chkTelemetry) = ctx.Rows.AddToggle(right,
+                "Send anonymous error reports", "Error-level log entries only; nothing personal");
+            ctx.Rows.Tip(rowTelemetry, "Error-level log entries only — no personal data, machine name or IP is collected");
             ctx.RegisterSearch("Send anonymous error reports", "Error-level log entries only — no personal data, machine name or IP is collected", "Toggle", rowTelemetry);
 
             ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Paths");
+            ctx.Rows.AddGroupHeader(panel, "Paths & version");
             var (rowConfig, _) = ctx.Rows.AddReadOnlyField(panel, "Configuration file", Constants.ConfigFilePath);
             ctx.RegisterSearch("Configuration file", Constants.ConfigFilePath, "Info", rowConfig);
             var (rowLogs, _) = ctx.Rows.AddReadOnlyField(panel, "Log directory", Constants.LogsPath);
             ctx.RegisterSearch("Log directory", Constants.LogsPath, "Info", rowLogs);
-
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "About");
             var versionRow = ctx.Rows.AddInfoRow(panel, "Version", Constants.RuntimeVersion + " (built " + AkmlSql.Core.AppVersion.BuildDateTime + ")");
             ctx.RegisterSearch("Version", Constants.RuntimeVersion, "Info", versionRow);
 

@@ -20,6 +20,19 @@ check against this file.
   top level.
 - "Help topic" is the F1 target: `https://akml.khamis.work/docs/` + the slug.
 
+> **Superseded 2026-10-13** (user-approved "rebalanced tree", design B of
+> `artifacts/options-redesign-demo`; tests `OptionsNavStructureTests`, `OptionsCombinedPagesTests`,
+> `OptionsPageFitTests`). The tree is now: General (`GeneralAll`: General + SQL Server
+> connections) · Suggestions › Behavior (`SuggestionsBehavior`: tabs Completion, JOIN
+> assistance) · Suggestions › Lists & scope (`SuggestionsLists`) · Inserted code (`InsertedCode`:
+> tabs Statements, Aliases, Closing characters) · Snippets (`Snippets`) · Format (`Formatting`) ·
+> Queries › Execution & warnings (`ResultsExecution`: tabs Results & execution, Warnings) ·
+> Queries › History (`HistoryAll`: tabs Recording, Restoring queries) · Queries › Color
+> (`Tabs & UI`) · Editor (`EditorAll`) · Code analysis · AI assistance. Section keys and F1 anchors
+> below are unchanged except `CompletionPolish` (folded into `IntelliSense`) and the new
+> `HistoryRestore` (anchor `#queries-history`). The table below is the spec-040 arrangement it
+> replaced.
+
 | Group | Page label | Page key (unchanged) | Help topic (F1) |
 |---|---|---|---|
 | — | General | `General` | `topics/options#general` |

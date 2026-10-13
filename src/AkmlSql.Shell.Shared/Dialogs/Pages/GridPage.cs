@@ -4,10 +4,14 @@ using AkmlSql.Core.Config;
 
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
+    /// <summary>
+    /// Queries › Execution &amp; warnings › Query results (fitted in the 2026-10 design B): the
+    /// four grid switches in two columns, the Excel export toggle among them.
+    /// </summary>
     internal sealed class GridPage : IPageBuilder
     {
         public string Key     => "Grid";
-        public string Display => "Queries › Results & execution › Query results";
+        public string Display => "Queries › Execution & warnings › Query results";
         public string Title   => "Query results";
         public string HelpTopic => "topics/options#query-results";
         public string Help    => "Controls how query results appear in the grid, including aggregate statistics, NULL highlighting and row numbers. Also sets whether 15+ digit numbers are exported to Excel as text to avoid rounding.";
@@ -15,27 +19,25 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
             ctx.Rows.AddGroupHeader(panel, "Results grid");
-            var (rowAgg, chkAgg) = ctx.Rows.AddToggle(panel,
-                "Aggregate statistics",
-                "Show Sum, Avg, Count, Min, Max for selected cells");
+
+            var (left, right) = ctx.Rows.AddColumns(panel);
+
+            var (rowAgg, chkAgg) = ctx.Rows.AddToggle(left,
+                "Aggregate statistics", "Sum, Avg, Count, Min, Max for a selection");
             ctx.RegisterSearch("Aggregate statistics", "Show Sum, Avg, Count, Min, Max for selected cells", "Toggle", rowAgg);
 
-            var (rowNull, chkNull) = ctx.Rows.AddToggle(panel,
-                "Highlight NULL cells", "Highlight NULL cells in results grid");
+            var (rowNull, chkNull) = ctx.Rows.AddToggle(right, "Highlight NULL cells", "");
             ctx.RegisterSearch("Highlight NULL cells", "Highlight NULL cells in results grid", "Toggle", rowNull);
 
-            var (rowRowNums, chkRowNums) = ctx.Rows.AddToggle(panel,
-                "Row numbers", "Show row numbers column");
+            var (rowRowNums, chkRowNums) = ctx.Rows.AddToggle(left, "Row numbers", "");
+            ctx.Rows.Tip(rowRowNums, "Show a row numbers column");
             ctx.RegisterSearch("Row numbers", "Show row numbers column", "Toggle", rowRowNums);
 
             // Spec 040 (OPT-01): "Freeze headers" changed nothing and is hidden; the saved value is kept.
 
-            ctx.Rows.AddGroupSeparator(panel);
-            ctx.Rows.AddGroupHeader(panel, "Excel export");
-
-            var (rowExcel, chkExcel) = ctx.Rows.AddToggle(panel,
-                "Save 15+ digit numbers as text",
-                "Numbers with 15 or more digits are saved as text to prevent Excel from rounding them");
+            var (rowExcel, chkExcel) = ctx.Rows.AddToggle(right,
+                "Save 15+ digit numbers as text", "Excel export; stops Excel rounding them");
+            ctx.Rows.Tip(rowExcel, "Numbers with 15 or more digits are saved as text to prevent Excel from rounding them");
             ctx.RegisterSearch("Save 15+ digit numbers as text", "Numbers with 15 or more digits are saved as text to prevent Excel from rounding them", "Toggle", rowExcel);
 
             return new GridControls(chkAgg, chkNull, chkRowNums, chkExcel);

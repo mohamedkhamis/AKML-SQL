@@ -136,7 +136,7 @@ namespace AkmlSql.Shell.Shared.Tests
             bool found = false;
             foreach (var tb in LogicalTree.Descendants<TextBlock>(window))
             {
-                if (tb.Text == "Suggestions › Lists & connections")
+                if (tb.Text == "Suggestions › Lists & scope")
                 {
                     found = true;
                     break;

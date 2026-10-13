@@ -24,28 +24,24 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         public IPageControls Build(StackPanel panel, PageContext ctx)
         {
-            ctx.Rows.AddGroupHeader(panel, "Alias generation");
+            // Design B (2026-10): one group, the two lists side by side.
+            ctx.Rows.AddGroupHeader(panel, "Aliases");
 
             var (rowIncludeAs, chkIncludeAs) = ctx.Rows.AddToggle(panel,
-                "Include the AS keyword",
-                "Insert AS in generated aliases (Orders AS o) rather than the bare form (Orders o). Applies when alias generation is on (Suggestions › Behavior › Suggest table aliases).");
+                "Include the AS keyword", "Orders AS o rather than Orders o");
+            ctx.Rows.Tip(rowIncludeAs, "Insert AS in generated aliases (Orders AS o) rather than the bare form (Orders o). Applies when alias generation is on (Suggestions › Behavior › JOIN assistance › Suggest table aliases).");
             ctx.RegisterSearch("Include the AS keyword", "Insert AS in generated aliases (Orders AS o vs Orders o)", "Toggle", rowIncludeAs);
 
-            // Spec 040 (T159): the row's label is the name search shows — no header repeating it.
-            ctx.Rows.AddGroupSeparator(panel);
+            var (left, right) = ctx.Rows.AddColumns(panel);
 
-            var (rowMap, txtMap) = ctx.Rows.AddMultilineTextInput(panel,
-                "Custom alias map",
-                "Force a specific alias for an object. One mapping per line as “object = alias”, e.g. Customers = c. Object names are matched case-insensitively.",
-                height: 110);
+            var (rowMap, txtMap) = ctx.Rows.AddMultilineTextInput(left,
+                "Custom alias map", "One per line: object = alias", height: 96, stretch: true);
+            ctx.Rows.Tip(rowMap, "Force a specific alias for an object. One mapping per line as “object = alias”, e.g. Customers = c. Object names are matched case-insensitively.");
             ctx.RegisterSearch("Custom alias map", "Force a specific alias for an object (object = alias, one per line)", "Text", rowMap);
 
-            ctx.Rows.AddGroupSeparator(panel);
-
-            var (rowPrefixes, txtPrefixes) = ctx.Rows.AddMultilineTextInput(panel,
-                "Prefixes to ignore",
-                "Strip these prefixes from an object name before deriving its alias (tbl_Orders → o). One prefix per line, e.g. tbl_ or vw_.",
-                height: 90);
+            var (rowPrefixes, txtPrefixes) = ctx.Rows.AddMultilineTextInput(right,
+                "Prefixes to ignore", "One per line: tbl_, vw_ …", height: 96, stretch: true);
+            ctx.Rows.Tip(rowPrefixes, "Strip these prefixes from an object name before deriving its alias (tbl_Orders → o). One prefix per line, e.g. tbl_ or vw_.");
             ctx.RegisterSearch("Prefixes to ignore", "Strip these prefixes before deriving an alias (one per line)", "Text", rowPrefixes);
 
             return new AliasesControls(chkIncludeAs, txtMap, txtPrefixes);

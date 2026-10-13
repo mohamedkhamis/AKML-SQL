@@ -204,7 +204,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
             window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
 
-            Assert.Equal("History", dialog.CurrentPageKey);
+            Assert.Equal("HistoryAll", dialog.CurrentPageKey);   // the tabbed page that shows the History section
             var row = Assert.IsAssignableFrom<FrameworkElement>(dialog.FocusedRow);
             Assert.Contains(LogicalTree.Descendants<TextBlock>(row), t => t.Text == HistoryLabel);
         }
@@ -217,7 +217,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
             window.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
 
-            Assert.Equal("History", dialog.CurrentPageKey);
+            Assert.Equal("HistoryAll", dialog.CurrentPageKey);   // the tabbed page that shows the History section
             Assert.Null(dialog.FocusedRow);
         }
 
