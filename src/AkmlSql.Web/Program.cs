@@ -149,6 +149,7 @@ builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
 // PostgreSQL text before it goes to a cloud provider. AiPromptService and AiGhostTextService take them as optional.
 builder.Services.AddSingleton<IAiDialectContext, AiDialectContext>();
 builder.Services.AddSingleton<IPostgresRedactor, EnginePostgresRedactor>();
+builder.Services.AddSingleton<IPostgresFormatEngine, EnginePostgresFormat>();
 builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
 // Spec 028 (M6) T034 (US6): local-only persisted chat conversations.
 builder.Services.AddSingleton<IChatHistoryStore, ChatHistoryStore>();

@@ -27,6 +27,94 @@ public class FormatRequestHandler(ProfileManager profileManager)
 
     public FormatResponse HandleFormat(FormatRequest request) => HandleFormat(request, null, null);
 
+    // ── PostgreSQL sessions (spec 042, user story 7) ─────────────────────────────────────────────────
+
+    private readonly AkmlSql.Engine.PostgreSql.PgFormatService _postgres = new();
+
+    /// <summary>The style for a PostgreSQL request: the JSON the web edition sent, else the engine's own by name.</summary>
+    private FormattingProfile PostgresProfile(string? profileName, string? profileJson, out string? fallbackWarning)
+    {
+        fallbackWarning = null;
+        if (!string.IsNullOrWhiteSpace(profileJson))
+        {
+            try { return ProfileSerializer.Deserialize(profileJson); }
+            catch (Exception ex)
+            {
+                fallbackWarning = "The formatting style that came with the request could not be read, so the built-in defaults were used instead.";
+                Log.Warning(ex, "PostgreSQL format: the style JSON could not be read");
+                return new FormattingProfile();
+            }
+        }
+        return LoadProfile(profileName, out fallbackWarning);
+    }
+
+    private static DatabaseCache? CacheOf(string? sessionId, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    {
+        if (sessions == null || schemaCache == null || string.IsNullOrEmpty(sessionId)) return null;
+        var session = sessions.GetSession(sessionId);
+        return session == null ? null : schemaCache.GetCache(sessionId, session.DatabaseName);
+    }
+
+    public FormatResponse HandleFormatPostgres(FormatRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    {
+        try
+        {
+            var profile = PostgresProfile(request.ProfileName, request.ProfileJson, out var warning);
+            return _postgres.Format(request.Text, profile, request.Actions, CacheOf(request.SessionId, schemaCache, sessions), warning);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "PostgreSQL format request failed");
+            return new FormatResponse
+            {
+                Success = false,
+                FormattedText = request.Text,
+                Diagnostics = [new FormatDiagnosticInfo { Severity = 2, Message = "Not formatted: " + ex.GetType().Name }],
+            };
+        }
+    }
+
+    public FormatSelectionResponse HandleFormatSelectionPostgres(FormatSelectionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    {
+        try
+        {
+            var profile = PostgresProfile(request.ProfileName, request.ProfileJson, out var warning);
+            return _postgres.FormatSelection(request, profile, CacheOf(request.SessionId, schemaCache, sessions), warning);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "PostgreSQL format selection request failed");
+            return new FormatSelectionResponse { Success = false, FormattedText = request.Text, OriginalStart = request.SelectionStart, OriginalEnd = request.SelectionEnd };
+        }
+    }
+
+    public FormatActionResponse HandleFormatActionPostgres(FormatActionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    {
+        try
+        {
+            var profile = PostgresProfile(request.ProfileName, request.ProfileJson, out _);
+            return _postgres.RunAction(request, profile, CacheOf(request.SessionId, schemaCache, sessions));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "PostgreSQL format action request failed");
+            return new FormatActionResponse { Success = false, FormattedText = request.Text, ErrorMessage = "Not changed: " + ex.GetType().Name };
+        }
+    }
+
+    public FormatPreviewResponse HandleFormatPreviewPostgres(FormatPreviewRequest request)
+    {
+        try
+        {
+            return _postgres.Preview(request.SampleText, ProfileSerializer.Deserialize(request.ProfileJson));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "PostgreSQL format preview request failed");
+            return new FormatPreviewResponse { FormattedText = request.SampleText, ValidationError = "Preview failed: " + ex.GetType().Name };
+        }
+    }
+
     /// <summary>
     /// Format Document. Spec 040 (STY-11): when the shell sends its Format SQL actions
     /// (<see cref="FormatRequest.Actions"/>), they replace the style's own format actions — layout

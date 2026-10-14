@@ -128,10 +128,10 @@ internal sealed class RefactoringService : IRefactoringService
         catch (InvalidOperationException) { return null; }
     }
 
-    public Task<string> FormatSelectionAsync(string sql, AkmlSql.Formatting.Profiles.FormattingProfile? profile = null)
+    public async Task<string> FormatSelectionAsync(string sql, AkmlSql.Formatting.Profiles.FormattingProfile? profile = null)
     {
-        var result = _formatter.Format(sql ?? string.Empty, profile);
-        return Task.FromResult(result.FormattedText ?? sql ?? string.Empty);
+        var result = await _formatter.FormatAsync(sql ?? string.Empty, profile).ConfigureAwait(false);
+        return result.FormattedText ?? sql ?? string.Empty;
     }
 
     public Task<LightweightPreview> PreviewLightweightAsync(

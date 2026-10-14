@@ -79,8 +79,9 @@ public class FormattingContractTests
         Assert.Equal(1, back.Actions!.Semicolons);
         Assert.True(back.Actions.ExpandWildcards);
 
+        // Keys only ever grow: key 6 (ProfileJson, spec 042) follows key 5, so Actions stays where it was.
         var array = MessagePackSerializer.Deserialize<object[]>(bytes);
-        Assert.Equal(6, array.Length);
+        Assert.True(array.Length >= 6);
         Assert.NotNull(array[5]);
     }
 
@@ -128,7 +129,8 @@ public class FormattingContractTests
         Assert.True(back.Actions.QualifyObjectNames);
 
         var array = MessagePackSerializer.Deserialize<object[]>(bytes);
-        Assert.Equal(6, array.Length);
+        Assert.True(array.Length >= 6);
+        Assert.NotNull(array[5]);
     }
 
     [Fact]

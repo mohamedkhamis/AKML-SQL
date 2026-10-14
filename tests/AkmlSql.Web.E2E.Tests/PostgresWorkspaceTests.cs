@@ -833,4 +833,112 @@ public sealed class PostgresWorkspaceTests
             await DropQuietlyAsync(s, $"DROP TABLE IF EXISTS {table};");
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+    // User story 7 (task T147, quickstart US7, SC-015, SC-017): format PostgreSQL scripts; Parse without the server.
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+    private static async Task<string> FormatAndReadAsync(SqlSession s, string sql)
+    {
+        await s.SetEditorTextAsync(sql);
+        await s.Page.ClickAsync("[data-testid='format-button']");
+        await Assertions.Expect(s.Page.Locator("[data-testid='format-complete']")).ToHaveCountAsync(1, new() { Timeout = 30_000 });
+        return (await EditorTextAsync(s.Page)).Replace(" ", " ");
+    }
+
+    [SkippableFact]
+    public async Task Format_lays_out_a_PostgreSQL_script_with_the_active_style_and_a_second_Format_changes_nothing()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        const string script =
+            "select a.id, upper(b.name) as n, row_number() over (partition by a.g order by a.d) rn from t a join u b on b.id=a.id where a.x > 1 and b.y is not null order by a.id desc limit 10;\n" +
+            "insert into t (a, b) values (1, 'x'), (2, 'y') on conflict (a) do update set b = excluded.b returning a;\n" +
+            "update t set a = a + 1 where id = 7 returning a;\n" +
+            "with c as (select 1 as x) select x::text from c;";
+
+        var first = await FormatAndReadAsync(s, script);
+
+        Assert.Contains("SELECT", first);
+        Assert.Contains("ON CONFLICT", first);
+        Assert.Contains("RETURNING", first);
+        Assert.Matches(@"LIMIT\s+10", first);                                        // the style decides the padding
+        Assert.Matches(@"OVER\s*\(\s*PARTITION BY a\.g ORDER BY a\.d\s*\)", first);
+        Assert.DoesNotContain("select a.id", first);
+        Assert.True(first.Split('\n').Length > 8, "the script should be laid out over several lines:\n" + first);
+
+        var version = await s.Page.Locator("[data-testid='format-complete']").GetAttributeAsync("data-version");
+        await s.Page.ClickAsync("[data-testid='format-button']");
+        await Assertions.Expect(s.Page.Locator("[data-testid='format-complete']")).Not.ToHaveAttributeAsync("data-version", version!, new() { Timeout = 30_000 });
+        var second = (await EditorTextAsync(s.Page)).Replace(" ", " ");
+        Assert.Equal(first, second);
+    }
+
+    [SkippableFact]
+    public async Task Format_keeps_a_function_body_and_quoted_names_exactly_as_written()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        const string body = "$$ BEGIN RETURN 1; END $$";
+        var script = $"create function f() returns int as {body} language plpgsql;\nselect \"OrderId\", \"select\" from \"Order Details\";";
+
+        var formatted = await FormatAndReadAsync(s, script);
+
+        Assert.Contains(body, formatted);
+        Assert.Contains("\"OrderId\"", formatted);
+        Assert.Contains("\"select\"", formatted);
+        Assert.Contains("\"Order Details\"", formatted);
+        Assert.Contains("CREATE", formatted);
+    }
+
+    [SkippableFact]
+    public async Task A_script_with_a_syntax_error_is_left_alone_and_the_message_names_the_problem()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        const string script = "select 1;\nselec 2;";
+
+        await s.SetEditorTextAsync(script);
+        await s.Page.ClickAsync("[data-testid='format-button']");
+
+        await Assertions.Expect(s.Page.GetByText("syntax error", new() { Exact = false }).First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        Assert.Equal(script, (await EditorTextAsync(s.Page)).Replace(" ", " "));
+    }
+
+    [SkippableFact]
+    public async Task The_Format_Styles_page_marks_the_options_with_no_PostgreSQL_meaning_and_previews_a_PostgreSQL_sample()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        await s.Page.ClickAsync("[data-testid='nav-styles']");
+        await s.Page.WaitForSelectorAsync("[data-testid='styles-page']", new() { Timeout = 30_000 });
+        await s.Page.Locator("[data-testid='style-row']").First.ClickAsync();
+
+        await s.Page.ClickAsync("[data-testid='page-controlFlow']");
+        await Assertions.Expect(s.Page.Locator("[data-testid='option-no-effect']").First).ToContainTextAsync("No effect for PostgreSQL");
+        Assert.Equal(await s.Page.Locator("[data-testid='option-row']").CountAsync(), await s.Page.Locator("[data-testid='option-no-effect']").CountAsync());
+
+        await s.Page.ClickAsync("[data-testid='page-joinStatements']");
+        await Assertions.Expect(s.Page.Locator("[data-testid='preview']")).ToContainTextAsync("sales.customers", new() { Timeout = 30_000 });
+        Assert.Equal(0, await s.Page.Locator("[data-testid='preview'] >> text=dbo.").CountAsync());
+        var lists = s.Page.Locator("[data-option='lists.placeCommasBeforeItems'] [data-testid='option-no-effect']");
+        await s.Page.ClickAsync("[data-testid='page-lists']");
+        Assert.Equal(0, await lists.CountAsync());
+    }
+
+    [SkippableFact]
+    public async Task Parse_lists_every_syntax_error_with_its_line_and_column_without_running_anything()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        await s.SetEditorTextAsync("select 1;\nselec 2;\nselect 3 from;\nselect (4;\nselect 5;");
+
+        await s.Page.ClickAsync("[data-testid='parse-button']");
+        await Tab(s.Page, "messages").ClickAsync();
+
+        var errors = s.Page.Locator("[data-testid^='messages-error-']");
+        await Assertions.Expect(errors).ToHaveCountAsync(3, new() { Timeout = 30_000 });
+        Assert.All(await errors.AllInnerTextsAsync(), t => Assert.Contains("SQLSTATE 42601", t));
+        var titles = new List<string>();
+        for (var i = 0; i < 3; i++) titles.Add(await errors.Nth(i).GetAttributeAsync("title") ?? string.Empty);
+        Assert.StartsWith("Go to line 2, column", titles[0]);
+        Assert.StartsWith("Go to line 3, column", titles[1]);
+        Assert.StartsWith("Go to line 4, column", titles[2]);
+        await Assertions.Expect(s.Page.Locator("[data-testid='results-grid']")).ToHaveCountAsync(0);   // nothing ran
+    }
 }

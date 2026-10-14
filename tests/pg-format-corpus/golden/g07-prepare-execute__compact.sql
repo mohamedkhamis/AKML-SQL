@@ -1,0 +1,4 @@
+PREPARE q (int) AS
+SELECT * FROM products WHERE id = $1;
+EXECUTE q(1);
+DEALLOCATE q;

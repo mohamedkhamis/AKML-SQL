@@ -1,0 +1,4 @@
+SELECT  *
+FROM    a
+				NATURAL JOIN b
+				NATURAL LEFT JOIN c ;

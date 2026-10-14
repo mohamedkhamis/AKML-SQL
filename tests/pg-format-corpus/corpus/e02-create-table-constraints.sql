@@ -1,0 +1,1 @@
+create table order_lines (order_id int not null, line int not null, product_id int not null, qty int not null default 1, primary key (order_id, line), foreign key (order_id) references orders (id) on delete cascade, constraint qty_pos check (qty > 0), unique (order_id, product_id));

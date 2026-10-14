@@ -1,0 +1,4 @@
+WITH
+	u AS ( SELECT id FROM a UNION SELECT id FROM b )
+SELECT  COUNT ( * )
+FROM    u ;

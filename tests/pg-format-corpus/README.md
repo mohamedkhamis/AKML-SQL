@@ -5,10 +5,11 @@ Real-world PostgreSQL scripts and their formatted goldens, the PostgreSQL counte
 
 - **Runner**: `tests/AkmlSql.PostgreSql.Tests/Formatting/PgFormatCorpusTests.cs`
   (`[Trait("Category", "FormatCorpus")]`).
-- **Inputs**: `corpus/NN-name.sql`, at least 100 scripts: examples from the PostgreSQL manual,
-  Northwind-style queries, DDL, functions with dollar-quoted bodies, regression cases.
-- **Goldens**: `golden/NN-name__<style>.sql`, one per built-in style (`default`, `compact`,
-  `collapsed`, `indented`, `aligned-left-bracket`, and the Khamis styles).
+- **Inputs**: `corpus/<group><nn>-name.sql`, 151 scripts in eight groups: `a` SELECT forms, `b` joins, `c` subqueries, CTEs and set operations,
+  `d` data-changing statements, `e` definitions, `f` functions and triggers with dollar-quoted bodies, `g` utility statements and comments,
+  `h` regression cases (operators without spaces, signs, casts, parameters, quoted names, unicode, Windows line ends).
+- **Goldens**: `golden/<name>__<style>.sql`, one per built-in style (`default`, `compact`, `indented`, `aligned-left-bracket`,
+  `leading-commas`, `minimalist`, `khamis-style`, `collapsed`).
 - **Regenerating**: set `AKML_UPDATE_PG_GOLDENS=1` and run the corpus test. Review the diff by eye
   against the style definitions before keeping it; a golden is a drift guard, not an authority.
 

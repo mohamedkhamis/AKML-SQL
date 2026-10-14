@@ -325,8 +325,8 @@ AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_file_without_a_BOM_that_is_not_UT
 AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "  a/b:c?.sql ", expected: "abc")
 AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "...", expected: "SQLQuery3")
 AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "notes.txt", expected: "notes.txt")
-AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "orders-audit.SQL", expected: "orders-audit")
-AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "orders-audit.sql", expected: "orders-audit") [#2]
+AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "orders-audit.sql", expected: "orders-audit")
+AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "orders-audit.SQL", expected: "orders-audit") [#2]
 AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "Q3.2025 revenue", expected: "Q3.2025 revenue")
 AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: "report v1.2", expected: "report v1.2")
 AkmlSql.Web.Tests.Editor.EditorDocumentTests.A_typed_name_keeps_its_dots_and_loses_only_a_sql_extension(input: null, expected: "SQLQuery3")
@@ -596,8 +596,8 @@ AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.SearchTerm_ProducesHitS
 AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.Segments_ConcatenateToInputVerbatim
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:\"postgresql\"", expected: 1)
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:mssql", expected: 0)
-AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:pg", expected: 1)
-AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "Kind:PG", expected: 1) [#2]
+AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "Kind:PG", expected: 1)
+AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:pg", expected: 1) [#2]
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:postgres", expected: 1)
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "KIND:PostgreSQL", expected: 1)
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:postgresql", expected: 1) [#2]
@@ -866,8 +866,8 @@ AkmlSql.Web.Tests.Services.EngineEndpointTests.A_remembered_scheme_is_tried_firs
 AkmlSql.Web.Tests.Services.EngineEndpointTests.An_ipv6_literal_is_bracketed_so_the_url_is_valid
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "::1")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "127.0.0.1")
-AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost")
-AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST") [#2]
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost") [#2]
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "192.168.1.10")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "engine.example.com")
@@ -881,6 +881,16 @@ AkmlSql.Web.Tests.Services.ExecutionSettingsStoreTests.Saving_a_default_clears_t
 AkmlSql.Web.Tests.Services.ExecutionSettingsStoreTests.The_effective_values_are_the_saved_ones_until_the_toolbar_overrides_them
 AkmlSql.Web.Tests.Services.ExecutionSettingsStoreTests.The_effective_values_carry_the_grid_options_from_the_saved_defaults
 AkmlSql.Web.Tests.Services.ExecutionSettingsStoreTests.The_session_override_is_never_written
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.A_bridge_that_fails_is_reported_not_thrown
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.A_closed_bridge_or_an_engine_without_PostgreSQL_leaves_the_script_unchanged_and_says_why
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.A_document_over_the_size_limit_is_refused_before_it_is_sent
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.For_PostgreSQL_the_script_and_the_active_style_go_to_the_engine
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.For_PostgreSQL_with_no_engine_to_ask_the_script_comes_back_unchanged_with_the_reason
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.For_SQL_Server_the_script_is_formatted_in_the_browser_and_the_engine_is_never_asked
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.The_engine_gets_the_script_the_session_and_the_style_as_JSON_and_its_answer_is_read_back
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.The_preview_request_says_it_is_PostgreSQL_and_a_validation_error_comes_back_as_a_warning
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.The_style_preview_goes_to_the_engine_for_PostgreSQL_only
+AkmlSql.Web.Tests.Services.FormatterServicePgRoutingTests.The_synchronous_entry_point_still_refuses_PostgreSQL_text
 AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_already_canonical_text_does_not_modify
 AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_handles_null_input_gracefully
 AkmlSql.Web.Tests.Services.FormatterServiceTests.Format_honours_explicit_profile_override
@@ -1347,6 +1357,11 @@ AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Rename_changes_the_name_everyw
 AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.The_saved_style_is_what_the_editor_formats_with
 AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.With_an_engine_new_styles_are_saved_on_the_engine
 AkmlSql.Web.Tests.Styles.SqlPromptStyleStoreTests.Without_an_engine_a_new_style_is_saved_in_the_browser_as_a_sql_prompt_style
+AkmlSql.Web.Tests.Styles.StylesPagePgTests.On_a_PostgreSQL_connection_the_options_with_no_meaning_are_marked_and_the_others_are_not
+AkmlSql.Web.Tests.Styles.StylesPagePgTests.On_a_PostgreSQL_connection_the_preview_is_the_PostgreSQL_sample_formatted_by_the_engine
+AkmlSql.Web.Tests.Styles.StylesPagePgTests.On_a_SQL_Server_connection_nothing_is_marked
+AkmlSql.Web.Tests.Styles.StylesPagePgTests.On_a_SQL_Server_connection_the_preview_is_formatted_in_the_browser
+AkmlSql.Web.Tests.Styles.StylesPagePgTests.The_mark_carries_the_reason_as_its_tooltip
 AkmlSql.Web.Tests.Styles.StylesPageTests.A_gated_option_is_disabled_until_its_switch_is_on
 AkmlSql.Web.Tests.Styles.StylesPageTests.Changing_an_option_changes_the_preview_and_marks_the_style_unsaved
 AkmlSql.Web.Tests.Styles.StylesPageTests.Classic_styles_say_saving_makes_them_sql_prompt_styles

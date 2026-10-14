@@ -1,0 +1,1 @@
+CREATE UNLOGGED TABLE copy_of (LIKE products INCLUDING ALL);

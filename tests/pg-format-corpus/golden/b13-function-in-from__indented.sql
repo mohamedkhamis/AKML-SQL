@@ -1,0 +1,5 @@
+SELECT *
+FROM   GENERATE_SERIES(1, 10) AS g(n)
+
+       JOIN UNNEST(ARRAY[1, 2, 3]) u
+           ON u = g.n;

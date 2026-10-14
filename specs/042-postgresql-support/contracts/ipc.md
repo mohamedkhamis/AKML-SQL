@@ -81,6 +81,25 @@ The type name is the only piece of client text that reaches a PostgreSQL stateme
 only if it reads as a type name (letters, digits, `_`, space, `.`, `,`, brackets and quoted identifiers; no semicolon, comment marker,
 backslash or dollar sign) and refuses the edit otherwise.
 
+## Appended keys for formatting (user story 7, FR-140 to FR-147)
+
+`FormatDocument`, `FormatSelection`, `FormatAction` and `FormatPreview` are answered for a PostgreSQL session by the PostgreSQL formatter
+(no refusal any more). The web edition keeps its styles in the browser, so the request carries the style:
+
+```text
+FormatRequest          [6] ProfileJson  string?  the style as .akmlstyle JSON; used instead of ProfileName when present
+FormatSelectionRequest [6] ProfileJson  string?  same
+FormatActionRequest    [6] ProfileJson  string?  same
+FormatPreviewRequest   [3] Dialect      int      DatabaseKind of the sample: 0 SQL Server (default), 1 PostgreSQL
+```
+
+Format Actions on a PostgreSQL session: `CasingOnly`, `InsertSemicolons` (the last statement's), `RemoveSemicolons` (only the last statement's:
+PostgreSQL needs the ones between), `ExpandWildcards` and `QualifyObjectNames` (PostgreSQL quoting) run; every other type answers
+`Success = false`, `ErrorMessage = "Not available for PostgreSQL"`. A selection is widened to whole statements, as for SQL Server.
+
+The style editor schema (`StyleEditorSchemaRequest`, SQL Prompt model) goes to version **2003**: each setting may carry
+`noEffectForPostgreSql: true` and `noEffectReason`, and each group a `samplePostgreSql` beside `sample`.
+
 ## New messages
 
 ### 221 `CredentialRequest` → 222 `CredentialResponse`

@@ -76,25 +76,35 @@ public sealed class NoTsqlOnPostgresSessionTests
         return MessagePackSerializer.Deserialize<TResponse>(response!.Payload!);
     }
 
-    // The formatter pipeline parses with ScriptDom directly, which the count above cannot see, so the refusal itself is checked.
-    // When PostgreSQL formatting is routed in (task T154) these become the PostgreSQL formatting tests and this one goes.
+    // Spec 042, user story 7: a PostgreSQL session is formatted by the PostgreSQL formatter. The T-SQL parser count in the test below still
+    // stays where it was, which is what proves the T-SQL formatter never saw the text.
     [Fact]
-    public async Task Until_PostgreSQL_formatting_is_routed_in_the_T_SQL_formatter_refuses_a_PostgreSQL_session_and_returns_the_text_untouched()
+    public async Task A_PostgreSQL_session_is_formatted_by_the_PostgreSQL_formatter()
     {
         const string sql = "select  *   from customers   where country='UK'";
+        var before = TsqlParserService.TotalInvocations;
 
         var document = await Ask<FormatRequest, FormatResponse>(MessageTypes.FormatDocument, new FormatRequest { SessionId = _pg, Text = sql });
         var selection = await Ask<FormatSelectionRequest, FormatSelectionResponse>(
             MessageTypes.FormatSelection, new FormatSelectionRequest { SessionId = _pg, Text = sql, SelectionStart = 0, SelectionEnd = sql.Length });
-        var action = await Ask<FormatActionRequest, FormatActionResponse>(MessageTypes.FormatAction, new FormatActionRequest { SessionId = _pg, Text = sql });
+        var casing = await Ask<FormatActionRequest, FormatActionResponse>(
+            MessageTypes.FormatAction, new FormatActionRequest { SessionId = _pg, Text = sql, ActionType = (int)FormatActionType.CasingOnly });
+        var refused = await Ask<FormatActionRequest, FormatActionResponse>(
+            MessageTypes.FormatAction, new FormatActionRequest { SessionId = _pg, Text = sql, ActionType = (int)FormatActionType.ConvertOldStyleJoins });
 
-        Assert.False(document.Success);
-        Assert.Equal(sql, document.FormattedText);
-        Assert.Contains("Not available for PostgreSQL", document.Diagnostics![0].Message);
-        Assert.False(selection.Success);
-        Assert.Equal(sql, selection.FormattedText);
-        Assert.False(action.Success);
-        Assert.Equal(sql, action.FormattedText);
+        Assert.True(document.Success, string.Join("; ", document.Diagnostics?.Select(d => d.Message) ?? Array.Empty<string>()));
+        Assert.StartsWith("SELECT", document.FormattedText);
+        Assert.Contains("'UK'", document.FormattedText);
+        Assert.NotEqual(sql, document.FormattedText);
+        Assert.True(selection.Success);
+        Assert.Equal(0, selection.OriginalStart);
+        Assert.Equal(sql.Length, selection.OriginalEnd);
+        Assert.True(casing.Success);
+        Assert.Equal("SELECT  *   FROM customers   WHERE country='UK'", casing.FormattedText);   // case only: the white space is untouched
+        Assert.False(refused.Success);
+        Assert.Equal("Not available for PostgreSQL", refused.ErrorMessage);
+        Assert.Equal(sql, refused.FormattedText);
+        Assert.Equal(before, TsqlParserService.TotalInvocations);
     }
 
     [Fact]

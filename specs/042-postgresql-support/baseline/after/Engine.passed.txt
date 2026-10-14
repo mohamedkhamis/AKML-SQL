@@ -1597,11 +1597,11 @@ AkmlSql.Engine.Tests.Parser.VariableTrackerTests.TrackVariables_VarcharType_Form
 AkmlSql.Engine.Tests.PerformanceBaselineTests.Corpus_meets_contract_size_and_determinism
 AkmlSql.Engine.Tests.PerformanceBaselineTests.Pre_closure_baseline_without_BulkFormat_block_deserialises_gracefully
 AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.A_PostgreSQL_session_asking_for_everything_never_reaches_the_T_SQL_parser
+AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.A_PostgreSQL_session_is_formatted_by_the_PostgreSQL_formatter
 AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.A_SQL_Server_session_is_still_formatted_as_before
 AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.Analysis_of_a_PostgreSQL_session_reports_no_findings_instead_of_T_SQL_syntax_errors
 AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.Surfaces_without_a_PostgreSQL_form_are_refused_without_reaching_the_parser
 AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.The_same_requests_on_a_SQL_Server_session_do_reach_it_so_the_count_is_a_real_instrument
-AkmlSql.Engine.Tests.PostgreSql.NoTsqlOnPostgresSessionTests.Until_PostgreSQL_formatting_is_routed_in_the_T_SQL_formatter_refuses_a_PostgreSQL_session_and_returns_the_text_untouched
 AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.A_connection_that_carries_its_password_is_left_alone
 AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.A_connection_without_a_password_gets_the_remembered_one
 AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.A_password_is_saved_after_a_successful_open_only_when_asked
@@ -1666,6 +1666,20 @@ AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(t
 AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "uuid")
 AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Setting_a_value_to_NULL_is_a_NULL_parameter_still_cast_to_the_type
 AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.The_returned_columns_are_quoted_like_any_other_name_and_a_name_cannot_end_the_list
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.A_SQL_Server_preview_is_formatted_as_before
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.A_style_that_cannot_be_read_falls_back_to_the_defaults_and_says_so
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.A_syntax_error_comes_back_unchanged_with_the_position
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.An_action_with_no_PostgreSQL_meaning_is_refused_with_the_standard_words
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.Case_only_and_terminator_actions_act_on_the_selection_when_there_is_one
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.Expand_wildcards_leaves_a_count_star_alone_and_without_a_schema_says_why
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.Expand_wildcards_with_several_tables_qualifies_each_column
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.Expand_wildcards_writes_the_columns_with_PostgreSQL_quoting
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.Formatting_a_PostgreSQL_session_never_reaches_the_T_SQL_parser
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.Qualify_names_writes_the_schema_of_each_table_the_cache_finds_and_leaves_the_rest
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.The_Format_SQL_actions_of_the_dialog_apply_case_and_terminators_without_the_layout
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.The_new_request_keys_are_appended_not_inserted
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.The_style_preview_formats_a_PostgreSQL_sample_when_asked_in_PostgreSQL
+AkmlSql.Engine.Tests.PostgreSql.PgFormatRoutingTests.The_style_sent_as_JSON_is_the_one_the_script_is_laid_out_with
 AkmlSql.Engine.Tests.PostgreSql.PgParseRunnerTests.A_character_outside_the_basic_plane_before_the_error_keeps_the_column_right
 AkmlSql.Engine.Tests.PostgreSql.PgParseRunnerTests.A_GO_line_gets_the_SQL_Server_hint_beside_the_not_checked_text
 AkmlSql.Engine.Tests.PostgreSql.PgParseRunnerTests.An_empty_script_has_nothing_to_check
@@ -1714,8 +1728,8 @@ AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Anything_the_web_edition_does
 AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Anything_the_web_edition_does_not_send_is_refused(setting: "Some Unknown Key=1")
 AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "GSS Encryption Mode=Require")
 AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "Include Realm=true")
-AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "Integrated Security=True")
-AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "Integrated Security=true") [#2]
+AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "Integrated Security=true")
+AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "Integrated Security=True") [#2]
 AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Authentication_with_the_engines_own_identity_is_refused(setting: "Kerberos Service Name=postgres")
 AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Requests_that_do_not_come_over_the_bridge_are_not_checked
 AkmlSql.Engine.Tests.PostgreSql.PgTargetGuardTests.Settings_that_make_the_engine_read_files_or_change_the_session_are_refused(setting: "Options=-c search_path=evil")
@@ -1737,8 +1751,8 @@ AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.Text_over_the_document_limit_
 AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.Text_that_cannot_be_read_to_the_end_is_refused_and_not_returned
 AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.The_PostgreSQL_dialect_may_be_written_as_its_name_or_a_common_alias(dialect: " postgres ")
 AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.The_PostgreSQL_dialect_may_be_written_as_its_name_or_a_common_alias(dialect: "pg")
-AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.The_PostgreSQL_dialect_may_be_written_as_its_name_or_a_common_alias(dialect: "PostgreSQL")
-AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.The_PostgreSQL_dialect_may_be_written_as_its_name_or_a_common_alias(dialect: "postgresql") [#2]
+AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.The_PostgreSQL_dialect_may_be_written_as_its_name_or_a_common_alias(dialect: "postgresql")
+AkmlSql.Engine.Tests.PostgreSql.RedactHandlerTests.The_PostgreSQL_dialect_may_be_written_as_its_name_or_a_common_alias(dialect: "PostgreSQL") [#2]
 AkmlSql.Engine.Tests.Pr247_DatabaseRenameScriptBuilderFix.RewriteDependent_BracketQuotedIdentifier_PreservesBrackets
 AkmlSql.Engine.Tests.Pr247_DatabaseRenameScriptBuilderFix.RewriteDependent_UnquotedIdentifier_NoBracketsAdded
 AkmlSql.Engine.Tests.Pr247_ExecuteQueryHandlerFix.ActiveRequest_CancelAfterGateAcquired_CancelsCts
@@ -2045,8 +2059,8 @@ AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeNa
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "int", maxLength: 0, precision: 0, scale: 0, expected: "int")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nchar", maxLength: 20, precision: 0, scale: 0, expected: "nchar(20)")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "numeric", maxLength: 0, precision: 12, scale: 3, expected: "numeric(12,3)")
-AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "NVARCHAR", maxLength: -1, precision: 0, scale: 0, expected: "NVARCHAR(MAX)")
-AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nvarchar", maxLength: -1, precision: 0, scale: 0, expected: "nvarchar(MAX)") [#2]
+AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nvarchar", maxLength: -1, precision: 0, scale: 0, expected: "nvarchar(MAX)")
+AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "NVARCHAR", maxLength: -1, precision: 0, scale: 0, expected: "NVARCHAR(MAX)") [#2]
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nvarchar", maxLength: 50, precision: 0, scale: 0, expected: "nvarchar(50)")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "uniqueidentifier", maxLength: 0, precision: 0, scale: 0, expected: "uniqueidentifier")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "varbinary", maxLength: -1, precision: 0, scale: 0, expected: "varbinary(MAX)")

@@ -108,6 +108,29 @@ BOM); `.sqlpromptstylev2` export (SQL Prompt 9 XML) is unchanged.
 
 ---
 
+## PostgreSQL (spec 042)
+
+A script of a PostgreSQL connection is formatted by its own formatter (`AkmlSql.PostgreSql/Formatting`, run by the engine; the web edition asks the
+engine). The style is any style: one written in SQL Prompt's model is used as it is, one in AKML's own model is read as its SQL Prompt equivalent
+(`SqlPromptStyles.ToDocument`).
+
+- **Layout.** Tokens in, tokens out: every token of the script is printed once, in order; the layout decides only the white space and the case of
+  keywords, functions and data types. Names are never recased, quotes are never added or removed, string constants and dollar-quoted bodies
+  (functions, `DO` blocks) are verbatim. Clause alignment, lists, parentheses, CTEs, joins, `CASE`, `AND` / `OR`, `BETWEEN`, `IN`, `INSERT`,
+  function calls and the layout of `CREATE TABLE` / `INDEX` / `VIEW` follow the style's options; `MERGE`, `EXPLAIN`, `PREPARE` and the other
+  statements keep their own line breaks (a long one-line statement wraps after its top-level commas).
+- **Safety.** The script must parse (otherwise it is returned unchanged with the first error). The result must parse to the same statements
+  (location-free tree comparison), hold the same tokens and comments in the same order, and format to itself. Any failure returns the original with
+  a message.
+- **Options with no PostgreSQL meaning** (control flow, variables, batch separators, global variables, comparison alignment ...) are listed in
+  `SqlPromptApplicability` and marked "No effect for PostgreSQL" in the Format Styles page while a PostgreSQL connection is active, whose preview is
+  a PostgreSQL sample. The formatter never reads them.
+- **Format SQL actions.** Case only; add / remove the last terminator; expand wildcards and qualify names with PostgreSQL quoting (both need the
+  schema). Square brackets, `AS` keyword and the T-SQL rewrites are not available.
+- **Parse** (Ctrl+F5) checks the syntax with the PostgreSQL parser, without the server, and lists every error with its line and column.
+- **Corpus.** `tests/pg-format-corpus`: 151 scripts x the 8 built-in styles, every pair parse-equivalent, stable, literal-preserving and equal to its golden
+  (`AKML_UPDATE_PG_GOLDENS=1` regenerates).
+
 ## noformat Regions
 
 Wrap any block you want the formatter to skip:

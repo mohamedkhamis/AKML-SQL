@@ -1419,7 +1419,7 @@
     {
         try
         {
-            var result = Formatter.Format(_currentText, _activeProfile);
+            var result = await Formatter.FormatAsync(_currentText, _activeProfile);
             if (result.Success && _editor != null)
             {
                 await _editor.SetTextAsync(result.FormattedText);

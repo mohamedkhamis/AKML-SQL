@@ -1,0 +1,1 @@
+SELECT * FROM t WHERE a = $1 AND b = ANY ($2) AND c BETWEEN $3 AND $4 LIMIT $5;

@@ -19,6 +19,15 @@ public interface IFormatterService
     /// profile (matches the legacy "ANSI default" baseline that the IDE plugin ships).
     /// </summary>
     FormatResult Format(string sql, FormattingProfile? profile = null);
+
+    /// <summary>
+    /// As <see cref="Format"/>, for a script of the active connection's language. A SQL Server script is formatted in the browser; a PostgreSQL
+    /// script is sent to the engine (spec 042, FR-140). With no engine to ask, a PostgreSQL script comes back unchanged with the reason.
+    /// </summary>
+    Task<FormatResult> FormatAsync(string sql, FormattingProfile? profile = null, CancellationToken ct = default);
+
+    /// <summary>The Format Styles page's preview of <paramref name="sample"/> with the style being edited, in the active connection's language.</summary>
+    Task<FormatResult> PreviewAsync(string sample, FormattingProfile profile, CancellationToken ct = default);
 }
 
 internal sealed class FormatterService : IFormatterService
@@ -26,10 +35,29 @@ internal sealed class FormatterService : IFormatterService
     private readonly FormatterPipeline _pipeline = new();
     private readonly FormattingProfile _defaultProfile = new();
     private readonly IDialectGate? _gate;
+    private readonly IPostgresFormatEngine? _postgres;
 
-    public FormatterService(IDialectGate? gate = null)
+    public FormatterService(IDialectGate? gate = null, IPostgresFormatEngine? postgres = null)
     {
         _gate = gate;
+        _postgres = postgres;
+    }
+
+    public async Task<FormatResult> FormatAsync(string sql, FormattingProfile? profile = null, CancellationToken ct = default)
+    {
+        if (_gate?.IsPostgres == true && _postgres != null)
+        {
+            DocumentSizeLimit.EnsureWithinLimit(sql);
+            return await _postgres.FormatAsync(sql ?? string.Empty, profile ?? _defaultProfile, ct).ConfigureAwait(false);
+        }
+        return Format(sql, profile);
+    }
+
+    public async Task<FormatResult> PreviewAsync(string sample, FormattingProfile profile, CancellationToken ct = default)
+    {
+        if (_gate?.IsPostgres == true && _postgres != null)
+            return await _postgres.PreviewAsync(sample ?? string.Empty, profile, ct).ConfigureAwait(false);
+        return Format(sample, profile);
     }
 
     public FormatResult Format(string sql, FormattingProfile? profile = null)
@@ -38,7 +66,7 @@ internal sealed class FormatterService : IFormatterService
         DocumentSizeLimit.EnsureWithinLimit(sql);
 
         // Spec 042 (FR-092): this is the T-SQL formatter; it never sees PostgreSQL text. PostgreSQL formatting runs in
-        // the engine (story 7). Until it is routed the text comes back unchanged with the reason.
+        // the engine (see FormatAsync); a caller that still asks here gets the text back unchanged with the reason.
         if (_gate?.IsPostgres == true)
         {
             return new FormatResult

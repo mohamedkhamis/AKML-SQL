@@ -68,4 +68,12 @@ internal sealed class TestFormatterService : IFormatterService
     {
         return _pipeline.Format(sql ?? string.Empty, profile ?? new AkmlSql.Formatting.Profiles.FormattingProfile());
     }
+
+    public Task<AkmlSql.Formatting.Pipeline.FormatResult> FormatAsync(
+        string sql, AkmlSql.Formatting.Profiles.FormattingProfile? profile = null, CancellationToken ct = default) =>
+        Task.FromResult(Format(sql, profile));
+
+    public Task<AkmlSql.Formatting.Pipeline.FormatResult> PreviewAsync(
+        string sample, AkmlSql.Formatting.Profiles.FormattingProfile profile, CancellationToken ct = default) =>
+        Task.FromResult(Format(sample, profile));
 }

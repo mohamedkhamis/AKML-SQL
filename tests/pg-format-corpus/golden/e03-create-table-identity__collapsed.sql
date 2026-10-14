@@ -1,0 +1,3 @@
+CREATE TABLE t (id    BIGINT  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                v     TEXT,
+                total NUMERIC GENERATED ALWAYS AS (LENGTH(v) * 2) STORED);

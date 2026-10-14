@@ -64,6 +64,29 @@ RETURNING / DELETE / WITH / window functions before writing layout rules. If nod
 too sparse for a clause, fall back for that clause to a token-stream, clause-aware layout with the
 AST used only for nesting depth. The plan keeps US7's layout tasks contingent on S2.
 
+**SPIKE S2 result (2026-10-14, task T143, `PgTokenAnchorsSpikeTests`).** The parse tree carries a `location` (a start offset, the first
+token of the node) on expressions and names only: `ColumnRef`, `ResTarget`, `A_Expr`, `FuncCall`, `RangeVar` and the like. The nodes that
+hold the clauses - `SelectStmt`, `InsertStmt`, `UpdateStmt`, `DeleteStmt`, `JoinExpr` - have none, no node has an end, and nothing places a
+clause keyword (`FROM`, `WHERE`, `GROUP BY`, `ON CONFLICT`) or an alias's `AS`. So the "AST-anchored" branch is not available for any
+clause, and the plan's fallback applies to all of them.
+
+**As built.**
+- The structure is read off the **tokens**: the lexical scanner's tokens (comments attached to the token they lead or trail), bracket and
+  `CASE ... END` pairs matched, clause keywords found at the top level of each statement. The parse tree is used where it is exact: the script
+  must parse before anything is done, the result must parse to the same statements (`TreesEquivalent`), and the statement kinds decide
+  nothing else.
+- The layout is built as a **document** (`PgDoc`: text, soft breaks, groups that stay flat when they fit, indentation, alignment, scopes for
+  "the start of the line the parenthesis was on"), then rendered. The printers decide what goes where from the SQL Prompt style; the renderer
+  decides which groups fit. The text is a function of the tokens and the style alone, which is what makes it stable.
+- One more check than planned: the formatted script must hold the same tokens (a word may differ in case) and the same comments, in order,
+  as the original. A comment that ended a line before a comma is written after the comma, so comments are compared apart from tokens.
+- Option semantics follow the T-SQL SQL Prompt layout option by option (clause alignment, lists, parentheses, CTE, join, CASE, AND / OR,
+  BETWEEN, IN, INSERT, function calls). Statements it does not restructure (most utility and DDL statements) keep their own line breaks and
+  indentation, get keyword case, and a statement written on one line is wrapped after its top-level commas when it is too long.
+- `PgStyleApplicability` is `SqlPromptApplicability` in `AkmlSql.Formatting`, next to the catalog, because the browser's style editor
+  reads it and cannot reference the engine-only PostgreSQL library. A test proves it both ways: an option listed as no effect changes
+  nothing for any script of the corpus, and every other option changes the output of some script.
+
 ## R3. Analysis rules on top of R1
 
 **Decision**: `PgAnalysisEngine` + `PgRuleRegistry` + `IPgAnalysisRule` in the new library,

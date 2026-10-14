@@ -294,7 +294,11 @@ Formats an entire SQL document.
 ```
 Text         string    SQL text to format
 ProfileName  string?   Name of the .akmlstyle profile (null = default)
+ProfileJson  string?   Key 6 (spec 042): the style as JSON, used instead of ProfileName (the web edition's styles live in the browser)
 ```
+
+Served for a PostgreSQL session by the PostgreSQL formatter (spec 042): the same reply, with a script that does not parse, a layout that
+would not mean the same, or one that is not stable returned unchanged (`Success = false`) with the reason in `Diagnostics`.
 
 **Response** (`FormatResponse`):
 ```
@@ -322,6 +326,7 @@ Text            string    Full document text
 SelectionStart  int       Zero-based start character offset
 SelectionEnd    int       Zero-based end character offset
 ProfileName     string?
+ProfileJson     string?   Key 6 (spec 042): the style as JSON
 ```
 
 **Response** (`FormatSelectionResponse`):
@@ -346,6 +351,7 @@ Formats a sample SQL string against an unsaved profile (used in the Options dial
 ```
 SampleText   string   SQL to format
 ProfileJson  string   Full JSON of the profile to preview (not yet saved)
+Dialect      int      Key 3 (spec 042): DatabaseKind of the sample, 0 SQL Server (default) or 1 PostgreSQL
 ```
 
 **Response** (`FormatPreviewResponse`):

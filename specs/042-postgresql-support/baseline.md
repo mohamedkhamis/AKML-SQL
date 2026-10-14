@@ -147,3 +147,48 @@ the server's words with nothing else written. The pending-edit confirmation stil
 
 It does not run the script again after an Apply (FR-133): the write returns the stored rows. The `QueryRefreshSafety` rule is
 unchanged for SQL Server.
+
+## User story 7 - format PostgreSQL scripts, Parse without the server (2026-10-14)
+
+### SC-015 - the format corpus
+
+`tests/pg-format-corpus`: 151 scripts (SELECT forms, joins, subqueries and CTEs, data-changing statements, definitions, functions with dollar
+bodies, utility statements, comments, regression cases) formatted with the 8 built-in styles, 1,208 pairs. Each pair is accepted (the script is valid,
+so the formatter must format it), parses to the same statements as the original (the tree compared with every location ignored), formats to
+itself, keeps every quoted name, string and dollar-quoted body as written, and equals its golden. All 1,208 hold.
+
+Two kinds of defect were found by the corpus and the style probe and fixed before the goldens were kept:
+- layout: a parenthesis that never broke because a forced-break flag sat outside its group; a space lost after `SELECT *`; `PRIMARY KEY`,
+  `OVER w`, `IS UNKNOWN`, the words of a `CAST(x AS type)` and of `timestamp with time zone` not cased; the head and constraint words of
+  `CREATE` / `ALTER` / `GRANT` / `MERGE` / function options left lower case;
+- stability: a comment placed after code on one line that the layout moved to a line start, and one that the layout moved past a comma,
+  both changed on the second pass. Comments now remember whether anything follows them on their line, and a comment written after an item
+  stays with the item in comma-first styles.
+
+### FR-145 - what a style option does for PostgreSQL
+
+`PgStyleApplicabilityTests` runs the corpus under every option of the SQL Prompt catalog (115 options), with each other value of it, on three
+page widths. An option listed in `SqlPromptApplicability` (27 of them: batch separators, global variables, control flow, variables, comparison
+alignment, comment alignment, the collapse thresholds the layout does not read ...) changes nothing in any script. Every other option changes the
+output of at least one script. The first run of the probe listed 10 options that did nothing; after a fix (contents of a parenthesis ignored their indentation option) and three
+scripts with long `VALUES` rows and column lists, none is left.
+
+### Other checks
+
+- Unit: `PgFormatterSafetyTests` (syntax errors with line and offset, unterminated quotes, psql commands, comments in order, Windows line ends and the
+  final newline, dollar bodies with their own line ends, selection by whole statements, terminators), `PgCasingTests` (keywords, functions and types
+  by their options, names never recased, words that are keywords only in their place), `PgFormatRoutingTests` (the engine: style as JSON or by name,
+  the Format SQL actions, expand wildcards and qualify names against a cache, preview in PostgreSQL), web: `FormatterServicePgRoutingTests`,
+  `StylesPagePgTests`.
+- SC-010: formatting a PostgreSQL session leaves the T-SQL parser's invocation count where it was (`NoTsqlOnPostgresSessionTests`,
+  `Formatting_a_PostgreSQL_session_never_reaches_the_T_SQL_parser`). The US5 refusal test became the formatting test.
+- SC-017: `Twenty_seeded_syntax_errors_are_twenty_messages_each_at_its_line_and_column` (user story 1) and a browser scenario: three statements with
+  errors give three Messages entries with their lines and nothing runs.
+- Browser (`PostgresWorkspaceTests`): format lays out a multi-statement script and a second format changes nothing; a function body and quoted names are
+  verbatim; a syntax error leaves the text and names the problem; the Format Styles page marks the options and previews a PostgreSQL sample.
+
+### Not covered
+
+- The comparison with a person's idea of a good layout: the goldens are drift guards read against the options, not an authority.
+- Formatting inside PL/pgSQL bodies (out of scope: they are kept as written).
+- `tasks.md` T128 (the final dialect gate) waits for story 8.

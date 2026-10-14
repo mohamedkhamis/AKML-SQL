@@ -40,7 +40,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int ResponseMessageType => MessageTypes.FormatDocumentResult;
         public Task<FormatResponse> HandleAsync(FormatRequest request, RpcContext ctx, CancellationToken ct)
             => PostgresFormatRefusal.Applies(ctx, request.SessionId)
-                ? Task.FromResult(new FormatResponse { Success = false, FormattedText = request.Text, Diagnostics = PostgresFormatRefusal.Diagnostics() })
+                ? Task.FromResult(_inner.HandleFormatPostgres(request, ctx.SchemaCache, ctx.Sessions))                  // spec 042: the PostgreSQL formatter
                 : Task.FromResult(_inner.HandleFormat(request, ctx.SchemaCache, ctx.Sessions));   // spec 040: schema-aware Format SQL actions
     }
 
@@ -52,10 +52,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int ResponseMessageType => MessageTypes.FormatSelectionResult;
         public Task<FormatSelectionResponse> HandleAsync(FormatSelectionRequest request, RpcContext ctx, CancellationToken ct)
             => PostgresFormatRefusal.Applies(ctx, request.SessionId)
-                ? Task.FromResult(new FormatSelectionResponse
-                {
-                    Success = false, FormattedText = request.Text, OriginalStart = request.SelectionStart, OriginalEnd = request.SelectionEnd,
-                })
+                ? Task.FromResult(_inner.HandleFormatSelectionPostgres(request, ctx.SchemaCache, ctx.Sessions))
                 : Task.FromResult(_inner.HandleFormatSelection(request, ctx.SchemaCache, ctx.Sessions));
     }
 
@@ -66,7 +63,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatPreview;
         public int ResponseMessageType => MessageTypes.FormatPreviewResult;
         public Task<FormatPreviewResponse> HandleAsync(FormatPreviewRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatPreview(request));
+            => Task.FromResult(request.Dialect == (int)AkmlSql.Core.DatabaseKind.PostgreSql || PostgresFormatRefusal.Applies(ctx, request.SessionId)
+                ? _inner.HandleFormatPreviewPostgres(request)
+                : _inner.HandleFormatPreview(request));
     }
 
     public sealed class FormatActionHandler : IRpcRequestHandler<FormatActionRequest, FormatActionResponse>
@@ -77,7 +76,7 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int ResponseMessageType => MessageTypes.FormatActionResult;
         public Task<FormatActionResponse> HandleAsync(FormatActionRequest request, RpcContext ctx, CancellationToken ct)
             => PostgresFormatRefusal.Applies(ctx, request.SessionId)
-                ? Task.FromResult(new FormatActionResponse { Success = false, FormattedText = request.Text })
+                ? Task.FromResult(_inner.HandleFormatActionPostgres(request, ctx.SchemaCache, ctx.Sessions))
                 : Task.FromResult(_inner.HandleFormatAction(request, ctx.SchemaCache, ctx.Sessions));
     }
 

@@ -92,7 +92,7 @@ public static class SqlPromptOptionCatalog
     /// Kept apart from the AKML settings schema's versions so a cached copy of one is never
     /// mistaken for the other.
     /// </summary>
-    public const int SchemaVersion = 2002;   // 2002: per-option examples, SELECT examples
+    public const int SchemaVersion = 2003;   // 2003: per-option "no effect for PostgreSQL" (spec 042); 2002: per-option examples, SELECT examples
 
     /// <summary>Prefix of the setting ids in <see cref="ToEditorSchemaJson"/>: working values keyed
     /// <c>sqlPrompt.&lt;path&gt;</c> nest straight into the style's <c>sqlPrompt</c> document.</summary>
@@ -131,6 +131,7 @@ public static class SqlPromptOptionCatalog
                 ["displayName"] = section.Label,
                 ["parentId"] = section.Category.ToLowerInvariant(),
                 ["sample"] = SqlPromptPreviewSamples.For(section.Id),
+                ["samplePostgreSql"] = SqlPromptPreviewSamples.ForPostgreSql(section.Id),
             });
             foreach (var o in section.Options)
             {
@@ -147,6 +148,11 @@ public static class SqlPromptOptionCatalog
                 };
                 if (o.Group is not null) node["subgroup"] = o.Group;
                 if (o.Note is not null) node["note"] = o.Note;
+                if (SqlPromptApplicability.ReasonNoEffect(o.Path) is { } reason)
+                {
+                    node["noEffectForPostgreSql"] = true;
+                    node["noEffectReason"] = reason;
+                }
                 if (o.Kind == SqlPromptOptionKind.Choice)
                 {
                     node["allowedEnumValues"] = new System.Text.Json.Nodes.JsonArray(o.Choices.Select(c => (System.Text.Json.Nodes.JsonNode?)c.Value).ToArray());
