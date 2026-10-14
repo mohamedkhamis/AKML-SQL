@@ -169,6 +169,7 @@ and UI only.
 | --- | --- | --- |
 | New project `AkmlSql.PostgreSql` (+ its test project) | FR-093 asks for PostgreSQL support switchable as one unit; the parser dependency (native) and the rule set must not leak into `AkmlSql.Analysis` / `AkmlSql.Formatting`, which the web bundle references | Folding into the existing libraries would pull `pgsqlparser` + Google.Protobuf into the browser bundle and put PostgreSQL rules inside the T-SQL registry's reflection scope |
 | `ISchemaMetadataProvider` seam over the concrete `SchemaMetadataService` | `ConnectionChangedHandler` and `SchemaCacheManager` must call one of two catalog implementations by kind | Branching inside `SchemaMetadataService` (every method takes `SqlConnection`) would mix `pg_catalog` and `sys.*` code in one class and touch the SQL Server path the gates protect |
+| `PgLexicalScanner` beside the native `Scan` (R5) | Tolerant scanning of in-progress text, psql meta-command and `COPY FROM STDIN` detection before the native scanner would reject the text, and literal redaction | The native scanner errors on unterminated input and knows no meta-commands; routing those cases through it would need error recovery it does not offer |
 
 ## Phase 0: Research (complete)
 

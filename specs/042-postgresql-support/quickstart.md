@@ -6,7 +6,8 @@ criterion it proves. Automated gates first, then the manual walk-through.
 ## 0. Environment
 
 1. **PostgreSQL 18** on `localhost:5432` (installer from postgresql.org, or
-   `docker run -e POSTGRES_PASSWORD=akml -p 5432:5432 postgres:18`).
+   `docker run -e POSTGRES_PASSWORD=akml -p 5432:5432 postgres:18`). Enable `ssl = on` with the
+   default self-signed certificate in `postgresql.conf` for the TLS checks (FR-101).
 2. **Sample database**: load a Northwind port, e.g. `northwind.sql` from
    `github.com/tasawar-hussain/northwind_psql` (or `pthom/northwind_psql`), into a database named
    `northwind`; then create a second schema for the search-path checks:
@@ -85,10 +86,10 @@ criterion it proves. Automated gates first, then the manual walk-through.
 
 ### US3 Write with help (SC-005)
 
-1. Type `SELECT * FROM ` → tables of the search path unqualified, `sales.orders` qualified;
+1. Type `SELECT * FROM` and a space → tables of the search path unqualified, `sales.orders` qualified;
    `"Order Details"`-style names inserted double-quoted.
 2. `SELECT o. FROM orders o` → columns with types. `INSERT INTO orders (...) VALUES (...) ON
-   CONFLICT ` → `DO NOTHING` / `DO UPDATE`.
+   CONFLICT` and a space → `DO NOTHING` / `DO UPDATE`.
 3. Hover `string_agg` → signatures, description, link; inside `date_trunc(` → signature help.
 4. Type `@`, `#`, `[` → no T-SQL suggestions. Switch to the SQL Server connection → no PostgreSQL
    functions or types offered.

@@ -315,7 +315,7 @@ Completion, QuickInfo, Signature, WildcardExpansion, StatementBoundary, GetObjec
 ScriptAs, ExecuteQuery, ExecuteParse, ApplyChanges, ChangeDatabase, ListDatabases with session)
 branch on the session's kind at the top and call the PostgreSQL implementation; the SQL Server
 path is byte-for-byte the existing code. `SafetyCheckRequest` has no session, so it gains a
-`Dialect` key. `SessionConnection` is generalised to hold a `DbConnection` plus a `Kind`; the
+`Kind` key. `SessionConnection` is generalised to hold a `DbConnection` plus a `Kind`; the
 SQL Server handlers cast as before. Surfaces without a PostgreSQL implementation (refactorings,
 Find invalid objects) return the "Not available for PostgreSQL" error for a PostgreSQL session,
 and the web disables their entries by kind (FR-092).

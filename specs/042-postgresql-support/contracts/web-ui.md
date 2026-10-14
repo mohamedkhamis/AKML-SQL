@@ -15,7 +15,7 @@ listed so browser tests can be written before the components.
 | Password | `conn-pg-password` | empty allowed when a remembered password exists (`CredentialRequest(Has)`) |
 | TLS mode | `conn-pg-sslmode` | disable / prefer (default) / require / verify-ca / verify-full |
 | CA certificate path | `conn-pg-rootcert` | shown for verify-ca / verify-full; "a path on the engine machine" |
-| Remember password | `conn-pg-remember` | off by default; help text: "Stored on the engine machine for the account the engine runs as. Any client paired with this engine can use it." (FR-104, FR-106) |
+| Remember password | `conn-pg-remember` | off by default; help text: "Stored on the engine machine for the account the engine runs as. On the web engine service this means any administrator of the engine machine. Any client paired with this engine can use it." (FR-104, FR-106) |
 | Forget password | `conn-pg-forget` | visible when `Has` is true; sends `CredentialRequest(Forget)` |
 | Test | existing | PostgreSQL: shows "PostgreSQL 18.1 on host:port" or the server's message + hint (FR-002, FR-007) |
 | Save / Connect | existing | saves `Kind`, `Port`, `SslMode`, `RememberPassword`; never the password |
@@ -48,7 +48,7 @@ style error on a SQL Server port) is rephrased: "The server at host:port did not
 | Code analysis | routed to the engine (`CodeAnalysis`) for PostgreSQL; "Enable code analysis" off → no request |
 | Completion / quick info / signature help / wildcard expansion | engine, as the online path already does; offline fallbacks (`OfflineSqlScanner`, basic keywords) disabled for PostgreSQL |
 | Snippets | built-in list swapped by kind; user snippets stored with `Kind` and filtered by it (FR-066) |
-| Safety check | `SafetyCheckRequest.Dialect = postgresql` |
+| Safety check | `SafetyCheckRequest.Kind = PostgreSql` |
 | Unsupported surfaces (FR-092) | Refactor menu entries, Find invalid objects: disabled with tooltip "Not available for PostgreSQL" (`data-testid="unavailable-postgresql"`); the palette entries carry the same note; shortcuts show the message in the status outcome segment |
 | Database selector | before switching on PostgreSQL: dialog "PostgreSQL reconnects to switch databases. Temporary tables, session settings and any open transaction are lost." (`db-switch-confirm`); when `TransactionState ≠ None`: "Roll back the open transaction and switch?" (FR-009, FR-031) |
 | Connection switch | same transaction guard (FR-009); editor text untouched; `setDialect` after the switch |

@@ -157,7 +157,7 @@ Aborted triggers the FR-009 prompt.
 
 `IPgAnalysisRule { RuleId, Name, Category (RuleCategory), DefaultSeverity, Description,
 ReferenceUrl, RequiresSchema, Analyze(PgAnalysisContext) }` emitting `AnalysisDiagnostic`.
-`AnalysisRuleInfoDto.Dialect` (key 9) = `postgresql` so the rules window groups by kind. Settings
+`AnalysisRuleInfoDto.Kind` (key 9) = `PostgreSql` so the rules window groups by kind. Settings
 and overrides use the same `codeAnalysis.ruleOverrides` map keyed by rule id; the ids never
 collide with the SQL Server set.
 

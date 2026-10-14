@@ -637,8 +637,9 @@ Server rule fires.
 - **FR-100**: PostgreSQL passwords MUST never appear in logs, history, diagnostics, settings
   exports, URLs or the browser's storage.
 - **FR-104**: "Remember password" MUST be an opt-in per saved connection, off by default. A
-  remembered password MUST be kept in a protected store on the engine machine, readable only by
-  the Windows account the engine runs as, and MUST never be sent back to the browser. Without
+  remembered password MUST be kept in a protected store on the engine machine, protected for the
+  Windows account the engine runs as (for the web engine service that account is LocalSystem, so
+  any administrator of that machine can read it), and MUST never be sent back to the browser. Without
   the opt-in, the password is entered per browser session and held in memory only until the tab
   closes.
 - **FR-105**: A saved connection with a remembered password MUST connect without a prompt. When

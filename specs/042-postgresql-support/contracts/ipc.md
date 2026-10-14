@@ -28,11 +28,15 @@ the new keys, so an older client and a newer engine (or the reverse) keep workin
 | `ExecuteQueryResult` | 13 `TransactionState` | int | 0 | `TransactionState` after the run (0 None, 1 Open, 2 Aborted) |
 | `ChangeDatabaseResponse` | 4 `TransactionState` | int | 0 | always 0 after a PostgreSQL reconnect |
 | `CrudCellDto` | 6 `TypeName` | string? | null | `format_type` text used for the `::type` cast (PostgreSQL only) |
-| `AnalysisRuleInfoDto` | 9 `Dialect` | string | "sqlserver" | `sqlserver` / `postgresql` |
-| `SafetyCheckRequest` | 3 `Dialect` | string | "sqlserver" | no session on this request |
+| `AnalysisRuleInfoDto` | 9 `Kind` | int | 0 | `DatabaseKind` of the rule set the rule belongs to |
+| `SafetyCheckRequest` | 3 `Kind` | int | 0 | `DatabaseKind`; no session on this request |
 | `HistoryRecordRequest` | 13 `Kind` | int | 0 | stored in `history.kind` |
 | `HistoryEntryDto` | 18 `Kind` | int | 0 | |
 | `HistorySearchRequest` | 15 `Kind` | int? | null | filter; null = both kinds |
+| `SchemaPhasePayload` | 5 `InaccessibleSchemas` | string[] | empty | schemas the user lacks USAGE on (FR-046) |
+| `SchemaPhasePayload` | 6 `HiddenSchemas` | string[] | empty | system schemas loaded for name resolution, hidden in the tree by default (FR-040) |
+| `SchemaPhasePayload` | 7 `SearchPath` | string[] | empty | the session's `current_schemas(false)` (FR-061) |
+| `StyleEditorSchemaResponse` | none | | | option entries inside `SchemaJson` gain `"noEffectForPostgreSql": true/false` and `SchemaVersion` is bumped (record the new number here when it lands) (FR-145) |
 | `HandshakeResponse` | none | | | the capability list carries the feature |
 
 `ExecuteMessageDto.Kind`, `Severity`, `Line` keep their meaning: notices are Info with
@@ -52,12 +56,12 @@ parser and never contacts the server; errors arrive as `ExecuteMessageDto` with 
 
 `Format`, `FormatAction`, `FormatPreview`, `FormatSelection`, `CodeAnalysis`, `Completion`,
 `QuickInfo`, `Signature`, `WildcardExpansion`, `StatementBoundary`, `GetObjectDefinition`,
-`ScriptAs`, `ExecuteQuery`, `ExecuteParse`, `ApplyChanges`, `ChangeDatabase`,
-`ListDatabases` (with `SessionId`), `DocumentOutline`, `SnippetExpand`: the engine reads
-`SessionState.Kind` and routes to the PostgreSQL implementation. For `RefactorPreview`,
-`RefactorApply`, `FindInvalidObjects`, `FindReferences`, `FindUnusedVariables`,
-`CrudGeneration`, `EncryptedObjectDecryption` on a PostgreSQL session the engine replies with the
-`dialect.unsupported` error.
+`ExecuteQuery`, `ExecuteParse`, `ApplyChanges`, `ChangeDatabase`, `ListDatabases` (with
+`SessionId`), `SnippetExpand`: the engine reads `SessionState.Kind` and routes to the PostgreSQL
+implementation. For `RefactorPreview`, `RefactorApply`, `FindInvalidObjects`, `FindReferences`,
+`FindUnusedVariables`, `CrudGeneration`, `EncryptedObjectDecryption`, `ScriptAs` and
+`DocumentOutline` on a PostgreSQL session the engine replies with the `dialect.unsupported`
+error.
 
 ## New messages
 
@@ -103,5 +107,6 @@ connection; the engine then injects the remembered one (or fails the open with
 
 `PgTargetGuard.Check(connectionString)` on `ConnectionChanged`, `TestSqlConnection` and
 `ListDatabases` from the WebSocket bridge: rejects `Integrated Security=true`, `Kerberos Service
-Name`, `GSS Encryption Mode=Require`, and a missing `Username`; the named-pipe path (SSMS) is
-exempt as today. Error code `dialect.credentials-required`.
+Name`, `GSS Encryption Mode=Require`, a missing `Username`, and a `Root Certificate` path that
+is not absolute and canonical (`Path.GetFullPath(value) == value`); the named-pipe path (SSMS)
+is exempt as today. Error code `dialect.credentials-required`.
