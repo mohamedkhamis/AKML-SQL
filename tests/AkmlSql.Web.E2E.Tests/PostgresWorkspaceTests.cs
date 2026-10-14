@@ -626,4 +626,33 @@ public sealed class PostgresWorkspaceTests
         await Assertions.Expect(row).ToHaveAttributeAsync("data-state", "not-advertised");
         await Assertions.Expect(row).ToContainTextAsync("postgreSql.enabled");
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+    // User story 5 (task T124/T127, quickstart US5): surfaces without a PostgreSQL form say so.
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+    /// <summary>FR-092, SC-010: the Refactor button is off with the reason, the palette entry is off with the same reason, and the menu never opens.</summary>
+    [SkippableFact]
+    public async Task On_PostgreSQL_the_refactorings_are_off_and_say_why_in_the_toolbar_and_the_palette()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var page = s.Page;
+
+        var button = page.Locator("[data-testid='refactor-button']");
+        await Assertions.Expect(button).ToBeDisabledAsync();
+        await Assertions.Expect(button).ToHaveAttributeAsync("title", "Not available for PostgreSQL");
+        await Assertions.Expect(button).ToHaveAttributeAsync("data-unavailable", "postgresql");
+        await button.ClickAsync(new() { Force = true });
+        await Assertions.Expect(page.Locator("[data-testid='refactor-menu']")).ToHaveCountAsync(0);
+
+        await page.Locator("[data-testid='sql-editor'] .cm-content").ClickAsync();
+        await page.Keyboard.PressAsync("Control+Shift+P");
+        await page.Locator(".akml-cmd-input").FillAsync("Refactor");
+        var row = page.GetByTestId("command-palette-row").Filter(new() { HasTextString = "Refactor" }).First;
+        await Assertions.Expect(row).ToHaveAttributeAsync("aria-disabled", "true");
+        await Assertions.Expect(row).ToHaveAttributeAsync("title", "Not available for PostgreSQL");
+        await row.ClickAsync(new() { Force = true });   // Playwright treats aria-disabled as not enabled; the click must still do nothing
+        await Assertions.Expect(page.Locator("[data-testid='refactor-menu']")).ToHaveCountAsync(0);
+        await page.Keyboard.PressAsync("Escape");
+    }
 }

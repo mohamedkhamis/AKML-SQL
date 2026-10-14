@@ -56,6 +56,7 @@
                             <div class="akml-cmd-row @(idx == _selected ? "selected" : "") @(available ? "" : "disabled")"
                                  id="@RowId(idx)" role="option" aria-selected="@(idx == _selected ? "true" : "false")"
                                  aria-disabled="@(available ? null : "true")"
+                                 title="@action.WhyUnavailable"
                                  aria-checked="@(action.IsChecked == null ? null : action.IsOn ? "true" : "false")"
                                  data-testid="command-palette-row" data-action-id="@action.Id"
                                  @onclick="@(() => RunAsync(action))"

@@ -44,6 +44,7 @@
 @inject IConnectionManagerController ConnManager
 @inject EditorDocumentFlow Document
 @inject ISchemaSync SchemaSync
+@inject IDialectGate DialectGate
 
 @* Spec 041 (R64, FR-089): the title SSMS's window reads like — orders-audit* - SERVER.db - AKML SQL. *@
 <PageTitle>@EditorDocument.TitleFor(Document.Name, Document.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null)</PageTitle>
@@ -95,8 +96,11 @@
         </button>
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
+        @* Spec 042 (FR-092): the refactorings are written for T-SQL; on a PostgreSQL connection the button is off and says why. *@
         <button type="button" class="akml-btn" data-testid="refactor-button" aria-label="Refactor" aria-haspopup="menu"
-                @onclick="OpenRefactorMenu" title="@WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor")">
+                disabled="@(!Surfaces.IsEnabled(WorkspaceSurface.Refactor))"
+                data-unavailable="@Surfaces.Unavailable(WorkspaceSurface.Refactor)"
+                @onclick="OpenRefactorMenu" title="@Surfaces.Tooltip(WorkspaceSurface.Refactor, WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor"))">
             <Icon Name="replace" /><span>Refactor</span><Icon Name="chevron-down" Size="12" />
         </button>
         <button type="button" class="akml-btn @(AiShown ? "is-active" : null)" data-testid="ai-button" aria-label="AI"
@@ -863,6 +867,10 @@
         _commandRegistration = Commands.Register(_contextActions);
     }
 
+    // Spec 042 (FR-092): what this connection kind may use. Stateless, so it follows a switch of connection by itself.
+    private SurfaceGate? _surfaces;
+    private SurfaceGate Surfaces => _surfaces ??= new SurfaceGate(DialectGate, Notifications);
+
     private void OnSqlConnStateChanged()
     {
         RefreshSchemaTarget();
@@ -1279,6 +1287,9 @@
         {
             Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
             Icon = "replace", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+            // Spec 042 (FR-092): off on a PostgreSQL connection, with the reason on the palette row.
+            IsEnabled = () => Surfaces.IsEnabled(WorkspaceSurface.Refactor),
+            DisabledReason = () => UnsupportedSurfaces.Reason(WorkspaceSurface.Refactor, DialectGate.Kind),
         };
         yield return new CommandAction
         {
@@ -1924,7 +1935,13 @@
     {
         var action = _contextActions.FirstOrDefault(a => a.Id == commandId)
                      ?? Commands.Snapshot().FirstOrDefault(a => a.Id == commandId);
-        if (action == null || !action.IsAvailable) return;
+        if (action == null) return;
+        if (!action.IsAvailable)
+        {
+            // Spec 042 (FR-092): a shortcut for a surface this connection kind does not have is answered, not ignored.
+            if (Surfaces.ExplainRefusal(commandId)) StateHasChanged();
+            return;
+        }
         await action.Run();
         StateHasChanged();
     }

@@ -18,6 +18,20 @@ namespace AkmlSql.Engine.Handlers.Formatting
     // requires a streaming-response extension to the transport contract -- tracked as a
     // separate follow-up under spec 021.
 
+    /// <summary>
+    /// Spec 042 (FR-090, FR-092, SC-010). The formatter pipeline behind these handlers is T-SQL's: it parses with ScriptDom and
+    /// lays out T-SQL. A PostgreSQL session's text is never given to it. Until PostgreSQL formatting is routed in, such a
+    /// request is answered as a refusal, with the text returned untouched and the standard words as the diagnostic.
+    /// </summary>
+    internal static class PostgresFormatRefusal
+    {
+        public static bool Applies(RpcContext ctx, string? sessionId) =>
+            ctx.Sessions.KindOf(sessionId) == AkmlSql.Core.DatabaseKind.PostgreSql;
+
+        public static FormatDiagnosticInfo[] Diagnostics() =>
+            new[] { new FormatDiagnosticInfo { Severity = 2, Message = DialectErrors.UnsupportedMessage } };
+    }
+
     public sealed class FormatDocumentHandler : IRpcRequestHandler<FormatRequest, FormatResponse>
     {
         private readonly FormatRequestHandler _inner;
@@ -25,7 +39,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatDocument;
         public int ResponseMessageType => MessageTypes.FormatDocumentResult;
         public Task<FormatResponse> HandleAsync(FormatRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormat(request, ctx.SchemaCache, ctx.Sessions));   // spec 040: schema-aware Format SQL actions
+            => PostgresFormatRefusal.Applies(ctx, request.SessionId)
+                ? Task.FromResult(new FormatResponse { Success = false, FormattedText = request.Text, Diagnostics = PostgresFormatRefusal.Diagnostics() })
+                : Task.FromResult(_inner.HandleFormat(request, ctx.SchemaCache, ctx.Sessions));   // spec 040: schema-aware Format SQL actions
     }
 
     public sealed class FormatSelectionHandler : IRpcRequestHandler<FormatSelectionRequest, FormatSelectionResponse>
@@ -35,7 +51,12 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatSelection;
         public int ResponseMessageType => MessageTypes.FormatSelectionResult;
         public Task<FormatSelectionResponse> HandleAsync(FormatSelectionRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatSelection(request, ctx.SchemaCache, ctx.Sessions));
+            => PostgresFormatRefusal.Applies(ctx, request.SessionId)
+                ? Task.FromResult(new FormatSelectionResponse
+                {
+                    Success = false, FormattedText = request.Text, OriginalStart = request.SelectionStart, OriginalEnd = request.SelectionEnd,
+                })
+                : Task.FromResult(_inner.HandleFormatSelection(request, ctx.SchemaCache, ctx.Sessions));
     }
 
     public sealed class FormatPreviewHandler : IRpcRequestHandler<FormatPreviewRequest, FormatPreviewResponse>
@@ -55,7 +76,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatAction;
         public int ResponseMessageType => MessageTypes.FormatActionResult;
         public Task<FormatActionResponse> HandleAsync(FormatActionRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatAction(request, ctx.SchemaCache, ctx.Sessions));
+            => PostgresFormatRefusal.Applies(ctx, request.SessionId)
+                ? Task.FromResult(new FormatActionResponse { Success = false, FormattedText = request.Text })
+                : Task.FromResult(_inner.HandleFormatAction(request, ctx.SchemaCache, ctx.Sessions));
     }
 
     /// <summary>

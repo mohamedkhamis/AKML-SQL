@@ -65,3 +65,47 @@ without elevation. One elevated command is left to run; the consent text does no
   the `kind:` term, not the notification.
 - The "disabled in config" state of Diagnostics cannot be told from "older engine" by the browser: both are an engine that does not
   advertise the capability. The text names both causes.
+
+## User story 5 - nothing leaks, nothing pretends (2026-10-14)
+
+### SC-004 - the two dialects share nothing by accident
+
+- **Dictionaries.** 223 names are in both the PostgreSQL reference and the T-SQL dictionaries. Each is in
+  `tests/AkmlSql.PostgreSql.Tests/Isolation/shared-sql-names.json` with a reason: 195 are standard SQL with one meaning, 28 are the
+  same word with a different meaning or form in each dialect (for example `ISNULL`, `CONVERT`, `FORMAT`, `TIMESTAMP`, `EXECUTE`),
+  each described. A new shared name fails the test until a person writes it down; a stale entry fails it too.
+- **PostgreSQL probe.** All 379 cases of the PostgreSQL completion corpus return no `GO`, `@`, `#`, `[`, `sp_`, `xp_` or `NOCOUNT`
+  item and nothing only T-SQL has. One word needed a decision: `hash`, an index access method after `USING`, is PostgreSQL's by
+  right and is listed as such.
+- **SQL Server probe.** All 1,376 cases of the SQL Server corpus return no key word or function only PostgreSQL has. Four words
+  the T-SQL providers offer from their own lists (`ASC`, `DESC`, `BY`, `OFFSET`) are real T-SQL and are listed with their reasons.
+- **T-SQL dictionaries.** Unchanged from the snapshot taken before the feature (`DictionarySnapshotTests`).
+
+### SC-010 - the T-SQL implementation never sees PostgreSQL text
+
+`NoTsqlOnPostgresSessionTests` counts every call into the T-SQL parser (a process-wide counter in `TsqlParserService`) while a
+PostgreSQL session asks for completion, hover, signature help, wildcard expansion, statement boundaries, formatting, analysis,
+the safety check and execution. The same requests on a SQL Server session move the count, so it is a working instrument.
+
+It found two real leaks, both fixed in this story:
+- code analysis of a PostgreSQL session ran the T-SQL parser and the T-SQL rules on PostgreSQL text (it now answers "no findings"
+  until the PostgreSQL rules are routed in);
+- formatting a PostgreSQL session ran the T-SQL formatter (it now refuses with "Not available for PostgreSQL" and returns the text
+  untouched until PostgreSQL formatting is routed in). The formatter parses with ScriptDom directly, which the counter cannot see, so
+  the refusal itself is asserted.
+
+In the browser, the Refactor button is disabled with the tooltip "Not available for PostgreSQL" and `data-unavailable="postgresql"`,
+and the palette row is disabled with the same tooltip and never runs (`PostgresWorkspaceTests`).
+
+### FR-091 - SQL Server behaviour and SSMS
+
+- The commits of this spec change no file in `src/AkmlSql.Ssms22`, `src/AkmlSql.Shell.Shared` or `tests/AkmlSql.Shell.Shared.Tests`
+  (`git diff --stat 92388c7..HEAD` on those paths is empty). The only changes in Core are appended message keys and the PostgreSQL
+  helpers.
+- Manual SSMS check (task T129): **not done.** It needs a person to start SSMS 22 against the engine and look. The structural
+  evidence above and the unchanged Shell.Shared result in `baseline/README.md` are all there is so far.
+
+### Theme tokens (task T131)
+
+`scripts/generate-theme-css.ps1 -CheckOnly` reports `OK` for light, dark and high contrast, and no hex or rgb colour was added to
+any component or page in this story or the one before it.

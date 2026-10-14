@@ -38,6 +38,19 @@ namespace AkmlSql.Engine.Handlers.Analysis
             if (request == null) throw new ArgumentNullException(nameof(request));
             if (ctx == null) throw new ArgumentNullException(nameof(ctx));
 
+            // Spec 042 (FR-090, FR-092, SC-010): the rules, the parser and the suppressions behind this engine are T-SQL's. A
+            // PostgreSQL session's text is never given to them - they would report PostgreSQL syntax as T-SQL syntax errors.
+            // Until the PostgreSQL rules are routed here the answer is "no findings", the version echoed so the client moves on.
+            if (ctx.Sessions.KindOf(request.SessionId) == AkmlSql.Core.DatabaseKind.PostgreSql)
+            {
+                return Task.FromResult(new CodeAnalysisResponse
+                {
+                    RequestId = request.RequestId,
+                    Issues = Array.Empty<CodeIssueInfo>(),
+                    AnalyzedVersion = request.DocumentVersion,
+                });
+            }
+
             var settings = _settingsProvider();
 
             // Spec 021 F1: AnalysisEngine no longer takes SessionManager / SchemaCacheManager
