@@ -404,8 +404,8 @@ AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_
 AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "sometimes", expected: 3)
 AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Semicolons_map_to_0_leave_1_insert_2_remove(value: "style", expected: 3)
 AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "", expected: 3)
-AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "add", expected: 1)
-AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "Add", expected: 1) [#2]
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "Add", expected: 1)
+AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "add", expected: 1) [#2]
 AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "insert", expected: 3)
 AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "leave", expected: 0)
 AkmlSql.Core.Tests.Config.FormatSqlActionsMapperTests.Square_brackets_map_to_0_leave_1_add_2_remove(value: "remove", expected: 2)
@@ -467,8 +467,8 @@ AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driv
 AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "disable", expected: "Disable")
 AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "prefer", expected: "Prefer")
 AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "require", expected: "Require")
-AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "VERIFY-CA", expected: "VerifyCA")
-AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "verify-ca", expected: "VerifyCA") [#2]
+AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "verify-ca", expected: "VerifyCA")
+AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "VERIFY-CA", expected: "VerifyCA") [#2]
 AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: "verify-full", expected: "VerifyFull")
 AkmlSql.Core.Tests.Connections.PgConnectionStringTests.TLS_modes_map_to_the_driver_names_and_default_to_prefer(mode: null, expected: "Prefer")
 AkmlSql.Core.Tests.Connections.PgConnectionStringTests.Values_with_connection_string_metacharacters_are_quoted_not_interpreted
@@ -478,8 +478,8 @@ AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_ta
 AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "PipeAlias", expected: "np:\\\\sql03\\pipe\\sql\\query")
 AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "PipeShort", expected: "np:\\\\sql03\\pipe\\sql\\query")
 AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "ReportsDb", expected: "tcp:sql02\\REPORTS")
-AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "ServerDemo", expected: "tcp:192.168.4.5,1433")
-AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "serverdemo", expected: "tcp:192.168.4.5,1433") [#2]
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "serverdemo", expected: "tcp:192.168.4.5,1433")
+AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.An_alias_resolves_to_its_target(server: "ServerDemo", expected: "tcp:192.168.4.5,1433") [#2]
 AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "")
 AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "(local)")
 AkmlSql.Core.Tests.Connections.SqlServerAliasesTests.Anything_else_is_left_as_typed(server: "192.168.4.5")
@@ -851,23 +851,23 @@ AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_NewInstance_IsCaseInsensit
 AkmlSql.Core.Tests.Pr247_AppSettingsFix.RuleOverrides_SetterWithNullValue_ReturnsCaseInsensitiveEmptyDict
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.CanonicalIds_ListsAllEightProviders
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "  kimi  ", expected: "kimi")
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Anthropic", expected: "anthropic")
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "anthropic", expected: "anthropic") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "anthropic", expected: "anthropic")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Anthropic", expected: "anthropic") [#2]
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Azure OpenAI", expected: "azure")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "azure", expected: "azure")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "azureopenai", expected: "azure")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "AzureOpenAI", expected: "azure") [#2]
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "custom", expected: "custom")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Custom", expected: "custom") [#2]
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "gemini", expected: "gemini")
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Gemini", expected: "gemini") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Gemini", expected: "gemini")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "gemini", expected: "gemini") [#2]
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Kimi (Moonshot)", expected: "kimi")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "KIMI", expected: "kimi")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "kimi", expected: "kimi") [#2]
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "LM Studio", expected: "lmstudio")
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "lm studio", expected: "lmstudio") [#2]
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "lmstudio", expected: "lmstudio")
-AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "LMStudio", expected: "lmstudio") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "lm studio", expected: "lmstudio")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "LM Studio", expected: "lmstudio") [#2]
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "LMStudio", expected: "lmstudio")
+AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "lmstudio", expected: "lmstudio") [#2]
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "Moonshot", expected: "kimi")
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "moonshot", expected: "kimi") [#2]
 AkmlSql.Core.Tests.ProviderIdNormalizationTests.Normalize_MapsAliasesToCanonicalIds(input: "ollama", expected: "ollama")
@@ -1078,8 +1078,8 @@ AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: 
 AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "*PROD*", value: "SQLPROD01", expected: True)
 AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "DEV*", value: "DEV-SQL", expected: True)
 AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "DEV*", value: "PRODUCTION", expected: False)
-AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "LOCALHOST", expected: True)
-AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "localhost", expected: True) [#2]
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "localhost", expected: True)
+AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "LOCALHOST", expected: True) [#2]
 AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.GlobMatch_VariousPatterns(glob: "localhost", value: "localhost2", expected: False)
 AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "(local)", expectedLabel: "DEV")
 AkmlSql.Core.Tests.Tabs.EnvironmentMatcherTests.Match_DefaultRules_ReturnsExpectedLabel(server: "DEV-SQL01", expectedLabel: "DEV")
@@ -1114,8 +1114,8 @@ AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.CanDelete_IsFalseWhenARuleUses
 AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.CanDelete_IsTrueWhenNoRuleUsesTheEnvironment
 AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.DeleteRefusedMessage_NamesTheEnvironmentAndTheRules
 AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#00bCd4")
-AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#FF4444")
-AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#ff4444") [#2]
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#ff4444")
+AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_AcceptsHashAndSixHexDigits(color: "#FF4444") [#2]
 AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: " #FF4444")
 AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "")
 AkmlSql.Core.Tests.Tabs.EnvironmentValidatorTests.IsValidColor_RejectsAnythingElse(color: "#AAFF4444")
@@ -1262,8 +1262,8 @@ AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.QualifiedName_quotes_each_part_
 AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "join")
 AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "left")
 AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "order")
-AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "SELECT")
-AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "select") [#2]
+AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "select")
+AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "SELECT") [#2]
 AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "table")
 AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.Reserved_words_are_quoted(name: "user")
 AkmlSql.Core.Tests.Text.PgIdentifierQuotingTests.The_reserved_set_has_the_reserved_and_type_function_name_keywords

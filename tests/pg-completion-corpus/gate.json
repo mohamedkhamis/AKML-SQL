@@ -1,4 +1,19 @@
 {
   "minPassRate": 0.95,
-  "minCases": 300
+  "minCases": 300,
+  "families": {
+    "select-columns": 1.0,
+    "from-tables": 1.0,
+    "join-on": 1.0,
+    "where-group-order": 1.0,
+    "insert-conflict": 1.0,
+    "update-delete": 1.0,
+    "cte-window": 1.0,
+    "functions": 1.0,
+    "types-casts": 1.0,
+    "dollar-quoted": 1.0,
+    "json-array-ops": 1.0,
+    "ddl-and-types": 1.0,
+    "isolation": 1.0
+  }
 }

@@ -1,0 +1,18 @@
+[
+
+{ oid => '349', descr => 'append element onto end of array',
+  oprname => '||', oprleft => 'anycompatiblearray', oprright => 'anycompatible',
+  oprresult => 'anycompatiblearray', oprcode => 'array_append' },
+{ oid => '375', descr => 'concatenate',
+  oprname => '||', oprleft => 'anycompatiblearray',
+  oprright => 'anycompatiblearray', oprresult => 'anycompatiblearray',
+  oprcode => 'array_cat' },
+{ oid => '96', descr => 'equal',
+  oprname => '=', oprcanmerge => 't', oprcanhash => 't', oprleft => 'int4',
+  oprright => 'int4', oprresult => 'bool', oprcom => '=(int4,int4)',
+  oprcode => 'int4eq' },
+{ oid => '484', descr => 'negate',
+  oprname => '-', oprright => 'int8', oprresult => 'int8',
+  oprcode => 'int8um' },
+
+]

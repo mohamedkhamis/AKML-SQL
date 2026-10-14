@@ -1,0 +1,422 @@
+[
+  {
+    "id": "PGISO-001",
+    "family": "isolation",
+    "doc": "|",
+    "expect": {
+      "mustContain": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "CREATE"
+      ],
+      "mustNotContain": [
+        "GO",
+        "EXEC",
+        "PRINT",
+        "USE",
+        "SET NOCOUNT ON",
+        "sp_help",
+        "xp_cmdshell"
+      ]
+    },
+    "note": "Statement start offers PostgreSQL commands only"
+  },
+  {
+    "id": "PGISO-002",
+    "family": "isolation",
+    "doc": "SELECT | FROM customers",
+    "expect": {
+      "mustNotContain": [
+        "@@ROWCOUNT",
+        "@@VERSION",
+        "GETDATE",
+        "ISNULL",
+        "LEN",
+        "TOP",
+        "NOLOCK",
+        "NEWID"
+      ]
+    },
+    "note": "No T-SQL in the select list"
+  },
+  {
+    "id": "PGISO-003",
+    "family": "isolation",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustNotContain": [
+        "sys.objects",
+        "INFORMATION_SCHEMA",
+        "dbo",
+        "sp_help",
+        "xp_cmdshell",
+        "#temp"
+      ]
+    },
+    "note": "No T-SQL objects in FROM"
+  },
+  {
+    "id": "PGISO-004",
+    "family": "isolation",
+    "doc": "SELECT @|",
+    "expect": {
+      "mustNotContain": [
+        "@@ROWCOUNT",
+        "@@IDENTITY",
+        "@@ERROR",
+        "@@TRANCOUNT",
+        "@@VERSION"
+      ]
+    },
+    "note": "No @@ system variables"
+  },
+  {
+    "id": "PGISO-005",
+    "family": "isolation",
+    "doc": "SELECT #| FROM customers",
+    "expect": {
+      "mustNotContain": [
+        "#temp",
+        "#tmp"
+      ]
+    },
+    "note": "No # temp tables"
+  },
+  {
+    "id": "PGISO-006",
+    "family": "isolation",
+    "doc": "SELECT [| FROM customers",
+    "expect": {
+      "mustNotContain": [
+        "[customers]",
+        "[dbo]",
+        "[Customers]"
+      ]
+    },
+    "note": "No bracket identifiers"
+  },
+  {
+    "id": "PGISO-007",
+    "family": "isolation",
+    "doc": "SELECT * FROM customers WHERE |",
+    "expect": {
+      "mustNotContain": [
+        "ISNULL",
+        "GETDATE",
+        "NOLOCK",
+        "TOP"
+      ]
+    },
+    "note": "No T-SQL in WHERE"
+  },
+  {
+    "id": "PGISO-008",
+    "family": "isolation",
+    "doc": "SELECT * FROM orders ORDER BY |",
+    "expect": {
+      "mustNotContain": [
+        "TOP",
+        "OFFSET 0 ROWS"
+      ]
+    },
+    "note": "No T-SQL in ORDER BY"
+  },
+  {
+    "id": "PGISO-009",
+    "family": "isolation",
+    "doc": "SELECT getdate|",
+    "expect": {
+      "mustNotContain": [
+        "getdate",
+        "GETDATE"
+      ]
+    },
+    "note": "GETDATE is not a PostgreSQL function"
+  },
+  {
+    "id": "PGISO-010",
+    "family": "isolation",
+    "doc": "SELECT len|",
+    "expect": {
+      "mustContain": [
+        "length"
+      ],
+      "mustNotContain": [
+        "len",
+        "LEN"
+      ]
+    },
+    "note": "len is not a PostgreSQL function; length is"
+  },
+  {
+    "id": "PGISO-011",
+    "family": "isolation",
+    "doc": "SELECT charindex|",
+    "expect": {
+      "mustNotContain": [
+        "charindex",
+        "CHARINDEX"
+      ]
+    },
+    "note": "CHARINDEX is not a PostgreSQL function"
+  },
+  {
+    "id": "PGISO-012",
+    "family": "isolation",
+    "doc": "SELECT datediff|",
+    "expect": {
+      "mustNotContain": [
+        "datediff",
+        "DATEDIFF",
+        "dateadd"
+      ]
+    },
+    "note": "DATEDIFF/DATEADD are not PostgreSQL functions"
+  },
+  {
+    "id": "PGISO-013",
+    "family": "isolation",
+    "doc": "SELECT newid|",
+    "expect": {
+      "mustNotContain": [
+        "newid",
+        "NEWID"
+      ]
+    },
+    "note": "NEWID is not a PostgreSQL function"
+  },
+  {
+    "id": "PGISO-014",
+    "family": "isolation",
+    "doc": "SELECT scope_identity|",
+    "expect": {
+      "mustNotContain": [
+        "scope_identity",
+        "SCOPE_IDENTITY"
+      ]
+    },
+    "note": "SCOPE_IDENTITY is not a PostgreSQL function"
+  },
+  {
+    "id": "PGISO-015",
+    "family": "isolation",
+    "doc": "SELECT * FROM customers c JOIN orders o ON c.customer_id = o.customer_id |",
+    "expect": {
+      "mustNotContain": [
+        "WITH (NOLOCK)",
+        "OPTION",
+        "FOR XML",
+        "CROSS APPLY",
+        "OUTER APPLY"
+      ]
+    },
+    "note": "No T-SQL join hints or APPLY"
+  },
+  {
+    "id": "PGISO-016",
+    "family": "isolation",
+    "doc": "UPDATE orders SET freight = 1 |",
+    "expect": {
+      "mustContain": [
+        "WHERE",
+        "RETURNING"
+      ],
+      "mustNotContain": [
+        "OUTPUT"
+      ]
+    },
+    "note": "RETURNING, not OUTPUT"
+  },
+  {
+    "id": "PGISO-017",
+    "family": "isolation",
+    "doc": "INSERT INTO orders (order_id) |",
+    "expect": {
+      "mustContain": [
+        "VALUES"
+      ],
+      "mustNotContain": [
+        "OUTPUT",
+        "EXEC"
+      ]
+    },
+    "note": "No OUTPUT or EXEC"
+  },
+  {
+    "id": "PGISO-018",
+    "family": "isolation",
+    "doc": "DELETE FROM orders |",
+    "expect": {
+      "mustContain": [
+        "WHERE",
+        "RETURNING"
+      ],
+      "mustNotContain": [
+        "OUTPUT"
+      ]
+    },
+    "note": "DELETE ... RETURNING"
+  },
+  {
+    "id": "PGISO-019",
+    "family": "isolation",
+    "doc": "CREATE TABLE t (id |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text"
+      ],
+      "mustNotContain": [
+        "nvarchar",
+        "datetime",
+        "datetime2",
+        "uniqueidentifier",
+        "IDENTITY(1,1)"
+      ]
+    },
+    "note": "No T-SQL column types"
+  },
+  {
+    "id": "PGISO-020",
+    "family": "isolation",
+    "doc": "CREATE TABLE t (id int |",
+    "expect": {
+      "mustContain": [
+        "NOT NULL",
+        "PRIMARY KEY"
+      ],
+      "mustNotContain": [
+        "IDENTITY",
+        "CLUSTERED",
+        "NONCLUSTERED"
+      ]
+    },
+    "note": "No T-SQL column options"
+  },
+  {
+    "id": "PGISO-021",
+    "family": "isolation",
+    "doc": "CREATE |",
+    "expect": {
+      "mustContain": [
+        "TABLE",
+        "SCHEMA"
+      ],
+      "mustNotContain": [
+        "LOGIN",
+        "SYNONYM",
+        "PARTITION FUNCTION"
+      ]
+    },
+    "note": "No T-SQL-only objects"
+  },
+  {
+    "id": "PGISO-022",
+    "family": "isolation",
+    "doc": "CALL |",
+    "expect": {
+      "mustContain": [
+        "archive_orders"
+      ],
+      "mustNotContain": [
+        "sp_help",
+        "xp_cmdshell",
+        "EXEC"
+      ]
+    },
+    "note": "CALL, not EXEC"
+  },
+  {
+    "id": "PGISO-023",
+    "family": "isolation",
+    "doc": "EXEC |",
+    "expect": {
+      "mustNotContain": [
+        "sp_who",
+        "sp_help",
+        "xp_cmdshell"
+      ]
+    },
+    "note": "EXEC is not a PostgreSQL command"
+  },
+  {
+    "id": "PGISO-024",
+    "family": "isolation",
+    "doc": "SELECT * FROM customers c |",
+    "expect": {
+      "mustContain": [
+        "JOIN",
+        "WHERE"
+      ],
+      "mustNotContain": [
+        "CROSS APPLY",
+        "OUTER APPLY",
+        "PIVOT",
+        "UNPIVOT",
+        "NOLOCK"
+      ]
+    },
+    "note": "After a table: PostgreSQL clauses only"
+  },
+  {
+    "id": "PGISO-025",
+    "family": "isolation",
+    "doc": "SELECT * FROM customers WHERE country = 'UK' AND |",
+    "expect": {
+      "mustContain": [
+        "city"
+      ],
+      "mustNotContain": [
+        "GO",
+        "NOCOUNT",
+        "sp_help",
+        "xp_cmdshell",
+        "GETDATE",
+        "NEWID",
+        "NOLOCK",
+        "@@ROWCOUNT"
+      ]
+    },
+    "note": "No T-SQL after AND"
+  },
+  {
+    "id": "PGISO-026",
+    "family": "isolation",
+    "doc": "SELECT | FROM orders",
+    "expect": {
+      "mustNotContain": [
+        "NOCOUNT",
+        "sp_",
+        "xp_"
+      ]
+    },
+    "note": "Names starting sp_ / xp_ do not appear"
+  },
+  {
+    "id": "PGISO-027",
+    "family": "isolation",
+    "doc": "SET |",
+    "expect": {
+      "mustNotContain": [
+        "NOCOUNT",
+        "XACT_ABORT",
+        "QUOTED_IDENTIFIER"
+      ]
+    },
+    "note": "SET offers no T-SQL options"
+  },
+  {
+    "id": "PGISO-028",
+    "family": "isolation",
+    "doc": "BEGIN |",
+    "expect": {
+      "mustNotContain": [
+        "TRAN",
+        "TRANSACTION ISOLATION LEVEL READ UNCOMMITTED"
+      ]
+    },
+    "note": "BEGIN is PostgreSQL's"
+  }
+]

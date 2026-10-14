@@ -51,6 +51,8 @@ internal static class EngineHandlerRegistry
         var wildcardHandler = new WildcardExpansionHandler(parser);
         var signatureProvider = new SignatureProvider();
         var quickInfoProvider = new QuickInfoProvider();
+        // Spec 042 (T030, T106): the PostgreSQL language services, composed only when the dialect is enabled.
+        var pgServices = ctx.EnsureSettings().PostgreSql.Enabled ? new PostgreSql.PgServices() : null;
         // Spec 040 (STY-10): the team style folder, read per use so a changed setting applies
         // after AnalysisSettingsChanged invalidates the cached settings — no restart.
         var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault(
@@ -152,10 +154,10 @@ internal static class EngineHandlerRegistry
 
         // === Completion (4 typed) ===
         router.Register(new Handlers.Completion.CompletionHandler(
-            completionEngine, () => ctx.EnsureSettings()));
-        router.Register(new Handlers.Completion.WildcardExpansionHandler(wildcardHandler));
-        router.Register(new Handlers.Completion.SignatureHelpHandler(parser, signatureProvider));
-        router.Register(new Handlers.Completion.QuickInfoHandler(parser, quickInfoProvider));
+            completionEngine, () => ctx.EnsureSettings(), pgServices));
+        router.Register(new Handlers.Completion.WildcardExpansionHandler(wildcardHandler, pgServices));
+        router.Register(new Handlers.Completion.SignatureHelpHandler(parser, signatureProvider, pgServices));
+        router.Register(new Handlers.Completion.QuickInfoHandler(parser, quickInfoProvider, pgServices));
 
         // === Formatting (10 typed) ===
         router.Register(new Handlers.Formatting.FormatDocumentHandler(formatHandler));

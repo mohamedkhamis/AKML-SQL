@@ -24,6 +24,7 @@ namespace AkmlSql.Engine.Handlers.Completion
     {
         private readonly CompletionEngine _engine;
         private readonly Func<AppSettings> _settingsProvider;
+        private readonly PostgreSql.PgServices? _pg;
 
         /// <param name="engine">
         /// The shared <see cref="CompletionEngine"/>. Owned by the engine host, not the handler;
@@ -35,8 +36,9 @@ namespace AkmlSql.Engine.Handlers.Completion
         /// caller-side invalidation (e.g. AnalysisSettingsChanged) takes effect on the next
         /// completion call without a handler re-construction.
         /// </param>
-        public CompletionHandler(CompletionEngine engine, Func<AppSettings> settingsProvider)
+        public CompletionHandler(CompletionEngine engine, Func<AppSettings> settingsProvider, PostgreSql.PgServices? pg = null)
         {
+            _pg = pg;
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
         }
@@ -54,6 +56,10 @@ namespace AkmlSql.Engine.Handlers.Completion
             var dbCache = session != null
                 ? ctx.SchemaCache.GetCache(request.SessionId, session.DatabaseName)
                 : null;
+
+            // Spec 042 (FR-061): a PostgreSQL session is completed by the PostgreSQL engine, never by the T-SQL one.
+            if (session?.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _pg != null)
+                return Task.FromResult(_pg.Complete(documentText, request.CursorOffset, dbCache, session, _settingsProvider()));
 
             // Mirror NamedPipeTransport behaviour: push IntelliSense settings onto the engine before
             // each request so toggles in the Settings dialog take effect immediately.

@@ -71,6 +71,12 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+    <!-- Spec 042 (T104, FR-066): the PostgreSQL snippet pack rides in the same folder. Its files are named pg-*.akmlsnippet and carry
+         dialect=postgresql, so the index keeps them apart from the SQL Server shortcodes of the same name. -->
+    <Content Include="..\AkmlSql.PostgreSql\Snippets\*.akmlsnippet" Link="snippets\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

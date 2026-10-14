@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "id": "builtin-pg-upd",
+    "shortcode": "upd",
+    "name": "UPDATE SET",
+    "description": "UPDATE ... SET ... WHERE ... RETURNING",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DML",
+    "tags": [
+      "update"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "UPDATE $CURSOR$",
+    "SET ",
+    "WHERE ",
+    "RETURNING *;"
+  ]
+}

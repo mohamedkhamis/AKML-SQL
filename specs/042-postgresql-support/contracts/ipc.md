@@ -32,6 +32,7 @@ the new keys, so an older client and a newer engine (or the reverse) keep workin
 | `CrudCellDto` | 6 `TypeName` | string? | null | `format_type` text used for the `::type` cast (PostgreSQL only) |
 | `AnalysisRuleInfoDto` | 9 `Kind` | int | 0 | `DatabaseKind` of the rule set the rule belongs to |
 | `SafetyCheckRequest` | 3 `Kind` | int | 0 | `DatabaseKind`; no session on this request |
+| `SnippetListRequest` | 5 `Kind` | int | 0 | `DatabaseKind` of the snippets wanted; `.akmlsnippet` files gain `metadata.dialect` (default `sqlserver`) |
 | `HistoryRecordRequest` | 13 `Kind` | int | 0 | stored in `history.kind` |
 | `HistoryEntryDto` | 18 `Kind` | int | 0 | |
 | `HistorySearchRequest` | 15 `Kind` | int? | null | filter; null = both kinds |

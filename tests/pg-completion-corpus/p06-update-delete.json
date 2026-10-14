@@ -1,0 +1,442 @@
+[
+  {
+    "id": "PGUPD-001",
+    "family": "update-delete",
+    "doc": "UPDATE |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "products"
+      ],
+      "mustNotContain": [
+        "mv_product_sales"
+      ],
+      "minCount": 8
+    },
+    "note": "UPDATE targets"
+  },
+  {
+    "id": "PGUPD-002",
+    "family": "update-delete",
+    "doc": "UPDATE orders |",
+    "expect": {
+      "mustContain": [
+        "SET",
+        "AS"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the target"
+  },
+  {
+    "id": "PGUPD-003",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "ship_city"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 14
+    },
+    "note": "SET lists the target's columns"
+  },
+  {
+    "id": "PGUPD-004",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_date",
+        "now"
+      ]
+    },
+    "note": "Right side of an assignment"
+  },
+  {
+    "id": "PGUPD-005",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = 1, |",
+    "expect": {
+      "mustContain": [
+        "ship_city",
+        "ship_country"
+      ]
+    },
+    "note": "Second assignment"
+  },
+  {
+    "id": "PGUPD-006",
+    "family": "update-delete",
+    "doc": "UPDATE orders o SET |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "ship_city"
+      ]
+    },
+    "note": "Aliased target, bare SET columns"
+  },
+  {
+    "id": "PGUPD-007",
+    "family": "update-delete",
+    "doc": "UPDATE orders o SET freight = o.|",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Alias dot on the right"
+  },
+  {
+    "id": "PGUPD-008",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = 1 |",
+    "expect": {
+      "mustContain": [
+        "WHERE",
+        "FROM",
+        "RETURNING"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "After an assignment"
+  },
+  {
+    "id": "PGUPD-009",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = 1 WHERE |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id"
+      ]
+    },
+    "note": "WHERE of an UPDATE"
+  },
+  {
+    "id": "PGUPD-010",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = 1 FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "suppliers"
+      ]
+    },
+    "note": "UPDATE ... FROM takes tables"
+  },
+  {
+    "id": "PGUPD-011",
+    "family": "update-delete",
+    "doc": "UPDATE orders o SET ship_city = c.city FROM customers c WHERE |",
+    "expect": {
+      "mustContain": [
+        "o.order_id",
+        "c.customer_id"
+      ]
+    },
+    "note": "Two tables in an UPDATE ... FROM"
+  },
+  {
+    "id": "PGUPD-012",
+    "family": "update-delete",
+    "doc": "UPDATE orders o SET ship_city = c.| FROM customers c",
+    "expect": {
+      "mustContain": [
+        "city",
+        "country"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Alias dot of the FROM table"
+  },
+  {
+    "id": "PGUPD-013",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = 1 RETURNING |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "RETURNING"
+  },
+  {
+    "id": "PGUPD-014",
+    "family": "update-delete",
+    "doc": "UPDATE sales.invoices SET |",
+    "expect": {
+      "mustContain": [
+        "paid",
+        "amount"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Schema-qualified target"
+  },
+  {
+    "id": "PGUPD-015",
+    "family": "update-delete",
+    "doc": "DELETE |",
+    "expect": {
+      "mustContain": [
+        "FROM"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "DELETE takes FROM"
+  },
+  {
+    "id": "PGUPD-016",
+    "family": "update-delete",
+    "doc": "DELETE FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "shippers"
+      ],
+      "mustNotContain": [
+        "mv_product_sales"
+      ],
+      "minCount": 8
+    },
+    "note": "DELETE targets"
+  },
+  {
+    "id": "PGUPD-017",
+    "family": "update-delete",
+    "doc": "DELETE FROM orders |",
+    "expect": {
+      "mustContain": [
+        "WHERE",
+        "USING",
+        "RETURNING",
+        "AS"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the target"
+  },
+  {
+    "id": "PGUPD-018",
+    "family": "update-delete",
+    "doc": "DELETE FROM orders WHERE |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "WHERE of a DELETE"
+  },
+  {
+    "id": "PGUPD-019",
+    "family": "update-delete",
+    "doc": "DELETE FROM orders o USING |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "products"
+      ]
+    },
+    "note": "USING takes tables"
+  },
+  {
+    "id": "PGUPD-020",
+    "family": "update-delete",
+    "doc": "DELETE FROM orders o USING customers c WHERE |",
+    "expect": {
+      "mustContain": [
+        "o.order_id",
+        "c.customer_id"
+      ]
+    },
+    "note": "Two tables in DELETE ... USING"
+  },
+  {
+    "id": "PGUPD-021",
+    "family": "update-delete",
+    "doc": "DELETE FROM orders WHERE order_id IN (SELECT | FROM order_details)",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "quantity"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Subquery in a DELETE"
+  },
+  {
+    "id": "PGUPD-022",
+    "family": "update-delete",
+    "doc": "DELETE FROM orders RETURNING |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ]
+    },
+    "note": "DELETE RETURNING"
+  },
+  {
+    "id": "PGUPD-023",
+    "family": "update-delete",
+    "doc": "TRUNCATE orders |",
+    "expect": {
+      "mustContain": [
+        "CASCADE",
+        "RESTRICT",
+        "RESTART IDENTITY"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "TRUNCATE options"
+  },
+  {
+    "id": "PGUPD-024",
+    "family": "update-delete",
+    "doc": "MERGE INTO |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ],
+      "mustNotContain": [
+        "mv_product_sales"
+      ]
+    },
+    "note": "MERGE target"
+  },
+  {
+    "id": "PGUPD-025",
+    "family": "update-delete",
+    "doc": "MERGE INTO orders o USING |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "products"
+      ]
+    },
+    "note": "MERGE source"
+  },
+  {
+    "id": "PGUPD-026",
+    "family": "update-delete",
+    "doc": "MERGE INTO orders o USING customers c ON |",
+    "expect": {
+      "mustContain": [
+        "o.customer_id = c.customer_id",
+        "o.freight"
+      ]
+    },
+    "note": "MERGE ON uses the foreign key"
+  },
+  {
+    "id": "PGUPD-027",
+    "family": "update-delete",
+    "doc": "MERGE INTO orders o USING customers c ON o.customer_id = c.customer_id WHEN |",
+    "expect": {
+      "mustContain": [
+        "MATCHED",
+        "NOT MATCHED"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "WHEN"
+  },
+  {
+    "id": "PGUPD-028",
+    "family": "update-delete",
+    "doc": "MERGE INTO orders o USING customers c ON o.customer_id = c.customer_id WHEN MATCHED THEN |",
+    "expect": {
+      "mustContain": [
+        "UPDATE SET",
+        "DELETE",
+        "DO NOTHING"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "MATCHED actions"
+  },
+  {
+    "id": "PGUPD-029",
+    "family": "update-delete",
+    "doc": "MERGE INTO orders o USING customers c ON o.customer_id = c.customer_id WHEN MATCHED THEN UPDATE SET |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "ship_city"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "MERGE UPDATE SET lists target columns"
+  },
+  {
+    "id": "PGUPD-030",
+    "family": "update-delete",
+    "doc": "MERGE INTO orders o USING customers c ON o.customer_id = c.customer_id WHEN MATCHED AND |",
+    "expect": {
+      "mustContain": [
+        "o.freight",
+        "c.country"
+      ]
+    },
+    "note": "MERGE WHEN ... AND condition"
+  },
+  {
+    "id": "PGUPD-031",
+    "family": "update-delete",
+    "doc": "UPDATE orders SET freight = 1 WHERE order_id = 5 |",
+    "expect": {
+      "mustContain": [
+        "AND",
+        "OR",
+        "RETURNING"
+      ],
+      "mustNotContain": [
+        "orders"
+      ]
+    },
+    "note": "After the WHERE predicate"
+  }
+]

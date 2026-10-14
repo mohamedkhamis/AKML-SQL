@@ -1,0 +1,25 @@
+{
+  "metadata": {
+    "id": "builtin-pg-ssf",
+    "shortcode": "ssf",
+    "name": "SELECT * FROM",
+    "description": "SELECT every column of a table",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Query",
+    "tags": [
+      "select",
+      "star"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "SELECT *",
+    "FROM $CURSOR$;"
+  ]
+}

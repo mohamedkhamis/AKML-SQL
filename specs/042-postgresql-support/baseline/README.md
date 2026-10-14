@@ -44,7 +44,10 @@ Failures that already existed at `97efd46` (none is caused by spec 042; each als
 - **Web**: 66 cases of `Services.FormatterServiceTests.Formatter_MatchesIdeBaseline_AcrossCorpusAndProfiles` (the known
   pending golden baselines for the sp031 corpus and several others).
 - **Shell.Shared**: `AiChatPanelCopyButtonTests.A_second_click_inside_the_flash_window_still_restores_the_true_label` (clipboard
-  access; flaky, `OpenClipboard failed`; passes or fails with what else is using the clipboard).
+  access; flaky, `OpenClipboard failed`; passes or fails with what else is using the clipboard). In the full run at the end of user
+  story 3 three more tests of the same class failed with `CLIPBRD_E_CANT_OPEN` (`Message_text_is_a_selectable_read_only_text_host`,
+  `Copy_conversation_attributes_and_orders_every_turn`, `Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name`);
+  run alone the whole class passed (9 of 9), and nothing in `AkmlSql.Shell.Shared` was changed by this spec.
 - **Engine**: `PerformanceBaselineTests.Capture_or_compare_M0_baseline` (environmental drift; about 17 minutes by itself).
 
 Skipped by design: three `Theme` tests in Core (`[Fact(Skip = ...)]`) and `WebSocketTransportLanTests.LanMode_round_trip_wss_handshake`

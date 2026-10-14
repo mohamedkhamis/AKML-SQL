@@ -1,0 +1,27 @@
+{
+  "docVersion": "18",
+  "commands": {
+    "documented": 185,
+    "included": 185
+  },
+  "keywords": {
+    "documented": 494,
+    "included": 494
+  },
+  "types": {
+    "documented": 68,
+    "included": 68
+  },
+  "functions": {
+    "documented": 679,
+    "included": 679
+  },
+  "operators": {
+    "documented": 88,
+    "included": 88
+  },
+  "sqlState": {
+    "documented": 262,
+    "included": 262
+  }
+}

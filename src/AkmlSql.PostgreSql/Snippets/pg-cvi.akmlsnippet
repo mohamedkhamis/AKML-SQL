@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "id": "builtin-pg-cvi",
+    "shortcode": "cvi",
+    "name": "CREATE VIEW",
+    "description": "CREATE OR REPLACE VIEW",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [
+      "create",
+      "view"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "CREATE OR REPLACE VIEW $CURSOR$ AS",
+    "SELECT ",
+    "FROM ;"
+  ]
+}

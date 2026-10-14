@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 
@@ -26,11 +27,17 @@ public interface ISnippetStore
     /// <summary>Return every snippet (built-in + user). Built-ins precede user.</summary>
     Task<IReadOnlyList<WebSnippet>> ListAsync();
 
+    /// <summary>Spec 042 (FR-066): the snippets of one database kind - the built-ins of that kind and the user's own that carry it.</summary>
+    Task<IReadOnlyList<WebSnippet>> ListAsync(DatabaseKind kind);
+
     /// <summary>Find a snippet by id. Returns null when missing.</summary>
     Task<WebSnippet?> GetByIdAsync(string id);
 
     /// <summary>Find a snippet by shortcode (the trigger the user types).</summary>
     Task<WebSnippet?> GetByShortcodeAsync(string shortcode);
+
+    /// <summary>Spec 042: the snippet with that shortcode in the given kind, so <c>sel</c> expands to the dialect of the connection.</summary>
+    Task<WebSnippet?> GetByShortcodeAsync(string shortcode, DatabaseKind kind);
 
     /// <summary>Save a user snippet. Built-in ids reject writes.</summary>
     Task SaveAsync(WebSnippet snippet);
@@ -67,6 +74,9 @@ public sealed class WebSnippetMetadata
     /// current selection lands (NOT the VS-Code <c>$selected$</c> form).
     /// </summary>
     public bool SurroundsWith { get; set; }
+
+    /// <summary>Spec 042 (FR-066): the <c>DatabaseKind</c> the snippet is for; 0 (SQL Server) for everything saved before the feature.</summary>
+    public int Kind { get; set; }
 }
 
 public sealed class WebSnippetVariable
@@ -124,8 +134,22 @@ internal sealed class SnippetStore : ISnippetStore
     {
         if (string.IsNullOrEmpty(shortcode)) return null;
         var all = await ListAsync().ConfigureAwait(false);
-        return all.FirstOrDefault(s =>
+        // before a connection has a kind, the SQL Server snippet of that name wins (what it always was)
+        return all.OrderBy(s => s.Metadata.Kind).FirstOrDefault(s =>
             string.Equals(s.Metadata.Shortcode, shortcode, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<IReadOnlyList<WebSnippet>> ListAsync(DatabaseKind kind)
+    {
+        var all = await ListAsync().ConfigureAwait(false);
+        return all.Where(s => s.Metadata.Kind == (int)kind).ToList();
+    }
+
+    public async Task<WebSnippet?> GetByShortcodeAsync(string shortcode, DatabaseKind kind)
+    {
+        if (string.IsNullOrEmpty(shortcode)) return null;
+        var ofKind = await ListAsync(kind).ConfigureAwait(false);
+        return ofKind.FirstOrDefault(s => string.Equals(s.Metadata.Shortcode, shortcode, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task SaveAsync(WebSnippet snippet)
@@ -237,6 +261,30 @@ internal sealed class SnippetStore : ISnippetStore
     /// named stop comes from the matching <see cref="WebSnippetVariable"/> (else the name).
     /// </para>
     /// </summary>
+    private static (string Shortcode, string Title, string Desc, string[] Tags, (string Name, string Default)[] Vars, string[] Body)[] PostgresDefinitions() => new[]
+    {
+        ("ssf", "SELECT * FROM", "SELECT every column of a table", new[] { "select" }, new[] { ("table", "table") }, new[] { "SELECT * FROM $table$$CURSOR$;" }),
+        ("sel", "SELECT columns", "SELECT with WHERE, ORDER BY and LIMIT", new[] { "select" }, new[] { ("columns", "columns"), ("table", "table"), ("condition", "condition") },
+            new[] { "SELECT $columns$", "FROM $table$", "WHERE $condition$", "ORDER BY $CURSOR$", "LIMIT 100;" }),
+        ("ins", "INSERT INTO", "INSERT ... VALUES ... RETURNING", new[] { "insert" }, new[] { ("table", "table"), ("columns", "columns"), ("values", "values") },
+            new[] { "INSERT INTO $table$ ($columns$)", "VALUES ($values$)", "RETURNING *;" }),
+        ("upd", "UPDATE SET", "UPDATE ... SET ... WHERE ... RETURNING", new[] { "update" }, new[] { ("table", "table"), ("column", "column"), ("value", "value"), ("condition", "condition") },
+            new[] { "UPDATE $table$", "SET $column$ = $value$", "WHERE $condition$", "RETURNING *;" }),
+        ("del", "DELETE FROM", "DELETE FROM ... WHERE ... RETURNING", new[] { "delete" }, new[] { ("table", "table"), ("condition", "condition") },
+            new[] { "DELETE FROM $table$", "WHERE $condition$", "RETURNING *;" }),
+        ("cte", "Common Table Expression", "WITH ... AS (SELECT ...) SELECT ...", new[] { "cte", "with" }, new[] { ("name", "my_cte"), ("query", "SELECT 1") },
+            new[] { "WITH $name$ AS (", "    $query$", ")", "SELECT * FROM $name$;" }),
+        ("crt", "CREATE TABLE", "CREATE TABLE with an identity key and a timestamp", new[] { "create", "table" }, new[] { ("name", "my_table") },
+            new[] { "CREATE TABLE $name$ (", "    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,", "    created_at timestamptz NOT NULL DEFAULT now()", ");" }),
+        ("cix", "CREATE INDEX", "CREATE INDEX on a table", new[] { "create", "index" }, new[] { ("name", "ix_name"), ("table", "table"), ("columns", "column") },
+            new[] { "CREATE INDEX $name$ ON $table$ ($columns$);" }),
+        ("cfn", "CREATE FUNCTION", "CREATE OR REPLACE FUNCTION in PL/pgSQL", new[] { "create", "function" }, new[] { ("name", "my_function") },
+            new[] { "CREATE OR REPLACE FUNCTION $name$()", "RETURNS void", "LANGUAGE plpgsql", "AS $$", "BEGIN", "    $CURSOR$", "END;", "$$;" }),
+        ("cvi", "CREATE VIEW", "CREATE OR REPLACE VIEW", new[] { "create", "view" }, new[] { ("name", "my_view"), ("query", "SELECT 1") },
+            new[] { "CREATE OR REPLACE VIEW $name$ AS", "$query$;" }),
+        ("txn", "Transaction block", "BEGIN ... COMMIT", new[] { "transaction" }, Array.Empty<(string, string)>(), new[] { "BEGIN;", "$CURSOR$", "COMMIT;" }),
+    };
+
     private static Dictionary<string, WebSnippet> BuildBuiltIns()
     {
         var defs = new (string Shortcode, string Title, string Desc, string[] Tags, bool Surrounds,
@@ -324,6 +372,18 @@ internal sealed class SnippetStore : ISnippetStore
                     Tags = d.Tags,
                     SurroundsWith = d.Surrounds,
                 },
+                Variables = d.Vars.Select(v => new WebSnippetVariable { Name = v.Name, Default = v.Default }).ToArray(),
+                Body = d.Body,
+            };
+        }
+
+        // Spec 042 (FR-066): the same shortcodes in PostgreSQL syntax, for a PostgreSQL connection.
+        foreach (var d in PostgresDefinitions())
+        {
+            var id = "builtin.pg." + d.Shortcode;
+            map[id] = new WebSnippet
+            {
+                Metadata = new WebSnippetMetadata { Id = id, Shortcode = d.Shortcode, Title = d.Title, Description = d.Desc, Author = "AKML SQL", Tags = d.Tags, Kind = (int)DatabaseKind.PostgreSql },
                 Variables = d.Vars.Select(v => new WebSnippetVariable { Name = v.Name, Default = v.Default }).ToArray(),
                 Body = d.Body,
             };

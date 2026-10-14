@@ -17,9 +17,9 @@ public static class PgWebSession
     public const string EnvVar = "AKML_PG_TEST_CONNECTION";
 
     /// <summary>Host, port, user and password from the environment variable, or null when it is not set.</summary>
-    public static (string Host, int Port, string User, string Password)? Configured()
+    public static (string Host, int Port, string User, string Password)? Configured(string? envVar = null)
     {
-        var text = Environment.GetEnvironmentVariable(EnvVar);
+        var text = Environment.GetEnvironmentVariable(envVar ?? EnvVar);
         if (string.IsNullOrWhiteSpace(text)) return null;
 
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -50,10 +50,10 @@ public static class PgWebSession
     /// Starts everything and, when <paramref name="connect"/> is true, connects the page to the PostgreSQL server through
     /// the connection manager; the editor is open when this returns.
     /// </summary>
-    public static async Task<SqlSession> StartOrSkipAsync(ITestOutputHelper? output = null, bool connect = true)
+    public static async Task<SqlSession> StartOrSkipAsync(ITestOutputHelper? output = null, bool connect = true, string? envVar = null)
     {
-        var configured = Configured();
-        Skip.If(configured is null, $"No PostgreSQL test server: set {EnvVar} (see scripts/pg-test-server.ps1).");
+        var configured = Configured(envVar);
+        Skip.If(configured is null, $"No PostgreSQL test server: set {envVar ?? EnvVar} (see scripts/pg-test-server.ps1).");
         var (host, port, user, password) = configured!.Value;
         Skip.IfNot(await ServerAnswersAsync(host, port), $"No PostgreSQL server answering on {host}:{port}.");
 

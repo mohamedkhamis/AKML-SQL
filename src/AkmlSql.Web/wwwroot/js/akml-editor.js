@@ -72,10 +72,83 @@ export function optionExtensions(cm, opts) {
  * feature, so SQL Server highlighting does not change.
  */
 export function dialectExtension(cm, kind) {
-    const isPostgres = typeof kind === 'string' && kind.trim().toLowerCase() === 'postgresql';
-    return isPostgres
+    return isPostgresKind(kind)
         ? cm.langSql.sql({ dialect: cm.langSql.PostgreSQL })
         : cm.langSql.sql();
+}
+
+/** Spec 042: true for the PostgreSQL database kind. */
+export function isPostgresKind(kind) {
+    return typeof kind === 'string' && kind.trim().toLowerCase() === 'postgresql';
+}
+
+/**
+ * Spec 042 (FR-061, T108) - the word right before the caret, which a completion replaces: `{ from, text }` with `from` an
+ * offset into `textBeforeCaret`, or null when the caret is not in a word.
+ *
+ * SQL Server words may start with '@' or '#'. PostgreSQL has neither: a word is letters, digits, '_' and '$', or a
+ * double-quoted name being typed. The opening quote belongs to the word, so accepting "Audit Log" over `"Aud` does not
+ * double the quote. A quote is an opening one when an odd number of quotes lie before the caret (a doubled quote inside a
+ * name counts as two), so the closing quote of `"Audit Log" ` is not mistaken for the start of a word.
+ */
+export function wordBefore(kind, textBeforeCaret) {
+    const text = typeof textBeforeCaret === 'string' ? textBeforeCaret : '';
+    if (!isPostgresKind(kind)) {
+        const m = /[@#\w]+$/.exec(text);
+        return m ? { from: m.index, text: m[0] } : null;
+    }
+
+    let quotes = 0;
+    for (const c of text) if (c === '"') quotes++;
+    if (quotes % 2 === 1) {
+        const at = text.lastIndexOf('"');
+        return { from: at, text: text.slice(at) };
+    }
+    const m = /[\w$]+$/.exec(text);
+    return m ? { from: m.index, text: m[0] } : null;
+}
+
+/**
+ * Spec 042 (FR-053, T107) - the link in a quick-info "Documentation" row. Only the official PostgreSQL manual is linked, and only
+ * its https pages: the text comes from the engine, and a page is never handed an arbitrary address to open.
+ */
+export function documentationLink(detail) {
+    if (!detail || detail.label !== 'Documentation' || typeof detail.value !== 'string') return null;
+    return /^https:\/\/www\.postgresql\.org\/docs\/\d+\/[a-z0-9\-]+\.html$/.test(detail.value) ? detail.value : null;
+}
+
+/**
+ * Spec 042 (T108) - the span a completion replaces when the word being typed began with a double quote. The editor closes
+ * an opened quote on its own, so `"Aud` is really `"Aud|"`; accepting "Audit Log" over it must take that closing quote too, or
+ * the result is `"Audit Log""`. Returns the span unchanged unless the replaced text opens with a quote, the insert is a quoted
+ * name, and a quote follows the caret.
+ */
+export function quotedReplaceSpan(docText, from, to, insertText) {
+    const text = typeof docText === 'string' ? docText : '';
+    if (typeof insertText !== 'string' || !insertText.startsWith('"')) return { from, to };
+    if (text.charAt(from) !== '"') return { from, to };
+    if (text.charAt(to) === '"') return { from, to: to + 1 };
+    return { from, to };
+}
+
+/** The pattern CodeMirror uses to keep a popup open while the typed word still matches. */
+export function completionValidFor(kind) {
+    return isPostgresKind(kind) ? /^(?:"[^"]*|[\w$]*)$/ : /^[\w]*$/;
+}
+
+const POST_KEYWORD_SQLSERVER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|update|insert(?:\s+into)?|into|delete(?:\s+from)?|exec(?:ute)?)\s+$/i;
+
+// PostgreSQL: its own words, and '::' (a cast takes a type).
+const POST_KEYWORD_POSTGRES = /(?:\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|update|insert(?:\s+into)?|into|delete(?:\s+from)?|returning|using|values|limit|offset|as|conflict|do|union(?:\s+all)?|except|intersect|references|table|index|call|truncate|distinct|lateral|only|case|not|exists)\s+|::\s*)$/i;
+
+/** What, right before the caret, opens the popup without a typed word (after a clause word and a space, or after '::'). */
+export function postKeywordTrigger(kind) {
+    return isPostgresKind(kind) ? POST_KEYWORD_POSTGRES : POST_KEYWORD_SQLSERVER;
+}
+
+/** The characters that, typed last, may open the popup (a space, a dot, a comma ...); PostgreSQL adds ':' for '::'. */
+export function typedTriggerCharacters(kind) {
+    return isPostgresKind(kind) ? /[\s.,()=<>!+\-*/:]/ : /[\s.,()=<>!+\-*/]/;
 }
 
 /** The font size is CSS only: a variable on the host the editor's font-size reads. */
@@ -146,7 +219,8 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     // `in` intentionally omitted: typing "WHERE x IN " almost always wants a
     // subquery / value list, not a column name; the false-positive popup was
     // more noise than help.
-    const POST_KEYWORD_TRIGGER = /\b(?:where|and|or|from|join|on|set|having|select|group\s+by|order\s+by|by|when|then|else|update|insert(?:\s+into)?|into|delete(?:\s+from)?|exec(?:ute)?)\s+$/i;
+    // Spec 042: the trigger words and the word pattern follow the editor's current database kind.
+    const currentKind = () => { const i = _instances.get(hostElementId); return i && i.kind ? i.kind : (options && options.dialect); };
     const DOT_MEMBER_TRIGGER = /(?:[A-Za-z_\]"][\w$]*|\]|")\.$/;
 
     // Spec 041 (R65, FR-083): the caret for the status bar ("Ln 1, Col 12"), throttled to one report per 100 ms.
@@ -191,7 +265,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             let typedNonWord = false;
             update.changes.iterChanges((_fromA, _toA, _fromB, _toB, inserted) => {
                 const ins = inserted.toString();
-                if (ins.length > 0 && /[\s.,()=<>!+\-*/]/.test(ins[ins.length - 1])) {
+                if (ins.length > 0 && typedTriggerCharacters(currentKind()).test(ins[ins.length - 1])) {
                     typedNonWord = true;
                 }
             });
@@ -201,7 +275,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                 const lineUpToCaret = line.text.slice(0, pos - line.from);
                 // Spec 032 FR-001: '.' is a non-word char, so activateOnTyping never fires
                 // for member access — this manual open is the ONLY dot-trigger path.
-                if (POST_KEYWORD_TRIGGER.test(lineUpToCaret) || DOT_MEMBER_TRIGGER.test(lineUpToCaret)) {
+                if (postKeywordTrigger(currentKind()).test(lineUpToCaret) || DOT_MEMBER_TRIGGER.test(lineUpToCaret)) {
                     cm.autocomplete.startCompletion(update.view);
                 }
             }
@@ -214,7 +288,14 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         // Spec 032 FR-005 (C5): include '@'/'#' in the replace span so accepting
         // '@CustomerID' over a typed '@C' (or '#t' over '#') replaces the whole
         // sigil token instead of doubling it ('@@CustomerID').
-        const word = context.matchBefore(/[@#\w]+/);
+        const kind = currentKind();
+        const lineAtCaret = context.state.doc.lineAt(context.pos);
+        const found = wordBefore(kind, lineAtCaret.text.slice(0, context.pos - lineAtCaret.from));
+        const word = found ? { from: lineAtCaret.from + found.from, to: context.pos, text: found.text } : null;
+        // Spec 042 (FR-061, scenario US3-7): PostgreSQL has no @variables, #temp tables or [brackets]. A popup the editor opened
+        // by itself (after `SELECT `) is an explicit session that CodeMirror re-queries on every keystroke, so the sigil
+        // has to end it here, or the list would stay open over the character that makes no sense.
+        if (isPostgresKind(kind) && /[@#\[]$/.test(lineAtCaret.text.slice(0, context.pos - lineAtCaret.from))) return null;
         const wordValid = word && (word.from !== word.to || context.explicit);
 
         // Detect "after a trigger keyword + whitespace" or "after a member-access
@@ -225,7 +306,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         if (!wordValid) {
             const lineUpToCaret = context.state.doc.lineAt(context.pos)
                 .text.slice(0, context.pos - context.state.doc.lineAt(context.pos).from);
-            postKeyword = POST_KEYWORD_TRIGGER.test(lineUpToCaret);
+            postKeyword = postKeywordTrigger(kind).test(lineUpToCaret);
             dotMember = DOT_MEMBER_TRIGGER.test(lineUpToCaret);
         }
 
@@ -235,9 +316,17 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             // Pass the LIVE document text so the offline smart GROUP BY action parses what the
             // user is actually editing (the debounced session would be stale during fast typing).
             // The online path ignores it; it never reaches the engine wire.
+            // Spec 042: a reply that arrives after the user typed on describes text that is gone (the popup opened by
+            // `SELECT ` must not reappear over `SELECT @`). PostgreSQL drops it; SQL Server keeps its behaviour.
+            let stale = false;
+            if (isPostgresKind(kind)) context.addEventListener('abort', () => { stale = true; }, { onDocChange: true });
             const items = await dotNetRef.invokeMethodAsync(
                 'RequestCompletionsFromJs', context.pos, context.state.doc.toString());
+            if (stale || context.aborted) return null;
             if (!items || items.length === 0) return null;
+            // Spec 042: while a quoted name is being typed CodeMirror matches the text from the opening quote, so the
+            // label is the quoted form (a label without the quote can never match `"Aud`).
+            const quotedPrefix = isPostgresKind(kind) && word && word.text.startsWith('"');
             return {
                 from: wordValid ? word.from : context.pos,
                 options: items.map(i => {
@@ -274,9 +363,21 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                     // "[[Order Details]". applyBracketed widens the replacement to take in an
                     // open "[" (and an auto-closed "]") so the name goes in exactly once.
                     const insertText = i.insertText;
+                    if (quotedPrefix && typeof insertText === 'string' && insertText.startsWith('"')) {
+                        return {
+                            label: insertText,
+                            apply: (view, _completion, from, to) => {
+                                const span = quotedReplaceSpan(view.state.doc.toString(), from, to, insertText);
+                                view.dispatch({ changes: { from: span.from, to: span.to, insert: insertText }, selection: { anchor: span.from + insertText.length }, userEvent: 'input.complete' });
+                            },
+                            type,
+                            detail: i.detail || undefined,
+                            boost,
+                        };
+                    }
                     return {
                         label: i.label,
-                        apply: (typeof insertText === 'string' && insertText.includes('['))
+                        apply: (!isPostgresKind(kind) && typeof insertText === 'string' && insertText.includes('['))
                             ? (view, _completion, from, to) => applyBracketed(view, insertText, from, to)
                             : insertText,
                         type,
@@ -287,7 +388,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                 // CM does its own fuzzy filter against the prefix at `from`. The
                 // empty-prefix case (post-keyword trigger) re-invokes the source
                 // as soon as the user types a non-word char, which is what we want.
-                validFor: /^[\w]*$/,
+                validFor: completionValidFor(kind),
             };
         } catch {
             // Never let a .NET interop crash kill the popup.
@@ -511,7 +612,22 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                     list.className = 'akml-qi-details';
                     for (const d of info.details) {
                         const row = document.createElement('div');
-                        row.textContent = d.value ? `${d.label}: ${d.value}` : d.label;
+                        const link = documentationLink(d);
+                        if (link) {
+                            // Spec 042 (FR-053): the manual page opens in its own tab.
+                            row.appendChild(document.createTextNode(d.label + ': '));
+                            const a = document.createElement('a');
+                            a.href = link;
+                            a.target = '_blank';
+                            a.rel = 'noopener noreferrer';
+                            a.textContent = link.replace('https://www.postgresql.org/', '');
+                            a.className = 'akml-qi-link';
+                            row.appendChild(a);
+                        } else {
+                            row.textContent = d.value ? `${d.label}: ${d.value}` : d.label;
+                            // a column list or a syntax diagram keeps its line breaks
+                            if (d.value && d.value.indexOf('\n') >= 0) row.style.whiteSpace = 'pre-wrap';
+                        }
                         list.appendChild(row);
                     }
                     dom.appendChild(list);
@@ -726,7 +842,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     });
 
     const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
-    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard });
+    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect });
 }
 
 // CodeMirror's lint gutter opens its own tooltip on mouseover. Give its markers the same
@@ -779,6 +895,7 @@ function installLintKeyboard(view, hostElementId) {
 export function setDialect(hostElementId, kind) {
     const inst = _instances.get(hostElementId);
     if (!inst || !inst.dialectCompartment) return;
+    inst.kind = kind;
     inst.view.dispatch({ effects: inst.dialectCompartment.reconfigure(dialectExtension(inst.cm, kind)) });
 }
 

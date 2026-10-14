@@ -17,9 +17,11 @@ namespace AkmlSql.Engine.Handlers.Completion
     {
         private readonly TsqlParserService _parserService;
         private readonly QuickInfoProvider _quickInfoProvider;
+        private readonly PostgreSql.PgServices? _pg;
 
-        public QuickInfoHandler(TsqlParserService parserService, QuickInfoProvider quickInfoProvider)
+        public QuickInfoHandler(TsqlParserService parserService, QuickInfoProvider quickInfoProvider, PostgreSql.PgServices? pg = null)
         {
+            _pg = pg;
             _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
             _quickInfoProvider = quickInfoProvider ?? throw new ArgumentNullException(nameof(quickInfoProvider));
         }
@@ -37,6 +39,9 @@ namespace AkmlSql.Engine.Handlers.Completion
             var cache = session != null
                 ? ctx.SchemaCache.GetCache(request.SessionId, session.DatabaseName)
                 : null;
+
+            if (session?.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _pg != null)
+                return Task.FromResult(_pg.QuickInfo.Get(documentText, request.CursorOffset, cache, PostgreSql.PgServices.ServerMajor(session)));
 
             var response = _quickInfoProvider.GetQuickInfo(documentText, request.CursorOffset, cache, _parserService);
             return Task.FromResult(response);

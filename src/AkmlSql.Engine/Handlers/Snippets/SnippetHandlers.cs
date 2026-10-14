@@ -21,6 +21,8 @@ namespace AkmlSql.Engine.Handlers.Snippets
         public Task<SnippetExpandResponse> HandleAsync(SnippetExpandRequest request, RpcContext ctx, CancellationToken ct)
         {
             var session = ctx.Sessions.GetSession(request.SessionId);
+            // Spec 042: a PostgreSQL session expands PostgreSQL snippets
+            var dialect = SnippetDialects.For(session?.Kind ?? AkmlSql.Core.DatabaseKind.SqlServer);
             // Spec 030 (re-audit): thread the server name so the $SERVER$ placeholder resolves at
             // runtime. Previously only DatabaseName was passed, so $SERVER$ silently expanded to "".
             // Spec 030 FR-037 parity: thread the SQL login so $USER$ resolves to the connected login.
@@ -29,7 +31,8 @@ namespace AkmlSql.Engine.Handlers.Snippets
                 request,
                 session?.DatabaseName,
                 DeriveServerName(session?.ConnectionString),
-                DeriveLogin(session?.ConnectionString)));
+                DeriveLogin(session?.ConnectionString),
+                dialect));
         }
 
         // Derive the server from the session's connection string DataSource — the same scrub

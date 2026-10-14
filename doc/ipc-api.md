@@ -701,7 +701,11 @@ Context         string?   Clause context, e.g. "SELECT", "FROM" → filters by s
 HasSelection    bool      True when editor has selected text (shows surround-with snippets only)
 SourceFilter    int       0=All, 1=Personal, 2=Team, 3=BuiltIn
 CategoryFilter  string?   Filter by snippet category
+Kind            int       Spec 042 (key 5): DatabaseKind of the snippets wanted, 0=SQL Server (default), 1=PostgreSQL
 ```
+
+A snippet file carries `metadata.dialect` (`sqlserver`, the default when absent, or `postgresql`). The list is cut to the requested
+kind, and `SnippetExpand` uses the dialect of the session's kind, so a shortcode such as `sel` is never the other dialect's text.
 
 **Response** (`SnippetListResponse`):
 ```

@@ -21,9 +21,11 @@ namespace AkmlSql.Engine.Handlers.Completion
     {
         private readonly TsqlParserService _parserService;
         private readonly SignatureProvider _signatureProvider;
+        private readonly PostgreSql.PgServices? _pg;
 
-        public SignatureHelpHandler(TsqlParserService parserService, SignatureProvider signatureProvider)
+        public SignatureHelpHandler(TsqlParserService parserService, SignatureProvider signatureProvider, PostgreSql.PgServices? pg = null)
         {
+            _pg = pg;
             _parserService = parserService ?? throw new ArgumentNullException(nameof(parserService));
             _signatureProvider = signatureProvider ?? throw new ArgumentNullException(nameof(signatureProvider));
         }
@@ -41,6 +43,9 @@ namespace AkmlSql.Engine.Handlers.Completion
             var cache = session != null
                 ? ctx.SchemaCache.GetCache(request.SessionId, session.DatabaseName)
                 : null;
+
+            if (session?.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _pg != null)
+                return Task.FromResult(_pg.Signature.Get(documentText, request.CursorOffset, cache, PostgreSql.PgServices.ServerMajor(session)));
 
             var tokens = _parserService.GetTokenStream(documentText);
             var (funcName, parenOffset) = FindFunctionAtCursor(tokens, request.CursorOffset);

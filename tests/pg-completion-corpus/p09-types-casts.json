@@ -1,0 +1,296 @@
+[
+  {
+    "id": "PGTYP-001",
+    "family": "types-casts",
+    "doc": "SELECT created::|",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text",
+        "timestamp with time zone",
+        "jsonb",
+        "uuid",
+        "numeric",
+        "date",
+        "boolean"
+      ],
+      "mustNotContain": [
+        "customers"
+      ],
+      "minCount": 10
+    },
+    "note": "After :: types"
+  },
+  {
+    "id": "PGTYP-002",
+    "family": "types-casts",
+    "doc": "SELECT x::int|",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "int",
+        "int4"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "Prefix int"
+  },
+  {
+    "id": "PGTYP-003",
+    "family": "types-casts",
+    "doc": "SELECT x::time|",
+    "expect": {
+      "mustContain": [
+        "time",
+        "timestamp",
+        "timestamptz"
+      ]
+    },
+    "note": "Prefix time"
+  },
+  {
+    "id": "PGTYP-004",
+    "family": "types-casts",
+    "doc": "SELECT CAST(x AS |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text",
+        "date"
+      ],
+      "mustNotContain": [
+        "customers"
+      ],
+      "minCount": 10
+    },
+    "note": "CAST ( AS takes types"
+  },
+  {
+    "id": "PGTYP-005",
+    "family": "types-casts",
+    "doc": "SELECT CAST(x AS var|",
+    "expect": {
+      "mustContain": [
+        "varchar",
+        "character varying"
+      ]
+    },
+    "note": "Prefix var"
+  },
+  {
+    "id": "PGTYP-006",
+    "family": "types-casts",
+    "doc": "SELECT * FROM orders WHERE order_date::|",
+    "expect": {
+      "mustContain": [
+        "date",
+        "timestamp"
+      ]
+    },
+    "note": "Cast in WHERE"
+  },
+  {
+    "id": "PGTYP-007",
+    "family": "types-casts",
+    "doc": "SELECT x::numeric(10,2)::|",
+    "expect": {
+      "mustContain": [
+        "text",
+        "integer"
+      ]
+    },
+    "note": "Chained casts"
+  },
+  {
+    "id": "PGTYP-008",
+    "family": "types-casts",
+    "doc": "SELECT $1::|",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text"
+      ]
+    },
+    "note": "Cast of a positional parameter"
+  },
+  {
+    "id": "PGTYP-009",
+    "family": "types-casts",
+    "doc": "SELECT x::text, y::|",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "uuid"
+      ]
+    },
+    "note": "Second cast in the select list"
+  },
+  {
+    "id": "PGTYP-010",
+    "family": "types-casts",
+    "doc": "SELECT ARRAY[1,2]::|",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "bigint"
+      ]
+    },
+    "note": "Cast of an array constructor"
+  },
+  {
+    "id": "PGTYP-011",
+    "family": "types-casts",
+    "doc": "SELECT x::|",
+    "expect": {
+      "mustNotContain": [
+        "nvarchar",
+        "datetime",
+        "datetime2",
+        "uniqueidentifier",
+        "ntext",
+        "tinyint"
+      ]
+    },
+    "note": "No SQL Server types"
+  },
+  {
+    "id": "PGTYP-012",
+    "family": "types-casts",
+    "doc": "SELECT CAST(| AS text) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ]
+    },
+    "note": "The expression inside CAST"
+  },
+  {
+    "id": "PGTYP-013",
+    "family": "types-casts",
+    "doc": "SELECT * FROM orders WHERE freight > 10::|",
+    "expect": {
+      "mustContain": [
+        "numeric",
+        "integer"
+      ]
+    },
+    "note": "Cast of a constant"
+  },
+  {
+    "id": "PGTYP-014",
+    "family": "types-casts",
+    "doc": "SELECT 'x'::cha|",
+    "expect": {
+      "mustContain": [
+        "character",
+        "char"
+      ]
+    },
+    "note": "Prefix cha"
+  },
+  {
+    "id": "PGTYP-015",
+    "family": "types-casts",
+    "doc": "SELECT x::dou|",
+    "expect": {
+      "mustContain": [
+        "double precision"
+      ]
+    },
+    "note": "double precision"
+  },
+  {
+    "id": "PGTYP-016",
+    "family": "types-casts",
+    "doc": "SELECT x::bool|",
+    "expect": {
+      "mustContain": [
+        "boolean",
+        "bool"
+      ]
+    },
+    "note": "boolean and its alias"
+  },
+  {
+    "id": "PGTYP-017",
+    "family": "types-casts",
+    "doc": "SELECT x::uu|",
+    "expect": {
+      "mustContain": [
+        "uuid"
+      ]
+    },
+    "note": "uuid"
+  },
+  {
+    "id": "PGTYP-018",
+    "family": "types-casts",
+    "doc": "SELECT x::int8|",
+    "expect": {
+      "mustContain": [
+        "int8"
+      ]
+    },
+    "note": "Alias int8"
+  },
+  {
+    "id": "PGTYP-019",
+    "family": "types-casts",
+    "doc": "SELECT x::timestamptz|",
+    "expect": {
+      "mustContain": [
+        "timestamptz"
+      ]
+    },
+    "note": "Alias timestamptz"
+  },
+  {
+    "id": "PGTYP-020",
+    "family": "types-casts",
+    "doc": "SELECT x::json|",
+    "expect": {
+      "mustContain": [
+        "json",
+        "jsonb"
+      ]
+    },
+    "note": "json types"
+  },
+  {
+    "id": "PGTYP-021",
+    "family": "types-casts",
+    "doc": "SELECT x::by|",
+    "expect": {
+      "mustContain": [
+        "bytea"
+      ]
+    },
+    "note": "bytea"
+  },
+  {
+    "id": "PGTYP-022",
+    "family": "types-casts",
+    "doc": "SELECT order_id::text, | FROM orders",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "freight"
+      ]
+    },
+    "note": "Columns after a cast item"
+  },
+  {
+    "id": "PGTYP-023",
+    "family": "types-casts",
+    "doc": "SELECT x::inter|",
+    "expect": {
+      "mustContain": [
+        "interval"
+      ]
+    },
+    "note": "interval"
+  }
+]

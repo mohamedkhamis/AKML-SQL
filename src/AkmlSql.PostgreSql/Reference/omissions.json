@@ -1,0 +1,12 @@
+[
+  {
+    "kind": "function",
+    "name": "(2138 distinct names)",
+    "reason": "in the catalog but not in the manual's function reference: internal, type-support and access-method functions"
+  },
+  {
+    "kind": "operator",
+    "name": "(15 distinct names)",
+    "reason": "in the catalog but not in the manual's operator tables: internal and extension-support operators"
+  }
+]

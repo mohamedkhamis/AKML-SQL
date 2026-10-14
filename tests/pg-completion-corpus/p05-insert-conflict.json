@@ -1,0 +1,449 @@
+[
+  {
+    "id": "PGINS-001",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ],
+      "mustNotContain": [
+        "mv_product_sales",
+        "orders_order_id_seq"
+      ],
+      "minCount": 8
+    },
+    "note": "Write targets"
+  },
+  {
+    "id": "PGINS-002",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (|",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 14
+    },
+    "note": "Column list of the target"
+  },
+  {
+    "id": "PGINS-003",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id, |",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "freight",
+        "ship_city"
+      ]
+    },
+    "note": "Next column"
+  },
+  {
+    "id": "PGINS-004",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO customers (|",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name",
+        "country"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 11
+    },
+    "note": "customers columns"
+  },
+  {
+    "id": "PGINS-005",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO sales.orders (|",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "total"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 3
+    },
+    "note": "Schema-qualified target"
+  },
+  {
+    "id": "PGINS-006",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders |",
+    "expect": {
+      "mustContain": [
+        "VALUES",
+        "SELECT",
+        "DEFAULT VALUES",
+        "AS"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the target name"
+  },
+  {
+    "id": "PGINS-007",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) |",
+    "expect": {
+      "mustContain": [
+        "VALUES",
+        "SELECT",
+        "DEFAULT VALUES",
+        "OVERRIDING SYSTEM VALUE"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "After the column list"
+  },
+  {
+    "id": "PGINS-008",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (|",
+    "expect": {
+      "mustContain": [
+        "DEFAULT",
+        "NULL",
+        "now"
+      ]
+    },
+    "note": "In a VALUES row"
+  },
+  {
+    "id": "PGINS-009",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) |",
+    "expect": {
+      "mustContain": [
+        "ON CONFLICT",
+        "RETURNING"
+      ],
+      "mustNotContain": [
+        "VALUES"
+      ]
+    },
+    "note": "After a row"
+  },
+  {
+    "id": "PGINS-010",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON |",
+    "expect": {
+      "mustContain": [
+        "CONFLICT"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "ON takes CONFLICT"
+  },
+  {
+    "id": "PGINS-011",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON CONFLICT |",
+    "expect": {
+      "mustContain": [
+        "DO NOTHING",
+        "DO UPDATE SET",
+        "ON CONSTRAINT"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "After ON CONFLICT"
+  },
+  {
+    "id": "PGINS-012",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON CONFLICT (|",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Conflict target columns"
+  },
+  {
+    "id": "PGINS-013",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON CONFLICT (order_id) |",
+    "expect": {
+      "mustContain": [
+        "DO NOTHING",
+        "DO UPDATE SET",
+        "WHERE"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "After the conflict target"
+  },
+  {
+    "id": "PGINS-014",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON CONFLICT (order_id) DO |",
+    "expect": {
+      "mustContain": [
+        "NOTHING",
+        "UPDATE SET"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "DO takes an action"
+  },
+  {
+    "id": "PGINS-015",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON CONFLICT (order_id) DO UPDATE |",
+    "expect": {
+      "mustContain": [
+        "SET"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "DO UPDATE takes SET"
+  },
+  {
+    "id": "PGINS-016",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) ON CONFLICT (order_id) DO UPDATE SET |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "customer_id",
+        "ship_city"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "SET lists the target's columns"
+  },
+  {
+    "id": "PGINS-017",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id, freight) VALUES (1, 2) ON CONFLICT (order_id) DO UPDATE SET freight = |",
+    "expect": {
+      "mustContain": [
+        "excluded",
+        "freight",
+        "now"
+      ]
+    },
+    "note": "Right side: excluded and columns"
+  },
+  {
+    "id": "PGINS-018",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id, freight) VALUES (1, 2) ON CONFLICT (order_id) DO UPDATE SET freight = excluded.|",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_id",
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "excluded. lists the target's columns"
+  },
+  {
+    "id": "PGINS-019",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id, freight) VALUES (1, 2) ON CONFLICT (order_id) DO UPDATE SET freight = EXCLUDED.|",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_id"
+      ]
+    },
+    "note": "Upper-case EXCLUDED"
+  },
+  {
+    "id": "PGINS-020",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id, freight) VALUES (1, 2) ON CONFLICT (order_id) DO UPDATE SET freight = excluded.freight WHERE |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight",
+        "excluded"
+      ]
+    },
+    "note": "WHERE of the conflict action"
+  },
+  {
+    "id": "PGINS-021",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) RETURNING |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight",
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "RETURNING takes the target's columns"
+  },
+  {
+    "id": "PGINS-022",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1) RETURNING order_id, |",
+    "expect": {
+      "mustContain": [
+        "freight"
+      ]
+    },
+    "note": "Second RETURNING item"
+  },
+  {
+    "id": "PGINS-023",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) SELECT | FROM order_details",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "quantity"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "INSERT ... SELECT reads from the source, not the target"
+  },
+  {
+    "id": "PGINS-024",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (customer_id) SELECT c.| FROM customers c",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Alias dot in INSERT ... SELECT"
+  },
+  {
+    "id": "PGINS-025",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO \"Audit Log\" (|",
+    "expect": {
+      "mustContain": [
+        "log_id",
+        "Event Name",
+        "logged_at"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ]
+    },
+    "note": "Quoted target"
+  },
+  {
+    "id": "PGINS-026",
+    "family": "insert-conflict",
+    "doc": "INSERT |",
+    "expect": {
+      "mustContain": [
+        "INTO"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "INSERT takes INTO"
+  },
+  {
+    "id": "PGINS-027",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO customers (customer_id, company_name) VALUES ('A', 'B') ON CONFLICT (customer_id) DO UPDATE SET company_name = |",
+    "expect": {
+      "mustContain": [
+        "excluded",
+        "company_name"
+      ]
+    },
+    "note": "Conflict update on customers"
+  },
+  {
+    "id": "PGINS-028",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) OVERRIDING |",
+    "expect": {
+      "mustContain": [
+        "SYSTEM VALUE",
+        "USER VALUE"
+      ]
+    },
+    "note": "OVERRIDING"
+  },
+  {
+    "id": "PGINS-029",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders DEFAULT |",
+    "expect": {
+      "mustContain": [
+        "VALUES"
+      ]
+    },
+    "note": "DEFAULT VALUES"
+  },
+  {
+    "id": "PGINS-030",
+    "family": "insert-conflict",
+    "doc": "INSERT INTO orders (order_id) VALUES (1); |",
+    "expect": {
+      "mustContain": [
+        "SELECT",
+        "INSERT",
+        "UPDATE"
+      ],
+      "mustNotContain": [
+        "GO",
+        "NOCOUNT",
+        "sp_help",
+        "xp_cmdshell",
+        "GETDATE",
+        "NEWID",
+        "NOLOCK",
+        "@@ROWCOUNT"
+      ]
+    },
+    "note": "A new statement after the semicolon"
+  }
+]

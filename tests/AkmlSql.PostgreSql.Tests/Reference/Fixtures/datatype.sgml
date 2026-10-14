@@ -1,0 +1,89 @@
+<chapter id="datatype">
+ <title>Data Types</title>
+
+ <sect1 id="datatype-overview">
+  <title>Data Types</title>
+
+   <table id="datatype-table">
+    <title>Data Types</title>
+    <tgroup cols="3">
+     <thead>
+      <row>
+       <entry>Name</entry>
+       <entry>Aliases</entry>
+       <entry>Description</entry>
+      </row>
+     </thead>
+
+     <tbody>
+      <row>
+       <entry><type>bigint</type></entry>
+       <entry><type>int8</type></entry>
+       <entry>signed eight-byte integer</entry>
+      </row>
+
+      <row>
+       <entry><type>bit [ (<replaceable>n</replaceable>) ]</type></entry>
+       <entry></entry>
+       <entry>fixed-length bit string</entry>
+      </row>
+
+      <row>
+       <entry><type>bit varying [ (<replaceable>n</replaceable>) ]</type></entry>
+       <entry><type>varbit [ (<replaceable>n</replaceable>) ]</type></entry>
+       <entry>variable-length bit string</entry>
+      </row>
+
+      <row>
+       <entry><type>integer</type></entry>
+       <entry><type>int</type>, <type>int4</type></entry>
+       <entry>signed four-byte integer</entry>
+      </row>
+
+      <row>
+       <entry><type>timestamp [ (<replaceable>p</replaceable>) ] with time zone</type></entry>
+       <entry><type>timestamptz</type></entry>
+       <entry>date and time, including time zone</entry>
+      </row>
+     </tbody>
+    </tgroup>
+   </table>
+ </sect1>
+
+ <sect1 id="datatype-numeric">
+  <title>Numeric Types</title>
+  <para>
+   The types <type>integer</type> and <type>bigint</type> store whole numbers. A <type>bigint</type> is wider than an
+   <type>integer</type>.
+  </para>
+ </sect1>
+
+ <sect1 id="datatype-bit">
+  <title>Bit String Types</title>
+  <para>
+   <type>bit</type> and <type>bit varying</type> hold bit strings. A <type>bit</type> value has a fixed length.
+  </para>
+ </sect1>
+
+ <sect1 id="datatype-pseudo">
+  <title>Pseudo-Types</title>
+
+    <table id="datatype-pseudotypes-table">
+     <title>Pseudo-Types</title>
+     <tgroup cols="2">
+      <thead>
+       <row>
+        <entry>Name</entry>
+        <entry>Description</entry>
+       </row>
+      </thead>
+      <tbody>
+       <row>
+        <entry><type>record</type></entry>
+        <entry>Identifies a function taking or returning an unspecified row type.</entry>
+       </row>
+      </tbody>
+     </tgroup>
+    </table>
+ </sect1>
+</chapter>

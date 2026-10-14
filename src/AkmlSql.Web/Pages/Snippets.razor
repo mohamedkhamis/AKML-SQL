@@ -10,12 +10,14 @@
 @using AkmlSql.Web.Services
 @using AkmlSql.Web.Shared
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.DependencyInjection
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject ISnippetStore SnippetStore
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IJSRuntime JS
 @inject IDialogService Dialogs
+@inject IServiceProvider Services
 
 <PageTitle>Snippets — AKML SQL</PageTitle>
 
@@ -25,6 +27,11 @@
         <h1 class="akml-page-title" data-testid="page-title">Snippets</h1>
         <span class="akml-page-spacer"></span>
         <div class="akml-page-actions" data-testid="page-actions">
+            <select class="akml-select" value="@_kindFilter" @onchange="OnKindFilterChanged" aria-label="Show snippets for" data-testid="snippet-kind-filter">
+                <option value="-1">All databases</option>
+                <option value="0">SQL Server</option>
+                <option value="1">PostgreSQL</option>
+            </select>
             <button type="button" class="akml-btn" @onclick="NewSnippet" data-testid="snippet-new">New</button>
             <label class="akml-btn">
                 Import
@@ -45,13 +52,17 @@
             {
                 <li class="akml-empty" data-testid="snippet-loading" role="status"><Icon Name="loader-circle" Class="akml-spin" /><span>Loading snippets…</span></li>
             }
-            @foreach (var s in _all)
+            @foreach (var s in Visible)
             {
                 <li class="akml-list-row akml-snippets-row @(IsSelected(s) ? "is-selected" : null)" role="option" aria-selected="@(IsSelected(s) ? "true" : "false")"
                     data-testid="snippet-row" data-shortcode="@s.Metadata.Shortcode"
                     @onclick="@(() => SelectSnippet(s))">
                     <span class="akml-snippets-code">@s.Metadata.Shortcode</span>
                     <span class="akml-snippets-name">@s.Metadata.Title</span>
+                    @if (s.Metadata.Kind == 1)
+                    {
+                        <span class="akml-snippets-badge" data-testid="snippet-kind-badge">PostgreSQL</span>
+                    }
                     @if (s.IsBuiltIn)
                     {
                         <span class="akml-snippets-badge">built-in</span>
@@ -164,7 +175,24 @@
     private string _editDescription = string.Empty;
     private string _editBody = string.Empty;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    // Spec 042 (FR-066): -1 shows every snippet, 0 SQL Server's, 1 PostgreSQL's. It starts at the connection's kind.
+    private int _kindFilter = -1;
+
+    private IEnumerable<WebSnippet> Visible => _all.Where(s => _kindFilter < 0 || s.Metadata.Kind == _kindFilter);
+
+    private void OnKindFilterChanged(ChangeEventArgs e)
+    {
+        _kindFilter = int.TryParse(e.Value?.ToString(), out var v) ? v : -1;
+        if (_selected != null && _kindFilter >= 0 && _selected.Metadata.Kind != _kindFilter) _selected = null;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // the connection is optional here: with none (or in a host that has none) every snippet shows
+        var connection = Services.GetService<ISqlConnectionService>();
+        _kindFilter = connection is { IsConnected: true } ? (int)connection.Kind : -1;
+        await RefreshAsync();
+    }
 
     private bool _loaded;
 
@@ -200,7 +228,7 @@
 
     private void NewSnippet()
     {
-        _selected = new WebSnippet { Metadata = new WebSnippetMetadata { Shortcode = "", Title = "New snippet" } };
+        _selected = new WebSnippet { Metadata = new WebSnippetMetadata { Shortcode = "", Title = "New snippet", Kind = _kindFilter == 1 ? 1 : 0 } };
         _editShortcode = string.Empty;
         _editTitle = "New snippet";
         _editDescription = string.Empty;

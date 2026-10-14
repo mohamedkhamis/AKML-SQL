@@ -1,7 +1,7 @@
 # PostgreSQL reference generator (spec 042)
 
 `AkmlSql.PostgreSql.ReferenceGen` builds the PostgreSQL reference that completion, quick info and signature help
-use (FR-050 to FR-054). It reads checked-out PostgreSQL source trees and writes three committed outputs. It is a
+use (FR-050 to FR-054). It reads checked-out PostgreSQL source trees and writes four committed outputs. It is a
 developer tool, run by hand when the reference needs to change (a new PostgreSQL release, a fixed omission). It is
 in the solution so it builds with it, but it is never part of the installer.
 

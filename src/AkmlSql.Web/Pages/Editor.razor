@@ -1556,7 +1556,8 @@
     // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
     private async Task OpenSurroundPickerAsync()
     {
-        var all = await Snippets.ListAsync();
+        // Spec 042 (FR-066): a snippet is offered only in its own dialect.
+        var all = await Snippets.ListAsync(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer);
         _surroundSnippets = all.Where(s => s.Metadata.SurroundsWith).ToList();
         _showSurroundPicker = true;
         StateHasChanged();
