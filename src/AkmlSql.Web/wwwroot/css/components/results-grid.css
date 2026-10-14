@@ -37,6 +37,17 @@
     font-size: var(--akml-type-chrome-size);
     flex: 0 0 auto;
 }
+/* Why a result cannot be edited (spec 042, FR-130): a quiet note in the place the legend takes when it can. */
+.akml-results-readonly {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px var(--akml-scalar-spacing-s);
+    border-bottom: 1px solid var(--akml-border-subtle);
+    color: var(--akml-text-secondary);
+    font-size: var(--akml-type-chrome-size);
+    flex: 0 0 auto;
+}
 .akml-legend-chip { color: var(--akml-text-secondary); }
 .akml-legend-chip.akml-row-edited { color: var(--akml-statustext-warning); box-shadow: none; }
 .akml-legend-chip.akml-row-new { color: var(--akml-statustext-success); box-shadow: none; }

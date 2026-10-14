@@ -1370,8 +1370,8 @@ AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_u
 AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "")
 AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "1kloetf1..sql")
 AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "dwnhdxfq...sql")
-AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "dwnhdxfq.sql")
-AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "DWNHDXFQ.SQL") [#2]
+AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "DWNHDXFQ.SQL")
+AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "dwnhdxfq.sql") [#2]
 AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "epxoezf5..sql")
 AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "km1kjagk..sql")
 AkmlSql.Engine.Tests.History.QuerySessionNamerTests.IsScratchTabTitle_true_for_unsaved_scratch_documents(title: "mbucdkb4..sql")
@@ -1614,6 +1614,58 @@ AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.The_host_is_matched_ca
 AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.The_key_is_the_host_port_and_user_so_other_servers_and_users_do_not_match
 AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.The_stored_file_holds_no_clear_text_password
 AkmlSql.Engine.Tests.PostgreSql.PgCredentialResolverTests.Without_a_remembered_password_the_string_is_unchanged_and_nothing_is_injected
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_cell_without_a_type_is_refused_because_the_cast_needs_one
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_composite_key_is_every_column_joined_with_AND
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_delete_is_keyed_by_the_original_key
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_delete_returns_nothing
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_keyless_update_or_delete_is_refused_so_a_whole_table_is_never_written
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_missing_table_or_an_unknown_operation_is_refused
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_NULL_key_cell_is_IS_NULL_and_takes_no_parameter
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_table_without_a_schema_is_written_unqualified
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_type_that_fails_the_check_is_refused_by_Build_and_never_reaches_the_statement
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.A_value_that_looks_like_SQL_is_a_parameter_and_never_part_of_the_statement
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.An_absurdly_long_type_name_is_refused
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.An_insert_lists_the_columns_and_casts_each_value
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.An_insert_returns_the_written_row_by_the_columns_the_grid_names
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.An_update_returns_the_written_row_too_so_what_a_trigger_changed_is_shown
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.An_update_sets_by_parameter_with_casts_and_is_keyed_by_the_original_key
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.An_update_with_nothing_to_set_and_an_insert_with_no_values_are_refused
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "   ")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "$1")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "\"a\" \"b\"; DROP")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "\"unterminated")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "integer -- note")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "integer /* c */")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "text'")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "text); DROP TABLE orders; --")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "text; SELECT 1")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "text\\")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Anything_that_could_end_the_cast_or_start_another_statement_is_refused(type: "text\nSELECT")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Names_are_quoted_only_when_they_need_it
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "\"odd\"\"name\"")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "\"Sales\".\"order status\"")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "\"semi;colon\"")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "bigint")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "bytea")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "character varying(10)[]")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "character varying(40)")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "character(5)")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "double precision")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "integer")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "integer[]")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "interval day to second(3)")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "jsonb")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "numeric(10, 2)")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "numeric(10,2)")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "public.mood")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "text[][]")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "time with time zone")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "timestamp without time zone")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "timestamp(3) with time zone")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Real_type_names_pass(type: "uuid")
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.Setting_a_value_to_NULL_is_a_NULL_parameter_still_cast_to_the_type
+AkmlSql.Engine.Tests.PostgreSql.PgCrudWriteGeneratorTests.The_returned_columns_are_quoted_like_any_other_name_and_a_name_cannot_end_the_list
 AkmlSql.Engine.Tests.PostgreSql.PgParseRunnerTests.A_character_outside_the_basic_plane_before_the_error_keeps_the_column_right
 AkmlSql.Engine.Tests.PostgreSql.PgParseRunnerTests.A_GO_line_gets_the_SQL_Server_hint_beside_the_not_checked_text
 AkmlSql.Engine.Tests.PostgreSql.PgParseRunnerTests.An_empty_script_has_nothing_to_check
@@ -1993,8 +2045,8 @@ AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeNa
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "int", maxLength: 0, precision: 0, scale: 0, expected: "int")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nchar", maxLength: 20, precision: 0, scale: 0, expected: "nchar(20)")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "numeric", maxLength: 0, precision: 12, scale: 3, expected: "numeric(12,3)")
-AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nvarchar", maxLength: -1, precision: 0, scale: 0, expected: "nvarchar(MAX)")
-AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "NVARCHAR", maxLength: -1, precision: 0, scale: 0, expected: "NVARCHAR(MAX)") [#2]
+AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "NVARCHAR", maxLength: -1, precision: 0, scale: 0, expected: "NVARCHAR(MAX)")
+AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nvarchar", maxLength: -1, precision: 0, scale: 0, expected: "nvarchar(MAX)") [#2]
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "nvarchar", maxLength: 50, precision: 0, scale: 0, expected: "nvarchar(50)")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "uniqueidentifier", maxLength: 0, precision: 0, scale: 0, expected: "uniqueidentifier")
 AkmlSql.Engine.Tests.Schema.Models.DatabaseObjectTests.Column_TypeDisplay(typeName: "varbinary", maxLength: -1, precision: 0, scale: 0, expected: "varbinary(MAX)")

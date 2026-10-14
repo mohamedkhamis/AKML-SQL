@@ -54,9 +54,12 @@ public sealed class PgExecuteRunner
     /// <param name="cancel">The user's cancel.</param>
     /// <param name="schemaChanged">Called once, after the run, when a statement that changes the catalog succeeded (FR-043).
     /// A failure further on does not take it back: the earlier statement is applied.</param>
+    /// <param name="includeProvenance">True when the client wants to edit results (FR-130): the result sets of statements that return
+    /// a table's rows say where each column comes from and whether the set can be edited, or why it cannot.</param>
     /// <returns>The reply, with <see cref="ExecuteQueryResult.TransactionState"/> set; never throws for a failing statement.</returns>
     public async Task<ExecuteQueryResult> RunAsync(NpgsqlConnection connection, string sql, TransactionState transaction,
-        int maxRows, int commandTimeoutSeconds, TimeSpan? scriptLimit, CancellationToken cancel, Action? schemaChanged = null)
+        int maxRows, int commandTimeoutSeconds, TimeSpan? scriptLimit, CancellationToken cancel, Action? schemaChanged = null,
+        bool includeProvenance = false)
     {
         sql ??= string.Empty;
         var outcome = new ExecuteOutcome();
@@ -107,7 +110,7 @@ public sealed class PgExecuteRunner
                 var statement = statements[i];
                 outcome.BeginBatch(spans[i], 1);
                 var timer = Stopwatch.StartNew();
-                var fate = await RunStatementAsync(connection, sql, statement, state, maxRows, commandTimeoutSeconds, outcome, ct)
+                var fate = await RunStatementAsync(connection, sql, statement, state, maxRows, commandTimeoutSeconds, outcome, includeProvenance, ct)
                     .ConfigureAwait(false);
                 state = fate.State;
                 outcome.EndBatch(timer.ElapsedMilliseconds);
@@ -184,7 +187,7 @@ public sealed class PgExecuteRunner
     }
 
     private async Task<StatementFate> RunStatementAsync(NpgsqlConnection connection, string script, PgStatement statement,
-        TransactionState state, int maxRows, int timeoutSeconds, ExecuteOutcome outcome, CancellationToken ct)
+        TransactionState state, int maxRows, int timeoutSeconds, ExecuteOutcome outcome, bool includeProvenance, CancellationToken ct)
     {
         // Never sent: what is not SQL, or needs the client to stream data (FR-019).
         if (statement.IsMetaCommand || PgStatementInspector.UsesClientCopy(statement.Text))
@@ -203,15 +206,24 @@ public sealed class PgExecuteRunner
                 // The server formats every value as text, as psql prints it (FR-018).
                 AllResultTypesAreUnknown = true,
             };
-            await using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
 
-            do
+            // Where the columns come from is asked only for a statement that returns a table's rows, and only when the client
+            // wants to edit: it costs one catalog round trip once the rows are read.
+            var collector = includeProvenance && PgStatementInspector.ReturnsRowsOfATable(statement.Text) ? new PgProvenanceCollector() : null;
+            string? tag;
+            await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             {
-                if (reader.FieldCount > 0) await _reader.ReadSetAsync(reader, maxRows, outcome, ct).ConfigureAwait(false);
-            }
-            while (await reader.NextResultAsync(ct).ConfigureAwait(false));
+                do
+                {
+                    if (reader.FieldCount > 0) await _reader.ReadSetAsync(reader, maxRows, outcome, ct, collector).ConfigureAwait(false);
+                }
+                while (await reader.NextResultAsync(ct).ConfigureAwait(false));
 
-            var tag = ReportTag(reader, statement, outcome);
+                tag = ReportTag(reader, statement, outcome);
+            }
+
+            // The reader is closed, so the connection can answer the catalog question (primary key, kind of relation).
+            if (collector != null) await collector.ResolveAsync(connection, ct).ConfigureAwait(false);
             return new StatementFate(Fate.Ran, PgTransactionTracker.Next(state, statement.Text, succeeded: true, sqlState: null), tag);
         }
         catch (PostgresException ex)

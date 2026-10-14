@@ -238,7 +238,7 @@ namespace AkmlSql.Engine.Execution
                         // The gate is held: only now can a cancel reach this execute.
                         sessionConn.RegisterQuery(queryId, cts);
                         var run = await _postgresRunner.RunAsync(conn, req.Sql, sessionConn.TransactionState, maxRows, timeoutSec, null, cts.Token,
-                                _schemaChanged == null ? null : () => _schemaChanged(req.SessionId))
+                                _schemaChanged == null ? null : () => _schemaChanged(req.SessionId), req.IncludeProvenance)
                             .ConfigureAwait(false);
                         sessionConn.TransactionState = (TransactionState)run.TransactionState;
                         return run;

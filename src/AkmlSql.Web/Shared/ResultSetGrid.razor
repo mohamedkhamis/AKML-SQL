@@ -30,6 +30,13 @@
     if (!_pointerRender) _rowRenderVersion++;
     _pointerRender = false;
 }
+@* Why the result cannot be edited (spec 042, FR-130): shown when the engine gave a reason; SQL Server results carry none. *@
+@if (!set.IsEditable && !string.IsNullOrEmpty(set.ReadOnlyReason))
+{
+    <div class="akml-results-readonly" role="note" data-testid="results-readonly-reason">
+        <Icon Name="info" Size="12" /> <span>Read-only: @set.ReadOnlyReason</span>
+    </div>
+}
 @* CRUD legend — only when the set is editable. Each chip pairs a glyph with the colour. *@
 @if (set.IsEditable)
 {
@@ -1370,7 +1377,7 @@
     /// given only for a column that comes from a table, so exotic sources show no false reason (R14).</summary>
     private string? SetNullBlockedReason(int row, int col)
     {
-        if (!Set.IsEditable) return "This result can't be edited.";
+        if (!Set.IsEditable) return Set.ReadOnlyReason ?? "This result can't be edited.";
         if (_deletes.Contains(row)) return "The row is marked for deletion.";
         if (!IsColumnEditable(col)) return $"{ColumnLabel(col)} can't be edited.";
         if (AllowsNull(col) == false) return $"{ColumnLabel(col)} does not allow NULL.";
@@ -1385,7 +1392,8 @@
         var reason = SetNullBlockedReason(row, f.Col);
         if (reason != null)
         {
-            if (Set.IsEditable) Notify(reason, NotificationKind.Info);
+            // A read-only result stays quiet unless the engine said why (spec 042): then the key press gets its answer.
+            if (Set.IsEditable || !string.IsNullOrEmpty(Set.ReadOnlyReason)) Notify(reason, NotificationKind.Info);
             return;
         }
         CommitEdit(row, f.Col, null);
@@ -1588,7 +1596,8 @@
     /// replaces these rows. Server-filled identity/computed values on INSERT aren't known here — a
     /// manual re-Execute surfaces them.
     /// </summary>
-    private void BakeCommittedChangesIntoSet(ExecuteResultSet set)
+    private void BakeCommittedChangesIntoSet(ExecuteResultSet set, IReadOnlyDictionary<int, string?[]>? storedUpdates = null,
+        IReadOnlyDictionary<int, string?[]>? storedInserts = null)
     {
         int colCount = set.ColumnNames.Length;
         var rows = new List<string?[]>(set.Rows.Length + _inserts.Count);
@@ -1601,17 +1610,37 @@
                 foreach (var (c, v) in rowEdits)
                     if (c >= 0 && c < row.Length) row[c] = v;
             }
+            // Spec 042 (FR-133): a PostgreSQL write returns the row as the server stored it (defaults, a trigger's changes,
+            // the form the type prints in); that replaces what was typed.
+            if (storedUpdates != null && storedUpdates.TryGetValue(r, out var storedRow)) OverlayStored(row, storedRow);
             rows.Add(row);
         }
-        foreach (var ins in _inserts)                            // committed inserts → append rows
+        for (int i = 0; i < _inserts.Count; i++)                 // committed inserts → append rows
         {
             var row = new string?[colCount];
-            foreach (var (c, v) in ins)
+            foreach (var (c, v) in _inserts[i])
                 if (c >= 0 && c < colCount) row[c] = v;
+            if (storedInserts != null && storedInserts.TryGetValue(i, out var storedRow)) OverlayStored(row, storedRow);
             rows.Add(row);
         }
         set.Rows = rows.ToArray();
     }
+
+    /// <summary>Writes a returned row's values over the cells of the columns that were asked for (<see cref="_returnOrdinals"/>).</summary>
+    private void OverlayStored(string?[] row, string?[] stored)
+    {
+        for (int k = 0; k < stored.Length && k < _returnOrdinals.Length; k++)
+        {
+            int c = _returnOrdinals[k];
+            if (c >= 0 && c < row.Length) row[c] = stored[k];
+        }
+    }
+
+    /// <summary>What each edit of the request in flight stands for, in request order, so a result can be matched back to its row.</summary>
+    private readonly List<(int Op, int Index)> _applyTargets = new();
+
+    /// <summary>Result-column ordinals of the columns the request asked the server to return, in the same order.</summary>
+    private int[] _returnOrdinals = System.Array.Empty<int>();
 
     private async Task ApplyEditsAsync()
     {
@@ -1631,7 +1660,16 @@
             {
                 // Reflect the committed changes in-memory BEFORE clearing the overlay so the grid shows
                 // the new values even when the page declines to re-run the query (multi-statement batch).
-                BakeCommittedChangesIntoSet(set);
+                var storedUpdates = new Dictionary<int, string?[]>();
+                var storedInserts = new Dictionary<int, string?[]>();
+                foreach (var edit in result.Results ?? System.Array.Empty<CrudEditResult>())
+                {
+                    if (!edit.Ok || edit.Row == null || edit.Index < 0 || edit.Index >= _applyTargets.Count) continue;
+                    var (op, index) = _applyTargets[edit.Index];
+                    if (op == CrudOp.Update) storedUpdates[index] = edit.Row;
+                    else if (op == CrudOp.Insert) storedInserts[index] = edit.Row;
+                }
+                BakeCommittedChangesIntoSet(set, storedUpdates, storedInserts);
                 ResetEditState();
                 RebuildRowIndexes();             // deletes/inserts changed the row set.
                 _layout.SetRowCount(set.Rows.Length);
@@ -1668,6 +1706,7 @@
     private ApplyChangesRequest BuildApplyRequest(ExecuteResultSet set)
     {
         var edits = new List<CrudEditDto>();
+        _applyTargets.Clear();
 
         // Key columns: prefer true PK; fall back to any IsKey column.
         var keyProv = set.Provenance.Where(p => p.IsTruePrimaryKey).ToList();
@@ -1691,6 +1730,7 @@
                 Op = CrudOp.Delete,
                 KeyCells = keyProv.Select(p => KeyCell(set, rowIdx, p)).ToArray(),
             });
+            _applyTargets.Add((CrudOp.Delete, rowIdx));
         }
 
         // Updates (skip rows also marked for delete).
@@ -1702,6 +1742,7 @@
                 .Select(e => new CrudCellDto
                 {
                     BaseColumnName = set.Provenance[e.Key].BaseColumnName!,
+                    TypeName = DeclaredTypeOrNull(set.Provenance[e.Key].Ordinal),
                     ProviderType = set.Provenance[e.Key].ProviderType,
                     Size = set.Provenance[e.Key].ColumnSize,
                     Precision = set.Provenance[e.Key].Precision,
@@ -1716,11 +1757,13 @@
                 SetCells = setCells,
                 KeyCells = keyProv.Select(p => KeyCell(set, kv.Key, p)).ToArray(),
             });
+            _applyTargets.Add((CrudOp.Update, kv.Key));
         }
 
         // Inserts.
-        foreach (var ins in _inserts)
+        for (int insIdx = 0; insIdx < _inserts.Count; insIdx++)
         {
+            var ins = _inserts[insIdx];
             var setCells = new List<CrudCellDto>();
             for (int c = 0; c < set.Provenance.Length; c++)
             {
@@ -1730,6 +1773,7 @@
                 setCells.Add(new CrudCellDto
                 {
                     BaseColumnName = p.BaseColumnName!,
+                    TypeName = DeclaredTypeOrNull(p.Ordinal),
                     ProviderType = p.ProviderType,
                     Size = p.ColumnSize,
                     Precision = p.Precision,
@@ -1739,7 +1783,15 @@
             }
             if (setCells.Count == 0) continue;
             edits.Add(new CrudEditDto { Op = CrudOp.Insert, SetCells = setCells.ToArray() });
+            _applyTargets.Add((CrudOp.Insert, insIdx));
         }
+
+        // The columns a PostgreSQL write reads back from the stored row; SQL Server ignores them.
+        var returned = set.Provenance
+            .Where(p => !p.IsExpression && !string.IsNullOrEmpty(p.BaseColumnName))
+            .OrderBy(p => p.Ordinal)
+            .ToArray();
+        _returnOrdinals = returned.Select(p => p.Ordinal).ToArray();
 
         return new ApplyChangesRequest
         {
@@ -1749,12 +1801,21 @@
             BaseSchema = set.BaseSchema ?? string.Empty,
             BaseTable = set.BaseTable ?? string.Empty,
             Edits = edits.ToArray(),
+            ReturnColumns = returned.Select(p => p.BaseColumnName!).ToArray(),
         };
     }
 
-    private static CrudCellDto KeyCell(ExecuteResultSet set, int rowIdx, ColumnProvenanceDto p) => new()
+    /// <summary>The column's declared type as the engine printed it ("numeric(10,2)", "text[]"); the PostgreSQL write casts to it.</summary>
+    private string? DeclaredTypeOrNull(int ordinal)
+    {
+        var type = Set.ColumnSqlTypes.ElementAtOrDefault(ordinal);
+        return string.IsNullOrWhiteSpace(type) ? null : type;
+    }
+
+    private CrudCellDto KeyCell(ExecuteResultSet set, int rowIdx, ColumnProvenanceDto p) => new()
     {
         BaseColumnName = p.BaseColumnName!,
+        TypeName = DeclaredTypeOrNull(p.Ordinal),
         ProviderType = p.ProviderType,
         Size = p.ColumnSize,
         Precision = p.Precision,

@@ -655,4 +655,182 @@ public sealed class PostgresWorkspaceTests
         await Assertions.Expect(page.Locator("[data-testid='refactor-menu']")).ToHaveCountAsync(0);
         await page.Keyboard.PressAsync("Escape");
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+    // User story 6 (task T137, quickstart US6, SC-014): edit PostgreSQL results in place.
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+    private static ILocator GridCell(IPage page, int r, int c) => page.Locator($"[data-testid='results-cell-{r}-{c}']");
+
+    private static async Task ApplyAndWaitAsync(IPage page)
+    {
+        await page.ClickAsync("[data-testid='results-apply']");
+        var bar = page.Locator("[data-testid='results-applybar']");
+        var message = page.Locator("[data-testid='results-apply-message']");
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < deadline && await bar.CountAsync() > 0 && await message.CountAsync() == 0) await Task.Delay(100);
+    }
+
+    private static async Task EditCellAsync(IPage page, int r, int c, string value)
+    {
+        await GridCell(page, r, c).ClickAsync();
+        await page.Keyboard.PressAsync("F2");
+        await page.Keyboard.PressAsync("Control+A");
+        await page.Keyboard.TypeAsync(value);
+        await page.Keyboard.PressAsync("Enter");
+    }
+
+    /// <summary>Drops the pending edits through their confirmation, as a user does before running anything else (FR-134).</summary>
+    private static async Task DiscardPendingAsync(IPage page)
+    {
+        await page.ClickAsync("[data-testid='results-discard']");
+        await page.ClickAsync("[data-testid='dialog-confirm']");
+        await Assertions.Expect(page.Locator("[data-testid='results-applybar']")).ToHaveCountAsync(0);
+    }
+
+    private async Task DropQuietlyAsync(SqlSession s, string sql)
+    {
+        try
+        {
+            if (await s.Page.Locator("[data-testid='dialog-cancel']").CountAsync() > 0) await s.Page.ClickAsync("[data-testid='dialog-cancel']");
+            if (await s.Page.Locator("[data-testid='results-discard']").CountAsync() > 0) await DiscardPendingAsync(s.Page);
+            await s.Page.ClickAsync("nav >> text=Editor");
+            await s.ExecuteAsync(sql);
+        }
+        catch (Exception ex) { SqlSession.Log(_output, "[cleanup] " + ex.Message); }
+    }
+
+    [SkippableFact]
+    public async Task Edits_inserts_and_deletes_land_on_their_rows_and_the_grid_shows_what_the_server_stored()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var table = "akml_e2e_edit_" + Guid.NewGuid().ToString("N")[..8];
+        await s.ExecuteAsync(
+            $"CREATE TABLE {table} (id serial PRIMARY KEY, name text NOT NULL, price numeric(10,2), added date, tags text[]);\n" +
+            $"INSERT INTO {table} (name, price, added, tags) VALUES ('Ada', 9.5, '2026-01-02', '{{a,b}}'), ('Alan', NULL, '2026-01-03', NULL), ('Grace', 3.25, NULL, '{{z}}');");
+        try
+        {
+            await s.ExecuteAsync($"SELECT id, name, price, added, tags FROM {table} ORDER BY id;");
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-legend']")).ToBeVisibleAsync();
+
+            await EditCellAsync(s.Page, 0, 2, "5");                          // numeric(10,2): stored as 5.00
+            await GridCell(s.Page, 0, 3).ClickAsync();
+            await s.Page.Keyboard.PressAsync("Control+0");                   // Set to NULL
+            await Assertions.Expect(GridCell(s.Page, 0, 3)).ToHaveTextAsync("NULL");
+            await EditCellAsync(s.Page, 1, 4, "{x,\"y z\"}");                // an array, typed as PostgreSQL prints it
+            await s.Page.ClickAsync("[data-testid='results-delete-2']");     // Grace goes
+            await s.Page.ClickAsync("[data-testid='results-add-row']");
+            await s.Page.ClickAsync("[data-testid='results-insert-cell-0-1']");
+            await s.Page.Keyboard.TypeAsync("Edsger");
+            await s.Page.Keyboard.PressAsync("Enter");
+            await s.Page.ClickAsync("[data-testid='results-insert-cell-0-2']");
+            await s.Page.Keyboard.TypeAsync("7.5");
+            await s.Page.Keyboard.PressAsync("Enter");
+
+            await ApplyAndWaitAsync(s.Page);
+
+            Assert.Equal(0, await s.Page.Locator("[data-testid='results-applybar']").CountAsync());
+            Assert.Equal(0, await s.Page.Locator("[data-testid='results-apply-message'].akml-connmgr-msg-error").CountAsync());
+            await Assertions.Expect(GridCell(s.Page, 0, 2)).ToHaveTextAsync("5.00");        // what the server stored, not what was typed
+            await Assertions.Expect(GridCell(s.Page, 2, 1)).ToHaveTextAsync("Edsger");
+            await Assertions.Expect(GridCell(s.Page, 2, 2)).ToHaveTextAsync("7.50");
+            Assert.Matches(@"^\d+$", (await GridCell(s.Page, 2, 0).InnerTextAsync()).Trim());   // the serial the server gave it
+
+            // The table itself, read back by a new query.
+            await s.ExecuteAsync($"SELECT id, name, price::text, added::text, tags::text FROM {table} ORDER BY id;");
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-rowcount']")).ToContainTextAsync("3 rows");
+            var rows = new List<string[]>();
+            for (var r = 0; r < 3; r++)
+            {
+                var row = new string[5];
+                for (var c = 0; c < 5; c++) row[c] = (await GridCell(s.Page, r, c).InnerTextAsync()).Trim();
+                rows.Add(row);
+            }
+            Assert.Equal(new[] { "1", "Ada", "5.00", "NULL", "{a,b}" }, rows[0]);
+            Assert.Equal(new[] { "2", "Alan", "NULL", "2026-01-03", "{x,\"y z\"}" }, rows[1]);
+            Assert.Equal("Edsger", rows[2][1]);
+            Assert.Equal("7.50", rows[2][2]);
+        }
+        finally
+        {
+            await DropQuietlyAsync(s, $"DROP TABLE IF EXISTS {table};");
+        }
+    }
+
+    [SkippableFact]
+    public async Task A_join_a_view_an_aggregate_and_a_table_without_a_key_are_read_only_and_say_why()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var table = "akml_e2e_ro_" + Guid.NewGuid().ToString("N")[..8];
+        await s.ExecuteAsync(
+            $"CREATE TABLE {table} (id int PRIMARY KEY, name text); CREATE TABLE {table}_loose (x int, y text);\n" +
+            $"CREATE VIEW {table}_v AS SELECT id, name FROM {table};\n" +
+            $"INSERT INTO {table} VALUES (1, 'a'); INSERT INTO {table}_loose VALUES (1, 'b');");
+        try
+        {
+            var note = s.Page.Locator("[data-testid='results-readonly-reason']");
+            var cases = new (string Sql, string Reason)[]
+            {
+                ($"SELECT a.id, a.name, b.y FROM {table} a JOIN {table}_loose b ON b.x = a.id;", "more than one table"),
+                ($"SELECT id, name FROM {table}_v;", "view"),
+                ($"SELECT count(*) AS n FROM {table};", "not a table"),
+                ($"SELECT x, y FROM {table}_loose;", "no primary key"),
+                ($"SELECT name FROM {table};", "primary key"),
+            };
+            foreach (var (sql, reason) in cases)
+            {
+                await s.ExecuteAsync(sql);
+                await Assertions.Expect(note).ToContainTextAsync(reason, new() { IgnoreCase = true });
+                await Assertions.Expect(s.Page.Locator("[data-testid='results-legend']")).ToHaveCountAsync(0);
+                await Assertions.Expect(s.Page.Locator("[data-testid='results-add-row']")).ToHaveCountAsync(0);
+            }
+
+            await s.ExecuteAsync($"SELECT id, name FROM {table};");      // and the plain one is editable, with no note
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-legend']")).ToBeVisibleAsync();
+            await Assertions.Expect(note).ToHaveCountAsync(0);
+        }
+        finally
+        {
+            await DropQuietlyAsync(s, $"DROP VIEW IF EXISTS {table}_v; DROP TABLE IF EXISTS {table}, {table}_loose;");
+        }
+    }
+
+    [SkippableFact]
+    public async Task Text_the_column_cannot_read_and_a_row_that_vanished_are_reported_and_nothing_else_is_written()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var table = "akml_e2e_fail_" + Guid.NewGuid().ToString("N")[..8];
+        await s.ExecuteAsync(
+            $"CREATE TABLE {table} (id int PRIMARY KEY, name text NOT NULL, price numeric(10,2));\n" +
+            $"INSERT INTO {table} VALUES (1, 'one', 1), (2, 'two', 2);");
+        try
+        {
+            // Invalid text: the server's own message, the edit stays pending, nothing is written.
+            await s.ExecuteAsync($"SELECT id, name, price FROM {table} ORDER BY id;");
+            await EditCellAsync(s.Page, 0, 1, "uno");
+            await EditCellAsync(s.Page, 1, 2, "abc");
+            await ApplyAndWaitAsync(s.Page);
+            var message = s.Page.Locator("[data-testid='results-apply-message']");
+            await Assertions.Expect(message).ToContainTextAsync("invalid input syntax for type numeric");
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-applybar']")).ToBeVisibleAsync();
+            await DiscardPendingAsync(s.Page);
+            await s.ExecuteAsync($"SELECT name FROM {table} WHERE id = 1;");
+            await Assertions.Expect(GridCell(s.Page, 0, 0)).ToHaveTextAsync("one");
+
+            // A row deleted after the grid read it: the apply is refused, the other edit is not kept.
+            await s.ExecuteAsync($"SELECT id, name, price FROM {table} ORDER BY id; DELETE FROM {table} WHERE id = 1;");
+            await EditCellAsync(s.Page, 0, 1, "uno");
+            await EditCellAsync(s.Page, 1, 1, "dos");
+            await ApplyAndWaitAsync(s.Page);
+            await Assertions.Expect(message).ToContainTextAsync("0 row(s)");
+            await Assertions.Expect(message).ToContainTextAsync("exactly 1");
+            await DiscardPendingAsync(s.Page);
+            await s.ExecuteAsync($"SELECT name FROM {table};");
+            await Assertions.Expect(GridCell(s.Page, 0, 0)).ToHaveTextAsync("two");        // row 2 kept its old value
+        }
+        finally
+        {
+            await DropQuietlyAsync(s, $"DROP TABLE IF EXISTS {table};");
+        }
+    }
 }

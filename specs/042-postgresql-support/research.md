@@ -194,6 +194,34 @@ rolls back everything and names the row (FR-131). `CrudCellDto` carries the type
 for the casts. **SPIKE S6**: confirm when Npgsql populates `BaseTableName` / `IsKey` (with or
 without `CommandBehavior.KeyInfo`) before freezing `IsEditable`.
 
+**SPIKE S6 result (2026-10-14, task T132, Npgsql with PostgreSQL 18, `PgColumnSchemaSpikeTests`).**
+
+| Query | Without `KeyInfo` | With `KeyInfo` |
+|---|---|---|
+| `SELECT id, name FROM people` | `TableOID` set; base table, base schema, base column and `IsKey` empty | base table `people`, schema `public`, base column, `IsKey` true for the primary key only |
+| `SELECT id AS person_id ...` | - | `BaseColumnName` is the real column (`id`) |
+| `SELECT upper(name) AS shout, id + 1 ...` | - | no table, no base column, `TableOID` 0, `IsKey` null |
+| a join of two tables | - | each column carries its own table, so one set names two |
+| a view | - | the view is the base relation, `IsKey` false |
+| a table with no primary key | - | the table is named, `IsKey` false everywhere |
+| a composite primary key | - | `IsKey` true on each of its columns that is in the set |
+
+Decisions that follow:
+- **As built (T138):** the engine does not use `KeyInfo` at all. The row description already carries `TableOID` and the column's
+  attribute number for every kind of relation, and the driver's own schema query skips partitioned and foreign tables (relkind `p`
+  and `f`: `A_partitioned_table_is_editable` found a set with no base table and a zero OID there). So the names, the key, nullability,
+  identity, generation and sequence defaults all come from one catalog read by `TableOID` once the reader is closed
+  (`PgProvenanceCollector`), which also opens no second connection. Needs PostgreSQL 12 or later (generated columns).
+- Provenance needs `CommandBehavior.KeyInfo` for the driver's names; without it only `TableOID` is known (kept for the record; the
+  engine does not rely on it, see above).
+- `IsIdentity` was false for a `serial` column; `IsAutoIncrement` was true. A generated column is "auto" if either is set.
+- `IsKey` marks the key columns that are present, so a composite key with one column missing still shows one `IsKey`. A set is
+  editable only when **every** primary key column of the table is present, so the engine reads the table's primary key
+  (`pg_index.indisprimary` by `TableOID`) and compares; the keyed write would otherwise match several rows (the affected-row
+  check would catch it, but the grid should say read-only up front).
+- A set is read-only, with a reason, when it names more than one table, a view, a table with no primary key, an expression, or
+  leaves out part of the primary key.
+
 ## R12. Schema metadata
 
 **Decision**: introduce `ISchemaMetadataProvider` with the four operations the engine uses

@@ -358,7 +358,7 @@ internal static class EngineHandlerRegistry
             sessionId => ctx.Sessions.KindOf(sessionId),
             // Spec 042 (FR-043): a PostgreSQL run that changed the catalog reloads that session's schema.
             sessionId => schemaRefreshService.Refresh(new RefreshRequest { SessionId = sessionId }));
-        var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections);
+        var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections, sessionId => ctx.Sessions.KindOf(sessionId));
         var executeCancelHandler = new Execution.ExecuteCancelHandler(sessionConnections);
         router.RegisterRaw(MessageTypes.ExecuteQuery,
             (msg, ct) => executeQueryHandler.HandleAsync(msg, lookupSession, ct));

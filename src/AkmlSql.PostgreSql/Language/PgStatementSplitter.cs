@@ -129,6 +129,24 @@ public static class PgStatementInspector
         return copy != null && !copy.IsProgram && string.IsNullOrEmpty(copy.Filename);
     }
 
+    /// <summary>
+    /// True when the statement's first word is <c>SELECT</c>, <c>WITH</c>, <c>TABLE</c> or <c>VALUES</c> - a statement that returns
+    /// a table's rows, for which the driver is asked where each column came from (spec 042, FR-130). Anything else, such as
+    /// <c>INSERT ... RETURNING</c> or <c>EXPLAIN</c>, returns rows that cannot be written back to a table by key.
+    /// </summary>
+    public static bool ReturnsRowsOfATable(string statementText)
+    {
+        foreach (var token in PgLexicalScanner.Scan(statementText))
+        {
+            if (token.Kind is PgTokenKind.Whitespace or PgTokenKind.LineComment or PgTokenKind.BlockComment) continue;
+            if (token.Kind != PgTokenKind.Identifier) return false;
+            var word = statementText.AsSpan(token.Start, token.End - token.Start);
+            return word.Equals("SELECT", StringComparison.OrdinalIgnoreCase) || word.Equals("WITH", StringComparison.OrdinalIgnoreCase)
+                || word.Equals("TABLE", StringComparison.OrdinalIgnoreCase) || word.Equals("VALUES", StringComparison.OrdinalIgnoreCase);
+        }
+        return false;
+    }
+
     // The first word that is not white space or a comment is COPY.
     private static bool StartsWithCopy(string text)
     {

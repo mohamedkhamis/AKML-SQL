@@ -66,6 +66,21 @@ implementation. For `RefactorPreview`, `RefactorApply`, `FindInvalidObjects`, `F
 `DocumentOutline` on a PostgreSQL session the engine replies with the `dialect.unsupported`
 error.
 
+## Appended keys for editing (user story 6, FR-130 to FR-133)
+
+All append-only; SQL Server ignores them and an older engine ignores them on a request.
+
+```text
+ExecuteResultSet      [12] ReadOnlyReason   string?   why IsEditable is false (PostgreSQL, when provenance was asked for)
+ApplyChangesRequest   [5]  ReturnColumns    string[]? the result set's base columns in result order; the write reads these back
+CrudCellDto           [6]  TypeName         string?   the column's type as the server prints it ("numeric(10,2)", "text[]"); cast target
+CrudEditResult        [5]  Row              string?[]? the written row as stored (RETURNING), in ReturnColumns order; null for a delete
+```
+
+The type name is the only piece of client text that reaches a PostgreSQL statement outside a parameter, so the engine accepts it
+only if it reads as a type name (letters, digits, `_`, space, `.`, `,`, brackets and quoted identifiers; no semicolon, comment marker,
+backslash or dollar sign) and refuses the edit otherwise.
+
 ## New messages
 
 ### 221 `CredentialRequest` → 222 `CredentialResponse`

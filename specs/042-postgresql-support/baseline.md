@@ -109,3 +109,41 @@ and the palette row is disabled with the same tooltip and never runs (`PostgresW
 
 `scripts/generate-theme-css.ps1 -CheckOnly` reports `OK` for light, dark and high contrast, and no hex or rgb colour was added to
 any component or page in this story or the one before it.
+
+## User story 6 - edit PostgreSQL results in place (2026-10-14)
+
+### SC-014 - thirty edits across ten column types land exactly
+
+`PgApplyRunnerTests.Thirty_edits_inserts_and_deletes_across_ten_column_types_land_exactly` applies 15 updates, 10 inserts and 5
+deletes in one Apply to a table of ten column types (serial, text, numeric(10,2), date, text[], jsonb, boolean, integer, uuid,
+timestamptz). The same changes are written as plain statements to a twin table, and the two tables must have the same checksum of
+all their rows; they do. Every value was typed the way PostgreSQL prints it and converted by the server.
+
+Also against the live server: the written row comes back as stored (`5` typed, `5.00` returned; a trigger's upper-casing; the
+sequence's next value and the column default for an insert), composite and quoted keys, a key that changed or vanished (the
+failing edit and the rest named, nothing kept), NOT NULL, bad text, unique and check violations with the server's own words, a
+failure in the middle of 3 edits, a key-less update refused, a type name that tries to end the cast refused, the user's open
+transaction joined and left open (and a failure undoing only the apply), an aborted transaction refused with the advice to roll back.
+
+### FR-130 - which results can be edited
+
+`PgResultSetProvenanceTests` (22 cases): editable for a single-table SELECT with its whole primary key, also with `ORDER BY` and
+`LIMIT`, with an alias, beside an expression, for a composite key, quoted mixed-case names in another schema, a partitioned table
+and a table with generated and identity columns. Read-only, each with its reason: a join, an aggregate, a constant, a view, a
+materialized view, a table with no key, part of a composite key (the missing column is named), a column twice. Nothing is collected
+when the client did not ask, or for a statement that is not a SELECT, WITH, TABLE or VALUES.
+
+One finding changed the design: the driver's own schema query does not describe partitioned or foreign tables, so the engine reads
+the names, key and defaults from the catalog by table OID and attribute number instead (research R11, spike S6).
+
+### Browser
+
+`PostgresWorkspaceTests`, three scenarios against a live server: edit, Set to NULL (Ctrl+0), insert and delete in one Apply, with
+the grid showing `5.00` and the generated key and the table read back by a new query; a join, a view, an aggregate and key-less and
+partial-key tables each read-only with the reason beside the grid; bad text and a row deleted after the grid read it, each reported in
+the server's words with nothing else written. The pending-edit confirmation still stops a run until the edits are discarded.
+
+### What the grid does not do on PostgreSQL
+
+It does not run the script again after an Apply (FR-133): the write returns the stored rows. The `QueryRefreshSafety` rule is
+unchanged for SQL Server.

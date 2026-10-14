@@ -15,7 +15,8 @@ namespace AkmlSql.Engine.PostgreSql;
 /// <para>
 /// Row and byte caps work as <see cref="ResultSetReader"/>'s do: the set is announced to the sink before its rows, rows stop
 /// at the cap or at the reply's shared byte budget, and a bounded number of the rows left over are counted so the banner
-/// can say that more exist. Editing provenance is not collected here (grid editing is a later story): the set is read-only.
+/// can say that more exist. Where the columns come from is read only when the caller passes a collector (the reader must then
+/// have been opened with KeyInfo); the collector decides editability once the connection is free. Without one the set is read-only.
 /// </para>
 /// </summary>
 public sealed class PgResultSetReader
@@ -34,7 +35,8 @@ public sealed class PgResultSetReader
     /// Reads the reader's current result set into the sink and returns it (null when the sink declined it because the
     /// reply already holds the most sets it may). The reader is left on the set's last row; the caller moves on.
     /// </summary>
-    public async Task<ExecuteResultSet?> ReadSetAsync(NpgsqlDataReader reader, int maxRows, IResultSink sink, CancellationToken ct)
+    public async Task<ExecuteResultSet?> ReadSetAsync(NpgsqlDataReader reader, int maxRows, IResultSink sink, CancellationToken ct,
+        PgProvenanceCollector? provenance = null)
     {
         var fieldCount = reader.FieldCount;
         var names = new string[fieldCount];
@@ -55,6 +57,8 @@ public sealed class PgResultSetReader
             ClrTypeHints = hints,
             IsEditable = false,
         };
+
+        if (provenance != null) await provenance.CaptureAsync(reader, set, ct).ConfigureAwait(false);
 
         // Announce the set before its rows: the statement's command tag arrives while it is current.
         if (sink.BeginSet(set) < 0)

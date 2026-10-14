@@ -1167,6 +1167,10 @@
     {
         if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
 
+        // PostgreSQL (spec 042, FR-133): the write returned the rows as the server stored them and the grid already shows
+        // them, so the script is not run again - not even a single SELECT - and only the written rows were ever read back.
+        if (DialectGate.IsPostgres) return;
+
         // Refresh by re-running the query ONLY when it is a single read-only SELECT. Re-running a
         // multi-statement batch or any mutating statement would REPEAT its side effects on the
         // persistent connection: a `CREATE TABLE #t; …; SELECT` errors ("object already exists") and,

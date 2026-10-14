@@ -1074,6 +1074,9 @@ ExecuteResultSet
                                         from when the name was two-part (a script's USE can move between sets),
                                         so Apply writes where the rows came from.
     11 BatchIndex             int       execute.v2 — the batch that produced the set.
+    12 ReadOnlyReason         string?   Spec 042 (PostgreSQL) — why IsEditable is false when provenance was asked for: not a
+                                        table, more than one table, a view, no primary key, a column twice, part of
+                                        the key missing. Null for SQL Server and for an editable set.
 
 ExecuteMessageDto (execute.v2)
     0 Kind (0 Info · 1 RowCount · 2 Error · 3 System) · 1 Text · 2 BatchIndex · 3 Number (0 for PRINT) ·
@@ -1123,8 +1126,15 @@ the session's connection; it does not interrupt a statement that is already runn
 Writes a result set's pending edits (parameterized UPDATE / INSERT / DELETE, each keyed by the fetched key
 values) in one transaction on the same persistent connection. Any failed edit rolls the whole batch back; the
 failed edit carries the error and every other edit the note "Rolled back — edit N failed.". `Status`,
-`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity }`) and
+`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity, Row }`) and
 `ConnectionWasReset`.
+
+Spec 042 adds, append-only, for a PostgreSQL session (SQL Server ignores them): `ApplyChangesRequest.ReturnColumns` (key 5, the set's
+base columns in result order) and `CrudCellDto.TypeName` (key 6, the column's type as the server prints it, which the write casts
+to), and `CrudEditResult.Row` (key 5, the written row as the server stored it, in `ReturnColumns` order, from `RETURNING`; null for
+a delete). On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
+transaction, which is joined and left open; an aborted transaction is refused with a message to roll back. Every edit must touch
+exactly one row.
 
 ### `ListDatabases` (94) → `ListDatabasesResult` (194) — `SessionId`
 

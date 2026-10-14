@@ -60,6 +60,7 @@ re-run alone before it is called a regression.
 |---|---|---|
 | US4, 2026-10-14 | 1450 / 25 / 5 / 1635 / 92 / 1407 / 985 / 2285 | none. Three tests failed in the full run and passed alone: two history timing tests that ran while other builds and tests shared the machine, and one clipboard test of the known flake (`AiChatPanelCopyButtonTests`) |
 | US5, 2026-10-14 | 1448 / 25 / 5 / 1635 / 92 / 1424 / 987 / 2298 | none. `compare.txt` in `after-us5`. Failing in the full run and failing before the feature too: `ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only` (Core), the 66 `FormatterServiceTests` sp031 baselines (Web), `PerformanceBaselineTests` (Engine) |
+| US6, 2026-10-14 | 1454 / 25 / 5 / 1635 / 92 / 1437 / 986 / 2350 | none. `compare.txt` in `after-us6`. One test failed in the full run and passed alone (9 of 9): the known clipboard flake `AiChatPanelCopyButtonTests.Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name`; nothing in `AkmlSql.Shell.Shared` changed. The failures that also failed before the feature are the same three as for US5 |
 
 Skipped by design: three `Theme` tests in Core (`[Fact(Skip = ...)]`) and `WebSocketTransportLanTests.LanMode_round_trip_wss_handshake`
 (needs elevation).
@@ -74,6 +75,7 @@ outcomes do not change.
 | `History.HistorySchemaV3Tests` (v2 to current upgrade) | expected `schema_version` `"3"` becomes `"4"` | history schema v4 adds the `kind` columns (data-model §10) |
 | `History.HistorySchemaVersionTests` | expected `schema_version` `"3"` becomes `"4"` | same |
 | `Ipc.ExecuteQueryMessagesCompatTests` (two tests) | the array length of `ExecuteMessageDto` (10) and `ExecuteQueryResult` (13) is no longer pinned; the positions of the existing keys still are | spec 042 appends keys 10 to 13 and key 13; a length pin fails on every append-only change, which is the opposite of what the test is for. The history search test beside it already pins position, not length |
+| `Ipc.ExecuteQueryMessagesCompatTests.The_result_and_set_keys_are_appended_in_contract_order` (result set part) | the array length of `ExecuteResultSet` (12) is no longer pinned; `BatchIndex` is still asserted at position 11 | spec 042 appends `ReadOnlyReason` at key 12 (user story 6); the new `EditMessagesContractTests` pins the new key by position |
 | `Ipc.HistoryUs5ContractTests.Record_request_is_draft_is_key_12` | asserts `IsDraft` is at position 12 instead of a total length of 13 | `HistoryRecordRequest` gains `Kind` at key 13 |
 | `InProcess.AllMessageTypesInProcessTests` | `RedactRequest` (223) added to `ExpectedUnwired` with its reason | the handler is task T117 (US4); the entry is removed when it lands. The credential pair (221) is registered |
 

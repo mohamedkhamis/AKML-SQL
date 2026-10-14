@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.PostgreSql;
 using MessagePack;
 using Microsoft.Data.SqlClient;
 using Serilog;
@@ -19,10 +21,15 @@ namespace AkmlSql.Engine.Execution
     public sealed class ApplyChangesHandler
     {
         private readonly SessionConnectionRegistry _registry;
+        private readonly Func<string, DatabaseKind> _kindOf;
+        private readonly PgApplyRunner _postgresRunner = new();
 
-        public ApplyChangesHandler(SessionConnectionRegistry registry)
+        /// <param name="kindOf">Spec 042: the kind of server a session is connected to; a PostgreSQL session's edits are written by
+        /// <see cref="PgApplyRunner"/>. Null means every session is SQL Server.</param>
+        public ApplyChangesHandler(SessionConnectionRegistry registry, Func<string, DatabaseKind>? kindOf = null)
         {
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+            _kindOf = kindOf ?? (_ => DatabaseKind.SqlServer);
         }
 
         public async Task<RpcMessage?> HandleAsync(
@@ -43,6 +50,9 @@ namespace AkmlSql.Engine.Execution
 
                 if (req.Edits.Length == 0)
                     return Respond(request.RequestId, new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = Array.Empty<CrudEditResult>() });
+
+                if (_kindOf(req.SessionId) == DatabaseKind.PostgreSql)
+                    return await ApplyPostgresAsync(request.RequestId, req, connStr!, ct).ConfigureAwait(false);
 
                 var sessionConn = _registry.GetOrCreate(req.SessionId, connStr!);
 
@@ -69,6 +79,20 @@ namespace AkmlSql.Engine.Execution
                 Log.Error(ex, "ApplyChanges failed");
                 return Respond(request.RequestId, Err(ExecuteStatus.Error, ex.Message));
             }
+        }
+
+        /// <summary>Spec 042 (T141): the edits of a PostgreSQL session, on its persistent connection under the same gate as its queries.</summary>
+        private async Task<RpcMessage?> ApplyPostgresAsync(int requestId, ApplyChangesRequest req, string connStr, CancellationToken ct)
+        {
+            var sessionConn = _registry.GetOrCreate(req.SessionId, connStr, DatabaseKind.PostgreSql);
+            var (result, wasReset) = await sessionConn.RunExclusivePostgresAsync(
+                connStr,
+                (conn, token) => _postgresRunner.RunAsync(conn, req, sessionConn.TransactionState, token),
+                ct).ConfigureAwait(false);
+
+            // A reopened connection lost the user's transaction, session settings and temporary tables.
+            result.ConnectionWasReset = wasReset;
+            return Respond(requestId, result);
         }
 
         private static async Task<ApplyChangesResult> ApplyOnConnectionAsync(

@@ -128,7 +128,8 @@ public class ExecuteQueryMessagesCompatTests
         Assert.Equal("db", result[12]);
 
         var set = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(new ExecuteResultSet { BatchIndex = 4 }));
-        Assert.Equal(12, set.Length);
+        // Position, not length: spec 042 appended ReadOnlyReason (12) after BatchIndex (11).
+        Assert.True(set.Length >= 12);
         Assert.Equal(4, System.Convert.ToInt32(set[11]));
     }
 

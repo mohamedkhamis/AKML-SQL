@@ -153,6 +153,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 041 — the batch (0-based, after GO splitting) that produced this set; 0 from older engines.</summary>
         [Key(11)]
         public int BatchIndex { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-130): why a PostgreSQL set cannot be edited - it joins tables, is a view, has no primary key or leaves part of
+        /// it out. Null when editable, and for SQL Server sets. The grid says it where it would otherwise only say "can't be edited".
+        /// </summary>
+        [Key(12)]
+        public string? ReadOnlyReason { get; set; }
     }
 
     /// <summary>Engine → Browser: the full execute outcome (NEVER null — a missing frame hangs the bridge).</summary>
@@ -404,6 +411,14 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public CrudEditDto[] Edits { get; set; } = System.Array.Empty<CrudEditDto>();
+
+        /// <summary>
+        /// Spec 042 (FR-133, R11): the result set's base columns, in result order. A PostgreSQL UPDATE or INSERT returns exactly these
+        /// from the written row (<c>RETURNING a, b, c</c>), so the grid shows what the server stored - defaults, generated keys, what
+        /// a trigger changed - and reads back nothing else. SQL Server ignores it. Null or empty returns nothing.
+        /// </summary>
+        [Key(5)]
+        public string[]? ReturnColumns { get; set; }
     }
 
     /// <summary>Per-edit result so the grid can flag the exact row that failed.</summary>
@@ -425,6 +440,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>SCOPE_IDENTITY() for an INSERT into an identity table, as invariant text; else null.</summary>
         [Key(4)]
         public string? NewIdentity { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-133): the written row as the server holds it, in the order of <see cref="ApplyChangesRequest.ReturnColumns"/>
+        /// (PostgreSQL <c>RETURNING</c>). Null for a delete, for SQL Server, and when no columns were asked for.
+        /// </summary>
+        [Key(5)]
+        public string?[]? Row { get; set; }
     }
 
     /// <summary>Engine → Browser: outcome of an ApplyChanges batch (NEVER null).</summary>
