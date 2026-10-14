@@ -500,8 +500,8 @@ AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_K
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_UnderscoreIdentifier(input: "FIRST_VALUE", mode: "PascalCase", expected: "FirstValue")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_UnderscoreIdentifier(input: "ROW_NUMBER", mode: "PascalCase", expected: "RowNumber")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_UnknownMode_ReturnsAsIs
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "Select", mode: "UPPERCASE", expected: "SELECT")
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "select", mode: "UPPERCASE", expected: "SELECT") [#2]
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "select", mode: "UPPERCASE", expected: "SELECT")
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "Select", mode: "UPPERCASE", expected: "SELECT") [#2]
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "SELECT", mode: "UPPERCASE", expected: "SELECT") [#3]
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.CasingEngine_CanSetIdentifierLookup
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.CasingEngine_CanSetUseCamelCaseDictionary

@@ -59,6 +59,7 @@ re-run alone before it is called a regression.
 | After | Passed (Core / IntelliSense / Analysis / Formatting / AI / Web / Shell / Engine) | Regressions |
 |---|---|---|
 | US4, 2026-10-14 | 1450 / 25 / 5 / 1635 / 92 / 1407 / 985 / 2285 | none. Three tests failed in the full run and passed alone: two history timing tests that ran while other builds and tests shared the machine, and one clipboard test of the known flake (`AiChatPanelCopyButtonTests`) |
+| US5, 2026-10-14 | 1448 / 25 / 5 / 1635 / 92 / 1424 / 987 / 2298 | none. `compare.txt` in `after-us5`. Failing in the full run and failing before the feature too: `ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only` (Core), the 66 `FormatterServiceTests` sp031 baselines (Web), `PerformanceBaselineTests` (Engine) |
 
 Skipped by design: three `Theme` tests in Core (`[Fact(Skip = ...)]`) and `WebSocketTransportLanTests.LanMode_round_trip_wss_handshake`
 (needs elevation).

@@ -583,8 +583,8 @@ AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.SearchTerm_ProducesHitS
 AkmlSql.Web.Tests.History.HistoryPreviewHighlighterTests.Segments_ConcatenateToInputVerbatim
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:\"postgresql\"", expected: 1)
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:mssql", expected: 0)
-AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:pg", expected: 1)
-AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "Kind:PG", expected: 1) [#2]
+AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "Kind:PG", expected: 1)
+AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:pg", expected: 1) [#2]
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:postgres", expected: 1)
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "kind:postgresql", expected: 1)
 AkmlSql.Web.Tests.History.WebHistoryKindSearchTests.A_kind_term_becomes_the_kind_filter_and_leaves_no_text(search: "KIND:PostgreSQL", expected: 1) [#2]
@@ -853,8 +853,8 @@ AkmlSql.Web.Tests.Services.EngineEndpointTests.A_remembered_scheme_is_tried_firs
 AkmlSql.Web.Tests.Services.EngineEndpointTests.An_ipv6_literal_is_bracketed_so_the_url_is_valid
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "::1")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "127.0.0.1")
-AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST")
-AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost") [#2]
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "localhost")
+AkmlSql.Web.Tests.Services.EngineEndpointTests.Loopback_hosts_are_recognised(host: "LOCALHOST") [#2]
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "192.168.1.10")
 AkmlSql.Web.Tests.Services.EngineEndpointTests.Non_loopback_hosts_are_not_mistaken_for_loopback(host: "engine.example.com")
@@ -953,8 +953,8 @@ AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_un
 AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "prefer")
 AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "require")
 AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "verify-ca")
-AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "verify-full")
-AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "VERIFY-FULL") [#2]
+AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "VERIFY-FULL")
+AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: "verify-full") [#2]
 AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_five_TLS_modes_and_unset_are_accepted(mode: null)
 AkmlSql.Web.Tests.Services.SavedSqlConnectionKindTests.The_port_is_unset_by_default_and_means_5432
 AkmlSql.Web.Tests.Services.SqlConnectionServicePgTests.A_blank_password_sends_no_Password_key_so_the_engine_can_use_the_remembered_one
@@ -1105,11 +1105,16 @@ AkmlSql.Web.Tests.Settings.SettingsSectionsTests.Opening_filtering_and_switching
 AkmlSql.Web.Tests.Settings.SettingsSectionsTests.Opening_filtering_and_switching_sections_writes_nothing(route: "settings/queries")
 AkmlSql.Web.Tests.Settings.SettingsSectionsTests.Queries_saves_the_default_row_limit_and_clears_the_toolbar_override
 AkmlSql.Web.Tests.Settings.SettingsSectionsTests.Schema_cache_Clear_all_names_how_many_databases_and_how_much_space
+AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.A_caller_that_passes_the_answer_needs_no_bridge_at_all
+AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.A_host_with_no_bridge_reads_as_the_capability_not_offered
 AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.An_engine_that_is_not_paired_at_all_is_asked_for_first
 AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.An_engine_without_it_is_named_with_the_capability_and_its_version
 AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.Nothing_is_shown_while_the_engine_offers_the_capability
 AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.The_bridge_helper_reads_the_capabilities_of_the_last_handshake
+AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.The_notice_follows_the_bridge_when_the_engine_reconnects_with_the_capability
 AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.The_test_id_is_the_callers
+AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.With_the_capability_on_the_bridge_the_child_content_renders_and_no_notice_does
+AkmlSql.Web.Tests.Shell.CapabilityNoticeTests.Without_it_the_original_notice_renders_in_place_of_the_child_content
 AkmlSql.Web.Tests.Shell.ConnectionManagerModalKindTests.A_failed_connect_keeps_the_dialog_open_with_the_reason
 AkmlSql.Web.Tests.Shell.ConnectionManagerModalKindTests.A_failed_test_shows_the_engines_words
 AkmlSql.Web.Tests.Shell.ConnectionManagerModalKindTests.A_new_connection_starts_as_SQL_Server_and_both_choices_are_buttons
@@ -1267,6 +1272,18 @@ AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Save as", commandId: "editor:saveas", expected: "Save as (Ctrl+Shift+S or Ctrl+K, Ctrl+A)")
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_with_keys_shows_them(name: "Save", commandId: "editor:save", expected: "Save (Ctrl+S)")
 AkmlSql.Web.Tests.Shell.ToolbarTitleTests.A_command_without_keys_shows_only_its_name
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.A_command_that_is_not_a_gated_surface_is_left_alone(commandId: "")
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.A_command_that_is_not_a_gated_surface_is_left_alone(commandId: "editor:execute")
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.A_command_that_is_not_a_gated_surface_is_left_alone(commandId: "editor:format")
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.A_command_that_is_not_a_gated_surface_is_left_alone(commandId: "view:toggle-ai")
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.A_refactor_command_that_reaches_a_PostgreSQL_connection_says_why_it_did_not_run
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.Every_unsupported_surface_is_off_for_PostgreSQL_and_on_for_SQL_Server(surface: FindInvalidObjects)
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.Every_unsupported_surface_is_off_for_PostgreSQL_and_on_for_SQL_Server(surface: Refactor)
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.On_a_PostgreSQL_connection_the_refactor_button_is_disabled_with_the_tooltip
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.On_a_SQL_Server_connection_the_button_keeps_its_own_title_and_nothing_is_marked
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.On_SQL_Server_nothing_is_ever_explained
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.The_command_ids_map_to_their_surface
+AkmlSql.Web.Tests.Shell.UnsupportedSurfaceGatingTests.The_words_are_the_ones_the_engine_and_the_rest_of_the_product_use
 AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.BuiltIns_include_the_floor_ssf_and_cte
 AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.BuiltIns_use_engine_native_placeholder_syntax_not_vscode_dialect
 AkmlSql.Web.Tests.Snippets.SnippetBuiltInsTests.Imported_snippet_with_builtin_id_is_savable_only_after_id_is_cleared
