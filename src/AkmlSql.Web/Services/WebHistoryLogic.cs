@@ -75,7 +75,8 @@ public static class WebHistoryLogic
     /// history session (<c>TabTitle</c>); a default <c>SQLQuery{n}</c> is not sent, so the session reads
     /// <c>query-NN</c> as SSMS's unsaved tabs do and can still be upgraded later.</param>
     public static HistoryRecordRequest BuildRecordRequest(
-        string sql, ExecuteQueryResult result, string? server, string? database, string? sessionKey = null, string? documentName = null) => new()
+        string sql, ExecuteQueryResult result, string? server, string? database, string? sessionKey = null, string? documentName = null,
+        AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer) => new()
     {
         SqlText = sql ?? string.Empty,
         Truncated = false,
@@ -86,6 +87,7 @@ public static class WebHistoryLogic
         Status = MapStatus(result.Status),
         ErrorMessage = result.ErrorMessage,
         Source = "web",
+        Kind = (int)kind,   // spec 042: recorded with the run, so History can tell the two apart
         SessionKey = sessionKey,
         TabTitle = string.IsNullOrWhiteSpace(documentName) || EditorDocument.IsDefaultName(documentName) ? null : documentName,
     };

@@ -78,5 +78,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(14)]
         public bool SqlOnly { get; set; }
+
+        /// <summary>Spec 042 (FR-070): only entries of this <see cref="DatabaseKind"/>; null for both kinds. Appended key.</summary>
+        [Key(15)]
+        public int? Kind { get; set; }
     }
 }

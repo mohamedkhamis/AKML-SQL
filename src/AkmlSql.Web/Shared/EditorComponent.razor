@@ -171,7 +171,15 @@
     /// running the query. Same shape as <see cref="OnTextChanged"/>.</summary>
     [Parameter] public EventCallback OnExecute { get; set; }
 
+    /// <summary>
+    /// Spec 042 (FR-060, FR-065): the database kind of the active connection. PostgreSQL highlights as PostgreSQL; SQL
+    /// Server, and no connection, keep the language the editor always had. A change reconfigures the open editor in
+    /// place, so switching connections keeps the text, caret and diagnostics.
+    /// </summary>
+    [Parameter] public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
+
     private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
+    private AkmlSql.Core.DatabaseKind _appliedKind = AkmlSql.Core.DatabaseKind.SqlServer;
     private ElementReference _host;
     private IJSObjectReference? _module;
     // Set when the page is left. Start-up awaits JS several times; leaving mid-way (e.g. the style
@@ -198,7 +206,9 @@
         // Spec 041 (R53): the editor options from Settings › Editor, applied at create and on every change.
         var options = await EditorSettings.GetAsync();
         if (_disposed) return;
-        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options));
+        var kindAtCreate = Kind;
+        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate));
+        _appliedKind = kindAtCreate;
         _appliedInitialText = seed;
         EditorSettings.Changed += OnEditorSettingsChanged;
 
@@ -216,6 +226,13 @@
             _appliedInitialText = InitialText;
             await _module.InvokeVoidAsync("setText", HostId, InitialText);
         }
+
+        // Same race for the connection kind: it may have changed while the module was loading.
+        if (!_disposed && Kind != _appliedKind)
+        {
+            _appliedKind = Kind;
+            await _module.InvokeVoidAsync("setDialect", HostId, AkmlSql.Core.DatabaseKindNames.ToName(Kind));
+        }
     }
 
     /// <summary>If the parent updates <see cref="InitialText"/> after CodeMirror is already created
@@ -227,6 +244,13 @@
         {
             _appliedInitialText = InitialText;
             await _module.InvokeVoidAsync("setText", HostId, InitialText);
+        }
+
+        // Spec 042: the active connection changed kind; reconfigure the open editor's language in place.
+        if (_initialised && _module != null && Kind != _appliedKind)
+        {
+            _appliedKind = Kind;
+            await _module.InvokeVoidAsync("setDialect", HostId, AkmlSql.Core.DatabaseKindNames.ToName(Kind));
         }
     }
 
@@ -620,6 +644,13 @@
         await _module.InvokeVoidAsync("gotoLine", HostId, lineNumber);
     }
 
+    /// <summary>Spec 042 (FR-014): put the caret at a 1-based line and column (a PostgreSQL error's position).</summary>
+    public async Task GotoPositionAsync(int lineNumber, int column)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("gotoPosition", HostId, lineNumber, column);
+    }
+
     /// <summary>Spec 041 (R39) — show findings in the editor (underline, gutter marker, message on hover),
     /// replacing any shown before. Lines past the end of the document are ignored.</summary>
     public async Task SetDiagnosticsAsync(IReadOnlyList<EditorDiagnostic> diagnostics)
@@ -678,7 +709,8 @@
         return await _module.InvokeAsync<string>("getText", HostId);
     }
 
-    private static object ToJs(EditorSettings o) => new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize };
+    private static object ToJs(EditorSettings o, AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer) =>
+        new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize, dialect = AkmlSql.Core.DatabaseKindNames.ToName(kind) };
 
     private void OnEditorSettingsChanged() => _ = InvokeAsync(async () =>
     {

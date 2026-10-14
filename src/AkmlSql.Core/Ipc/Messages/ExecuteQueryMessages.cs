@@ -214,6 +214,10 @@ namespace AkmlSql.Core.Ipc.Messages
         /// reply; null from older engines.</summary>
         [Key(12)]
         public string? CurrentDatabase { get; set; }
+
+        /// <summary>Spec 042 (FR-016): the transaction state after the script (0 None, 1 Open, 2 Aborted); always 0 for SQL Server.</summary>
+        [Key(13)]
+        public int TransactionState { get; set; }
     }
 
     /// <summary>Spec 041 (R20) — one server or engine message of an execute, in stream order.</summary>
@@ -258,6 +262,22 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>The statement's row count (RowCount messages); -1 for none.</summary>
         [Key(9)]
         public long RowCount { get; set; } = -1;
+
+        /// <summary>Spec 042 (FR-014): the PostgreSQL SQLSTATE (<c>42P01</c>); null for SQL Server messages and for notices without one.</summary>
+        [Key(10)]
+        public string? SqlState { get; set; }
+
+        /// <summary>Spec 042: the server's DETAIL text, or null.</summary>
+        [Key(11)]
+        public string? Detail { get; set; }
+
+        /// <summary>Spec 042: the server's HINT text, or the engine's own hint (for example that <c>GO</c> is SQL Server-only), or null.</summary>
+        [Key(12)]
+        public string? Hint { get; set; }
+
+        /// <summary>Spec 042: the 1-based column within <see cref="Line"/> of the error position; 0 when unknown.</summary>
+        [Key(13)]
+        public int Column { get; set; }
     }
 
     /// <summary>Spec 041 (R20) — one batch of an execute, after GO splitting.</summary>
@@ -344,6 +364,10 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Invariant-culture cell text (same encoding as the read path); null == SQL NULL.</summary>
         [Key(5)]
         public string? Value { get; set; }
+
+        /// <summary>Spec 042 (R11): the PostgreSQL type name (<c>format_type</c> text) used for the <c>$n::type</c> cast; null for SQL Server.</summary>
+        [Key(6)]
+        public string? TypeName { get; set; }
     }
 
     /// <summary>One row-level edit: Update, Insert, or Delete. See <see cref="CrudOp"/>.</summary>
@@ -489,6 +513,12 @@ namespace AkmlSql.Core.Ipc.Messages
         public const int Guid = 7;
         public const int Binary = 8;
         public const int Variant = 9;
+
+        /// <summary>Spec 042 (R10): a PostgreSQL column read as the server's own text (<c>{1,2,3}</c>, <c>1 day 02:00:00</c>, <c>\xdeadbeef</c>); nothing to parse back.</summary>
+        public const int ServerText = 10;
+
+        /// <summary>Spec 042 (R10): a PostgreSQL numeric column (integer types, <c>real</c>, <c>double precision</c>, <c>numeric</c>) as server text; the grid aligns and sorts it as a number.</summary>
+        public const int ServerNumber = 11;
     }
 
     /// <summary>Operation codes for <see cref="CrudEditDto.Op"/>.</summary>

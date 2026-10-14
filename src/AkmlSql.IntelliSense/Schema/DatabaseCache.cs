@@ -24,8 +24,15 @@ public enum PopulationPhase
 /// </summary>
 public class DatabaseCache
 {
-    /// <summary>Cache identity key in the form <c>"server:database"</c>.</summary>
+    /// <summary>Cache identity key in the form <c>"server:database"</c>; a PostgreSQL cache's key starts with <c>pg|</c>.</summary>
     public string CacheKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Spec 042: which kind of server this cache describes. Set by <c>SchemaCacheManager</c> from the session's kind when the
+    /// cache is created, and read by change detection and refresh to pick the matching catalog code. A cache saved before the
+    /// feature has none and reads back as SQL Server.
+    /// </summary>
+    public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
 
     /// <summary>Current population phase. Phase A is the minimum needed for IntelliSense.</summary>
     public PopulationPhase Phase { get; set; } = PopulationPhase.NotLoaded;
@@ -43,6 +50,24 @@ public class DatabaseCache
     /// when the IntelliSense connection scope enables linked-server suggestions (FR-016).
     /// </summary>
     public List<LinkedServerInfo> LinkedServers { get; set; } = [];
+
+    /// <summary>
+    /// Spec 042 (FR-061): the PostgreSQL search path (<c>current_schemas(false)</c>) at the time of loading. Unqualified
+    /// suggestions come from these schemas, in this order; other schemas' objects are offered qualified. Empty for SQL Server.
+    /// </summary>
+    public List<string> SearchPath { get; set; } = [];
+
+    /// <summary>
+    /// Spec 042 (FR-040): system schemas (<c>pg_catalog</c>, <c>information_schema</c>) that are loaded so names resolve
+    /// but are hidden in the Schema explorer unless the user turns system objects on. Empty for SQL Server.
+    /// </summary>
+    public List<string> HiddenSchemas { get; set; } = [];
+
+    /// <summary>
+    /// Spec 042 (FR-046): schemas the connected user has no USAGE on. They are listed (marked not accessible) and their
+    /// objects are not loaded, so the rest of the database loads normally. Empty for SQL Server.
+    /// </summary>
+    public List<string> InaccessibleSchemas { get; set; } = [];
 
     /// <summary>UTC timestamp of the last complete Phase A + B refresh cycle.</summary>
     public DateTime LastFullRefresh { get; set; }

@@ -17,6 +17,7 @@
     only the login username; the password stays a transient field re-prompted at Connect/Test.
 *@
 @using System.Threading
+@using AkmlSql.Core
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
@@ -34,7 +35,7 @@
              @onclick:stopPropagation="true" data-testid="connection-manager">
 
             <div class="akml-connmgr-header">
-                <span class="akml-connmgr-title">Connect to SQL Server</span>
+                <span class="akml-connmgr-title" data-testid="conn-title">@(_kind == DatabaseKind.PostgreSql ? "Connect to PostgreSQL" : "Connect to SQL Server")</span>
                 <button type="button" class="akml-connmgr-close" @onclick="Close"
                         aria-label="Close" data-testid="conn-close-btn"><Icon Name="x" /></button>
             </div>
@@ -62,7 +63,8 @@
                                     @onclick="@(() => SelectSaved(c))" data-testid="conn-row" data-conn-id="@c.Id">
                                     <span class="akml-connmgr-row-name">@c.Name</span>
                                     <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
-                                    <span class="akml-connmgr-row-badge">@(c.WindowsAuth ? "Win" : "SQL")</span>
+                                    <span class="akml-connmgr-row-badge" data-testid="conn-row-kind"
+                                          title="@(c.Kind == DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server")">@(c.Kind == DatabaseKind.PostgreSql ? "PG" : c.WindowsAuth ? "Win" : "SQL")</span>
                                 </li>
                             }
                         </ul>
@@ -71,11 +73,95 @@
 
                 <!-- RIGHT: connect form -->
                 <div class="akml-connmgr-form-pane">
+                    @* Spec 042 (FR-001): every connection has a kind, chosen here. The choice is two buttons, not a colour. *@
+                    <div class="akml-field akml-connmgr-field">
+                        <span class="akml-field-label" id="conn-kind-label">Database kind</span>
+                        <div class="akml-connmgr-kind" role="group" aria-labelledby="conn-kind-label">
+                            <button type="button" class="akml-btn akml-connmgr-kindbtn @(_kind == DatabaseKind.SqlServer ? "selected" : "")"
+                                    aria-pressed="@(_kind == DatabaseKind.SqlServer ? "true" : "false")"
+                                    @onclick="@(() => SetKind(DatabaseKind.SqlServer))" data-testid="conn-kind-sqlserver">SQL Server</button>
+                            <button type="button" class="akml-btn akml-connmgr-kindbtn @(_kind == DatabaseKind.PostgreSql ? "selected" : "")"
+                                    aria-pressed="@(_kind == DatabaseKind.PostgreSql ? "true" : "false")"
+                                    disabled="@(!SqlConn.EngineSupportsPostgres)"
+                                    title="@(SqlConn.EngineSupportsPostgres ? null : PostgresDisabledTooltip)"
+                                    @onclick="@(() => SetKind(DatabaseKind.PostgreSql))" data-testid="conn-kind-postgresql">PostgreSQL</button>
+                        </div>
+                        @if (!SqlConn.EngineSupportsPostgres)
+                        {
+                            <span class="akml-connmgr-hint" data-testid="conn-kind-hint">@PostgresDisabledTooltip</span>
+                        }
+                    </div>
                     <div class="akml-field akml-connmgr-field">
                         <label class="akml-field-label" for="conn-name">Display name</label>
                         <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
                                placeholder="e.g. Local master" data-testid="conn-name-input" />
                     </div>
+                    @if (_kind == DatabaseKind.PostgreSql)
+                    {
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-pg-host">Host</label>
+                            <input id="conn-pg-host" class="akml-input" @bind="_pgHost" @bind:event="oninput"
+                                   @onchange="OnPgIdentityChanged"
+                                   placeholder="db.example.com, 10.0.0.5 or [::1]" data-testid="conn-pg-host" />
+                        </div>
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-pg-port">Port</label>
+                            <input id="conn-pg-port" class="akml-input" type="number" min="1" max="65535"
+                                   @bind="_pgPort" @bind:event="oninput" @onchange="OnPgIdentityChanged" data-testid="conn-pg-port" />
+                        </div>
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-pg-database">Database</label>
+                            <input id="conn-pg-database" class="akml-input" @bind="_pgDatabase" @bind:event="oninput"
+                                   placeholder="postgres" data-testid="conn-pg-database" />
+                        </div>
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-pg-user">User name</label>
+                            <input id="conn-pg-user" class="akml-input" @bind="_pgUser" @bind:event="oninput"
+                                   @onchange="OnPgIdentityChanged" autocomplete="off" data-testid="conn-pg-user" />
+                        </div>
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-pg-password">Password</label>
+                            <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
+                                   @bind="_pgPassword" @bind:event="oninput"
+                                   placeholder="@(_pgHasRemembered ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
+                            <span class="akml-connmgr-hint">Not saved in the browser. @(_pgRemember ? "It will be kept on the engine machine." : "Re-entered each time you connect.")</span>
+                        </div>
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-field-label" for="conn-pg-sslmode">TLS mode</label>
+                            <select id="conn-pg-sslmode" class="akml-select" @bind="_pgSslMode" data-testid="conn-pg-sslmode">
+                                @foreach (var mode in SavedSqlConnection.SslModes)
+                                {
+                                    <option value="@mode">@mode</option>
+                                }
+                            </select>
+                        </div>
+                        @if (_pgSslMode is "verify-ca" or "verify-full")
+                        {
+                            <div class="akml-field akml-connmgr-field">
+                                <label class="akml-field-label" for="conn-pg-rootcert">CA certificate path</label>
+                                <input id="conn-pg-rootcert" class="akml-input" @bind="_pgRootCert" @bind:event="oninput"
+                                       placeholder="C:\certs\root.crt" data-testid="conn-pg-rootcert" />
+                                <span class="akml-connmgr-hint">A path on the engine machine.</span>
+                            </div>
+                        }
+                        <div class="akml-field akml-connmgr-field">
+                            <label class="akml-connmgr-radio" for="conn-pg-remember">
+                                <input id="conn-pg-remember" type="checkbox" @bind="_pgRemember" data-testid="conn-pg-remember" />
+                                Remember the password on the engine machine
+                            </label>
+                            <span class="akml-connmgr-hint" data-testid="conn-pg-remember-help">
+                                Stored on the engine machine for the account the engine runs as. On the web engine service this means any
+                                administrator of the engine machine. Any client paired with this engine can use it.
+                            </span>
+                            @if (_pgHasRemembered)
+                            {
+                                <button type="button" class="akml-btn" @onclick="ForgetPasswordAsync" disabled="@_busy"
+                                        data-testid="conn-pg-forget">Forget the remembered password</button>
+                            }
+                        </div>
+                    }
+                    else
+                    {
                     <div class="akml-field akml-connmgr-field">
                         <label class="akml-field-label" for="conn-server">Server</label>
                         <input id="conn-server" class="akml-input" @bind="_server" @bind:event="oninput"
@@ -146,6 +232,7 @@
                                    @bind="_password" @bind:event="oninput" data-testid="conn-password-input" />
                             <span class="akml-connmgr-hint">Not saved — re-entered each time you connect.</span>
                         </div>
+                    }
                     }
 
                     @if (!string.IsNullOrEmpty(_message))
@@ -289,6 +376,16 @@
         padding-left: var(--akml-scalar-spacing-s); padding-right: var(--akml-scalar-spacing-s);
     }
     .akml-connmgr-radio { display: block; color: var(--akml-text-primary); font-size: 13px; margin-top: 2px; }
+
+    /* Spec 042: the two-way kind switch. The pressed one is announced through aria-pressed and drawn with a fill, a
+       heavier outline and bold text, so the choice is never colour alone. */
+    .akml-connmgr-kind { display: flex; gap: var(--akml-scalar-spacing-xs); }
+    .akml-connmgr-kindbtn.selected {
+        background-color: var(--akml-surface-selection);
+        border-color: var(--akml-accent-primary);
+        box-shadow: inset 0 0 0 1px var(--akml-accent-primary);
+        font-weight: 600;
+    }
     .akml-connmgr-hint { color: var(--akml-text-secondary); font-size: 11px; font-style: italic; }
 
     .akml-connmgr-msg { font-size: 12px; margin: var(--akml-scalar-spacing-xs) 0 0; }
@@ -318,6 +415,19 @@
     // Saved-connection list + the currently-selected saved row (null = unsaved "new" form).
     private List<SavedSqlConnection> _saved = new();
     private string? _selectedId;
+
+    // Spec 042: the kind the form is for. A saved row brings its own; "New" starts as SQL Server unless the opener asked.
+    private const string PostgresDisabledTooltip = "Requires an engine with PostgreSQL support (dialect.postgresql.v1)";
+    private DatabaseKind _kind = DatabaseKind.SqlServer;
+    private string _pgHost = string.Empty;
+    private int? _pgPort = SavedSqlConnection.DefaultPostgresPort;
+    private string _pgDatabase = "postgres";
+    private string _pgUser = string.Empty;
+    private string _pgPassword = string.Empty;   // transient, like the SQL password: never persisted
+    private string _pgSslMode = "prefer";
+    private string _pgRootCert = string.Empty;
+    private bool _pgRemember;
+    private bool _pgHasRemembered;                // the engine holds a password for this host, port and user (FR-105)
 
     // Form state. Password is transient — never persisted.
     private string _name = string.Empty;
@@ -352,7 +462,11 @@
         // Pre-fill from the active (most-recently-used) saved row, if any.
         var activeId = await Store.GetActiveIdAsync();
         var active = string.IsNullOrEmpty(activeId) ? null : _saved.FirstOrDefault(c => c.Id == activeId);
-        if (active != null) SelectSaved(active);
+
+        // Spec 042 (T064): "Connect to PostgreSQL…" asks for the PostgreSQL form; otherwise the active row decides.
+        var requested = Controller.RequestedKind;
+        if (requested.HasValue && (active == null || active.Kind != requested.Value)) NewConnection(requested.Value);
+        else if (active != null) SelectSaved(active);
         else NewConnection();
         _open = true;
         _focusOnNextRender = true;
@@ -361,8 +475,10 @@
         // Best-effort pre-populate the database dropdown. Windows auth needs no password, so the
         // common localhost/Windows default "just works"; SQL auth waits for the user to enter a
         // password and click refresh. Failures land in _dbMessage, never blocking the dialog.
-        if (_windowsAuth)
+        if (_kind == DatabaseKind.SqlServer && _windowsAuth)
             await LoadDatabasesAsync();
+        else if (_kind == DatabaseKind.PostgreSql)
+            await RefreshRememberedAsync();
     });
 
     private void OnSqlStateChanged() => InvokeAsync(StateHasChanged);
@@ -372,23 +488,78 @@
         _saved = (await Store.ListAsync()).ToList();
     }
 
-    private void NewConnection()
+    private void NewConnection() => NewConnection(DatabaseKind.SqlServer);
+
+    private void NewConnection(DatabaseKind kind)
     {
         _selectedId = null;
+        _kind = kind == DatabaseKind.PostgreSql && !SqlConn.EngineSupportsPostgres ? DatabaseKind.SqlServer : kind;
         _name = string.Empty;
         _server = "localhost";
         _database = "master";
         _windowsAuth = true;
         _login = string.Empty;
         _password = string.Empty;
+        ResetPostgresFields();
         _message = null;
         ClearDatabaseList();
+    }
+
+    private void ResetPostgresFields()
+    {
+        _pgHost = "localhost";
+        _pgPort = SavedSqlConnection.DefaultPostgresPort;
+        _pgDatabase = "postgres";
+        _pgUser = string.Empty;
+        _pgPassword = string.Empty;
+        _pgSslMode = "prefer";
+        _pgRootCert = string.Empty;
+        _pgRemember = false;
+        _pgHasRemembered = false;
+    }
+
+    // The kind switch: the other kind's fields start from their defaults, so nothing typed for one server leaks into the other.
+    private void SetKind(DatabaseKind kind)
+    {
+        if (_kind == kind) return;
+        if (kind == DatabaseKind.PostgreSql && !SqlConn.EngineSupportsPostgres) return;
+        _kind = kind;
+        _message = null;
+        _selectedId = null;
+        if (kind == DatabaseKind.PostgreSql) ResetPostgresFields();
+        else
+        {
+            _server = "localhost";
+            _database = "master";
+            _windowsAuth = true;
+            _login = string.Empty;
+            _password = string.Empty;
+            ClearDatabaseList();
+        }
     }
 
     private void SelectSaved(SavedSqlConnection c)
     {
         _selectedId = c.Id;
         _name = c.Name;
+        _kind = c.Kind;
+        if (c.Kind == DatabaseKind.PostgreSql)
+        {
+            _pgHost = c.Server;
+            _pgPort = c.EffectivePort;
+            _pgDatabase = c.Database;
+            _pgUser = c.Login ?? string.Empty;
+            _pgPassword = string.Empty;   // never stored in the browser
+            _pgSslMode = c.SslMode ?? "prefer";
+            _pgRootCert = c.RootCertificatePath ?? string.Empty;
+            _pgRemember = c.RememberPassword;
+            _pgHasRemembered = false;     // asked of the engine once the row is shown
+            _message = null;
+            ClearDatabaseList();
+            _ = InvokeAsync(RefreshRememberedAsync);
+            return;
+        }
+
         _server = c.Server;
         _database = c.Database;
         _windowsAuth = c.WindowsAuth;
@@ -463,8 +634,176 @@
         }
     }
 
+    // ── PostgreSQL (spec 042) ────────────────────────────────────────────────────────────────────────────
+
+    private ConnectionTarget PgTarget() => new(DatabaseKind.PostgreSql, _pgHost, _pgDatabase, WindowsAuth: false,
+        User: _pgUser, Password: _pgPassword, Port: _pgPort, SslMode: _pgSslMode,
+        RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert, RememberPassword: _pgRemember);
+
+    // Asks the engine whether it holds a password for this host, port and user. Never fetches the password itself.
+    private async Task RefreshRememberedAsync()
+    {
+        if (_kind != DatabaseKind.PostgreSql) return;
+        var (host, port, _) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
+        _pgHasRemembered = host != null && !string.IsNullOrWhiteSpace(_pgUser)
+            && await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnPgIdentityChanged() => RefreshRememberedAsync();
+
+    private async Task ForgetPasswordAsync()
+    {
+        var (host, port, error) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
+        if (host == null) { SetMessage(error ?? "Enter the host first.", isError: true); return; }
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            await SqlConn.ForgetRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+            _pgHasRemembered = await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+            if (!_pgHasRemembered) _pgRemember = false;
+            SetMessage(_pgHasRemembered ? "The engine could not forget the password." : "The remembered password was forgotten.", isError: _pgHasRemembered);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    // "PostgreSQL 18.1 on db1:5432" (FR-002), or the engine's own words; a missing password is a prompt, not a failure.
+    private async Task TestPostgresAsync()
+    {
+        _busy = true;
+        _message = null;
+        StateHasChanged();
+        try
+        {
+            var result = await SqlConn.TestAsync(PgTarget(), CancellationToken.None);
+            if (result.Ok)
+            {
+                var (host, port, _) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
+                SetMessage($"{result.ServerVersion ?? "PostgreSQL"} on {host}:{port}", isError: false);
+            }
+            else if (result.PasswordRequired)
+            {
+                SetMessage("The server asked for a password. Enter the password and try again.", isError: true);
+            }
+            else
+            {
+                SetMessage(result.Error ?? "Connection test failed.", isError: true);
+            }
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SavePostgresAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            var (host, port, error) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
+            if (host == null) throw new ArgumentException(error);
+
+            var database = string.IsNullOrWhiteSpace(_pgDatabase) ? "postgres" : _pgDatabase.Trim();
+            var name = string.IsNullOrWhiteSpace(_name) ? $"{host} / {database}" : _name.Trim();
+            var record = new SavedSqlConnection
+            {
+                Id = _selectedId ?? Guid.NewGuid().ToString("N"),
+                Name = name,
+                Kind = DatabaseKind.PostgreSql,
+                Server = host,
+                Database = database,
+                WindowsAuth = false,
+                Login = string.IsNullOrWhiteSpace(_pgUser) ? null : _pgUser.Trim(),
+                Port = port,
+                SslMode = _pgSslMode,
+                RootCertificatePath = string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert.Trim(),
+                RememberPassword = _pgRemember,
+            };
+            if (_selectedId == null) await Store.AddAsync(record);
+            else await Store.UpdateAsync(record);
+            _selectedId = record.Id;
+            await Store.SetActiveIdAsync(_selectedId);
+            await ReloadAsync();
+            _name = name;
+            SetMessage("Saved.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, isError: true);
+        }
+        _busy = false;
+        StateHasChanged();
+    }
+
+    // Spec 042 (FR-009): connecting somewhere else drops the session, and with it any open transaction. The engine rolls it
+    // back; it never commits. Ask first, naming what is lost.
+    private async Task<bool> ConfirmLeaveTransactionAsync()
+    {
+        if (!SqlConn.IsConnected || SqlConn.TransactionState == TransactionState.None) return true;
+        var aborted = SqlConn.TransactionState == TransactionState.Aborted;
+        return await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = aborted ? "Aborted transaction" : "Open transaction",
+            Message = (aborted
+                ? "The current session has a transaction that an error aborted. "
+                : "The current session has an open transaction. ")
+                + "Connecting to another server rolls it back. Nothing is committed.",
+            ConfirmLabel = "Roll back and connect",
+            Destructive = true,
+        });
+    }
+
+    private async Task ConnectPostgresAsync()
+    {
+        if (!await ConfirmLeaveTransactionAsync()) return;
+        _busy = true;
+        _message = null;
+        StateHasChanged();
+        try
+        {
+            var result = await SqlConn.ConnectAsync(PgTarget(), CancellationToken.None);
+            if (result.Ok)
+            {
+                if (!string.IsNullOrEmpty(_selectedId))
+                {
+                    try
+                    {
+                        var existing = await Store.GetAsync(_selectedId!);
+                        if (existing != null)
+                        {
+                            existing.LastConnectedAt = DateTimeOffset.UtcNow;
+                            await Store.UpdateAsync(existing);
+                            await Store.SetActiveIdAsync(existing.Id);
+                        }
+                    }
+                    catch { /* best-effort metadata update — connect already succeeded */ }
+                }
+                Close();
+                return;
+            }
+            SetMessage(result.PasswordRequired
+                ? "The server asked for a password. Enter the password and try again."
+                : result.Error ?? "Connect failed.", isError: true);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task TestAsync()
     {
+        if (_kind == DatabaseKind.PostgreSql) { await TestPostgresAsync(); return; }
+
         // Passwords are never stored, so a saved SQL-auth connection loads with an empty password.
         // Require one rather than silently testing with "" (which always fails confusingly).
         if (!_windowsAuth && string.IsNullOrEmpty(_password))
@@ -490,6 +829,8 @@
 
     private async Task SaveAsync()
     {
+        if (_kind == DatabaseKind.PostgreSql) { await SavePostgresAsync(); return; }
+
         _busy = true;
         _message = null;
         try
@@ -567,11 +908,14 @@
 
     private async Task ConnectAsync()
     {
+        if (_kind == DatabaseKind.PostgreSql) { await ConnectPostgresAsync(); return; }
+
         if (!_windowsAuth && string.IsNullOrEmpty(_password))
         {
             SetMessage("Enter the SQL password to connect (passwords are never stored).", isError: true);
             return;
         }
+        if (!await ConfirmLeaveTransactionAsync()) return;
         _busy = true;
         _message = null;
         StateHasChanged();

@@ -26,16 +26,24 @@ namespace AkmlSql.Engine.Schema
         private readonly SessionManager _sessionManager;
         private readonly SchemaCacheManager _schemaCacheManager;
         private readonly SchemaMetadataService _schemaMetadataService;
+        private readonly Func<AkmlSql.Core.DatabaseKind, ISchemaMetadataProvider?>? _providerFor;
 
+        /// <param name="providerFor">Spec 042: the catalog reader for a session's kind (null while the feature is off). Without
+        /// it every session is read with <paramref name="schemaMetadataService"/>, as before.</param>
         public SchemaRefreshService(
             SessionManager sessionManager,
             SchemaCacheManager schemaCacheManager,
-            SchemaMetadataService schemaMetadataService)
+            SchemaMetadataService schemaMetadataService,
+            Func<AkmlSql.Core.DatabaseKind, ISchemaMetadataProvider?>? providerFor = null)
         {
             _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
             _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
             _schemaMetadataService = schemaMetadataService ?? throw new ArgumentNullException(nameof(schemaMetadataService));
+            _providerFor = providerFor;
         }
+
+        private ISchemaMetadataProvider? ProviderFor(AkmlSql.Core.DatabaseKind kind) =>
+            _providerFor != null ? _providerFor(kind) : _schemaMetadataService;
 
         public void Refresh(RefreshRequest req)
         {
@@ -95,17 +103,23 @@ namespace AkmlSql.Engine.Schema
 
             var ctxSession = session;
             var ctxSessionId = req.SessionId;
+            var provider = ProviderFor(session.Kind);
+            if (provider == null)
+            {
+                Log.Warning("SchemaRefreshRequest: no catalog reader for kind {Kind} (session={Session})", session.Kind, req.SessionId);
+                return;
+            }
             _ = Task.Run(async () =>
             {
                 try
                 {
                     var c = _schemaCacheManager.GetOrCreateCache(ctxSessionId, ctxSession.DatabaseName);
-                    await _schemaMetadataService.PopulatePhaseAAsync(
+                    await provider.PopulatePhaseAAsync(
                         c, ctxSession.ConnectionString, CancellationToken.None);
                     _schemaCacheManager.EvictLru();
                     if (c.Phase == PopulationPhase.PhaseA)
                     {
-                        await _schemaMetadataService.PopulatePhaseBAsync(
+                        await provider.PopulatePhaseBAsync(
                             c, ctxSession.ConnectionString, CancellationToken.None);
                     }
                 }

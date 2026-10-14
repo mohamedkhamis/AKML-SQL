@@ -31,14 +31,19 @@ public sealed class EngineComposition
     /// </summary>
     public static EngineComposition Build(Handlers.Handshake.HandshakeHandler? handshakeHandler = null)
     {
+        var sessions = new SessionManager();
         var ctx = new RpcContext
         {
-            Sessions = new SessionManager(),
-            SchemaCache = new SchemaCacheManager(),
+            Sessions = sessions,
+            // Spec 042: the cache key carries the session's kind, so one session's SQL Server and PostgreSQL databases of the
+            // same name are two caches.
+            SchemaCache = new SchemaCacheManager { KindOf = sessions.KindOf },
             Logger = Log.Logger,
             SettingsLoader = ConfigManager.Load,
             ParserService = new TsqlParserService(),
             SchemaMetadata = new SchemaMetadataService(),
+            // Spec 042 (FR-093): PostgreSQL's catalog reader exists only while the feature is switched on.
+            PostgresSchemaMetadata = ConfigManager.Load().PostgreSql.Enabled ? new PostgreSql.PgSchemaMetadataService() : null,
             // Spec 030 — Phase 5: one registry shared by every transport so #temp/SET/USE state
             // persists across executes on the SAME per-session SqlConnection.
             SessionConnections = new Execution.SessionConnectionRegistry(),
@@ -46,7 +51,12 @@ public sealed class EngineComposition
 
         ctx.SchemaCache.ReloadMissing = (sessionId, database) => ReloadSessionCacheAsync(ctx, sessionId, database);
 
-        var router = new RpcRouter();
+        var router = new RpcRouter
+        {
+            // Spec 042 (FR-092): surfaces with no PostgreSQL implementation answer a PostgreSQL session
+            // themselves, before any handler runs. Inert for SQL Server sessions.
+            DialectGuard = PostgreSql.DialectGuard.Create(),
+        };
         var retention = EngineHandlerRegistry.RegisterAllHandlers(router, ctx, handshakeHandler);
 
         return new EngineComposition
@@ -65,7 +75,8 @@ public sealed class EngineComposition
     internal static async Task ReloadSessionCacheAsync(RpcContext ctx, string sessionId, string database)
     {
         var session = ctx.Sessions.GetSession(sessionId);
-        if (session == null || ctx.SchemaMetadata == null || string.IsNullOrEmpty(session.ConnectionString)
+        var metadata = session == null ? null : ctx.SchemaMetadataFor(session.Kind);
+        if (session == null || metadata == null || string.IsNullOrEmpty(session.ConnectionString)
             || !string.Equals(session.DatabaseName, database, StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -73,9 +84,9 @@ public sealed class EngineComposition
         if (cache.Phase != PopulationPhase.NotLoaded || cache.PermissionDenied) return;
 
         Log.Information("Reloading the evicted schema cache for {Session}:{Db}", sessionId, database);
-        await ctx.SchemaMetadata.PopulatePhaseAAsync(cache, session.ConnectionString, CancellationToken.None);
+        await metadata.PopulatePhaseAAsync(cache, session.ConnectionString, CancellationToken.None);
         ctx.SchemaCache.EvictLru();
         if (cache.Phase == PopulationPhase.PhaseA && !cache.PermissionDenied)
-            await ctx.SchemaMetadata.PopulatePhaseBAsync(cache, session.ConnectionString, CancellationToken.None);
+            await metadata.PopulatePhaseBAsync(cache, session.ConnectionString, CancellationToken.None);
     }
 }

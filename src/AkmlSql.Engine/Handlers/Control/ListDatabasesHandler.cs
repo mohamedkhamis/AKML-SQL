@@ -1,12 +1,16 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
+using AkmlSql.Core.Connections;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Pairing;
+using AkmlSql.Engine.PostgreSql;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Transports;
 using Microsoft.Data.SqlClient;
+using Npgsql;
 using Serilog;
 
 namespace AkmlSql.Engine.Handlers.Control
@@ -29,6 +33,13 @@ namespace AkmlSql.Engine.Handlers.Control
             ListDatabasesRequest request, RpcContext ctx, CancellationToken ct)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
+
+            // Spec 042 (T081): the kind is the session's when there is one, otherwise the request's.
+            var kind = !string.IsNullOrEmpty(request.SessionId) && ctx?.Sessions.GetSession(request.SessionId!) is { } known
+                ? known.Kind
+                : DatabaseKindNames.FromInt(request.Kind);
+            if (kind == DatabaseKind.PostgreSql)
+                return await ListPostgresAsync(request, ctx, ct).ConfigureAwait(false);
 
             // Spec 041 (R25): the database selector lists with the connection the engine already holds, so the
             // browser never resends a password. The alias and the guard below judge it like any other request.
@@ -79,6 +90,56 @@ namespace AkmlSql.Engine.Handlers.Control
             {
                 Log.Warning("ListDatabases error — {ConnDesc}: {Msg}", connDesc, ex.Message);
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = ex.Message };
+            }
+        }
+
+        /// <summary>
+        /// Spec 042 (FR-030): the databases of a PostgreSQL server the role may connect to, templates left out. With a session the
+        /// engine's own connection string is used (the browser never resends a password); without one the request's string is,
+        /// after the same guard as every bridge request, with a remembered password filled in. A failure is the server's words
+        /// and a hint, never the connection string.
+        /// </summary>
+        private static async Task<ListDatabasesResponse> ListPostgresAsync(ListDatabasesRequest request, RpcContext? ctx, CancellationToken ct)
+        {
+            var connectionString = request.ConnectionString;
+            if (string.IsNullOrEmpty(connectionString) && !string.IsNullOrEmpty(request.SessionId))
+            {
+                var session = ctx?.Sessions.GetSession(request.SessionId!);
+                if (session == null || !session.IsConnected || string.IsNullOrEmpty(session.ConnectionString))
+                    return new ListDatabasesResponse { Ok = false, ErrorMessage = "The session is not connected to a PostgreSQL server." };
+                connectionString = session.ConnectionString;
+            }
+            if (string.IsNullOrEmpty(connectionString))
+                return new ListDatabasesResponse { Ok = false, ErrorMessage = "No connection string supplied." };
+
+            if (PgTargetGuard.Check(connectionString) is { } refusal)
+            {
+                Log.Warning("ListDatabases (PostgreSQL) refused for a bridge request - {ConnDesc}", PgConnectionString.Describe(connectionString));
+                return new ListDatabasesResponse { Ok = false, ErrorMessage = refusal.Message, ErrorCode = refusal.Code };
+            }
+
+            string host = string.Empty;
+            int port = 0;
+            try
+            {
+                var resolved = new PgCredentialResolver().Resolve(connectionString).ConnectionString;
+                var builder = new NpgsqlConnectionStringBuilder(resolved);
+                host = builder.Host ?? string.Empty;
+                port = builder.Port;
+
+                var names = await new PgSchemaMetadataService().ListDatabasesStrictAsync(resolved, ct).ConfigureAwait(false);
+                Log.Information("ListDatabases (PostgreSQL) ok - {Count} databases ({ConnDesc})", names.Count, PgConnectionString.Describe(connectionString));
+                return new ListDatabasesResponse { Ok = true, Databases = names };
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                var failure = PgConnectionFailure.Describe(ex, host, port);
+                Log.Warning("ListDatabases (PostgreSQL) failed ({Type}) - {ConnDesc}", ex.GetType().Name, PgConnectionString.Describe(connectionString));
+                return new ListDatabasesResponse { Ok = false, ErrorMessage = failure.Message, ErrorCode = failure.ErrorCode };
             }
         }
     }

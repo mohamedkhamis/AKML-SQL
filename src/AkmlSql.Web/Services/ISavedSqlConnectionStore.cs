@@ -59,6 +59,40 @@ public sealed class SavedSqlConnection
 
     public DateTimeOffset? LastConnectedAt { get; set; }
 
+    // ── Spec 042 (PostgreSQL support, data-model §2) ───────────────────────────────────────────────────────
+    // IndexedDB values are schemaless JSON: a record saved before the feature has none of these, and they read
+    // back as defaults - a SQL Server connection, exactly as before. No password here either: even with
+    // RememberPassword on, the password lives only in the engine's protected store.
+
+    /// <summary>Which kind of server this is. Missing on older records = SQL Server.</summary>
+    public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
+
+    /// <summary>PostgreSQL port; null means <see cref="DefaultPostgresPort"/>. Ignored for SQL Server (use <c>host,port</c> there).</summary>
+    public int? Port { get; set; }
+
+    /// <summary>PostgreSQL TLS mode: <c>disable</c>, <c>prefer</c>, <c>require</c>, <c>verify-ca</c> or <c>verify-full</c>; null means <c>prefer</c>.</summary>
+    public string? SslMode { get; set; }
+
+    /// <summary>Path of the CA certificate on the ENGINE machine, for the verifying TLS modes. Not a secret.</summary>
+    public string? RootCertificatePath { get; set; }
+
+    /// <summary>
+    /// The user opted in to keep the PostgreSQL password on the engine machine (FR-104). The password itself is never
+    /// part of this record; the engine holds it (DPAPI) under this server and login and never sends it back.
+    /// Stored under a key without the word "password": the store's tripwire test scans the whole persisted record
+    /// for that word, and a flag must not weaken a check that exists to catch a real secret.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonPropertyName("RememberOnEngine")]
+    public bool RememberPassword { get; set; }
+
+    public const int DefaultPostgresPort = 5432;
+
+    /// <summary>The five TLS modes the connection dialog offers, in the order it lists them.</summary>
+    public static readonly string[] SslModes = ["disable", "prefer", "require", "verify-ca", "verify-full"];
+
+    /// <summary>The port a PostgreSQL connection uses: the saved one, or 5432.</summary>
+    public int EffectivePort => Port ?? DefaultPostgresPort;
+
     // NOTE: deliberately NO "IsRemoteAllowed" flag. The loopback/SSRF guard
     // (SqlConnectionService.ValidateTarget) is HOST-BASED and authoritative — it ignores any
     // stored boolean — so a persisted flag could never relax it, only mislead. If remote targets
@@ -152,6 +186,14 @@ internal sealed class SavedSqlConnectionStore : ISavedSqlConnectionStore
         if (string.IsNullOrWhiteSpace(c.Name)) throw new ArgumentException("Name is required.");
         if (string.IsNullOrWhiteSpace(c.Server)) throw new ArgumentException("Server is required.");
         if (string.IsNullOrWhiteSpace(c.Database)) throw new ArgumentException("Database is required.");
+
+        // Spec 042: what makes a PostgreSQL connection. A SQL Server record is never held to these.
+        if (c.Kind != AkmlSql.Core.DatabaseKind.PostgreSql) return;
+
+        if (string.IsNullOrWhiteSpace(c.Login)) throw new ArgumentException("A user name is required for PostgreSQL.");
+        if (c.Port is < 1 or > 65535) throw new ArgumentException("The port must be between 1 and 65535.");
+        if (c.SslMode is not null && Array.IndexOf(SavedSqlConnection.SslModes, c.SslMode.ToLowerInvariant()) < 0)
+            throw new ArgumentException("The TLS mode must be disable, prefer, require, verify-ca or verify-full.");
     }
 
     private static SavedSqlConnection? SafeDeserialize(string json)

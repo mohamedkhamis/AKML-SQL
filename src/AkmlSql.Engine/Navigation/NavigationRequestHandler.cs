@@ -12,9 +12,12 @@ namespace AkmlSql.Engine.Navigation;
 /// database queries, and uses <see cref="SchemaCacheManager"/> to resolve the session's schema cache.
 /// (ObjectSearch (62) moved to the typed <c>ObjectSearchHandler</c> in spec 030.)
 /// </summary>
-public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
+public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager, Func<string, AkmlSql.Core.DatabaseKind>? kindOf = null)
 {
     private readonly ObjectDefinitionService _definitionService = new();
+    private readonly PostgreSql.PgObjectDefinitionService _postgresDefinitionService = new();
+    // Spec 042 (FR-068): the kind of server a session is on; null means every session is SQL Server.
+    private readonly Func<string, AkmlSql.Core.DatabaseKind> _kindOf = kindOf ?? (_ => AkmlSql.Core.DatabaseKind.SqlServer);
     private readonly ReferenceCollector _referenceCollector = new();
     private readonly SchemaCacheManager _schemaCacheManager = schemaCacheManager ?? throw new ArgumentNullException(nameof(schemaCacheManager));
 
@@ -56,8 +59,9 @@ public class NavigationRequestHandler(SchemaCacheManager schemaCacheManager)
                 ? _schemaCacheManager.GetCache(req.SessionId, databaseName)
                 : null;
 
-            var (definition, objectType, fullName) = await _definitionService.GetDefinitionAsync(
-                req.ObjectName, req.SchemaName, connectionString, dbCache, ct);
+            var (definition, objectType, fullName) = _kindOf(req.SessionId) == AkmlSql.Core.DatabaseKind.PostgreSql
+                ? await _postgresDefinitionService.GetDefinitionAsync(req.ObjectName, req.SchemaName, connectionString, dbCache, ct)
+                : await _definitionService.GetDefinitionAsync(req.ObjectName, req.SchemaName, connectionString, dbCache, ct);
 
             if (definition == null)
             {

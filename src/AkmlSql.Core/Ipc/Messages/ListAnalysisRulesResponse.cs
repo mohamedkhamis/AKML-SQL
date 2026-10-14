@@ -64,5 +64,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>One-line description for the detail pane / tooltip.</summary>
         [Key(8)]
         public string Description { get; set; } = string.Empty;
+
+        /// <summary>Spec 042: the <see cref="DatabaseKind"/> of the rule set this rule belongs to (0 SQL Server, 1 PostgreSQL).</summary>
+        [Key(9)]
+        public int Kind { get; set; }
     }
 }

@@ -107,7 +107,8 @@
              hidden="@(ActiveTab != MessagesTab)">
             @if (Result != null)
             {
-                <MessagesView Result="Result" SelectionStartLine="SelectionStartLine" ReceivedAt="ReceivedAt" OnNavigate="OnNavigateToLine" />
+                <MessagesView Result="Result" SelectionStartLine="SelectionStartLine" SelectionStartColumn="SelectionStartColumn" ReceivedAt="ReceivedAt"
+                              OnNavigate="OnNavigateToLine" OnNavigateToPosition="OnNavigateToPosition" />
             }
             else if (!IsRunning)
             {
@@ -118,7 +119,9 @@
         <div class="akml-results-panel" role="tabpanel" id="@TabStrip.PanelId(IdPrefix, ProblemsTab)"
              aria-labelledby="@TabStrip.TabId(IdPrefix, ProblemsTab)" data-testid="results-panel-problems"
              hidden="@(ActiveTab != ProblemsTab)">
-            <ProblemsListComponent Findings="Findings" ShowHeader="false" OnVisibleCountChanged="OnProblemsCountChanged"
+            <ProblemsListComponent Findings="Findings" ExecutionResult="Result" SelectionStartLine="SelectionStartLine"
+                                   SelectionStartColumn="SelectionStartColumn" OnJumpToPosition="OnNavigateToPosition"
+                                   ShowHeader="false" OnVisibleCountChanged="OnProblemsCountChanged"
                                    AnalysisEnabled="AnalysisEnabled" OnEnableAnalysis="OnEnableAnalysis" DefaultFilter="ProblemsDefaultFilter"
                                    OnJumpToIssue="OnJumpToIssue" OnSuppressLine="OnSuppressLine" OnSuppressGlobal="OnSuppressGlobal" />
         </div>
@@ -167,6 +170,12 @@
 
     /// <summary>An error message was clicked: the document line it points at.</summary>
     [Parameter] public EventCallback<int> OnNavigateToLine { get; set; }
+
+    /// <summary>Spec 042: the document column the executed text started at on its first line (1 for the whole document).</summary>
+    [Parameter] public int SelectionStartColumn { get; set; } = 1;
+
+    /// <summary>Spec 042: a PostgreSQL error was clicked (Messages or Problems): its line and column.</summary>
+    [Parameter] public EventCallback<DocumentPosition> OnNavigateToPosition { get; set; }
 
     /// <summary>A set's Apply succeeded (the page may re-run the query).</summary>
     [Parameter] public EventCallback OnApplied { get; set; }

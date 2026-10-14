@@ -167,7 +167,7 @@
             await SchemaSync.StopAsync();
             if (SqlConn.IsConnected)
             {
-                await SchemaSync.StartAsync(SqlConn.SessionId, SqlConn.Server!, SqlConn.Database!);
+                await SchemaSync.StartAsync(SqlConn.SessionId, SqlConn.SchemaIdentity ?? SqlConn.Server!, SqlConn.Database!);
             }
         }
         catch

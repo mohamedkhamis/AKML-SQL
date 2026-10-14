@@ -10,6 +10,7 @@
     <Project Path="src/AkmlSql.AI/AkmlSql.AI.csproj" />
     <Project Path="src/AkmlSql.Analysis/AkmlSql.Analysis.csproj" />
     <Project Path="src/AkmlSql.IntelliSense/AkmlSql.IntelliSense.csproj" />
+    <Project Path="src/AkmlSql.PostgreSql/AkmlSql.PostgreSql.csproj" />
     <Project Path="src/AkmlSql.Web/AkmlSql.Web.csproj" />
     <Project Path="src/AkmlSql.Web.Shared/AkmlSql.Web.Shared.csproj" />
     <Project Path="src/AkmlSql.Site/AkmlSql.Site.csproj" />
@@ -22,6 +23,7 @@
     <Project Path="tests/AkmlSql.AI.Tests/AkmlSql.AI.Tests.csproj" />
     <Project Path="tests/AkmlSql.Analysis.Tests/AkmlSql.Analysis.Tests.csproj" />
     <Project Path="tests/AkmlSql.IntelliSense.Tests/AkmlSql.IntelliSense.Tests.csproj" />
+    <Project Path="tests/AkmlSql.PostgreSql.Tests/AkmlSql.PostgreSql.Tests.csproj" />
     <Project Path="tests/AkmlSql.Shell.Shared.Tests/AkmlSql.Shell.Shared.Tests.csproj" />
     <Project Path="tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj" />
     <Project Path="tests/AkmlSql.Site.Tests/AkmlSql.Site.Tests.csproj" />
@@ -29,5 +31,8 @@
     <Project Path="tests/AkmlSql.Web.E2E.Tests/AkmlSql.Web.E2E.Tests.csproj" />
     <Project Path="tests/AkmlSql.Site.E2E.Tests/AkmlSql.Site.E2E.Tests.csproj" />
     <Project Path="tests/AkmlSql.Installer.Tests/AkmlSql.Installer.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/pg-reference/AkmlSql.PostgreSql.ReferenceGen/AkmlSql.PostgreSql.ReferenceGen.csproj" />
   </Folder>
 </Solution>

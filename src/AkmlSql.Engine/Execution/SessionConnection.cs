@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using Microsoft.Data.SqlClient;
+using Npgsql;
 using Serilog;
 
 namespace AkmlSql.Engine.Execution
@@ -32,7 +35,7 @@ namespace AkmlSql.Engine.Execution
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeQueries = new();
         private readonly string _sessionId;
 
-        private SqlConnection? _conn;
+        private DbConnection? _conn;
         private bool _everOpened;
         private volatile bool _disposeRequested;
 
@@ -43,6 +46,19 @@ namespace AkmlSql.Engine.Execution
 
         /// <summary>The connection string this session most recently opened/will open under.</summary>
         public string ConnectionString { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 042: which provider the persistent connection uses. The gate, the cancel registry and the idle
+        /// sweep are the same for both kinds; only the connection that is opened differs.
+        /// </summary>
+        public DatabaseKind Kind { get; internal set; } = DatabaseKind.SqlServer;
+
+        /// <summary>
+        /// Spec 042 (FR-016, research R9): the transaction state of a PostgreSQL session, tracked per statement by
+        /// <c>PgExecuteRunner</c> because the driver exposes none. Read and written only while the gate is held; reset when a
+        /// new connection is opened. Always None for SQL Server.
+        /// </summary>
+        public TransactionState TransactionState { get; set; } = TransactionState.None;
 
         /// <summary>UTC timestamp of the last execute/apply — drives idle eviction.</summary>
         public DateTime LastUsedUtc { get; private set; } = DateTime.UtcNow;
@@ -56,9 +72,26 @@ namespace AkmlSql.Engine.Execution
         /// reopened — #temp/SET/USE state was lost) so the handler can surface it on the same call,
         /// race-free.
         /// </summary>
-        public async Task<(T Result, bool ConnectionWasReset)> RunExclusiveAsync<T>(
+        public Task<(T Result, bool ConnectionWasReset)> RunExclusiveAsync<T>(
             string connectionString,
             Func<SqlConnection, CancellationToken, Task<T>> work,
+            CancellationToken ct) =>
+            RunCoreAsync(DatabaseKind.SqlServer, connectionString, (conn, token) => work((SqlConnection)conn, token), ct);
+
+        /// <summary>
+        /// Spec 042: as <see cref="RunExclusiveAsync{T}"/>, for a PostgreSQL session. A different name, not an
+        /// overload, so the existing implicitly-typed SQL Server lambdas keep resolving unambiguously.
+        /// </summary>
+        public Task<(T Result, bool ConnectionWasReset)> RunExclusivePostgresAsync<T>(
+            string connectionString,
+            Func<NpgsqlConnection, CancellationToken, Task<T>> work,
+            CancellationToken ct) =>
+            RunCoreAsync(DatabaseKind.PostgreSql, connectionString, (conn, token) => work((NpgsqlConnection)conn, token), ct);
+
+        private async Task<(T Result, bool ConnectionWasReset)> RunCoreAsync<T>(
+            DatabaseKind kind,
+            string connectionString,
+            Func<DbConnection, CancellationToken, Task<T>> work,
             CancellationToken ct)
         {
             await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -69,7 +102,7 @@ namespace AkmlSql.Engine.Execution
                 if (_disposeRequested)
                     throw new ObjectDisposedException(nameof(SessionConnection));
 
-                bool wasReset = await EnsureOpenAsync(connectionString, ct).ConfigureAwait(false);
+                bool wasReset = await EnsureOpenAsync(kind, connectionString, ct).ConfigureAwait(false);
                 LastUsedUtc = DateTime.UtcNow;
                 var result = await work(_conn!, ct).ConfigureAwait(false);
                 LastUsedUtc = DateTime.UtcNow;
@@ -92,9 +125,19 @@ namespace AkmlSql.Engine.Execution
         /// Ensure the connection is open. Returns true when a PREVIOUSLY-opened connection was found
         /// broken and reopened (state loss — surfaced to the user); false for first-open or reuse.
         /// </summary>
-        private async Task<bool> EnsureOpenAsync(string connectionString, CancellationToken ct)
+        private async Task<bool> EnsureOpenAsync(DatabaseKind kind, string connectionString, CancellationToken ct)
         {
             ConnectionString = connectionString;
+
+            // A run of the other kind on the same session starts from a fresh connection of that kind. That is
+            // a switch the user made (a different server), not a broken connection, so it is not reported as a reset.
+            if (_conn != null && Kind != kind)
+            {
+                try { await _conn.DisposeAsync().ConfigureAwait(false); } catch { /* ignore */ }
+                _conn = null;
+                _everOpened = false;
+            }
+            Kind = kind;
 
             if (_conn != null && _conn.State == ConnectionState.Open)
             {
@@ -112,7 +155,9 @@ namespace AkmlSql.Engine.Execution
             // Open into a LOCAL first; publish to _conn ONLY after a successful open, so a failed open
             // (bad credential / cancel / network) never leaves a half-dead, never-opened connection in
             // the field for the next execute to trip over.
-            var fresh = new SqlConnection(connectionString);
+            DbConnection fresh = kind == DatabaseKind.PostgreSql
+                ? AkmlSql.Engine.PostgreSql.PgConnectionFactory.Create(connectionString)
+                : new SqlConnection(connectionString);
             try
             {
                 await fresh.OpenAsync(ct).ConfigureAwait(false);
@@ -124,6 +169,8 @@ namespace AkmlSql.Engine.Execution
             }
             _conn = fresh;
             _everOpened = true;
+            // A transaction belongs to its backend: a new connection starts outside one.
+            TransactionState = TransactionState.None;
 
             if (wasBroken)
             {

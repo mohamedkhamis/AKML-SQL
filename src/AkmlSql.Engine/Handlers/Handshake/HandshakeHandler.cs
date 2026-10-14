@@ -63,6 +63,18 @@ namespace AkmlSql.Engine.Handlers.Handshake
             _serverCanonicalIdentityProvider = serverCanonicalIdentityProvider ?? throw new ArgumentNullException(nameof(serverCanonicalIdentityProvider));
         }
 
+        /// <summary>
+        /// Spec 042: the settings that decide which optional capabilities to advertise. A context
+        /// without a usable loader (unit tests, a half-built host) yields <c>null</c>, which
+        /// <see cref="Capabilities.For"/> reads as the defaults; a handshake must never fail on it.
+        /// </summary>
+        private static AkmlSql.Core.Config.AppSettings? SafeSettings(RpcContext? ctx)
+        {
+            if (ctx == null) return null;
+            try { return ctx.EnsureSettings(); }
+            catch { return null; }
+        }
+
         public int RequestMessageType => MessageTypes.HandshakeRequest;
         public int ResponseMessageType => MessageTypes.HandshakeResponse;
 
@@ -106,7 +118,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         Status = HandshakeStatus.Ok,
                         EngineVersion = EngineVersion,
                         ChosenProtocolVersion = chosen,
-                        EngineCapabilities = Capabilities.Current.ToArray(),
+                        EngineCapabilities = Capabilities.For(SafeSettings(ctx)),
                         NewBearerToken = minted,
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
                         HostKind = EngineIdentity.HostKind,
@@ -139,7 +151,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         Status = HandshakeStatus.Ok,
                         EngineVersion = EngineVersion,
                         ChosenProtocolVersion = chosen,
-                        EngineCapabilities = Capabilities.Current.ToArray(),
+                        EngineCapabilities = Capabilities.For(SafeSettings(ctx)),
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
                         HostKind = EngineIdentity.HostKind,
                         RunsAs = EngineIdentity.RunsAs,
@@ -167,7 +179,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                 Status = HandshakeStatus.Ok,
                 EngineVersion = EngineVersion,
                 ChosenProtocolVersion = chosen,
-                EngineCapabilities = Capabilities.Current.ToArray(),
+                EngineCapabilities = Capabilities.For(SafeSettings(ctx)),
                 ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
                 // Spec 041 (R29): how the engine runs, so the web names its styles truthfully (FR-063).
                 HostKind = EngineIdentity.HostKind,

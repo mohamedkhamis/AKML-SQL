@@ -47,6 +47,7 @@ internal sealed class AnalyserService : IAnalyserService
     private readonly AnalysisEngine _engine;
     private readonly CodeAnalysisSettings _settings;
     private readonly IAnalysisSettingsStore? _settingsStore;
+    private readonly IDialectGate? _gate;
 
     // Severity codes matching CodeIssueInfo.Severity / ProblemsListComponent: 0=Hint,1=Info,2=Warning,3=Error.
     private const int SeverityHint = 0;
@@ -60,8 +61,9 @@ internal sealed class AnalyserService : IAnalyserService
     /// keep working (no overrides applied). The DI container injects the registered
     /// <see cref="IAnalysisSettingsStore"/> in the running app.
     /// </summary>
-    public AnalyserService(IAnalysisSettingsStore? settingsStore = null)
+    public AnalyserService(IAnalysisSettingsStore? settingsStore = null, IDialectGate? gate = null)
     {
+        _gate = gate;
         var parser = new TsqlParserService();
         var registry = new RuleRegistry();
         var settingsLoader = new CaSettingsLoader();
@@ -82,6 +84,11 @@ internal sealed class AnalyserService : IAnalyserService
     {
         // Spec 021 FR-011 (T042): refuse documents larger than the 10 MB limit.
         DocumentSizeLimit.EnsureWithinLimit(documentText);
+
+        // Spec 042 (FR-092): these are the T-SQL rules; PostgreSQL text gets no findings from them. The PostgreSQL rule
+        // set runs in the engine (story 8).
+        if (_gate?.IsPostgres == true)
+            return new CodeAnalysisResponse { RequestId = Guid.NewGuid().ToString(), Issues = Array.Empty<CodeIssueInfo>(), AnalyzedVersion = 1 };
 
         // Spec 041 (R50, FR-055): "Enable code analysis" off means no analysis at all — not findings dropped
         // afterwards. Without a settings store analysis is on.

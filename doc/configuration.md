@@ -93,6 +93,10 @@ It is created automatically on first run with all defaults. The file is written 
     "renameScope": "currentScript",
     "includeCommentsInRename": true,
     "includeStringLiteralsInRename": false
+  },
+
+  "postgreSql": {
+    "enabled": true
   }
 }
 ```
@@ -236,6 +240,21 @@ Tab colouring by environment (Options › Queries › Color). Only the environme
 | `renameScope` | string | "currentScript" | Scope for Safe Rename: `currentScript` or `projectDirectory` |
 | `includeCommentsInRename` | bool | true | Update object names found inside SQL comments |
 | `includeStringLiteralsInRename` | bool | false | Update object names found inside string literals |
+
+---
+
+## `postgreSql` Section
+
+Spec 042. PostgreSQL support in the engine and the web edition is one switchable unit.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | true | When `false` the engine does not advertise the `dialect.postgresql.v1` capability and registers no PostgreSQL handlers; the web edition then shows the PostgreSQL choice disabled with the reason. The product behaves exactly as it did before spec 042. |
+
+Remembered PostgreSQL passwords (the opt-in "Remember password" per saved connection) are kept by the
+engine in `sql-credentials.json`, the same DPAPI-protected store as SQL Server logins, under the server
+key `pg://{host}:{port}` and the user name. On the web engine service (which runs as LocalSystem) this
+means any administrator of that machine can read them.
 
 ---
 

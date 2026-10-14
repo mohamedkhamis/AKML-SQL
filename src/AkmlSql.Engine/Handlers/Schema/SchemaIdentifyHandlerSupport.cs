@@ -38,6 +38,27 @@ namespace AkmlSql.Engine.Handlers.Schema
             return string.Empty;
         }
 
+        /// <summary>
+        /// Spec 042: the canonical identity of a PostgreSQL server, <c>pg://host:port</c> (host lower-cased, port 5432 when the
+        /// string has none), or an empty string when the string has no host. The scheme keeps it distinct from every SQL Server
+        /// identity in the browser's schema cache and the engine's.
+        /// </summary>
+        public static string PostgresIdentity(string? connectionString)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString)) return string.Empty;
+            try
+            {
+                var builder = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                return string.IsNullOrWhiteSpace(builder.Host)
+                    ? string.Empty
+                    : AkmlSql.Core.Connections.PgConnectionString.ServerKey(builder.Host, builder.Port);
+            }
+            catch (ArgumentException)
+            {
+                return string.Empty;
+            }
+        }
+
         private static bool IsServerKey(string key) =>
             key.Equals("Data Source", StringComparison.OrdinalIgnoreCase) ||
             key.Equals("Server", StringComparison.OrdinalIgnoreCase) ||

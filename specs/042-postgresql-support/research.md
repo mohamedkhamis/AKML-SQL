@@ -405,3 +405,91 @@ flag (R15). A second data library was rejected as a parallel mechanism.
 | S5 | `AllResultTypesAreUnknown` gives text for every type | R10 display and edit round-trip |
 | S6 | when `BaseTableName` / `IsKey` are populated | FR-130 editability |
 | S7 | credential store path and ACL under the service account | FR-104 consent text |
+
+## Spike outcomes (recorded during implementation)
+
+### S1 - pgsqlparser in a self-contained win-x64 publish (recorded 2026-10-14, T011)
+
+**Outcome: loads and works; part of the original question (running as the web service account) is
+deferred to deployment.** Evidence: a throwaway self-contained win-x64 console app (outside the
+repository) parsed, scanned and split text; `libpg_query.dll` was copied next to the executable by
+the package; `dumpbin /dependents` shows it imports only `KERNEL32.dll` (the C runtime is linked in),
+so no VC++ redistributable is needed on a clean machine. `tests/AkmlSql.PostgreSql.Tests/Language/PgParserSmokeTests.cs`
+pins the behaviour below (9 tests, all pass). Running the engine as `AkmlSqlWebEngine`
+(LocalSystem) needs an elevated install; it is verified at the deployment task (T181), and there is
+no reason to expect a difference because the DLL depends on nothing but the OS.
+
+API facts the design now relies on (replacing guesses in R1, R2, R7):
+
+| Area | Fact |
+|---|---|
+| Parse | `Parser.Parse(sql)` returns `Result<ParseResult>`; `ParseResult.Stmts[i]` is a `RawStmt` (`Stmt`, `StmtLocation`, `StmtLen`). |
+| Error position | `Error.CursorPos` is **1-based, in Unicode code points** (not bytes, not UTF-16). `Error.GetCursorCharOffset(sql)` converts to a 0-based UTF-16 offset; `Error.GetLineAndColumn(sql)` gives line and column. This answers S3 for the parser. The server's `PostgresException.Position` follows the same rule (code points), so the engine converts it with the same helper (`PgPositions`), and S3's live check only confirms it. |
+| Tree locations | Node `location` and `RawStmt.StmtLocation` are **UTF-8 byte offsets**; `Utf8OffsetMapper.ToCharOffset(int)` converts to UTF-16. |
+| Scan | `Parser.Scan(sql)` returns `ScanResult.Tokens` (raw scanner tokens); `Parser.Tokenize(sql)` returns `SqlToken` (`Start`/`End` UTF-16, `Kind` in Keyword/Identifier/StringLiteral/NumericLiteral/Parameter/Operator/Punctuation/Comment/Other, `Token`, `KeywordKind`). Whitespace is not a token. |
+| Split | `Parser.SplitWithScanner(sql)` returns `SplitResult.Statements` (`SplitStmt`: `Location`, `Length` in UTF-16, `Text`). `Text` is the **raw slice, leading white space included**, so a statement starts at the first non-white-space character after `Location`; error positions must be added to that, not to `Location`. Dollar quoting is respected. |
+| Equivalence | `ParseTreeExtensions.EqualsIgnoringLocations(IMessage, IMessage)` compares two trees ignoring every location field. It replaces the hand-written location stripper planned in R2 for the formatter's meaning-preserved check (FR-141). |
+| Classification | `Parser.Classify(sql)` returns `StatementInfo` (`Kind`: Select, Insert, Update, Delete, Merge, Truncate, Copy, Ddl, Transaction, Session, Cursor, Prepared, Explain, Call, Maintenance, Lock; `IsReadOnly`, `IsUtility`, `HasDataModifyingCte`, `HasLockingClause`). It drives the transaction tracker (R9) and several rules. |
+| Tree walking | `ParseTreeExtensions.Walk`/`Descendants`/`GetLocation`/`GetText`, and `Deparse(IMessage)`, exist and are used by the rules and the formatter's token anchoring (S2). |
+| PL/pgSQL | `Parser.ParsePlpgsql` is available for the dynamic-SQL rule (PGSE001). |
+
+Consequence for tasks: T038 wraps these members (`PgParser`, `PgStatementSplitter`, `PgPositions`)
+rather than re-implementing them; T022's `StripLocations`/`TreesEquivalent` test becomes a thin test
+of `EqualsIgnoringLocations`.
+
+### S3 - the server's error position counts characters (recorded 2026-10-14, T071)
+
+**Outcome: confirmed.** `PostgresException.Position` is 1-based and counts Unicode code points, as the parser's
+cursor position does. `PgExecuteRunnerTests.A_character_outside_the_basic_plane_before_the_error_still_puts_the_caret_in_the_right_place`
+runs `SELECT 'a<U+1F642>' || nope;` on the second line: the server reports `nope` at character 16, the engine
+converts it with `PgPositions.ToUtf16Offset` to editor column 17, and the test pins line 2, column 17. An error
+without a position (for example `RAISE EXCEPTION`, SQLSTATE `P0001`) is placed at the start of its statement. The
+engine sends each statement on its own, so the position is relative to the statement text and is shifted by the
+statement's start in the script (`PgPositions.ToDocumentOffset`) before the line and column are read.
+
+### S4 - a cancelled or timed-out statement keeps the physical connection (recorded 2026-10-14, T071)
+
+**Outcome: the connection and its backend survive; no Disconnected path is needed for timeouts.** Probed against
+PostgreSQL 18 with Npgsql 10.0.3 and pinned by `PgExecuteRunnerTests`:
+
+| Event | What the driver does | Result in the engine |
+|---|---|---|
+| `CommandTimeout` expires | sends a cancel request, throws `NpgsqlException` with an inner `TimeoutException` | `TimedOut`; the backend process id before and after is the same; the next run works |
+| user cancel (token) | sends a cancel request, throws `OperationCanceledException` | `Cancelled`; the next run works |
+| server `statement_timeout` | `PostgresException` with SQLSTATE `57014` | an ordinary error |
+| backend terminated (`pg_terminate_backend`) | `NpgsqlException` with an inner `IOException`; connection state Closed (Broken) | `Disconnected`; later statements Skipped; the transaction state resets to None |
+
+The same cancel request that stops a statement inside a transaction aborts the transaction (SQLSTATE `57014`), so
+the transaction tracker treats a timeout and a cancel as failures. No password or connection string appears in any
+of the messages.
+
+### S5 - `AllResultTypesAreUnknown` returns the server's text for every type (recorded 2026-10-14, T071)
+
+**Outcome: confirmed, and the driver's own type names are good enough.** With the flag set on each command,
+`reader.GetString` returns exactly what `psql` prints: `{1,2,3}` for an integer array, `1 day 02:00:00` for an
+interval, `{"a": 1}` for json (spacing as the server writes it), `Þadbeef` for bytea, the label of an enum, and
+`1.50` for `numeric(10,2)`. `GetDataTypeName` already carries the declared modifier (`character varying(5)`,
+`numeric(10, 2)`); the engine removes the space after the comma to match `format_type` (`numeric(10,2)`), and a type
+outside `pg_catalog` arrives schema-qualified (`public.mood`). That makes the column-schema call (a catalog query on a
+cloned connection per result set) unnecessary for display; the editing story will fetch column provenance itself, once
+per table, not per set.
+
+Two driver facts used by the runner: `NpgsqlDataReader.Statements[0].StatementType` and `.Rows` give the counted
+command tags (`SELECT n`, `INSERT 0 n`, `UPDATE n`, `DELETE n`, `MERGE n`, `COPY n`) while every definition or control
+command reports `Other`, whose tag the engine builds from the statement's leading words (`PgCommandTag`); `Statements`
+is marked obsolete in favour of the batch API, which has no `AllResultTypesAreUnknown`, so the property is used with
+the warning suppressed in one place.
+
+### Connection failures by cause (recorded 2026-10-14, T055)
+
+Probed against the private server, a closed port, an unknown host and the local SQL Server on port 1433:
+
+| Cause | Driver exception | Engine message |
+|---|---|---|
+| wrong password / unknown user | `PostgresException` 28P01 | server text + "Check the user name and password." |
+| unknown database | `PostgresException` 3D000 | server text + hint to connect to `postgres` |
+| password missing, server wants one | `NpgsqlException` "No password has been provided ..." | `dialect.password-required` |
+| TLS verification fails | `NpgsqlException` "Exception while performing SSL handshake", inner `AuthenticationException` | TLS text + hint about the mode and root certificate |
+| port closed / host unknown | `NpgsqlException` with inner `SocketException` | "Could not reach host:port ..." |
+| port answers in another protocol (SQL Server on 1433) | `NpgsqlException` "Exception while reading from stream", inner `EndOfStreamException` | "The server at host:port did not answer as a PostgreSQL server. Check the database kind." |
+| SQL Server driver against 5432 | `SqlException` 258 (a plain timeout; the driver gives no protocol signal) | reworded only because the port is 5432 (FR-008) |

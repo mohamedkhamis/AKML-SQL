@@ -28,6 +28,8 @@ builder.Services.AddSingleton<IIndexedDbAdapter, JsIndexedDbAdapter>();
 builder.Services.AddSingleton<IThemeApplier, JsThemeApplier>();
 
 builder.Services.AddSingleton<IFormatterService, FormatterService>();
+// Spec 042: which dialect the active connection speaks, so the in-browser T-SQL services never see PostgreSQL text.
+builder.Services.AddSingleton<IDialectGate, DialectGate>();
 builder.Services.AddSingleton<IProfileStore>(sp => new ProfileStore(
     sp.GetRequiredService<IIndexedDbAdapter>(),
     sp.GetRequiredService<IEngineBridge>()));
@@ -37,7 +39,7 @@ builder.Services.AddSingleton<IAnalysisSettingsStore, AnalysisSettingsStore>();
 // unambiguously injected (rather than relying on DI to fill the optional ctor param) —
 // "Suppress globally" depends on this same store instance being read on the next analyse.
 builder.Services.AddSingleton<IAnalyserService>(sp =>
-    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>()));
+    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>(), sp.GetRequiredService<IDialectGate>()));
 builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IEditorSessionStore, EditorSessionStore>();
 builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();

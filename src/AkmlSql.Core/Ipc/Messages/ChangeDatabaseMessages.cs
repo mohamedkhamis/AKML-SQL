@@ -37,5 +37,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>The persistent connection had to be reopened: #temp tables and SET options were lost.</summary>
         [Key(3)]
         public bool ConnectionWasReset { get; set; }
+
+        /// <summary>Spec 042: the transaction state after the switch (always 0 after a PostgreSQL reconnect: an open transaction is lost).</summary>
+        [Key(4)]
+        public int TransactionState { get; set; }
     }
 }

@@ -29,11 +29,11 @@ style error on a SQL Server port) is rephrased: "The server at host:port did not
 
 | Surface | Change | Test id |
 | --- | --- | --- |
-| `ConnectionPickerComponent` | kind label + icon per entry (`database` icon for PostgreSQL, existing plug icon for SQL Server) | `conn-item-kind` |
+| Connection manager saved list (`ConnectionManagerModal`; `ConnectionPickerComponent` lists engines, not database connections) | kind badge per entry ("PG" for PostgreSQL, "Win" / "SQL" for SQL Server, with the full name as its title) | `conn-row-kind` |
 | `StatusBar` | kind segment before the server segment: icon + "PostgreSQL" / "SQL Server"; tooltip with server version | `status-kind` |
 | `StatusBar` | transaction segment when state ≠ None: "Transaction open" / "Transaction aborted" + Rollback button | `status-txn`, `status-txn-rollback` |
 | `StatusBar` | `status-login` title becomes "Login" (was "SQL Server login") only on PostgreSQL sessions | existing id |
-| `CommandPalette` | existing "Connect to SQL Server…" entry unchanged; new "Connect to PostgreSQL…" opens the dialog on the PostgreSQL kind | `palette-connect-postgresql` |
+| `CommandPalette` | existing "Connect to SQL Server…" entry unchanged; new "Connect to PostgreSQL…" opens the dialog on the PostgreSQL kind | row selector `[data-action-id='sql:connect-postgresql']` |
 | Settings → Connections | kind badge per saved connection; Forget password action | `settings-conn-kind`, `settings-conn-forget` |
 | Settings → Diagnostics | "PostgreSQL support: available / not advertised / disabled in config"; active kind + server version | `diag-postgresql` |
 
@@ -50,7 +50,7 @@ style error on a SQL Server port) is rephrased: "The server at host:port did not
 | Snippets | built-in list swapped by kind; user snippets stored with `Kind` and filtered by it (FR-066) |
 | Safety check | `SafetyCheckRequest.Kind = PostgreSql` |
 | Unsupported surfaces (FR-092) | Refactor menu entries, Find invalid objects: disabled with tooltip "Not available for PostgreSQL" (`data-testid="unavailable-postgresql"`); the palette entries carry the same note; shortcuts show the message in the status outcome segment |
-| Database selector | before switching on PostgreSQL: dialog "PostgreSQL reconnects to switch databases. Temporary tables, session settings and any open transaction are lost." (`db-switch-confirm`); when `TransactionState ≠ None`: "Roll back the open transaction and switch?" (FR-009, FR-031) |
+| Database selector | before switching on PostgreSQL: dialog "Switch to {db}?" - "PostgreSQL connects to one database at a time, so switching to {db} reconnects. Temporary tables and session settings are lost." (`data-dialog-id="db-switch-confirm"`); when `TransactionState ≠ None`: "Open transaction" / "Aborted transaction" - "... Switching to {db} reconnects and rolls it back. Nothing is committed." with a destructive "Roll back and switch" (FR-009, FR-031). The connection manager asks the same way before Connect |
 | Connection switch | same transaction guard (FR-009); editor text untouched; `setDialect` after the switch |
 
 ## Results pane

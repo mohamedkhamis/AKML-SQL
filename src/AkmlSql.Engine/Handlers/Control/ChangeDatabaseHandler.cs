@@ -2,13 +2,18 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
+using AkmlSql.Core.Connections;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Pairing;
+using AkmlSql.Engine.PostgreSql;
 using AkmlSql.Engine.Schema;
+using AkmlSql.Engine.Server;
 using AkmlSql.Engine.Transports;
 using Microsoft.Data.SqlClient;
+using Npgsql;
 using Serilog;
 
 namespace AkmlSql.Engine.Handlers.Control
@@ -49,6 +54,10 @@ namespace AkmlSql.Engine.Handlers.Control
             if (!IsSafeDatabaseName(request.DatabaseName))
                 return Refuse("That is not a valid database name.");
             var database = request.DatabaseName!;   // as listed: leading and trailing spaces are part of a name
+
+            // Spec 042 (FR-031): PostgreSQL cannot change database on a connection; the session reconnects to the new one.
+            if (session.Kind == DatabaseKind.PostgreSql)
+                return await SwitchPostgresAsync(request.SessionId!, session, database, ctx, ct).ConfigureAwait(false);
 
             // The same connection string, pointed at the new database (and its alias resolved), judged by the guard
             // as every other bridge request is.
@@ -106,6 +115,68 @@ namespace AkmlSql.Engine.Handlers.Control
         }
 
         /// <summary>
+        /// Spec 042 (FR-031, FR-009): a PostgreSQL connection is to one database for its whole life, so the switch is a
+        /// reconnect. The new database is opened first - a name that does not exist, or one the role may not connect to, leaves the
+        /// session exactly as it was. Then the old connection goes (its temporary tables and settings with it, and an open
+        /// transaction is rolled back, never committed: the web edition asked first) and the session is re-keyed to the new
+        /// database, which is read in the background. The reply says the connection was reset and the transaction is gone.
+        /// </summary>
+        private static async Task<ChangeDatabaseResponse> SwitchPostgresAsync(
+            string sessionId, SessionState session, string database, RpcContext ctx, CancellationToken ct)
+        {
+            string connectionString, host;
+            int port;
+            try
+            {
+                var builder = new NpgsqlConnectionStringBuilder(session.ConnectionString) { Database = database };
+                connectionString = builder.ConnectionString;
+                host = builder.Host ?? string.Empty;
+                port = builder.Port;
+            }
+            catch (ArgumentException)
+            {
+                return Refuse("The session's connection string is not valid.");
+            }
+
+            if (PgTargetGuard.Check(connectionString) is { } refusal)
+            {
+                Log.Warning("ChangeDatabase (PostgreSQL) refused for a bridge request (session={Session}) - {ConnDesc}",
+                    sessionId, PgConnectionString.Describe(connectionString));
+                return Refuse(refusal.Message);
+            }
+
+            var registry = ctx.SessionConnections;
+            if (registry == null) return Refuse("This engine cannot switch databases.");
+
+            PgConnectionFacts facts;
+            try
+            {
+                facts = await PgConnectionFactory.ReadFactsAsync(connectionString, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("ChangeDatabase (PostgreSQL) failed ({Type}) for session={Session}", ex.GetType().Name, sessionId);
+                return Refuse(PgConnectionFailure.Describe(ex, host, port).Message);
+            }
+
+            registry.Dispose(sessionId);
+            registry.GetOrCreate(sessionId, connectionString, DatabaseKind.PostgreSql);   // the next run opens in the new database
+
+            Rekey(ctx, sessionId, facts.Database, connectionString);
+            session.TransactionState = TransactionState.None;
+            session.SearchPath = facts.SearchPath;
+            Log.Information("ChangeDatabase (PostgreSQL): session={Session} now in {Db}", sessionId, facts.Database);
+            return new ChangeDatabaseResponse
+            {
+                Ok = true, DatabaseName = facts.Database, ConnectionWasReset = true, TransactionState = (int)TransactionState.None,
+            };
+        }
+
+        /// <summary>
         /// Point the session at <paramref name="database"/> and give it a populated schema cache — used by the switch
         /// and by an execute whose <c>USE</c> moved the connection (R27). Never disposes the connection.
         /// </summary>
@@ -115,10 +186,11 @@ namespace AkmlSql.Engine.Handlers.Control
             DatabaseProvider.InvalidateSession(sessionId);
 
             var cache = ctx.SchemaCache.GetOrCreateCache(sessionId, database);
-            if (cache.PermissionDenied || ctx.SchemaMetadata == null) return;
+            // Spec 042: the catalog reader of the session's kind.
+            var metadata = ctx.SchemaMetadataFor(ctx.Sessions.KindOf(sessionId));
+            if (cache.PermissionDenied || metadata == null) return;
             if (cache.Phase != PopulationPhase.NotLoaded || !ctx.SchemaCache.TryClaimPopulation(cache.CacheKey)) return;
 
-            var metadata = ctx.SchemaMetadata;
             var manager = ctx.SchemaCache;
             _ = Task.Run(async () =>
             {

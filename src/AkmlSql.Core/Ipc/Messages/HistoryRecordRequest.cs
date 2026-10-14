@@ -68,5 +68,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(12)]
         public bool IsDraft { get; set; }
+
+        /// <summary>Spec 042 (FR-020, FR-070): the <see cref="DatabaseKind"/> the query ran against (0 SQL Server, 1 PostgreSQL). Appended key: older shells omit it (0).</summary>
+        [Key(13)]
+        public int Kind { get; set; }
     }
 }

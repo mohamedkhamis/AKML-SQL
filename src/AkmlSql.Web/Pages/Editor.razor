@@ -156,7 +156,8 @@
            conversation; the AI dock mounts the first time it is shown. *@
         <div class="akml-ws-schema @(SchemaShown ? null : "akml-ws-hidden")" id="akml-ws-schema" data-testid="workspace-schema"
              role="region" aria-label="Schema" tabindex="-1">
-            <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
+            <SchemaTreeComponent Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)"
+                                     ServerCanonicalIdentity="@_activeServerIdentity"
                                  DatabaseName="@_activeDatabaseName"
                                  SessionId="@(SqlConn.IsConnected ? SqlConn.SessionId : null)"
                                  OnObjectClicked="OnSchemaObjectClickedAsync"
@@ -190,7 +191,8 @@
                 }
             </div>
             <div class="akml-ws-editor">
-                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
+                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync"
+                                 Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)" />
             </div>
         </div>
 
@@ -217,7 +219,8 @@
                 <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
                                       Findings="_findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
                                       OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
-                                      SelectionStartLine="_selectionStartLine" ReceivedAt="_resultReceivedAt" OnNavigateToLine="OnNavigateToLineAsync"
+                                      SelectionStartLine="_selectionStartLine" SelectionStartColumn="_selectionStartColumn" ReceivedAt="_resultReceivedAt"
+                                      OnNavigateToLine="OnNavigateToLineAsync" OnNavigateToPosition="OnNavigateToPositionAsync"
                                       OnApplied="OnAppliedReExecuteAsync" DocumentName="@Document.Name"
                                       ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy" />
             </div>
@@ -745,6 +748,10 @@
     private string _resultsTab = ResultsPaneComponent.ResultsTab;
     private DateTimeOffset _resultReceivedAt = DateTimeOffset.Now;
     private int _selectionStartLine = 1;
+
+    // Spec 042: where the executed text began on its first line; a PostgreSQL error on that line maps from it.
+    private int _selectionStartColumn = 1;
+    private int _pendingStartColumn = 1;
     private int _executeVersion;
     private int _lastExecuteStatus;
     private bool _analysisEnabled = true;
@@ -872,7 +879,7 @@
     {
         if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Server) && !string.IsNullOrEmpty(SqlConn.Database))
         {
-            _activeServerIdentity = SqlConn.Server;
+            _activeServerIdentity = SqlConn.SchemaIdentity ?? SqlConn.Server;
             _activeDatabaseName = SqlConn.Database;
         }
         else
@@ -900,7 +907,7 @@
         {
             if (!SqlConn.IsConnected)
             {
-                _status = "Connect to a SQL Server first (Connect button / palette).";
+                _status = "Connect to a database first (Connect button / palette).";
                 return;
             }
 
@@ -928,7 +935,12 @@
     {
         if (_editor == null) return (string.Empty, 1);
         var selection = await _editor.GetSelectionInfoAsync();
-        if (!string.IsNullOrWhiteSpace(selection.Text)) return (selection.Text, Math.Max(1, selection.StartLine));
+        if (!string.IsNullOrWhiteSpace(selection.Text))
+        {
+            _pendingStartColumn = Math.Max(1, selection.StartColumn);
+            return (selection.Text, Math.Max(1, selection.StartLine));
+        }
+        _pendingStartColumn = 1;
         return (await _editor.GetTextAsync(), 1);
     }
 
@@ -951,7 +963,7 @@
         if (WebHistoryLogic.ShouldRecord(result.Status))
         {
             // Spec 041 (R27): the database the script ended in (a USE moves it).
-            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name);
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name, SqlConn.Kind);
             _ = History.RecordAsync(rec, CancellationToken.None);
         }
 
@@ -971,6 +983,7 @@
         _result = result;
         _resultReceivedAt = DateTimeOffset.Now;
         _selectionStartLine = startLine;
+        _selectionStartColumn = _pendingStartColumn;
         if (chooseTab)
         {
             _resultsTab = result.ResultSets.Length > 0 && result.Status == ExecuteStatus.Ok
@@ -980,6 +993,20 @@
         Workspace.Complete(result);
         _executeVersion++;
         _lastExecuteStatus = result.Status;
+
+        // Spec 042 (FR-043): a PostgreSQL run that created, altered or dropped something shows in the explorer without a manual
+        // refresh. The engine has started reloading its catalog; this waits for it to settle and fetches the result.
+        if (SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && ChangedSchema(result))
+            _ = RefreshSchemaAfterRunAsync();
+    }
+
+    private static bool ChangedSchema(ExecuteQueryResult result) =>
+        result.MessageDetails?.Any(m => m.Kind == ExecuteMessageKind.RowCount && AkmlSql.Core.Text.PgCommandTags.ChangesSchema(m.Text)) == true;
+
+    private async Task RefreshSchemaAfterRunAsync()
+    {
+        try { await SchemaSync.RefreshAsync(); }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "schema-sync", $"Refresh after a run failed: {ex.Message}"); }
     }
 
     /// <summary>The engine understands Parse (it advertises execute.v2).</summary>
@@ -1024,6 +1051,22 @@
             .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == line);
         var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
         _errorDiagnostic = new EditorDiagnostic(line, 3, text, Source: "execute");
+        await ShowDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// Spec 042 (FR-014): a PostgreSQL error was clicked, in Messages or Problems: put the caret at its line and column and mark
+    /// the line, so the failing token is where the caret is.
+    /// </summary>
+    private async Task OnNavigateToPositionAsync(DocumentPosition position)
+    {
+        if (_editor == null) return;
+        await _editor.GotoPositionAsync(position.Line, position.Column);
+        var message = _result?.MessageDetails?.FirstOrDefault(m =>
+            ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == position.Line
+            && ExecuteLineMapper.DocumentColumn(_selectionStartColumn, m) == position.Column);
+        var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
+        _errorDiagnostic = new EditorDiagnostic(position.Line, 3, text, StartColumn: position.Column, Source: "execute");
         await ShowDiagnosticsAsync();
     }
 

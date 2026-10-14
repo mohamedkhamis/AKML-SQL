@@ -5,9 +5,11 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
+using AkmlSql.Engine.PostgreSql;
 using AkmlSql.Engine.Schema;
 using MessagePack;
 using Microsoft.Data.SqlClient;
@@ -51,16 +53,25 @@ namespace AkmlSql.Engine.Execution
         private readonly SchemaCacheManager _schemaCache;
         private readonly TsqlParserService _parser;
         private readonly Action<string, string>? _databaseMoved;
+        private readonly Func<string, DatabaseKind> _kindOf;
+        private readonly Action<string>? _schemaChanged;
+        private readonly PgExecuteRunner _postgresRunner = new();
 
         /// <param name="databaseMoved">Spec 041 (R27): called with (sessionId, database) when a script's <c>USE</c> left
         /// the session in another database, so the session is re-keyed (its schema cache follows).</param>
+        /// <param name="kindOf">Spec 042: the kind of server a session is connected to; a PostgreSQL session is served by
+        /// <see cref="PgExecuteRunner"/> and <see cref="PgParseRunner"/>. Null means every session is SQL Server.</param>
+        /// <param name="schemaChanged">Spec 042 (FR-043): called with the session id after a PostgreSQL run that changed the catalog,
+        /// so the engine reloads that session's schema.</param>
         public ExecuteQueryHandler(SessionConnectionRegistry registry, SchemaCacheManager schemaCache, TsqlParserService? parser = null,
-            Action<string, string>? databaseMoved = null)
+            Action<string, string>? databaseMoved = null, Func<string, DatabaseKind>? kindOf = null, Action<string>? schemaChanged = null)
         {
+            _schemaChanged = schemaChanged;
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _schemaCache = schemaCache ?? throw new ArgumentNullException(nameof(schemaCache));
             _parser = parser ?? new TsqlParserService();
             _databaseMoved = databaseMoved;
+            _kindOf = kindOf ?? (_ => DatabaseKind.SqlServer);
         }
 
         public Task<RpcMessage?> HandleAsync(
@@ -92,6 +103,10 @@ namespace AkmlSql.Engine.Execution
                 var (connStr, dbName) = sessionLookup(req.SessionId);
                 if (string.IsNullOrEmpty(connStr))
                     return Respond(request.RequestId, replyType, Err(queryId, ExecuteStatus.NoConnection, "No active database connection for this session."));
+
+                // Spec 042: a PostgreSQL session has no GO and no T-SQL parser; it runs its own way.
+                if (_kindOf(req.SessionId) == DatabaseKind.PostgreSql)
+                    return await HandlePostgresAsync(request.RequestId, replyType, req, connStr!, parseOnly, ct).ConfigureAwait(false);
 
                 // A GO line holding anything but a count refuses the whole script, before anything runs; so does a
                 // script with more batches than one reply can describe.
@@ -187,6 +202,69 @@ namespace AkmlSql.Engine.Execution
             {
                 Log.Error(ex, "ExecuteQuery failed");
                 return Respond(request.RequestId, replyType, WithDatabase(Err(queryId, ExecuteStatus.Error, ex.Message), currentDatabase));
+            }
+        }
+
+        /// <summary>
+        /// Spec 042 (T060): Execute and Parse for a PostgreSQL session. Parse checks the text with the PostgreSQL grammar and
+        /// never touches the server. Execute runs on the session's persistent connection under the same gate, cancel registry
+        /// and caps as a SQL Server script; the session's transaction state is carried from run to run.
+        /// </summary>
+        private async Task<RpcMessage?> HandlePostgresAsync(int requestId, int replyType, ExecuteQueryRequest req, string connStr,
+            bool parseOnly, CancellationToken ct)
+        {
+            string queryId = req.QueryId ?? string.Empty;
+
+            if (parseOnly)
+            {
+                var parsed = PgParseRunner.Run(req.Sql);
+                parsed.QueryId = queryId;
+                return Respond(requestId, replyType, parsed);
+            }
+
+            int maxRows = Clamp(req.MaxRows, 1, MaxRowsCeiling, MaxRowsDefault);
+            int timeoutSec = Clamp(req.CommandTimeoutSeconds, 1, CommandTimeoutCeilingSeconds, CommandTimeoutDefaultSeconds);
+            _registry.EvictIdle();
+
+            var sessionConn = _registry.GetOrCreate(req.SessionId, connStr, DatabaseKind.PostgreSql);
+            using var cts = new CancellationTokenSource();
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var (result, wasReset) = await sessionConn.RunExclusivePostgresAsync(
+                    connStr,
+                    async (conn, _) =>
+                    {
+                        // The gate is held: only now can a cancel reach this execute.
+                        sessionConn.RegisterQuery(queryId, cts);
+                        var run = await _postgresRunner.RunAsync(conn, req.Sql, sessionConn.TransactionState, maxRows, timeoutSec, null, cts.Token,
+                                _schemaChanged == null ? null : () => _schemaChanged(req.SessionId))
+                            .ConfigureAwait(false);
+                        sessionConn.TransactionState = (TransactionState)run.TransactionState;
+                        return run;
+                    },
+                    ct).ConfigureAwait(false);
+
+                sw.Stop();
+                result.QueryId = queryId;
+                result.ElapsedMs = sw.ElapsedMilliseconds;
+                result.ConnectionWasReset = wasReset;
+                return Respond(requestId, replyType, result);
+            }
+            catch (OperationCanceledException)
+            {
+                return Respond(requestId, replyType, Err(queryId, ExecuteStatus.Cancelled, "Query cancelled."));
+            }
+            catch (Exception ex)
+            {
+                // The connection could not be opened, or the runner failed in a way it does not report itself. Nothing ran.
+                // The text is the driver's; it holds no password.
+                Log.Warning("PostgreSQL ExecuteQuery failed before running: {Type}", ex.GetType().Name);
+                return Respond(requestId, replyType, Err(queryId, ExecuteStatus.Error, ex.Message));
+            }
+            finally
+            {
+                sessionConn.CompleteQuery(queryId);
             }
         }
 

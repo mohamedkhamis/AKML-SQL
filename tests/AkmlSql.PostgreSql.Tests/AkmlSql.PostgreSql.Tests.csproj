@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AkmlSql.PostgreSql.Tests</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.*" />
+    <PackageReference Include="xunit" Version="2.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AkmlSql.PostgreSql\AkmlSql.PostgreSql.csproj" />
+    <ProjectReference Include="..\..\tools\pg-reference\AkmlSql.PostgreSql.ReferenceGen\AkmlSql.PostgreSql.ReferenceGen.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The PostgreSQL completion and format corpora live beside the T-SQL ones under tests/. -->
+    <Content Include="..\pg-completion-corpus\**\*.json" LinkBase="pg-completion-corpus" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\pg-format-corpus\**\*.sql" LinkBase="pg-format-corpus" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Task T039: the pinned T-SQL dictionaries the isolation tests compare against. -->
+    <Content Include="Isolation\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Task T090: excerpts of the PostgreSQL source files the reference generator reads. -->
+    <Content Include="Reference\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

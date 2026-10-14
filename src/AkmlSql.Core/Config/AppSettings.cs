@@ -123,6 +123,15 @@ namespace AkmlSql.Core.Config
         public LabsSettings Labs { get; set; } = new();
 
         /// <summary>
+        /// Spec 042 (FR-093): PostgreSQL support as one switchable unit. When
+        /// <see cref="PostgreSqlSettings.Enabled"/> is <c>false</c> the engine does not advertise
+        /// <c>dialect.postgresql.v1</c> and registers no PostgreSQL handlers, so the product behaves
+        /// exactly as it did before the feature.
+        /// </summary>
+        [JsonPropertyName("postgreSql")]
+        public PostgreSqlSettings PostgreSql { get; set; } = new();
+
+        /// <summary>
         /// Spec 025 (M3 bridge closure) FR-027: WebSocket-bridge transport composition.
         /// When <see cref="BridgeOptions.Enabled"/> is <c>true</c>, the engine host starts
         /// a <c>WebSocketTransport</c> alongside the existing <c>NamedPipeTransport</c>;
@@ -222,6 +231,13 @@ namespace AkmlSql.Core.Config
     /// Experimental / preview feature flags. Per-feature opt-ins for in-flight work.
     /// Labs entries may change or be removed without notice.
     /// </summary>
+    /// <summary>Spec 042: the PostgreSQL feature switch (default on).</summary>
+    public class PostgreSqlSettings
+    {
+        [JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = true;
+    }
+
     public class LabsSettings
     {
         [JsonPropertyName("ghostTextCompletion")]

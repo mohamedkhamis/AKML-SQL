@@ -65,6 +65,19 @@ export function optionExtensions(cm, opts) {
     };
 }
 
+/**
+ * Spec 042 (FR-060, FR-065, research R23) - the SQL language extension for a database kind (pure; `cm` is the
+ * bundle). 'postgresql' gets the PostgreSQL dialect (its keywords, dollar-quoted strings, `::` casts, $n parameters,
+ * double-quoted identifiers); anything else, including no connection, is exactly what the editor used before the
+ * feature, so SQL Server highlighting does not change.
+ */
+export function dialectExtension(cm, kind) {
+    const isPostgres = typeof kind === 'string' && kind.trim().toLowerCase() === 'postgresql';
+    return isPostgres
+        ? cm.langSql.sql({ dialect: cm.langSql.PostgreSQL })
+        : cm.langSql.sql();
+}
+
 /** The font size is CSS only: a variable on the host the editor's font-size reads. */
 function applyFontSize(host, opts) {
     if (host && host.style) host.style.setProperty('--akml-editor-font-size', `${normaliseEditorOptions(opts).fontSize}px`);
@@ -662,6 +675,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     // editor (setEditorOptions) instead of recreating it.
     const wrapCompartment = new cm.state.Compartment();
     const tabCompartment = new cm.state.Compartment();
+    const dialectCompartment = new cm.state.Compartment();   // Spec 042: SQL Server (default) or PostgreSQL language
     const optionExt = optionExtensions(cm, options);
     applyFontSize(host, options);
 
@@ -684,7 +698,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                 ...cm.search.searchKeymap,
                 cm.commands.indentWithTab,
             ]),
-            cm.langSql.sql(),
+            dialectCompartment.of(dialectExtension(cm, options && options.dialect)),
             // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
             // map rendering via CM6's default so nothing goes uncoloured.
             cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
@@ -712,7 +726,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     });
 
     const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
-    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, disposeLintKeyboard });
+    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard });
 }
 
 // CodeMirror's lint gutter opens its own tooltip on mouseover. Give its markers the same
@@ -755,6 +769,17 @@ function installLintKeyboard(view, hostElementId) {
         view.dom.removeEventListener('focusout', blur);
         view.dom.removeEventListener('keydown', key);
     };
+}
+
+/**
+ * Spec 042 (FR-060, FR-065) - switch an open editor's SQL language to a database kind ('postgresql' or
+ * 'sqlserver'). Reconfigures one compartment: the text, caret, history and diagnostics are untouched, so switching
+ * connections keeps what the user typed.
+ */
+export function setDialect(hostElementId, kind) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !inst.dialectCompartment) return;
+    inst.view.dispatch({ effects: inst.dialectCompartment.reconfigure(dialectExtension(inst.cm, kind)) });
 }
 
 /** Spec 041 (R53) — apply changed editor options to an open editor. */
@@ -814,10 +839,12 @@ export function selectionStartLine(doc, range) {
  */
 export function getSelectionInfo(hostElementId) {
     const inst = _instances.get(hostElementId);
-    if (!inst) return { text: '', startLine: 1 };
+    if (!inst) return { text: '', startLine: 1, startColumn: 1 };
     const state = inst.view.state;
     const sel = state.selection.main;
-    return { text: state.sliceDoc(sel.from, sel.to), startLine: selectionStartLine(state.doc, sel) };
+    // Spec 042: the column the selection starts at on its first line, so an error on that line maps back to the document.
+    const startColumn = sel.from - state.doc.lineAt(sel.from).from + 1;
+    return { text: state.sliceDoc(sel.from, sel.to), startLine: selectionStartLine(state.doc, sel), startColumn };
 }
 
 /** Replace the entire document. */
@@ -992,6 +1019,25 @@ export function gotoLine(hostElementId, lineNumber1Based) {
     inst.view.dispatch({
         selection: { anchor: lineInfo.from, head: lineInfo.to },
         effects: inst.cm.view.EditorView.scrollIntoView(lineInfo.from, { y: 'center' }),
+    });
+    inst.view.focus();
+}
+
+/**
+ * Spec 042 (FR-014): put the caret at a (1-based) line and column and scroll it into view. A PostgreSQL error knows its
+ * column, so the caret lands on the token the server named instead of selecting the whole line. A line or column past
+ * the document is clamped to its end.
+ */
+export function gotoPosition(hostElementId, lineNumber1Based, column1Based) {
+    const inst = _instances.get(hostElementId);
+    if (!inst) return;
+    const doc = inst.view.state.doc;
+    const line = Math.max(1, Math.min(lineNumber1Based, doc.lines));
+    const lineInfo = doc.line(line);
+    const offset = Math.max(0, Math.min((column1Based || 1) - 1, lineInfo.length));
+    inst.view.dispatch({
+        selection: { anchor: lineInfo.from + offset },
+        effects: inst.cm.view.EditorView.scrollIntoView(lineInfo.from + offset, { y: 'center' }),
     });
     inst.view.focus();
 }

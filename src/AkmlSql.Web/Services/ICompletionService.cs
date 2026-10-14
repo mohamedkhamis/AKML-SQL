@@ -39,11 +39,13 @@ internal sealed class CompletionService : ICompletionService
 {
     private readonly IEngineBridge _bridge;
     private readonly ISchemaCacheStore? _cache;
+    private readonly IDialectGate? _gate;
 
-    public CompletionService(IEngineBridge bridge, ISchemaCacheStore? cache = null)
+    public CompletionService(IEngineBridge bridge, ISchemaCacheStore? cache = null, IDialectGate? gate = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _cache = cache;   // null in tests that only exercise the online path
+        _gate = gate;
     }
 
     public async Task<CompletionResponse> CompleteAsync(
@@ -77,6 +79,10 @@ internal sealed class CompletionService : ICompletionService
 
     private async Task<CompletionResponse> BuildFromCacheAsync(int cursorOffset, string? liveDocumentText)
     {
+        // Spec 042 (FR-065, FR-090): connected-only. The offline list is T-SQL keywords, @variables and [brackets];
+        // PostgreSQL gets completion from the engine, and an engine that is gone means no suggestions, not wrong ones.
+        if (_gate?.IsPostgres == true) return new CompletionResponse();
+
         // Keywords are ALWAYS available offline — they don't depend on any cache.
         // When no schema snapshot is present (fresh browser, never paired with an
         // engine, OR paired but the engine has no SQL session yet), the user still

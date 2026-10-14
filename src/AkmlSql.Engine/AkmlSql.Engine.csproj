@@ -29,6 +29,8 @@
     <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
+    <!-- Spec 042: the PostgreSQL data path (sessions, catalog, execution, CRUD). Engine-only. -->
+    <PackageReference Include="Npgsql" Version="10.0.3" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.102.0" />
     <PackageReference Include="ClosedXML" Version="0.105.*" />
     <PackageReference Include="MessagePack" Version="3.1.8" />
@@ -56,6 +58,7 @@
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
     <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
+    <ProjectReference Include="..\AkmlSql.PostgreSql\AkmlSql.PostgreSql.csproj" />
   </ItemGroup>
 
   <ItemGroup>

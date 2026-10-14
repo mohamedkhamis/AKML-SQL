@@ -66,6 +66,10 @@ public sealed class AllMessageTypesInProcessTests
         // WebSocketTransport bootstrap, not by NamedPipeTransport (IDE shells do not send
         // it). Coverage stays in HandshakeHandlerTests.
         [MessageTypes.HandshakeRequest] = "M3 WebSocket bridge only -- not dispatched over named pipe.",
+
+        // RedactRequest -- spec 042 US4 (task T117). The literal-redaction handler for PostgreSQL AI prompts lands with the
+        // AI story; remove this entry when it is registered.
+        [MessageTypes.RedactRequest] = "Spec 042 US4 (T117): handler registered by the PostgreSQL AI redaction task.",
     };
 
     [Fact]

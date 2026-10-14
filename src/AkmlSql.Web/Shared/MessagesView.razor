@@ -4,6 +4,10 @@
     document is a button that takes the editor there; the last line is the completion time in local time.
     An older engine sends only the legacy strings, which are shown as they came. Styles: .akml-messages* in
     components/results-grid.css.
+
+    Spec 042 (FR-013, FR-014): a PostgreSQL error reads "SQLSTATE 42P01: message" with its DETAIL and HINT lines, and
+    its button goes to the line AND the column; a notice or warning is not an error and is drawn quieter (its level is in
+    its text, so colour is never the only sign).
 *@
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Core.Text
@@ -14,12 +18,13 @@
     {
         var index = i;
         var line = _lines[index];
-        <div class="akml-messages-line @(line.IsError ? "akml-messages-line--error" : null) @(line.IsSystem ? "akml-messages-line--system" : null)"
+        <div class="akml-messages-line @(line.IsError ? "akml-messages-line--error" : null) @(line.IsSystem ? "akml-messages-line--system" : null) @(line.IsNotice ? "akml-messages-line--notice" : null) @(line.IsWarning ? "akml-messages-line--warning" : null)"
              data-testid="@($"messages-line-{index}")">
             @if (line.IsError && line.DocumentLine is int target)
             {
                 <button type="button" class="akml-messages-error" data-testid="@($"messages-error-{index}")"
-                        title="@($"Go to line {target}")" @onclick="() => OnNavigate.InvokeAsync(target)">@line.Text</button>
+                        title="@(line.DocumentColumn is int col ? $"Go to line {target}, column {col}" : $"Go to line {target}")"
+                        @onclick="() => NavigateAsync(target, line.DocumentColumn)">@line.Text</button>
             }
             else if (line.IsError)
             {
@@ -44,16 +49,29 @@
     /// <summary>The document line the executed text started on (1 for the whole document).</summary>
     [Parameter] public int SelectionStartLine { get; set; } = 1;
 
+    /// <summary>The document column the executed text started at on its first line (1 for the whole document).</summary>
+    [Parameter] public int SelectionStartColumn { get; set; } = 1;
+
     /// <summary>When the reply arrived; the completion time when the engine sent none.</summary>
     [Parameter] public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.Now;
 
     /// <summary>An error was clicked: the document line it points at.</summary>
     [Parameter] public EventCallback<int> OnNavigate { get; set; }
 
-    private sealed record Line(string Text, bool IsError, bool IsSystem, int? DocumentLine);
+    /// <summary>Spec 042: a PostgreSQL error was clicked: its line and column. When nobody listens, <see cref="OnNavigate"/> gets the line.</summary>
+    [Parameter] public EventCallback<DocumentPosition> OnNavigateToPosition { get; set; }
+
+    private sealed record Line(string Text, bool IsError, bool IsSystem, int? DocumentLine, int? DocumentColumn = null,
+        bool IsNotice = false, bool IsWarning = false);
 
     private List<Line> _lines = new();
     private string? _completion;
+
+    private Task NavigateAsync(int line, int? column)
+    {
+        if (column is int c && OnNavigateToPosition.HasDelegate) return OnNavigateToPosition.InvokeAsync(new DocumentPosition(line, c));
+        return OnNavigate.InvokeAsync(line);
+    }
 
     protected override void OnParametersSet()
     {
@@ -64,8 +82,13 @@
         {
             foreach (var m in details)
             {
+                // A notice or warning from PostgreSQL is information with a level in its text, never an error.
+                var notice = m.Kind == ExecuteMessageKind.Info && !string.IsNullOrEmpty(m.SqlState);
                 lines.Add(new Line(SqlMessageText.Format(m), m.Kind == ExecuteMessageKind.Error, m.Kind == ExecuteMessageKind.System,
-                    ExecuteLineMapper.DocumentLine(SelectionStartLine, result, m)));
+                    ExecuteLineMapper.DocumentLine(SelectionStartLine, result, m),
+                    ExecuteLineMapper.DocumentColumn(SelectionStartColumn, m),
+                    IsNotice: notice,
+                    IsWarning: notice && (m.Text ?? string.Empty).StartsWith("WARNING", StringComparison.Ordinal)));
             }
         }
         else

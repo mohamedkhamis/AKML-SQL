@@ -10,7 +10,7 @@ the new keys, so an older client and a newer engine (or the reverse) keep workin
 | --- | --- |
 | Capability string | `dialect.postgresql.v1` (added to `Capabilities.Current`; omitted when `postgreSql.enabled` is false) |
 | Config section | `"postgreSql": { "enabled": true }` in `config.json` (`PostgreSqlSettings`) |
-| Error code for unsupported surfaces | `ErrorInfo.Code = "dialect.unsupported"`, message `Not available for PostgreSQL` |
+| Unsupported surfaces | The router answers a PostgreSQL session's request for a surface with no PostgreSQL implementation (refactorings, Find invalid objects, find references, find unused variables, CRUD generation, encrypted-object decryption, script-as, document outline) with the standard `Error` envelope (106): `ErrorInfo.Code = 4201` and `Message = "dialect.unsupported: Not available for PostgreSQL"`. `ErrorInfo.Code` is an int, so the string ids below travel in `ErrorCode` fields of the connection replies, and the numeric codes are 4201 `dialect.unsupported`, 4202 `dialect.password-required`, 4203 `dialect.credentials-required` (`DialectErrors`). |
 
 ## Existing messages: appended keys
 
@@ -20,7 +20,9 @@ the new keys, so an older client and a newer engine (or the reverse) keep workin
 | `ConnectionInfo` | 6 `RememberPassword` | bool | false | save the supplied password after a successful open (FR-104) |
 | `TestSqlConnectionRequest` | 1 `Kind` | int | 0 | which provider to test with |
 | `TestSqlConnectionResponse` | 2 `ServerVersion` | string? | null | e.g. `PostgreSQL 18.1` / SQL Server product version (FR-002) |
+| `TestSqlConnectionResponse` | 3 `ErrorCode` | string? | null | `dialect.password-required` / `dialect.credentials-required` when the failure has a stable id |
 | `ListDatabasesRequest` | 2 `Kind` | int | 0 | used only when `SessionId` is absent |
+| `ListDatabasesResponse` | 3 `ErrorCode` | string? | null | as above |
 | `ExecuteMessageDto` | 10 `SqlState` | string? | null | PostgreSQL SQLSTATE (`42P01`) |
 | `ExecuteMessageDto` | 11 `Detail` | string? | null | `PostgresException.Detail` / notice detail |
 | `ExecuteMessageDto` | 12 `Hint` | string? | null | server hint, or the engine's own hint (`GO` is SQL Server-only) |

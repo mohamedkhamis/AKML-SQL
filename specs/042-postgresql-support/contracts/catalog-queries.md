@@ -106,7 +106,7 @@ scale) and left 0 otherwise.
 ## Change detection (periodic, cheap)
 
 ```sql
-SELECT md5(coalesce(string_agg(c.oid::text || ':' || c.relname || ':' || c.relkind || ':' || c.relnamespace::text, ',' ORDER BY c.oid), ''))
+SELECT md5(coalesce(string_agg(c.oid::text || ':' || c.relname || ':' || c.relkind::text || ':' || c.relnamespace::text, ',' ORDER BY c.oid), ''))
 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind IN ('r','p','f','v','m','S') AND n.nspname NOT LIKE 'pg\_%' AND n.nspname <> 'information_schema';
 

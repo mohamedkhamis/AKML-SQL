@@ -23,6 +23,16 @@ public class StatementBoundaryDetector(TsqlParserService parserService)
         if (allStatements == null || allStatements.Length == 0)
             return null;
 
+        return Select(allStatements, cursorOffset);
+    }
+
+    /// <summary>
+    /// The statement a cursor belongs to: the one that contains it; between statements, the nearest one before (or
+    /// ending at) the cursor, and only if there is none before it, the nearest one after. Shared by every dialect, so
+    /// "execute current statement" behaves the same in a SQL Server script and in a PostgreSQL one.
+    /// </summary>
+    public static StatementRangeDto? Select(IReadOnlyList<StatementRangeDto> allStatements, int cursorOffset)
+    {
         foreach (var stmt in allStatements)
         {
             if (cursorOffset >= stmt.StartOffset && cursorOffset <= stmt.EndOffset)

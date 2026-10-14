@@ -1,6 +1,8 @@
+using AkmlSql.Core;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Parser;
+using AkmlSql.Engine.PostgreSql;
 using MessagePack;
 using Serilog;
 
@@ -13,12 +15,16 @@ public class ProductivityRequestHandler
 {
     private readonly StatementBoundaryDetector _boundaryDetector;
     private readonly DocumentOutlineBuilder _outlineBuilder;
+    private readonly Func<string, DatabaseKind> _kindOf;
 
-    public ProductivityRequestHandler(TsqlParserService parserService)
+    /// <param name="kindOf">Spec 042: the kind of server a session is connected to; a PostgreSQL session's statements are
+    /// found with the PostgreSQL splitter. Null means every session is SQL Server.</param>
+    public ProductivityRequestHandler(TsqlParserService parserService, Func<string, DatabaseKind>? kindOf = null)
     {
         ArgumentNullException.ThrowIfNull(parserService);
         _boundaryDetector = new StatementBoundaryDetector(parserService);
         _outlineBuilder = new DocumentOutlineBuilder(parserService);
+        _kindOf = kindOf ?? (_ => DatabaseKind.SqlServer);
     }
 
     /// <summary>
@@ -46,23 +52,28 @@ public class ProductivityRequestHandler
             }
 
             var response = new StatementBoundaryResponse { Success = true };
+            var postgres = _kindOf(req.SessionId) == DatabaseKind.PostgreSql;
 
             if (req.AllStatements)
             {
-                var allRanges = _boundaryDetector.GetAllStatements(req.SqlText);
+                var allRanges = postgres
+                    ? PgStatementBoundaries.GetAll(req.SqlText)
+                    : _boundaryDetector.GetAllStatements(req.SqlText);
                 response.AllStatements = allRanges;
 
                 // Also find the current statement if cursor offset is provided
                 if (req.CursorOffset >= 0)
                 {
-                    response.CurrentStatement = _boundaryDetector.FindStatementAtOffset(
-                        req.SqlText, req.CursorOffset);
+                    response.CurrentStatement = postgres
+                        ? PgStatementBoundaries.FindAtOffset(req.SqlText, req.CursorOffset)
+                        : _boundaryDetector.FindStatementAtOffset(req.SqlText, req.CursorOffset);
                 }
             }
             else
             {
-                response.CurrentStatement = _boundaryDetector.FindStatementAtOffset(
-                    req.SqlText, req.CursorOffset);
+                response.CurrentStatement = postgres
+                    ? PgStatementBoundaries.FindAtOffset(req.SqlText, req.CursorOffset)
+                    : _boundaryDetector.FindStatementAtOffset(req.SqlText, req.CursorOffset);
             }
 
             Log.Debug("StatementBoundary: current={HasCurrent}, allCount={AllCount}",

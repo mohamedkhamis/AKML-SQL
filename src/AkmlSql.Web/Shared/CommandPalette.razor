@@ -57,7 +57,7 @@
                                  id="@RowId(idx)" role="option" aria-selected="@(idx == _selected ? "true" : "false")"
                                  aria-disabled="@(available ? null : "true")"
                                  aria-checked="@(action.IsChecked == null ? null : action.IsOn ? "true" : "false")"
-                                 data-testid="command-palette-row"
+                                 data-testid="command-palette-row" data-action-id="@action.Id"
                                  @onclick="@(() => RunAsync(action))"
                                  @onmouseenter="@(() => _selected = idx)">
                                 @if (action.IsChecked != null)
@@ -559,6 +559,17 @@
             Group = CommandGroup.Action,
             Icon = "plug",
             Run = () => { ConnManager.Open(); return Task.CompletedTask; },
+        };
+
+        // Spec 042 (FR-001): the same dialog, opened on the PostgreSQL kind. On an engine without PostgreSQL support it
+        // opens on SQL Server with the reason shown beside the disabled choice.
+        yield return new CommandAction
+        {
+            Id = "sql:connect-postgresql",
+            Title = "Connect to PostgreSQL…",
+            Group = CommandGroup.Action,
+            Icon = "database",
+            Run = () => { ConnManager.Open(AkmlSql.Core.DatabaseKind.PostgreSql); return Task.CompletedTask; },
         };
 
         // Clear schema cache.

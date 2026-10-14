@@ -42,6 +42,19 @@ namespace AkmlSql.Engine
         public SchemaMetadataService? SchemaMetadata { get; init; }
 
         /// <summary>
+        /// Spec 042: the PostgreSQL catalog provider (<c>pg_catalog</c> queries). Null in contexts that never serve a
+        /// PostgreSQL session (most unit tests); <c>EngineComposition.Build</c> assigns it.
+        /// </summary>
+        public ISchemaMetadataProvider? PostgresSchemaMetadata { get; init; }
+
+        /// <summary>
+        /// Spec 042: the catalog provider for a session's database kind, or null when none is registered. SQL Server
+        /// callers keep getting the existing <see cref="SchemaMetadata"/> instance.
+        /// </summary>
+        public ISchemaMetadataProvider? SchemaMetadataFor(AkmlSql.Core.DatabaseKind kind) =>
+            kind == AkmlSql.Core.DatabaseKind.PostgreSql ? PostgresSchemaMetadata : SchemaMetadata;
+
+        /// <summary>
         /// Spec 030 — Phase 5. The per-session persistent-connection registry shared by the
         /// ExecuteQuery / ApplyChanges / ConnectionChanged handlers. Non-required so existing test
         /// contexts (which don't exercise execution) still construct; <c>EngineComposition.Build</c>

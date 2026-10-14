@@ -71,6 +71,14 @@ namespace AkmlSql.Engine
         public const string SessionDatabaseV1 = "session.database.v1";
 
         /// <summary>
+        /// Spec 042 (contracts/ipc.md): the engine can connect to, run scripts against, browse and
+        /// provide language services for PostgreSQL servers. Advertised only when
+        /// <c>config.json</c> <c>postgreSql.enabled</c> is true (the default), so an engine built
+        /// before the feature, or one with it switched off, never claims it (FR-006, FR-093).
+        /// </summary>
+        public const string DialectPostgreSqlV1 = "dialect.postgresql.v1";
+
+        /// <summary>
         /// The set of capabilities the current engine build advertises. M3 baseline includes
         /// the always-available capabilities; <see cref="SchemaCacheV1"/> joined the list when
         /// T104 (SchemaIdentify) shipped. Future tasks add to this list:
@@ -92,6 +100,22 @@ namespace AkmlSql.Engine
             ExecuteV2,
             SessionDatabaseV1,
         };
+
+        /// <summary>
+        /// The capabilities to advertise for the given settings: <see cref="Current"/> plus
+        /// <see cref="DialectPostgreSqlV1"/> when PostgreSQL support is enabled (spec 042). Null settings
+        /// (a context built without a loader) mean the defaults, so PostgreSQL is on.
+        /// </summary>
+        public static string[] For(AkmlSql.Core.Config.AppSettings? settings)
+        {
+            var enabled = settings?.PostgreSql?.Enabled ?? true;
+            if (!enabled) return Current.ToArray();
+
+            var list = new List<string>(Current.Count + 1);
+            list.AddRange(Current);
+            list.Add(DialectPostgreSqlV1);
+            return list.ToArray();
+        }
 
         /// <summary>
         /// Lowest protocol version the current engine supports. <c>1</c> through M3.

@@ -72,8 +72,8 @@ internal static class EngineHandlerRegistry
         var refactoringEngine = new RefactoringEngine(parser, schemaCache);
 
         var safetyHandler = new SafetyCheckHandler(parser);
-        var productivityHandler = new ProductivityRequestHandler(parser);
-        var navigationHandler = new NavigationRequestHandler(schemaCache);
+        var productivityHandler = new ProductivityRequestHandler(parser, sessionId => ctx.Sessions.KindOf(sessionId));
+        var navigationHandler = new NavigationRequestHandler(schemaCache, sessionId => ctx.Sessions.KindOf(sessionId));
         var crudHandler = new CrudGenerationHandler(schemaCache);
         var scriptAsHandler = new ScriptAsHandler(schemaCache);
         // Spec 036 (US2, FR-014): the timeout row of the failure taxonomy names the CONFIGURED
@@ -210,7 +210,7 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Refactoring.RefactorApplyHandler(refactoringEngine));
 
         // === Schema (6 typed) ===
-        var schemaRefreshService = new SchemaRefreshService(sessions, schemaCache, schemaMeta);
+        var schemaRefreshService = new SchemaRefreshService(sessions, schemaCache, schemaMeta, kind => ctx.SchemaMetadataFor(kind));
         router.Register(new Handlers.Schema.SchemaRefreshHandler(schemaRefreshService.Refresh));
         router.Register(new Handlers.Schema.SchemaStatusHandler());
         router.Register(new Handlers.Schema.SchemaIdentifyHandler(
@@ -219,6 +219,9 @@ internal static class EngineHandlerRegistry
             {
                 var session = sessions.GetSession(sid);
                 if (session == null || !session.IsConnected) return null;
+                // Spec 042: a PostgreSQL server's identity is pg://host:port, so it can never equal a SQL Server's.
+                if (session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+                    return Handlers.Schema.SchemaIdentifyHandlerSupport.PostgresIdentity(session.ConnectionString);
                 return Handlers.Schema.SchemaIdentifyHandlerSupport
                     .ParseServerFromConnectionString(session.ConnectionString);
             }));
@@ -273,6 +276,9 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ConnectionChangedHandler());
         // Spec 029: validate SQL-auth credential before the shell stores it.
         router.Register(new Handlers.Control.TestSqlConnectionHandler());
+        // Spec 042 (FR-105, FR-106): whether a PostgreSQL password is remembered for a server and login, and forgetting it.
+        if (ctx.EnsureSettings().PostgreSql.Enabled)
+            router.Register(new PostgreSql.CredentialHandler(new PostgreSql.PgCredentialResolver()));
         router.Register(new Handlers.Control.ListDatabasesHandler());
         // Spec 041 (R26): the toolbar's database selector (217 → 218), advertised as session.database.v1.
         router.Register(new Handlers.Control.ChangeDatabaseHandler());
@@ -343,7 +349,10 @@ internal static class EngineHandlerRegistry
         // Spec 041 (R16, R17): the handler splits scripts on GO with the same parser as everything else.
         // Spec 041 (R27): a script's USE re-keys the session the way the database selector does.
         var executeQueryHandler = new Execution.ExecuteQueryHandler(sessionConnections, schemaCache, parser,
-            (sessionId, database) => Handlers.Control.ChangeDatabaseHandler.MoveSession(ctx, sessionId, database));
+            (sessionId, database) => Handlers.Control.ChangeDatabaseHandler.MoveSession(ctx, sessionId, database),
+            sessionId => ctx.Sessions.KindOf(sessionId),
+            // Spec 042 (FR-043): a PostgreSQL run that changed the catalog reloads that session's schema.
+            sessionId => schemaRefreshService.Refresh(new RefreshRequest { SessionId = sessionId }));
         var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections);
         var executeCancelHandler = new Execution.ExecuteCancelHandler(sessionConnections);
         router.RegisterRaw(MessageTypes.ExecuteQuery,

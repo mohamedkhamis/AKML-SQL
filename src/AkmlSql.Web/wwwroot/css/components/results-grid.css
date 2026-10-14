@@ -316,6 +316,9 @@
 .akml-messages-line--error { color: var(--akml-statustext-danger); }
 .akml-messages-line--system,
 .akml-messages-line--completion { color: var(--akml-text-secondary); }
+/* Spec 042: a PostgreSQL notice is information; a warning is the same line, heavier. The level is in the text. */
+.akml-messages-line--notice { color: var(--akml-text-secondary); }
+.akml-messages-line--warning { color: var(--akml-text-primary); font-weight: 600; }
 .akml-messages-line--completion { margin-top: var(--akml-scalar-spacing-s); }
 .akml-messages-error {
     display: inline;

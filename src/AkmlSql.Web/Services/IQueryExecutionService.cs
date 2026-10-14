@@ -67,6 +67,12 @@ internal sealed class QueryExecutionService : IQueryExecutionService
     /// </summary>
     internal int CountBatchRuns(string sql)
     {
+        // Spec 042: a PostgreSQL script has no GO. The engine runs each statement under its own timeout, and the browser
+        // has no PostgreSQL splitter, so it counts semicolons: never fewer than the statements, which only lengthens the
+        // wait (capped at the script ceiling), and a wait that is too short would report a run that is still going as lost.
+        if (_sqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+            return Math.Max(1, sql.Count(c => c == ';') + 1);
+
         var split = _parser.SplitBatches(sql);
         if (split.SeparatorError != null || split.Batches.Count == 0) return 1;
         long runs = split.Batches.Sum(b => (long)Math.Min(Math.Max(1, b.RepeatCount), 10_000));
@@ -104,7 +110,7 @@ internal sealed class QueryExecutionService : IQueryExecutionService
             {
                 QueryId = queryId,
                 Status = ExecuteStatus.NoConnection,
-                ErrorMessage = "Connect to a SQL Server first (the engine must be paired and a database connected).",
+                ErrorMessage = "Connect to a database first (the engine must be paired and a database connected).",
             };
         }
 
@@ -126,6 +132,12 @@ internal sealed class QueryExecutionService : IQueryExecutionService
 
             // Spec 041 (R27): a script's USE moves the session; the toolbar's database selector follows.
             if (result != null) _sqlConn.ReportCurrentDatabase(result.CurrentDatabase);
+
+            // Spec 042 (FR-016): a PostgreSQL run ends in a transaction state the status bar shows. A reply from the engine is
+            // the only thing that changes it; a dropped bridge says nothing about the server's transaction, so it is left alone.
+            // SQL Server replies always say None, so only a PostgreSQL session reports.
+            if (result != null && _sqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+                _sqlConn.ReportTransactionState((AkmlSql.Core.TransactionState)result.TransactionState);
 
             // The bridge returns default! for an empty payload; defend so callers always get a result.
             return result ?? new ExecuteQueryResult

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using Serilog;
 
 namespace AkmlSql.Engine.Execution
@@ -19,9 +20,30 @@ namespace AkmlSql.Engine.Execution
         private readonly ConcurrentDictionary<string, SessionConnection> _connections = new();
 
         /// <summary>Get the existing <see cref="SessionConnection"/> for a session, or create one.</summary>
-        public SessionConnection GetOrCreate(string sessionId, string connectionString)
+        public SessionConnection GetOrCreate(string sessionId, string connectionString, DatabaseKind kind = DatabaseKind.SqlServer)
         {
-            var conn = _connections.GetOrAdd(sessionId, id => new SessionConnection(id));
+            var conn = _connections.GetOrAdd(sessionId, id => new SessionConnection(id) { Kind = kind });
+
+            // Spec 042: the session moved to a server of the other kind. The old connection (its provider, its
+            // #temp tables or transaction) is dropped and the next run opens a fresh one of the new kind.
+            if (conn.Kind != kind)
+            {
+                var replacement = new SessionConnection(sessionId) { Kind = kind };
+                if (_connections.TryUpdate(sessionId, replacement, conn))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try { await conn.DisposeAsync().ConfigureAwait(false); }
+                        catch (Exception ex) { Log.Warning(ex, "SessionConnectionRegistry: dispose of the replaced connection failed for session {Session}", sessionId); }
+                    });
+                    conn = replacement;
+                }
+                else
+                {
+                    conn = _connections.GetOrAdd(sessionId, id => new SessionConnection(id) { Kind = kind });
+                }
+            }
+
             conn.ConnectionString = connectionString;
             return conn;
         }

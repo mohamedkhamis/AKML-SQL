@@ -29,7 +29,7 @@ existing record, message and config file keeps its meaning.
 | Login | string? | null | PostgreSQL user name (required) |
 | SslMode | string? | null | **new**; `disable` / `prefer` / `require` / `verify-ca` / `verify-full`; null → `prefer` |
 | RootCertificatePath | string? | null | **new**; path on the engine machine, verifying modes only |
-| RememberPassword | bool | false | **new**; opt-in per connection (FR-104) |
+| RememberPassword | bool | false | **new**; opt-in per connection (FR-104). Persisted under the JSON key `RememberOnEngine`, because the store's tripwire test forbids the word "password" anywhere in a stored record |
 | LastConnectedAt | DateTimeOffset? | null | unchanged |
 
 Never contains a password. IndexedDB values are schemaless: no DB version bump; the store's read

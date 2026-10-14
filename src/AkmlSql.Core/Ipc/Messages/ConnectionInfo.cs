@@ -19,5 +19,16 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public string DatabaseName { get; set; } = string.Empty;
+
+        /// <summary>Spec 042: the <see cref="DatabaseKind"/> of the server (0 SQL Server, 1 PostgreSQL). Absent from older peers = 0.</summary>
+        [Key(5)]
+        public int Kind { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-104): save the supplied password in the engine's protected store after a successful open.
+        /// The password itself travels only inside <see cref="ConnectionString"/>, never in this flag.
+        /// </summary>
+        [Key(6)]
+        public bool RememberPassword { get; set; }
     }
 }
