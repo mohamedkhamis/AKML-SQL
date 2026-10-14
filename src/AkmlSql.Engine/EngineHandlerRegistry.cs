@@ -281,6 +281,9 @@ internal static class EngineHandlerRegistry
         // Spec 042 (FR-105, FR-106): whether a PostgreSQL password is remembered for a server and login, and forgetting it.
         if (ctx.EnsureSettings().PostgreSql.Enabled)
             router.Register(new PostgreSql.CredentialHandler(new PostgreSql.PgCredentialResolver()));
+        // Spec 042 (FR-081): literal redaction of PostgreSQL text for the web edition's cloud AI calls (223 -> 224).
+        if (ctx.EnsureSettings().PostgreSql.Enabled)
+            router.Register(new PostgreSql.RedactHandler());
         router.Register(new Handlers.Control.ListDatabasesHandler());
         // Spec 041 (R26): the toolbar's database selector (217 → 218), advertised as session.database.v1.
         router.Register(new Handlers.Control.ChangeDatabaseHandler());

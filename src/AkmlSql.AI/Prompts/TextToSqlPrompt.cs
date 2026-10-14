@@ -18,10 +18,16 @@ public static class TextToSqlPrompt
     /// </summary>
     /// <param name="schemaText">Formatted schema context.</param>
     /// <param name="userPrompt">The user's natural-language description of the desired query.</param>
+    /// <param name="dialect">The SQL language of the active connection (spec 042). SQL Server by default.</param>
+    /// <param name="serverVersion">The PostgreSQL server version when known; ignored for SQL Server.</param>
     /// <returns>A tuple of (systemMessage, userMessage).</returns>
-    public static (string systemMessage, string userMessage) Build(string schemaText, string userPrompt)
+    public static (string systemMessage, string userMessage) Build(
+        string schemaText,
+        string userPrompt,
+        SqlDialect dialect = SqlDialect.SqlServer,
+        string? serverVersion = null)
     {
-        var system = PromptTemplates.BuildSystemPrompt(schemaText, TaskInstruction);
+        var system = PromptTemplates.BuildSystemPrompt(schemaText, TaskInstruction, dialect, serverVersion);
         return (system, userPrompt);
     }
 }

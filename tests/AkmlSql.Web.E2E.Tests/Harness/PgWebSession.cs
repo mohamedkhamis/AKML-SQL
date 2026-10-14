@@ -50,14 +50,16 @@ public static class PgWebSession
     /// Starts everything and, when <paramref name="connect"/> is true, connects the page to the PostgreSQL server through
     /// the connection manager; the editor is open when this returns.
     /// </summary>
-    public static async Task<SqlSession> StartOrSkipAsync(ITestOutputHelper? output = null, bool connect = true, string? envVar = null)
+    /// <param name="postgreSqlEnabled">False starts an engine with PostgreSQL switched off in its config (spec 042, FR-093).</param>
+    public static async Task<SqlSession> StartOrSkipAsync(
+        ITestOutputHelper? output = null, bool connect = true, string? envVar = null, bool postgreSqlEnabled = true)
     {
         var configured = Configured(envVar);
         Skip.If(configured is null, $"No PostgreSQL test server: set {envVar ?? EnvVar} (see scripts/pg-test-server.ps1).");
         var (host, port, user, password) = configured!.Value;
         Skip.IfNot(await ServerAnswersAsync(host, port), $"No PostgreSQL server answering on {host}:{port}.");
 
-        var engine = await SandboxEngine.StartAsync();
+        var engine = await SandboxEngine.StartAsync(postgreSqlEnabled);
         WebAppFixture? web = null;
         IPlaywright? pw = null;
         IBrowser? browser = null;

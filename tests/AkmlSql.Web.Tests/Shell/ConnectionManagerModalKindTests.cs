@@ -389,6 +389,86 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         Assert.NotEmpty(cut.FindAll("[data-testid=connection-manager]"));
     }
 
+    // ── A remembered password (FR-105, SC-018) ──────────────────────────────────────────────────
+
+    private async Task<IRenderedComponent<ConnectionManagerModal>> OpenWithRememberedAsync()
+    {
+        _sql.Remembered = true;
+        var cut = await OpenAsync(DatabaseKind.PostgreSql);
+        Type(cut, "conn-pg-host", "db1");
+        // A browser fires input while typing and change when the field is left; the engine is asked on the change.
+        cut.Find("[data-testid=conn-pg-user]").Input("app");
+        cut.Find("[data-testid=conn-pg-user]").Change("app");
+        cut.WaitForElement("[data-testid=conn-pg-forget]");
+        cut.Find("[data-testid=conn-pg-remember]").Change(true);
+        return cut;
+    }
+
+    [Fact]
+    public async Task Connecting_with_a_remembered_password_sends_none_and_asks_for_none()
+    {
+        var cut = await OpenWithRememberedAsync();
+        Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var target = Assert.Single(_sql.Connected);
+        Assert.True(string.IsNullOrEmpty(target.Password));
+        Assert.True(target.RememberPassword);
+    }
+
+    [Fact]
+    public async Task A_remembered_password_the_server_rejects_says_so_and_keeps_Remember_on_to_replace_it()
+    {
+        _sql.ConnectReply = ConnectResult.Failed("password authentication failed (SQLSTATE 28P01). Check the user name and password.");
+        var cut = await OpenWithRememberedAsync();
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var message = cut.Find("[data-testid=conn-message]").TextContent;
+            Assert.Contains("remembered password was not accepted", message);
+            Assert.Contains("Remember password", message);
+        });
+        Assert.NotEmpty(cut.FindAll("[data-testid=connection-manager]"));
+        Assert.True(cut.Find("[data-testid=conn-pg-remember]").HasAttribute("checked"));
+    }
+
+    [Fact]
+    public async Task The_same_rejection_without_a_remembered_password_is_an_ordinary_failure()
+    {
+        _sql.ConnectReply = ConnectResult.Failed("password authentication failed (SQLSTATE 28P01). Check the user name and password.");
+        var cut = await OpenAsync(DatabaseKind.PostgreSql);
+        Type(cut, "conn-pg-host", "db1");
+        Type(cut, "conn-pg-user", "app");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("password authentication failed", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.DoesNotContain("remembered", cut.Find("[data-testid=conn-message]").TextContent);
+    }
+
+    [Fact]
+    public async Task A_server_that_wants_a_password_when_none_is_remembered_asks_for_it_and_offers_to_remember_it()
+    {
+        _sql.ConnectReply = new ConnectResult(false, "The server asked for a password and none was supplied.", PasswordRequired: true);
+        var cut = await OpenAsync(DatabaseKind.PostgreSql);
+        Type(cut, "conn-pg-host", "db1");
+        Type(cut, "conn-pg-user", "app");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var message = cut.Find("[data-testid=conn-message]").TextContent;
+            Assert.Contains("Enter the password", message);
+            Assert.Contains("Remember password", message);
+        });
+        Assert.NotEmpty(cut.FindAll("[data-testid=conn-pg-remember]"));
+    }
+
     [Fact]
     public async Task No_label_or_hint_of_the_PostgreSQL_form_names_SQL_Server()
     {

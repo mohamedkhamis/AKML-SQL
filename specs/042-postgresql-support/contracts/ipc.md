@@ -92,10 +92,17 @@ RedactRequest
   [0] Dialect  string  "postgresql" (SQL Server redaction stays in-process in the client)
   [1] Text     string
 RedactResponse
-  [0] Ok       bool    false when the text could not be scanned (the client must not send the original)
-  [1] Text     string  literals replaced by placeholders, structure kept
-  [2] Error    string?
+  [0] Ok            bool    false when the text could not be scanned (the client must not send the original)
+  [1] Text          string  literals replaced by placeholders, structure kept
+  [2] Error         string?
+  [3] Placeholders  map<string,string>  placeholder as it appears in Text -> the literal it replaced (appended in US4:
+                    the client restores the literals in the provider's answer; sent only to the requester)
 ```
+
+Placeholders: `'__STR_n__'` (strings, any prefix), `__NUM_n__` (numbers), `$tag$__STR_n__$tag$` (dollar-quoted strings). A dollar-quoted
+body after `AS` or `DO` that reads as PostgreSQL text is redacted inside; one that does not is a single literal. A number after
+`LIMIT`, `OFFSET` or `FETCH FIRST|NEXT` stays. Text above 10 MB, or ending inside a string, quoted name, dollar-quoted string or block
+comment, gets `Ok = false` and an `Error` that does not quote the text.
 
 ## Connection strings (web → engine)
 

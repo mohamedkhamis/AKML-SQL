@@ -3,10 +3,12 @@
     feature next to its control (FR-005), so the user can see what will be sent before
     invoking. Resolves the mode from IAiFeatureSettings (per-feature override, else global).
 *@
+@using AkmlSql.Engine.Ai
 @using AkmlSql.Web.Services
 @inject IAiFeatureSettings Settings
+@inject IServiceProvider Services
 
-<span class="akml-ai-mode-badge akml-ai-mode-@Status" title="@Tooltip">@Label</span>
+<span class="akml-ai-mode-badge akml-ai-mode-@Status" title="@TooltipText">@Label</span>
 
 <style>
     .akml-ai-mode-badge {
@@ -44,10 +46,22 @@
     private string Label = "…";
     private string Tooltip = string.Empty;
     private string Status = string.Empty;
+    private AiPrivacyMode _mode;
+
+    // Spec 042 (FR-081): on a PostgreSQL connection a cloud provider gets the script without its literal values. Optional
+    // lookup, read at render time, so a host without the dialect context (and every earlier test) shows the text it always did.
+    private const string PostgreSqlLiteralNote = " Literal values in PostgreSQL scripts are removed before a cloud provider receives them.";
+
+    private string TooltipText =>
+        _mode != AiPrivacyMode.FullyLocal
+        && Services.GetService(typeof(IAiDialectContext)) is IAiDialectContext { Dialect: SqlDialect.PostgreSql }
+            ? Tooltip + PostgreSqlLiteralNote
+            : Tooltip;
 
     protected override async Task OnParametersSetAsync()
     {
         var mode = await Settings.ResolveModeAsync(FeatureId);
+        _mode = mode;
         (Label, Tooltip, Status) = Describe(mode);
         StateHasChanged();
     }

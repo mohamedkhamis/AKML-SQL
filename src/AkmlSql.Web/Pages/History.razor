@@ -24,6 +24,7 @@
 @inject IDialogService Dialogs
 @inject EditorDocumentFlow Document
 @inject INotificationService Notifications
+@inject IServiceProvider Services
 
 <PageTitle>SQL History — AKML SQL</PageTitle>
 
@@ -44,7 +45,7 @@
     </div>
     <!-- Top bar: search + filters -->
     <div class="akml-hist-top">
-        <input class="akml-hist-search" placeholder="Search SQL history…  (server: db: name: starred:)"
+        <input class="akml-hist-search" placeholder="@(ShowKinds ? "Search SQL history…  (server: db: name: kind: starred:)" : "Search SQL history…  (server: db: name: starred:)")"
                value="@_search" @oninput="OnSearchInput"
                @onkeydown="OnSearchKey" data-testid="history-search" />
         <button class="akml-btn akml-hist-fav @(_favoritesOnly ? "is-active" : null)" title="Favorites only"
@@ -58,6 +59,16 @@
             <option value="">All databases</option>
             @foreach (var d in _databases) { <option value="@d">@d</option> }
         </select>
+        @if (ShowKinds)
+        {
+            @* Spec 042 (FR-070): only entries of one kind; the search box takes kind:pg / kind:mssql for the same. *@
+            <select class="akml-hist-select" value="@(_kind?.ToString() ?? "")" @onchange="OnKindChanged" title="Kind of server"
+                    aria-label="Kind of server" data-testid="history-kind-filter">
+                <option value="">All kinds</option>
+                <option value="0">SQL Server</option>
+                <option value="1">PostgreSQL</option>
+            </select>
+        }
         @if (_compare.Count == 2)
         {
             <button class="akml-btn" @onclick="OpenCompareAsync" data-testid="history-compare">Compare (2)</button>
@@ -109,6 +120,11 @@
                                 <span class="akml-hist-rowmain">
                                     <span class="akml-hist-name">@rv.DisplayName</span>
                                     <span class="akml-hist-meta">
+                                        @if (ShowKinds)
+                                        {
+                                            <span class="akml-hist-kind" data-testid="history-kind"
+                                                  data-kind="@AkmlSql.Core.DatabaseKindNames.ToName(AkmlSql.Core.DatabaseKindNames.FromInt(e.Kind))">@WebHistoryLogic.KindLabel(e.Kind)</span>
+                                        }
                                         <span>@rv.RelativeTime</span>
                                         @if (!string.IsNullOrEmpty(rv.Meta)) { <span class="akml-hist-count"> · @rv.Meta</span> }
                                         <span class="akml-hist-conn">
@@ -267,6 +283,12 @@
         color: var(--akml-text-primary); font-weight: var(--akml-type-chrome-weight); }
     .akml-hist-meta { display: flex; gap: 4px; align-items: center; color: var(--akml-text-secondary);
         font-size: 11px; overflow: hidden; }
+    .akml-hist-kind {
+        flex: none; padding: 0 var(--akml-scalar-spacing-xs); border: 1px solid var(--akml-border-subtle);
+        border-radius: var(--akml-scalar-radius-xs); font-size: 10px; line-height: 1.4; color: var(--akml-text-secondary);
+        white-space: nowrap;
+    }
+    .akml-hist-kind[data-kind="postgresql"] { color: var(--akml-text-primary); border-color: var(--akml-border-strong); }
     .akml-hist-conn { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .akml-hist-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
     .akml-hist-dot.is-open { background-color: var(--akml-status-success); }
@@ -339,6 +361,7 @@
     private bool _favoritesOnly;
     private string? _server;
     private string? _database;
+    private int? _kind;   // spec 042 (FR-070): the kind filter control; a kind: term in the search box overrides it
     private IReadOnlyList<string> _servers = Array.Empty<string>();
     private IReadOnlyList<string> _databases = Array.Empty<string>();
 
@@ -381,9 +404,12 @@
         StateHasChanged();
         try
         {
+            // Spec 042 (FR-070): a kind: term is a filter, not words for the full-text index.
+            var parsed = WebHistoryLogic.ParseSearch(_search);
             var request = new HistorySearchRequest
             {
-                SearchText = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                SearchText = parsed.Text,
+                Kind = parsed.Kind ?? _kind,
                 Server = _server,
                 Database = _database,
                 FavoritesOnly = _favoritesOnly,
@@ -473,6 +499,18 @@
         await LoadAsync(true);
     }
 
+    private async Task OnKindChanged(ChangeEventArgs e)
+    {
+        _kind = int.TryParse(e.Value?.ToString(), out var kind) ? kind : null;
+        await LoadAsync(true);
+    }
+
+    /// <summary>
+    /// Spec 042 (FR-070): the kind badge, the kind filter and the kind: hint appear once PostgreSQL can be involved - the engine
+    /// supports it, an entry already is one, or a kind filter is on. Otherwise the page is the page it was.
+    /// </summary>
+    private bool ShowKinds => SqlConn.EngineSupportsPostgres || _kind != null || _entries.Any(e => e.Kind != 0);
+
     private void ToggleBucket(string bucket)
     {
         if (!_collapsed.Remove(bucket)) _collapsed.Add(bucket);
@@ -513,7 +551,7 @@
 
     private void CloseCompare() => _compareOpen = false;
 
-    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _favoritesOnly || _server != null || _database != null;
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _favoritesOnly || _server != null || _database != null || _kind != null;
 
     private void OnCompareKeyDown(KeyboardEventArgs e)
     {
@@ -592,17 +630,66 @@
         if (_selected == null) return;
         // Spec 041 (R64): a past query opens as a new document, as Open does, and never overwrites a modified
         // document without asking.
+        var entry = _selected;
         if (!await Document.OpenQueryAsync(_previewSql, "Open in editor")) return;
         await SessionStore.FlushAsync();
+        await SuggestConnectionAsync(entry);
         Nav.NavigateTo("/");
     }
 
     private async Task ReExecuteAsync()
     {
         if (_selected == null) return;
+        var entry = _selected;
         if (!await Document.OpenQueryAsync(_previewSql, "Re-execute")) return;
         await SessionStore.FlushAsync();
+
+        // Spec 042 (FR-070): a script written for one kind of server is never run on the other. It is opened, and the user is told
+        // which connection it belongs to; running it is theirs to choose after connecting.
+        if (RanOnOtherKind(entry))
+        {
+            await SuggestConnectionAsync(entry, notRun: true);
+            Nav.NavigateTo("/");
+            return;
+        }
+
         Nav.NavigateTo("/?autorun=1");
+    }
+
+    /// <summary>The entry ran on the other kind of server than the connection that is active now.</summary>
+    private bool RanOnOtherKind(HistoryEntryDto entry) =>
+        SqlConn.IsConnected && (int)SqlConn.Kind != entry.Kind;
+
+    /// <summary>
+    /// Spec 042 (FR-070): on restore, name the saved connection the entry ran on when it still exists. Said only when it helps - the
+    /// active connection is of the other kind, or on another server or database. Nothing is connected or run on the user's behalf.
+    /// </summary>
+    private async Task SuggestConnectionAsync(HistoryEntryDto entry, bool notRun = false)
+    {
+        var kind = AkmlSql.Core.DatabaseKindNames.FromInt(entry.Kind);
+        var ranWhere = $"{WebHistoryLogic.KindLabel(entry.Kind)} {entry.Server}/{entry.Database}";
+        var active = SqlConn.IsConnected && SqlConn.Kind == kind
+            && string.Equals(SqlConn.Server, entry.Server, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(SqlConn.Database, entry.Database, StringComparison.OrdinalIgnoreCase);
+        var sameKind = SqlConn.IsConnected && SqlConn.Kind == kind;
+        if (active) return;
+        if (!notRun && sameKind && string.IsNullOrWhiteSpace(entry.Server)) return;
+
+        SavedSqlConnection? match = null;
+        if (Services.GetService(typeof(ISavedSqlConnectionStore)) is ISavedSqlConnectionStore store)
+        {
+            try { match = WebHistoryLogic.FindConnection(await store.ListAsync(), kind, entry.Server, entry.Database); }
+            catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Saved connections could not be read: {ex.Message}"); }
+        }
+
+        // Same kind and nothing saved to point to: the query simply opens on whatever is connected, as it always did.
+        if (match == null && sameKind && !notRun) return;
+
+        var text = match != null
+            ? $"This query ran on {ranWhere}. Saved connection: “{match.Name}”. Connect to it to run the query where it ran."
+            : $"This query ran on {ranWhere}. No saved connection matches it.";
+        if (notRun) text += " It was opened but not run.";
+        Notifications.Notify(text, NotificationKind.Info);
     }
 
     private async Task OnExportChanged(ChangeEventArgs e)
@@ -683,7 +770,7 @@
     private void RecomputePreviewSegments() =>
         _previewSegments = _selected == null
             ? Array.Empty<HistoryPreviewHighlighter.Segment>()
-            : HistoryPreviewHighlighter.BuildSegments(_previewSql, _search);
+            : HistoryPreviewHighlighter.BuildSegments(_previewSql, WebHistoryLogic.ParseSearch(_search).Text ?? string.Empty);
 
     /// <summary>
     /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback

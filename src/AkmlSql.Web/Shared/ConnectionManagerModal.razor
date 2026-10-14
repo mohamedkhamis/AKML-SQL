@@ -26,6 +26,7 @@
 @inject ISqlConnectionService SqlConn
 @inject IJSRuntime JS
 @inject IDialogService Dialogs
+@inject IServiceProvider Services
 
 @if (_open)
 {
@@ -86,10 +87,11 @@
                                     title="@(SqlConn.EngineSupportsPostgres ? null : PostgresDisabledTooltip)"
                                     @onclick="@(() => SetKind(DatabaseKind.PostgreSql))" data-testid="conn-kind-postgresql">PostgreSQL</button>
                         </div>
-                        @if (!SqlConn.EngineSupportsPostgres)
-                        {
-                            <span class="akml-connmgr-hint" data-testid="conn-kind-hint">@PostgresDisabledTooltip</span>
-                        }
+                        @* Spec 042 (T121): said once, in place, with the capability and the engine version found. *@
+                        <CapabilityNotice Available="SqlConn.EngineSupportsPostgres" Feature="PostgreSQL"
+                                          RequiredCapability="@SqlConnectionService.CapabilityPostgreSql" TestId="conn-kind-hint"
+                                          EngineConnected="@(PairedEngine is null || PairedEngine.State == BridgeState.Open)"
+                                          EngineVersion="@PairedEngine?.EngineVersion" />
                     </div>
                     <div class="akml-field akml-connmgr-field">
                         <label class="akml-field-label" for="conn-name">Display name</label>
@@ -417,6 +419,9 @@
     private string? _selectedId;
 
     // Spec 042: the kind the form is for. A saved row brings its own; "New" starts as SQL Server unless the opener asked.
+    // Optional: a host (or test) with no bridge in its services still gets the notice, just without the engine's version.
+    private IEngineBridge? PairedEngine => Services.GetService(typeof(IEngineBridge)) as IEngineBridge;
+
     private const string PostgresDisabledTooltip = "Requires an engine with PostgreSQL support (dialect.postgresql.v1)";
     private DatabaseKind _kind = DatabaseKind.SqlServer;
     private string _pgHost = string.Empty;
@@ -672,6 +677,23 @@
         }
     }
 
+    // What a failed PostgreSQL test or connect says. A missing password is a prompt, not a failure, and it offers to remember the
+    // one typed. A password the engine remembered that the server no longer accepts says so and how to replace it (FR-105): the
+    // Remember option stays on, so connecting with the new password overwrites the old one.
+    private string PgFailureText(ConnectResult result, string fallback)
+    {
+        if (result.PasswordRequired)
+            return "The server asked for a password. Enter the password and try again; turn on Remember password to keep it on the engine machine.";
+
+        var rejected = result.Error != null
+            && (result.Error.Contains("28P01", StringComparison.Ordinal)
+                || result.Error.Contains("password authentication failed", StringComparison.OrdinalIgnoreCase));
+        if (_pgHasRemembered && rejected)
+            return "The remembered password was not accepted by the server. Enter the current password and keep Remember password on to replace it.";
+
+        return result.Error ?? fallback;
+    }
+
     // "PostgreSQL 18.1 on db1:5432" (FR-002), or the engine's own words; a missing password is a prompt, not a failure.
     private async Task TestPostgresAsync()
     {
@@ -686,13 +708,9 @@
                 var (host, port, _) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
                 SetMessage($"{result.ServerVersion ?? "PostgreSQL"} on {host}:{port}", isError: false);
             }
-            else if (result.PasswordRequired)
-            {
-                SetMessage("The server asked for a password. Enter the password and try again.", isError: true);
-            }
             else
             {
-                SetMessage(result.Error ?? "Connection test failed.", isError: true);
+                SetMessage(PgFailureText(result, "Connection test failed."), isError: true);
             }
         }
         finally
@@ -789,9 +807,7 @@
                 Close();
                 return;
             }
-            SetMessage(result.PasswordRequired
-                ? "The server asked for a password. Enter the password and try again."
-                : result.Error ?? "Connect failed.", isError: true);
+            SetMessage(PgFailureText(result, "Connect failed."), isError: true);
         }
         finally
         {

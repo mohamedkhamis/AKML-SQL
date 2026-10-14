@@ -6,6 +6,7 @@
 *@
 @using System.Collections.Generic
 @using System.Threading
+@using AkmlSql.Engine.Ai
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @implements IDisposable
@@ -16,6 +17,7 @@
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IJSRuntime JS
 @inject INotificationService Notifications
+@inject IServiceProvider Services
 
 <div class="akml-chat">
     <div class="akml-chat-header">
@@ -198,10 +200,12 @@
 </style>
 
 @code {
-    private const string SystemPrompt =
-        "You are a SQL Server expert assisting an experienced developer through " +
-        "AKML SQL. Be concise. When you give SQL, use canonical T-SQL formatting. " +
-        "When you're unsure of the schema, ask before guessing.";
+    /// <summary>Spec 042 (FR-080): written for the dialect of the connection at the moment of sending. SQL Server keeps the text
+    /// it always had. Optional lookup, so a host without the dialect context behaves as before PostgreSQL support.</summary>
+    private string SystemPrompt =>
+        Services.GetService(typeof(IAiDialectContext)) is IAiDialectContext dialect
+            ? AiChatSystemText.For(dialect.Dialect, dialect.ServerVersion)
+            : AiChatSystemText.SqlServer;
 
     private bool _hasProvider;
     private bool _busy;

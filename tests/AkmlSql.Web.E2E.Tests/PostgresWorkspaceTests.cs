@@ -305,4 +305,325 @@ public sealed class PostgresWorkspaceTests
             await s.ExecuteAsync($"DROP ROLE IF EXISTS {role};");
         }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+    // User story 4 (task T113, quickstart US4): switch, History, AI, remembered password, an engine without PostgreSQL.
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+    private static Task<string> EditorTextAsync(IPage page) =>
+        page.Locator("[data-testid='sql-editor'] .cm-content").InnerTextAsync();
+
+    /// <summary>Closes the connection manager if it is open (its Close button; Escape only works while focus is inside it).</summary>
+    private static async Task CloseConnectionManagerAsync(IPage page)
+    {
+        if (await page.Locator("[data-testid='connection-manager']").CountAsync() == 0) return;
+        await page.ClickAsync("[data-testid='conn-close-btn']");
+        await Assertions.Expect(page.Locator("[data-testid='connection-manager']")).ToHaveCountAsync(0);
+    }
+
+    private static async Task<long> SwitchToSqlServerAsync(IPage page)
+    {
+        await page.ClickAsync("[data-testid='status-connection']");
+        await page.WaitForSelectorAsync("[data-testid='connection-manager']");
+        await page.ClickAsync("[data-testid='conn-kind-sqlserver']");
+        await page.FillAsync("[data-testid='conn-server-input']", "localhost");
+        await page.Locator("[data-testid='conn-server-input']").DispatchEventAsync("change");
+        await page.CheckAsync("[data-testid='conn-auth-windows']");
+        await page.ClickAsync("[data-testid='conn-database-refresh']");
+        await Assertions.Expect(page.Locator("[data-testid='conn-database-select'] option[value='tempdb']"))
+            .ToHaveCountAsync(1, new() { Timeout = 30_000 });
+        await page.SelectOptionAsync("[data-testid='conn-database-select']", "tempdb");
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await page.ClickAsync("[data-testid='conn-connect-btn']");
+        await Assertions.Expect(page.Locator("[data-testid='status-kind']")).ToContainTextAsync("SQL Server", new() { Timeout = 30_000 });
+        return watch.ElapsedMilliseconds;
+    }
+
+    private static async Task<long> SwitchToPostgresAsync(IPage page, string host, int port, string user, string password)
+    {
+        await PgWebSession.FillFormAsync(page, host, port, "postgres", user, password);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await page.ClickAsync("[data-testid='conn-connect-btn']");
+        await Assertions.Expect(page.Locator("[data-testid='status-kind']")).ToContainTextAsync("PostgreSQL", new() { Timeout = 30_000 });
+        return watch.ElapsedMilliseconds;
+    }
+
+    /// <summary>SC-002, FR-007: twenty switches between the two kinds, each followed by the status bar in under three seconds.</summary>
+    [SkippableFact]
+    public async Task Twenty_switches_between_SQL_Server_and_PostgreSQL_each_follow_within_three_seconds_and_keep_the_text()
+    {
+        Skip.IfNot(await SandboxEngine.LocalSqlServerAnswersAsync(), "No local SQL Server answering on localhost:1433 (the switch needs both kinds).");
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var (host, port, user, password) = PgWebSession.Configured()!.Value;
+        const string text = "SELECT 'text that stays' AS kept;";
+        await s.SetEditorTextAsync(text);
+
+        var timings = new List<long>();
+        for (var round = 0; round < 10; round++)
+        {
+            timings.Add(await SwitchToSqlServerAsync(s.Page));
+            timings.Add(await SwitchToPostgresAsync(s.Page, host, port, user, password));
+        }
+
+        _output.WriteLine("SC-002 switch times (ms), SQL Server then PostgreSQL, ten rounds: " + string.Join(", ", timings));
+        Assert.Equal(20, timings.Count);
+        Assert.All(timings, ms => Assert.True(ms < 3_000, $"a switch took {ms} ms"));
+        Assert.Contains("text that stays", await EditorTextAsync(s.Page));
+    }
+
+    /// <summary>FR-070, SC-009: the kind on every entry, a filter control, and the kind: term in the search box.</summary>
+    [SkippableFact]
+    public async Task History_shows_the_kind_filters_by_it_and_takes_a_kind_term()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        await s.ExecuteAsync("SELECT 1 AS history_one;");
+
+        await s.Page.ClickAsync("nav >> text=History");
+        var rows = s.Page.Locator("[data-testid='history-row']");
+        await Assertions.Expect(rows).ToHaveCountAsync(1, new() { Timeout = 30_000 });
+        await Assertions.Expect(s.Page.Locator("[data-testid='history-kind']")).ToHaveTextAsync("PostgreSQL");
+
+        var filter = s.Page.Locator("[data-testid='history-kind-filter']");
+        await filter.SelectOptionAsync("0");
+        await Assertions.Expect(rows).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+        await filter.SelectOptionAsync("1");
+        await Assertions.Expect(rows).ToHaveCountAsync(1, new() { Timeout = 15_000 });
+        await filter.SelectOptionAsync("");
+
+        var search = s.Page.Locator("[data-testid='history-search']");
+        await search.FillAsync("kind:mssql");
+        await search.PressAsync("Enter");
+        await Assertions.Expect(rows).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+        await search.FillAsync("kind:pg");
+        await search.PressAsync("Enter");
+        await Assertions.Expect(rows).ToHaveCountAsync(1, new() { Timeout = 15_000 });
+    }
+
+    private static async Task AddProviderAsync(IPage page, string providerId, string model, string? endpoint, string? key)
+    {
+        await page.ClickAsync("nav >> text=Settings");
+        await page.ClickAsync("[data-testid='settings-nav-ai-assistance']");
+        await page.GetByLabel("Provider").SelectOptionAsync(providerId);
+        await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync(model);
+        if (endpoint != null) await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(endpoint);
+        if (key != null) await page.GetByLabel("API key").FillAsync(key);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).ClickAsync();
+        await page.GetByRole(AriaRole.Radio).First.CheckAsync();
+        await page.WaitForTimeoutAsync(750);   // the provider and the active choice persist to IndexedDB asynchronously
+        await page.ClickAsync("nav >> text=Editor");
+        await page.WaitForSelectorAsync("[data-testid='sql-editor'] .cm-content", new() { Timeout = 30_000 });
+        await page.WaitForTimeoutAsync(1_000);
+    }
+
+    private static string FirstMessage(System.Text.Json.JsonElement body, string role) =>
+        body.GetProperty("messages").EnumerateArray().First(m => m.GetProperty("role").GetString() == role).GetProperty("content").GetString() ?? "";
+
+    /// <summary>FR-080, SC-011: text-to-SQL on a PostgreSQL connection is asked for in PostgreSQL, with the server version.</summary>
+    [SkippableFact]
+    public async Task Text_to_SQL_on_PostgreSQL_asks_the_model_for_PostgreSQL()
+    {
+        using var mock = MockAiProvider.StartOllama();
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        await AddProviderAsync(s.Page, "ollama", "mock", mock.ChatCompletionsUrl, null);
+
+        await s.SetEditorTextAsync("write a query for the three most recent orders per customer");
+        await s.Page.Locator("[data-testid='ai-button']").ClickAsync();
+        await s.Page.GetByRole(AriaRole.Button, new() { Name = "Text to SQL" }).ClickAsync();
+        await Assertions.Expect(s.Page.Locator(".akml-ai-result pre")).ToContainTextAsync("MOCK-STREAM", new() { Timeout = 15_000 });
+
+        var system = FirstMessage(Assert.Single(mock.Captures), "system");
+        Assert.Contains("PostgreSQL developer", system);
+        Assert.Matches(@"The server is PostgreSQL \d+", system);
+        Assert.Contains("Do not use T-SQL", system);
+        Assert.DoesNotContain("SQL Server", system);
+        Assert.Contains("three most recent orders per customer", FirstMessage(mock.Captures[0], "user"));
+    }
+
+    /// <summary>FR-081: a cloud provider gets the PostgreSQL script without its literals, and the answer has them back.</summary>
+    [SkippableFact]
+    public async Task A_cloud_provider_gets_the_script_without_its_literals_and_the_answer_has_them_back()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var captured = new List<System.Text.Json.JsonElement>();
+        const string answer = "Filters customers where country = '__STR_0__' and age > __NUM_0__.";
+        await s.Context.RouteAsync("https://generativelanguage.googleapis.com/**", async route =>
+        {
+            var cors = new Dictionary<string, string>
+            {
+                ["Access-Control-Allow-Origin"] = "*",
+                ["Access-Control-Allow-Headers"] = "*",
+                ["Access-Control-Allow-Methods"] = "POST, OPTIONS",
+            };
+            if (route.Request.Method == "OPTIONS")
+            {
+                await route.FulfillAsync(new() { Status = 204, Headers = cors });
+                return;
+            }
+            captured.Add(System.Text.Json.JsonDocument.Parse(route.Request.PostData ?? "{}").RootElement.Clone());
+            var sse = "data: {\"choices\":[{\"delta\":{\"content\":" + System.Text.Json.JsonSerializer.Serialize(answer) + "}}]}\n\ndata: [DONE]\n\n";
+            cors["Content-Type"] = "text/event-stream";
+            await route.FulfillAsync(new() { Status = 200, Headers = cors, Body = sse });
+        });
+        await AddProviderAsync(s.Page, "gemini", "gemini-test", null, "g-e2e-not-a-real-key");
+
+        await s.SetEditorTextAsync("SELECT * FROM customers WHERE country = 'UK' AND age > 30");
+        await s.Page.Locator("[data-testid='ai-button']").ClickAsync();
+        await s.Page.GetByRole(AriaRole.Button, new() { Name = "Explain" }).ClickAsync();
+
+        await Assertions.Expect(s.Page.Locator(".akml-ai-result pre"))
+            .ToContainTextAsync("country = 'UK' and age > 30", new() { Timeout = 20_000 });
+        var request = Assert.Single(captured);
+        var user = FirstMessage(request, "user");
+        Assert.Contains("'__STR_0__'", user);
+        Assert.Contains("__NUM_0__", user);
+        Assert.DoesNotContain("'UK'", user);
+        Assert.DoesNotContain("PostgreSQL developer".Replace("PostgreSQL", "SQL Server"), FirstMessage(request, "system"));
+        Assert.Contains("PostgreSQL developer", FirstMessage(request, "system"));
+    }
+
+    private static async Task<string> IndexedDbDumpAsync(IPage page) => await page.EvaluateAsync<string>(@"async () => {
+        const out = [];
+        for (const info of await indexedDB.databases()) {
+            const db = await new Promise((ok, fail) => { const r = indexedDB.open(info.name); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
+            for (const name of Array.from(db.objectStoreNames)) {
+                const rows = await new Promise((ok, fail) => { const r = db.transaction(name).objectStore(name).getAll(); r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error); });
+                out.push(info.name + '/' + name + ': ' + JSON.stringify(rows, (k, v) => v instanceof ArrayBuffer ? Array.from(new Uint8Array(v)) : v));
+            }
+            db.close();
+        }
+        return out.join('\n');
+    }");
+
+    private static string EngineLogs(SandboxEngine engine)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var file in Directory.EnumerateFiles(engine.Root, "*.log", SearchOption.AllDirectories))
+        {
+            using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            text.AppendLine(reader.ReadToEnd());
+        }
+        return text.ToString();
+    }
+
+    /// <summary>
+    /// FR-104 to FR-106, SC-018: a saved connection with Remember password connects without a prompt ten times in ten, after a
+    /// reload as well; the password is nowhere the browser or a log can see; Forget makes the next connect ask again.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_remembered_password_connects_without_a_prompt_and_is_nowhere_it_should_not_be()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var (host, port, admin, adminPassword) = PgWebSession.Configured()!.Value;
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var role = "akml_e2e_" + suffix;
+        var secret = "Pw-" + Guid.NewGuid().ToString("N");
+        var page = s.Page;
+        var connect = page.Locator("[data-testid='conn-connect-btn']");
+
+        // The password is assembled on the server from two halves, so the script in the editor (stored in the browser and in
+        // History like any script) never holds it whole, and the scans below find only what the product itself kept.
+        var half = secret.Length / 2;
+        await s.ExecuteAsync($"DO $$ BEGIN EXECUTE format('CREATE ROLE {role} LOGIN PASSWORD %L', '{secret[..half]}' || '{secret[half..]}'); END $$;");
+        try
+        {
+            // Save it with Remember password on, and connect as the role (this is the one time the password is typed).
+            await PgWebSession.FillFormAsync(page, host, port, "postgres", role, secret);
+            await page.FillAsync("[data-testid='conn-name-input']", role);   // the saved row is found by this name
+            await page.CheckAsync("[data-testid='conn-pg-remember']");
+            await page.ClickAsync("[data-testid='conn-save-btn']");
+            await Assertions.Expect(page.Locator("[data-testid='conn-message']")).ToContainTextAsync("Saved");
+            await connect.ClickAsync();
+            await Assertions.Expect(page.Locator("[data-testid='status-login']")).ToHaveTextAsync(role, new() { Timeout = 30_000 });
+
+            // After a reload nothing is connected and no password is held by the page: the saved row connects on its own.
+            await page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle });
+            await page.WaitForSelectorAsync("[data-testid='execute-button']", new() { Timeout = 60_000 });
+            await Assertions.Expect(page.Locator("[data-testid='status-pill']")).ToContainTextAsync("Live", new() { Timeout = 60_000 });
+
+            var prompts = 0;
+            for (var attempt = 0; attempt < 10; attempt++)
+            {
+                await page.ClickAsync("[data-testid='status-connection']");
+                await page.WaitForSelectorAsync("[data-testid='connection-manager']");
+                await page.Locator("[data-testid='conn-row']", new() { HasTextString = role }).First.ClickAsync();
+                Assert.Equal(string.Empty, await page.InputValueAsync("[data-testid='conn-pg-password']"));
+                await connect.ClickAsync();
+                try
+                {
+                    await Assertions.Expect(page.Locator("[data-testid='connection-manager']")).ToHaveCountAsync(0, new() { Timeout = 20_000 });
+                }
+                catch (PlaywrightException)
+                {
+                    prompts++;   // the dialog stayed open: it is asking for a password
+                    await page.Keyboard.PressAsync("Escape");
+                }
+                await Assertions.Expect(page.Locator("[data-testid='status-login']")).ToHaveTextAsync(role, new() { Timeout = 20_000 });
+            }
+            _output.WriteLine($"SC-018: {10 - prompts} of 10 connects with a remembered password asked for nothing.");
+            Assert.Equal(0, prompts);
+
+            // The password is nowhere the browser, the engine's log or an export can show it.
+            Assert.DoesNotContain(secret, await IndexedDbDumpAsync(page));
+            Assert.DoesNotContain(secret, EngineLogs(s.Engine));
+            await page.ClickAsync("nav >> text=Settings");
+            var download = await page.RunAndWaitForDownloadAsync(() => page.ClickAsync("[data-testid='settings-export']"));
+            Assert.DoesNotContain(secret, await File.ReadAllTextAsync((await download.PathAsync())!));
+
+            // Forget in Settings: the record stays, the engine's copy goes, and the next connect asks for the password again.
+            await page.ClickAsync("[data-testid='settings-nav-connections']");
+            await page.Locator("[data-testid^='settings-conn-forget-']").First.ClickAsync();
+            await Assertions.Expect(page.Locator("[data-testid^='settings-conn-forget-']")).ToHaveCountAsync(0, new() { Timeout = 15_000 });
+
+            await page.ClickAsync("[data-testid='status-connection']");
+            await page.WaitForSelectorAsync("[data-testid='connection-manager']");
+            await page.Locator("[data-testid='conn-row']", new() { HasTextString = role }).First.ClickAsync();
+            await page.ClickAsync("[data-testid='conn-pg-remember']");   // off in the record now; the dialog follows it
+            await connect.ClickAsync();
+            await Assertions.Expect(page.Locator("[data-testid='conn-message']")).ToContainTextAsync("asked for a password", new() { Timeout = 20_000 });
+            await CloseConnectionManagerAsync(page);
+        }
+        finally
+        {
+            // Back to the administrator, then drop what this test made. A dialog the body left open is closed first, and a
+            // failure here is only logged: it must never hide the failure of the body.
+            try
+            {
+                await CloseConnectionManagerAsync(page);
+                await PgWebSession.ConnectAsync(page, host, port, "postgres", admin, adminPassword);
+                await page.ClickAsync("nav >> text=Editor");
+                await page.WaitForSelectorAsync("[data-testid='sql-editor'] .cm-content", new() { Timeout = 30_000 });
+                await s.ExecuteAsync($"DROP ROLE IF EXISTS {role};");
+            }
+            catch (Exception ex)
+            {
+                _output.WriteLine("Cleanup of role " + role + " failed: " + ex.Message);
+            }
+        }
+    }
+
+    /// <summary>FR-006, FR-093, quickstart US4 step 5: an engine with PostgreSQL switched off offers no PostgreSQL and says why.</summary>
+    [SkippableFact]
+    public async Task An_engine_with_PostgreSQL_switched_off_disables_the_choice_and_says_why()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output, connect: false, postgreSqlEnabled: false);
+        var page = s.Page;
+
+        await page.ClickAsync("[data-testid='status-connection']");
+        await page.WaitForSelectorAsync("[data-testid='connection-manager']");
+        var choice = page.Locator("[data-testid='conn-kind-postgresql']");
+        await Assertions.Expect(choice).ToBeDisabledAsync();
+        await Assertions.Expect(choice).ToHaveAttributeAsync("title", "Requires an engine with PostgreSQL support (dialect.postgresql.v1)");
+        await Assertions.Expect(page.Locator("[data-testid='conn-kind-hint']")).ToContainTextAsync("dialect.postgresql.v1");
+        await CloseConnectionManagerAsync(page);
+
+        await page.ClickAsync("nav >> text=Settings");
+        await page.ClickAsync("[data-testid='settings-nav-diagnostics']");
+        var row = page.Locator("[data-testid='diag-postgresql']");
+        await Assertions.Expect(row).ToHaveAttributeAsync("data-state", "not-advertised");
+        await Assertions.Expect(row).ToContainTextAsync("postgreSql.enabled");
+    }
 }

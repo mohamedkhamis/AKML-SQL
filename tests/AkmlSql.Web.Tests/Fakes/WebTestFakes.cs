@@ -13,7 +13,7 @@ namespace AkmlSql.Web.Tests.Bridge;
 internal sealed class FakeEngineBridge : IEngineBridge
 {
     public BridgeState State { get; private set; } = BridgeState.Disconnected;
-    public string[] EngineCapabilities { get; } = Array.Empty<string>();
+    public string[] EngineCapabilities { get; set; } = Array.Empty<string>();
     public string? EngineVersion { get; set; }
     public string? EngineHostKind { get; set; }
     public string? EngineRunsAs { get; set; }

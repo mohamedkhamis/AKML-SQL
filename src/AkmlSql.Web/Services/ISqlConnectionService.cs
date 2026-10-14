@@ -192,8 +192,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public string? SchemaIdentity => Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _schemaIdentity != null ? _schemaIdentity : Server;
 
-    public bool EngineSupportsPostgres =>
-        Array.IndexOf(_bridge.EngineCapabilities ?? Array.Empty<string>(), CapabilityPostgreSql) >= 0;
+    public bool EngineSupportsPostgres => _bridge.Advertises(CapabilityPostgreSql);
 
     public void ReportTransactionState(AkmlSql.Core.TransactionState state)
     {

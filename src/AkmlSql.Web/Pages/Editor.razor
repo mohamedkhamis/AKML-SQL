@@ -268,7 +268,7 @@
                     }
                     else
                     {
-                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
+                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" LastErrorProvider="GetLastExecuteError" />
                     }
                 </div>
             </div>
@@ -1719,6 +1719,17 @@
     /// back to the whole document when nothing is selected (so a user can run Explain on the
     /// full script without selecting first). Evaluated lazily at action time via
     /// <see cref="AiPanel.SelectedSqlProvider"/> so it is always current.</summary>
+    /// <summary>
+    /// Spec 042 (FR-082): the first error of the last run, for AI Fix. A PostgreSQL error carries its SQLSTATE, the server's
+    /// message, detail and hint. Only for a PostgreSQL connection: on SQL Server Fix sends what it always sent.
+    /// </summary>
+    private AiErrorInfo? GetLastExecuteError()
+    {
+        if (SqlConn.Kind != AkmlSql.Core.DatabaseKind.PostgreSql) return null;
+        var error = _result?.MessageDetails?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
+        return error == null ? null : new AiErrorInfo(error.Text, 0, error.SqlState, error.Detail, error.Hint);
+    }
+
     private async Task<string> GetAiInputSqlAsync()
     {
         if (_editor == null) return _currentText;

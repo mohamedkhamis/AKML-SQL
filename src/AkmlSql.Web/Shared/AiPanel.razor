@@ -119,6 +119,9 @@
     [Parameter] public Func<Task<string>>? SelectedSqlProvider { get; set; }
     /// <summary>Raised when the user clicks Accept -- the parent inserts the text into the editor.</summary>
     [Parameter] public EventCallback<string> OnAcceptResult { get; set; }
+    /// <summary>Spec 042 (FR-082): the error of the last run, read when Fix is clicked. A PostgreSQL error carries its SQLSTATE,
+    /// detail and hint. Null (or no provider) sends what Fix always sent when no error was at hand.</summary>
+    [Parameter] public Func<AiErrorInfo?>? LastErrorProvider { get; set; }
 
     private bool _hasProvider;
     private bool _providerCapable = true;
@@ -141,7 +144,7 @@
     }
 
     private Task RunExplainAsync() => RunStreamAsync((sql, ct) => Prompts.ExplainStreamAsync(sql, ct), "Explain");
-    private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, "(no error)", 0, ct), "Fix");
+    private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, LastErrorProvider?.Invoke() ?? AiErrorInfo.None, ct), "Fix");
     private Task RunOptimizeAsync() => RunStreamAsync((sql, ct) => Prompts.OptimizeStreamAsync(sql, ct), "Optimize");
     private Task RunTextToSqlAsync() => RunStreamAsync((sql, ct) => Prompts.TextToSqlStreamAsync(sql, ct), "Text to SQL");
     private Task RunIndexAnalysisAsync() => RunStreamAsync((sql, ct) => Prompts.IndexAnalysisStreamAsync(sql, ct), "Index Analysis");
@@ -175,6 +178,12 @@
         catch (OperationCanceledException)
         {
             // Superseded by a newer action -- keep whatever partial text rendered.
+        }
+        catch (AiNotSentException ex)
+        {
+            // Spec 042 (FR-081): the literals could not be removed and the user chose not to send the script as it is.
+            _lastError = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Info, "ai", "Request not sent: literals could not be removed and the user declined.");
         }
         catch (ProviderNotBrowserDirectException ex)
         {

@@ -248,6 +248,26 @@ store. The store file follows `Constants.ConfigFilePath`, so under `--web --conf
 engine can use it". **SPIKE S7**: confirm the resolved path under the service and that the file
 ACL matches the config's.
 
+**SPIKE S7 result (2026-10-14, task T114) - partly confirmed, one assumption corrected, one check
+left for an elevated shell.**
+
+- *Confirmed*: on the development machine `AkmlSqlWebEngine` is installed with `StartName:
+  LocalSystem` and the command line `AkmlSql.Engine.exe --web --config "C:\ProgramData\AKML SQL
+  Web\config.json"`. DPAPI `CurrentUser` in that process is the SYSTEM profile, as stated above.
+- *Corrected*: the sentence "it lands beside that config" was wrong. The `--config` file is the
+  engine's bridge settings. `SqlCredentialStore` takes its folder from `Constants.ConfigFilePath`,
+  which is the account's own `%AppData%\AKML SQL\config.json`, so for the service the file is
+  `C:\Windows\System32\config\systemprofile\AppData\Roaming\AKML SQL\sql-credentials.json`, in the
+  same folder as that account's `config.json`, and not in `C:\ProgramData\AKML SQL Web`.
+- *Confirmed for an interactive account*: in the user's profile `sql-credentials.json` and
+  `config.json` carry the same access list (SYSTEM, Administrators, the user; all inherited), so
+  the store is no more open than the settings file beside it.
+- *Not verified*: the access list of the SYSTEM profile's `AKML SQL` folder. It cannot be read from a
+  non-elevated shell (access denied), and the check needs an elevated one:
+  `icacls "C:\Windows\System32\config\systemprofile\AppData\Roaming\AKML SQL"`. The default for that
+  profile is SYSTEM and Administrators only, which is what the consent text already says ("any
+  administrator of the engine machine"), so the text stays as it is in `contracts/web-ui.md`.
+
 ## R15. Capability, configuration and switch-off (FR-006, FR-093)
 
 **Decision**: capability `dialect.postgresql.v1` in `Capabilities.Current`, omitted when

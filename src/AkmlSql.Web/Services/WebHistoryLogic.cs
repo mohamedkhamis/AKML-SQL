@@ -44,6 +44,92 @@ public static class WebHistoryLogic
         return (servers, databases);
     }
 
+    // ── Spec 042 (FR-070): the kind of an entry ─────────────────────────────────────────────────────────
+
+    /// <summary>The History search box after its <c>kind:</c> term is taken out (spec 042, FR-070).</summary>
+    /// <param name="Text">The search text left over, words separated by single spaces; null when nothing is left.</param>
+    /// <param name="Kind">The <see cref="AkmlSql.Core.DatabaseKind"/> the <c>kind:</c> term named; null when there was none.</param>
+    public readonly record struct WebHistorySearch(string? Text, int? Kind);
+
+    /// <summary>
+    /// Splits a <c>kind:</c> term out of the search box: <c>kind:postgresql</c>, <c>kind:pg</c>, <c>kind:sqlserver</c>,
+    /// <c>kind:mssql</c> (any case, the value may be quoted). It is not for the full-text index, so it is not left in the text.
+    /// A term with a value that names no kind, a quoted phrase that contains one, and everything else stay as the text.
+    /// The last kind term wins.
+    /// </summary>
+    public static WebHistorySearch ParseSearch(string? search)
+    {
+        if (string.IsNullOrWhiteSpace(search)) return new WebHistorySearch(null, null);
+
+        int? kind = null;
+        var kept = new List<string>();
+        foreach (var token in SplitTokens(search))
+        {
+            if (TryReadKindTerm(token, out var named))
+                kind = named;
+            else
+                kept.Add(token);
+        }
+
+        return new WebHistorySearch(kept.Count == 0 ? null : string.Join(" ", kept), kind);
+    }
+
+    private static bool TryReadKindTerm(string token, out int kind)
+    {
+        kind = 0;
+        const string prefix = "kind:";
+        if (token.Length <= prefix.Length || !token.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
+
+        var value = token.Substring(prefix.Length);
+        if (value.Length >= 2 && value[0] == '"' && value[value.Length - 1] == '"') value = value.Substring(1, value.Length - 2);
+        if (!AkmlSql.Core.DatabaseKindNames.TryParse(value, out var named)) return false;
+
+        kind = (int)named;
+        return true;
+    }
+
+    /// <summary>Whitespace-separated words; a double-quoted phrase is one word, so what is inside it is never a term.</summary>
+    private static IEnumerable<string> SplitTokens(string text)
+    {
+        var current = new System.Text.StringBuilder();
+        var inQuote = false;
+        foreach (var c in text)
+        {
+            if (c == '"') inQuote = !inQuote;
+            if (char.IsWhiteSpace(c) && !inQuote)
+            {
+                if (current.Length > 0) { yield return current.ToString(); current.Clear(); }
+                continue;
+            }
+            current.Append(c);
+        }
+        if (current.Length > 0) yield return current.ToString();
+    }
+
+    /// <summary>The kind as the product names it everywhere: <c>SQL Server</c> or <c>PostgreSQL</c>.</summary>
+    public static string KindLabel(int kind) =>
+        AkmlSql.Core.DatabaseKindNames.FromInt(kind) == AkmlSql.Core.DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server";
+
+    /// <summary>
+    /// The saved connection an entry ran on (FR-070): the one of the same kind whose server and database match, else the one of the
+    /// same kind on the same server. A PostgreSQL entry's server is <c>host:port</c>, as the status bar writes it; a SQL Server
+    /// entry's is the server name as typed. Never a connection of the other kind, whatever its server is called.
+    /// </summary>
+    public static AkmlSql.Web.Services.SavedSqlConnection? FindConnection(
+        IEnumerable<AkmlSql.Web.Services.SavedSqlConnection> saved, AkmlSql.Core.DatabaseKind kind, string? server, string? database)
+    {
+        if (string.IsNullOrWhiteSpace(server)) return null;
+
+        var sameServer = saved
+            .Where(c => c.Kind == kind && string.Equals(ServerOf(c), server.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return sameServer.FirstOrDefault(c => string.Equals(c.Database, database, StringComparison.OrdinalIgnoreCase))
+               ?? sameServer.FirstOrDefault();
+    }
+
+    private static string ServerOf(AkmlSql.Web.Services.SavedSqlConnection c) =>
+        c.Kind == AkmlSql.Core.DatabaseKind.PostgreSql ? c.Server.Trim() + ":" + c.EffectivePort : c.Server.Trim();
+
     /// <summary>Row count for the history record: summed result rows for a SELECT; otherwise the DML
     /// rows-affected (which is 0/-1 for a SELECT, so reads take the summed path).</summary>
     public static long DeriveRowCount(ExecuteQueryResult result)

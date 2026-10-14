@@ -1152,3 +1152,29 @@ command, each batch once (results ignored, no row counts), then `SET PARSEONLY O
 connection is closed so the next execute reopens it and reports `ConnectionWasReset`. `Status` Ok means the
 server found no syntax error ("Commands completed successfully."); errors carry batch-relative lines like an
 execute's. Sent only when the engine advertises `execute.v2`: an engine that does not know 219 gives no reply.
+
+## PostgreSQL Messages (221–224) — spec 042, `dialect.postgresql.v1`
+
+Registered only when `postgreSql.enabled` is true in `config.json` (the default). A PostgreSQL session is an ordinary session whose
+`ConnectionInfo.Kind` is 1; the handlers that take a `SessionId` branch on it (see `specs/042-postgresql-support/contracts/ipc.md`).
+
+### `CredentialRequest` (221) → `CredentialResponse` (222)
+
+`CredentialRequest { 0 Action, 1 Kind, 2 Server, 3 Port, 4 Login }` → `CredentialResponse { 0 Ok, 1 Has, 2 Error }`. `Action` 0 asks whether the
+engine holds a remembered password for this server and login, 1 forgets it. The reply says yes or no and never carries a password.
+Only PostgreSQL is served: any other `Kind`, or a missing login, finds nothing and touches nothing. The password lives in the engine's
+protected credential store under `pg://{server}:{port}` and the login, and is filled into a connection that arrives without one.
+
+### `RedactRequest` (223) → `RedactResponse` (224)
+
+`RedactRequest { 0 Dialect, 1 Text }` → `RedactResponse { 0 Ok, 1 Text, 2 Error, 3 Placeholders }`. The web edition sends PostgreSQL text here before it
+goes to a cloud AI provider. `Dialect` must be `postgresql` (or an alias such as `pg`); anything else is refused, never passed through. The
+engine replaces each string, numeric and dollar-quoted literal with a placeholder and keeps identifiers, keywords, operators, comments and
+layout. Placeholders are `'__STR_n__'` for strings, `__NUM_n__` for numbers, and the dollar tag around `__STR_n__` for a dollar-quoted
+string; a dollar-quoted body after `AS` or `DO` that reads as PostgreSQL text is redacted inside instead. A number after `LIMIT`, `OFFSET` or
+`FETCH FIRST|NEXT` is a row count and stays.
+
+`Placeholders` (key 3, appended after the first release) maps each placeholder, as it appears in `Text`, to the literal it replaced, so the
+client can restore the literals in the provider's answer; it goes back only to the client that sent the text. When the text ends inside a
+string, quoted name, dollar-quoted string or block comment, or exceeds 10 MB, `Ok` is false, `Text` is empty and `Error` says why without
+quoting the text: the client must not send the original without the user's say-so.

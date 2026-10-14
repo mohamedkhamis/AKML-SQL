@@ -16,6 +16,7 @@
 @inject IJSRuntime JS
 @inject IDialogService Dialogs
 @inject INotificationService Notifications
+@inject ISqlConnectionService SqlConn
 
 @* Spec 041 (R29): how the paired engine runs, and as whom (also on hover in the status bar). *@
 <SettingRow Id="diagnostics-engine" Kind="block">
@@ -29,6 +30,12 @@
             <text>AKML SQL engine @(AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion) ?? "(version unknown)") — @HostKindText(Bridge.EngineHostKind)@(string.IsNullOrEmpty(Bridge.EngineRunsAs) ? "" : $", running as {Bridge.EngineRunsAs}").</text>
         }
     </p>
+</SettingRow>
+
+@* Spec 042 (FR-006): does the paired engine offer PostgreSQL, and what is the active connection. *@
+<SettingRow Id="diagnostics-postgresql" Kind="block">
+    <p class="akml-settings-status" data-testid="diag-postgresql" data-state="@PostgresState">@PostgresText</p>
+    <p class="akml-settings-status" data-testid="diag-active-connection">@ActiveConnectionText</p>
 </SettingRow>
 
 <SettingRow Id="diagnostics-levels" Kind="block">
@@ -104,6 +111,27 @@
     private IJSObjectReference? _downloadModule;
     private readonly HashSet<DiagnosticEntry> _expanded = new();
     private const int MessagePreviewLimit = 160;
+
+    private bool EngineAdvertisesPostgres => Bridge.Advertises(SqlConnectionService.CapabilityPostgreSql);
+
+    private string PostgresState =>
+        Bridge.State != BridgeState.Open ? "no-engine" : EngineAdvertisesPostgres ? "available" : "not-advertised";
+
+    // An engine that leaves PostgreSQL out of its capabilities is either older than the feature or has it switched off in its
+    // config.json; the handshake does not say which, so the text names both.
+    private string PostgresText => PostgresState switch
+    {
+        "available" => $"PostgreSQL support: available ({SqlConnectionService.CapabilityPostgreSql}).",
+        "not-advertised" => "PostgreSQL support: not advertised. The paired engine is older than PostgreSQL support, or postgreSql.enabled is false in its config.json.",
+        _ => "PostgreSQL support: unknown. No engine is connected.",
+    };
+
+    private string ActiveConnectionText =>
+        !SqlConn.IsConnected
+            ? "No SQL connection."
+            : SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
+                ? $"Active connection: PostgreSQL{(string.IsNullOrWhiteSpace(SqlConn.ServerVersionText) ? "" : " " + SqlConn.ServerVersionText)} at {SqlConn.Server} / {SqlConn.Database}."
+                : $"Active connection: SQL Server at {SqlConn.Server} / {SqlConn.Database}.";
 
     private static string HostKindText(string? kind) => kind switch
     {

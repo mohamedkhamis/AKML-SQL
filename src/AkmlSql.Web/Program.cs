@@ -145,6 +145,10 @@ builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
 });
 builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
+// Spec 042 (FR-080, FR-081): the dialect of the active connection, and the engine call that removes the literals of
+// PostgreSQL text before it goes to a cloud provider. AiPromptService and AiGhostTextService take them as optional.
+builder.Services.AddSingleton<IAiDialectContext, AiDialectContext>();
+builder.Services.AddSingleton<IPostgresRedactor, EnginePostgresRedactor>();
 builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
 // Spec 028 (M6) T034 (US6): local-only persisted chat conversations.
 builder.Services.AddSingleton<IChatHistoryStore, ChatHistoryStore>();

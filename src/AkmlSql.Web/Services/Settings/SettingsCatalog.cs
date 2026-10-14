@@ -77,6 +77,7 @@ public static class SettingsCatalog
         new SettingEntry("schema-cache-databases", SchemaCache, "Cached databases", "Schema kept in this browser for completion and the Schema panel.", "refresh clear"),
 
         new SettingEntry("diagnostics-engine", Diagnostics, "Engine", "The paired engine: its version, how it runs and the account it runs as.", "service account version"),
+        new SettingEntry("diagnostics-postgresql", Diagnostics, "PostgreSQL support", "Whether the paired engine offers PostgreSQL, and what the active connection is.", "postgres capability kind version connection"),
         new SettingEntry("diagnostics-levels", Diagnostics, "Levels shown", "Which log entries the table shows.", "log info warn error debug"),
         new SettingEntry("diagnostics-log", Diagnostics, "Log", "Recent events in this browser. Export or clear them.", "export clear"),
     };

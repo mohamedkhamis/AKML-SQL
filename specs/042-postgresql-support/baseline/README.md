@@ -50,6 +50,16 @@ Failures that already existed at `97efd46` (none is caused by spec 042; each als
   run alone the whole class passed (9 of 9), and nothing in `AkmlSql.Shell.Shared` was changed by this spec.
 - **Engine**: `PerformanceBaselineTests.Capture_or_compare_M0_baseline` (environmental drift; about 17 minutes by itself).
 
+## Gate results per user story
+
+Each story ends with the same comparison (a copy of the working tree, every suite built and run once, then
+`scripts/compare-test-results.ps1`). `after/*.passed.txt` is the latest. A test that passed before and does not pass after is
+re-run alone before it is called a regression.
+
+| After | Passed (Core / IntelliSense / Analysis / Formatting / AI / Web / Shell / Engine) | Regressions |
+|---|---|---|
+| US4, 2026-10-14 | 1450 / 25 / 5 / 1635 / 92 / 1407 / 985 / 2285 | none. Three tests failed in the full run and passed alone: two history timing tests that ran while other builds and tests shared the machine, and one clipboard test of the known flake (`AiChatPanelCopyButtonTests`) |
+
 Skipped by design: three `Theme` tests in Core (`[Fact(Skip = ...)]`) and `WebSocketTransportLanTests.LanMode_round_trip_wss_handshake`
 (needs elevation).
 

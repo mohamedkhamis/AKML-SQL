@@ -24,10 +24,16 @@ public static class ExplainPrompt
     /// </summary>
     /// <param name="schemaText">Formatted schema context from <see cref="Context.SchemaContextFormatter"/>.</param>
     /// <param name="selectedSql">The SQL text to explain.</param>
+    /// <param name="dialect">The SQL language of the active connection (spec 042). SQL Server by default.</param>
+    /// <param name="serverVersion">The PostgreSQL server version when known; ignored for SQL Server.</param>
     /// <returns>A tuple of (systemMessage, userMessage).</returns>
-    public static (string systemMessage, string userMessage) Build(string schemaText, string selectedSql)
+    public static (string systemMessage, string userMessage) Build(
+        string schemaText,
+        string selectedSql,
+        SqlDialect dialect = SqlDialect.SqlServer,
+        string? serverVersion = null)
     {
-        var system = PromptTemplates.BuildSystemPrompt(schemaText, TaskInstruction);
+        var system = PromptTemplates.BuildSystemPrompt(schemaText, TaskInstruction, dialect, serverVersion);
         var user = $"Explain this SQL:\n\n{selectedSql}";
         return (system, user);
     }

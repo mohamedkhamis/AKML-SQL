@@ -111,6 +111,14 @@ public interface IEngineBridge : IAsyncDisposable
 
 public enum BridgeState { Disconnected, Connecting, Open, Reconnecting, Failed }
 
+/// <summary>Spec 042 (T121): the one way to ask whether the paired engine advertises a capability.</summary>
+public static class EngineBridgeCapabilities
+{
+    /// <summary>True when the last handshake listed <paramref name="capability"/>. False with no engine: the list is then empty.</summary>
+    public static bool Advertises(this IEngineBridge bridge, string capability) =>
+        Array.IndexOf(bridge.EngineCapabilities ?? Array.Empty<string>(), capability) >= 0;
+}
+
 /// <summary>
 /// Spec 025 follow-on. Carries the data a TLS-fingerprint-drift UI needs.
 /// </summary>
