@@ -656,9 +656,12 @@ Server rule fires.
 
 #### Settings, portability and diagnostics
 
-- **FR-110**: Settings → Connections MUST list both kinds with a kind badge; Export and Import of
-  settings MUST carry saved connections with their kind and never a password; importing an
-  export without a kind MUST assign SQL Server.
+- **FR-110**: Settings → Connections MUST list both kinds with a kind badge. The kind travels
+  with the saved-connection record; a record without a kind (saved before this feature) MUST be
+  treated as SQL Server. Settings Export and Import stay as they are: the envelope is built from
+  preference stores only and never includes saved connections or passwords. (Amended at plan
+  time: the previous wording asked exports to carry connections, which the spec 041 design rules
+  out by construction.)
 - **FR-111**: Diagnostics MUST show whether the paired engine supports PostgreSQL, and the active
   connection's kind and server version; the engine log tail MUST include PostgreSQL connection
   events.
