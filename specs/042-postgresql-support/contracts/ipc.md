@@ -31,6 +31,10 @@ the new keys, so an older client and a newer engine (or the reverse) keep workin
 | `ChangeDatabaseResponse` | 4 `TransactionState` | int | 0 | always 0 after a PostgreSQL reconnect |
 | `CrudCellDto` | 6 `TypeName` | string? | null | `format_type` text used for the `::type` cast (PostgreSQL only) |
 | `AnalysisRuleInfoDto` | 9 `Kind` | int | 0 | `DatabaseKind` of the rule set the rule belongs to |
+| `AnalysisRuleInfoDto` | 10 `ReferenceUrl` | string | empty | the PostgreSQL manual page of a PostgreSQL rule (user story 8) |
+| `ListAnalysisRulesRequest` | 1 `IncludePostgreSql` | bool | false | also list the PostgreSQL rule set; false keeps the answer the SQL Server rules only |
+| `FormatRequest`, `FormatSelectionRequest`, `FormatActionRequest` | 6 `ProfileJson` | string? | null | the style as JSON, used instead of `ProfileName` (user story 7) |
+| `FormatPreviewRequest` | 3 `Dialect` | int | 0 | `DatabaseKind` of the sample |
 | `SafetyCheckRequest` | 3 `Kind` | int | 0 | `DatabaseKind`; no session on this request |
 | `SnippetListRequest` | 5 `Kind` | int | 0 | `DatabaseKind` of the snippets wanted; `.akmlsnippet` files gain `metadata.dialect` (default `sqlserver`) |
 | `HistoryRecordRequest` | 13 `Kind` | int | 0 | stored in `history.kind` |
@@ -99,6 +103,20 @@ PostgreSQL needs the ones between), `ExpandWildcards` and `QualifyObjectNames` (
 
 The style editor schema (`StyleEditorSchemaRequest`, SQL Prompt model) goes to version **2003**: each setting may carry
 `noEffectForPostgreSql: true` and `noEffectReason`, and each group a `samplePostgreSql` beside `sample`.
+
+## Appended keys for code analysis (user story 8, FR-150 to FR-155)
+
+`RequestAnalyze` (CodeAnalysisRequest) is answered for a PostgreSQL session by the PostgreSQL rules, in the same `CodeAnalysisResponse`
+shape; the session's schema cache lets the schema-aware rules run. A script that does not parse yields one issue, rule id `PGSYN001`.
+
+```text
+ListAnalysisRulesRequest [1] IncludePostgreSql  bool    also list the PostgreSQL rule set; false (the default) keeps the answer
+                                                       exactly the SQL Server rules, as an older client expects
+AnalysisRuleInfoDto      [10] ReferenceUrl      string  the PostgreSQL manual page of a PostgreSQL rule; empty for SQL Server rules
+```
+
+`AnalysisRuleInfoDto.Kind` (key 9, appended earlier) is 0 for SQL Server rules and 1 for PostgreSQL rules. `SessionSuppression` takes
+`PG` rule ids unchanged (the store is a set of ids).
 
 ## New messages
 

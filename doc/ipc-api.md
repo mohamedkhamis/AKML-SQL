@@ -790,6 +790,27 @@ Issues  CodeIssueInfo[]
         EndOffset   int
 ```
 
+**PostgreSQL (spec 042).** A request for a PostgreSQL session (`SessionId` names it) is answered by the PostgreSQL rule set in the same shape:
+rule ids start with `PG` (`PGPE001`), the session's schema cache lets the schema-aware rules run, and a script that does not parse produces one
+issue with rule id `PGSYN001` at the first error and no other issue. With `postgreSql.enabled` off, the answer is no issues. The T-SQL rules never
+see PostgreSQL text. See [analysis-rules.md](analysis-rules.md#postgresql-rules-pg).
+
+---
+
+### `ListAnalysisRules` (33) → `ListAnalysisRulesResult` (133)
+
+The catalog the Manage Rules window renders: one `AnalysisRuleInfoDto` per rule (`RuleId`, `Name`, `Category`, `DefaultSeverity`, `EffectiveSeverity`,
+`Enabled`, `RequiresSchema`, `AutoFixable`, `Description`) with the enabled state and severity resolved from `config.json` and the nearest `.casettings`.
+
+**Request** (`ListAnalysisRulesRequest`):
+```
+FileDirectory      string   Absolute directory of the active document; resolves .casettings (empty = global defaults)
+IncludePostgreSql  bool     Key 1 (spec 042): also list the PostgreSQL rule set. False (the default) keeps the answer exactly the SQL Server rules.
+```
+
+**Response** adds, per rule: `Kind` (key 9: 0 SQL Server, 1 PostgreSQL) and `ReferenceUrl` (key 10: the PostgreSQL manual page; empty for SQL Server rules).
+PostgreSQL rows are present only when the request asks and `postgreSql.enabled` is on.
+
 ---
 
 ### `AnalysisSettingsChanged` (notification, no response)
@@ -1194,3 +1215,22 @@ string; a dollar-quoted body after `AS` or `DO` that reads as PostgreSQL text is
 client can restore the literals in the provider's answer; it goes back only to the client that sent the text. When the text ends inside a
 string, quoted name, dollar-quoted string or block comment, or exceeds 10 MB, `Ok` is false, `Text` is empty and `Error` says why without
 quoting the text: the client must not send the original without the user's say-so.
+
+### Capability, dispatch by kind and the `dialect.*` errors
+
+- **Capability.** `HandshakeResponse.EngineCapabilities` carries `dialect.postgresql.v1` when `postgreSql.enabled` is true. A client checks it before offering
+  PostgreSQL (the web connection dialog, formatting, analysis) and shows "requires an engine that supports PostgreSQL" otherwise. Messages 221 to 224 are
+  registered only then.
+- **Dispatch by kind.** `ConnectionInfo.Kind` (key 5, 0 SQL Server, 1 PostgreSQL) is stored on the session. A request that names a `SessionId` is routed by
+  `SessionManager.KindOf`: completion, quick info, signature help, wildcard expansion, statement boundaries, definitions, execute, parse, apply, change database,
+  list databases, snippets, format (document, selection, action, preview), analysis and History go to the PostgreSQL implementation for a PostgreSQL session and to
+  the T-SQL one otherwise. The T-SQL parser is never given PostgreSQL text.
+- **Surfaces with no PostgreSQL implementation** (refactorings, Find invalid objects, find references, find unused variables, CRUD generation, encrypted-object
+  decryption, script-as, document outline) are answered for a PostgreSQL session by the router with the standard `Error` envelope: `ErrorInfo.Code` 4201 and
+  `Message` `dialect.unsupported: Not available for PostgreSQL`.
+- **Error ids** that travel in `ErrorCode` fields of connection replies: `dialect.unsupported` (4201), `dialect.password-required` (4202: the engine holds no
+  password for this server and login, so the client should ask), `dialect.credentials-required` (4203: the connection is refused because it has no user name,
+  asks for integrated authentication, or names a certificate by a relative path).
+- **Appended keys** (all append-only; an older peer ignores them): see `specs/042-postgresql-support/contracts/ipc.md` for the full list. In this file they appear
+  where the message is described: `Dialect` on `FormatPreviewRequest` (3), `ProfileJson` on the three format requests (6), `Kind` on `SnippetListRequest` (5),
+  `IncludePostgreSql` on `ListAnalysisRulesRequest` (1), `Kind` (9) and `ReferenceUrl` (10) on `AnalysisRuleInfoDto`.

@@ -97,6 +97,18 @@ PostgreSQL behaviour it rests on (FR-150). 52 rules; the floor is 40 (FR-150, SC
 | PGNM004 | Same name used quoted and unquoted in one script (different identifiers) | Warning | | sql-syntax-identifiers |
 | PGNM005 | Identifier that needs quoting everywhere (spaces, punctuation, leading digit) | Info | | sql-syntax-identifiers |
 
+## Notes found while implementing
+
+- **Syntax finding.** A script that does not parse produces one finding with the id `PGSYN001` (Error) and no rule runs (FR-154). It is not
+  one of the 52 rules and is not listed in the rules window.
+- **PGDEP001.** `CREATE TABLE ... WITH OIDS` is a syntax error in the PostgreSQL 18 grammar, so that script reports `PGSYN001`. The rule covers
+  the forms that still parse: `SET default_with_oids` and `WITH (oids = ...)`.
+- **PGPE005** is the implicit cast PostgreSQL really performs on the column: an integer column compared with a fractional constant. A quoted
+  literal takes the column's type and is not affected.
+- **PGST005** rests on a product convention, so its link is the product documentation, not the manual.
+- **Listing.** `ListAnalysisRules` returns the PostgreSQL set only for a request with `IncludePostgreSql`; `AnalysisRuleInfoDto` gains
+  `ReferenceUrl` (key 10).
+
 ## Mechanics shared with the SQL Server rules
 
 - Enabled / severity overrides: `config.json codeAnalysis.ruleOverrides` and `.casettings`, keyed

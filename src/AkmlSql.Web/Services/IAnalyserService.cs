@@ -48,6 +48,7 @@ internal sealed class AnalyserService : IAnalyserService
     private readonly CodeAnalysisSettings _settings;
     private readonly IAnalysisSettingsStore? _settingsStore;
     private readonly IDialectGate? _gate;
+    private readonly IPostgresAnalysisEngine? _postgres;
 
     // Severity codes matching CodeIssueInfo.Severity / ProblemsListComponent: 0=Hint,1=Info,2=Warning,3=Error.
     private const int SeverityHint = 0;
@@ -61,9 +62,10 @@ internal sealed class AnalyserService : IAnalyserService
     /// keep working (no overrides applied). The DI container injects the registered
     /// <see cref="IAnalysisSettingsStore"/> in the running app.
     /// </summary>
-    public AnalyserService(IAnalysisSettingsStore? settingsStore = null, IDialectGate? gate = null)
+    public AnalyserService(IAnalysisSettingsStore? settingsStore = null, IDialectGate? gate = null, IPostgresAnalysisEngine? postgres = null)
     {
         _gate = gate;
+        _postgres = postgres;
         var parser = new TsqlParserService();
         var registry = new RuleRegistry();
         var settingsLoader = new CaSettingsLoader();
@@ -85,15 +87,21 @@ internal sealed class AnalyserService : IAnalyserService
         // Spec 021 FR-011 (T042): refuse documents larger than the 10 MB limit.
         DocumentSizeLimit.EnsureWithinLimit(documentText);
 
-        // Spec 042 (FR-092): these are the T-SQL rules; PostgreSQL text gets no findings from them. The PostgreSQL rule
-        // set runs in the engine (story 8).
-        if (_gate?.IsPostgres == true)
-            return new CodeAnalysisResponse { RequestId = Guid.NewGuid().ToString(), Issues = Array.Empty<CodeIssueInfo>(), AnalyzedVersion = 1 };
-
-        // Spec 041 (R50, FR-055): "Enable code analysis" off means no analysis at all — not findings dropped
-        // afterwards. Without a settings store analysis is on.
+        // Spec 041 (R50, FR-055; spec 042 FR-155): "Enable code analysis" off means no analysis at all — not findings dropped
+        // afterwards, and no request to the engine for a PostgreSQL script. Without a settings store analysis is on.
         if (_settingsStore != null && !(await _settingsStore.GetAsync().ConfigureAwait(false)).Enabled)
             return new CodeAnalysisResponse { RequestId = Guid.NewGuid().ToString(), Issues = Array.Empty<CodeIssueInfo>(), AnalyzedVersion = 1 };
+
+        // Spec 042 (FR-092, FR-151): these are the T-SQL rules, so PostgreSQL text never reaches them. The PostgreSQL rule set runs in the
+        // engine; its findings are shaped like these and get the same browser-local per-rule overrides.
+        if (_gate?.IsPostgres == true)
+        {
+            if (_postgres == null)
+                return new CodeAnalysisResponse { RequestId = Guid.NewGuid().ToString(), Issues = Array.Empty<CodeIssueInfo>(), AnalyzedVersion = 1 };
+
+            var pgResponse = await _postgres.AnalyseAsync(documentText ?? string.Empty, ct).ConfigureAwait(false);
+            return await ApplyOverridesAsync(pgResponse).ConfigureAwait(false);
+        }
 
         var request = new CodeAnalysisRequest
         {

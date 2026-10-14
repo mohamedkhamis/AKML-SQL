@@ -941,4 +941,73 @@ public sealed class PostgresWorkspaceTests
         Assert.StartsWith("Go to line 4, column", titles[2]);
         await Assertions.Expect(s.Page.Locator("[data-testid='results-grid']")).ToHaveCountAsync(0);   // nothing ran
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+    // User story 8 (task T161, quickstart US8, SC-016): code analysis with the PostgreSQL rules.
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+    private static async Task<string[]> AnalyseAndReadRulesAsync(SqlSession s, string sql)
+    {
+        await s.SetEditorTextAsync(sql);
+        var marker = s.Page.Locator("[data-testid='analyse-complete']");
+        var before = await marker.CountAsync() == 0 ? 0 : int.Parse(await marker.GetAttributeAsync("data-version") ?? "0");
+        await s.Page.ClickAsync("[data-testid='analyse-button']");
+        await Assertions.Expect(marker).Not.ToHaveAttributeAsync("data-version", before.ToString(), new() { Timeout = 30_000 });
+
+        await Tab(s.Page, "problems").ClickAsync();
+        var rules = s.Page.Locator("li[data-testid='problem-item'] .akml-problems-rule");
+        return (await rules.AllInnerTextsAsync()).Select(r => r.Trim()).ToArray();
+    }
+
+    [SkippableFact]
+    public async Task Analyse_reports_the_PostgreSQL_rules_with_links_and_a_line_directive_removes_only_its_finding()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+        var name = new string('n', 70);
+        var script = $"CREATE TABLE t ({name} integer, created timestamp);\nDELETE FROM orders;\nBEGIN; CREATE INDEX CONCURRENTLY ON customers (city); COMMIT;";
+
+        var rules = await AnalyseAndReadRulesAsync(s, script);
+
+        foreach (var id in new[] { "PGNM001", "PGBP002", "PGEX001", "PGDE001" }) Assert.Contains(id, rules);
+        Assert.All(rules, r => Assert.StartsWith("PG", r));                 // no T-SQL rule judged this script
+        var links = s.Page.Locator("[data-testid='problem-doc']");
+        Assert.True(await links.CountAsync() >= 4);
+        Assert.StartsWith("https://www.postgresql.org/docs/18/", await links.First.GetAttributeAsync("href"));
+
+        var suppressed = await AnalyseAndReadRulesAsync(s, script.Replace("DELETE FROM orders;", "DELETE FROM orders; -- akml-disable-line PGBP002"));
+
+        Assert.DoesNotContain("PGBP002", suppressed);
+        Assert.Contains("PGNM001", suppressed);
+        Assert.Contains("PGEX001", suppressed);
+    }
+
+    [SkippableFact]
+    public async Task A_script_that_does_not_parse_gives_one_syntax_finding_and_nothing_else()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+
+        var rules = await AnalyseAndReadRulesAsync(s, "DELETE FROM orders;\nselec 1;");
+
+        Assert.Equal(new[] { "PGSYN001" }, rules);
+    }
+
+    [SkippableFact]
+    public async Task Settings_lists_the_PostgreSQL_rules_by_category_under_their_own_database_beside_the_SQL_Server_rules()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);
+
+        await s.Page.ClickAsync("nav >> text=Settings");
+        await s.Page.ClickAsync("[data-testid='settings-nav-code-analysis']");
+
+        await Assertions.Expect(s.Page.Locator("[data-testid='rules-kind-postgresql']")).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        var kinds = await s.Page.Locator("[data-testid^='rules-kind-'][data-kind]").EvaluateAllAsync<string[]>("els => els.map(e => e.getAttribute('data-kind'))");
+        Assert.Equal(new[] { "sqlserver", "postgresql" }, kinds);
+
+        var pg = s.Page.Locator("[data-testid='rules-kind-postgresql']");
+        await Assertions.Expect(pg.Locator("h4")).ToContainTextAsync("(52 rules)");
+        Assert.Equal(8, await pg.Locator("details").CountAsync());
+        Assert.Equal(52, await pg.Locator("li[data-testid^='rule-PG']").CountAsync());
+        Assert.Equal(0, await s.Page.Locator("[data-testid='rules-kind-sqlserver'] li[data-testid^='rule-PG']").CountAsync());
+        Assert.True(await s.Page.Locator("[data-testid='rules-kind-sqlserver'] li[data-testid='rule-PE001']").CountAsync() == 1);
+    }
 }

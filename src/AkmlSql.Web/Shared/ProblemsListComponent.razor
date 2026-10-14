@@ -97,6 +97,15 @@
                     @if (!string.IsNullOrEmpty(issue.RuleId))
                     {
                         <span class="akml-problems-actions">
+                            @* Spec 042 (FR-150): a finding that carries a documentation page (every PostgreSQL rule does) links to it. *@
+                            @if (DocumentationUrl(issue) is { } documentation)
+                            {
+                                <a class="akml-problems-suppress akml-problems-doc"
+                                   data-testid="problem-doc"
+                                   href="@documentation" target="_blank" rel="noopener noreferrer"
+                                   title="@($"{issue.RuleId} in the documentation")"
+                                   @onclick:stopPropagation="true">docs</a>
+                            }
                             <button class="akml-problems-suppress"
                                     data-testid="suppress-line"
                                     title="@($"Suppress {issue.RuleId} for this line")"
@@ -185,6 +194,8 @@
         padding: 0 var(--akml-scalar-spacing-xs); cursor: pointer;
     }
     .akml-problems-suppress:hover { background-color: var(--akml-surface-hover); color: var(--akml-text-primary); }
+    .akml-problems-doc { text-decoration: none; }
+    .akml-problems-row:focus-within .akml-problems-actions { opacity: 1; }
     .akml-severity-error .akml-problems-rule { color: var(--akml-status-danger); font-weight: bold; }
     .akml-severity-warning .akml-problems-rule { color: var(--akml-status-warning); font-weight: bold; }
     .akml-severity-info .akml-problems-rule { color: var(--akml-status-info); }
@@ -238,6 +249,10 @@
     [Parameter] public EventCallback<int> OnVisibleCountChanged { get; set; }
 
     private int _lastVisibleCount = -1;
+
+    // Only an http(s) address becomes a link: the engine supplies it, and a link is something a person will click.
+    private static string? DocumentationUrl(CodeIssueInfo issue) =>
+        Uri.TryCreate(issue.ReferenceUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.AbsoluteUri : null;
 
     private bool _showInfo = true;
     private bool _showWarn = true;

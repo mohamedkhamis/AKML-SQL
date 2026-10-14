@@ -57,6 +57,54 @@ public static class PgPositions
     }
 
     /// <summary>
+    /// Finds the line and column of offsets that are asked for in increasing order, continuing from the previous answer instead of
+    /// counting from the start of the text again: a script of thousands of statements stays linear.
+    /// </summary>
+    public sealed class Cursor
+    {
+        private readonly string _text;
+        private int _offset;
+        private int _line = 1;
+        private int _column = 1;
+
+        public Cursor(string text) => _text = text;
+
+        /// <summary>The 1-based line and column of <paramref name="offset"/>; an offset before the previous one starts again from the beginning.</summary>
+        public (int Line, int Column) MoveTo(int offset)
+        {
+            offset = Math.Max(0, Math.Min(offset, _text.Length));
+            if (offset < _offset)
+            {
+                _offset = 0;
+                _line = 1;
+                _column = 1;
+            }
+
+            for (; _offset < offset; _offset++)
+            {
+                var c = _text[_offset];
+                if (c == '\n')
+                {
+                    _line++;
+                    _column = 1;
+                }
+                else if (c == '\r')
+                {
+                    // CRLF: the LF that follows ends the line; the CR itself takes no column.
+                    if (_offset + 1 < _text.Length && _text[_offset + 1] == '\n') continue;
+                    _line++;
+                    _column = 1;
+                }
+                else
+                {
+                    _column++;
+                }
+            }
+            return (_line, _column);
+        }
+    }
+
+    /// <summary>
     /// The 0-based offset in the whole script of a position the server reported inside one statement: that statement was
     /// sent on its own, so the position is relative to its text.
     /// </summary>

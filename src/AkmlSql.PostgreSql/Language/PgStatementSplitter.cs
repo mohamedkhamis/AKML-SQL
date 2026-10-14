@@ -36,12 +36,13 @@ public static class PgStatementSplitter
         string? firstWord = null;
         var atomicDepth = 0;       // > 0 while inside BEGIN ATOMIC ... END
         string? previousWord = null;
+        var cursor = new PgPositions.Cursor(sql);     // statements come in order, so each position is found from the last one
 
         void Flush(bool isMeta)
         {
             if (start >= 0 && (hasCode || isMeta))
             {
-                var (line, column) = PgPositions.ToLineColumn(sql, start);
+                var (line, column) = cursor.MoveTo(start);
                 statements.Add(new PgStatement(start, end, sql.Substring(start, end - start), line, column, unterminated, isMeta));
             }
             start = end = -1;

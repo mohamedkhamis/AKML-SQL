@@ -38,8 +38,10 @@ builder.Services.AddSingleton<IAnalysisSettingsStore, AnalysisSettingsStore>();
 // from IAnalysisSettingsStore. Registered via an explicit factory so the store is
 // unambiguously injected (rather than relying on DI to fill the optional ctor param) —
 // "Suppress globally" depends on this same store instance being read on the next analyse.
+// Spec 042 (US8): the PostgreSQL rules run in the engine, so the analyser also gets the engine route for PostgreSQL scripts.
+builder.Services.AddSingleton<IPostgresAnalysisEngine, EnginePostgresAnalysis>();
 builder.Services.AddSingleton<IAnalyserService>(sp =>
-    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>(), sp.GetRequiredService<IDialectGate>()));
+    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>(), sp.GetRequiredService<IDialectGate>(), sp.GetRequiredService<IPostgresAnalysisEngine>()));
 builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IEditorSessionStore, EditorSessionStore>();
 builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();

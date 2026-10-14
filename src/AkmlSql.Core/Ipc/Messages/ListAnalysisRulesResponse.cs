@@ -68,5 +68,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042: the <see cref="DatabaseKind"/> of the rule set this rule belongs to (0 SQL Server, 1 PostgreSQL).</summary>
         [Key(9)]
         public int Kind { get; set; }
+
+        /// <summary>Spec 042: the manual page the rule rests on (PostgreSQL rules); empty for the SQL Server rules, whose reference lives in the Ctrl-hover popup.</summary>
+        [Key(10)]
+        public string ReferenceUrl { get; set; } = string.Empty;
     }
 }

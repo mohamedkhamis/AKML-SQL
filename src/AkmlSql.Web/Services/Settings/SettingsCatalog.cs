@@ -66,6 +66,7 @@ public static class SettingsCatalog
         new SettingEntry("analysis-reanalyse-after-format", CodeAnalysis, "Re-analyse after format", "Analyse the document again after Format SQL.", "analyze"),
         new SettingEntry("analysis-problems-filter", CodeAnalysis, "Default Problems filters", "The severities the Problems tab shows when it opens.", "info warning error severity"),
         new SettingEntry("analysis-suppressed-rules", CodeAnalysis, "Suppressed rules", "Rules turned off everywhere. Undo brings a rule back.", "disabled ignore"),
+        new SettingEntry("analysis-rules", CodeAnalysis, "Rules", "Every rule, grouped by database: SQL Server and PostgreSQL. A PostgreSQL rule links to the manual page it rests on.", "catalog list severity category sql server postgres postgresql manual"),
 
         new SettingEntry("ai-providers", AiAssistance, "Providers", "The AI services you use and which one is active. Keys never leave this browser.", "openai anthropic ollama key model"),
         new SettingEntry("ai-privacy", AiAssistance, "Privacy", "How much of your schema is sent with an AI request.", "schema disclosure"),
