@@ -192,3 +192,109 @@ scripts with long `VALUES` rows and column lists, none is left.
 - The comparison with a person's idea of a good layout: the goldens are drift guards read against the options, not an authority.
 - Formatting inside PL/pgSQL bodies (out of scope: they are kept as written).
 - `tasks.md` T128 (the final dialect gate) waits for story 8.
+
+## User story 8 - code analysis for PostgreSQL (2026-10-14)
+
+### SC-016 - the rule set
+
+52 rules in the eight categories (floor: 40), every one with a PostgreSQL 18 manual link and a description of the behaviour it rests on
+(`PgRuleRegistryTests`). Each has a positive script that names, with `[[ ]]`, the exact text the finding must underline, and one to three
+negative scripts (`PgRuleCases`, run once per rule id by `PgRuleCaseTests`). The four schema-aware rules (PGPE004, PGPE005, PGBP005, PGDE006) also
+report nothing without a cache. `PgRulesCorpusSweepTests` runs every rule over the 151 scripts of the format corpus: 0 crashes, 0 impossible positions,
+0 SQL Server rule ids, and the whole-corpus engine run reports no syntax finding. `PgRulesDocTests` keeps `doc/analysis-rules.md` equal to the registry.
+
+The sweep was also a noise check: a corpus of valid scripts should trip few rules. Three rules fired where they should not and were fixed before
+this was recorded - PGNM002 on quoted names (a quoted name is exactly what it spells), PGPE010 on `CROSS JOIN LATERAL`, PGDE005 on temporary tables.
+
+### FR-151 / FR-154 / FR-155 - behaviour around the rules
+
+`PgAnalysisEngineTests`: a script that does not parse is one `PGSYN001` finding at the first error and no rule finding (also for T-SQL text and for a
+script with several errors); a psql command is `PGEX004`, not a syntax error; code analysis off returns nothing without parsing; `-- akml-disable-line`,
+`akml-disable` / `akml-enable`, `akml-disable` to the end of the script, the legacy `-- noqa` forms, "this session", "everywhere", severity overrides and the
+nearest `.casettings` all work for PostgreSQL rule ids. An unclosed `-- noqa-begin` is reported (`NOQA001`); the PostgreSQL engine adds that report after the suppression filter, so the block
+it opens cannot hide it.
+
+### FR-152 / SC-010 - the two sets never meet
+
+- `PgRuleRegistryTests`: no id in common, no T-SQL rule is a `PGxx` id, no PostgreSQL rule implements `IAnalysisRule` and the other way round.
+- Engine `AnalysisHandlersPgTests`: the same text gives `PGBP002` on a PostgreSQL session and `PE003` on a SQL Server one; the T-SQL parser's invocation
+  count does not move for a PostgreSQL session (and does for a SQL Server one, so the count is a working instrument).
+- Rules window: `ListAnalysisRules` returns the PostgreSQL set only for a request with `IncludePostgreSql`, so the SSMS Manage Rules window still lists the SQL Server
+  rules exactly as before; the web Settings page asks and groups by database, then category.
+
+### Browser
+
+`PostgresWorkspaceTests`: the story's script gives PGNM001, PGBP002, PGEX001 and PGDE001 with manual links in the Problems tab and nothing from the T-SQL rules, and a
+`-- akml-disable-line PGBP002` removes that one only; a script with a syntax error gives `PGSYN001` alone; Settings › Code analysis lists 52 rules in 8 categories under PostgreSQL
+beside the SQL Server rules.
+
+### Speed
+
+Measured in a Debug build (a Release build is faster): a script of 2,688 statements and 235,000 characters is split and parsed in 0.8 s and all 52 rules run
+over it in 1.0 s; ten typical corpus scripts take 0.7 ms each for parse and all rules. The first measurement was 2.6 s for the split alone. The statement splitter
+found each statement's line and column by counting from the start of the script (quadratic); it now continues from the previous statement (`PgPositions.Cursor`), and the
+tree of a statement is walked once for all rules (`PgScriptStatement.All`). `A_script_of_two_thousand_statements_is_analysed_in_seconds_not_minutes` guards it.
+
+### Not covered
+
+- Whether each message reads well to a person who is not a PostgreSQL expert: reviewed by the author only.
+- The SSMS Manage Rules window does not show the PostgreSQL rules (the shell is not part of this spec; the engine keeps its answer unchanged for it).
+- PGSE001 reads `EXECUTE` in `plpgsql` bodies from their tokens; a body in another language, or a command built in a variable first, is not examined.
+- PGBP005 and the other rules that resolve names need the loaded schema and say nothing about a table it has not loaded.
+
+## Quickstart section 2 - the walk-through (task T179)
+
+Nobody walked these scenarios by hand. Each step is mapped to the automated test that performs the same steps against the private PostgreSQL 18 cluster and the Debug
+engine and web builds; the steps no test performs are listed after the table. The tests are in `tests/AkmlSql.Web.E2E.Tests` (`PostgresWorkspaceTests`, `PostgresEditingTests`)
+unless a project is named.
+
+| Scenario and step | Test that performs it |
+|---|---|
+| US1.1 connect, status bar shows the kind, version, server | `The_status_bar_says_PostgreSQL_with_the_version_and_the_toolbar_runs_a_script` |
+| US1.2 stacked result sets, UPDATE tag, notice, error with SQLSTATE, caret on the failing line, statements stop | `Two_SELECTs_and_an_UPDATE_stack_two_grids_and_list_the_servers_tags`, `A_notice_is_listed_as_information_and_the_run_still_succeeds`, `An_error_opens_Messages_and_clicking_it_puts_the_caret_on_the_failing_statement`, `Twenty_different_errors_each_jump_to_their_statements_line` |
+| US1.3 aborted transaction, one-click rollback | `A_failure_in_a_transaction_shows_it_aborted_and_one_click_rolls_it_back` |
+| US1.4 `GO` is sent as written, the error explains it | `A_GO_line_is_sent_as_it_is_and_the_error_says_it_belongs_to_SQL_Server` |
+| US1.5 a PostgreSQL form aimed at a SQL Server port | `Testing_a_PostgreSQL_form_aimed_at_a_SQL_Server_port_asks_to_check_the_kind` |
+| US2.1 to 2.4 explorer kinds, columns, comments, follows a script and a database switch | `The_explorer_shows_the_kinds_columns_and_comments_follows_a_script_and_a_database_switch` |
+| US2.5 a role without USAGE on a schema | `A_role_without_usage_on_a_schema_sees_the_rest_and_the_schema_marked_not_accessible` |
+| US3.1 to 3.4 completion after FROM, alias dot, ON CONFLICT; hover; signature help; no T-SQL sigils | `PostgresEditingTests`: `After_FROM_the_search_path_is_unqualified_other_schemas_are_qualified_and_odd_names_are_quoted`, `After_an_alias_dot_the_columns_come_with_their_types`, `After_ON_CONFLICT_the_actions_are_PostgreSQLs`, `Hovering_string_agg_shows_its_signatures_description_and_the_manual_link`, `Inside_date_trunc_the_parameters_are_shown_and_the_active_one_follows_the_commas`, `Typing_at_hash_or_bracket_offers_no_t_sql` |
+| US3.5 an older server is not offered later commands | `An_older_server_is_not_offered_commands_that_arrived_later` needs a PostgreSQL 14 server (`AKML_PG14_TEST_CONNECTION`) and is skipped without one; the version gating itself is `PgVersionGatingTests` (PostgreSql.Tests) |
+| US4.1 twenty switches, text intact | `Twenty_switches_between_SQL_Server_and_PostgreSQL_each_follow_within_three_seconds_and_keep_the_text` |
+| US4.2 History kind badge, filter, `kind:` term | `History_shows_the_kind_filters_by_it_and_takes_a_kind_term` |
+| US4.3 the AI prompt names PostgreSQL (what the model is told; its answer is not read, see SC-011) | `Text_to_SQL_on_PostgreSQL_asks_the_model_for_PostgreSQL`, `A_cloud_provider_gets_the_script_without_its_literals_and_the_answer_has_them_back` |
+| US4.4 remembered password, no prompt, nowhere it should not be | `A_remembered_password_connects_without_a_prompt_and_is_nowhere_it_should_not_be` |
+| US4.5 an engine without PostgreSQL disables the choice | `An_engine_with_PostgreSQL_switched_off_disables_the_choice_and_says_why` |
+| US5.1 the existing suites unchanged | `baseline/after-us*/compare.txt` |
+| US5.2 refactorings and Find invalid objects off with the reason; the engine never reaches the T-SQL code | `On_PostgreSQL_the_refactorings_are_off_and_say_why_in_the_toolbar_and_the_palette`; `NoTsqlOnPostgresSessionTests` (Engine.Tests) |
+| US6.1 edit, NULL, add, delete, Apply | `Edits_inserts_and_deletes_land_on_their_rows_and_the_grid_shows_what_the_server_stored` |
+| US6.2 join, view, aggregate, keyless table are read-only with the reason | `A_join_a_view_an_aggregate_and_a_table_without_a_key_are_read_only_and_say_why` |
+| US6.3 invalid cell, vanished row | `Text_the_column_cannot_read_and_a_row_that_vanished_are_reported_and_nothing_else_is_written` |
+| US7.1 to 7.3 format, body and quoted names verbatim, syntax error left alone, Format Styles marks | `Format_lays_out_a_PostgreSQL_script_with_the_active_style_and_a_second_Format_changes_nothing`, `Format_keeps_a_function_body_and_quoted_names_exactly_as_written`, `A_script_with_a_syntax_error_is_left_alone_and_the_message_names_the_problem`, `The_Format_Styles_page_marks_the_options_with_no_PostgreSQL_meaning_and_previews_a_PostgreSQL_sample` |
+| US7.4 Parse lists every error without contacting the server | `Parse_lists_every_syntax_error_with_its_line_and_column_without_running_anything` |
+| US8.1 the four findings with links; the line directive | `Analyse_reports_the_PostgreSQL_rules_with_links_and_a_line_directive_removes_only_its_finding` |
+| US8.2 rules by category under their own database; a SQL Server session shows no PostgreSQL finding | `Settings_lists_the_PostgreSQL_rules_by_category_under_their_own_database_beside_the_SQL_Server_rules`; `AnalysisHandlersPgTests` (Engine.Tests) |
+
+**The run behind the table** (2026-10-14, Debug builds, serial, the private PostgreSQL 18 cluster and the local SQL Server): `PostgresWorkspaceTests` and `PostgresEditingTests`, 34 passed,
+1 skipped (the PostgreSQL 14 test), 8 min 51 s.
+
+**Not run by anyone**: the hallway tests for SC-001 and SC-012 (five people); US5.3 (SSMS 22 started against the same engine, task T129); the browser check against a real PostgreSQL 14 server of US3.5
+(skipped without `AKML_PG14_TEST_CONNECTION`); the SC-011 reading of real model answers.
+
+## Performance (task T180)
+
+Local PostgreSQL 18, one machine, nothing else running.
+
+| What | Result | Budget |
+|---|---|---|
+| SC-008: names of 1,000 objects (Phase A), cold connection | 1,055 ms in Debug, 954 ms in Release | 2,000 ms |
+| SC-008: columns, keys, foreign keys, indexes, parameters of the same 1,000 objects (Phase B) | 53 ms in Debug, 63 ms in Release | 10,000 ms |
+| Format a 2,010-line script (96,632 characters) with every safety check, style `default`, Release, running engine | median 262 to 305 ms over three runs (single runs 200 to 372 ms) | 500 ms |
+| The same in a Debug build | about 700 ms | (guard of 4 s) |
+| SC-002: a switch between SQL Server and PostgreSQL (user story 4) | longest 371 ms of 20 | 3,000 ms |
+
+What the formatting measurement is: `PgFormatter.Format` end to end (parse the original, lay it out, parse the result, compare the trees, compare the tokens and comments, lay the result out again), with
+eight unmeasured runs first because the runtime optimises a method only after it has run many times; the product runs for hours. The first version of the pipeline took 426 ms for 2,099 lines. Three changes
+brought it down: each text is read into tokens once, not four times; the two native parses (about two thirds of the time) overlap the layout work, as the PostgreSQL parser can run on two threads at once
+(measured: two parses at once 176 ms, one after the other 291 ms); and a script that is already laid out as the style wants it skips every check. Script analysis and the statement splitter are in
+the user story 8 section. `PerformanceBaselineTests` (the T-SQL formatter) is a known failure before and after; no T-SQL code changed.
+

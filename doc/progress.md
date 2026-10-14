@@ -2536,3 +2536,30 @@ The original report is preserved; new HTML/TRX evidence is under
 %LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
 missing alias/spike configuration, and pre-existing scenario placeholders. This was
 a focused fix verification, not another full-suite run.
+
+---
+
+## Spec 042 — PostgreSQL support in the engine and the web edition (2026-10)
+
+Branch `042-postgresql-support`; tasks `specs/042-postgresql-support/tasks.md`; evidence `specs/042-postgresql-support/baseline.md` and `baseline/`.
+The engine and the web edition serve PostgreSQL as well as SQL Server; the SSMS shell is unchanged (no file of the SSMS projects changed in any commit of the spec).
+Capability `dialect.postgresql.v1`; switch `postgreSql.enabled`; every handler dispatches by the session's kind and the T-SQL parser never sees PostgreSQL text.
+
+| Phase | Commit | What it delivered | Gate |
+|-------|--------|-------------------|------|
+| Foundation + US1 (run queries) + US2 (browse and switch) | `2abc1cb` | `DatabaseKind` and the session kind, Npgsql connections and catalog reader (Phase A/B), one command per statement, Parse without the server, schema tree and kind switching in the web | no regression |
+| US3 (write with help) | `909afc6` | manual-derived reference (`tools/pg-reference`), completion (corpus gate 95%), hover, signature help, snippets | no regression |
+| US4 (History, AI, passwords) | `44420cb` | history by kind, AI with PostgreSQL literals redacted in the engine, remembered passwords in the engine's protected store | no regression |
+| US5 (nothing leaks, nothing pretends) | `8ec9304`, `0f97d47` | `DialectGuard` at the router, disabled surfaces, SC-004 / SC-010 isolation tests | no regression |
+| US6 (edit results) | `0453521` | provenance from the row description plus one catalog read, parameterised keyed writes, all-or-nothing Apply, returned rows merged into the grid | no regression |
+| US7 (format) | `1c66bde` | token-based formatter on any SQL Prompt style, safety pipeline (same tree, same tokens and comments, stable), 151-script × 8-style corpus with goldens, Format Styles marks 27 options "no effect for PostgreSQL" | three deliberate test edits, recorded |
+| US8 (analysis) | `9ccaf6d` | 52 rules in 8 categories, `PgAnalysisEngine` sharing suppressions, settings and `.casettings` with the T-SQL analyser, rules listed by database in the web Settings page, manual links in the Problems tab | one timing test flagged, passes alone |
+
+**Spikes.** S1 the native parser loads from a self-contained publish (the library imports only the Windows base library). S2 the parse tree places expressions and names but no clause
+keyword, so the formatter and the rules read structure from tokens and use the tree where it is exact. S3 the server's error position counts characters, not bytes. S4 a cancelled or timed-out
+statement keeps the physical connection. S5 with every result type read as text the driver returns the server's own text. S6 provenance is table OID plus attribute number, with the editable kind, key,
+identity and generated columns read in one catalog query after the reader closes. S7 (where the service account stores a remembered password) is not read: it needs an elevated session.
+
+**Deferred or not done** (reasons in the spec folder): the hallway tests SC-001 and SC-012 (need people); the SSMS 22 manual check T129; the elevated ACL read of spike S7; formatting inside PL/pgSQL bodies;
+refactorings and Find invalid objects for PostgreSQL (out of scope by the clarification session); the pgAdmin client (a later spec); PostgreSQL 19 (reference pinned to 18).
+

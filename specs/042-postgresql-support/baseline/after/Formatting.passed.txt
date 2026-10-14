@@ -12,8 +12,8 @@ AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_MissingSemi
 AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_MixedStatements_OnlyMissingOnesInserted
 AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_MultipleStatements_AllGetSemicolons
 AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_StatementAlreadyHasSemicolon_WasModifiedFalse
-AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_StatementWithSemicolon_NoDoubleSemicolon
 AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_StatementWithoutSemicolon_InsertsSemicolon
+AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_StatementWithSemicolon_NoDoubleSemicolon
 AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_TrailingWhitespace_SemicolonInsertedBeforeWhitespace
 AkmlSql.Formatting.Tests.Actions.InsertSemicolonsActionTests.Execute_ValidSql_ValidationPassed
 AkmlSql.Formatting.Tests.Actions.RemoveSemicolonsActionTests.Execute_EmptySql_NoThrow
@@ -73,11 +73,11 @@ AkmlSql.Formatting.Tests.Layout.AlignmentCalculatorTests.MeasureLineWidth_TwoInl
 AkmlSql.Formatting.Tests.Layout.AlignmentCalculatorTests.MeasureRange_BeyondEnd_NoCrash
 AkmlSql.Formatting.Tests.Layout.AlignmentCalculatorTests.MeasureRange_SingleNode_ReturnsTextLength
 AkmlSql.Formatting.Tests.Layout.AlignmentCalculatorTests.MeasureRange_TwoNodes_IncludesSpaces
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CollapseIfShort_LongContent_DoesNotCollapseAndReturnsFalse
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CollapseIfShort_ShortContent_CollapsesAndReturnsTrue
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.Collapse_CommaGetsZeroSpaces
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.Collapse_NonCommaGetsOneSpace
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.Collapse_RemovesLineBreaks
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CollapseIfShort_LongContent_DoesNotCollapseAndReturnsFalse
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CollapseIfShort_ShortContent_CollapsesAndReturnsTrue
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CountLines_EmptyRange_ReturnsZero
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CountLines_MultipleNodes_NoBreaks_ReturnsOne
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.CountLines_SingleNode_ReturnsOne
@@ -91,6 +91,11 @@ AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.MeasureFormattedLength_Pa
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.MeasureFormattedLength_SingleNode_ReturnsTextLength
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.MeasureFormattedLength_TwoInlineNodes_IncludesSpaces
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.MeasureParenthesizedLength_ExcludesParens
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_EndBeyondList_ReturnsFalse
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_InvalidRange_StartGteEnd_ReturnsFalse
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_LongContent_AboveThreshold_ReturnsFalse
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_NegativeStart_ReturnsFalse
+AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_ShortContent_BelowThreshold_ReturnsTrue
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseCase_CollapseDisabled_ReturnsFalse
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseCase_ShortCase_ReturnsTrue
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseDdl_CollapseDisabled_ReturnsFalse
@@ -105,11 +110,6 @@ AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseParenthesiz
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseSelectList_CollapseDisabled_ReturnsFalse
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseSelectList_CollapseEnabled_ShortList_ReturnsTrue
 AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapseSubquery_CollapseDisabled_ReturnsFalse
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_EndBeyondList_ReturnsFalse
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_InvalidRange_StartGteEnd_ReturnsFalse
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_LongContent_AboveThreshold_ReturnsFalse
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_NegativeStart_ReturnsFalse
-AkmlSql.Formatting.Tests.Layout.CollapseEvaluatorTests.ShouldCollapse_ShortContent_BelowThreshold_ReturnsTrue
 AkmlSql.Formatting.Tests.Layout.IndentationTrackerTests.IndentReason_Values
 AkmlSql.Formatting.Tests.Layout.IndentationTrackerTests.InitialDepth_IsZero
 AkmlSql.Formatting.Tests.Layout.IndentationTrackerTests.InitialReason_IsNull
@@ -134,9 +134,9 @@ AkmlSql.Formatting.Tests.Layout.IndentationTrackerTests.SetDepth_NegativeValue_C
 AkmlSql.Formatting.Tests.Layout.IndentationTrackerTests.SetDepth_SetsDirectly
 AkmlSql.Formatting.Tests.Layout.IndentationTrackerTests.SetDepth_Zero_SetsToZero
 AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.BreakType_Values
-AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.CommentAttachmentType_Values
 AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.CommentAttachment_Defaults
 AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.CommentAttachment_Mutations
+AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.CommentAttachmentType_Values
 AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.LayoutNode_Defaults
 AkmlSql.Formatting.Tests.Layout.LayoutNodeTests.LayoutNode_Mutations
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.ClauseContext_Values
@@ -158,11 +158,11 @@ AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Go_WithEmptyLineBef
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Go_WithoutEmptyLineBefore_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Group_OnNewLine_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Having_OnNewLine_ReturnsNewLine
+AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Inner_InFromContext_JoinOnNewLine_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_InSelectPending_MidItemToken_NoBreak
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_InSelectPending_OnNewLine_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_InSelectPending_StarOnSameLine_ReturnsSpace
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_InSelectPending_SubquerySelectAfterOpenParen_Breaks
-AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Inner_InFromContext_JoinOnNewLine_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Join_OnNewLine_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_Left_InJoinContext_JoinOnNewLine_ReturnsNewLine
 AkmlSql.Formatting.Tests.Layout.LineBreakDeciderTests.Decide_OnInJoinContext_NotOnConditionNewLine_ReturnsSpace
@@ -473,12 +473,16 @@ AkmlSql.Formatting.Tests.Parity2_DeclareLayoutTests.OneDeclarationPerLine_Indent
 AkmlSql.Formatting.Tests.Parity2_DeclareLayoutTests.OneDeclarationPerLine_SplitsCommaVariables
 AkmlSql.Formatting.Tests.Parity2_DeclareLayoutTests.OneDeclarationPerLine_ThreeVariables_AllSplit
 AkmlSql.Formatting.Tests.Parity2_DeclareLayoutTests.SingleVariableDeclare_NoChange
-AkmlSql.Formatting.Tests.Pipeline.AliasAlignmentTests.SelectAliases_AlignToOneColumn
 AkmlSql.Formatting.Tests.Pipeline.AliasAlignmentTests.SelectAliases_Alignment_IsIdempotent
+AkmlSql.Formatting.Tests.Pipeline.AliasAlignmentTests.SelectAliases_AlignToOneColumn
 AkmlSql.Formatting.Tests.Pipeline.AliasAlignmentTests.SingleAlias_IsNotPadded
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_AsIs_ReturnsUnchanged(input: "SELECT", mode: "AsIs", expected: "SELECT")
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_GlobalVariable_InNoformatRegion_Untouched
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_GlobalVariable_Lowercase
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_GlobalVariable_UsesGlobalVariablesMode_NotLocal
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_LocalVariable_StillUsesLocalVariablesMode
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_AsIs_ReturnsUnchanged(input: "myCol", mode: "AsIs", expected: "myCol")
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_AsIs_ReturnsUnchanged(input: "select", mode: "AsIs", expected: "select") [#2]
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_AsIs_ReturnsUnchanged(input: "select", mode: "AsIs", expected: "select")
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_AsIs_ReturnsUnchanged(input: "SELECT", mode: "AsIs", expected: "SELECT") [#2]
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_CamelCase_Keywords(input: "FROM", mode: "camelCase", expected: "from")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_CamelCase_Keywords(input: "INNER", mode: "camelCase", expected: "inner")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_CamelCase_Keywords(input: "select", mode: "camelCase", expected: "select")
@@ -486,23 +490,19 @@ AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_CamelCase_Un
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_CamelCase_UnderscoreIdentifier(input: "ROW_NUMBER", mode: "camelCase", expected: "rowNumber")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_EmptyString_ReturnsEmpty
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Lowercase(input: "From", mode: "lowercase", expected: "from")
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Lowercase(input: "SELECT", mode: "lowercase", expected: "select")
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Lowercase(input: "select", mode: "lowercase", expected: "select") [#2]
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Lowercase(input: "select", mode: "lowercase", expected: "select")
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Lowercase(input: "SELECT", mode: "lowercase", expected: "select") [#2]
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_Keywords(input: "from", mode: "PascalCase", expected: "From")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_Keywords(input: "INNER", mode: "PascalCase", expected: "Inner")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_Keywords(input: "JOIN", mode: "PascalCase", expected: "Join")
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_Keywords(input: "from", mode: "PascalCase", expected: "From")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_Keywords(input: "select", mode: "PascalCase", expected: "Select")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_Keywords(input: "where", mode: "PascalCase", expected: "Where")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_UnderscoreIdentifier(input: "FIRST_VALUE", mode: "PascalCase", expected: "FirstValue")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_PascalCase_UnderscoreIdentifier(input: "ROW_NUMBER", mode: "PascalCase", expected: "RowNumber")
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_UnknownMode_ReturnsAsIs
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "SELECT", mode: "UPPERCASE", expected: "SELECT")
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "Select", mode: "UPPERCASE", expected: "SELECT") [#3]
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "select", mode: "UPPERCASE", expected: "SELECT") [#2]
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_GlobalVariable_InNoformatRegion_Untouched
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_GlobalVariable_Lowercase
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_GlobalVariable_UsesGlobalVariablesMode_NotLocal
-AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasing_LocalVariable_StillUsesLocalVariablesMode
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "select", mode: "UPPERCASE", expected: "SELECT")
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "Select", mode: "UPPERCASE", expected: "SELECT") [#2]
+AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.ApplyCasingMode_Uppercase(input: "SELECT", mode: "UPPERCASE", expected: "SELECT") [#3]
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.CasingEngine_CanSetIdentifierLookup
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.CasingEngine_CanSetUseCamelCaseDictionary
 AkmlSql.Formatting.Tests.Pipeline.CasingEngineTests.CasingEngine_DefaultProperties
@@ -596,12 +596,12 @@ AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_AkmlFormattingOff_Bl
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_AkmlFormattingOff_CaseInsensitive
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_AkmlFormattingOff_LineComment_Recognized
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_AkmlFormattingOff_UnmatchedOpen_ExtendsToEof
-AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_BlockCommentOpenAndClose_ReturnsRegion
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_BlockComment_WithSpaces_Recognized
+AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_BlockCommentOpenAndClose_ReturnsRegion
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_CaseInsensitive_Open
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_EmptyString_ReturnsEmpty
-AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_LineCommentOpenAndClose_ReturnsRegion
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_LineComment_WithSpaces_Recognized
+AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_LineCommentOpenAndClose_ReturnsRegion
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_MixedSyntax_AkmlOpenAndSqlPromptClose
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_MixedSyntax_NoformatOpenAndAkmlClose
 AkmlSql.Formatting.Tests.Pipeline.NoformatScannerTests.Scan_MixedSyntax_SqlPromptOpenAndNoformatClose
@@ -650,8 +650,8 @@ AkmlSql.Formatting.Tests.Pipeline.SemanticValidatorTests.Validate_RemovedPredica
 AkmlSql.Formatting.Tests.Pipeline.SemanticValidatorTests.Validate_SameQueryDifferentCasing_ReturnsTrue
 AkmlSql.Formatting.Tests.Pipeline.SemanticValidatorTests.Validate_SameQueryDifferentWhitespace_ReturnsTrue
 AkmlSql.Formatting.Tests.Pipeline.SemanticValidatorTests.Validate_StringLiteralCaseChange_ReturnsFalse
-AkmlSql.Formatting.Tests.Pipeline.ShortBlockLayoutTests.TinyProcBody_KeepsBeginEndStructure
 AkmlSql.Formatting.Tests.Pipeline.ShortBlockLayoutTests.TinyProc_Layout_IsIdempotent
+AkmlSql.Formatting.Tests.Pipeline.ShortBlockLayoutTests.TinyProcBody_KeepsBeginEndStructure
 AkmlSql.Formatting.Tests.Pipeline.SqlcmdPreprocessorTests.Preprocess_CalledTwice_ResetsMaps
 AkmlSql.Formatting.Tests.Pipeline.SqlcmdPreprocessorTests.Preprocess_ConnectDirective_ReplacedWithSentinel
 AkmlSql.Formatting.Tests.Pipeline.SqlcmdPreprocessorTests.Preprocess_DirectiveCaseInsensitive
@@ -715,13 +715,13 @@ AkmlSql.Formatting.Tests.Pipeline.UnarySignSpacingTests.UnaryMinus_AfterComparis
 AkmlSql.Formatting.Tests.Pipeline.UnarySignSpacingTests.UnaryMinus_AtExpressionStart_Hugs
 AkmlSql.Formatting.Tests.Pr247_ParenthesisRulesFix.ProcedureParameters_NewLine_Idempotent
 AkmlSql.Formatting.Tests.Pr247_ParenthesisRulesFix.ProcedureParameters_NewLine_InnerTypeCommaNotSplit
-AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.AnEditSurvivesAReload_AndResetIsRepeatable
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.AnEditedBuiltIn_IsReportedAsShippedAndChanged
+AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.AnEditSurvivesAReload_AndResetIsRepeatable
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.AnOverrideFileDoesNotClaimToBeBuiltIn
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.Delete_OnAnEditedBuiltIn_RefusesInsteadOfSilentlyRemovingTheOverride
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.EditingABuiltIn_WritesAnOverride_AndNeverTouchesTheShippedFile
-AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.Reset_OnAStyleThatNeverShipped_RefusesAndKeepsIt
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.Reset_OnAnUneditedBuiltIn_IsANoOp_NotAnError
+AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.Reset_OnAStyleThatNeverShipped_RefusesAndKeepsIt
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.Reset_RemovesAnOverrideWhoseFilenameDiffersFromItsStyleName
 AkmlSql.Formatting.Tests.Profiles.BuiltInOverrideTests.Reset_RestoresTheShippedStyleExactly
 AkmlSql.Formatting.Tests.Profiles.BuiltInStyleGenerationTests.Generated_builtin_matches_committed_file(fixtureFile: "Collapsed-style.json", displayName: "Collapsed", outputFile: "collapsed.akmlstyle", pinnedId: "3f8a2b1c-9d4e-4f6a-8b2c-031c011a95ed", shipCollapseGatesOff: False)
@@ -867,7 +867,6 @@ AkmlSql.Formatting.Tests.Profiles.RedgateJsonStyleImporterTests.Whitespace_lists
 AkmlSql.Formatting.Tests.Profiles.RedgateSchemaCompletenessTests.Every_schema_leaf_key_is_mapped_or_explicitly_unsupported
 AkmlSql.Formatting.Tests.Profiles.RedgateSchemaCompletenessTests.Every_unsupported_entry_has_a_reason
 AkmlSql.Formatting.Tests.Profiles.RedgateSchemaCompletenessTests.Example_enum_values_are_uppercamel_and_still_match
-AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.ExportToFile_WritesXmlAtomically
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_AlignJoinKeyword_EmitsSqlPromptEnumName(akmlValue: "left", expectedXmlToken: "ToTable")
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_AlignJoinKeyword_EmitsSqlPromptEnumName(akmlValue: "none", expectedXmlToken: "None")
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_AlignJoinKeyword_EmitsSqlPromptEnumName(akmlValue: "right", expectedXmlToken: "RightAligned")
@@ -886,6 +885,7 @@ AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_OutputParsesAsVa
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_OutputUsesOptionNameValueShape
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_ParenthesisCollapseSettings_EmittedCorrectly
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.Export_TabSize_EmittedCorrectly
+AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.ExportToFile_WritesXmlAtomically
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.RoundTrip_AlignItemsAcrossClauses_PreservesValue
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.RoundTrip_AlignJoinKeyword_PreservesValue(akmlValue: "left")
 AkmlSql.Formatting.Tests.Profiles.SqlPromptExporterTests.RoundTrip_AlignJoinKeyword_PreservesValue(akmlValue: "none")
@@ -1029,10 +1029,10 @@ AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_FinalNewline_Remove_Re
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_LineBreakAfterSemicolon_True_AddsBreak
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_LineBreakBeforeComma_True_AddsBreakBeforeComma
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_MaxConsecutiveEmptyLines_ReducesExcess
+AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_NoformatRegion_CommaBreak_Skipped
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_NoSpaceAroundDot
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_NoSpaceBeforeComma
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_NoSpaceBeforeSemicolon
-AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_NoformatRegion_CommaBreak_Skipped
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_PreserveEmptyLinesAfterBatch_False_StillNormalisesViaEmptyLineAfterGo
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_PreserveEmptyLinesAfterBatch_True_KeepsAuthorBlankLineAfterGo
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_PreserveEmptyLinesAfterBatch_True_KeepsNoBlankLineAfterGo
@@ -1046,6 +1046,7 @@ AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_SpaceInsideParentheses
 AkmlSql.Formatting.Tests.Rules.WhitespaceRulesTests.Apply_SpaceInsideParentheses_True_AddsSpace
 AkmlSql.Formatting.Tests.SqlPrompt.EditorSchemaFixtureTests.The_shell_test_snapshot_matches_the_catalog
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Every_comment_survives
+AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "<rich sample>", style: "sql-prompt-defaults")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "01-simple-select", style: "collapsed")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "01-simple-select", style: "everything-collapsed")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "01-simple-select", style: "expanded-tabs")
@@ -1124,7 +1125,6 @@ AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_t
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "13-subqueries", style: "mohamed-khamis")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "13-subqueries", style: "river")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "13-subqueries", style: "sql-prompt-defaults")
-AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "<rich sample>", style: "sql-prompt-defaults")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "sp031-01-select-list", style: "collapsed")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "sp031-01-select-list", style: "everything-collapsed")
 AkmlSql.Formatting.Tests.SqlPrompt.SqlPromptLayoutSafetyTests.Formatting_keeps_the_meaning_and_is_idempotent(corpusFile: "sp031-01-select-list", style: "expanded-tabs")

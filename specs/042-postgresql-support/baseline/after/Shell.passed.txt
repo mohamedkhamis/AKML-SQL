@@ -46,8 +46,8 @@ AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_blank_agent_with_an_empty_name
 AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_completely_blank_agent_does_not_block_ok
 AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_disabled_agent_can_be_re_enabled_and_saved
 AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_duplicate_name_is_refused_naming_the_agent(duplicate: "  Claude (work)  ")
-AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_duplicate_name_is_refused_naming_the_agent(duplicate: "Claude (work)") [#2]
-AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_duplicate_name_is_refused_naming_the_agent(duplicate: "claude (work)")
+AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_duplicate_name_is_refused_naming_the_agent(duplicate: "Claude (work)")
+AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.A_duplicate_name_is_refused_naming_the_agent(duplicate: "claude (work)") [#2]
 AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.Add_creates_a_uniquely_named_agent_and_selects_it
 AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.Cancel_discards_every_edit
 AkmlSql.Shell.Shared.Tests.AiAgentListPageTests.Disabling_an_agent_commits_through_save
@@ -132,7 +132,6 @@ AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.A_second_click_inside_the_
 AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Clipboard_failure_is_surfaced_and_the_message_stays_recopyable
 AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Copy_conversation_attributes_and_orders_every_turn
 AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Copy_conversation_attributes_each_answer_to_its_own_agent
-AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name
 AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Each_sql_block_gets_its_own_labelled_copy_action
 AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Every_bubble_gets_a_copy_button_that_copies_the_whole_message
 AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Every_copy_control_has_an_accessible_name_and_is_keyboard_reachable
@@ -149,8 +148,8 @@ AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.BuildRequest_canonicalises_the_
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "Azure OpenAI requires an endpoint URL. Set 'ai.end"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "Could not reach the AI provider endpoint 'https://"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "Kimi requires an API key. Set 'ai.apiKey' in confi"···)
-AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "Model 'claude-sonnet-5' is a Anthropic model, but "···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "Model \"claude-sonnet-5\" is a anthropic model, no"···)
+AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "Model 'claude-sonnet-5' is a Anthropic model, but "···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "The API key was rejected by 'gemini' (HTTP 400). C"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "The API key was rejected by 'kimi' (HTTP 401). Che"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Configuration_causes_are_classified_as_such(error: "The model 'kimi-k9' was not found at 'kimi' (HTTP "···)
@@ -162,10 +161,10 @@ AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_config
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "AI engine is not connected. Please check that the "···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "CONSENT_REQUIRED:Data will be sent to kimi. Please"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "Request was cancelled")
-AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "The 'kimi' account is rate-limited or out of quota"···)
-AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "The AI provider 'gemini' is temporarily unavailabl"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "The AI provider did not respond within the timeout"···)
+AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "The AI provider 'gemini' is temporarily unavailabl"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "The AI request timed out after 120s — the provider"···)
+AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Momentary_states_are_not_configuration_caused(error: "The 'kimi' account is rate-limited or out of quota"···)
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.No_agent_name_means_no_naming_even_for_a_configuration_cause
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.No_provider_selected_is_refused_before_ipc
 AkmlSql.Shell.Shared.Tests.AiFailureMessageTests.Provider_errors_keep_their_original_message
@@ -189,8 +188,8 @@ AkmlSql.Shell.Shared.Tests.AiFeatureAssignmentPageTests.Use_active_agent_is_the_
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Ipc_wait_is_provider_timeout_plus_margin(providerTimeoutSec: 300, expectedMs: 330000)
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Ipc_wait_is_provider_timeout_plus_margin(providerTimeoutSec: 45, expectedMs: 75000)
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Ipc_wait_is_provider_timeout_plus_margin(providerTimeoutSec: 90, expectedMs: 120000)
-AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Nonsense_provider_timeout_falls_back_to_the_default(broken: -5)
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Nonsense_provider_timeout_falls_back_to_the_default(broken: 0)
+AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Nonsense_provider_timeout_falls_back_to_the_default(broken: -5)
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.Null_settings_fall_back_to_the_default
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.The_chat_budget_follows_the_assigned_agents_timeout_not_the_active_ones
 AkmlSql.Shell.Shared.Tests.AiIpcTimeoutsTests.The_per_feature_budget_falls_back_to_the_flat_value_when_nothing_resolves
@@ -203,17 +202,17 @@ AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Null_settings_are_neither_enabled_
 AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Other_privacy_modes_permit(mode: "full")
 AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Other_privacy_modes_permit(mode: "fullyLocal")
 AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Other_privacy_modes_permit(mode: "schemaOnly")
-AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Privacy_disabled_blocks_regardless_of_case(mode: "DISABLED") [#3]
+AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Privacy_disabled_blocks_regardless_of_case(mode: "DISABLED")
 AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Privacy_disabled_blocks_regardless_of_case(mode: "Disabled") [#2]
-AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Privacy_disabled_blocks_regardless_of_case(mode: "disabled")
+AkmlSql.Shell.Shared.Tests.AiNoAgentGateTests.Privacy_disabled_blocks_regardless_of_case(mode: "disabled") [#3]
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.After_decrypt_failure_typing_a_new_key_saves_normally
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Every_provider_round_trips_through_save_and_load
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "", expectedIndex: 0)
+AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "azure", expectedIndex: 3)
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "AzureOpenAI", expectedIndex: 3)
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "Kimi (Moonshot)", expectedIndex: 5)
-AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "LMStudio", expectedIndex: 7)
-AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "azure", expectedIndex: 3)
-AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "lmstudio", expectedIndex: 7) [#2]
+AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "lmstudio", expectedIndex: 7)
+AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "LMStudio", expectedIndex: 7) [#2]
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: "moonshot", expectedIndex: 5)
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Load_normalises_legacy_and_display_spellings(stored: null, expectedIndex: 0)
 AkmlSql.Shell.Shared.Tests.AiProviderModelAutofillTests.Loading_a_mismatched_config_does_not_silently_rewrite_it
@@ -255,9 +254,9 @@ AkmlSql.Shell.Shared.Tests.AnalysisTriggerPolicyTests.Edits_analyse_only_when_en
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.Adopt_makes_TryGet_return_that_key
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.Adopt_refuses_a_key_another_open_document_holds
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.Same_path_save_of_the_active_document_is_a_no_op
-AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.SaveAll_then_saving_the_active_tab_again_does_not_retire_the_inactive_tabs_key
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.Save_of_an_inactive_document_does_not_change_the_tracked_path
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.Save_of_the_active_document_migrates_its_own_key_and_updates_tracking
+AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.SaveAll_then_saving_the_active_tab_again_does_not_retire_the_inactive_tabs_key
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.TryFindDocument_returns_the_holder_until_it_is_forgotten
 AkmlSql.Shell.Shared.Tests.ApplyDocumentSavedTests.TryGet_is_false_for_an_unknown_document_and_creates_no_key
 AkmlSql.Shell.Shared.Tests.AutoClosePairsTests.CommentMark_ClosesOnlyAfterSlash
@@ -300,8 +299,8 @@ AkmlSql.Shell.Shared.Tests.CommandPaletteSelectionTests.Enter_with_nothing_highl
 AkmlSql.Shell.Shared.Tests.CommandPaletteSelectionTests.Typing_keeps_the_first_result_selected
 AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Empty_filter_matches_everything_in_both_modes
 AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Fuzzy_mode_keeps_todays_behaviour
-AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Prefix_only_matches_the_filter_text_or_the_display_text(typed: "Unit")
 AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Prefix_only_matches_the_filter_text_or_the_display_text(typed: "p.Unit")
+AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Prefix_only_matches_the_filter_text_or_the_display_text(typed: "Unit")
 AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Prefix_only_matches_the_filter_text_or_the_display_text(typed: "unit") [#2]
 AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Prefix_only_rejects_camel_case_matches
 AkmlSql.Shell.Shared.Tests.CompletionPrefixOnlyFilterTests.Prefix_only_rejects_substring_matches
@@ -337,8 +336,8 @@ AkmlSql.Shell.Shared.Tests.ErrorListGateTests.ShouldPublish_follows_the_setting(
 AkmlSql.Shell.Shared.Tests.ErrorListGateTests.ShouldPublish_follows_the_setting(on: True)
 AkmlSql.Shell.Shared.Tests.ErrorListGateTests.Unregistered_reporters_are_not_reapplied
 AkmlSql.Shell.Shared.Tests.ExecutionCaptureIsSavedToDiskTests.IsSavedToDisk_reflects_whether_the_document_has_an_on_disk_path(path: "", expected: False)
-AkmlSql.Shell.Shared.Tests.ExecutionCaptureIsSavedToDiskTests.IsSavedToDisk_reflects_whether_the_document_has_an_on_disk_path(path: "C:\\Reports\\", expected: True)
 AkmlSql.Shell.Shared.Tests.ExecutionCaptureIsSavedToDiskTests.IsSavedToDisk_reflects_whether_the_document_has_an_on_disk_path(path: "\\\\server\\share\\Reports\\", expected: True)
+AkmlSql.Shell.Shared.Tests.ExecutionCaptureIsSavedToDiskTests.IsSavedToDisk_reflects_whether_the_document_has_an_on_disk_path(path: "C:\\Reports\\", expected: True)
 AkmlSql.Shell.Shared.Tests.ExecutionCaptureIsSavedToDiskTests.IsSavedToDisk_reflects_whether_the_document_has_an_on_disk_path(path: null, expected: False)
 AkmlSql.Shell.Shared.Tests.ExecutionCommandMatchTests.Another_command_in_the_same_group_is_not
 AkmlSql.Shell.Shared.Tests.ExecutionCommandMatchTests.Another_group_is_not
@@ -381,9 +380,9 @@ AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Export_with_unsaved_edi
 AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Export_with_unsaved_edits_asks_to_save_first(answer: "Save")
 AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_after_discarding_edits_imports_and_leaves_nothing_unsaved
 AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_makes_the_style_active_in_the_list_header_and_button_at_once
+AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_of_a_clashing_name_asks_for_a_new_one(clashingName: "default")
 AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_of_a_clashing_name_asks_for_a_new_one(clashingName: "Default") [#2]
 AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_of_a_clashing_name_asks_for_a_new_one(clashingName: "Mine")
-AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_of_a_clashing_name_asks_for_a_new_one(clashingName: "default")
 AkmlSql.Shell.Shared.Tests.FormatStylesImportExportTests.Import_with_unsaved_edits_asks_before_anything_is_imported
 AkmlSql.Shell.Shared.Tests.FormatStylesKeyboardTests.Ctrl_F_goes_to_the_option_search
 AkmlSql.Shell.Shared.Tests.FormatStylesKeyboardTests.Ctrl_S_saves_only_when_there_is_something_to_save
@@ -438,22 +437,22 @@ AkmlSql.Shell.Shared.Tests.FormatStylesSqlPromptModelTests.The_schema_model_read
 AkmlSql.Shell.Shared.Tests.FormatStylesTreeDegradeTests.Control_kinds_cover_all_setting_types
 AkmlSql.Shell.Shared.Tests.FormatStylesTreeDegradeTests.V1_schema_parses_flat_with_no_v2_fields
 AkmlSql.Shell.Shared.Tests.FormatStylesTreeDegradeTests.V2_schema_parses_categories_in_canonical_order_with_unknown_to_other
-AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT Tot| FROM t", insert: "[Total Sales]", expected: "SELECT [Total Sales] FROM t")
+AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [|]", insert: "[Order]", expected: "SELECT [Order]")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [Ord|]", insert: "[Order]", expected: "SELECT [Order]")
-AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [Total Sa|] FROM t", insert: "[Total Sales]", expected: "SELECT [Total Sales] FROM t")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [Tot| FROM t", insert: "[Total Sales]", expected: "SELECT [Total Sales] FROM t")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [Tot|] FROM t", insert: "[Total Sales]", expected: "SELECT [Total Sales] FROM t")
-AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [|]", insert: "[Order]", expected: "SELECT [Order]")
+AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [Total Sa|] FROM t", insert: "[Total Sales]", expected: "SELECT [Total Sales] FROM t")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT [Übersicht-Ja|]", insert: "[Übersicht-Jahr]", expected: "SELECT [Übersicht-Jahr]")
+AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_bracketed_insert_takes_in_the_brackets_already_typed(before: "SELECT Tot| FROM t", insert: "[Total Sales]", expected: "SELECT [Total Sales] FROM t")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_disabled_combo_looks_disabled(theme: "Dark", menu: False)
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_disabled_combo_looks_disabled(theme: "Dark", menu: True)
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_disabled_combo_looks_disabled(theme: "Light", menu: False)
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.A_disabled_combo_looks_disabled(theme: "Light", menu: True)
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "/* see [x */ SELECT Tot|", insert: "[Total]", expected: "/* see [x */ SELECT [Total]")
-AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT '[x' + Tot|", insert: "[Total]", expected: "SELECT '[x' + [Total]")
-AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT [Order ID, Tot|", insert: "[Total]", expected: "SELECT [Order ID, [Total]")
-AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT [Ord|", insert: "Orders", expected: "SELECT [Orders")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT [a].Tot|", insert: "[Total]", expected: "SELECT [a].[Total]")
+AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT [Ord|", insert: "Orders", expected: "SELECT [Orders")
+AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT [Order ID, Tot|", insert: "[Total]", expected: "SELECT [Order ID, [Total]")
+AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT '[x' + Tot|", insert: "[Total]", expected: "SELECT '[x' + [Total]")
 AkmlSql.Shell.Shared.Tests.FormatStylesUiFixTests.Earlier_brackets_are_left_alone(before: "SELECT \"a[b\" + Tot|", insert: "[Total]", expected: "SELECT \"a[b\" + [Total]")
 AkmlSql.Shell.Shared.Tests.FormatStylesWindowFixTests.A_gate_switch_enables_its_rows_in_place_and_keeps_the_page
 AkmlSql.Shell.Shared.Tests.FormatStylesWindowFixTests.Any_save_of_a_built_in_marks_its_list_item_modified
@@ -527,8 +526,8 @@ AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.ClearFilters_ResetsOpenF
 AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.Search_WhenEngineNotConnected_FlagsIsDisconnected
 AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.ToggleOpenFilter_Closed_SetsClosedOnly_ThenClearsToAll
 AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.ToggleOpenFilter_IgnoredWhileSearchIsLoading
-AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.ToggleOpenFilter_OpenAndClosed_AreMutuallyExclusive
 AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.ToggleOpenFilter_Open_SetsOpenOnly_ThenClearsToAll
+AkmlSql.Shell.Shared.Tests.HistoryOpenFilterToggleTests.ToggleOpenFilter_OpenAndClosed_AreMutuallyExclusive
 AkmlSql.Shell.Shared.Tests.HistoryPagingTests.A_short_page_ends_paging
 AkmlSql.Shell.Shared.Tests.HistoryPagingTests.A_short_page_the_engine_says_is_not_the_last_keeps_More
 AkmlSql.Shell.Shared.Tests.HistoryPagingTests.More_stays_true_until_every_match_is_loaded
@@ -543,9 +542,9 @@ AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Never_reopens_nothing_and_
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Not_now_reopens_nothing
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Nothing_to_restore_asks_nothing
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Prompt_asks_and_reopens_only_the_chosen_queries
-AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Restore_mode_reads_the_setting(value: "Never", expected: "Never")
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Restore_mode_reads_the_setting(value: "always", expected: "Always")
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Restore_mode_reads_the_setting(value: "bogus", expected: "Prompt")
+AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Restore_mode_reads_the_setting(value: "Never", expected: "Never")
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Restore_mode_reads_the_setting(value: "prompt", expected: "Prompt")
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Restore_mode_reads_the_setting(value: null, expected: "Prompt")
 AkmlSql.Shell.Shared.Tests.HistoryRestoreServiceTests.Switched_off_session_recovery_disables_restore
@@ -612,7 +611,6 @@ AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Ctrl_Space_is_ours_only_in
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Ctrl_Space_is_ours_only_in_a_SQL_editor(vk: 32, ctrl: True, editor: True, completes: True)
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Ctrl_Space_is_ours_only_in_a_SQL_editor(vk: 65, ctrl: True, editor: True, completes: False)
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Deactivation_drops_a_half_typed_chord
-AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_SSMS_outside_a_SQL_editor_the_keys_keep_their_SSMS_meaning
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_a_SQL_editor_Ctrl_D_formats_and_Ctrl_Shift_D_refreshes
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_a_SQL_editor_Ctrl_K_Y_formats
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_a_SQL_editor_SSMS_Ctrl_K_chords_are_handed_back(second: 27, ctrl: False)
@@ -622,6 +620,7 @@ AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_a_SQL_editor_SSMS_Ctrl_
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_a_SQL_editor_SSMS_Ctrl_K_chords_are_handed_back(second: 85, ctrl: True)
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_an_SSMS_SQL_editor_Ctrl_K_C_reaches_SSMS_as_Ctrl_K_C
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_an_SSMS_SQL_editor_the_shortcuts_still_work
+AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.In_SSMS_outside_a_SQL_editor_the_keys_keep_their_SSMS_meaning
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Nothing_is_ever_typed_into_another_program
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Opening_a_query_while_another_program_is_active_installs_no_desktop_hook
 AkmlSql.Shell.Shared.Tests.KeyboardHookIsolationTests.Replaying_Ctrl_K_C_presses_Ctrl_for_K_only
@@ -650,9 +649,9 @@ AkmlSql.Shell.Shared.Tests.LogFileSetTests.ProcessLabel_shortens_the_recorded_pr
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.ProcessLabel_shortens_the_recorded_process_name(processName: "Ssms", label: "SSMS") [#2]
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.ProcessLabel_shortens_the_recorded_process_name(processName: "testhost", label: "testhost")
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.Source_follows_the_latest_header_in_a_file_reused_by_another_process
-AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_reads_day_and_sequence(name: "AKMLSQL-20261231_120.LOG", y: 2026, m: 12, d: 31, sequence: 120)
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_reads_day_and_sequence(name: "akmlsql-20261013.log", y: 2026, m: 10, d: 13, sequence: 0)
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_reads_day_and_sequence(name: "akmlsql-20261013_007.log", y: 2026, m: 10, d: 13, sequence: 7)
+AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_reads_day_and_sequence(name: "AKMLSQL-20261231_120.LOG", y: 2026, m: 12, d: 31, sequence: 120)
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_rejects_other_names(name: "akmlsql-.log")
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_rejects_other_names(name: "akmlsql-20261399.log")
 AkmlSql.Shell.Shared.Tests.LogFileSetTests.TryParseFileName_rejects_other_names(name: "akmlsql-web-20261013.log")
@@ -665,8 +664,8 @@ AkmlSql.Shell.Shared.Tests.ManageRulesWindowTests.Rules_are_grouped_by_category_
 AkmlSql.Shell.Shared.Tests.ManageRulesWindowTests.Window_is_themed_titled_and_shows_the_settings_file_and_selected_rule
 AkmlSql.Shell.Shared.Tests.ManageRulesWindowTests.Without_edits_the_saved_overrides_come_back_unchanged
 AkmlSql.Shell.Shared.Tests.ManageRulesWindowTests.Without_session_suppressions_there_is_no_restore_strip
-AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordMatching_isCaseInsensitive(keyword: "Delete") [#2]
-AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordMatching_isCaseInsensitive(keyword: "delete")
+AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordMatching_isCaseInsensitive(keyword: "Delete")
+AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordMatching_isCaseInsensitive(keyword: "delete") [#2]
 AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordsExpectingAnObjectName_triggerObjectCompletion(keyword: "ALTER")
 AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordsExpectingAnObjectName_triggerObjectCompletion(keyword: "DELETE")
 AkmlSql.Shell.Shared.Tests.ObjectExpectingKeywordTests.KeywordsExpectingAnObjectName_triggerObjectCompletion(keyword: "DROP")
@@ -717,16 +716,16 @@ AkmlSql.Shell.Shared.Tests.OptionsConnectionsHelpTests.EveryPageHeader_HasHelpBu
 AkmlSql.Shell.Shared.Tests.OptionsConnectionsHelpTests.ObjectDefinitionBoxToggle_RoundTrips_OnTooltipsPage
 AkmlSql.Shell.Shared.Tests.OptionsDarkComboTests.Dropdown_ClosedFace_ShowsSelectionAsString_NotVisualBrushSnapshot
 AkmlSql.Shell.Shared.Tests.OptionsDarkComboTests.Dropdown_HasOwnTemplate_TheStockFaceCannotBeThemed
-AkmlSql.Shell.Shared.Tests.OptionsDarkComboTests.Dropdown_ItemStyle_SelectedAndHover_UseAccentSurfaceWithOnAccentText
 AkmlSql.Shell.Shared.Tests.OptionsDarkComboTests.Dropdown_Items_ArePlainStrings_NeverUiElements
+AkmlSql.Shell.Shared.Tests.OptionsDarkComboTests.Dropdown_ItemStyle_SelectedAndHover_UseAccentSurfaceWithOnAccentText
 AkmlSql.Shell.Shared.Tests.OptionsDarkComboTests.PageHeader_ShowsBreadcrumbDisplay_ForSpecialCharactersPage
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.AgentList_Dark_AllStates_MeetContrast
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.AgentList_HighContrast_TokenPairs_MeetContrast
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.AgentList_Light_AllStates_MeetContrast
-AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxItemStyles_own_their_item_template
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxItems_Dark_AllStates_MeetContrast
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxItems_HighContrast_TokenPairs_MeetContrast
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxItems_Light_AllStates_MeetContrast
+AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxItemStyles_own_their_item_template
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxMenuItems_Dark_AllStates_MeetContrast
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.ComboBoxMenuItems_Light_AllStates_MeetContrast
 AkmlSql.Shell.Shared.Tests.OptionsHoverContrastTests.NavTree_Dark_AllStates_MeetContrast
@@ -874,9 +873,9 @@ AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_BareLogin_Cl
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "(local).StockProduction - q.sql", expectedServer: "(local)", expectedDatabase: "StockProduction")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - (local).StockProduction (DOMAIN\\me (52))", expectedServer: "(local)", expectedDatabase: "StockProduction")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - 10.0.0.5.Sales (DOMAIN\\me (52))", expectedServer: "10.0.0.5", expectedDatabase: "Sales")
+AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - localhost.MyDb (DOMAIN\\me (52))", expectedServer: "localhost", expectedDatabase: "MyDb")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - MACHINE\\SQLEXPRESS.MyDb (DOMAIN\\me (52))", expectedServer: "MACHINE\\SQLEXPRESS", expectedDatabase: "MyDb")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - SQLPROD01.Sales (DOMAIN\\me (52))", expectedServer: "SQLPROD01", expectedDatabase: "Sales")
-AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - localhost.MyDb (DOMAIN\\me (52))", expectedServer: "localhost", expectedDatabase: "MyDb")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - srv.corp.contoso.com.Sales (DOMAIN\\me (52"···, expectedServer: "srv.corp.contoso.com", expectedDatabase: "Sales")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "q.sql - srv.corp.contoso.com\\SQL2019.Sales (DOMAI"···, expectedServer: "srv.corp.contoso.com\\SQL2019", expectedDatabase: "Sales")
 AkmlSql.Shell.Shared.Tests.SsmsConnectionDetectorTests.ParseCaption_SplitsServerDatabaseAtLastDot(caption: "srv.corp.contoso.com.Sales - q.sql", expectedServer: "srv.corp.contoso.com", expectedDatabase: "Sales")
@@ -914,15 +913,15 @@ AkmlSql.Shell.Shared.Tests.SuggestionsBehaviorLayoutTests.The_page_has_a_complet
 AkmlSql.Shell.Shared.Tests.SuppressionScopeActionTests.Line_directive_is_the_documented_akml_disable_line_form
 AkmlSql.Shell.Shared.Tests.SuppressionScopeActionTests.Script_directive_is_a_disable_with_no_matching_enable
 AkmlSql.Shell.Shared.Tests.SuppressionScopeActionTests.The_four_scopes_are_offered_narrowest_first
+AkmlSql.Shell.Shared.Tests.TabbedPageTests.Sections_build_into_their_tabs_panels_in_order
+AkmlSql.Shell.Shared.Tests.TabbedPageTests.The_strip_opens_on_the_first_tab_and_hides_the_rest
 AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Focus_staying_in_the_same_document_is_not(lost: "", gained: "C:\\Work\\Northwind checks.sql")
-AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Focus_staying_in_the_same_document_is_not(lost: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql", gained: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql") [#2]
 AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Focus_staying_in_the_same_document_is_not(lost: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql", gained: "c:\\users\\ME\\appdata\\local\\temp\\sqlquery3.SQL")
+AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Focus_staying_in_the_same_document_is_not(lost: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql", gained: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql") [#2]
 AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Focus_staying_in_the_same_document_is_not(lost: null, gained: "C:\\Work\\Northwind checks.sql")
 AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Leaving_a_tab_is_a_switch(lost: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql", gained: "C:\\Work\\Northwind checks.sql")
 AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Leaving_a_tab_is_a_switch(lost: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql", gained: null)
 AkmlSql.Shell.Shared.Tests.TabSwitchSnapshotTests.Leaving_a_tab_is_a_switch(lost: "C:\\Work\\Northwind checks.sql", gained: "C:\\Users\\me\\AppData\\Local\\Temp\\SQLQuery3.sql")
-AkmlSql.Shell.Shared.Tests.TabbedPageTests.Sections_build_into_their_tabs_panels_in_order
-AkmlSql.Shell.Shared.Tests.TabbedPageTests.The_strip_opens_on_the_first_tab_and_hides_the_rest
 AkmlSql.Shell.Shared.Tests.TeamStylesAndFormatSqlActionsTests.A_read_only_team_style_loads_but_save_rename_and_delete_are_refused
 AkmlSql.Shell.Shared.Tests.TeamStylesAndFormatSqlActionsTests.A_relative_team_folder_is_flagged_and_the_last_good_one_is_kept
 AkmlSql.Shell.Shared.Tests.TeamStylesAndFormatSqlActionsTests.A_writable_team_style_is_not_read_only
@@ -957,12 +956,12 @@ AkmlSql.Shell.Shared.Tests.UpdateInstallConfirmDialogTests.Clicking_cancel_decli
 AkmlSql.Shell.Shared.Tests.UpdateInstallConfirmDialogTests.Dialog_names_the_version_and_the_application_that_must_close
 AkmlSql.Shell.Shared.Tests.UpdateLauncherThrottleTests.LaunchIfDue_with_a_stale_LastUpdateCheck_launches_a_check
 AkmlSql.Shell.Shared.Tests.UpdateLauncherThrottleTests.LaunchIfDue_with_recent_LastUpdateCheck_does_not_start_a_process
-AkmlSql.Shell.Shared.Tests.UpdateLauncherThrottleTests.LaunchUpdaterDownload_passes_download_to_the_updater
 AkmlSql.Shell.Shared.Tests.UpdateLauncherThrottleTests.LaunchUpdater_bypasses_the_throttle_with_a_recent_LastUpdateCheck
+AkmlSql.Shell.Shared.Tests.UpdateLauncherThrottleTests.LaunchUpdaterDownload_passes_download_to_the_updater
 AkmlSql.Shell.Shared.Tests.UpdateLauncherThrottleTests.Updater_path_candidates_check_x86_program_files_first
 AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.ADownloadThatIsNotVerified_IsNotOffered
-AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.AReadyNewerUpdate_IsOffered
 AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.AnInstallerThatWasDeleted_IsNotOffered
+AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.AReadyNewerUpdate_IsOffered
 AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.ItIsOfferedOnce
 AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.NoOffer_NoPrompt
 AkmlSql.Shell.Shared.Tests.UpdateStartupPromptTests.TheStartupOffer_SaysLater_NotCancel

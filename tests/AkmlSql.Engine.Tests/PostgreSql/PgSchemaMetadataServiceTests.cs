@@ -5,6 +5,7 @@ using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Schema.Models;
 using Npgsql;
 using Xunit;
+using Xunit.Abstractions;
 using Index = AkmlSql.Engine.Schema.Models.Index;
 
 namespace AkmlSql.Engine.Tests.PostgreSql;
@@ -18,6 +19,10 @@ namespace AkmlSql.Engine.Tests.PostgreSql;
 [Trait("Category", "PostgreSql")]
 public class PgSchemaMetadataServiceTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public PgSchemaMetadataServiceTests(ITestOutputHelper output) => _output = output;
+
     private const string Seed = @"
 CREATE SCHEMA sales;
 CREATE SCHEMA hr;
@@ -355,6 +360,7 @@ CREATE TABLE hr.staff (id int PRIMARY KEY, boss int REFERENCES hr.staff(id));
         await service.PopulatePhaseBAsync(cache, database.ConnectionString, CancellationToken.None);
         phaseB.Stop();
 
+        _output.WriteLine($"SC-008: {cache.GetObjectsInSchema("bulk").Count()} objects, Phase A {phaseA.Elapsed.TotalMilliseconds:F0} ms, Phase B {phaseB.Elapsed.TotalMilliseconds:F0} ms.");
         Assert.True(cache.GetObjectsInSchema("bulk").Count() >= 1000, "The fixture should create at least 1,000 objects.");
         Assert.True(phaseA.Elapsed < TimeSpan.FromSeconds(2), $"Phase A took {phaseA.Elapsed.TotalMilliseconds:F0} ms.");
         Assert.True(phaseB.Elapsed < TimeSpan.FromSeconds(10), $"Phase B took {phaseB.Elapsed.TotalMilliseconds:F0} ms.");

@@ -38,41 +38,73 @@ public static class PgFormatter
 
         if (string.IsNullOrWhiteSpace(sql)) return Unchanged(sql, success: true);
 
-        var parsed = PgParser.Parse(sql);
-        if (!parsed.Success)
-        {
-            var error = parsed.Error!;
-            return Failed(sql, new PgFormatDiagnostic(2, $"Not formatted: {error.Message}", error.Offset, error.Line));
-        }
+        // The PostgreSQL parser is most of the time of a long script, so the parses overlap the layout work: the original is parsed while
+        // it is laid out; the result is parsed (as soon as it exists) while it is read into tokens and laid out once more for the stability
+        // check. Each text is read into tokens once: the layout and the safety checks use the same list.
+        var parsing = Task.Run(() => PgParser.Parse(sql));
 
-        string formatted;
+        string formatted = string.Empty;
+        PgFormatTokens? originalTokens = null;
+        string? layoutFailure = null;
         try
         {
-            formatted = Layout(sql, style, options);
+            originalTokens = PgFormatTokens.Build(sql);
+            formatted = Layout(sql, originalTokens, style, options);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            return Failed(sql, new PgFormatDiagnostic(2, "Not formatted: the layout could not handle this script (" + ex.GetType().Name + ")."));
+            layoutFailure = "Not formatted: the layout could not handle this script (" + ex.GetType().Name + ").";
         }
 
+        // A script with a syntax error usually fails to parse before it is laid out; report it without doing the rest.
+        if (parsing.IsCompleted && !parsing.Result.Success) return ParseFailure(sql, parsing.Result);
+
+        Task<PgParseResult>? reparsing = null;
+        var needsChecks = layoutFailure is null && formatted.Length > 0 && !(options.Semicolons == 0 && string.Equals(formatted, sql, StringComparison.Ordinal));
+        if (needsChecks) reparsing = Task.Run(() => PgParser.Parse(formatted));
+
+        PgFormatTokens? formattedTokens = null;
+        string? again = null;
+        string? againFailure = null;
+        if (needsChecks)
+        {
+            formattedTokens = PgFormatTokens.Build(formatted);
+            if (options.CheckIdempotency)
+            {
+                try { again = Layout(formatted, formattedTokens, style, options with { Semicolons = 0 }); }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    againFailure = "Not formatted: formatting the result again failed (" + ex.GetType().Name + ").";
+                }
+            }
+        }
+
+        var parsed = parsing.GetAwaiter().GetResult();
+        if (!parsed.Success) return ParseFailure(sql, parsed);
+        if (layoutFailure is not null) return Failed(sql, new PgFormatDiagnostic(2, layoutFailure));
         if (formatted.Length == 0) return Failed(sql, new PgFormatDiagnostic(2, "Not formatted: the layout produced nothing."));
 
-        var verdict = Verify(sql, parsed, formatted, options.Semicolons is 1 or 2);
+        // A script that is already laid out as the style wants it needs no checks: the text is the original, which parsed, and laying
+        // out the same text again gives the same text.
+        if (!needsChecks) return new PgFormatResult(true, formatted, false, true, Array.Empty<PgFormatDiagnostic>());
+
+        var verdict = Verify(parsed, originalTokens!, reparsing!.GetAwaiter().GetResult(), formattedTokens!, options.Semicolons is 1 or 2);
         if (verdict is not null) return Failed(sql, new PgFormatDiagnostic(2, verdict));
 
         if (options.CheckIdempotency)
         {
-            string again;
-            try { again = Layout(formatted, style, options with { Semicolons = 0 }); }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                return Failed(sql, new PgFormatDiagnostic(1, "Not formatted: formatting the result again failed (" + ex.GetType().Name + ")."));
-            }
+            if (againFailure is not null) return Failed(sql, new PgFormatDiagnostic(1, againFailure));
             if (!string.Equals(formatted, again, StringComparison.Ordinal))
                 return Failed(sql, new PgFormatDiagnostic(1, "Not formatted: this script does not format to a stable layout, so it was left as it is."));
         }
 
         return new PgFormatResult(true, formatted, !string.Equals(formatted, sql, StringComparison.Ordinal), true, Array.Empty<PgFormatDiagnostic>());
+    }
+
+    private static PgFormatResult ParseFailure(string sql, PgParseResult parsed)
+    {
+        var error = parsed.Error!;
+        return Failed(sql, new PgFormatDiagnostic(2, $"Not formatted: {error.Message}", error.Offset, error.Line));
     }
 
     /// <summary>
@@ -102,9 +134,12 @@ public static class PgFormatter
     }
 
     /// <summary>The layout of the script as text, without the safety checks. Public for the corpus tests; callers use <see cref="Format"/>.</summary>
-    internal static string Layout(string sql, SqlPromptStyle style, PgFormatOptions options)
+    internal static string Layout(string sql, SqlPromptStyle style, PgFormatOptions options) =>
+        Layout(sql, PgFormatTokens.Build(sql), style, options);
+
+    // The layout of text whose tokens have been read already (the safety checks read the same list).
+    private static string Layout(string sql, PgFormatTokens tokens, SqlPromptStyle style, PgFormatOptions options)
     {
-        var tokens = PgFormatTokens.Build(sql);
         if (!tokens.Balanced || tokens.Count == 0) return sql;
 
         var layout = new PgLayout(sql, tokens, style, options.ApplyCasing, options.Semicolons);
@@ -131,14 +166,13 @@ public static class PgFormatter
     // ═══ the safety checks ═══════════════════════════════════════════════════════════════════════════
 
     /// <summary>Null when the formatted text means the same and holds the same tokens and comments; otherwise the reason it does not.</summary>
-    private static string? Verify(string original, PgParseResult originalTree, string formatted, bool ignoreTerminators)
+    private static string? Verify(PgParseResult originalTree, PgFormatTokens original, PgParseResult reparsed, PgFormatTokens formattedTokens, bool ignoreTerminators)
     {
-        var reparsed = PgParser.Parse(formatted);
         if (!reparsed.Success)
             return "Not formatted: the formatted script did not parse, so the original was kept.";
         if (!PgParser.TreesEquivalent(originalTree.Tree!, reparsed.Tree!))
             return "Not formatted: the formatted script did not read as the same statements, so the original was kept.";
-        if (!SameTokens(original, formatted, ignoreTerminators))
+        if (!SameTokens(original, formattedTokens, ignoreTerminators))
             return "Not formatted: a token or a comment would have changed, so the original was kept.";
         return null;
     }
@@ -147,7 +181,7 @@ public static class PgFormatter
     /// The tokens of both texts match one by one (a word may differ in case only) and so do the comments, in order. They are compared
     /// apart because a comment that ended a line before a comma is written after the comma.
     /// </summary>
-    private static bool SameTokens(string a, string b, bool ignoreTerminators)
+    private static bool SameTokens(PgFormatTokens a, PgFormatTokens b, bool ignoreTerminators)
     {
         var (tokensA, commentsA) = Significant(a, ignoreTerminators);
         var (tokensB, commentsB) = Significant(b, ignoreTerminators);
@@ -166,11 +200,10 @@ public static class PgFormatter
     }
 
     /// <summary>The tokens as the layout reads them (an operator run is split where PostgreSQL splits it) and the comments in order.</summary>
-    private static (List<(PgFt Kind, string Text)> Tokens, List<string> Comments) Significant(string text, bool ignoreTerminators)
+    private static (List<(PgFt Kind, string Text)> Tokens, List<string> Comments) Significant(PgFormatTokens read, bool ignoreTerminators)
     {
         var tokens = new List<(PgFt, string)>();
         var comments = new List<string>();
-        var read = PgFormatTokens.Build(text);
         foreach (var token in read.All)
         {
             foreach (var comment in token.Leading) comments.Add(comment.IsLine ? comment.Text.TrimEnd() : comment.Text);

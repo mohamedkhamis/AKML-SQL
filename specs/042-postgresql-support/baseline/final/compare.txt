@@ -1,0 +1,46 @@
+AI                               92 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\AI.passed.txt
+Analysis                          5 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\Analysis.passed.txt
+Core                           1457 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\Core.passed.txt
+Engine                         2376 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\Engine.passed.txt
+Formatting                     1635 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\Formatting.passed.txt
+IntelliSense                     25 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\IntelliSense.passed.txt
+Shell                           986 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\Shell.passed.txt
+Web                            1474 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-final\Web.passed.txt
+
+== Core
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllReferenceMarkdownFilesExistAndAreNonEmpty
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllSvgMockupsExist
+
+== Engine
+  passed -> Failed      AkmlSql.Engine.Tests.History.HistoryScaleTests.A_free_text_search_over_names_and_servers_comes_back_quickly
+
+== Shell
+  passed -> Failed      AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name
+
+
+Suite        BeforePassed AfterPassed Regressed Missing NowSkipped NowPassing Unexpected
+-----        ------------ ----------- --------- ------- ---------- ---------- ----------
+AI                     56          92         0       0          0          0          0
+Analysis                5           5         0       0          0          0          0
+Core                 1349        1457         0       0          0          2          0
+Engine               2133        2376         1       0          0          0          1
+Formatting           1635        1635         0       0          0          0          0
+IntelliSense           25          25         0       0          0          0          0
+Shell                 986         986         1       0          0          0          1
+Web                  1129        1474         0       0          0          0          0
+
+
+
+2 test(s) passed before and do not pass after (not on the allow-list).
+
+== Resolution of the two flagged tests (after the full run)
+  Engine  HistoryScaleTests.A_free_text_search_over_names_and_servers_comes_back_quickly
+        A timing test of History search over a large store. It failed once in the full run and passes alone (3 of 3 in the class);
+        nothing it calls changed in this feature.
+  Shell  AiChatPanelCopyButtonTests (Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name; run alone, its sibling
+        Message_text_is_a_selectable_read_only_text_host fails too)
+        The known clipboard flake. Run alone at the end of the gate it fails with CLIPBRD_E_CANT_OPEN (OpenClipboard failed): another
+        process on the machine holds the Windows clipboard (the session runs through a remote-desktop client). Earlier the same day both
+        passed alone (11 of 11 with FormatStylesRowLayoutTests). No file of AkmlSql.Shell.Shared or its tests changed in this feature.
+  The failures that also failed before the feature are the same three as for US5: ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only (Core),
+  the 66 FormatterServiceTests sp031 baselines (Web), PerformanceBaselineTests (Engine).

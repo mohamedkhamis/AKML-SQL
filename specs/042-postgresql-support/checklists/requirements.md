@@ -43,4 +43,7 @@
   History page, Settings page, Format Styles page) are used as product terms, not implementation
   terms. Class, file and library names are kept out of the spec; the plan-phase codebase map
   lives beside it in `codebase-map.md`.
+- Implementation outcome (2026-10-15): all eight user stories are implemented and every task is ticked except T114 (the elevated ACL read of spike S7) and T129 (the SSMS 22 check by a
+  person). The success criteria that need people are not met by a test: SC-001 and SC-012 (hallway tests with five testers) and the reading of real model answers in SC-011. Everything else
+  is measured or tested; see `baseline.md` and `baseline/final/compare.txt`.
 - Items marked incomplete require spec updates before `/speckit.clarify` or `/speckit.plan`
