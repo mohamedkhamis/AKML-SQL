@@ -107,6 +107,13 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     /// <summary>Ends a population claimed with <see cref="TryClaimPopulation"/>.</summary>
     public void ReleasePopulation(string cacheKey) => _populating.TryRemove(cacheKey, out _);
 
+    /// <summary>True while a population of the cache <paramref name="cacheKey"/> is claimed: a load is running on it.</summary>
+    public bool IsPopulating(string cacheKey) => _populating.ContainsKey(cacheKey);
+
+    /// <summary>The cache for the server/database if it exists; nothing else (no reload is started, no use is recorded).</summary>
+    public DatabaseCache? FindCache(string serverName, string databaseName) =>
+        _caches.TryGetValue(BuildCacheKey(serverName, databaseName), out var cache) ? cache : null;
+
     /// <summary>
     /// Registers a connection string for a cache key, used by periodic refresh (T079).
     /// </summary>

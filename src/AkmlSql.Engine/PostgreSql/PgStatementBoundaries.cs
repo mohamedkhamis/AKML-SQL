@@ -17,6 +17,7 @@ public static class PgStatementBoundaries
         if (string.IsNullOrWhiteSpace(sql)) return Array.Empty<StatementRangeDto>();
 
         var ranges = new List<StatementRangeDto>();
+        var cursor = new PgPositions.Cursor(sql);          // statements come in order: each end is found from the previous one, not from the start
         foreach (var statement in PgStatementSplitter.Split(sql))
         {
             ranges.Add(new StatementRangeDto
@@ -25,7 +26,7 @@ public static class PgStatementBoundaries
                 EndOffset = statement.End,
                 // The editor counts lines from 0; the splitter from 1.
                 StartLine = statement.StartLine - 1,
-                EndLine = PgPositions.ToLineColumn(sql, statement.End).Line - 1,
+                EndLine = cursor.MoveTo(statement.End).Line - 1,
                 StatementType = TypeName(statement),
             });
         }
@@ -44,7 +45,7 @@ public static class PgStatementBoundaries
     {
         if (statement.IsMetaCommand) return "MetaCommand";
 
-        var tag = PgCommandTag.For(statement.Text, PgStatementType.Other, 0).Tag;
+        var tag = PgCommandTag.For(statement, PgStatementType.Other, 0).Tag;
         var first = tag.Split(' ', 2)[0];
         if (first.Length == 0) return "Statement";
         return char.ToUpperInvariant(first[0]) + first.Substring(1).ToLowerInvariant() + "Statement";

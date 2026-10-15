@@ -29,7 +29,6 @@ public enum PgStatementType
 /// <param name="RowCount">The number the tag ends with, or -1 when the tag has none (a definition or control command).</param>
 public readonly record struct PgCommandTag(string Tag, long RowCount)
 {
-    private const int MaxWords = 8;
 
     // Object kinds whose name is more than one word. Matching tries every entry and keeps the longest.
     private static readonly string[][] MultiWordKinds =
@@ -58,7 +57,12 @@ public readonly record struct PgCommandTag(string Tag, long RowCount)
     };
 
     /// <summary>The tag for a statement the driver reported as <paramref name="type"/> with <paramref name="rows"/> rows.</summary>
-    public static PgCommandTag For(string sql, PgStatementType type, long rows)
+    public static PgCommandTag For(string sql, PgStatementType type, long rows) => For(PgLeadingWords.Of(sql), type, rows);
+
+    /// <summary>The same for a statement of a split script, which knows its leading words already.</summary>
+    public static PgCommandTag For(PgStatement statement, PgStatementType type, long rows) => For(statement.LeadingWords, type, rows);
+
+    private static PgCommandTag For(IReadOnlyList<string> leadingWords, PgStatementType type, long rows)
     {
         // A server that reports no count sends none; never print a negative number.
         var count = rows < 0 ? 0 : rows;
@@ -83,7 +87,7 @@ public readonly record struct PgCommandTag(string Tag, long RowCount)
             case PgStatementType.Move:
                 return new PgCommandTag("MOVE " + count, count);
             default:
-                return new PgCommandTag(FromLeadingWords(sql), -1);
+                return new PgCommandTag(FromLeadingWords(leadingWords), -1);
         }
     }
 
@@ -102,9 +106,8 @@ public readonly record struct PgCommandTag(string Tag, long RowCount)
             : PgStatementType.Other;
     }
 
-    private static string FromLeadingWords(string sql)
+    private static string FromLeadingWords(IReadOnlyList<string> words)
     {
-        var words = LeadingWords(sql);
         if (words.Count == 0) return string.Empty;
 
         switch (words[0])
@@ -150,7 +153,7 @@ public readonly record struct PgCommandTag(string Tag, long RowCount)
     }
 
     // The object kind after CREATE / ALTER / DROP: one word, or one of the multi-word forms.
-    private static string ObjectKind(List<string> words, int from, bool skipCreateModifiers)
+    private static string ObjectKind(IReadOnlyList<string> words, int from, bool skipCreateModifiers)
     {
         var i = from;
         if (skipCreateModifiers)
@@ -176,17 +179,4 @@ public readonly record struct PgCommandTag(string Tag, long RowCount)
         return words[i] is "USER" or "GROUP" ? "ROLE" : words[i];
     }
 
-    // The leading keywords: identifiers separated by white space or comments, up to the first other token.
-    private static List<string> LeadingWords(string sql)
-    {
-        var words = new List<string>();
-        foreach (var token in PgLexicalScanner.Scan(sql))
-        {
-            if (token.Kind is PgTokenKind.Whitespace or PgTokenKind.LineComment or PgTokenKind.BlockComment) continue;
-            if (token.Kind != PgTokenKind.Identifier) break;
-            words.Add(sql.Substring(token.Start, token.End - token.Start).ToUpperInvariant());
-            if (words.Count == MaxWords) break;
-        }
-        return words;
-    }
 }

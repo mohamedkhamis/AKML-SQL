@@ -80,17 +80,56 @@ public static class PgDestructiveStatementCheck
         for (var i = 0; i < t.Count; i++)
         {
             var w = t[i];
-            if (!w.IsWord) continue;
+            if (!w.IsWord || !StartsAStatement(t, i)) continue;
 
-            if (w.Upper == "DELETE" && i + 1 < t.Count && t[i + 1].IsWordEqual("FROM") && !(i > 0 && t[i - 1].IsWordEqual("THEN")))
+            if (w.Upper == "DELETE" && i + 1 < t.Count && t[i + 1].IsWordEqual("FROM"))
             {
                 if (!HasWhere(t, i)) warnings.Add(Without(SafetyWarningType.DeleteWithoutWhere, "DELETE", Target(t, i + 2)));
             }
-            else if (w.Upper == "UPDATE" && !(i > 0 && t[i - 1].IsWord && t[i - 1].Upper is "DO" or "FOR" or "ON" or "THEN" or "NO" or "KEY"))
+            else if (w.Upper == "UPDATE")
             {
                 if (i + 1 < t.Count && !HasWhere(t, i)) warnings.Add(Without(SafetyWarningType.UpdateWithoutWhere, "UPDATE", Target(t, i + 1)));
             }
         }
+    }
+
+    // The word is a statement of its own (the whole statement, a CTE's body, a subquery, the statement a WITH clause introduces, a
+    // statement of a SQL-standard function body, a rule's action, a prepared statement) when it opens the text past EXPLAIN, or follows
+    // an opening parenthesis, a closing one, a semicolon, BEGIN ATOMIC, DO INSTEAD / DO ALSO, or PREPARE name AS. Anywhere else the same
+    // word is a clause of something larger: BEFORE UPDATE ON t in a trigger, GRANT SELECT, UPDATE ON t, FOR UPDATE, ON CONFLICT DO UPDATE,
+    // WHEN MATCHED THEN UPDATE, ON DELETE CASCADE, CREATE POLICY ... FOR UPDATE - none of which touches any row by itself.
+    private static bool StartsAStatement(PgStatementTokens t, int i)
+    {
+        var first = 0;
+        while (first < t.Count && t[first].IsWord && t[first].Upper is "EXPLAIN" or "ANALYZE" or "VERBOSE") first++;
+        if (i == first) return true;
+        if (i == 0) return false;
+
+        var before = t[i - 1];
+        if (before.IsOpen || before.IsClose || before.Kind == PgTokenKind.Semicolon) return true;
+        if (before.IsWord && before.Upper is "ATOMIC" or "INSTEAD" or "ALSO") return true;
+        if (before.IsWordEqual("AS") && t[first].IsWordEqual("PREPARE")) return true;
+        return t[first].IsWordEqual("WITH") && t[i].Depth == t[first].Depth && IsTheStatementOfWith(t, i);
+    }
+
+    // A WITH clause usually ends in ")", but a recursive one may end in a SEARCH or CYCLE clause, whose last word is a column name. The
+    // word is then the statement the WITH introduces when no statement verb stands between the last ")" and it, and it does not follow
+    // one of the words that make it a clause (ON CONFLICT DO UPDATE, FOR UPDATE).
+    private static bool IsTheStatementOfWith(PgStatementTokens t, int i)
+    {
+        var before = t[i - 1];
+        if (before.IsWord && before.Upper is "DO" or "FOR" or "ON" or "THEN" or "NO" or "KEY" or "OF" or "OR") return false;
+
+        var from = 0;
+        for (var k = i - 1; k > 0; k--)
+        {
+            if (t[k].IsClose) { from = k; break; }
+        }
+        for (var k = from + 1; k < i; k++)
+        {
+            if (t[k].IsWord && t[k].Upper is "SELECT" or "INSERT" or "UPDATE" or "DELETE" or "MERGE" or "TABLE" or "VALUES") return false;
+        }
+        return true;
     }
 
     // a WHERE of the same query level before it ends (the closing parenthesis, the next statement, RETURNING does not end it)

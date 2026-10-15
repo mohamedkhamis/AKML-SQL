@@ -163,11 +163,11 @@ namespace AkmlSql.Engine.Handlers.Control
                 return Refuse((await PgConnectionFailure.DescribeAsync(ex, connectionString, host, port, ct).ConfigureAwait(false)).Message);
             }
 
+            // The next run opens in the new database, on a connection that holds no transaction.
             registry.Dispose(sessionId);
-            registry.GetOrCreate(sessionId, connectionString, DatabaseKind.PostgreSql);   // the next run opens in the new database
+            registry.GetOrCreate(sessionId, connectionString, DatabaseKind.PostgreSql);
 
             Rekey(ctx, sessionId, facts.Database, connectionString);
-            session.TransactionState = TransactionState.None;
             session.SearchPath = facts.SearchPath;
             Log.Information("ChangeDatabase (PostgreSQL): session={Session} now in {Db}", sessionId, facts.Database);
             return new ChangeDatabaseResponse

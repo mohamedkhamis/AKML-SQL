@@ -40,7 +40,18 @@ namespace AkmlSql.Engine.Handlers.Control
             // Spec 042 (T056): a PostgreSQL connection takes its own path. None of what follows is meaningful for it: the
             // alias resolver and the T-SQL parser's server version are SQL Server's, and the parser setting is process-wide.
             if (DatabaseKindNames.FromInt(request.Kind) == DatabaseKind.PostgreSql)
+            {
+                // FR-093: with the feature off no session may become a PostgreSQL session, or the handlers that have no
+                // PostgreSQL service would read its text with the T-SQL parser. The session keeps its previous connection.
+                // The sign is the catalog reader, made at start-up only when the feature was on: the services and handlers are
+                // fixed then too, so a switch flipped while the engine runs waits for a restart, as they do.
+                if (ctx.PostgresSchemaMetadata == null)
+                {
+                    Log.Warning("ConnectionChanged (PostgreSQL) ignored: {Reason} (session={Session})", DialectErrors.FeatureOffMessage, request.SessionId);
+                    return Task.FromResult(request);
+                }
                 return Task.FromResult(HandlePostgres(request, ctx));
+            }
 
             // A SQL Server client alias ("ServerDemo") becomes the server it points at before anything
             // else — the guard below must judge the real target, and SqlClient can't resolve aliases.

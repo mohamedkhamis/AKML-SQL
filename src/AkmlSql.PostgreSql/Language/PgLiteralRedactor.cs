@@ -24,9 +24,11 @@ public sealed record PgRedaction(bool Ok, string Text, IReadOnlyDictionary<strin
 /// It works on the managed <see cref="PgLexicalScanner"/> tokens, not a parse, so it also reads scripts that do not parse
 /// (the case where someone asks the assistant to fix them). Strings of every form (<c>'x'</c>, <c>E'x'</c>, <c>U&amp;'x'</c>,
 /// <c>B'1'</c>, <c>X'1F'</c>, <c>N'x'</c>) become <c>'__STR_n__'</c>, numbers become <c>__NUM_n__</c>, and a dollar-quoted
-/// string keeps its tag around the placeholder. A dollar-quoted body that is code - after <c>AS</c> or <c>DO</c> - is read
-/// as code and redacted inside, so an explained function still shows its logic; if the body cannot be read as PostgreSQL
-/// text (another language, for example) the whole body is one literal.
+/// string keeps its tag around the placeholder. A dollar-quoted body that is code - after <c>AS</c> or <c>DO</c>, in a
+/// statement whose <c>LANGUAGE</c> is SQL or PL/pgSQL or that names none - is read as code and redacted inside, so an
+/// explained function still shows its logic; a body in any other language (Python, Perl, C), wherever its <c>LANGUAGE</c>
+/// clause stands, and a body that cannot be read as PostgreSQL text, is one literal: its strings are not PostgreSQL strings
+/// and could not be found.
 /// </para>
 ///
 /// <para>
@@ -81,6 +83,10 @@ public static class PgLiteralRedactor
         string? previous = null;
         string? beforePrevious = null;
 
+        // The LANGUAGE of each statement, read ahead: a CREATE FUNCTION may name it after the body.
+        var languages = StatementLanguages(text, tokens);
+        var statement = 0;
+
         var position = 0;
         foreach (var token in tokens)
         {
@@ -110,7 +116,8 @@ public static class PgLiteralRedactor
                     break;
 
                 case PgTokenKind.DollarString:
-                    var error = AppendDollarString(text, token, output, state, depth, IsCodePosition(previous));
+                    var isCode = IsCodePosition(previous) && IsReadableAsSql(languages[statement]);
+                    var error = AppendDollarString(text, token, output, state, depth, isCode);
                     if (error != null) return error;
                     break;
 
@@ -119,6 +126,7 @@ public static class PgLiteralRedactor
                     break;
             }
 
+            if (token.Kind is PgTokenKind.Semicolon or PgTokenKind.MetaCommand) statement++;     // the boundaries the splitter uses
             beforePrevious = previous;
             previous = token.Kind == PgTokenKind.Identifier ? span.ToString().ToUpperInvariant() : null;
         }
@@ -175,6 +183,50 @@ public static class PgLiteralRedactor
 
     /// <summary>A dollar-quoted string right after AS (a function or procedure body) or DO (an anonymous block) is code.</summary>
     private static bool IsCodePosition(string? previous) => previous is "AS" or "DO";
+
+    /// <summary>Only SQL and PL/pgSQL bodies are PostgreSQL text; a statement that names no language (a DO block) is PL/pgSQL.</summary>
+    private static bool IsReadableAsSql(string? language) => language is null or "sql" or "plpgsql";
+
+    /// <summary>
+    /// The language each statement of <paramref name="text"/> names after <c>LANGUAGE</c> (lower case, quotes removed), by statement
+    /// index (a semicolon or a psql meta-command ends a statement, as for the splitter); null for a statement that names none. The word
+    /// may stand before or after the body, so the whole statement is read first. A language that is not PostgreSQL text sticks for the
+    /// rest of the statement: in text that does not parse, two functions may share one statement (a missing semicolon), and the one
+    /// that is not SQL must not be read as SQL because the other is.
+    /// </summary>
+    private static List<string?> StatementLanguages(string text, IReadOnlyList<PgLexToken> tokens)
+    {
+        var languages = new List<string?>();
+        string? current = null;
+        var afterLanguage = false;
+        foreach (var token in tokens)
+        {
+            if (token.Kind is PgTokenKind.Whitespace or PgTokenKind.LineComment or PgTokenKind.BlockComment) continue;
+            if (token.Kind is PgTokenKind.Semicolon or PgTokenKind.MetaCommand)
+            {
+                languages.Add(current);
+                current = null;
+                afterLanguage = false;
+                continue;
+            }
+
+            var span = text.AsSpan(token.Start, token.End - token.Start);
+            var isKeyword = token.Kind == PgTokenKind.Identifier && span.Equals("LANGUAGE", StringComparison.OrdinalIgnoreCase);
+            if (afterLanguage && !isKeyword)                 // "language" is also a name (a table of languages): the keyword after it is the real one
+            {
+                afterLanguage = false;
+                if (token.Kind is PgTokenKind.Identifier or PgTokenKind.QuotedIdentifier or PgTokenKind.String)
+                {
+                    var named = span.Trim("\"'".AsSpan()).ToString().ToLowerInvariant();
+                    if (current is null || IsReadableAsSql(current)) current = named;
+                }
+                continue;
+            }
+            afterLanguage = isKeyword;
+        }
+        languages.Add(current);
+        return languages;
+    }
 
     private static string Unterminated(PgTokenKind kind) => kind switch
     {

@@ -249,7 +249,7 @@ Spec 042. PostgreSQL support in the engine and the web edition is one switchable
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `enabled` | bool | true | When `false` the engine does not advertise the `dialect.postgresql.v1` capability and registers no PostgreSQL handlers; the web edition then shows the PostgreSQL choice disabled with the reason. The product behaves exactly as it did before spec 042. |
+| `enabled` | bool | true | Read when the engine starts. When `false` the engine does not advertise the `dialect.postgresql.v1` capability, registers no PostgreSQL-only handler, and refuses a PostgreSQL connection, connection test or database list with `PostgreSQL support is switched off in this engine (postgreSql.enabled).`; the web edition shows the PostgreSQL choice disabled with the reason. No session is ever of that kind, so every handler sees SQL Server work only, as before spec 042. |
 
 Remembered PostgreSQL passwords (the opt-in "Remember password" per saved connection) are kept by the
 engine in `sql-credentials.json`, the same DPAPI-protected store as SQL Server logins, under the server

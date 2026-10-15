@@ -33,9 +33,13 @@ namespace AkmlSql.Engine.Handlers.Control
             if (string.IsNullOrEmpty(request.ConnectionString))
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = "No connection string supplied." };
 
-            // Spec 042: a PostgreSQL string is tested with the PostgreSQL driver and worded its own way.
+            // Spec 042: a PostgreSQL string is tested with the PostgreSQL driver and worded its own way; not at all with the feature off (FR-093).
             if (DatabaseKindNames.FromInt(request.Kind) == DatabaseKind.PostgreSql)
+            {
+                if (ctx != null && ctx.PostgresSchemaMetadata == null)          // the feature was off when the engine started
+                    return new TestSqlConnectionResponse { Ok = false, ErrorMessage = DialectErrors.FeatureOffMessage };
                 return await TestPostgresAsync(request, ct).ConfigureAwait(false);
+            }
 
             // A SQL Server client alias becomes the server it points at (the guard judges the real target).
             request.ConnectionString = SqlAliasResolution.Apply(request.ConnectionString);

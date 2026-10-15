@@ -125,8 +125,9 @@ namespace AkmlSql.Core.Config
         /// <summary>
         /// Spec 042 (FR-093): PostgreSQL support as one switchable unit. When
         /// <see cref="PostgreSqlSettings.Enabled"/> is <c>false</c> the engine does not advertise
-        /// <c>dialect.postgresql.v1</c> and registers no PostgreSQL handlers, so the product behaves
-        /// exactly as it did before the feature.
+        /// <c>dialect.postgresql.v1</c>, registers no PostgreSQL-only handler, and refuses a PostgreSQL
+        /// connection, connection test or database list at the door (<c>DialectErrors.FeatureOffMessage</c>),
+        /// so no session is ever of that kind and every handler sees SQL Server work only, as before the feature.
         /// </summary>
         [JsonPropertyName("postgreSql")]
         public PostgreSqlSettings PostgreSql { get; set; } = new();

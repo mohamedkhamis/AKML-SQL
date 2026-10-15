@@ -136,7 +136,38 @@ public static class PgCrudWriteGenerator
             throw new InvalidOperationException($"Column '{cell.BaseColumnName}' carried a type name that is not accepted.");
 
         parameters.Add(new PgCrudParameter(cell.Value, cell.TypeName!));
-        return "$" + parameters.Count + "::" + cell.TypeName;
+        return "$" + parameters.Count + "::" + CastType(cell.TypeName!);
+    }
+
+    /// <summary>
+    /// The type as a cast can name it. The driver reports a column's type in display form, without quotes (<c>public.Mood</c>,
+    /// <c>Mood[]</c>), which the server would fold to lower case; a name that is not already lower case is quoted part by part,
+    /// with the schema, the modifier and the array brackets left outside the quotes. A lower-case name is written as it came,
+    /// so the built-in types with spaces (<c>character varying(5)</c>, <c>timestamp(3) with time zone</c>) stay as they are.
+    /// </summary>
+    internal static string CastType(string typeName)
+    {
+        var name = typeName.Trim();
+        var suffixAt = name.IndexOfAny(new[] { '(', '[' });        // "(10,2)" and "[]" belong after the name
+        var suffix = suffixAt < 0 ? string.Empty : name[suffixAt..];
+        var bare = suffixAt < 0 ? name : name[..suffixAt];
+
+        var dot = bare.IndexOf('.');
+        if (dot < 0) return QuoteIfNeeded(bare) + suffix;
+        return QuoteIfNeeded(bare[..dot]) + "." + QuoteIfNeeded(bare[(dot + 1)..]) + suffix;
+    }
+
+    private static string QuoteIfNeeded(string part)
+    {
+        if (part.Length == 0 || part[0] == '"') return part;
+        var needsQuotes = false;
+        foreach (var c in part)
+        {
+            if (char.IsLower(c) || char.IsDigit(c) || c is '_' or ' ') continue;
+            needsQuotes = true;
+            break;
+        }
+        return needsQuotes ? "\"" + part.Replace("\"", "\"\"") + "\"" : part;
     }
 
     /// <summary>

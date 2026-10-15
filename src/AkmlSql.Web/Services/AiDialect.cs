@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core;
@@ -121,13 +123,23 @@ internal sealed class EnginePostgresRedactor : IPostgresRedactor
 /// <summary>What may be sent to a provider in place of a piece of SQL, and how to read the answer that comes back.</summary>
 internal sealed class AiOutbound
 {
-    private readonly PlaceholderRestorer? _restorer;
+    /// <summary>What Fix says in place of a detail it does not send (<see cref="Protect"/>).</summary>
+    public const string WithheldDetail = "(not sent: it can hold data from the table)";
 
-    private AiOutbound(string text, PlaceholderRestorer? restorer, bool withheld)
+    /// <summary>What Fix puts in place of a quoted value in a data error's message (<see cref="Protect"/>).</summary>
+    public const string WithheldValue = "(value not sent)";
+
+    private readonly PlaceholderRestorer? _restorer;
+    private readonly IReadOnlyDictionary<string, string>? _placeholders;
+    private readonly bool _protect;
+
+    private AiOutbound(string text, IReadOnlyDictionary<string, string>? placeholders, bool withheld, bool protect)
     {
         Text = text;
-        _restorer = restorer;
+        _placeholders = placeholders;
+        _restorer = placeholders == null ? null : new PlaceholderRestorer(placeholders);
         Withheld = withheld;
+        _protect = protect;
     }
 
     /// <summary>The text to send.</summary>
@@ -136,15 +148,119 @@ internal sealed class AiOutbound
     /// <summary>True when nothing may be sent (the literals could not be removed and nobody could be asked).</summary>
     public bool Withheld { get; }
 
-    /// <summary>The text goes out as it is.</summary>
-    public static AiOutbound Unchanged(string text) => new(text, null, false);
+    /// <summary>True when the literals were removed from <see cref="Text"/>.</summary>
+    public bool IsRedacted => _placeholders is { Count: > 0 };
 
-    /// <summary>The literals were removed; the answer's placeholders are put back.</summary>
+    /// <summary>True when the text is PostgreSQL bound for a provider outside this machine: the error that goes with it is protected too (<see cref="Protect"/>).</summary>
+    public bool IsProtected => _protect;
+
+    /// <summary>The text goes out as it is (a local provider, or SQL Server).</summary>
+    public static AiOutbound Unchanged(string text) => new(text, null, false, false);
+
+    /// <summary>The literals were removed (there may have been none to remove); the answer's placeholders are put back.</summary>
     public static AiOutbound Redacted(string text, IReadOnlyDictionary<string, string> placeholders) =>
-        new(text, new PlaceholderRestorer(placeholders), false);
+        new(text, placeholders, false, true);
+
+    /// <summary>
+    /// The user chose to send the script with its values when the literals could not be removed. The script goes as it is; the
+    /// server's error is still protected, because its detail can hold rows the script never had and the user was not asked about those.
+    /// </summary>
+    public static AiOutbound SentWithValues(string text) => new(text, null, false, true);
 
     /// <summary>Nothing may be sent.</summary>
-    public static AiOutbound NotSent { get; } = new(string.Empty, null, true);
+    public static AiOutbound NotSent { get; } = new(string.Empty, null, true, false);
+
+    /// <summary>
+    /// Spec 042 (FR-081): the server's error as it may go with PostgreSQL text to a provider outside this machine. The server
+    /// repeats values from the script in its message (<c>invalid input syntax for type integer: "abc"</c>), values from rows in the
+    /// message of a data error (SQLSTATE class 22, the same shape with a value the script never had), and whole rows in its detail
+    /// (<c>Key (email)=(x) already exists</c>, <c>Failing row contains (...)</c>). The message and the hint get the script's literals
+    /// replaced by the placeholders the script carries; in a data error every other quoted value of the message is replaced by
+    /// <see cref="WithheldValue"/>; the detail is not sent. An error that goes with an unprotected script (a local provider, SQL
+    /// Server) is returned as it is.
+    /// </summary>
+    public AiErrorInfo Protect(AiErrorInfo error)
+    {
+        if (!_protect) return error;
+        var message = Mask(error.Message);
+        if (IsDataException(error.SqlState)) message = HideQuotedValues(message);
+        return error with
+        {
+            Message = message,
+            Hint = error.Hint is null ? null : Mask(error.Hint),
+            Detail = string.IsNullOrWhiteSpace(error.Detail) ? error.Detail : WithheldDetail,
+        };
+    }
+
+    /// <summary>SQLSTATE class 22 (data exception): the message names the offending value, which may come from a row.</summary>
+    private static bool IsDataException(string? sqlState) =>
+        sqlState is { Length: >= 2 } && sqlState.StartsWith("22", StringComparison.Ordinal);
+
+    // Every quoted run of the message but a placeholder's name (which stands for a value the script named and the model may see as such).
+    private static string HideQuotedValues(string message) =>
+        Regex.Replace(message, "\"([^\"]*)\"", m => Regex.IsMatch(m.Groups[1].Value, "^__(STR|NUM)_[0-9]+__$") ? m.Value : "\"" + WithheldValue + "\"");
+
+    /// <summary>
+    /// The script's literals, as the server might repeat them - as written (<c>'O''Brien'</c>, which becomes the placeholder as written,
+    /// <c>'__STR_0__'</c>) and as a bare value (<c>O'Brien</c>, which becomes the placeholder's name) - replaced in one pass, longest form
+    /// first so a value inside another is masked as part of it, and only as whole words where a form begins or ends with a word
+    /// character, so a literal <c>'in'</c> is not found inside "invalid". A form with no letter or digit (a space, a comma, a dash) is in
+    /// every sentence and names nothing, and a one-character number is in every message ("LINE 1"); they are left alone.
+    /// </summary>
+    private string Mask(string text)
+    {
+        if (_placeholders is not { Count: > 0 } || text.Length == 0) return text;
+
+        var forms = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in _placeholders)
+        {
+            var isString = pair.Key.Contains("__STR_", StringComparison.Ordinal);
+            if (Maskable(pair.Value, isString)) forms.TryAdd(pair.Value, pair.Key);
+            var bare = BareValue(pair.Value);
+            if (Maskable(bare, isString)) forms.TryAdd(bare, PlaceholderName(pair.Key));
+        }
+        if (forms.Count == 0) return text;
+
+        var pattern = string.Join("|", forms.Keys.OrderByDescending(f => f.Length).Select(Bounded));
+        return Regex.Replace(text, pattern, m => forms[m.Value]);
+    }
+
+    private static bool Maskable(string form, bool isString) =>
+        form.Any(char.IsLetterOrDigit) && (isString || form.Length >= 2);
+
+    private static string Bounded(string form)
+    {
+        var start = IsWordChar(form[0]) ? "(?<![A-Za-z0-9_])" : string.Empty;
+        var end = IsWordChar(form[^1]) ? "(?![A-Za-z0-9_])" : string.Empty;
+        return start + Regex.Escape(form) + end;
+    }
+
+    private static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
+
+    // '__STR_0__' and $tag$__STR_2__$tag$ -> __STR_0__ / __STR_2__; __NUM_1__ stays.
+    private static string PlaceholderName(string placeholder)
+    {
+        var first = placeholder.IndexOf("__", StringComparison.Ordinal);
+        var last = placeholder.LastIndexOf("__", StringComparison.Ordinal);
+        return first < 0 || last < first ? placeholder : placeholder.Substring(first, last + 2 - first);
+    }
+
+    // The value as the server would repeat it: a string without its quotes and prefix (E'it''s' -> it's), a dollar-quoted body
+    // without its tags, a number as written.
+    private static string BareValue(string literal)
+    {
+        if (literal.Length >= 2 && literal[^1] == '\'')
+        {
+            var open = literal.IndexOf('\'');
+            if (open >= 0 && open < literal.Length - 1) return literal.Substring(open + 1, literal.Length - open - 2).Replace("''", "'");
+        }
+        if (literal.Length >= 2 && literal[0] == '$')
+        {
+            var tagEnd = literal.IndexOf('$', 1) + 1;
+            if (tagEnd > 1 && literal.Length >= 2 * tagEnd) return literal.Substring(tagEnd, literal.Length - 2 * tagEnd);
+        }
+        return literal;
+    }
 
     /// <summary>The answer with the literals put back.</summary>
     public string Restore(string answer) => _restorer == null ? answer : _restorer.Restore(answer);
@@ -232,6 +348,6 @@ internal sealed class AiOutboundGate
         }).ConfigureAwait(false);
 
         if (!sendAnyway) throw new AiNotSentException(NotSentMessage);
-        return AiOutbound.Unchanged(sql);
+        return AiOutbound.SentWithValues(sql);
     }
 }

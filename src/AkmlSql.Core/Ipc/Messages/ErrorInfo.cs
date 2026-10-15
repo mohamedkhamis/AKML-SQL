@@ -34,5 +34,11 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>The message of the <see cref="Unsupported"/> reply.</summary>
         public const string UnsupportedMessage = Unsupported + ": Not available for PostgreSQL";
+
+        /// <summary>
+        /// FR-093: a PostgreSQL request reached an engine whose <c>postgreSql.enabled</c> is false. The engine does not advertise
+        /// the capability then, so only a client that ignores the handshake sends one; the answer names the switch.
+        /// </summary>
+        public const string FeatureOffMessage = "PostgreSQL support is switched off in this engine (postgreSql.enabled).";
     }
 }

@@ -48,10 +48,10 @@ public class SessionManager
                 existing.EngineEdition = info.EngineEdition;
                 existing.DatabaseName = info.DatabaseName;
                 existing.IsConnected = true;
-                // Spec 042: a new connection starts clean. Whatever transaction or search path the previous
-                // connection held (possibly of the other kind) does not carry over.
+                // Spec 042: a new connection starts clean. Whatever search path the previous connection held
+                // (possibly of the other kind) does not carry over; its transaction went with the persistent
+                // connection, which the connection-changed handler disposes.
                 existing.Kind = kind;
-                existing.TransactionState = TransactionState.None;
                 existing.SearchPath = System.Array.Empty<string>();
                 existing.ServerVersionText = string.Empty;
                 return existing;
@@ -153,6 +153,6 @@ public class SessionState
     /// <summary>Spec 042 (FR-061): the PostgreSQL search path (<c>current_schemas(false)</c>) at connect time and after <c>SET search_path</c>.</summary>
     public string[] SearchPath { get; set; } = System.Array.Empty<string>();
 
-    /// <summary>Spec 042 (FR-016, data-model §9): the PostgreSQL transaction state, tracked per statement; always None for SQL Server.</summary>
-    public TransactionState TransactionState { get; set; } = TransactionState.None;
+    // The PostgreSQL transaction state (FR-016) lives on the session's persistent connection
+    // (SessionConnection.TransactionState): it belongs to the connection that holds the transaction.
 }

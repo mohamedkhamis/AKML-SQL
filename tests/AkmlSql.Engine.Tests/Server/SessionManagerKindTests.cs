@@ -33,14 +33,12 @@ public class SessionManagerKindTests
 
         sessions.UpdateSession(Info("s1", DatabaseKind.PostgreSql, "Host=localhost;Port=5432;Database=northwind;Username=u;Password=secret"));
         Assert.Equal(DatabaseKind.PostgreSql, sessions.KindOf("s1"));
-        Assert.Equal(TransactionState.None, sessions.GetSession("s1")!.TransactionState);
 
-        sessions.GetSession("s1")!.TransactionState = TransactionState.Open;
+        sessions.GetSession("s1")!.SearchPath = new[] { "sales", "public" };
         sessions.UpdateSession(Info("s1", DatabaseKind.SqlServer, "Server=(local);Database=tempdb"));
 
         Assert.Equal(DatabaseKind.SqlServer, sessions.KindOf("s1"));
-        // A new connection starts without a transaction, whatever the old one held.
-        Assert.Equal(TransactionState.None, sessions.GetSession("s1")!.TransactionState);
+        // A new connection starts without the old one's search path (its transaction went with the persistent connection).
         Assert.Empty(sessions.GetSession("s1")!.SearchPath);
     }
 

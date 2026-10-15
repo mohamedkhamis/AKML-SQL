@@ -39,7 +39,7 @@ public static class PgParseRunner
             outcome.BeginBatch(new SqlBatchSpan(i, statement.Start, statement.End, statement.StartLine, 1, statement.Text), 1);
 
             // A client command is not SQL: there is nothing for the grammar to check.
-            if (statement.IsMetaCommand || PgStatementInspector.UsesClientCopy(statement.Text))
+            if (statement.IsMetaCommand || PgStatementInspector.UsesClientCopy(statement))
             {
                 notParsed++;
                 outcome.AddSystem(statement.IsMetaCommand

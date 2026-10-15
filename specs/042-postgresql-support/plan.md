@@ -118,7 +118,7 @@ src/
 │   └── Safety/        PgDestructiveStatementCheck
 ├── AkmlSql.Engine/
 │   ├── Capabilities.cs                       # + DialectPostgreSqlV1 (conditional on config)
-│   ├── Server/SessionManager.cs              # SessionState.Kind, SearchPath, TransactionState
+│   ├── Server/SessionManager.cs              # SessionState.Kind, SearchPath (the transaction state is on SessionConnection)
 │   ├── Execution/SessionConnection.cs        # DbConnection + Kind
 │   ├── Schema/ISchemaMetadataProvider.cs     # seam; SchemaMetadataService implements it unchanged
 │   ├── Handlers/…                            # dispatch by kind at the top of each session-scoped handler

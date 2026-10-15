@@ -23,17 +23,17 @@ public sealed class PgFormatService
 
     // ── document ─────────────────────────────────────────────────────────────────────────────────────
 
-    public FormatResponse Format(string text, FormattingProfile profile, FormatSqlActionsDto? actions, DatabaseCache? cache, string? fallbackWarning)
+    public async Task<FormatResponse> FormatAsync(string text, FormattingProfile profile, FormatSqlActionsDto? actions, DatabaseCache? cache, string? fallbackWarning)
     {
         var watch = Stopwatch.StartNew();
         var style = StyleOf(profile);
         var options = OptionsOf(profile, actions);
-        var result = PgFormatter.Format(text, style, options);
+        var result = await PgFormatter.FormatAsync(text, style, options).ConfigureAwait(false);
         var diagnostics = result.Diagnostics.Select(ToInfo).ToList();
         var formatted = result.Text;
 
         if (result.Success && actions is { } a && (a.ExpandWildcards || a.QualifyObjectNames))
-            formatted = ApplySchemaActions(formatted, a, style, options, cache, diagnostics);
+            formatted = await ApplySchemaActionsAsync(formatted, a, style, options, cache, diagnostics).ConfigureAwait(false);
 
         return new FormatResponse
         {
@@ -49,18 +49,18 @@ public sealed class PgFormatService
 
     // ── selection ────────────────────────────────────────────────────────────────────────────────────
 
-    public FormatSelectionResponse FormatSelection(FormatSelectionRequest request, FormattingProfile profile, DatabaseCache? cache, string? fallbackWarning)
+    public async Task<FormatSelectionResponse> FormatSelectionAsync(FormatSelectionRequest request, FormattingProfile profile, DatabaseCache? cache, string? fallbackWarning)
     {
         var watch = Stopwatch.StartNew();
         var style = StyleOf(profile);
         var options = OptionsOf(profile, request.Actions);
-        var result = PgFormatter.FormatSelection(request.Text, request.SelectionStart, request.SelectionEnd, style, options);
+        var result = await PgFormatter.FormatSelectionAsync(request.Text, request.SelectionStart, request.SelectionEnd, style, options).ConfigureAwait(false);
 
         var formatted = result.Text;
         var modified = result.WasModified;
         if (result.Success && request.Actions is { } a && (a.ExpandWildcards || a.QualifyObjectNames))
         {
-            var expanded = ApplySchemaActions(formatted, a, style, options, cache, diagnostics: null);
+            var expanded = await ApplySchemaActionsAsync(formatted, a, style, options, cache, diagnostics: null).ConfigureAwait(false);
             if (!string.Equals(expanded, formatted, StringComparison.Ordinal))
             {
                 formatted = expanded;
@@ -83,10 +83,10 @@ public sealed class PgFormatService
 
     // ── preview (the Format Styles page) ─────────────────────────────────────────────────────────────
 
-    public FormatPreviewResponse Preview(string sample, FormattingProfile profile)
+    public async Task<FormatPreviewResponse> PreviewAsync(string sample, FormattingProfile profile)
     {
         var watch = Stopwatch.StartNew();
-        var result = PgFormatter.Format(sample, StyleOf(profile), new PgFormatOptions());
+        var result = await PgFormatter.FormatAsync(sample, StyleOf(profile), new PgFormatOptions()).ConfigureAwait(false);
         return new FormatPreviewResponse
         {
             FormattedText = result.Text,
@@ -97,7 +97,7 @@ public sealed class PgFormatService
 
     // ── single actions ───────────────────────────────────────────────────────────────────────────────
 
-    public FormatActionResponse RunAction(FormatActionRequest request, FormattingProfile profile, DatabaseCache? cache)
+    public async Task<FormatActionResponse> RunActionAsync(FormatActionRequest request, FormattingProfile profile, DatabaseCache? cache)
     {
         var watch = Stopwatch.StartNew();
         var style = StyleOf(profile);
@@ -114,13 +114,13 @@ public sealed class PgFormatService
         switch (type)
         {
             case FormatActionType.CasingOnly:
-                changed = Run(PgFormatter.Format(part, style, new PgFormatOptions(ApplyLayout: false)), part, warnings);
+                changed = Run(await PgFormatter.FormatAsync(part, style, new PgFormatOptions(ApplyLayout: false)).ConfigureAwait(false), part, warnings);
                 break;
             case FormatActionType.InsertSemicolons:
-                changed = Run(PgFormatter.Format(part, style, new PgFormatOptions(ApplyLayout: false, ApplyCasing: false, Semicolons: 1)), part, warnings);
+                changed = Run(await PgFormatter.FormatAsync(part, style, new PgFormatOptions(ApplyLayout: false, ApplyCasing: false, Semicolons: 1)).ConfigureAwait(false), part, warnings);
                 break;
             case FormatActionType.RemoveSemicolons:
-                changed = Run(PgFormatter.Format(part, style, new PgFormatOptions(ApplyLayout: false, ApplyCasing: false, Semicolons: 2)), part, warnings);
+                changed = Run(await PgFormatter.FormatAsync(part, style, new PgFormatOptions(ApplyLayout: false, ApplyCasing: false, Semicolons: 2)).ConfigureAwait(false), part, warnings);
                 break;
             case FormatActionType.ExpandWildcards:
             case FormatActionType.QualifyObjectNames:
@@ -194,7 +194,7 @@ public sealed class PgFormatService
         new() { Severity = d.Severity, Message = d.Message, Offset = d.Offset, Line = d.Line };
 
     /// <summary>Expand wildcards / Qualify names on already formatted text; laid out once more so inserted names look like the rest.</summary>
-    private static string ApplySchemaActions(string text, FormatSqlActionsDto actions, SqlPromptStyle style, PgFormatOptions options,
+    private static async Task<string> ApplySchemaActionsAsync(string text, FormatSqlActionsDto actions, SqlPromptStyle style, PgFormatOptions options,
         DatabaseCache? cache, List<FormatDiagnosticInfo>? diagnostics)
     {
         var current = text;
@@ -227,7 +227,7 @@ public sealed class PgFormatService
 
         if (options.ApplyLayout)
         {
-            var again = PgFormatter.Format(current, style, options with { Semicolons = 0 });
+            var again = await PgFormatter.FormatAsync(current, style, options with { Semicolons = 0 }).ConfigureAwait(false);
             if (again.Success) current = again.Text;
         }
         return current;

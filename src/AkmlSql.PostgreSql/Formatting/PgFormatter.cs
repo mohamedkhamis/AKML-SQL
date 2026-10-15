@@ -31,7 +31,14 @@ public sealed record PgSelectionResult(bool Success, string Text, int OriginalSt
 /// </summary>
 public static class PgFormatter
 {
-    public static PgFormatResult Format(string sql, SqlPromptStyle style, PgFormatOptions? options = null)
+    /// <summary>
+    /// <see cref="FormatAsync"/> for a caller on a thread of its own (the command line, the corpus tests). The engine's handlers await
+    /// <see cref="FormatAsync"/>: this form waits for the parse that runs beside the layout, which an IPC handler must not do.
+    /// </summary>
+    public static PgFormatResult Format(string sql, SqlPromptStyle style, PgFormatOptions? options = null) =>
+        FormatAsync(sql, style, options).GetAwaiter().GetResult();
+
+    public static async Task<PgFormatResult> FormatAsync(string sql, SqlPromptStyle style, PgFormatOptions? options = null)
     {
         options ??= new PgFormatOptions();
         sql ??= string.Empty;
@@ -40,7 +47,8 @@ public static class PgFormatter
 
         // The PostgreSQL parser is most of the time of a long script, so the parses overlap the layout work: the original is parsed while
         // it is laid out; the result is parsed (as soon as it exists) while it is read into tokens and laid out once more for the stability
-        // check. Each text is read into tokens once: the layout and the safety checks use the same list.
+        // check. Each text is read into tokens once: the layout and the safety checks use the same list. The parses are awaited, never
+        // waited for, so no thread is held while they run.
         var parsing = Task.Run(() => PgParser.Parse(sql));
 
         string formatted = string.Empty;
@@ -57,7 +65,7 @@ public static class PgFormatter
         }
 
         // A script with a syntax error usually fails to parse before it is laid out; report it without doing the rest.
-        if (parsing.IsCompleted && !parsing.Result.Success) return ParseFailure(sql, parsing.Result);
+        if (parsing.IsCompletedSuccessfully && !parsing.Result.Success) return ParseFailure(sql, parsing.Result);
 
         Task<PgParseResult>? reparsing = null;
         var needsChecks = layoutFailure is null && formatted.Length > 0 && !(options.Semicolons == 0 && string.Equals(formatted, sql, StringComparison.Ordinal));
@@ -79,7 +87,7 @@ public static class PgFormatter
             }
         }
 
-        var parsed = parsing.GetAwaiter().GetResult();
+        var parsed = await parsing.ConfigureAwait(false);
         if (!parsed.Success) return ParseFailure(sql, parsed);
         if (layoutFailure is not null) return Failed(sql, new PgFormatDiagnostic(2, layoutFailure));
         if (formatted.Length == 0) return Failed(sql, new PgFormatDiagnostic(2, "Not formatted: the layout produced nothing."));
@@ -88,7 +96,7 @@ public static class PgFormatter
         // out the same text again gives the same text.
         if (!needsChecks) return new PgFormatResult(true, formatted, false, true, Array.Empty<PgFormatDiagnostic>());
 
-        var verdict = Verify(parsed, originalTokens!, reparsing!.GetAwaiter().GetResult(), formattedTokens!, options.Semicolons is 1 or 2);
+        var verdict = Verify(parsed, originalTokens!, await reparsing!.ConfigureAwait(false), formattedTokens!, options.Semicolons is 1 or 2);
         if (verdict is not null) return Failed(sql, new PgFormatDiagnostic(2, verdict));
 
         if (options.CheckIdempotency)
@@ -111,7 +119,10 @@ public static class PgFormatter
     /// Formats the statements a selection touches (or the one the caret is in, for an empty selection) and nothing else. The result replaces
     /// the statements' own text, from the first one's start to the last one's end, so the semicolons and what lies around them stay.
     /// </summary>
-    public static PgSelectionResult FormatSelection(string sql, int selectionStart, int selectionEnd, SqlPromptStyle style, PgFormatOptions? options = null)
+    public static PgSelectionResult FormatSelection(string sql, int selectionStart, int selectionEnd, SqlPromptStyle style, PgFormatOptions? options = null) =>
+        FormatSelectionAsync(sql, selectionStart, selectionEnd, style, options).GetAwaiter().GetResult();
+
+    public static async Task<PgSelectionResult> FormatSelectionAsync(string sql, int selectionStart, int selectionEnd, SqlPromptStyle style, PgFormatOptions? options = null)
     {
         sql ??= string.Empty;
         var start = Math.Clamp(Math.Min(selectionStart, selectionEnd), 0, sql.Length);
@@ -129,7 +140,7 @@ public static class PgFormatter
         var regionStart = touched[0].Start;
         var regionEnd = touched[^1].End;
         var region = sql.Substring(regionStart, regionEnd - regionStart);
-        var result = Format(region, style, options);
+        var result = await FormatAsync(region, style, options).ConfigureAwait(false);
         return new PgSelectionResult(result.Success, result.Success ? result.Text : region, regionStart, regionEnd, result.WasModified, result.Diagnostics);
     }
 

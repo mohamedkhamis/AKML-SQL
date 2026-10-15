@@ -108,8 +108,9 @@ public class SessionDatabaseHandlersPgTests
         await using var second = await PgTestServer.CreateDatabaseAsync();
         var (engine, session) = await SessionInAsync(first);
         var state = engine.Context.Sessions.GetSession(session)!;
-        state.TransactionState = TransactionState.Open;   // as a run that began one would have left it
         var firstConnection = engine.Context.SessionConnections!.GetOrCreate(session, first.ConnectionString, DatabaseKind.PostgreSql);
+        firstConnection.TransactionState = TransactionState.Open;   // as a run that began one would have left it
+        firstConnection.SchemaChange.Pending = true;                // and a CREATE TABLE inside it
 
         var response = await new ChangeDatabaseHandler().HandleAsync(
             new ChangeDatabaseRequest { SessionId = session, DatabaseName = second.Name }, engine.Context, default);
@@ -119,12 +120,13 @@ public class SessionDatabaseHandlersPgTests
         Assert.True(response.ConnectionWasReset);
         Assert.Equal((int)TransactionState.None, response.TransactionState);
         Assert.Equal(second.Name, state.DatabaseName);
-        Assert.Equal(TransactionState.None, state.TransactionState);
         Assert.Contains(second.Name, state.ConnectionString);
 
-        // The persistent connection is a new one, and it is in the new database.
+        // The persistent connection is a new one, in the new database, with no transaction and nothing owed from the old one.
         var connection = engine.Context.SessionConnections.TryGet(session)!;
         Assert.NotSame(firstConnection, connection);
+        Assert.Equal(TransactionState.None, connection.TransactionState);
+        Assert.False(connection.SchemaChange.Pending);
         var (current, _) = await connection.RunExclusivePostgresAsync(state.ConnectionString, async (conn, ct) =>
         {
             await using var command = new NpgsqlCommand("SELECT current_database()", conn);
@@ -139,7 +141,8 @@ public class SessionDatabaseHandlersPgTests
         await using var database = await PgTestServer.CreateDatabaseAsync();
         var (engine, session) = await SessionInAsync(database);
         var state = engine.Context.Sessions.GetSession(session)!;
-        state.TransactionState = TransactionState.Open;
+        var connection = engine.Context.SessionConnections!.GetOrCreate(session, database.ConnectionString, DatabaseKind.PostgreSql);
+        connection.TransactionState = TransactionState.Open;
 
         var response = await new ChangeDatabaseHandler().HandleAsync(
             new ChangeDatabaseRequest { SessionId = session, DatabaseName = "akml_no_such_database" }, engine.Context, default);
@@ -148,7 +151,9 @@ public class SessionDatabaseHandlersPgTests
         Assert.Contains("3D000", response.ErrorMessage);
         Assert.DoesNotContain("SQL Server", response.ErrorMessage, StringComparison.Ordinal);
         Assert.Equal(database.Name, state.DatabaseName);
-        Assert.Equal(TransactionState.Open, state.TransactionState);   // nothing was rolled back for a switch that did not happen
+        // Nothing was rolled back for a switch that did not happen: the same connection, with its transaction, serves the session.
+        Assert.Same(connection, engine.Context.SessionConnections.TryGet(session));
+        Assert.Equal(TransactionState.Open, connection.TransactionState);
     }
 
     [SkippableFact]

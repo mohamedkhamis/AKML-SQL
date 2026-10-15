@@ -60,6 +60,13 @@ namespace AkmlSql.Engine.Execution
         /// </summary>
         public TransactionState TransactionState { get; set; } = TransactionState.None;
 
+        /// <summary>
+        /// Spec 042 (FR-043): whether a run changed the catalog inside a transaction that was still open when it ended, so that the
+        /// reload of the schema is owed once that transaction ends. Read and written by <c>PgExecuteRunner</c> while the gate is
+        /// held; a new or reopened connection owes nothing. Never set for SQL Server.
+        /// </summary>
+        public PostgreSql.PgExecuteRunner.PgSchemaChangeState SchemaChange { get; } = new();
+
         /// <summary>UTC timestamp of the last execute/apply — drives idle eviction.</summary>
         public DateTime LastUsedUtc { get; private set; } = DateTime.UtcNow;
 
@@ -169,8 +176,10 @@ namespace AkmlSql.Engine.Execution
             }
             _conn = fresh;
             _everOpened = true;
-            // A transaction belongs to its backend: a new connection starts outside one.
+            // A transaction belongs to its backend: a new connection starts outside one, and a change the old one held inside a
+            // transaction went with it.
             TransactionState = TransactionState.None;
+            SchemaChange.Pending = false;
 
             if (wasBroken)
             {

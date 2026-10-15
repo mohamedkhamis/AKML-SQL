@@ -271,4 +271,43 @@ public class PgCrudWriteGeneratorTests
     {
         Assert.False(PgCrudWriteGenerator.IsSafeTypeName(new string('a', 300)));
     }
+
+    // ---- the type as a cast can name it ---------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("public.Mood", "public.\"Mood\"")]
+    [InlineData("Mood", "\"Mood\"")]
+    [InlineData("Mood[]", "\"Mood\"[]")]
+    [InlineData("public.Mood[]", "public.\"Mood\"[]")]
+    [InlineData("Sales.Order Status", "\"Sales\".\"Order Status\"")]
+    [InlineData("character varying(5)", "character varying(5)")]
+    [InlineData("timestamp(3) with time zone", "timestamp(3) with time zone")]
+    [InlineData("numeric(10,2)", "numeric(10,2)")]
+    [InlineData("my_schema.my_type", "my_schema.my_type")]
+    [InlineData("\"Mood\"", "\"Mood\"")]
+    public void A_type_the_driver_shows_unquoted_is_cast_with_the_quotes_the_server_needs(string shown, string cast) =>
+        Assert.Equal(cast, PgCrudWriteGenerator.CastType(shown));
+
+    [Fact]
+    public void The_cast_of_a_mixed_case_type_is_still_a_safe_type_name()
+    {
+        Assert.True(PgCrudWriteGenerator.IsSafeTypeName(PgCrudWriteGenerator.CastType("public.Mood[]")));
+        Assert.True(PgCrudWriteGenerator.IsSafeTypeName(PgCrudWriteGenerator.CastType("Sales.Order Status")));
+    }
+
+    [Fact]
+    public void A_mixed_case_type_is_quoted_in_the_cast_of_an_update_an_insert_and_a_key()
+    {
+        var update = PgCrudWriteGenerator.Build(Request(table: "moods"),
+            Update(new[] { Cell("m", "happy", "public.Mood") }, new[] { Cell("id", "1", "integer") }));
+        Assert.Equal("UPDATE public.moods SET m = $1::public.\"Mood\" WHERE id = $2::integer", update.Sql);
+
+        var insert = PgCrudWriteGenerator.Build(Request(table: "moods"),
+            new CrudEditDto { Op = CrudOp.Insert, SetCells = new[] { Cell("id", "2", "integer"), Cell("m", "sad", "Mood") } });
+        Assert.Contains("$2::\"Mood\"", insert.Sql);
+
+        var keyed = PgCrudWriteGenerator.Build(Request(table: "moods"),
+            Update(new[] { Cell("id", "3", "integer") }, new[] { Cell("tags", "{a}", "public.Mood[]") }));
+        Assert.Contains("WHERE tags = $2::public.\"Mood\"[]", keyed.Sql);
+    }
 }

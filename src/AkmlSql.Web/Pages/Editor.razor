@@ -1003,13 +1003,11 @@
         _lastExecuteStatus = result.Status;
 
         // Spec 042 (FR-043): a PostgreSQL run that created, altered or dropped something shows in the explorer without a manual
-        // refresh. The engine has started reloading its catalog; this waits for it to settle and fetches the result.
-        if (SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && ChangedSchema(result))
+        // refresh. The engine says when it has started reloading its catalog (SchemaChangeSignal); this waits for it to settle and
+        // fetches the result.
+        if (SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && SchemaChangeSignal.RefetchAfter(result))
             _ = RefreshSchemaAfterRunAsync();
     }
-
-    private static bool ChangedSchema(ExecuteQueryResult result) =>
-        result.MessageDetails?.Any(m => m.Kind == ExecuteMessageKind.RowCount && AkmlSql.Core.Text.PgCommandTags.ChangesSchema(m.Text)) == true;
 
     private async Task RefreshSchemaAfterRunAsync()
     {

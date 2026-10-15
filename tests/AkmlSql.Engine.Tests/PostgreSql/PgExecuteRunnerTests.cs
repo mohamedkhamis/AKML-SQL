@@ -29,6 +29,11 @@ public class PgExecuteRunnerTests
         public NpgsqlConnection Connection { get; }
         public TransactionState State { get; private set; }
 
+        /// <summary>What the session carries between runs, as the execute handler does (FR-043).</summary>
+        public PgExecuteRunner.PgSchemaChangeState SchemaChange { get; } = new();
+
+        public bool SchemaChangePending => SchemaChange.Pending;
+
         public static async Task<Session> OpenAsync(string? seed = null)
         {
             var database = await PgTestServer.CreateDatabaseAsync(seed);
@@ -40,7 +45,8 @@ public class PgExecuteRunnerTests
         public async Task<ExecuteQueryResult> RunAsync(string sql, int maxRows = 1000, int timeoutSeconds = 30, CancellationToken cancel = default,
             Action? schemaChanged = null)
         {
-            var result = await new PgExecuteRunner().RunAsync(Connection, sql, State, maxRows, timeoutSeconds, TimeSpan.FromMinutes(5), cancel, schemaChanged);
+            var result = await new PgExecuteRunner().RunAsync(Connection, sql, State, maxRows, timeoutSeconds, TimeSpan.FromMinutes(5), cancel, schemaChanged,
+                schemaChange: SchemaChange);
             State = (TransactionState)result.TransactionState;
             return result;
         }
@@ -490,5 +496,87 @@ public class PgExecuteRunnerTests
             text.Contains("certificate", StringComparison.OrdinalIgnoreCase) || text.Contains("SSL", StringComparison.OrdinalIgnoreCase)
             || text.Contains("TLS", StringComparison.OrdinalIgnoreCase),
             "The failure should name the TLS problem: " + ex.Message);
+    }
+
+    // ── A change inside a transaction is reported when the transaction ends (FR-043) ─────────────
+
+    [SkippableFact]
+    public async Task A_change_inside_an_open_transaction_is_reported_by_the_run_that_ends_the_transaction()
+    {
+        await using var s = await Session.OpenAsync();
+        var calls = 0;
+
+        var first = await s.RunAsync("BEGIN;\nCREATE TABLE a (x int);", schemaChanged: () => calls++);
+        Assert.Equal(0, calls);                                   // another connection cannot see the table yet
+        Assert.False(first.SchemaChanged);
+        Assert.True(s.SchemaChangePending);
+
+        await s.RunAsync("SELECT 1;", schemaChanged: () => calls++);
+        Assert.Equal(0, calls);                                   // still open
+        Assert.True(s.SchemaChangePending);
+
+        var last = await s.RunAsync("COMMIT;", schemaChanged: () => calls++);
+        Assert.Equal(1, calls);
+        Assert.True(last.SchemaChanged);
+        Assert.False(s.SchemaChangePending);
+    }
+
+    [SkippableFact]
+    public async Task A_change_committed_in_the_same_run_is_reported_at_once()
+    {
+        await using var s = await Session.OpenAsync();
+        var calls = 0;
+
+        var result = await s.RunAsync("BEGIN;\nCREATE TABLE a (x int);\nCOMMIT;", schemaChanged: () => calls++);
+
+        Assert.Equal(1, calls);
+        Assert.True(result.SchemaChanged);
+        Assert.False(s.SchemaChangePending);
+    }
+
+    [SkippableFact]
+    public async Task A_change_made_before_a_transaction_opens_in_the_same_run_is_reported_at_once()
+    {
+        await using var s = await Session.OpenAsync();
+        var calls = 0;
+
+        var result = await s.RunAsync("CREATE TABLE a (x int);\nBEGIN;\nINSERT INTO a VALUES (1);", schemaChanged: () => calls++);
+
+        Assert.Equal(1, calls);                                   // the table was created outside the transaction: visible already
+        Assert.True(result.SchemaChanged);
+        Assert.Equal(TransactionState.Open, s.State);
+        Assert.False(s.SchemaChangePending);
+    }
+
+    [SkippableFact]
+    public async Task A_change_whose_transaction_ends_before_another_begins_is_reported_in_that_run()
+    {
+        await using var s = await Session.OpenAsync();
+        var calls = 0;
+
+        var result = await s.RunAsync("BEGIN;\nCREATE TABLE b (x int);\nCOMMIT;\nBEGIN;\nSELECT 1;", schemaChanged: () => calls++);
+
+        Assert.Equal(1, calls);
+        Assert.True(result.SchemaChanged);
+        Assert.Equal(TransactionState.Open, s.State);
+        Assert.False(s.SchemaChangePending);
+    }
+
+    [SkippableFact]
+    public async Task A_change_kept_in_a_transaction_survives_a_run_that_does_not_end_it_and_is_paid_by_ROLLBACK_too()
+    {
+        await using var s = await Session.OpenAsync();
+        var calls = 0;
+
+        await s.RunAsync("BEGIN;\nCREATE TABLE c (x int);\nSELECT * FROM nope;", schemaChanged: () => calls++);   // the failure aborts the transaction
+        Assert.Equal(0, calls);
+        Assert.Equal(TransactionState.Aborted, s.State);
+        Assert.True(s.SchemaChangePending);
+
+        var result = await s.RunAsync("ROLLBACK;", schemaChanged: () => calls++);
+
+        Assert.Equal(1, calls);                                   // the catalog is read again once the transaction is gone, whichever way it ended
+        Assert.True(result.SchemaChanged);
+        Assert.False(s.SchemaChangePending);
     }
 }

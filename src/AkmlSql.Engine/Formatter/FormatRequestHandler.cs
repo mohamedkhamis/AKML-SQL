@@ -55,12 +55,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
         return session == null ? null : schemaCache.GetCache(sessionId, session.DatabaseName);
     }
 
-    public FormatResponse HandleFormatPostgres(FormatRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    public async Task<FormatResponse> HandleFormatPostgresAsync(FormatRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
             var profile = PostgresProfile(request.ProfileName, request.ProfileJson, out var warning);
-            return _postgres.Format(request.Text, profile, request.Actions, CacheOf(request.SessionId, schemaCache, sessions), warning);
+            return await _postgres.FormatAsync(request.Text, profile, request.Actions, CacheOf(request.SessionId, schemaCache, sessions), warning).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -74,12 +74,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
-    public FormatSelectionResponse HandleFormatSelectionPostgres(FormatSelectionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    public async Task<FormatSelectionResponse> HandleFormatSelectionPostgresAsync(FormatSelectionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
             var profile = PostgresProfile(request.ProfileName, request.ProfileJson, out var warning);
-            return _postgres.FormatSelection(request, profile, CacheOf(request.SessionId, schemaCache, sessions), warning);
+            return await _postgres.FormatSelectionAsync(request, profile, CacheOf(request.SessionId, schemaCache, sessions), warning).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -88,12 +88,12 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
-    public FormatActionResponse HandleFormatActionPostgres(FormatActionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
+    public async Task<FormatActionResponse> HandleFormatActionPostgresAsync(FormatActionRequest request, SchemaCacheManager? schemaCache, SessionManager? sessions)
     {
         try
         {
             var profile = PostgresProfile(request.ProfileName, request.ProfileJson, out _);
-            return _postgres.RunAction(request, profile, CacheOf(request.SessionId, schemaCache, sessions));
+            return await _postgres.RunActionAsync(request, profile, CacheOf(request.SessionId, schemaCache, sessions)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -102,11 +102,11 @@ public class FormatRequestHandler(ProfileManager profileManager)
         }
     }
 
-    public FormatPreviewResponse HandleFormatPreviewPostgres(FormatPreviewRequest request)
+    public async Task<FormatPreviewResponse> HandleFormatPreviewPostgresAsync(FormatPreviewRequest request)
     {
         try
         {
-            return _postgres.Preview(request.SampleText, ProfileSerializer.Deserialize(request.ProfileJson));
+            return await _postgres.PreviewAsync(request.SampleText, ProfileSerializer.Deserialize(request.ProfileJson)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

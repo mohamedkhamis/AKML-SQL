@@ -39,7 +39,11 @@ namespace AkmlSql.Engine.Handlers.Control
                 ? known.Kind
                 : DatabaseKindNames.FromInt(request.Kind);
             if (kind == DatabaseKind.PostgreSql)
+            {
+                if (ctx != null && ctx.PostgresSchemaMetadata == null)                   // FR-093: the feature was off when the engine started
+                    return new ListDatabasesResponse { Ok = false, ErrorMessage = DialectErrors.FeatureOffMessage };
                 return await ListPostgresAsync(request, ctx, ct).ConfigureAwait(false);
+            }
 
             // Spec 041 (R25): the database selector lists with the connection the engine already holds, so the
             // browser never resends a password. The alias and the guard below judge it like any other request.

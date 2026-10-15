@@ -225,6 +225,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042 (FR-016): the transaction state after the script (0 None, 1 Open, 2 Aborted); always 0 for SQL Server.</summary>
         [Key(13)]
         public int TransactionState { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-043): the engine started reloading its catalog after this run, because a statement changed it and the change is
+        /// visible to other connections (the transaction it ran in has ended). A client that shows the schema refetches it when this is
+        /// true. False for SQL Server, and for a change inside a transaction that is still open (the reload follows the run that ends it).
+        /// </summary>
+        [Key(14)]
+        public bool SchemaChanged { get; set; }
     }
 
     /// <summary>Spec 041 (R20) — one server or engine message of an execute, in stream order.</summary>

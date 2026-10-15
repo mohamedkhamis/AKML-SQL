@@ -37,6 +37,10 @@ public class PgApplyRunnerTests
 
         CREATE TABLE strict_t (id int PRIMARY KEY, code text UNIQUE NOT NULL, qty int CHECK (qty >= 0));
         INSERT INTO strict_t VALUES (1, 'a', 1), (2, 'b', 2);
+
+        CREATE TYPE "Mood" AS ENUM ('sad', 'happy');
+        CREATE TABLE moods (id int PRIMARY KEY, m "Mood");
+        INSERT INTO moods VALUES (1, 'sad');
         """;
 
     private static readonly string[] ItemColumns = { "id", "name", "price", "added", "tags", "meta", "flag", "cnt", "uid", "ts" };
@@ -413,5 +417,29 @@ public class PgApplyRunnerTests
         Assert.Contains("aborted", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ROLLBACK", result.ErrorMessage);
         Assert.Equal(before, await db.ChecksumAsync("items"));
+    }
+
+    // ---- a type the server would fold if the cast did not quote it -------------------------------------------------
+
+    [SkippableFact]
+    public async Task A_column_of_a_mixed_case_user_type_is_written_with_the_type_name_the_driver_shows()
+    {
+        // The type is in the seed: the driver reads the server's types when the connection opens, and a type made later on the
+        // same connection is reported as "-.-" until the types are read again (a separate matter from the cast).
+        await using var db = await Db.OpenAsync();
+
+        // What the grid is told about the column: the driver's display form.
+        string shown;
+        await using (var command = new NpgsqlCommand("SELECT m FROM moods", db.Connection))
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            shown = reader.GetDataTypeName(0);
+        }
+        Assert.Equal("public.Mood", shown);                     // unquoted: the cast must add the quotes
+
+        var result = await db.ApplyAsync(Request("moods", null, Update(new[] { C("m", "happy", shown) }, Id(1))));
+
+        Assert.Equal(ExecuteStatus.Ok, result.Status);
+        Assert.Equal("happy", await db.ScalarAsync("SELECT m::text FROM moods WHERE id = 1"));
     }
 }

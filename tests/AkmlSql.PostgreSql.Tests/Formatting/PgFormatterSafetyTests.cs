@@ -213,4 +213,19 @@ public class PgFormatterSafetyTests
         document.Set("casing.builtInDataTypes", types);
         return new SqlPromptStyle(document);
     }
+
+    [Fact]
+    public async Task The_awaitable_form_gives_the_result_of_the_blocking_one_and_reports_a_syntax_error_as_a_diagnostic()
+    {
+        const string sql = "select a,b from t where c=1";
+
+        var blocking = PgFormatter.Format(sql, Style);
+        var awaited = await PgFormatter.FormatAsync(sql, Style);
+        Assert.True(awaited.Success);
+        Assert.Equal(blocking.Text, awaited.Text);
+
+        var broken = await PgFormatter.FormatAsync("select from where", Style);
+        Assert.False(broken.Success);
+        Assert.StartsWith("Not formatted:", Assert.Single(broken.Diagnostics).Message);
+    }
 }

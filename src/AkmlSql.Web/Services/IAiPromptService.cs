@@ -95,7 +95,7 @@ internal sealed class AiPromptService : IAiPromptService
     public async Task<string> FixAsync(string failingSql, AiErrorInfo error, CancellationToken ct)
     {
         var call = await PrepareAsync("fix", failingSql, isSql: true, ct).ConfigureAwait(false);
-        var (system, user) = await BuildFixAsync(failingSql, call.Outbound.Text, error, ct).ConfigureAwait(false);
+        var (system, user) = await BuildFixAsync(failingSql, call.Outbound, error, ct).ConfigureAwait(false);
         return await SendAsync(call, system, user, ct).ConfigureAwait(false);
     }
 
@@ -136,7 +136,7 @@ internal sealed class AiPromptService : IAiPromptService
     public async IAsyncEnumerable<string> FixStreamAsync(string failingSql, AiErrorInfo error, [EnumeratorCancellation] CancellationToken ct)
     {
         var call = await PrepareAsync("fix", failingSql, isSql: true, ct).ConfigureAwait(false);
-        var (system, user) = await BuildFixAsync(failingSql, call.Outbound.Text, error, ct).ConfigureAwait(false);
+        var (system, user) = await BuildFixAsync(failingSql, call.Outbound, error, ct).ConfigureAwait(false);
         await foreach (var tok in StreamAsync(call, system, user, ct).ConfigureAwait(false)) yield return tok;
     }
 
@@ -169,11 +169,13 @@ internal sealed class AiPromptService : IAiPromptService
         return ExplainPrompt.Build(schemaText, outboundSql, _gate.Dialect, _gate.ServerVersion);
     }
 
-    private async Task<(string System, string User)> BuildFixAsync(string failingSql, string outboundSql, AiErrorInfo error, CancellationToken ct)
+    private async Task<(string System, string User)> BuildFixAsync(string failingSql, AiOutbound outbound, AiErrorInfo error, CancellationToken ct)
     {
         var schemaText = await _schema.GetSchemaTextAsync("fix", failingSql, ct).ConfigureAwait(false);
+        // The server's error goes the same way as the script (FR-081): with the literals it repeats replaced, and without a detail that could hold row data.
+        var sent = outbound.Protect(error);
         return FixPrompt.Build(
-            schemaText, outboundSql, error.Message, error.Number, _gate.Dialect, _gate.ServerVersion, error.SqlState, error.Detail, error.Hint);
+            schemaText, outbound.Text, sent.Message, sent.Number, _gate.Dialect, _gate.ServerVersion, sent.SqlState, sent.Detail, sent.Hint);
     }
 
     private async Task<(string System, string User)> BuildOptimizeAsync(string selectedSql, string outboundSql, CancellationToken ct)

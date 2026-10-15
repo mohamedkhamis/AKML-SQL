@@ -43,9 +43,9 @@ namespace AkmlSql.Engine
 
         /// <summary>
         /// Spec 042: the PostgreSQL catalog provider (<c>pg_catalog</c> queries). Null in contexts that never serve a
-        /// PostgreSQL session (most unit tests); <c>EngineComposition.Build</c> assigns it.
+        /// PostgreSQL session (most unit tests); <c>EngineComposition.Build</c> assigns it from the settings it has loaded.
         /// </summary>
-        public ISchemaMetadataProvider? PostgresSchemaMetadata { get; init; }
+        public ISchemaMetadataProvider? PostgresSchemaMetadata { get; set; }
 
         /// <summary>
         /// Spec 042: the catalog provider for a session's database kind, or null when none is registered. SQL Server

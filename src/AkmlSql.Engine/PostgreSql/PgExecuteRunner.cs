@@ -52,14 +52,18 @@ public sealed class PgExecuteRunner
     /// <param name="commandTimeoutSeconds">The timeout of each statement.</param>
     /// <param name="scriptLimit">How long the whole script may take; null is the statement timeout for each statement, as for SQL Server scripts.</param>
     /// <param name="cancel">The user's cancel.</param>
-    /// <param name="schemaChanged">Called once, after the run, when a statement that changes the catalog succeeded (FR-043).
-    /// A failure further on does not take it back: the earlier statement is applied.</param>
+    /// <param name="schemaChanged">Called once, after the run, when a statement that changes the catalog succeeded and the change is
+    /// visible to other connections (FR-043): outside a transaction, or once the transaction it ran in has ended. A failure further on
+    /// does not take it back: the earlier statement is applied.</param>
     /// <param name="includeProvenance">True when the client wants to edit results (FR-130): the result sets of statements that return
     /// a table's rows say where each column comes from and whether the set can be edited, or why it cannot.</param>
-    /// <returns>The reply, with <see cref="ExecuteQueryResult.TransactionState"/> set; never throws for a failing statement.</returns>
+    /// <param name="schemaChange">What the session carries between runs: whether a change made inside a transaction still awaits that
+    /// transaction's end. Read at the start and written at the end of the run.</param>
+    /// <returns>The reply, with <see cref="ExecuteQueryResult.TransactionState"/> and <see cref="ExecuteQueryResult.SchemaChanged"/> set;
+    /// never throws for a failing statement.</returns>
     public async Task<ExecuteQueryResult> RunAsync(NpgsqlConnection connection, string sql, TransactionState transaction,
         int maxRows, int commandTimeoutSeconds, TimeSpan? scriptLimit, CancellationToken cancel, Action? schemaChanged = null,
-        bool includeProvenance = false)
+        bool includeProvenance = false, PgSchemaChangeState? schemaChange = null)
     {
         sql ??= string.Empty;
         var outcome = new ExecuteOutcome();
@@ -69,7 +73,7 @@ public sealed class PgExecuteRunner
         if (statements.Count > ExecuteOutcome.MaxBatches)
         {
             outcome.RefuseScript(ExecuteOutcome.TooManyBatchesText(statements.Count));
-            return Finish(outcome, connection, transaction);
+            return Finish(outcome, connection, transaction, schemaChanged: false);
         }
         outcome.ReserveBatches(statements.Count);
 
@@ -101,7 +105,8 @@ public sealed class PgExecuteRunner
         var state = transaction;
         var ran = 0;
         var stopped = false;
-        var changedSchema = false;
+        var owed = schemaChange?.Pending ?? false;       // a change inside a transaction that has not ended yet
+        var reload = false;                                // a change other connections can see: the catalog is read again after the run
         connection.Notice += OnNotice;
         try
         {
@@ -118,7 +123,18 @@ public sealed class PgExecuteRunner
                 if (fate.Kind == Fate.Ran)
                 {
                     ran++;
-                    changedSchema |= PgCommandTags.ChangesSchema(fate.Tag);
+                    // A change is there for the catalog reader (another connection) once no transaction holds it: at once outside a
+                    // transaction, otherwise when the transaction ends - in this run or a later one (FR-043).
+                    if (PgCommandTags.ChangesSchema(fate.Tag))
+                    {
+                        if (fate.State == TransactionState.None) reload = true;
+                        else owed = true;
+                    }
+                    else if (owed && fate.State == TransactionState.None)
+                    {
+                        reload = true;
+                        owed = false;
+                    }
                     continue;
                 }
 
@@ -162,7 +178,8 @@ public sealed class PgExecuteRunner
             connection.Notice -= OnNotice;
         }
 
-        if (changedSchema) NotifySchemaChanged(schemaChanged);
+        if (reload) NotifySchemaChanged(schemaChanged);
+        if (schemaChange != null) schemaChange.Pending = owed;
 
         if (stopped)
         {
@@ -171,7 +188,17 @@ public sealed class PgExecuteRunner
         }
         if (state == TransactionState.Aborted) outcome.AddSystem(AbortedTransactionText);
 
-        return Finish(outcome, connection, state);
+        return Finish(outcome, connection, state, reload);
+    }
+
+    /// <summary>
+    /// Spec 042 (FR-043): what a session carries from one run to the next for the catalog reload - whether a change made inside a
+    /// transaction still awaits that transaction's end. It belongs to the persistent connection, so a connection that is reopened or
+    /// replaced (the transaction is gone with it) owes nothing.
+    /// </summary>
+    public sealed class PgSchemaChangeState
+    {
+        public bool Pending { get; set; }
     }
 
     private enum Fate { Ran, Failed, Skipped, TimedOut, Cancelled, Disconnected }
@@ -190,7 +217,7 @@ public sealed class PgExecuteRunner
         TransactionState state, int maxRows, int timeoutSeconds, ExecuteOutcome outcome, bool includeProvenance, CancellationToken ct)
     {
         // Never sent: what is not SQL, or needs the client to stream data (FR-019).
-        if (statement.IsMetaCommand || PgStatementInspector.UsesClientCopy(statement.Text))
+        if (statement.IsMetaCommand || PgStatementInspector.UsesClientCopy(statement))
         {
             var text = statement.IsMetaCommand ? PgErrorHints.MetaCommandSkipped(statement.Text) : PgErrorHints.ClientCopySkipped();
             outcome.AddPostgresMessage(ExecuteMessageKind.Error, text, severity: 0, line: statement.StartLine, column: statement.StartColumn);
@@ -209,7 +236,7 @@ public sealed class PgExecuteRunner
 
             // Where the columns come from is asked only for a statement that returns a table's rows, and only when the client
             // wants to edit: it costs one catalog round trip once the rows are read.
-            var collector = includeProvenance && PgStatementInspector.ReturnsRowsOfATable(statement.Text) ? new PgProvenanceCollector() : null;
+            var collector = includeProvenance && PgStatementInspector.ReturnsRowsOfATable(statement) ? new PgProvenanceCollector() : null;
             string? tag;
             await using (var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false))
             {
@@ -224,12 +251,12 @@ public sealed class PgExecuteRunner
 
             // The reader is closed, so the connection can answer the catalog question (primary key, kind of relation).
             if (collector != null) await collector.ResolveAsync(connection, ct).ConfigureAwait(false);
-            return new StatementFate(Fate.Ran, PgTransactionTracker.Next(state, statement.Text, succeeded: true, sqlState: null), tag);
+            return new StatementFate(Fate.Ran, PgTransactionTracker.Next(state, statement, succeeded: true, sqlState: null), tag);
         }
         catch (PostgresException ex)
         {
             ReportServerError(script, statement, ex, outcome);
-            var next = PgTransactionTracker.Next(state, statement.Text, succeeded: false, ex.SqlState);
+            var next = PgTransactionTracker.Next(state, statement, succeeded: false, ex.SqlState);
             // A FATAL error ends the backend: the transaction went with it.
             return connection.State == System.Data.ConnectionState.Open
                 ? new StatementFate(Fate.Failed, next)
@@ -237,12 +264,12 @@ public sealed class PgExecuteRunner
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new StatementFate(Fate.Cancelled, PgTransactionTracker.Next(state, statement.Text, succeeded: false, "57014"));
+            return new StatementFate(Fate.Cancelled, PgTransactionTracker.Next(state, statement, succeeded: false, "57014"));
         }
         catch (NpgsqlException ex) when (ex.InnerException is TimeoutException)
         {
             // The driver sent a cancel request to the server; the backend and the connection are still there.
-            return new StatementFate(Fate.TimedOut, PgTransactionTracker.Next(state, statement.Text, succeeded: false, "57014"));
+            return new StatementFate(Fate.TimedOut, PgTransactionTracker.Next(state, statement, succeeded: false, "57014"));
         }
         catch (Exception ex) when (ex is NpgsqlException or IOException or ObjectDisposedException or InvalidOperationException)
         {
@@ -251,7 +278,7 @@ public sealed class PgExecuteRunner
             // No SQLSTATE and no server number: the text says it all, as for any error the engine raises itself.
             outcome.AddPostgresMessage(ExecuteMessageKind.Error, ex.Message, severity: 0, line: statement.StartLine, column: statement.StartColumn);
             return connection.State == System.Data.ConnectionState.Open
-                ? new StatementFate(Fate.Failed, PgTransactionTracker.Next(state, statement.Text, succeeded: false, sqlState: null))
+                ? new StatementFate(Fate.Failed, PgTransactionTracker.Next(state, statement, succeeded: false, sqlState: null))
                 : new StatementFate(Fate.Disconnected, TransactionState.None);
         }
     }
@@ -266,7 +293,7 @@ public sealed class PgExecuteRunner
 #pragma warning restore CS0618
         var type = PgCommandTag.TypeFromDriverName(driverStatement.StatementType.ToString());
         var rows = driverStatement.Rows > long.MaxValue ? long.MaxValue : (long)driverStatement.Rows;
-        var tag = PgCommandTag.For(statement.Text, type, rows);
+        var tag = PgCommandTag.For(statement, type, rows);
         if (tag.Tag.Length > 0) outcome.AddCommandTag(tag.Tag, tag.RowCount);
         return tag.Tag;
     }
@@ -285,11 +312,12 @@ public sealed class PgExecuteRunner
         outcome.AddPostgresMessage(ExecuteMessageKind.Error, ex.MessageText, ErrorSeverity, ex.SqlState, ex.Detail, hint, line, column);
     }
 
-    private static ExecuteQueryResult Finish(ExecuteOutcome outcome, NpgsqlConnection connection, TransactionState state)
+    private static ExecuteQueryResult Finish(ExecuteOutcome outcome, NpgsqlConnection connection, TransactionState state, bool schemaChanged)
     {
         var result = outcome.Build(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         result.TransactionState = (int)state;
         result.CurrentDatabase = DatabaseOf(connection);
+        result.SchemaChanged = schemaChanged;
         return result;
     }
 

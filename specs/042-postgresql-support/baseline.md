@@ -284,6 +284,63 @@ driver's sentence. Tests: no case used an expired or future authority or an inte
 real driver exception was never used offline; two of three call sites were untested; the suite took 40 s because `localhost` resolved to `::1` first (now 127.0.0.1 with an address in the certificate, 14 s). One trap found on the way:
 Windows remembers certificates by subject name, so two test authorities with one name and different keys make a chain fail its signature check instead of reporting a missing issuer; each test authority now has a name of its own.
 
+## Code review of PR #256 - the fourteen findings and their fixes (2026-10-15)
+
+The review (`/code-review` at xhigh effort over every source change of the PR) reported 14 findings; all 14 were acted on in one pass.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | AI Fix sent the server's DETAIL/HINT to a cloud provider unredacted | `AiOutbound.Protect`: on a redacted call the message and hint get the script's literals replaced by their placeholders; the detail, which can hold row data, is not sent. Local providers and SQL Server unchanged |
+| 2 | A dollar-quoted body after AS/DO was redacted "as code" whatever its LANGUAGE | `PgLiteralRedactor` reads each statement's LANGUAGE ahead (before or after the body); only SQL, PL/pgSQL or none is read as code, anything else is one literal |
+| 3 | Statement boundaries were quadratic in script length | `PgPositions.Cursor`; 20,000 statements in well under 5 s |
+| 4 | A CREATE/ALTER/DROP inside an open transaction reloaded the catalog (invisibly) and COMMIT never did | The reload waits for the run that ends the transaction; `SessionConnection.SchemaChangePending`; `ExecuteQueryResult.SchemaChanged` (key 14) tells the browser |
+| 5 | A refresh during Phase B only marked the cache stale, which nothing read | `SchemaRefreshService` carries it out once the load has settled, once per load |
+| 6 | Edits on columns of mixed-case user types failed: `$1::public.Mood` was folded | `PgCrudWriteGenerator.CastType` quotes the parts that need it, outside the modifier and array brackets |
+| 7 | `postgreSql.enabled = false` still let a PostgreSQL session exist and fall into the T-SQL engines | ConnectionChanged ignores the request; TestSqlConnection and ListDatabases answer `DialectErrors.FeatureOffMessage` |
+| 8 | `PgFormatter.Format` blocked a thread on its parse tasks inside the handler path | `FormatAsync`/`FormatSelectionAsync` are the cores; the format service, the request handler and the four handlers await them; the blocking forms remain for tools and tests |
+| 9 | Triggers and GRANT/REVOKE with the word UPDATE raised "UPDATE without WHERE" | An UPDATE or DELETE is a statement only when it starts the text (past EXPLAIN) or follows `(` or `)` |
+| 10 | Each statement was re-lexed three or four times for its first words | `PgLeadingWords`; the splitter records them on `PgStatement.LeadingWords` during its one walk; the tag, the tracker and the inspectors read them |
+| 11 | `$SERVER$`/`$USER$` expanded empty on PostgreSQL (the SQL Server builder threw) | The PostgreSQL builder: `host:port` and the user name |
+| 12 | `SessionState.TransactionState` was written and never read | Removed; the state lives on the persistent connection |
+| 13 | `PostgresFormatRefusal` described the pre-US7 behaviour | `PostgresFormatDispatch.IsPostgres` |
+| 14 | `EngineComposition` read `config.json` twice | One read through `ctx.EnsureSettings()` |
+
+**Tests added or changed**: `SchemaRefreshServiceTests` (new, 4), `PostgresFlagRegistrationTests` (+3), `PgCrudWriteGeneratorTests` (+11), `PgApplyRunnerTests` (+1 live, with `CREATE TYPE "Mood"`), `PgExecuteRunnerTests`
+(+2 live, +1), `PgStatementBoundariesTests` (+2), `SnippetHandlersTests` (+1), `PgLiteralRedactorTests` (+3), `PgDestructiveStatementCheckTests` (+13 cases), `PgStatementSplitterTests` (+2),
+`AiPromptDialectTests` (+2), `PgFormatterSafetyTests` (+1); `SessionManagerKindTests` and `SessionDatabaseHandlersPgTests` moved to the connection's state.
+
+**The suites after the fixes** (Debug, the private PostgreSQL 18 cluster): `AkmlSql.PostgreSql.Tests` 2,226 passed; `AkmlSql.AI.Tests` 92 passed; `AkmlSql.Core.Tests` 1,457 passed, 1 failed (the known
+`ProfileGet` key-layout test, red before the feature); `AkmlSql.Web.Tests` 1,476 passed, 66 failed (the known sp031 formatter goldens, red before the feature); `AkmlSql.Engine.Tests` without the 20-minute
+performance baseline 2,570 passed, 3 failed on time budgets while the review agents loaded the machine (`RefactoringPerformanceTests.SC001` 100 ms against < 100, two `HistoryScaleTests` at 256 and 279 ms
+against 250) - all three pass alone (4 of 4).
+
+**Adversarial verification of the fixes** (14 judges, one per finding, each claimed problem tried by 2 skeptics, plus a completeness critic over the whole diff; 65 agents): 20 problems
+confirmed, 5 refuted, 11 sweep items. All were acted on in a second round:
+
+- Fix prompt (1): protection is now a property of the call, not of the placeholder map, so a script with no literal and the "Send anyway" consent path also withhold the detail; the script's
+  literals are masked in one pass, as written and as a value, only as whole words (a literal `'in'` is not found in "invalid"; a lone space names nothing); in a data error (SQLSTATE 22) every
+  other quoted value of the message, which may come from a row, becomes `(value not sent)`.
+- Redactor (2): a non-SQL language sticks for the rest of its statement (two functions sharing a statement after a missing semicolon), a psql meta-command ends a statement, and a table named
+  `language` no longer hides the `LANGUAGE` word after it.
+- Reload after DDL (4): the owed reload is carried in `PgSchemaChangeState` on the session's connection, never re-read from the capped message list; visibility is judged per statement, so a
+  change made before a `BEGIN` in the same run, or committed before another `BEGIN`, is reported at once; the web's rule is `SchemaChangeSignal`, with its own tests.
+- Refresh during a load (5): "a load is running" is the population claim, not the phase (a failed Phase B leaves PhaseA with nothing running, and is refreshable at once); the refresh takes
+  the claim like every other load; a deferred refresh is dropped when the session moved to another database meanwhile.
+- Feature off (7): the gate is the start-up decision (the catalog reader exists only when the feature was on), not settings re-read later, so a switch flipped at runtime waits for a restart like the registrations.
+- Safety check (9): `PREPARE ... AS`, a rule's `DO INSTEAD` / `DO ALSO` action, the statements of a `BEGIN ATOMIC` body and the statement after a `WITH` clause ending in `SEARCH` / `CYCLE` are checked again.
+- Tests that could not fail were made to (the never-settles refresh, the recorded leading words); the live Apply test puts the type in the seed and pins the driver's `public.Mood`; a Build-level
+  test pins the quoted cast; the contracts (`contracts/ipc.md`, `data-model.md`, `plan.md`), `doc/ipc-api.md` and `doc/configuration.md` describe key 14, the moved transaction state and the
+  feature-off refusal; the BOMs a scripted edit had added to three files were removed.
+- Left as known limits: a lower-case user type whose name has a space is shown unquoted by the driver and cannot be told from a built-in; the faulted-parse half of finding 8 is verified by reading
+  (`PgParser` is static, so a throwing parse cannot be injected without a test-only seam).
+
+**After the second round** (the private cluster): the PostgreSQL library tests of the changed areas 212 passed; the web AI-prompt and schema-signal tests 37 passed; the engine's changed handlers, runner,
+Apply, refresh and TLS tests 237 passed, live. The full suites again: `AkmlSql.PostgreSql.Tests` 2,237 passed; `AkmlSql.Web.Tests` without the known sp031 goldens 1,476 passed; `AkmlSql.Engine.Tests`
+without the performance baseline 2,576 passed, with the same three time-budget tests red under the load of the verification agents and green alone.
+
+**Seen on the way, not fixed here**: the driver reports a column's type as `-.-` when the type was created on the same connection after it opened (its type cache dates from the open), so a grid edit on such a column is
+refused until the connection is reopened; a reload of the driver's types after a `CREATE TYPE` would remove it.
+
 ## Quickstart section 2 - the walk-through (task T179)
 
 Nobody walked these scenarios by hand. Each step is mapped to the automated test that performs the same steps against the private PostgreSQL 18 cluster and the Debug

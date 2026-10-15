@@ -147,4 +147,39 @@ public class PgDestructiveStatementCheckTests
         // GO is a client batch word in SQL Server; PostgreSQL has none, so it is just an unknown statement here
         Assert.Empty(Types("SELECT 1\nGO\nSELECT 2"));
     }
+
+    [Theory]
+    [InlineData("CREATE TRIGGER trg BEFORE UPDATE ON t FOR EACH ROW EXECUTE FUNCTION f();")]
+    [InlineData("CREATE TRIGGER trg AFTER INSERT OR UPDATE OR DELETE ON t FOR EACH ROW EXECUTE FUNCTION f();")]
+    [InlineData("CREATE TRIGGER trg INSTEAD OF UPDATE ON v FOR EACH ROW EXECUTE FUNCTION f();")]
+    [InlineData("GRANT SELECT, UPDATE ON t TO app;")]
+    [InlineData("REVOKE UPDATE ON t FROM app;")]
+    [InlineData("GRANT DELETE ON t TO app;")]
+    [InlineData("CREATE POLICY p ON t FOR UPDATE USING (true);")]
+    [InlineData("CREATE RULE r AS ON UPDATE TO t DO NOTHING;")]
+    [InlineData("ALTER TABLE t ADD FOREIGN KEY (a) REFERENCES p (id) ON UPDATE CASCADE ON DELETE CASCADE;")]
+    public void A_clause_that_names_UPDATE_or_DELETE_is_not_a_statement_that_touches_rows(string sql) => Assert.Empty(Types(sql));
+
+    [Theory]
+    [InlineData("EXPLAIN UPDATE t SET a = 1", SafetyWarningType.UpdateWithoutWhere)]
+    [InlineData("WITH x AS (SELECT 1) UPDATE t SET a = 1", SafetyWarningType.UpdateWithoutWhere)]
+    [InlineData("WITH d AS (DELETE FROM t RETURNING *) SELECT * FROM d", SafetyWarningType.DeleteWithoutWhere)]
+    [InlineData("WITH u AS (UPDATE t SET a = 1 RETURNING *) SELECT * FROM u", SafetyWarningType.UpdateWithoutWhere)]
+    public void A_statement_of_its_own_is_still_checked_wherever_it_stands(string sql, SafetyWarningType expected) =>
+        Assert.Equal(new[] { expected }, Types(sql));
+
+    [Theory]
+    [InlineData("PREPARE p AS DELETE FROM t", SafetyWarningType.DeleteWithoutWhere)]
+    [InlineData("CREATE RULE r AS ON INSERT TO t DO INSTEAD DELETE FROM log", SafetyWarningType.DeleteWithoutWhere)]
+    [InlineData("CREATE RULE r AS ON UPDATE TO t DO ALSO UPDATE audit SET n = n + 1", SafetyWarningType.UpdateWithoutWhere)]
+    [InlineData("CREATE FUNCTION f() RETURNS void LANGUAGE sql BEGIN ATOMIC UPDATE t SET a = 1; END", SafetyWarningType.UpdateWithoutWhere)]
+    [InlineData("CREATE FUNCTION f() RETURNS void LANGUAGE sql BEGIN ATOMIC SELECT 1; DELETE FROM t; END", SafetyWarningType.DeleteWithoutWhere)]
+    [InlineData("WITH RECURSIVE r AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM r WHERE n < 3) CYCLE n SET is_cycle USING path UPDATE t SET a = 1", SafetyWarningType.UpdateWithoutWhere)]
+    public void A_statement_defined_or_prepared_inside_another_is_still_checked(string sql, SafetyWarningType expected) =>
+        Assert.Equal(new[] { expected }, Types(sql));
+
+    [Theory]
+    [InlineData("WITH x AS (SELECT 1) INSERT INTO t (a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = 1")]
+    [InlineData("WITH x AS (SELECT 1) SELECT * FROM t FOR UPDATE")]
+    public void A_clause_after_a_WITH_is_still_a_clause(string sql) => Assert.Empty(Types(sql));
 }

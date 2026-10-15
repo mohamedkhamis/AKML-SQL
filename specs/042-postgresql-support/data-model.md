@@ -45,9 +45,8 @@ Existing fields plus:
 | Kind | DatabaseKind | from `ConnectionInfo.Kind` |
 | ServerVersionText | string | PostgreSQL `server_version` (e.g. `18.1`) for the status bar |
 | SearchPath | string[] | `current_schemas(false)` captured at connect and after a successful `SET search_path` statement |
-| TransactionState | TransactionState | see §9 |
 
-`SessionConnection` holds a `DbConnection` and the `Kind`; `RunExclusiveAsync` is unchanged in
+`SessionConnection` holds a `DbConnection`, the `Kind`, the transaction state (§9) and whether a change made inside a transaction still awaits its end (FR-043); `RunExclusiveAsync` is unchanged in
 shape. The web engine's `ServerCanonicalIdentity` for a PostgreSQL session is `pg://{host}:{port}`
 lower-cased.
 
@@ -114,6 +113,7 @@ entries deliberately left out; SC-006 counts coverage as entries + omissions ove
   (new keys 10–13; `Number` = 0; `Severity` = 16 for ERROR and above so the existing "error when
   ≥ 11" rule holds, 10 for notices).
 - `TransactionState` (new key 13) after the run.
+- `SchemaChanged` (new key 14): the engine started reloading its catalog after the run (FR-043); false while the change waits in an open transaction - the run that ends it reports it.
 - Statuses: Ok, Error (stopped at statement N), TimedOut, Skipped (meta-command / COPY FROM
   STDIN), Disconnected, NoReply as today.
 

@@ -392,4 +392,108 @@ public sealed class AiPromptDialectTests
     {
         public Task<string> GetSchemaTextAsync(string featureId, string? promptOrSql, CancellationToken ct) => Task.FromResult(string.Empty);
     }
+
+    [Fact]
+    public async Task Fix_on_a_cloud_provider_masks_the_scripts_literals_in_the_error_and_keeps_the_detail_back()
+    {
+        var rig = Rig.Build(SqlDialect.PostgreSql, "anthropic");
+        rig.Redactor.Result = new PostgresRedaction(true, Redacted, Map, null);
+        var error = new AiErrorInfo("invalid input syntax for type integer: \"UK\"", 0, "22P02",
+            "Key (country)=(UK) already exists, and row (1, bob@corp.com) failed.", "Perhaps you meant 'UK' as text, not 30.");
+
+        await rig.Service.FixAsync(Script, error, CancellationToken.None);
+
+        var user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains("Error Message: invalid input syntax for type integer: \"__STR_0__\"", user);   // the literal, as the script carries it
+        Assert.Contains("Hint: Perhaps you meant '__STR_0__' as text, not __NUM_0__.", user);
+        Assert.Contains("Detail: (not sent", user);                                                     // row data the script never had
+        Assert.DoesNotContain("UK", user);
+        Assert.DoesNotContain("bob@corp.com", user);
+        Assert.DoesNotContain("Key (country)", user);
+    }
+
+    [Fact]
+    public async Task Fix_on_a_cloud_provider_sends_an_error_that_names_no_literal_as_it_is()
+    {
+        var rig = Rig.Build(SqlDialect.PostgreSql, "anthropic");
+        rig.Redactor.Result = new PostgresRedaction(true, Redacted, Map, null);
+        var error = new AiErrorInfo("relation \"custmers\" does not exist", 0, "42P01", null, "Perhaps you meant customers.");
+
+        await rig.Service.FixAsync(Script, error, CancellationToken.None);
+
+        var user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains("relation \"custmers\" does not exist", user);
+        Assert.Contains("Hint: Perhaps you meant customers.", user);
+        Assert.DoesNotContain("Detail:", user);
+    }
+
+    [Fact]
+    public async Task Fix_on_a_cloud_provider_withholds_the_detail_even_when_the_script_had_no_literal()
+    {
+        var rig = Rig.Build(SqlDialect.PostgreSql, "anthropic");
+        const string script = "INSERT INTO archive SELECT * FROM live";
+        rig.Redactor.Result = new PostgresRedaction(true, script, new Dictionary<string, string>(), null);
+        var error = new AiErrorInfo("duplicate key value violates unique constraint \"archive_pkey\"", 0, "23505", "Key (id)=(42) already exists.", null);
+
+        await rig.Service.FixAsync(script, error, CancellationToken.None);
+
+        var user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains("violates unique constraint \"archive_pkey\"", user);   // an identifier, kept
+        Assert.Contains("Detail: (not sent", user);
+        Assert.DoesNotContain("(42)", user);
+    }
+
+    [Fact]
+    public async Task Fix_sent_with_its_values_on_the_users_say_so_still_withholds_the_detail()
+    {
+        var rig = Rig.Build(SqlDialect.PostgreSql, "anthropic", consent: true);
+        rig.Redactor.Result = PostgresRedaction.Failed("The text ends inside a string literal.");
+        var error = new AiErrorInfo("syntax error at end of input", 0, "42601", "Row (1, bob@corp.com) was being read.", null);
+
+        await rig.Service.FixAsync(Script, error, CancellationToken.None);
+
+        var user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains(Script, user);                                           // as the user chose
+        Assert.Contains("Detail: (not sent", user);
+        Assert.DoesNotContain("bob@corp.com", user);
+    }
+
+    [Fact]
+    public async Task Short_literals_are_masked_only_as_whole_words_so_the_message_stays_readable()
+    {
+        var rig = Rig.Build(SqlDialect.PostgreSql, "anthropic");
+        rig.Redactor.Result = new PostgresRedaction(true, "SELECT first || '__STR_0__' || last FROM people WHERE kind = '__STR_1__'",
+            new Dictionary<string, string> { ["'__STR_0__'"] = "' '", ["'__STR_1__'"] = "'in'" }, null);
+        var error = new AiErrorInfo("column \"first\" does not exist in relation \"people\"", 0, "42703", null, "Perhaps you meant \"first_name\"; it is not in the list.");
+
+        await rig.Service.FixAsync("SELECT first || ' ' || last FROM people WHERE kind = 'in'", error, CancellationToken.None);
+
+        var user = Assert.Single(rig.Client.Requests).UserPrompt;
+        var errorPart = user.Split("Failing SQL:")[0];
+        Assert.Contains("Error Message: column \"first\" does not exist __STR_1__ relation \"people\"", errorPart);   // the whole word is the literal
+        Assert.Contains("Hint: Perhaps you meant \"first_name\"; it is not __STR_1__ the list.", errorPart);
+        Assert.DoesNotContain("__STR_0__", errorPart);                           // a lone space names nothing, and "invalid" is not "in"
+    }
+
+    [Fact]
+    public async Task A_data_error_hides_a_quoted_value_the_script_never_had_and_keeps_a_placeholder_for_one_it_had()
+    {
+        var rig = Rig.Build(SqlDialect.PostgreSql, "anthropic");
+        rig.Redactor.Result = new PostgresRedaction(true, Redacted, Map, null);
+
+        await rig.Service.FixAsync(Script, new AiErrorInfo("invalid input syntax for type integer: \"bob@corp.com\"", 0, "22P02", null, null), CancellationToken.None);
+        var user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains("invalid input syntax for type integer: \"(value not sent)\"", user);
+        Assert.DoesNotContain("bob@corp.com", user);
+
+        rig.Client.Requests.Clear();
+        await rig.Service.FixAsync(Script, new AiErrorInfo("invalid input syntax for type integer: \"UK\"", 0, "22P02", null, null), CancellationToken.None);
+        user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains("invalid input syntax for type integer: \"__STR_0__\"", user);
+
+        rig.Client.Requests.Clear();                                             // not a data error: the quoted names are identifiers
+        await rig.Service.FixAsync(Script, new AiErrorInfo("column \"agee\" of relation \"t\" does not exist", 0, "42703", null, null), CancellationToken.None);
+        user = Assert.Single(rig.Client.Requests).UserPrompt;
+        Assert.Contains("column \"agee\" of relation \"t\" does not exist", user);
+    }
 }

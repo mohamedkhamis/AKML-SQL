@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Server;
 using AkmlSql.Engine.Snippets;
 using AkmlSql.Engine.Transports;
 
@@ -30,20 +31,25 @@ namespace AkmlSql.Engine.Handlers.Snippets
             return Task.FromResult(_inner.HandleExpand(
                 request,
                 session?.DatabaseName,
-                DeriveServerName(session?.ConnectionString),
-                DeriveLogin(session?.ConnectionString),
+                DeriveServerName(session),
+                DeriveLogin(session),
                 dialect));
         }
 
-        // Derive the server from the session's connection string DataSource — the same scrub
-        // SessionManager / SessionTrackerBridge use. Null/empty/unparseable → "" so $SERVER$ falls
-        // back to empty rather than throwing.
-        private static string DeriveServerName(string? connectionString)
+        // Derive the server from the session's connection string — the same scrub SessionManager /
+        // SessionTrackerBridge use. Null/empty/unparseable → "" so $SERVER$ falls back to empty rather
+        // than throwing. Spec 042: a PostgreSQL session's server is host:port, as the web edition names it.
+        internal static string DeriveServerName(SessionState? session)
         {
-            if (string.IsNullOrEmpty(connectionString)) return string.Empty;
+            if (session == null || string.IsNullOrEmpty(session.ConnectionString)) return string.Empty;
             try
             {
-                return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).DataSource ?? string.Empty;
+                if (session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+                {
+                    var pg = new Npgsql.NpgsqlConnectionStringBuilder(session.ConnectionString);
+                    return string.IsNullOrEmpty(pg.Host) ? string.Empty : pg.Host + ":" + pg.Port;
+                }
+                return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(session.ConnectionString).DataSource ?? string.Empty;
             }
             catch { return string.Empty; }
         }
@@ -51,13 +57,15 @@ namespace AkmlSql.Engine.Handlers.Snippets
         // Derive the SQL login from the connection string UserID. Returns "" for integrated-auth
         // (Windows auth) connections so the resolver falls back to Environment.UserName, which is a
         // coherent approximation. Note: live SYSTEM_USER query was intentionally not implemented to
-        // keep the handler sync/IO-free.
-        private static string DeriveLogin(string? connectionString)
+        // keep the handler sync/IO-free. Spec 042: a PostgreSQL session's login is its user name.
+        internal static string DeriveLogin(SessionState? session)
         {
-            if (string.IsNullOrEmpty(connectionString)) return string.Empty;
+            if (session == null || string.IsNullOrEmpty(session.ConnectionString)) return string.Empty;
             try
             {
-                return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString).UserID ?? string.Empty;
+                if (session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+                    return new Npgsql.NpgsqlConnectionStringBuilder(session.ConnectionString).Username ?? string.Empty;
+                return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(session.ConnectionString).UserID ?? string.Empty;
             }
             catch { return string.Empty; }
         }

@@ -16,7 +16,14 @@ public static class PgTransactionTracker
 {
     public const string InFailedSqlTransaction = "25P02";
 
-    public static TransactionState Next(TransactionState state, string statementText, bool succeeded, string? sqlState)
+    public static TransactionState Next(TransactionState state, string statementText, bool succeeded, string? sqlState) =>
+        Next(state, PgLeadingWords.Of(statementText), succeeded, sqlState);
+
+    /// <summary>The same for a statement of a split script, which knows its leading words already.</summary>
+    public static TransactionState Next(TransactionState state, PgStatement statement, bool succeeded, string? sqlState) =>
+        Next(state, statement.LeadingWords, succeeded, sqlState);
+
+    private static TransactionState Next(TransactionState state, IReadOnlyList<string> words, bool succeeded, string? sqlState)
     {
         if (!succeeded)
         {
@@ -26,7 +33,6 @@ public static class PgTransactionTracker
             return state == TransactionState.Open ? TransactionState.Aborted : state;
         }
 
-        var words = LeadingWords(statementText, 8);
         if (words.Count == 0) return state;
 
         switch (words[0])
@@ -70,17 +76,4 @@ public static class PgTransactionTracker
         return false;
     }
 
-    /// <summary>The first <paramref name="max"/> words of a statement, upper-cased, skipping comments.</summary>
-    private static List<string> LeadingWords(string text, int max)
-    {
-        var words = new List<string>();
-        foreach (var token in PgLexicalScanner.Scan(text))
-        {
-            if (token.Kind is PgTokenKind.Whitespace or PgTokenKind.LineComment or PgTokenKind.BlockComment) continue;
-            if (token.Kind != PgTokenKind.Identifier) break;
-            words.Add(text.Substring(token.Start, token.End - token.Start).ToUpperInvariant());
-            if (words.Count == max) break;
-        }
-        return words;
-    }
 }

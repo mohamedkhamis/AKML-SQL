@@ -176,4 +176,29 @@ public class PgStatementSplitterTests
         var expected = native.Value.Statements.Select(s => s.Text.Trim().TrimEnd(';').Trim()).Where(t => t.Length > 0).ToList();
         Assert.Equal(expected, Texts(sql));
     }
+
+    [Fact]
+    public void Each_statement_carries_its_leading_words_read_once_by_the_splitter()
+    {
+        var statements = PgStatementSplitter.Split(
+            "-- note\nCREATE OR REPLACE FUNCTION f(a int) RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql;\n/* c */ \"Quoted\".t;\nselect 1");
+
+        Assert.All(statements, s => Assert.True(s.HasRecordedLeadingWords));                             // recorded, not read again on first use
+        Assert.Equal(new[] { "CREATE", "OR", "REPLACE", "FUNCTION", "F" }, statements[0].LeadingWords);   // stops at the parenthesis
+        Assert.Empty(statements[1].LeadingWords);                                                           // a quoted name is not a word
+        Assert.Equal(new[] { "SELECT" }, statements[2].LeadingWords);
+        foreach (var s in statements) Assert.Equal(PgLeadingWords.Of(s.Text), s.LeadingWords);
+    }
+
+    [Fact]
+    public void Leading_words_stop_at_eight_and_a_statement_made_by_hand_finds_its_own()
+    {
+        var statement = Assert.Single(PgStatementSplitter.Split("ROLLBACK WORK TO SAVEPOINT a b c d e f g"));
+        Assert.Equal(8, statement.LeadingWords.Count);
+
+        var byHand = new PgStatement(0, 8, "select 1", 1, 1, false, false);
+        Assert.False(byHand.HasRecordedLeadingWords);
+        Assert.Equal(new[] { "SELECT" }, byHand.LeadingWords);
+        Assert.True(byHand.HasRecordedLeadingWords);
+    }
 }

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AkmlSql.Core;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
@@ -86,5 +87,29 @@ public class PgStatementBoundariesTests
         Assert.True(pg.Success);
         Assert.Equal(2, pg.AllStatements!.Length);
         Assert.Equal(0, pg.CurrentStatement!.StartLine);
+    }
+
+    [Fact]
+    public void End_lines_are_right_whatever_the_line_endings()
+    {
+        const string script = "SELECT 1;\r\nSELECT\r\n 2;\rSELECT 3;\nSELECT\n4";
+
+        var all = PgStatementBoundaries.GetAll(script);
+
+        Assert.Equal(new[] { (0, 0), (1, 2), (3, 3), (4, 5) }, all.Select(s => (s.StartLine, s.EndLine)).ToArray());
+    }
+
+    [Fact]
+    public void A_script_of_twenty_thousand_statements_is_measured_in_linear_time()
+    {
+        var script = string.Concat(Enumerable.Range(0, 20_000).Select(i => $"INSERT INTO t (a, b) VALUES ({i}, 'row {i}');\n"));
+        var watch = Stopwatch.StartNew();
+
+        var all = PgStatementBoundaries.GetAll(script);
+
+        watch.Stop();
+        Assert.Equal(20_000, all.Length);
+        Assert.Equal(19_999, all[^1].EndLine);
+        Assert.True(watch.ElapsedMilliseconds < 5_000, $"took {watch.ElapsedMilliseconds} ms");   // the quadratic form takes tens of seconds
     }
 }

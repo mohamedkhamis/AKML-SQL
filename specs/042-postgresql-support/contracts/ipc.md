@@ -28,6 +28,7 @@ the new keys, so an older client and a newer engine (or the reverse) keep workin
 | `ExecuteMessageDto` | 12 `Hint` | string? | null | server hint, or the engine's own hint (`GO` is SQL Server-only) |
 | `ExecuteMessageDto` | 13 `Column` | int | 0 | 1-based column of the error position in the document (0 = unknown) |
 | `ExecuteQueryResult` | 13 `TransactionState` | int | 0 | `TransactionState` after the run (0 None, 1 Open, 2 Aborted) |
+| `ExecuteQueryResult` | 14 `SchemaChanged` | bool | false | the engine started reloading its catalog after this run (FR-043): a statement changed it outside a transaction, or the transaction it ran in ended in this run; the client refetches the schema when true |
 | `ChangeDatabaseResponse` | 4 `TransactionState` | int | 0 | always 0 after a PostgreSQL reconnect |
 | `CrudCellDto` | 6 `TypeName` | string? | null | `format_type` text used for the `::type` cast (PostgreSQL only) |
 | `AnalysisRuleInfoDto` | 9 `Kind` | int | 0 | `DatabaseKind` of the rule set the rule belongs to |

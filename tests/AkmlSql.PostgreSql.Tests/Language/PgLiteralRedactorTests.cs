@@ -289,4 +289,64 @@ public class PgLiteralRedactorTests
         Assert.True(watch.ElapsedMilliseconds < 3_000, $"took {watch.ElapsedMilliseconds} ms");
         Assert.Equal(36_000, r.Placeholders.Count);
     }
+
+    // ---- the language of a body decides whether it is read as code ---------------------------------------------
+
+    [Fact]
+    public void A_body_in_another_language_that_happens_to_scan_cleanly_is_still_one_literal()
+    {
+        const string sql = "CREATE FUNCTION f() RETURNS text LANGUAGE plpython3u AS $$ return \"p@ssw0rd\" $$;";
+
+        var r = Ok(sql);
+
+        Assert.Equal("CREATE FUNCTION f() RETURNS text LANGUAGE plpython3u AS $$__STR_0__$$;", r.Text);
+        Assert.DoesNotContain("p@ssw0rd", r.Text);
+        Assert.Equal(sql, Restore(r.Text, r.Placeholders));
+    }
+
+    [Fact]
+    public void The_language_named_after_the_body_counts_too()
+    {
+        var perl = Ok("CREATE FUNCTION f() RETURNS text AS $$ return 'secret'; $$ LANGUAGE plperl;");
+        Assert.Equal("CREATE FUNCTION f() RETURNS text AS $$__STR_0__$$ LANGUAGE plperl;", perl.Text);
+
+        var sql = Ok("CREATE FUNCTION g() RETURNS text AS $$ SELECT 'secret' $$ LANGUAGE sql;");
+        Assert.Equal("CREATE FUNCTION g() RETURNS text AS $$ SELECT '__STR_0__' $$ LANGUAGE sql;", sql.Text);
+    }
+
+    [Fact]
+    public void A_quoted_language_name_is_read_and_each_statement_is_judged_on_its_own()
+    {
+        var r = Ok("CREATE FUNCTION a() RETURNS int LANGUAGE 'plpgsql' AS $$ BEGIN RETURN 1; END $$;\nCREATE FUNCTION b() RETURNS int LANGUAGE plv8 AS $$ return 1; $$;");
+
+        Assert.Contains("AS $$ BEGIN RETURN __NUM_0__; END $$;", r.Text);     // PL/pgSQL: read as code
+        Assert.Contains("LANGUAGE plv8 AS $$__STR_", r.Text);                  // JavaScript: one literal
+    }
+
+    [Fact]
+    public void Two_functions_with_no_semicolon_between_them_are_judged_by_the_language_that_is_not_SQL()
+    {
+        // Text that does not parse (the "fix my script" case): the first function's semicolon is missing.
+        var r = Ok("CREATE FUNCTION a() RETURNS text LANGUAGE plpython3u AS $$ return \"p@ssw0rd\" $$\nCREATE FUNCTION b() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;");
+
+        Assert.Contains("AS $$__STR_0__$$", r.Text);
+        Assert.DoesNotContain("p@ssw0rd", r.Text);
+    }
+
+    [Fact]
+    public void A_name_spelled_language_does_not_hide_the_LANGUAGE_word_after_it()
+    {
+        var r = Ok("CREATE FUNCTION f() RETURNS SETOF language LANGUAGE sql AS $$ SELECT * FROM language WHERE name = 'en' $$;");
+
+        Assert.Contains("WHERE name = '__STR_0__' $$", r.Text);        // read as code
+    }
+
+    [Fact]
+    public void A_psql_meta_command_ends_a_statement_for_the_language_too()
+    {
+        var r = Ok("CREATE FUNCTION a() RETURNS text LANGUAGE plperl AS $$ return 'x' $$ \\g\nCREATE FUNCTION b() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;");
+
+        Assert.Contains("AS $$__STR_0__$$ \\g", r.Text);
+        Assert.Contains("AS $$ SELECT __NUM_0__ $$;", r.Text);
+    }
 }

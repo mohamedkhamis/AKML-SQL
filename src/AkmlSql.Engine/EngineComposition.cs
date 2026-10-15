@@ -42,12 +42,15 @@ public sealed class EngineComposition
             SettingsLoader = ConfigManager.Load,
             ParserService = new TsqlParserService(),
             SchemaMetadata = new SchemaMetadataService(),
-            // Spec 042 (FR-093): PostgreSQL's catalog reader exists only while the feature is switched on.
-            PostgresSchemaMetadata = ConfigManager.Load().PostgreSql.Enabled ? new PostgreSql.PgSchemaMetadataService() : null,
             // Spec 030 — Phase 5: one registry shared by every transport so #temp/SET/USE state
             // persists across executes on the SAME per-session SqlConnection.
             SessionConnections = new Execution.SessionConnectionRegistry(),
         };
+
+        // Spec 042 (FR-093): PostgreSQL's catalog reader exists only when the feature is switched on at start-up. The same loaded
+        // settings decide this and every handler registration below; the handlers that gate PostgreSQL requests look at this
+        // reader, not at settings re-read later, so a switch flipped while the engine runs waits for a restart, as the registrations do.
+        ctx.PostgresSchemaMetadata = ctx.EnsureSettings().PostgreSql.Enabled ? new PostgreSql.PgSchemaMetadataService() : null;
 
         ctx.SchemaCache.ReloadMissing = (sessionId, database) => ReloadSessionCacheAsync(ctx, sessionId, database);
 

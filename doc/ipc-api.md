@@ -1081,6 +1081,10 @@ ExecuteQueryResult (type 213; also the payload of 220)
     10 CompletedAtUnixMs      long      execute.v2 — end of the script, UTC Unix ms; 0 from older engines.
     11 MessagesOmitted        int       execute.v2 — messages dropped beyond 10,000 (one System line says so).
     12 CurrentDatabase        string?   session.database.v1 — the connection's database after the script.
+    13 TransactionState       int       dialect.postgresql.v1 — after the script: 0 None, 1 Open, 2 Aborted; always 0 for SQL Server.
+    14 SchemaChanged          bool      dialect.postgresql.v1 — the engine started reloading its catalog after this run (a
+                                        statement changed it, and the change is visible: outside a transaction, or the
+                                        transaction has ended). A client that shows the schema refetches it when true.
 
 ExecuteResultSet
     0  ColumnNames            string[]
@@ -1231,6 +1235,9 @@ quoting the text: the client must not send the original without the user's say-s
 - **Error ids** that travel in `ErrorCode` fields of connection replies: `dialect.unsupported` (4201), `dialect.password-required` (4202: the engine holds no
   password for this server and login, so the client should ask), `dialect.credentials-required` (4203: the connection is refused because it has no user name,
   asks for integrated authentication, or names a certificate by a relative path).
+- **The feature switched off** (`postgreSql.enabled = false`, FR-093): the engine makes no PostgreSQL session at all. `ConnectionChanged` with `Kind` 1 is ignored
+  (logged), and `TestSqlConnection` / `ListDatabases` for a PostgreSQL target answer `Ok = false` with the message
+  `PostgreSQL support is switched off in this engine (postgreSql.enabled).` and no `ErrorCode`. The switch is read when the engine starts.
 - **Appended keys** (all append-only; an older peer ignores them): see `specs/042-postgresql-support/contracts/ipc.md` for the full list. In this file they appear
   where the message is described: `Dialect` on `FormatPreviewRequest` (3), `ProfileJson` on the three format requests (6), `Kind` on `SnippetListRequest` (5),
   `IncludePostgreSql` on `ListAnalysisRulesRequest` (1), `Kind` (9) and `ReferenceUrl` (10) on `AnalysisRuleInfoDto`.
