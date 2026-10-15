@@ -88,9 +88,11 @@ namespace AkmlSql.Engine.Handlers.Control
 
             string host = string.Empty;
             int port = 0;
+            var attempted = request.ConnectionString;
             try
             {
                 var resolved = new PgCredentialResolver().Resolve(request.ConnectionString);
+                attempted = resolved.ConnectionString;
                 var builder = new NpgsqlConnectionStringBuilder(resolved.ConnectionString);
                 host = builder.Host ?? string.Empty;
                 port = builder.Port;
@@ -105,7 +107,7 @@ namespace AkmlSql.Engine.Handlers.Control
             }
             catch (Exception ex)
             {
-                var failure = PgConnectionFailure.Describe(ex, host, port);
+                var failure = await PgConnectionFailure.DescribeAsync(ex, attempted, host, port, ct).ConfigureAwait(false);
                 Log.Warning("TestSqlConnection (PostgreSQL) failed ({Type}) — {ConnDesc}",
                     ex.GetType().Name, PgConnectionString.Describe(request.ConnectionString));
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = failure.Message, ErrorCode = failure.ErrorCode };

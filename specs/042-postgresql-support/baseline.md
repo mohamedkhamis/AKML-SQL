@@ -55,9 +55,10 @@ the desktop edition already sends.
 
 ### Spike S7 - where the service stores a remembered password
 
-Recorded in [research.md](research.md) under R14: the service runs as LocalSystem, the store is in that account's own
-`%AppData%\AKML SQL` (the SYSTEM profile) and not beside the `--config` file, and the access list of that folder could not be read
-without elevation. One elevated command is left to run; the consent text does not change either way.
+Recorded in [research.md](research.md) under R14: the service runs as LocalSystem and the store is in that account's own
+`%AppData%\AKML SQL` (the SYSTEM profile), not beside the `--config` file. Read from an elevated shell on 2026-10-15: the folder is open to
+`SYSTEM` and `Administrators` only (full control, inherited), the same as the `config.json` beside it and the bridge file under `ProgramData`,
+so the consent text ("any administrator of the engine machine") is accurate. The file itself did not exist yet; nothing was read from it.
 
 ### Not covered by a test
 
@@ -102,8 +103,21 @@ and the palette row is disabled with the same tooltip and never runs (`PostgresW
 - The commits of this spec change no file in `src/AkmlSql.Ssms22`, `src/AkmlSql.Shell.Shared` or `tests/AkmlSql.Shell.Shared.Tests`
   (`git diff --stat 92388c7..HEAD` on those paths is empty). The only changes in Core are appended message keys and the PostgreSQL
   helpers.
-- Manual SSMS check (task T129): **not done.** It needs a person to start SSMS 22 against the engine and look. The structural
-  evidence above and the unchanged Shell.Shared result in `baseline/README.md` are all there is so far.
+- SSMS check (task T129): **half done, the "after" half is waiting for one approval.** The check is an observation, not a judgement:
+  `tests/AkmlSql.UiTests/Check042.cs` starts the installed SSMS 22 on a Northwind script (own app-data folder, so the owner's history and
+  settings are untouched) and writes down the menus, the Error List, what completion commits, what Format Document makes of the script,
+  what SQL History lists after an execution, every window and prompt, and the warnings and errors in the logs; `logsummary.sh` adds the stable
+  log facts (analysis finding counts, history records sent). It runs only when `AKML_CHECK042_LABEL` is set, so routine runs never touch the desktop.
+  **Before** (2026-10-15, the installed engine 1.26.1013.1822, which has no PostgreSQL library) is recorded in
+  `baseline/acceptance/t129/`: the AKML SQL menu has its 12 entries and the submenus of `AkmlMenuTable`, no dialog or prompt appeared,
+  completion committed `dbo.Orders`, Format Document produced the layout in the file, the analyser reported 11, 11 and 3 findings, one history record was sent,
+  no warning or error except the normal "Parent process exited" line at shutdown.
+  **After** needs the engine built from this branch (1.26.1015.0825, with `AkmlSql.PostgreSql.dll`) in `C:\Program Files (x86)\AKML SQL\Engine`,
+  the folder the unchanged shell starts it from. Putting it there is a write into the installed product that also stops the web engine service for a moment, so it
+  was not done without the owner's approval (the automated attempt was declined). With it in place: run
+  `AKML_CHECK042_LABEL=after AKML_CHECK042_OUT=<folder> dotnet test tests/AkmlSql.UiTests --filter FullyQualifiedName~Check042`, run
+  `logsummary.sh` on the sandbox, and compare with `observations-before.txt` and `logsummary-before.txt`: a line that differs is the finding
+  (the engine version line differs by design).
 
 ### Theme tokens (task T131)
 
@@ -241,6 +255,34 @@ tree of a statement is walked once for all rules (`PgScriptStatement.All`). `A_s
 - The SSMS Manage Rules window does not show the PostgreSQL rules (the shell is not part of this spec; the engine keeps its answer unchanged for it).
 - PGSE001 reads `EXECUTE` in `plpgsql` bodies from their tokens; a body in another language, or a command built in a variable first, is not examined.
 - PGBP005 and the other rules that resolve names need the loaded schema and say nothing about a table it has not loaded.
+
+## FR-101 - TLS modes (2026-10-15)
+
+**What was checked, live, on the private PostgreSQL 18 with a self-signed certificate** (`PgTlsLiveTests`, 10 tests, through `PgConnectionString.Build` and `TestSqlConnectionHandler`):
+`disable` never uses TLS; `prefer` and an empty mode use it when offered and do not check the certificate; `require` insists on TLS and does not check the certificate either, as libpq
+does (a self-signed server is accepted; `pg_stat_ssl` confirms the session is encrypted); `verify-ca` with the server's own certificate as root connects, without a root or with another
+authority's it refuses; `verify-full` connects for `localhost` and `127.0.0.1`, which the certificate names, and refuses `::1`, which it does not, while `verify-ca` accepts `::1`.
+
+**What the driver says, and the fix.** For every certificate refusal the driver gives one sentence. `PgTlsDiagnosis` repeats the start of the connection once, only after such a refusal (the eight-byte
+SSLRequest, the handshake, nothing after it), and `PgConnectionFailure.DescribeAsync` puts the specific reason after where it happened. The refusal says which thing was wrong: an authority this machine
+does not know ("... is not signed by a root this machine trusts ... or use TLS mode require"), a certificate that does not chain to the root given, a certificate outside its dates (the certificate that is outside them: the
+server's, an intermediate's or the root given, each with its own date), a root given that does not hold the issuer (the file is wrong, or the issuer is an intermediate the server should send), or a host name the
+certificate does not carry (with the names it does). A root certificate file the driver cannot read is worded by `DescribeAsync` as that file and why (it never reaches the diagnosis: the driver fails inside its handshake).
+The root in force is the driver's: the connection string, else `PGSSLROOTCERT`, else `%APPDATA%\postgresql\root.crt`, in PEM or `.pfx`. What a server puts in its certificate is shown cleaned (no line breaks, bidirectional
+or formatting characters, no double quote) and cut to 64 characters.
+
+**Tests:** `PgTlsDiagnosisTests` 47 (a fake PostgreSQL TLS endpoint with certificates made in the test: authorities, intermediates, expired, not yet valid, wrong names, no names; it records what it received, so the tests
+assert that the client sent the SSLRequest and nothing after the handshake and that the modes which do not verify never connect), `PgTlsHandlerTests` 4 (test connection, list databases by string and by session, switch database), `PgTlsLiveTests` 10,
+and the browser test `The_verifying_TLS_modes_name_the_certificate_problem_and_the_root_certificate_fixes_it` (skips, rather than fails, without TLS or an IPv6 loopback on the server).
+The PostgreSQL and handler namespaces of `AkmlSql.Engine.Tests` ran 528 passed, 0 failed; the whole project ran 2,520 passed and 2 failed (the known `PerformanceBaselineTests`, and a history search that took 311 ms
+against a budget of 250 ms and passes alone) before the fixes below.
+
+**Adversarial review of this change** (4 reviewers, each finding tried by 2 skeptics; 20 confirmed, 6 refuted): all 20 were acted on. Production: a certificate outside its dates was always blamed on the server's own
+certificate with the server's dates; a `.pfx` root was reported as unreadable PEM; the diagnosis ignored `PGSSLROOTCERT` and the profile root file and so named the wrong cause; a root that lacks the issuer was worded as
+"give the root" although it was given; server-controlled certificate text went into the sentence unsanitised; and an unexpected exception inside the diagnosis would have escaped the handler instead of leaving the
+driver's sentence. Tests: no case used an expired or future authority or an intermediate chain; the unreadable-root case pinned a branch real connections never reach; the "not contacted" and "nothing sent" tests could not fail; the
+real driver exception was never used offline; two of three call sites were untested; the suite took 40 s because `localhost` resolved to `::1` first (now 127.0.0.1 with an address in the certificate, 14 s). One trap found on the way:
+Windows remembers certificates by subject name, so two test authorities with one name and different keys make a chain fail its signature check instead of reporting a missing issuer; each test authority now has a name of its own.
 
 ## Quickstart section 2 - the walk-through (task T179)
 

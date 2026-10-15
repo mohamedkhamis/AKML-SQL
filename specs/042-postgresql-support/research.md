@@ -299,8 +299,7 @@ store. The store file follows `Constants.ConfigFilePath`, so under `--web --conf
 engine can use it". **SPIKE S7**: confirm the resolved path under the service and that the file
 ACL matches the config's.
 
-**SPIKE S7 result (2026-10-14, task T114) - partly confirmed, one assumption corrected, one check
-left for an elevated shell.**
+**SPIKE S7 result (2026-10-14, completed 2026-10-15, task T114) - confirmed; one assumption corrected.**
 
 - *Confirmed*: on the development machine `AkmlSqlWebEngine` is installed with `StartName:
   LocalSystem` and the command line `AkmlSql.Engine.exe --web --config "C:\ProgramData\AKML SQL
@@ -313,11 +312,14 @@ left for an elevated shell.**
 - *Confirmed for an interactive account*: in the user's profile `sql-credentials.json` and
   `config.json` carry the same access list (SYSTEM, Administrators, the user; all inherited), so
   the store is no more open than the settings file beside it.
-- *Not verified*: the access list of the SYSTEM profile's `AKML SQL` folder. It cannot be read from a
-  non-elevated shell (access denied), and the check needs an elevated one:
-  `icacls "C:\Windows\System32\config\systemprofile\AppData\Roaming\AKML SQL"`. The default for that
-  profile is SYSTEM and Administrators only, which is what the consent text already says ("any
-  administrator of the engine machine"), so the text stays as it is in `contracts/web-ui.md`.
+- *Confirmed from an elevated shell (2026-10-15)*: the service is `LocalSystem`, start type automatic (delayed),
+  running `C:\Program Files (x86)\AKML SQL\Engine\AkmlSql.Engine.exe --web --config "C:\ProgramData\AKML SQL Web\config.json"`.
+  The folder `C:\Windows\System32\config\systemprofile\AppData\Roaming\AKML SQL` exists (`config.json`, `history`, `logs`) and its access
+  list is `NT AUTHORITY\SYSTEM` and `BUILTIN\Administrators`, full control, inherited, and nothing else. `config.json` in that folder and the
+  bridge file `C:\ProgramData\AKML SQL Web\config.json` carry the same two entries, so a remembered-password file created there is exactly as
+  readable as the settings beside it: by SYSTEM and by the administrators of the machine, which is what the consent text says ("any
+  administrator of the engine machine"). The text stays as it is in `contracts/web-ui.md`. `sql-credentials.json` does not exist in that folder
+  yet: no password has been remembered through the service on this machine. The check listed names and sizes and read no file.
 
 ## R15. Capability, configuration and switch-off (FR-006, FR-093)
 

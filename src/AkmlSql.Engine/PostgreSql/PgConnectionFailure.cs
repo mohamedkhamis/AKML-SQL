@@ -41,7 +41,7 @@ public static class PgConnectionFailure
 
             case NpgsqlException when IsTlsFailure(ex):
                 return new ConnectionFailure(
-                    WithHint($"The TLS connection to {target} failed: {Innermost(ex).Message}",
+                    WithHint($"The TLS connection to {target} failed: {Innermost(ex).Message.TrimEnd('.', ' ')}",
                         "Use TLS mode require or prefer, or give the root certificate for verify-ca and verify-full."),
                     null);
 
@@ -66,6 +66,43 @@ public static class PgConnectionFailure
             default:
                 return new ConnectionFailure(ex.Message, null);
         }
+    }
+
+    /// <summary>
+    /// <see cref="Describe"/>, and for a certificate the verifying TLS modes refused, the specific reason (FR-101): the driver says the same sentence for an
+    /// authority it does not know, an expired certificate and a name the certificate does not carry, so the handshake is looked at once more
+    /// (<see cref="PgTlsDiagnosis"/>). When that cannot be done the driver's sentence stands, so a diagnosis never turns a refusal into a different outcome.
+    /// </summary>
+    /// <param name="connectionString">The string that failed. Only its host, port, TLS mode and root certificate are read, and it is never logged or returned.</param>
+    public static Task<ConnectionFailure> DescribeAsync(Exception ex, string connectionString, string host, int port, CancellationToken ct) =>
+        DescribeAsync(ex, connectionString, host, port, PgTlsDiagnosis.ExplainAsync, ct);
+
+    /// <param name="explain">What looks at the handshake again; a seam so a test can make it fail.</param>
+    internal static async Task<ConnectionFailure> DescribeAsync(Exception ex, string connectionString, string host, int port,
+        Func<string, CancellationToken, Task<string?>> explain, CancellationToken ct)
+    {
+        var generic = Describe(ex, host, port);
+        try
+        {
+            if (ex is NpgsqlException && ex.InnerException is AuthenticationException)
+            {
+                var reason = await explain(connectionString, ct).ConfigureAwait(false);
+                if (reason is not null) return new ConnectionFailure($"The TLS connection to {host}:{port} failed: {reason}", null);
+            }
+            else if (PgTlsDiagnosis.UnreadableRoot(ex, connectionString) is { } unreadable)
+            {
+                return new ConnectionFailure($"The TLS connection to {host}:{port} failed: {unreadable}", null);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            // A diagnosis only words a refusal that has already happened; whatever goes wrong inside it leaves the driver's sentence, never a thrown error.
+        }
+        return generic;
     }
 
     /// <summary>

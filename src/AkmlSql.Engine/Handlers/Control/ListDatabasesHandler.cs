@@ -120,9 +120,11 @@ namespace AkmlSql.Engine.Handlers.Control
 
             string host = string.Empty;
             int port = 0;
+            var attempted = connectionString;
             try
             {
                 var resolved = new PgCredentialResolver().Resolve(connectionString).ConnectionString;
+                attempted = resolved;
                 var builder = new NpgsqlConnectionStringBuilder(resolved);
                 host = builder.Host ?? string.Empty;
                 port = builder.Port;
@@ -137,7 +139,7 @@ namespace AkmlSql.Engine.Handlers.Control
             }
             catch (Exception ex)
             {
-                var failure = PgConnectionFailure.Describe(ex, host, port);
+                var failure = await PgConnectionFailure.DescribeAsync(ex, attempted, host, port, ct).ConfigureAwait(false);
                 Log.Warning("ListDatabases (PostgreSQL) failed ({Type}) - {ConnDesc}", ex.GetType().Name, PgConnectionString.Describe(connectionString));
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = failure.Message, ErrorCode = failure.ErrorCode };
             }

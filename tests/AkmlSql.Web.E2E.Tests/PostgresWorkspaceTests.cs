@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.Playwright;
 using Xunit;
 using Xunit.Abstractions;
@@ -1009,5 +1010,84 @@ public sealed class PostgresWorkspaceTests
         Assert.Equal(52, await pg.Locator("li[data-testid^='rule-PG']").CountAsync());
         Assert.Equal(0, await s.Page.Locator("[data-testid='rules-kind-sqlserver'] li[data-testid^='rule-PG']").CountAsync());
         Assert.True(await s.Page.Locator("[data-testid='rules-kind-sqlserver'] li[data-testid='rule-PE001']").CountAsync() == 1);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+    // TLS (FR-101, quickstart US1 step 1): the verifying modes refuse what they must, and say which thing was wrong.
+    // ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+    [SkippableFact]
+    public async Task The_verifying_TLS_modes_name_the_certificate_problem_and_the_root_certificate_fixes_it()
+    {
+        var configured = PgWebSession.Configured();
+        Skip.If(configured is null, "No PostgreSQL test server.");
+        var (host, port, user, password) = configured!.Value;
+        var configuredRoot = Environment.GetEnvironmentVariable("AKML_PG_TEST_ROOT_CERT");
+        // The engine accepts only a canonical local path as the root certificate, so a path written with forward slashes is normalised here.
+        var root = Path.GetFullPath(string.IsNullOrWhiteSpace(configuredRoot)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AKML SQL", "pg-test", "data", "server.crt")
+            : configuredRoot);
+        Skip.IfNot(File.Exists(root), "No server certificate to give as the root (AKML_PG_TEST_ROOT_CERT).");
+        Skip.IfNot(await ServerOffersTlsAsync(IPAddress.Loopback, port), "The test server does not offer TLS (ssl = on in postgresql.conf).");
+        Skip.IfNot(await TcpAcceptsAsync(IPAddress.IPv6Loopback, port), "The test server does not listen on ::1, the name its certificate does not carry.");
+
+        await using var s = await PgWebSession.StartOrSkipAsync(_output, connect: false);
+        await PgWebSession.FillFormAsync(s.Page, host, port, "postgres", user, password);
+        var message = s.Page.Locator("[data-testid='conn-message']");
+
+        // The certificate is self-signed, so this machine has no reason to trust it.
+        await s.Page.SelectOptionAsync("[data-testid='conn-pg-sslmode']", "verify-full");
+        await s.Page.FillAsync("[data-testid='conn-pg-rootcert']", string.Empty);
+        await s.Page.ClickAsync("[data-testid='conn-test-btn']");
+        await Assertions.Expect(message).ToContainTextAsync("is not signed by a root this machine trusts", new() { Timeout = 30_000 });
+        await Assertions.Expect(message).Not.ToContainTextAsync("RemoteCertificateValidationCallback");
+
+        // With the certificate given as the root, the connection works over TLS.
+        await s.Page.FillAsync("[data-testid='conn-pg-rootcert']", root);
+        await s.Page.ClickAsync("[data-testid='conn-test-btn']");
+        await Assertions.Expect(message).ToContainTextAsync("PostgreSQL ", new() { Timeout = 30_000 });
+        await Assertions.Expect(message).Not.ToContainTextAsync("TLS connection");
+
+        // A name the certificate does not carry is refused by verify-full and named, and accepted by verify-ca.
+        await s.Page.FillAsync("[data-testid='conn-pg-host']", "[::1]");
+        await s.Page.ClickAsync("[data-testid='conn-test-btn']");
+        await Assertions.Expect(message).ToContainTextAsync("is not valid for the host name \"::1\"", new() { Timeout = 30_000 });
+        await s.Page.SelectOptionAsync("[data-testid='conn-pg-sslmode']", "verify-ca");
+        await s.Page.ClickAsync("[data-testid='conn-test-btn']");
+        await Assertions.Expect(message).ToContainTextAsync("PostgreSQL ", new() { Timeout = 30_000 });
+    }
+
+    /// <summary>Asks as a PostgreSQL client does (the eight-byte SSLRequest) whether the server will do TLS: it answers S or N.</summary>
+    private static async Task<bool> ServerOffersTlsAsync(IPAddress address, int port)
+    {
+        try
+        {
+            using var client = new System.Net.Sockets.TcpClient();
+            using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await client.ConnectAsync(address, port, limit.Token);
+            var stream = client.GetStream();
+            await stream.WriteAsync(new byte[] { 0x00, 0x00, 0x00, 0x08, 0x04, 0xD2, 0x16, 0x2F }, limit.Token);
+            var answer = new byte[1];
+            return await stream.ReadAsync(answer, limit.Token) == 1 && answer[0] == (byte)'S';
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException or OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> TcpAcceptsAsync(IPAddress address, int port)
+    {
+        try
+        {
+            using var client = new System.Net.Sockets.TcpClient(address.AddressFamily);
+            using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            await client.ConnectAsync(address, port, limit.Token);
+            return true;
+        }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or OperationCanceledException)
+        {
+            return false;
+        }
     }
 }

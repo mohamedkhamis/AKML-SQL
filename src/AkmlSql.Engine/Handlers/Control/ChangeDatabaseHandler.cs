@@ -160,7 +160,7 @@ namespace AkmlSql.Engine.Handlers.Control
             catch (Exception ex)
             {
                 Log.Warning("ChangeDatabase (PostgreSQL) failed ({Type}) for session={Session}", ex.GetType().Name, sessionId);
-                return Refuse(PgConnectionFailure.Describe(ex, host, port).Message);
+                return Refuse((await PgConnectionFailure.DescribeAsync(ex, connectionString, host, port, ct).ConfigureAwait(false)).Message);
             }
 
             registry.Dispose(sessionId);
