@@ -9,7 +9,14 @@ public enum DbObjectType
     TableFunction,
     InlineFunction,
     Synonym,
-    Sequence
+    Sequence,
+
+    /// <summary>
+    /// Spec 042: a PostgreSQL materialized view (<c>relkind = 'm'</c>). Appended with an explicit value because the
+    /// number travels in <c>SchemaPhaseObject.ObjectType</c> and is persisted in the browser's schema cache; SQL
+    /// Server caches never contain it.
+    /// </summary>
+    MaterializedView = 8
 }
 
 public class DatabaseObject

@@ -20,5 +20,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Whether the target server is classified as a production server.</summary>
         [Key(2)]
         public bool IsProductionServer { get; set; }
+
+        /// <summary>Spec 042: the <see cref="DatabaseKind"/> the SQL is written in (0 SQL Server, 1 PostgreSQL); this request carries no session.</summary>
+        [Key(3)]
+        public int Kind { get; set; }
     }
 }

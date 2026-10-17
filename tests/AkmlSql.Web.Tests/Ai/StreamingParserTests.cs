@@ -43,15 +43,23 @@ public sealed class StreamingParserTests
         Assert.Equal(new[] { "Hello", " world" }, tokens); // role-only/empty/finish skipped; nothing after [DONE]
     }
 
+    /// <summary>Review WEB-18: a chunk that is not JSON used to be skipped, so a broken stream could pass for an answer. It
+    /// now ends the stream as malformed; the text before it stays with the caller.</summary>
     [Fact]
-    public async Task OpenAiSse_SkipsMalformedChunks()
+    public async Task OpenAiSse_RejectsMalformedChunks_KeepingWhatCameBefore()
     {
         const string sse =
-            "data: not-json\n" +
             "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n" +
+            "data: not-json\n" +
             "data: [DONE]\n";
 
-        var tokens = await Collect(OpenAiWire.ParseSse(Reader(sse), CancellationToken.None));
+        var tokens = new List<string>();
+        var ex = await Assert.ThrowsAsync<AiStreamException>(async () =>
+        {
+            await foreach (var t in OpenAiWire.ParseSse(Reader(sse), CancellationToken.None)) tokens.Add(t);
+        });
+
+        Assert.Equal(AiStreamFailure.Malformed, ex.Failure);
         Assert.Equal(new[] { "ok" }, tokens);
     }
 

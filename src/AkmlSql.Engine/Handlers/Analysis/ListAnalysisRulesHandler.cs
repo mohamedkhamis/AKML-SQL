@@ -8,6 +8,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Server;
 using AkmlSql.Engine.Transports;
+using AkmlSql.PostgreSql.Analysis;
 using Serilog;
 
 namespace AkmlSql.Engine.Handlers.Analysis
@@ -33,13 +34,19 @@ namespace AkmlSql.Engine.Handlers.Analysis
         private readonly RuleRegistry _registry;
         private readonly CaSettingsLoader _caSettings;
         private readonly Func<AppSettings> _settingsProvider;
+        private readonly PgRuleRegistry? _pgRegistry;
 
+        /// <param name="pgRegistry">
+        /// Spec 042: the PostgreSQL rule set, present when <c>postgreSql.enabled</c> is on. Its rules are listed (with <c>Kind</c> 1)
+        /// only for a request that asks for them, so a client that predates the feature sees exactly the SQL Server rules.
+        /// </param>
         public ListAnalysisRulesHandler(
-            RuleRegistry registry, CaSettingsLoader caSettings, Func<AppSettings> settingsProvider)
+            RuleRegistry registry, CaSettingsLoader caSettings, Func<AppSettings> settingsProvider, PgRuleRegistry? pgRegistry = null)
         {
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _caSettings = caSettings ?? throw new ArgumentNullException(nameof(caSettings));
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
+            _pgRegistry = pgRegistry;
         }
 
         public int RequestMessageType => MessageTypes.ListAnalysisRules;
@@ -72,14 +79,32 @@ namespace AkmlSql.Engine.Handlers.Analysis
                             Description       = meta.Description,
                         };
                     })
-                    .ToArray();
+                    .ToList();
 
-                Log.Debug("ListAnalysisRules: returned {Count} rules (dir={Dir})", rules.Length, dir ?? "<global>");
+                if (request?.IncludePostgreSql == true && _pgRegistry != null)
+                {
+                    rules.AddRange(_pgRegistry.AllRules.Select(r => new AnalysisRuleInfoDto
+                    {
+                        RuleId            = r.RuleId,
+                        Name              = r.Name,
+                        Category          = r.Category,
+                        DefaultSeverity   = (int)r.DefaultSeverity,
+                        EffectiveSeverity = (int)resolved.GetSeverity(r.RuleId, r.DefaultSeverity),
+                        Enabled           = resolved.IsEnabled(r.RuleId),
+                        RequiresSchema    = r.RequiresSchema,
+                        AutoFixable       = r.AutoFixable,
+                        Description       = r.Description,
+                        Kind              = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+                        ReferenceUrl      = r.ReferenceUrl,
+                    }));
+                }
+
+                Log.Debug("ListAnalysisRules: returned {Count} rules (dir={Dir})", rules.Count, dir ?? "<global>");
 
                 return Task.FromResult(new ListAnalysisRulesResponse
                 {
                     Success = true,
-                    Rules   = rules,
+                    Rules   = rules.ToArray(),
                 });
             }
             catch (Exception ex)

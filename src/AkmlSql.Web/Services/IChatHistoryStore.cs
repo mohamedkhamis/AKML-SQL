@@ -14,6 +14,13 @@ public sealed class ChatTurn
     public string Content { get; set; } = string.Empty;
     public string ProviderId { get; set; } = string.Empty;
     public DateTimeOffset Timestamp { get; set; }
+
+    /// <summary>
+    /// Re-review REV-07: why this assistant answer stopped before it finished (the stream failed, broke off or was stopped);
+    /// null for a complete answer and for every turn saved before the field existed. Safe text only — the typed failure, never
+    /// the provider's words. Kept with the turn so the answer stays marked after a reload, an export or the next message.
+    /// </summary>
+    public string? IncompleteReason { get; set; }
 }
 
 /// <summary>A locally-persisted AI chat conversation (data-model E8).</summary>
@@ -36,6 +43,7 @@ public sealed class ChatConversation
         {
             sb.Append("## ").AppendLine(turn.Role == "user" ? "You" : "Assistant");
             sb.AppendLine(turn.Content).AppendLine();
+            if (turn.IncompleteReason != null) sb.Append("> _This answer is incomplete: ").Append(turn.IncompleteReason).AppendLine("_").AppendLine();
         }
         return sb.ToString();
     }

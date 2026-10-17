@@ -1,0 +1,6 @@
+SELECT   id
+FROM     t
+ORDER BY created DESC NULLS LAST
+       , id ASC NULLS FIRST
+LIMIT    10
+OFFSET   20;

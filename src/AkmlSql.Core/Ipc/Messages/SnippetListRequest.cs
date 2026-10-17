@@ -19,5 +19,9 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public string? CategoryFilter { get; set; }
+
+        /// <summary>Spec 042: <c>DatabaseKind</c> of the snippets wanted; 0 (SQL Server) when absent.</summary>
+        [Key(5)]
+        public int Kind { get; set; }
     }
 }

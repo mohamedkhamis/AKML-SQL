@@ -25,15 +25,18 @@ internal sealed class SignatureHelpService : ISignatureHelpService
     private readonly IEngineBridge _bridge;
     private readonly ISchemaCacheStore? _cache;
     private readonly IEditorSessionStore? _session;
+    private readonly IDialectGate? _gate;
 
     public SignatureHelpService(
         IEngineBridge bridge,
         ISchemaCacheStore? cache = null,
-        IEditorSessionStore? session = null)
+        IEditorSessionStore? session = null,
+        IDialectGate? gate = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _cache = cache;
         _session = session;
+        _gate = gate;
     }
 
     public async Task<SignatureResponse> GetAsync(SignatureRequest request, CancellationToken ct)
@@ -52,6 +55,8 @@ internal sealed class SignatureHelpService : ISignatureHelpService
 
     private async Task<SignatureResponse> BuildOfflineAsync(SignatureRequest request)
     {
+        // Spec 042: the offline scanner is lexical T-SQL; PostgreSQL gets its answers from the engine only.
+        if (_gate?.IsPostgres == true) return new SignatureResponse();
         if (_cache == null || _session == null) return new SignatureResponse();
 
         var session = await _session.RestoreAsync().ConfigureAwait(false);

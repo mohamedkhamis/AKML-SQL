@@ -82,7 +82,8 @@ public class ExecuteQueryMessagesCompatTests
         var slots = MessagePackSerializer.Deserialize<object[]>(bytes);
         var back = MessagePackSerializer.Deserialize<ExecuteMessageDto>(bytes);
 
-        Assert.Equal(10, slots.Length);
+        // Keys 0-9 are fixed; later specs append (spec 042 added 10-13), so the positions are pinned, not the length.
+        Assert.True(slots.Length >= 10);
         Assert.Equal(ExecuteMessageKind.Error, System.Convert.ToInt32(slots[0]));
         Assert.Equal("bad", slots[1]);
         Assert.Equal(1, System.Convert.ToInt32(slots[2]));
@@ -122,11 +123,13 @@ public class ExecuteQueryMessagesCompatTests
     public void The_result_and_set_keys_are_appended_in_contract_order()
     {
         var result = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(new ExecuteQueryResult { CurrentDatabase = "db" }));
-        Assert.Equal(13, result.Length);
+        // Position, not length: spec 042 appended TransactionState (13) after CurrentDatabase (12).
+        Assert.True(result.Length >= 13);
         Assert.Equal("db", result[12]);
 
         var set = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(new ExecuteResultSet { BatchIndex = 4 }));
-        Assert.Equal(12, set.Length);
+        // Position, not length: spec 042 appended ReadOnlyReason (12) after BatchIndex (11).
+        Assert.True(set.Length >= 12);
         Assert.Equal(4, System.Convert.ToInt32(set[11]));
     }
 

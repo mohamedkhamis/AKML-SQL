@@ -24,6 +24,24 @@ internal sealed class SettingsPageHost : IDisposable
         public event Action? StateChanged;
         public List<(string Server, string Database)> Connects { get; } = new();
 
+        // Spec 042: a fake that sets none of these is a SQL Server connection on an engine without PostgreSQL support.
+        public AkmlSql.Core.DatabaseKind Kind { get; set; }
+        public bool EngineSupportsPostgres { get; set; }
+        public string? ServerVersionText { get; set; }
+
+        /// <summary>Spec 042 (FR-106): every request to forget a remembered PostgreSQL password, in order.</summary>
+        public List<(string Host, int? Port, string User)> Forgets { get; } = new();
+
+        /// <summary>Runs inside the forget call, so a test can look at what else existed at that moment.</summary>
+        public Func<Task>? OnForget { get; set; }
+
+        public async Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct)
+        {
+            Forgets.Add((host, port, user));
+            if (OnForget != null) await OnForget();
+            return true;
+        }
+
         public Task<(bool Ok, string? Error)> ConnectAsync(string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
         {
             Connects.Add((server, database));

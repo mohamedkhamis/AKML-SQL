@@ -77,6 +77,10 @@ public class SafetyCheckHandler(TsqlParserService parserService)
     /// </summary>
     private SafetyWarningDto[] AnalyzeSql(SafetyCheckRequest request)
     {
+        // Spec 042 (FR-069): a PostgreSQL script is read by the PostgreSQL check; the T-SQL parser never sees it.
+        if (request.Kind == (int)AkmlSql.Core.DatabaseKind.PostgreSql)
+            return AkmlSql.PostgreSql.Safety.PgDestructiveStatementCheck.Analyze(request.SqlText, request.Server, request.IsProductionServer);
+
         var script = _parserService.Parse(request.SqlText, out var errors);
 
         // If the SQL cannot be parsed, we cannot analyze it — allow execution

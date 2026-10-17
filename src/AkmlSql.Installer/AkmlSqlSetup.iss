@@ -213,6 +213,9 @@ Source: "update-task.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion
 Source: "..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\*"; DestDir: "{app}\Engine"; Flags: ignoreversion recursesubdirs
 Source: "..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
+; Spec 042: licences of the third-party software the PostgreSQL support ships (libpg_query, Npgsql, ...).
+; web-installer.iss is #included into this script, so this one entry serves the web edition too.
+Source: "..\..\THIRD-PARTY-NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SSMS 22 (x64) extension files — all DLLs from build output plus pkgdef and manifest
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\*.dll"; DestDir: "{code:GetSSMS22ExtDir}"; Check: CheckSSMS22; Flags: ignoreversion

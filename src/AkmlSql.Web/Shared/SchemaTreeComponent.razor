@@ -14,6 +14,7 @@
 *@
 @using System.Collections.Generic
 @using System.Threading
+@using AkmlSql.Core
 @using AkmlSql.Core.Ipc
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Web.Services
@@ -49,6 +50,13 @@
             <Icon Name="filter" Size="14" />
             <input type="search" class="akml-input" data-testid="schema-filter" aria-label="Filter objects" placeholder="Filter objects"
                    value="@_filterInput" @oninput="OnFilterInput" />
+            @* Spec 042 (FR-040): pg_catalog and information_schema are loaded so names resolve, and shown only on request. *@
+            @if (HasSystemSchemas)
+            {
+                <button type="button" class="akml-btn akml-btn--icon akml-schema-system-toggle @(_showSystem ? "selected" : null)"
+                        data-testid="schema-system-toggle" aria-pressed="@(_showSystem ? "true" : "false")"
+                        title="@(_showSystem ? "Hide system objects" : "Show system objects")" @onclick="ToggleSystem">System</button>
+            }
         </div>
     }
 
@@ -99,15 +107,29 @@
             {
                 @foreach (var schema in _payload.Schemas ?? Array.Empty<SchemaPhaseSchema>())
                 {
+                    if (IsHiddenSchema(schema.Name)) continue;
+                    var inaccessible = IsInaccessibleSchema(schema.Name);
                     var schemaPath = DbPath + "/" + schema.Name;
-                    var kinds = EnumerateKinds(schema, _filter).Where(k => !filtering || k.Objects.Count > 0).ToList();
-                    if (filtering && kinds.Count == 0) continue;
+                    var kinds = EnumerateKinds(schema, _filter, Kind).Where(k => !filtering || k.Objects.Count > 0).ToList();
+                    if (filtering && (kinds.Count == 0 || inaccessible)) continue;
                     <li class="akml-schema-tree-node akml-schema-tree-schema">
                         <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(schemaPath))"><Icon Name="@Chevron(IsOpen(schemaPath))" Size="12" Class="akml-schema-chevron" /></span>
                         <Icon Name="folder-open" Size="14" Class="akml-schema-icon akml-schema-icon--schema" />
                         <span class="akml-schema-tree-label">Schema "@schema.Name"</span>
+                        @if (inaccessible)
+                        {
+                            @* Spec 042 (FR-046): listed, marked, and left empty: the role has no USAGE on it. *@
+                            <span class="akml-schema-tree-noaccess" data-testid="schema-inaccessible"
+                                  title="Your role has no USAGE privilege on this schema, so its objects are not shown.">no access</span>
+                        }
                     </li>
-                    @if (IsOpen(schemaPath))
+                    @if (IsOpen(schemaPath) && inaccessible)
+                    {
+                        <li class="akml-schema-tree-node akml-schema-tree-empty-kind" data-testid="schema-inaccessible-note">
+                            <span class="akml-schema-tree-label">Not shown: no USAGE privilege.</span>
+                        </li>
+                    }
+                    else if (IsOpen(schemaPath))
                     {
                         @foreach (var kind in kinds)
                         {
@@ -251,6 +273,21 @@
     .akml-schema-tree-object:hover { text-decoration: underline; }
     .akml-schema-tree-column { padding-left: 64px; color: var(--akml-text-secondary); }
     .akml-schema-tree-virtual { padding: 0; }
+    .akml-schema-tree-noaccess {
+        flex: 0 0 auto;
+        font-size: 11px;
+        font-style: italic;
+        color: var(--akml-text-secondary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-s);
+        padding: 0 var(--akml-scalar-spacing-xs);
+    }
+    .akml-schema-tree-empty-kind { padding-left: 32px; color: var(--akml-text-secondary); font-style: italic; }
+    .akml-schema-system-toggle.selected {
+        background-color: var(--akml-surface-selection);
+        box-shadow: inset 0 0 0 1px var(--akml-accent-primary);
+        font-weight: 600;
+    }
 </style>
 
 @code {
@@ -267,6 +304,22 @@
 
     /// <summary>Spec 041 (R40) — the engine session whose schema Refresh reloads.</summary>
     [Parameter] public string? SessionId { get; set; }
+
+    /// <summary>Spec 042 (FR-040): the kind of server the tree describes. PostgreSQL has materialized views and sequences, calls
+    /// its procedures Procedures, quotes names its own way and keeps its system schemas out of sight until asked.</summary>
+    [Parameter] public DatabaseKind Kind { get; set; } = DatabaseKind.SqlServer;
+
+    private bool _showSystem;
+
+    private void ToggleSystem() => _showSystem = !_showSystem;
+
+    private bool HasSystemSchemas => _payload?.HiddenSchemas is { Length: > 0 };
+
+    private bool IsHiddenSchema(string name) =>
+        !_showSystem && _payload?.HiddenSchemas is { } hidden && Array.IndexOf(hidden, name) >= 0;
+
+    private bool IsInaccessibleSchema(string name) =>
+        _payload?.InaccessibleSchemas is { } blocked && Array.IndexOf(blocked, name) >= 0;
 
     private const int VirtualizeThreshold = 200;
     private const int FilterDelayMs = 150;
@@ -430,15 +483,24 @@
     /// SchemaPhasePayload doc-comment). Kinds with zero objects are still rendered so
     /// the user sees the full taxonomy even on sparse schemas (spec 041: the caller hides them while filtering).
     /// A non-empty <paramref name="filter"/> keeps only objects whose name contains it, ignoring case.</summary>
-    private static IEnumerable<KindGroup> EnumerateKinds(SchemaPhaseSchema schema, string filter)
+    private static IEnumerable<KindGroup> EnumerateKinds(SchemaPhaseSchema schema, string filter, DatabaseKind kind)
     {
+        var postgres = kind == DatabaseKind.PostgreSql;
+        var procedures = postgres ? "Procedures" : "Stored Procedures";
         var byKind = new Dictionary<string, List<SchemaPhaseObject>>(StringComparer.Ordinal)
         {
             ["Tables"] = new(),
             ["Views"] = new(),
-            ["Stored Procedures"] = new(),
-            ["Functions"] = new(),
         };
+        // Spec 042: PostgreSQL's materialized views and sequences are groups of their own, between views and routines.
+        if (postgres)
+        {
+            byKind["Materialized Views"] = new();
+            byKind["Sequences"] = new();
+        }
+        byKind[procedures] = new();
+        byKind["Functions"] = new();
+
         foreach (var obj in schema.Objects ?? Array.Empty<SchemaPhaseObject>())
         {
             if (filter.Length > 0 && obj.ObjectName.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0) continue;
@@ -446,7 +508,9 @@
             {
                 case DbObjectType.Table: byKind["Tables"].Add(obj); break;
                 case DbObjectType.View: byKind["Views"].Add(obj); break;
-                case DbObjectType.Procedure: byKind["Stored Procedures"].Add(obj); break;
+                case DbObjectType.MaterializedView when postgres: byKind["Materialized Views"].Add(obj); break;
+                case DbObjectType.Sequence when postgres: byKind["Sequences"].Add(obj); break;
+                case DbObjectType.Procedure: byKind[procedures].Add(obj); break;
                 case DbObjectType.ScalarFunction:
                 case DbObjectType.TableFunction:
                 case DbObjectType.InlineFunction:
@@ -468,11 +532,17 @@
         ["Views"] = ("eye", "view"),
         ["Stored Procedures"] = ("scroll-text", "storedproc"),
         ["Functions"] = ("square-function", "function"),
+        // Spec 042: PostgreSQL's groups.
+        ["Procedures"] = ("scroll-text", "storedproc"),
+        ["Materialized Views"] = ("eye", "view"),
+        ["Sequences"] = ("list-ordered", "index"),
     };
 
     private static (string Icon, string Badge) ObjectIcon(int objectType) => (DbObjectType)objectType switch
     {
         DbObjectType.View => KindIcons["Views"],
+        DbObjectType.MaterializedView => KindIcons["Materialized Views"],
+        DbObjectType.Sequence => KindIcons["Sequences"],
         DbObjectType.Procedure => KindIcons["Stored Procedures"],
         DbObjectType.ScalarFunction or DbObjectType.TableFunction or DbObjectType.InlineFunction => KindIcons["Functions"],
         _ => KindIcons["Tables"],
@@ -483,13 +553,16 @@
     /// Duplicated here to avoid taking a project reference on AkmlSql.IntelliSense
     /// (the engine project) from the browser build, which would drag in Sql parser
     /// dependencies we don't need in WASM.</summary>
-    private enum DbObjectType { Table = 0, View = 1, Procedure = 2, ScalarFunction = 3, TableFunction = 4, InlineFunction = 5, Synonym = 6, Sequence = 7 }
+    private enum DbObjectType { Table = 0, View = 1, Procedure = 2, ScalarFunction = 3, TableFunction = 4, InlineFunction = 5, Synonym = 6, Sequence = 7, MaterializedView = 8 }
 
     private record KindGroup(string Label, List<SchemaPhaseObject> Objects, string Icon, string Badge);
 
     private RenderFragment RenderObject(SchemaPhaseObject obj, string objPath, string schemaName) => builder =>
     {
-        var qualifier = $"[{schemaName}].[{obj.ObjectName}]";
+        // Spec 042: the name as PostgreSQL writes it - quoted only where it must be, never in square brackets.
+        var qualifier = Kind == DatabaseKind.PostgreSql
+            ? AkmlSql.Core.Text.PgIdentifierQuoting.QualifiedName(schemaName, obj.ObjectName)
+            : $"[{schemaName}].[{obj.ObjectName}]";
         var hasColumns = obj.Columns is { Length: > 0 };
         builder.OpenElement(0, "li");
         builder.AddAttribute(1, "class", "akml-schema-tree-node akml-schema-tree-object");

@@ -27,4 +27,9 @@
     <ProjectReference Include="..\..\src\AkmlSql.AI\AkmlSql.AI.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Spec 042: SQL Server prompt text captured before the dialect existed (PromptDialectTests pins it byte for byte). -->
+    <Content Include="Fixtures\*.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

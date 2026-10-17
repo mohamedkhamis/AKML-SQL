@@ -222,10 +222,12 @@ public sealed class HistoryDialogTests : BunitContext
         var page = OpenFirstEntry();
 
         HasThePageHeader(page.Find(".akml-page"), "SQL History");
-        var selected = page.Find("[data-testid=history-row][aria-selected=true]");
+        // Review WEB-13: the row is not an ARIA option (it holds a favorite button and a checkbox); its select button carries
+        // the selection, as aria-current.
+        var selected = page.Find("[data-testid=history-row].is-selected");
         Assert.Contains("akml-list-row", selected.ClassList);
-        Assert.Contains("is-selected", selected.ClassList);
-        Assert.Single(page.FindAll("[data-testid=history-row][aria-selected=true]"));
+        Assert.Equal("true", selected.QuerySelector("[data-testid=history-row-select]")!.GetAttribute("aria-current"));
+        Assert.Single(page.FindAll("[data-testid=history-row-select][aria-current=true]"));
     }
 
     // Spec 041 (T205, R66, FR-088) — empty and unavailable states say what to do next.

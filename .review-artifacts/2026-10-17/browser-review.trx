@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="15212e2c-0f9e-49d4-a550-bd635833297e" name="Administrator@1442-MOHAMEDKHA 2026-10-17 12:38:36" runUser="1442-MOHAMEDKHA\Administrator" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-17T12:38:36.9445607+03:00" queuing="2026-10-17T12:38:36.9445613+03:00" start="2026-10-17T12:38:14.4628724+03:00" finish="2026-10-17T12:42:02.7912845+03:00" />
+  <TestSettings name="default" id="555fb8c7-9fa7-4c9a-a763-43a31694a1dc">
+    <Deployment runDeploymentRoot="Administrator_1442-MOHAMEDKHA_2026-10-17_12_38_36" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a573c695-43f2-49e7-aedd-4cbde728c3b2" testId="87de980a-50bd-90d3-9004-b12fe336649b" testName="AkmlSql.Web.E2E.Tests.WorkspaceAccessibilityTests.Themes_have_readable_token_pairs_focus_help_and_reduced_motion" computerName="1442-MOHAMEDKHA" duration="00:00:12.8181720" startTime="2026-10-17T12:41:49.9118906+03:00" endTime="2026-10-17T12:42:02.7307480+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a573c695-43f2-49e7-aedd-4cbde728c3b2">
+      <Output>
+        <StdOut>Light editor: 17.85:1&#xD;
+Light badge: 14.48:1&#xD;
+Light dialog: 17.85:1&#xD;
+Light menu-selection: 5.17:1&#xD;
+Light secondary: 7.58:1&#xD;
+Light tooltip: 17.85:1&#xD;
+Light error-badge-and-confirm: 6.47:1&#xD;
+Light warning-badge: 7.09:1&#xD;
+Light success-badge: 7.13:1&#xD;
+Light primary-button: 5.17:1&#xD;
+Light primary-button-hover: 8.72:1&#xD;
+Light success-on-panel: 7.13:1&#xD;
+Light success-on-canvas: 6.51:1&#xD;
+Light warning-on-panel: 7.09:1&#xD;
+Light warning-on-canvas: 6.47:1&#xD;
+Light danger-on-panel: 6.47:1&#xD;
+Light danger-on-canvas: 5.91:1&#xD;
+Light live-status-pill: 7.13:1&#xD;
+Dark editor: 11.87:1&#xD;
+Dark badge: 8.40:1&#xD;
+Dark dialog: 11.87:1&#xD;
+Dark menu-selection: 5.17:1&#xD;
+Dark secondary: 5.71:1&#xD;
+Dark tooltip: 11.87:1&#xD;
+Dark error-badge-and-confirm: 6.47:1&#xD;
+Dark warning-badge: 7.09:1&#xD;
+Dark success-badge: 7.13:1&#xD;
+Dark primary-button: 5.17:1&#xD;
+Dark primary-button-hover: 8.72:1&#xD;
+Dark success-on-panel: 8.40:1&#xD;
+Dark success-on-canvas: 10.25:1&#xD;
+Dark warning-on-panel: 6.46:1&#xD;
+Dark warning-on-canvas: 7.89:1&#xD;
+Dark danger-on-panel: 5.29:1&#xD;
+Dark danger-on-canvas: 6.45:1&#xD;
+Dark live-status-pill: 7.13:1&#xD;
+HighContrast editor: 21.00:1&#xD;
+HighContrast badge: 21.00:1&#xD;
+HighContrast dialog: 21.00:1&#xD;
+HighContrast menu-selection: 21.00:1&#xD;
+HighContrast secondary: 5.17:1&#xD;
+HighContrast tooltip: 21.00:1&#xD;
+HighContrast error-badge-and-confirm: 21.00:1&#xD;
+HighContrast warning-badge: 21.00:1&#xD;
+HighContrast success-badge: 21.00:1&#xD;
+HighContrast primary-button: 21.00:1&#xD;
+HighContrast primary-button-hover: 21.00:1&#xD;
+HighContrast success-on-panel: 21.00:1&#xD;
+HighContrast success-on-canvas: 21.00:1&#xD;
+HighContrast warning-on-panel: 21.00:1&#xD;
+HighContrast warning-on-canvas: 21.00:1&#xD;
+HighContrast danger-on-panel: 21.00:1&#xD;
+HighContrast danger-on-canvas: 21.00:1&#xD;
+HighContrast live-status-pill: 21.00:1&#xD;
+{"hover":true,"rowHover":true,"theme":"high-contrast","color":"rgb(255, 255, 255)","rowBackground":"rgb(0, 0, 0)","parent":"akml-results-row","forced":false}</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8218f365-be69-4d74-9f06-08051d2c4855" testId="9661a896-2de3-c4e5-867e-816188a3a7f4" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.A_dark_theme_is_applied_before_the_first_paint" computerName="1442-MOHAMEDKHA" duration="00:00:12.5994329" startTime="2026-10-17T12:39:33.3276915+03:00" endTime="2026-10-17T12:39:45.9278883+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8218f365-be69-4d74-9f06-08051d2c4855">
+      <Output>
+        <StdOut>dark.css at 16.80000001192093 ms, first paint at 48 ms</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e2ea318f-d8a7-437d-a5e9-68d40ab247cf" testId="5ace9650-381e-0bf8-72e7-0aa492e08ed2" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.With_analysis_off_Analyse_says_so_and_Turn_on_brings_it_back" computerName="1442-MOHAMEDKHA" duration="00:00:12.1302837" startTime="2026-10-17T12:39:45.9290576+03:00" endTime="2026-10-17T12:39:58.0600541+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e2ea318f-d8a7-437d-a5e9-68d40ab247cf" />
+    <UnitTestResult executionId="e20762f1-1b94-46b1-b371-c62c891f694e" testId="d46054f0-a416-fdbc-28ab-760c3ab92981" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.The_filter_keeps_matching_settings_under_their_section_and_greys_the_rest" computerName="1442-MOHAMEDKHA" duration="00:00:09.9431830" startTime="2026-10-17T12:38:53.1725645+03:00" endTime="2026-10-17T12:39:03.1165838+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e20762f1-1b94-46b1-b371-c62c891f694e" />
+    <UnitTestResult executionId="c8b9c0d3-642f-4937-8428-6c2a2f8af6ad" testId="ce8aa3d8-3d61-ce36-e2ed-7d55d07ef63e" testName="AkmlSql.Web.E2E.Tests.TabStripKeyboardTests.Every_strip_moves_with_the_arrow_keys_and_shows_the_same_marker" computerName="1442-MOHAMEDKHA" duration="00:00:20.2130359" startTime="2026-10-17T12:38:16.6711962+03:00" endTime="2026-10-17T12:38:36.9025431+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c8b9c0d3-642f-4937-8428-6c2a2f8af6ad">
+      <Output>
+        <StdOut>results: 2px | solid | rgb(37, 99, 235) | 28px
+ai: 2px | solid | rgb(37, 99, 235) | 28px
+preview: 2px | solid | rgb(37, 99, 235) | 28px</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7f3ba603-a7b3-4114-9788-1d55ca7cae3a" testId="c4b5da3b-1b7b-28b7-2ba8-fcea20e8041c" testName="AkmlSql.Web.E2E.Tests.DocumentFlowTests.Save_names_a_default_document_downloads_UTF8_with_a_BOM_and_titles_the_page" computerName="1442-MOHAMEDKHA" duration="00:00:10.7775524" startTime="2026-10-17T12:41:21.0935423+03:00" endTime="2026-10-17T12:41:31.8714742+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7f3ba603-a7b3-4114-9788-1d55ca7cae3a" />
+    <UnitTestResult executionId="c1727f07-0925-41fb-944f-b331926ee275" testId="dccbc081-cf23-ecd7-af0a-cf200a9812c7" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.The_row_limit_default_against_the_toolbar_session_value" computerName="1442-MOHAMEDKHA" duration="00:00:14.4201466" startTime="2026-10-17T12:39:03.1175191+03:00" endTime="2026-10-17T12:39:17.5383679+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1727f07-0925-41fb-944f-b331926ee275" />
+    <UnitTestResult executionId="4a936451-25d5-4cbc-888d-dbe6932a5c24" testId="355fd95e-9f29-934a-a3c4-b06d819bf786" testName="AkmlSql.Web.E2E.Tests.WorkspaceAccessibilityTests.Touch_resizes_splitters_and_columns_at_both_scales" computerName="1442-MOHAMEDKHA" duration="00:00:18.0377576" startTime="2026-10-17T12:41:31.8724694+03:00" endTime="2026-10-17T12:41:49.9111167+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4a936451-25d5-4cbc-888d-dbe6932a5c24">
+      <Output>
+        <StdOut>100% workspace-splitter-bottom: hit area 12.0px; drag delta 64.0px&#xD;
+100% results-col-resizer-0: hit area 8.0px; drag delta 64.0px&#xD;
+150% workspace-splitter-bottom: hit area 18.0px; drag delta 96.0px&#xD;
+150% results-col-resizer-0: hit area 12.0px; drag delta 96.0px</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="bcc510a5-53e1-4d23-9a46-edc23af54971" testId="9acad848-7011-3379-1c80-817b096ae06b" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.Editor_options_change_the_editor_live_and_survive_a_reload" computerName="1442-MOHAMEDKHA" duration="00:00:12.0598610" startTime="2026-10-17T12:40:21.4986540+03:00" endTime="2026-10-17T12:40:33.5592606+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bcc510a5-53e1-4d23-9a46-edc23af54971" />
+    <UnitTestResult executionId="8ef12348-9a3f-4a0f-89fb-ed747d800f67" testId="7b74775a-e537-748d-77e9-d390cf7a3a64" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.Restoring_AI_defaults_names_the_three_providers_and_leaves_General_and_Connections" computerName="1442-MOHAMEDKHA" duration="00:00:12.1128068" startTime="2026-10-17T12:40:09.3831304+03:00" endTime="2026-10-17T12:40:21.4971330+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8ef12348-9a3f-4a0f-89fb-ed747d800f67" />
+    <UnitTestResult executionId="916f2071-008d-47a8-9da2-64e3d9096f21" testId="bc5101fa-c45a-1731-26f5-d54aaf96f07a" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.A_second_tab_uses_the_new_value_and_never_writes_the_old_one_back" computerName="1442-MOHAMEDKHA" duration="00:00:16.2381080" startTime="2026-10-17T12:38:36.9315163+03:00" endTime="2026-10-17T12:38:53.1706070+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="916f2071-008d-47a8-9da2-64e3d9096f21" />
+    <UnitTestResult executionId="2a4adc74-7225-48c2-ae0e-3f5801ffbda6" testId="8b329624-9fa7-639b-08fb-289c7023da7d" testName="AkmlSql.Web.E2E.Tests.DocumentFlowTests.New_query_confirms_a_modified_document_and_starts_the_next_number" computerName="1442-MOHAMEDKHA" duration="00:00:10.2701198" startTime="2026-10-17T12:41:10.8223826+03:00" endTime="2026-10-17T12:41:21.0927513+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2a4adc74-7225-48c2-ae0e-3f5801ffbda6" />
+    <UnitTestResult executionId="5105967e-a12e-4962-b2ec-41c7fe594a9f" testId="81767a9c-3bbe-4cd8-04e0-acb5cea51f9d" testName="AkmlSql.Web.E2E.Tests.DocumentFlowTests.History_names_a_session_after_its_document" computerName="1442-MOHAMEDKHA" duration="00:00:13.3500814" startTime="2026-10-17T12:40:57.4706972+03:00" endTime="2026-10-17T12:41:10.8215469+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5105967e-a12e-4962-b2ec-41c7fe594a9f">
+      <Output>
+        <StdOut>History: query-02 | orders-audit</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="01f71101-d3c3-4aaf-aa60-5bcfaa3b11f1" testId="e6854042-d803-ac45-b76f-205de598769a" testName="AkmlSql.Web.E2E.Tests.DocumentFlowTests.Open_reads_UTF16_and_UTF8_files_and_names_the_document_after_them" computerName="1442-MOHAMEDKHA" duration="00:00:10.1152412" startTime="2026-10-17T12:40:47.3461574+03:00" endTime="2026-10-17T12:40:57.4619734+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="01f71101-d3c3-4aaf-aa60-5bcfaa3b11f1" />
+    <UnitTestResult executionId="c529a64a-a617-454b-9b3e-264fa826b5ae" testId="147fa24e-2ad6-c9ee-158a-e6e46d4cbe88" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.An_export_holds_no_secret_and_imports_into_another_browser" computerName="1442-MOHAMEDKHA" duration="00:00:13.7845644" startTime="2026-10-17T12:40:33.5600233+03:00" endTime="2026-10-17T12:40:47.3450715+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c529a64a-a617-454b-9b3e-264fa826b5ae" />
+    <UnitTestResult executionId="f84c8f16-525b-4960-9b6c-7c54657a7336" testId="2875a222-8f4b-df5c-f531-0793ee9eedca" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.A_rule_suppressed_everywhere_is_listed_and_Undo_brings_its_finding_back" computerName="1442-MOHAMEDKHA" duration="00:00:11.3205672" startTime="2026-10-17T12:39:58.0611713+03:00" endTime="2026-10-17T12:40:09.3824589+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f84c8f16-525b-4960-9b6c-7c54657a7336" />
+    <UnitTestResult executionId="99d8c267-ce21-401b-a01a-71c4d266ce20" testId="8247b199-c7cd-3f0f-eeb1-394a8d8a1d01" testName="AkmlSql.Web.E2E.Tests.SettingsPageTests.Five_places_in_the_navigation_and_the_old_routes_open_their_sections" computerName="1442-MOHAMEDKHA" duration="00:00:15.7869040" startTime="2026-10-17T12:39:17.5393533+03:00" endTime="2026-10-17T12:39:33.3268709+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="99d8c267-ce21-401b-a01a-71c4d266ce20" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.An_export_holds_no_secret_and_imports_into_another_browser" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="147fa24e-2ad6-c9ee-158a-e6e46d4cbe88">
+      <Execution id="c529a64a-a617-454b-9b3e-264fa826b5ae" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="An_export_holds_no_secret_and_imports_into_another_browser" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.DocumentFlowTests.New_query_confirms_a_modified_document_and_starts_the_next_number" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="8b329624-9fa7-639b-08fb-289c7023da7d">
+      <Execution id="2a4adc74-7225-48c2-ae0e-3f5801ffbda6" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.DocumentFlowTests" name="New_query_confirms_a_modified_document_and_starts_the_next_number" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.A_rule_suppressed_everywhere_is_listed_and_Undo_brings_its_finding_back" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="2875a222-8f4b-df5c-f531-0793ee9eedca">
+      <Execution id="f84c8f16-525b-4960-9b6c-7c54657a7336" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="A_rule_suppressed_everywhere_is_listed_and_Undo_brings_its_finding_back" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.The_filter_keeps_matching_settings_under_their_section_and_greys_the_rest" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="d46054f0-a416-fdbc-28ab-760c3ab92981">
+      <Execution id="e20762f1-1b94-46b1-b371-c62c891f694e" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="The_filter_keeps_matching_settings_under_their_section_and_greys_the_rest" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.WorkspaceAccessibilityTests.Themes_have_readable_token_pairs_focus_help_and_reduced_motion" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="87de980a-50bd-90d3-9004-b12fe336649b">
+      <Execution id="a573c695-43f2-49e7-aedd-4cbde728c3b2" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.WorkspaceAccessibilityTests" name="Themes_have_readable_token_pairs_focus_help_and_reduced_motion" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.Restoring_AI_defaults_names_the_three_providers_and_leaves_General_and_Connections" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="7b74775a-e537-748d-77e9-d390cf7a3a64">
+      <Execution id="8ef12348-9a3f-4a0f-89fb-ed747d800f67" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="Restoring_AI_defaults_names_the_three_providers_and_leaves_General_and_Connections" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.Editor_options_change_the_editor_live_and_survive_a_reload" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="9acad848-7011-3379-1c80-817b096ae06b">
+      <Execution id="bcc510a5-53e1-4d23-9a46-edc23af54971" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="Editor_options_change_the_editor_live_and_survive_a_reload" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.TabStripKeyboardTests.Every_strip_moves_with_the_arrow_keys_and_shows_the_same_marker" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="ce8aa3d8-3d61-ce36-e2ed-7d55d07ef63e">
+      <Execution id="c8b9c0d3-642f-4937-8428-6c2a2f8af6ad" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.TabStripKeyboardTests" name="Every_strip_moves_with_the_arrow_keys_and_shows_the_same_marker" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.A_dark_theme_is_applied_before_the_first_paint" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="9661a896-2de3-c4e5-867e-816188a3a7f4">
+      <Execution id="8218f365-be69-4d74-9f06-08051d2c4855" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="A_dark_theme_is_applied_before_the_first_paint" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.A_second_tab_uses_the_new_value_and_never_writes_the_old_one_back" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="bc5101fa-c45a-1731-26f5-d54aaf96f07a">
+      <Execution id="916f2071-008d-47a8-9da2-64e3d9096f21" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="A_second_tab_uses_the_new_value_and_never_writes_the_old_one_back" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.The_row_limit_default_against_the_toolbar_session_value" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="dccbc081-cf23-ecd7-af0a-cf200a9812c7">
+      <Execution id="c1727f07-0925-41fb-944f-b331926ee275" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="The_row_limit_default_against_the_toolbar_session_value" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.DocumentFlowTests.Open_reads_UTF16_and_UTF8_files_and_names_the_document_after_them" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="e6854042-d803-ac45-b76f-205de598769a">
+      <Execution id="01f71101-d3c3-4aaf-aa60-5bcfaa3b11f1" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.DocumentFlowTests" name="Open_reads_UTF16_and_UTF8_files_and_names_the_document_after_them" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.WorkspaceAccessibilityTests.Touch_resizes_splitters_and_columns_at_both_scales" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="355fd95e-9f29-934a-a3c4-b06d819bf786">
+      <Execution id="4a936451-25d5-4cbc-888d-dbe6932a5c24" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.WorkspaceAccessibilityTests" name="Touch_resizes_splitters_and_columns_at_both_scales" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.With_analysis_off_Analyse_says_so_and_Turn_on_brings_it_back" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="5ace9650-381e-0bf8-72e7-0aa492e08ed2">
+      <Execution id="e2ea318f-d8a7-437d-a5e9-68d40ab247cf" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="With_analysis_off_Analyse_says_so_and_Turn_on_brings_it_back" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.DocumentFlowTests.History_names_a_session_after_its_document" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="81767a9c-3bbe-4cd8-04e0-acb5cea51f9d">
+      <Execution id="5105967e-a12e-4962-b2ec-41c7fe594a9f" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.DocumentFlowTests" name="History_names_a_session_after_its_document" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.DocumentFlowTests.Save_names_a_default_document_downloads_UTF8_with_a_BOM_and_titles_the_page" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="c4b5da3b-1b7b-28b7-2ba8-fcea20e8041c">
+      <Execution id="7f3ba603-a7b3-4114-9788-1d55ca7cae3a" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.DocumentFlowTests" name="Save_names_a_default_document_downloads_UTF8_with_a_BOM_and_titles_the_page" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.SettingsPageTests.Five_places_in_the_navigation_and_the_old_routes_open_their_sections" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="8247b199-c7cd-3f0f-eeb1-394a8d8a1d01">
+      <Execution id="99d8c267-ce21-401b-a01a-71c4d266ce20" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.SettingsPageTests" name="Five_places_in_the_navigation_and_the_old_routes_open_their_sections" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="87de980a-50bd-90d3-9004-b12fe336649b" executionId="a573c695-43f2-49e7-aedd-4cbde728c3b2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9661a896-2de3-c4e5-867e-816188a3a7f4" executionId="8218f365-be69-4d74-9f06-08051d2c4855" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5ace9650-381e-0bf8-72e7-0aa492e08ed2" executionId="e2ea318f-d8a7-437d-a5e9-68d40ab247cf" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d46054f0-a416-fdbc-28ab-760c3ab92981" executionId="e20762f1-1b94-46b1-b371-c62c891f694e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ce8aa3d8-3d61-ce36-e2ed-7d55d07ef63e" executionId="c8b9c0d3-642f-4937-8428-6c2a2f8af6ad" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c4b5da3b-1b7b-28b7-2ba8-fcea20e8041c" executionId="7f3ba603-a7b3-4114-9788-1d55ca7cae3a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="dccbc081-cf23-ecd7-af0a-cf200a9812c7" executionId="c1727f07-0925-41fb-944f-b331926ee275" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="355fd95e-9f29-934a-a3c4-b06d819bf786" executionId="4a936451-25d5-4cbc-888d-dbe6932a5c24" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9acad848-7011-3379-1c80-817b096ae06b" executionId="bcc510a5-53e1-4d23-9a46-edc23af54971" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7b74775a-e537-748d-77e9-d390cf7a3a64" executionId="8ef12348-9a3f-4a0f-89fb-ed747d800f67" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bc5101fa-c45a-1731-26f5-d54aaf96f07a" executionId="916f2071-008d-47a8-9da2-64e3d9096f21" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8b329624-9fa7-639b-08fb-289c7023da7d" executionId="2a4adc74-7225-48c2-ae0e-3f5801ffbda6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="81767a9c-3bbe-4cd8-04e0-acb5cea51f9d" executionId="5105967e-a12e-4962-b2ec-41c7fe594a9f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e6854042-d803-ac45-b76f-205de598769a" executionId="01f71101-d3c3-4aaf-aa60-5bcfaa3b11f1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="147fa24e-2ad6-c9ee-158a-e6e46d4cbe88" executionId="c529a64a-a617-454b-9b3e-264fa826b5ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2875a222-8f4b-df5c-f531-0793ee9eedca" executionId="f84c8f16-525b-4960-9b6c-7c54657a7336" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8247b199-c7cd-3f0f-eeb1-394a8d8a1d01" executionId="99d8c267-ce21-401b-a01a-71c4d266ce20" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="17" executed="17" passed="17" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:01.02]   Discovering: AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:01.30]   Discovered:  AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:01.35]   Starting:    AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:03:47.47]   Finished:    AkmlSql.Web.E2E.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

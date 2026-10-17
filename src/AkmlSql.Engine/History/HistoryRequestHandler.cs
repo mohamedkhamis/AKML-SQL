@@ -47,7 +47,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 recordRequest.ErrorMessage,
                 recordRequest.Source,
                 recordRequest.TabTitle,
-                sessionKey: recordRequest.SessionKey);
+                sessionKey: recordRequest.SessionKey,
+                kind: recordRequest.Kind);
 
             Log.Debug("History record saved: EntryId={EntryId}, Server={Server}, Database={Database}",
                 entryId, recordRequest.Server, recordRequest.Database);
@@ -115,7 +116,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
                 NameFilter = searchRequest.NameFilter,
                 CamelCaseTokens = searchRequest.CamelCaseTokens,
                 PathFilter = searchRequest.PathFilter,
-                SqlOnly = searchRequest.SqlOnly
+                SqlOnly = searchRequest.SqlOnly,
+                Kind = searchRequest.Kind
             };
 
             // Parse ISO 8601 date strings to DateTime
@@ -565,7 +567,8 @@ public class HistoryRequestHandler(HistoryDatabase database)
             Deduplicate = f.Deduplicate,
             Offset = 0,
             Limit = int.MaxValue, // Export: no pagination
-            NameFilter = f.NameFilter
+            NameFilter = f.NameFilter,
+            Kind = f.Kind
         };
 
         if (!string.IsNullOrEmpty(f.DateFrom) &&

@@ -59,7 +59,7 @@ public class HistorySchemaVersionTests
                 "SELECT value FROM metadata WHERE key = 'schema_version';", conn);
             var value = (string)(await readCmd.ExecuteScalarAsync())!;
 
-            Assert.Equal("3", value);   // current SchemaVersion (v3 since spec 040), not the stale '1'
+            Assert.Equal("4", value);   // current SchemaVersion (v4 since spec 042; v3 in spec 040), not the stale '1'
         }
         finally { CleanupDb(path); }
     }

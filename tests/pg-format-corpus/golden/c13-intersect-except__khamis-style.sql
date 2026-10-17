@@ -1,0 +1,8 @@
+SELECT  id
+FROM    a
+INTERSECT
+SELECT  id
+FROM    b
+EXCEPT
+SELECT  id
+FROM    c ;

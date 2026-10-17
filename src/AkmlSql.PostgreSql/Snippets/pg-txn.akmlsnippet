@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "id": "builtin-pg-txn",
+    "shortcode": "txn",
+    "name": "Transaction block",
+    "description": "BEGIN ... COMMIT",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "Transaction",
+    "tags": [
+      "transaction",
+      "begin"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "BEGIN;",
+    "$CURSOR$",
+    "COMMIT;"
+  ]
+}

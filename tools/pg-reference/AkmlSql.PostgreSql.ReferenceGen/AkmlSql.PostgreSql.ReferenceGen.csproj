@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Spec 042 (task T091): the PostgreSQL reference generator. A console tool that reads the PostgreSQL source tree of each
+    supported release (the documentation SGML and the catalog files) and writes the reference the product ships. It is not
+    part of the product build (it is not in the solution); the PostgreSQL test project references it so its readers are tested.
+    See tools/pg-reference/README.md and specs/042-postgresql-support/contracts/reference-schema.md.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>AkmlSql.PostgreSql.ReferenceGen</RootNamespace>
+    <AssemblyName>AkmlSql.PostgreSql.ReferenceGen</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>

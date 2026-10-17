@@ -1,18 +1,22 @@
 {
-    "generatedAt":  "2026-10-07T04:17:32Z",
+    "generatedAt":  "2026-10-17T12:32:06Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
-                                           "updated":  "2026-10-07"
+                                           "updated":  "2026-10-15"
                                        },
                  "configuration.md":  {
                                           "added":  "2026-03-24",
-                                          "updated":  "2026-10-06"
+                                          "updated":  "2026-10-15"
                                       },
                  "formatting.md":  {
                                        "added":  "2026-03-24",
-                                       "updated":  "2026-10-07"
+                                       "updated":  "2026-10-14"
                                    },
+                 "postgresql-reference.md":  {
+                                                 "added":  "2026-10-14",
+                                                 "updated":  "2026-10-14"
+                                             },
                  "topics/ai-assistance.md":  {
                                                  "added":  "2026-08-29",
                                                  "updated":  "2026-10-07"
@@ -23,19 +27,19 @@
                                           },
                  "topics/formatting.md":  {
                                               "added":  "2026-08-29",
-                                              "updated":  "2026-10-06"
+                                              "updated":  "2026-10-14"
                                           },
                  "topics/getting-started.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-10-07"
+                                                   "updated":  "2026-10-14"
                                                },
                  "topics/intellisense.md":  {
                                                 "added":  "2026-08-29",
-                                                "updated":  "2026-10-07"
+                                                "updated":  "2026-10-14"
                                             },
                  "topics/options.md":  {
                                            "added":  "2026-10-01",
-                                           "updated":  "2026-10-06"
+                                           "updated":  "2026-10-14"
                                        },
                  "topics/refactoring.md":  {
                                                "added":  "2026-08-29",
@@ -47,7 +51,7 @@
                                         },
                  "topics/sql-history.md":  {
                                                "added":  "2026-08-29",
-                                               "updated":  "2026-10-05"
+                                               "updated":  "2026-10-14"
                                            },
                  "topics/static-analysis.md":  {
                                                    "added":  "2026-08-29",
@@ -55,7 +59,7 @@
                                                },
                  "topics/troubleshooting.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-10-07"
+                                                   "updated":  "2026-10-14"
                                                }
              }
 }

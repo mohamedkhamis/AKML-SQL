@@ -12,6 +12,7 @@
 @inject IAiClientFactory Client
 @inject IDialogService Dialogs
 @inject INotificationService Notifications
+@inject IServiceProvider ServiceProvider
 
 <p class="akml-hint">
     AKML SQL never sees your API keys. They live encrypted in your browser via Web Crypto (AES-GCM 256). When you
@@ -87,6 +88,10 @@
             <label class="akml-field">Endpoint
                 <input class="akml-input" @bind="_form.Endpoint" disabled title="This provider uses its standard endpoint" placeholder="Not used by this provider" />
             </label>
+        }
+        @if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
+        {
+            <SecureContextNotice What="API keys" />
         }
         @if (RequiresApiKey(_form.ProviderId))
         {
@@ -230,8 +235,14 @@
         _ => string.Empty,
     };
 
+    // Review WEB-03: whether an API key can be stored here (a secure context). Assumed until the browser says otherwise.
+    private bool _secureStorage = true;
+
     protected override async Task OnInitializedAsync()
     {
+        try { _secureStorage = ServiceProvider.GetService(typeof(IWebCryptoWrapper)) is not IWebCryptoWrapper crypto || await crypto.IsSecureStorageAvailableAsync(); }
+        catch (JSException) { _secureStorage = false; }
+        catch (JSDisconnectedException) { }
         await FeatureSettings.ReloadAsync();
         await ReloadAsync();
     }
@@ -297,6 +308,8 @@
         if (string.IsNullOrEmpty(_form.ProviderId)) _errors.Add("Provider is required.");
         if (string.IsNullOrEmpty(_form.Model)) _errors.Add("Model is required.");
         if (RequiresApiKey(_form.ProviderId) && string.IsNullOrEmpty(_form.ApiKey)) _errors.Add("API key is required.");
+        if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
+            _errors.Add("This page was opened over plain HTTP from another computer, so the key cannot be stored. Open the site's HTTPS address.");
         if (RequiresEndpoint(_form.ProviderId) && string.IsNullOrEmpty(_form.Endpoint))
             _errors.Add($"Endpoint is required for {DefaultDisplayName(_form.ProviderId)}.");
         if (_errors.Count > 0) return;

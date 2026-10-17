@@ -100,6 +100,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>True when the IsKey column cross-checks to the schema-cache declared PRIMARY KEY.</summary>
         [Key(11)]
         public bool IsTruePrimaryKey { get; set; }
+
+        /// <summary>
+        /// Review WEB-20: the column has a default the server fills in when an INSERT leaves it out, so a new row need not
+        /// supply it (and an unset cell must be omitted, not sent as NULL, or the default never applies). False when unknown —
+        /// an older engine, or a SQL Server schema whose columns have not loaded yet — and the grid then asks for a value.
+        /// </summary>
+        [Key(12)]
+        public bool HasDefault { get; set; }
     }
 
     /// <summary>One result set: column metadata + SAFE text rows + CRUD eligibility + base-table identity.</summary>
@@ -153,6 +161,21 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 041 — the batch (0-based, after GO splitting) that produced this set; 0 from older engines.</summary>
         [Key(11)]
         public int BatchIndex { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-130): why a PostgreSQL set cannot be edited - it joins tables, is a view, has no primary key or leaves part of
+        /// it out. Null when editable, and for SQL Server sets. The grid says it where it would otherwise only say "can't be edited".
+        /// </summary>
+        [Key(12)]
+        public string? ReadOnlyReason { get; set; }
+
+        /// <summary>
+        /// Re-review REV-06: every column's <see cref="ColumnProvenanceDto.HasDefault"/> is known (the engine read the table's
+        /// columns). False when it is not — a SQL Server schema whose columns have not loaded, a temp table, an older engine —
+        /// and then an unset NOT NULL cell of a new row is left to the server to accept or refuse, never assumed to need a value.
+        /// </summary>
+        [Key(13)]
+        public bool DefaultsKnown { get; set; }
     }
 
     /// <summary>Engine → Browser: the full execute outcome (NEVER null — a missing frame hangs the bridge).</summary>
@@ -214,6 +237,26 @@ namespace AkmlSql.Core.Ipc.Messages
         /// reply; null from older engines.</summary>
         [Key(12)]
         public string? CurrentDatabase { get; set; }
+
+        /// <summary>Spec 042 (FR-016): the transaction state after the script (0 None, 1 Open, 2 Aborted); always 0 for SQL Server.</summary>
+        [Key(13)]
+        public int TransactionState { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-043): the engine started reloading its catalog after this run, because a statement changed it and the change is
+        /// visible to other connections (the transaction it ran in has ended). A client that shows the schema refetches it when this is
+        /// true. False for SQL Server, and for a change inside a transaction that is still open (the reload follows the run that ends it).
+        /// </summary>
+        [Key(14)]
+        public bool SchemaChanged { get; set; }
+
+        /// <summary>
+        /// The engine's stamp of the session's connection after the run (server, login, database, kind and engine process);
+        /// the grid sends it back with its edits (<see cref="ApplyChangesRequest.ConnectionStamp"/>) so they are never written
+        /// through a different connection. Opaque to the browser; null from older engines.
+        /// </summary>
+        [Key(15)]
+        public string? ConnectionStamp { get; set; }
     }
 
     /// <summary>Spec 041 (R20) — one server or engine message of an execute, in stream order.</summary>
@@ -258,6 +301,22 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>The statement's row count (RowCount messages); -1 for none.</summary>
         [Key(9)]
         public long RowCount { get; set; } = -1;
+
+        /// <summary>Spec 042 (FR-014): the PostgreSQL SQLSTATE (<c>42P01</c>); null for SQL Server messages and for notices without one.</summary>
+        [Key(10)]
+        public string? SqlState { get; set; }
+
+        /// <summary>Spec 042: the server's DETAIL text, or null.</summary>
+        [Key(11)]
+        public string? Detail { get; set; }
+
+        /// <summary>Spec 042: the server's HINT text, or the engine's own hint (for example that <c>GO</c> is SQL Server-only), or null.</summary>
+        [Key(12)]
+        public string? Hint { get; set; }
+
+        /// <summary>Spec 042: the 1-based column within <see cref="Line"/> of the error position; 0 when unknown.</summary>
+        [Key(13)]
+        public int Column { get; set; }
     }
 
     /// <summary>Spec 041 (R20) — one batch of an execute, after GO splitting.</summary>
@@ -344,6 +403,10 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Invariant-culture cell text (same encoding as the read path); null == SQL NULL.</summary>
         [Key(5)]
         public string? Value { get; set; }
+
+        /// <summary>Spec 042 (R11): the PostgreSQL type name (<c>format_type</c> text) used for the <c>$n::type</c> cast; null for SQL Server.</summary>
+        [Key(6)]
+        public string? TypeName { get; set; }
     }
 
     /// <summary>One row-level edit: Update, Insert, or Delete. See <see cref="CrudOp"/>.</summary>
@@ -380,6 +443,22 @@ namespace AkmlSql.Core.Ipc.Messages
 
         [Key(4)]
         public CrudEditDto[] Edits { get; set; } = System.Array.Empty<CrudEditDto>();
+
+        /// <summary>
+        /// Spec 042 (FR-133, R11): the result set's base columns, in result order. A PostgreSQL UPDATE or INSERT returns exactly these
+        /// from the written row (<c>RETURNING a, b, c</c>), so the grid shows what the server stored - defaults, generated keys, what
+        /// a trigger changed - and reads back nothing else. SQL Server ignores it. Null or empty returns nothing.
+        /// </summary>
+        [Key(5)]
+        public string[]? ReturnColumns { get; set; }
+
+        /// <summary>
+        /// The <see cref="ExecuteQueryResult.ConnectionStamp"/> of the run the edited rows came from. The engine refuses the
+        /// edits when the session's connection has changed since. Null (an older web bundle, or an older engine's result) is
+        /// not checked.
+        /// </summary>
+        [Key(6)]
+        public string? ConnectionStamp { get; set; }
     }
 
     /// <summary>Per-edit result so the grid can flag the exact row that failed.</summary>
@@ -401,6 +480,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>SCOPE_IDENTITY() for an INSERT into an identity table, as invariant text; else null.</summary>
         [Key(4)]
         public string? NewIdentity { get; set; }
+
+        /// <summary>
+        /// Spec 042 (FR-133): the written row as the server holds it, in the order of <see cref="ApplyChangesRequest.ReturnColumns"/>
+        /// (PostgreSQL <c>RETURNING</c>). Null for a delete, for SQL Server, and when no columns were asked for.
+        /// </summary>
+        [Key(5)]
+        public string?[]? Row { get; set; }
     }
 
     /// <summary>Engine → Browser: outcome of an ApplyChanges batch (NEVER null).</summary>
@@ -489,6 +575,12 @@ namespace AkmlSql.Core.Ipc.Messages
         public const int Guid = 7;
         public const int Binary = 8;
         public const int Variant = 9;
+
+        /// <summary>Spec 042 (R10): a PostgreSQL column read as the server's own text (<c>{1,2,3}</c>, <c>1 day 02:00:00</c>, <c>\xdeadbeef</c>); nothing to parse back.</summary>
+        public const int ServerText = 10;
+
+        /// <summary>Spec 042 (R10): a PostgreSQL numeric column (integer types, <c>real</c>, <c>double precision</c>, <c>numeric</c>) as server text; the grid aligns and sorts it as a number.</summary>
+        public const int ServerNumber = 11;
     }
 
     /// <summary>Operation codes for <see cref="CrudEditDto.Op"/>.</summary>

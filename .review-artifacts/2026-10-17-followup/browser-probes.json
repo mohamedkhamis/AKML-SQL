@@ -1,0 +1,74 @@
+{
+  "snippetEnd": {
+    "count": 22,
+    "scrollTop": 0,
+    "activeText": "upd\nUPDATE SET\nPostgreSQL\nbuilt-in",
+    "activeTop": 882,
+    "activeBottom": 924,
+    "listTop": 112,
+    "listBottom": 856,
+    "visible": false
+  },
+  "snippetDiscard": {
+    "dialogs": 1,
+    "body": "SELECT 918273 AS unsaved_marker;"
+  },
+  "styleDirtyBefore": true,
+  "styleNav": {
+    "url": "http://127.0.0.1:5077/styles",
+    "dialogs": 1
+  },
+  "crypto": {
+    "outcomes": [
+      {
+        "i": 0,
+        "ok": true
+      },
+      {
+        "i": 1,
+        "ok": true
+      },
+      {
+        "i": 2,
+        "ok": true
+      },
+      {
+        "i": 3,
+        "ok": true
+      },
+      {
+        "i": 4,
+        "ok": true
+      },
+      {
+        "i": 5,
+        "ok": true
+      },
+      {
+        "i": 6,
+        "ok": true
+      },
+      {
+        "i": 7,
+        "ok": true
+      },
+      {
+        "i": 8,
+        "ok": true
+      },
+      {
+        "i": 9,
+        "ok": true
+      },
+      {
+        "i": 10,
+        "ok": true
+      },
+      {
+        "i": 11,
+        "ok": true
+      }
+    ],
+    "upgrade": "upgrade available"
+  }
+}

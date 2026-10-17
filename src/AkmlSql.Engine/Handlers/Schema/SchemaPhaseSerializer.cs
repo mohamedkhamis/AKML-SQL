@@ -83,6 +83,10 @@ namespace AkmlSql.Engine.Handlers.Schema
                 Checksum = ComputeChecksum(cache),
                 Schemas = schemas,
                 ForeignKeys = fks,
+                // Spec 042: PostgreSQL facts the explorer and completion need; empty arrays for SQL Server.
+                InaccessibleSchemas = cache.InaccessibleSchemas.ToArray(),
+                HiddenSchemas = cache.HiddenSchemas.ToArray(),
+                SearchPath = cache.SearchPath.ToArray(),
             };
         }
 

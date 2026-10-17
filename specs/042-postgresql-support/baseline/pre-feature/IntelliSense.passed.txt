@@ -1,0 +1,25 @@
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Computed_follows_the_key_indicators_flag(keys: False, expected: "decimal(10,2), NULL")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Computed_follows_the_key_indicators_flag(keys: True, expected: "decimal(10,2), NULL, COMPUTED")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Defaults_are_all_on
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: False, nullability: False, keys: False, expected: "")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: False, nullability: False, keys: True, expected: "PK, IDENTITY")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: False, nullability: True, keys: False, expected: "NOT NULL")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: False, nullability: True, keys: True, expected: "NOT NULL, PK, IDENTITY")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: True, nullability: False, keys: False, expected: "int")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: True, nullability: False, keys: True, expected: "int, PK, IDENTITY")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: True, nullability: True, keys: False, expected: "int, NOT NULL")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Key_column_text_follows_every_flag_combination(types: True, nullability: True, keys: True, expected: "int, NOT NULL, PK, IDENTITY")
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Table_name_alone_when_every_detail_is_off
+AkmlSql.IntelliSense.Tests.Completion.ColumnProviderSecondaryTextTests.Table_suffix_follows_the_details
+AkmlSql.IntelliSense.Tests.ExtractionSmokeTests.CompletionEngine_constructs_without_engine_assembly
+AkmlSql.IntelliSense.Tests.ExtractionSmokeTests.CompletionEngine_returns_response_for_basic_select
+AkmlSql.IntelliSense.Tests.ExtractionSmokeTests.DatabaseCache_constructs_with_empty_state
+AkmlSql.IntelliSense.Tests.ExtractionSmokeTests.Models_DatabaseObject_and_ForeignKey_are_reachable
+AkmlSql.IntelliSense.Tests.ExtractionSmokeTests.TsqlParserService_GetTokenStream_returns_non_empty_for_valid_sql
+AkmlSql.IntelliSense.Tests.RefactoringReachabilityTests.All_ten_lightweight_operations_are_reachable_and_implement_the_interface
+AkmlSql.IntelliSense.Tests.RefactoringReachabilityTests.Lightweight_operation_runs_end_to_end_from_shared_library
+AkmlSql.IntelliSense.Tests.RefactoringReachabilityTests.RefactoringContext_constructs_without_engine_assembly
+AkmlSql.IntelliSense.Tests.SchemaPhaseRehydratorTests.Rehydrate_BothNull_ReturnsEmptyNotLoadedCache
+AkmlSql.IntelliSense.Tests.SchemaPhaseRehydratorTests.Rehydrate_PhaseAOnly_HasObjectsButNoColumnsOrForeignKeys
+AkmlSql.IntelliSense.Tests.SchemaPhaseRehydratorTests.Rehydrate_PhaseB_ReproducesObjectsColumnsAndForeignKeys
+AkmlSql.IntelliSense.Tests.SchemaPhaseRehydratorTests.Rehydrate_PhaseBSupersedesPhaseA

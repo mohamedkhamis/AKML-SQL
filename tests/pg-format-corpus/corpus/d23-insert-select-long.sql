@@ -1,0 +1,1 @@
+insert into sales.top_customers (customer_id, company_name, total_spent) select c.customer_id, c.company_name, sum(o.total) from sales.customers c join sales.orders o on o.customer_id = c.customer_id group by c.customer_id, c.company_name having sum(o.total) > 1000;

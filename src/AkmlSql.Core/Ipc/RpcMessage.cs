@@ -353,5 +353,26 @@ namespace AkmlSql.Core.Ipc
         // under SET PARSEONLY ON. Sent only when the engine advertises execute.v2.
         public const int ExecuteParse = 219;
         public const int ExecuteParseResult = 220;
+
+        // ------------------------------------------------------------------
+        // Spec 042 (PostgreSQL support). Both pairs are served only when the engine advertises
+        // `dialect.postgresql.v1`; see specs/042-postgresql-support/contracts/ipc.md.
+        // ------------------------------------------------------------------
+
+        /// <summary>Web -> Engine: has/forget a remembered PostgreSQL password. Never carries the password.</summary>
+        public const int CredentialRequest = 221;
+        public const int CredentialResponse = 222;
+
+        /// <summary>Web -> Engine: remove literals from PostgreSQL text before it is sent to a cloud AI provider.</summary>
+        public const int RedactRequest = 223;
+        public const int RedactResponse = 224;
+
+        /// <summary>
+        /// Web -> Engine: end the session's database connection — roll back any open transaction, close the physical
+        /// connection and forget the session's connection — and reply when that is done. Sent only when the engine
+        /// advertises <c>session.disconnect.v1</c>.
+        /// </summary>
+        public const int SessionDisconnect = 225;
+        public const int SessionDisconnectResult = 226;
     }
 }

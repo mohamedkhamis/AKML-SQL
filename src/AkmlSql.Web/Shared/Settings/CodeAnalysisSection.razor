@@ -5,8 +5,11 @@
 *@
 @using AkmlSql.Web.Services
 @using AkmlSql.Engine.Analysis
+@using AkmlSql.Core.Ipc.Messages
+@using Microsoft.Extensions.DependencyInjection
 @inject IAnalysisSettingsStore Store
 @inject INotificationService Notifications
+@inject IServiceProvider Services
 
 <SettingRow Id="analysis-enabled" Kind="switch">
     <input id="setting-analysis-enabled-control" type="checkbox" checked="@_settings.Enabled"
@@ -34,7 +37,7 @@
             <ul class="akml-settings-rules">
                 @foreach (var (id, _) in Suppressed)
                 {
-                    <li data-testid="@($"suppressed-rule-{id}")">
+                    <li data-testid="@($"suppressed-rule-{id}")" data-kind="@KindKey(id)">
                         <strong>@id</strong> @RuleName(id)
                         <button type="button" class="akml-btn akml-btn--ghost" data-testid="@($"suppressed-rule-undo-{id}")"
                                 aria-label="@($"Undo: bring {id} back")" @onclick="@(() => UndoAsync(id))">Undo</button>
@@ -42,34 +45,151 @@
                 }
                 @foreach (var (id, severity) in Remapped)
                 {
-                    <li data-testid="@($"remapped-rule-{id}")"><strong>@id</strong> @RuleName(id) — reported as @severity</li>
+                    <li data-testid="@($"remapped-rule-{id}")" data-kind="@KindKey(id)"><strong>@id</strong> @RuleName(id) — reported as @severity</li>
                 }
             </ul>
+        }
+    </div>
+</SettingRow>
+@* Spec 042 (FR-152): every rule, grouped by the database it is for (SQL Server, PostgreSQL), then by category. *@
+<SettingRow Id="analysis-rules" Kind="block">
+    <div id="setting-analysis-rules-control" data-testid="analysis-rules" aria-describedby="setting-analysis-rules-help">
+        @foreach (var group in RuleGroups)
+        {
+            <section class="akml-rules-kind" data-testid="@($"rules-kind-{group.Key}")" data-kind="@group.Key" aria-labelledby="@($"rules-kind-{group.Key}-title")">
+                <h4 id="@($"rules-kind-{group.Key}-title")" class="akml-settings-subtitle">@group.Title <span class="akml-settings-status">(@group.Total rules)</span></h4>
+                @if (group.Note != null)
+                {
+                    <p class="akml-settings-status" data-testid="@($"rules-kind-{group.Key}-note")">@group.Note</p>
+                }
+                @foreach (var category in group.Categories)
+                {
+                    <details class="akml-rules-category" data-testid="@($"rules-category-{group.Key}-{category.Id}")">
+                        <summary>@category.Title <span class="akml-settings-status">(@category.Rules.Count)</span></summary>
+                        <ul class="akml-settings-rules">
+                            @foreach (var rule in category.Rules)
+                            {
+                                <li data-testid="@($"rule-{rule.Id}")" data-severity="@rule.Severity" data-off="@(rule.Off ? "true" : null)">
+                                    <strong>@rule.Id</strong> @rule.Name
+                                    <span class="akml-rule-severity">@rule.Severity</span>
+                                    @if (rule.Url != null)
+                                    {
+                                        <a href="@rule.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{rule.Id} in the PostgreSQL manual")">Manual</a>
+                                    }
+                                    @if (rule.Off)
+                                    {
+                                        <em>off everywhere</em>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </details>
+                }
+            </section>
         }
     </div>
 </SettingRow>
 
 @code {
     private WebAnalysisSettings _settings = new();
+    private IReadOnlyList<AnalysisRuleInfoDto> _pgRules = Array.Empty<AnalysisRuleInfoDto>();
+
+    private const string SqlServerKey = "sqlserver";
+    private const string PostgresKey = "postgresql";
+
+    private static readonly string[] CategoryOrder = { "Performance", "BestPractices", "Security", "Style", "Design", "Deprecated", "Execution", "Naming" };
+
+    private static readonly Lazy<IReadOnlyList<(string Id, string Category, string Severity)>> SqlServerRules = new(() =>
+        new RuleRegistry().AllRules.Select(r => (r.RuleId, r.Category, r.DefaultSeverity.ToString())).ToList());
+
+    private sealed record RuleRow(string Id, string Name, string Severity, string? Url, bool Off);
+    private sealed record RuleCategory(string Id, string Title, List<RuleRow> Rules);
+    private sealed record RuleGroup(string Key, string Title, string? Note, List<RuleCategory> Categories)
+    {
+        public int Total => Categories.Sum(c => c.Rules.Count);
+    }
+
+    private static bool IsPostgres(string id) => id.StartsWith("PG", StringComparison.OrdinalIgnoreCase);
+
+    private static string KindKey(string id) => IsPostgres(id) ? PostgresKey : SqlServerKey;
 
     private List<(string Id, string Value)> Suppressed =>
         _settings.RuleOverrides.Where(kv => string.Equals(kv.Value, "off", StringComparison.OrdinalIgnoreCase))
-            .Select(kv => (kv.Key, kv.Value)).OrderBy(r => r.Key, StringComparer.OrdinalIgnoreCase).ToList();
+            .Select(kv => (kv.Key, kv.Value)).OrderBy(r => IsPostgres(r.Key) ? 1 : 0).ThenBy(r => r.Key, StringComparer.OrdinalIgnoreCase).ToList();
 
     private List<(string Id, string Value)> Remapped =>
         _settings.RuleOverrides.Where(kv => !string.Equals(kv.Value, "off", StringComparison.OrdinalIgnoreCase))
-            .Select(kv => (kv.Key, kv.Value)).OrderBy(r => r.Key, StringComparer.OrdinalIgnoreCase).ToList();
+            .Select(kv => (kv.Key, kv.Value)).OrderBy(r => IsPostgres(r.Key) ? 1 : 0).ThenBy(r => r.Key, StringComparer.OrdinalIgnoreCase).ToList();
 
-    private static string RuleName(string id)
+    private string RuleName(string id)
     {
-        var name = RuleMetadataCatalog.Get(id).Name;
+        var name = IsPostgres(id)
+            ? _pgRules.FirstOrDefault(r => string.Equals(r.RuleId, id, StringComparison.OrdinalIgnoreCase))?.Name
+            : RuleMetadataCatalog.Get(id).Name;
         return string.IsNullOrEmpty(name) || string.Equals(name, id, StringComparison.OrdinalIgnoreCase) ? string.Empty : name;
+    }
+
+    // The severity a rule is reported at: the browser-local remap when there is one, else the rule's own.
+    private string EffectiveSeverity(string id, string defaultSeverity)
+    {
+        if (!_settings.RuleOverrides.TryGetValue(id, out var value)) return defaultSeverity;
+        return value?.ToLowerInvariant() switch
+        {
+            "hint" => "Hint",
+            "info" or "information" => "Information",
+            "warning" or "warn" => "Warning",
+            "error" => "Error",
+            _ => defaultSeverity,
+        };
+    }
+
+    private bool IsOff(string id) =>
+        _settings.RuleOverrides.TryGetValue(id, out var value) && string.Equals(value, "off", StringComparison.OrdinalIgnoreCase);
+
+    private static string CategoryTitle(string category) => category == "BestPractices" ? "Best practices" : category;
+
+    private List<RuleGroup> RuleGroups
+    {
+        get
+        {
+            var sqlServer = SqlServerRules.Value.Select(r => (r.Id, r.Category, r.Severity, Name: RuleName(r.Id), Url: (string?)null));
+            var postgres = _pgRules.Select(r => (Id: r.RuleId, r.Category, Severity: ((AkmlSql.Core.Models.Analysis.DiagnosticSeverity)r.DefaultSeverity).ToString(),
+                Name: r.Name, Url: string.IsNullOrEmpty(r.ReferenceUrl) ? null : r.ReferenceUrl));
+
+            return new List<RuleGroup>
+            {
+                Group(SqlServerKey, "SQL Server", null, sqlServer),
+                Group(PostgresKey, "PostgreSQL", _pgRules.Count == 0
+                    ? "The PostgreSQL rules run in the AKML SQL engine. Pair an engine that supports PostgreSQL to list them here."
+                    : null, postgres),
+            };
+        }
+    }
+
+    private RuleGroup Group(string key, string title, string? note, IEnumerable<(string Id, string Category, string Severity, string Name, string? Url)> rules)
+    {
+        var categories = rules
+            .GroupBy(r => r.Category)
+            .OrderBy(g => Array.IndexOf(CategoryOrder, g.Key) is var i and >= 0 ? i : int.MaxValue)
+            .Select(g => new RuleCategory(g.Key, CategoryTitle(g.Key),
+                g.OrderBy(r => r.Id, StringComparer.Ordinal)
+                 .Select(r => new RuleRow(r.Id, r.Name, EffectiveSeverity(r.Id, r.Severity), r.Url, IsOff(r.Id))).ToList()))
+            .ToList();
+        return new RuleGroup(key, title, note, categories);
     }
 
     protected override async Task OnInitializedAsync()
     {
         await Store.ReloadAsync();
         _settings = await Store.GetAsync();
+
+        // The PostgreSQL rules live in the engine; a page without one shows the T-SQL rules and says why the rest is missing.
+        var engine = Services.GetService<IPostgresAnalysisEngine>();
+        if (engine != null)
+        {
+            try { _pgRules = await engine.ListRulesAsync(CancellationToken.None); }
+            catch (OperationCanceledException) { }
+        }
     }
 
     private async Task SaveAsync(string message)

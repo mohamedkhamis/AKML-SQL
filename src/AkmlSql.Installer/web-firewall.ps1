@@ -15,7 +15,9 @@
 #>
 param(
     [Parameter(Mandatory = $true)] [int] $Port,
-    [Parameter(Mandatory = $true)] [ValidateSet('Add', 'Remove')] [string] $Action
+    [Parameter(Mandatory = $true)] [ValidateSet('Add', 'Remove')] [string] $Action,
+    # Review WEB-03: the same script opens the site's HTTPS port under its own rule name.
+    [string] $RuleName = 'AKML SQL Web Engine'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,7 +31,7 @@ function Log {
     Add-Content -Path $logFile -Value $line -Encoding UTF8
 }
 
-$ruleName = 'AKML SQL Web Engine'
+$ruleName = $RuleName
 
 try {
     if ($Action -eq 'Add') {
@@ -43,7 +45,7 @@ try {
             "protocol=TCP" `
             "localport=$Port" `
             "profile=any" `
-            "description=Allow inbound connections to the AKML SQL Web Engine bridge" 2>&1
+            "description=Allow inbound connections to $ruleName" 2>&1
         Log "Added firewall rule. Result: $result"
     }
     else {

@@ -28,7 +28,8 @@ public class HistoryUs5ContractTests
     {
         var request = new HistoryRecordRequest { SqlText = "SELECT 1", IsDraft = true };
         Assert.True(RoundTrip(request).IsDraft);
-        Assert.Equal(13, MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(request)).Length);
+        // Its position, not the array's length: later keys are appended after it (spec 042 added Kind at 13).
+        Assert.Equal(true, MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(request))[12]);
     }
 
     [Fact]

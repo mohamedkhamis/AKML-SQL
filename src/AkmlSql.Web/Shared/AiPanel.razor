@@ -69,7 +69,11 @@
 
         @if (!string.IsNullOrEmpty(_lastError))
         {
-            <p class="akml-ai-error">@_lastError</p>
+            <p class="akml-ai-error" role="alert" data-testid="ai-error">@_lastError</p>
+            @if (_retry != null && !_busy)
+            {
+                <button type="button" class="akml-btn" data-testid="ai-retry" @onclick="_retry">Retry</button>
+            }
         }
 
         @if (!string.IsNullOrEmpty(_lastResult))
@@ -119,6 +123,9 @@
     [Parameter] public Func<Task<string>>? SelectedSqlProvider { get; set; }
     /// <summary>Raised when the user clicks Accept -- the parent inserts the text into the editor.</summary>
     [Parameter] public EventCallback<string> OnAcceptResult { get; set; }
+    /// <summary>Spec 042 (FR-082): the error of the last run, read when Fix is clicked. A PostgreSQL error carries its SQLSTATE,
+    /// detail and hint. Null (or no provider) sends what Fix always sent when no error was at hand.</summary>
+    [Parameter] public Func<AiErrorInfo?>? LastErrorProvider { get; set; }
 
     private bool _hasProvider;
     private bool _providerCapable = true;
@@ -126,6 +133,9 @@
     private bool _busy;
     private string? _lastResult;
     private string? _lastError;
+
+    // Review WEB-18: runs the action whose answer failed or broke off again.
+    private Func<Task>? _retry;
 
     // Per-surface streaming controller: one in-flight stream, cancelled when a new action
     // starts or the panel is disposed (FR-009/FR-010).
@@ -141,7 +151,7 @@
     }
 
     private Task RunExplainAsync() => RunStreamAsync((sql, ct) => Prompts.ExplainStreamAsync(sql, ct), "Explain");
-    private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, "(no error)", 0, ct), "Fix");
+    private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, LastErrorProvider?.Invoke() ?? AiErrorInfo.None, ct), "Fix");
     private Task RunOptimizeAsync() => RunStreamAsync((sql, ct) => Prompts.OptimizeStreamAsync(sql, ct), "Optimize");
     private Task RunTextToSqlAsync() => RunStreamAsync((sql, ct) => Prompts.TextToSqlStreamAsync(sql, ct), "Text to SQL");
     private Task RunIndexAnalysisAsync() => RunStreamAsync((sql, ct) => Prompts.IndexAnalysisStreamAsync(sql, ct), "Index Analysis");
@@ -156,6 +166,7 @@
 
         _busy = true;
         _lastError = null;
+        _retry = null;
         _lastResult = string.Empty;
         StateHasChanged();
         // Resolve the SQL lazily so the live editor selection is current at click time; the
@@ -176,6 +187,12 @@
         {
             // Superseded by a newer action -- keep whatever partial text rendered.
         }
+        catch (AiNotSentException ex)
+        {
+            // Spec 042 (FR-081): the literals could not be removed and the user chose not to send the script as it is.
+            _lastError = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Info, "ai", "Request not sent: literals could not be removed and the user declined.");
+        }
         catch (ProviderNotBrowserDirectException ex)
         {
             _lastError = ex.Message;
@@ -186,10 +203,18 @@
             _lastError = ex.Message;
             Diagnostics.Log(DiagnosticLevel.Error, "ai", ex.Message);
         }
+        catch (AiStreamException ex)
+        {
+            // Review WEB-18: the answer broke off. The partial text stays, marked incomplete, and the action can be run again.
+            _lastError = ex.Message + (sb.Length > 0 ? " The result above is incomplete." : string.Empty);
+            _retry = () => RunStreamAsync(stream, label);
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai", $"{label} stream failed: {ex.Failure} {ex.Code}");
+        }
         catch (Exception ex)
         {
             // Preserve partial text (FR-011) and surface the mapped error.
             _lastError = MapErrorToMessage(ex);
+            _retry = () => RunStreamAsync(stream, label);
             Diagnostics.Log(DiagnosticLevel.Error, "ai", _lastError, new { Exception = ex.GetType().Name });
         }
         finally
@@ -215,13 +240,11 @@
     /// </summary>
     private static string MapErrorToMessage(Exception ex)
     {
-        var msg = ex.Message;
-        if (msg.Contains("401")) return "Key invalid -- check the API key in Settings -> AI.";
-        if (msg.Contains("429")) return "Rate limited by the provider. Try again in a moment.";
-        if (msg.Contains("404")) return "Provider endpoint not found. Verify the endpoint URL in Settings.";
-        if (msg.Contains("content policy") || msg.Contains("safety")) return "The provider refused this prompt due to its content policy.";
-        if (ex is System.Net.Http.HttpRequestException) return "Provider unreachable. Check your network.";
-        return $"AI call failed: {msg}";
+        // Review WEB-21: the client's HTTP failures already say what happened in safe words (status + the provider's code);
+        // a failure with no status never reached the provider.
+        if (ex is System.Net.Http.HttpRequestException http)
+            return http.StatusCode != null ? http.Message : "Provider unreachable. Check your network.";
+        return $"AI call failed: {ex.Message}";
     }
 
     public void Dispose()

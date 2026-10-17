@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Linq;
+using AkmlSql.Core.Connections;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 
@@ -28,11 +30,20 @@ public interface ISqlConnectionService
     event Action? StateChanged;
 
     /// <summary>
+    /// Review finding WEB-01: changes whenever the session's target does — a connect, a disconnect, another database, or the
+    /// bridge reopening on another engine. Results read under one generation are never edited under another. A fake that does
+    /// not implement it never changes.
+    /// </summary>
+    int ConnectionGeneration => 0;
+
+    /// <summary>
     /// Tell the paired engine to open a SQL Server connection. <paramref name="windowsAuth"/> = true
     /// builds an Integrated-Security connection string (no password — the engine uses its own Windows
     /// identity); otherwise SQL auth with <paramref name="user"/>/<paramref name="password"/>.
-    /// The send is fire-and-forget (ConnectionChanged is a notification); schema population runs
-    /// asynchronously engine-side, so a successful return means "request sent", not "schema ready".
+    /// The engine first opens the connection (the TestSqlConnection round trip), so a wrong password or an
+    /// unreachable server fails here and the session is left as it was (review WEB-19). Only then is the
+    /// ConnectionChanged notification sent; schema population runs asynchronously engine-side, so a
+    /// successful return means "the server accepted the login", not "schema ready".
     /// </summary>
     Task<(bool Ok, string? Error)> ConnectAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct);
@@ -61,8 +72,24 @@ public interface ISqlConnectionService
     Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
         string server, bool windowsAuth, string? user, string? password, CancellationToken ct);
 
-    /// <summary>Clears the local connected state. (The engine session lingers harmlessly.)</summary>
+    /// <summary>Disconnects (see <see cref="DisconnectSessionAsync"/>) and ignores the outcome.</summary>
     Task DisconnectAsync();
+
+    /// <summary>
+    /// Review finding WEB-06: end the session's database connection. An engine that advertises
+    /// <c>session.disconnect.v1</c> rolls back an open transaction, closes the connection and confirms; only then is the
+    /// browser's state cleared. When the engine cannot be reached (or is too old) the browser still forgets the
+    /// connection, and the result says the engine's session could not be closed.
+    /// </summary>
+    async Task<DisconnectResult> DisconnectSessionAsync(CancellationToken ct)
+    {
+        await DisconnectAsync().ConfigureAwait(false);
+        return new DisconnectResult(true, false, null);
+    }
+
+    /// <summary>Review finding WEB-02: list databases with the target's certificate choice (see <see cref="ConnectionTarget"/>).</summary>
+    Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
+        ListDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, ct);
 
     /// <summary>
     /// Pushes the current editor text to the engine session (DocumentChanged) so the next completion
@@ -92,6 +119,57 @@ public interface ISqlConnectionService
 
     /// <summary>The database an execute ended in (a script's <c>USE</c>); raises <see cref="StateChanged"/> on a change.</summary>
     void ReportCurrentDatabase(string? database) { }
+
+    // ── Spec 042 (PostgreSQL support) ────────────────────────────────────────────────────────────────────
+    // Default members, as above: a fake that does not implement them is a SQL Server connection on an engine
+    // without PostgreSQL support.
+
+    /// <summary>The kind of the active connection (SQL Server until a PostgreSQL connection is made).</summary>
+    AkmlSql.Core.DatabaseKind Kind => AkmlSql.Core.DatabaseKind.SqlServer;
+
+    /// <summary>PostgreSQL's <c>server_version</c> text of the connected server (for example <c>18.1</c>), or null.</summary>
+    string? ServerVersionText => null;
+
+    /// <summary>The PostgreSQL transaction state after the last run (FR-016); always None for SQL Server.</summary>
+    AkmlSql.Core.TransactionState TransactionState => AkmlSql.Core.TransactionState.None;
+
+    /// <summary>
+    /// Spec 042 (T085): the name the browser's schema cache is keyed by. A SQL Server's is its server name as typed; a
+    /// PostgreSQL server's is <c>pg://host:port</c>, which no SQL Server name can equal, so the two kinds never share a cache.
+    /// </summary>
+    string? SchemaIdentity => Server;
+
+    /// <summary>The paired engine advertises <c>dialect.postgresql.v1</c>, so the PostgreSQL choice can be offered (FR-006).</summary>
+    bool EngineSupportsPostgres => false;
+
+    /// <summary>Record the transaction state a run ended in; raises <see cref="StateChanged"/> on a change.</summary>
+    void ReportTransactionState(AkmlSql.Core.TransactionState state) { }
+
+    /// <summary>
+    /// Spec 042 (T063): test a connection of either kind without changing the session. For SQL Server this is the
+    /// existing test; for PostgreSQL the engine opens the connection, reads the server version and closes it. A server
+    /// that wants a password the engine does not hold comes back as <see cref="ConnectResult.PasswordRequired"/>.
+    /// </summary>
+    async Task<ConnectResult> TestAsync(ConnectionTarget target, CancellationToken ct)
+    {
+        if (target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql) return ConnectResult.Failed(SqlConnectionService.PostgresUnavailable);
+        var (ok, error) = await TestAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, ct).ConfigureAwait(false);
+        return new ConnectResult(ok, error);
+    }
+
+    /// <summary>Spec 042 (T063): connect to a server of either kind; see <see cref="TestAsync(ConnectionTarget, CancellationToken)"/>.</summary>
+    async Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
+    {
+        if (target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql) return ConnectResult.Failed(SqlConnectionService.PostgresUnavailable);
+        var (ok, error) = await ConnectAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, ct).ConfigureAwait(false);
+        return new ConnectResult(ok, error);
+    }
+
+    /// <summary>Spec 042 (FR-105): does the engine hold a remembered PostgreSQL password for this server and login?</summary>
+    Task<bool> HasRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) => Task.FromResult(false);
+
+    /// <summary>Spec 042 (FR-106): ask the engine to forget the remembered PostgreSQL password; true when it had one.</summary>
+    Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) => Task.FromResult(false);
 }
 
 internal sealed class SqlConnectionService : ISqlConnectionService
@@ -103,6 +181,29 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        _bridge.StateChanged += OnBridgeStateChanged;
+    }
+
+    public int ConnectionGeneration { get; private set; }
+
+    // The engine the session was opened on: the bridge reopening on another one is a new target.
+    private string? _engineUrl;
+
+    private void OnBridgeStateChanged(BridgeState state)
+    {
+        if (state != BridgeState.Open || !IsConnected) return;
+        var url = _bridge.ConnectedUrl;
+        if (string.Equals(url, _engineUrl, StringComparison.OrdinalIgnoreCase)) return;
+        _engineUrl = url;
+        ConnectionGeneration++;
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>A new target: the session now writes to a different server, database, login, kind or engine.</summary>
+    private void NewTarget()
+    {
+        ConnectionGeneration++;
+        _engineUrl = _bridge.ConnectedUrl;
     }
 
     // One stable id per browser session — used by ConnectionChanged, DocumentChanged, and completion.
@@ -126,8 +227,301 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public event Action? StateChanged;
 
-    public async Task<(bool Ok, string? Error)> ConnectAsync(
-        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    // ── Spec 042 ──────────────────────────────────────────────────────────────────────────────────────────
+    public const string CapabilityPostgreSql = "dialect.postgresql.v1";
+
+    public AkmlSql.Core.DatabaseKind Kind { get; private set; } = AkmlSql.Core.DatabaseKind.SqlServer;
+
+    public string? ServerVersionText { get; private set; }
+
+    public AkmlSql.Core.TransactionState TransactionState { get; private set; } = AkmlSql.Core.TransactionState.None;
+
+    private string? _schemaIdentity;
+
+    /// <summary>
+    /// The browser's schema-cache key for this connection: the server as the engine reaches it, scoped to the engine the session
+    /// was opened through. Re-review REV-01: a SQL Server address is relative to the engine's computer — two engines can both
+    /// reach a different <c>localhost/Sales</c> — so without the scope their schemas shared one cache entry, and the AI could be
+    /// given the other engine's schema. The engine part goes last so a PostgreSQL key still starts <c>pg://</c>. Entries
+    /// cached before the scope existed no longer match and are refetched.
+    /// </summary>
+    public string? SchemaIdentity
+    {
+        get
+        {
+            var server = Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _schemaIdentity != null ? _schemaIdentity : Server;
+            return server == null ? null : ScopeToEngine(server, _engineUrl);
+        }
+    }
+
+    /// <summary><c>"localhost (engine 10.0.0.5:47291)"</c>: <paramref name="server"/> as reached by the engine at <paramref name="engineUrl"/>.</summary>
+    internal static string ScopeToEngine(string server, string? engineUrl)
+    {
+        var engine = Uri.TryCreate(engineUrl, UriKind.Absolute, out var uri) ? uri.Authority.ToLowerInvariant() : engineUrl ?? "unknown";
+        return server + " (engine " + engine + ")";
+    }
+
+    public bool EngineSupportsPostgres => _bridge.Advertises(CapabilityPostgreSql);
+
+    public void ReportTransactionState(AkmlSql.Core.TransactionState state)
+    {
+        if (!IsConnected || TransactionState == state) return;
+        TransactionState = state;
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>The text when a PostgreSQL connection is attempted against an engine that does not advertise it (FR-006).</summary>
+    internal const string PostgresUnavailable =
+        "The paired engine does not support PostgreSQL. Update the engine to a version that advertises dialect.postgresql.v1.";
+
+    public Task<ConnectResult> TestAsync(ConnectionTarget target, CancellationToken ct) =>
+        target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
+            ? TestPostgresAsync(target, ct)
+            : AdaptAsync(TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct));
+
+    public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
+        ListSqlServerDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct);
+
+    public async Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
+    {
+        if (target.Kind != AkmlSql.Core.DatabaseKind.PostgreSql)
+            return await AdaptAsync(ConnectSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct)).ConfigureAwait(false);
+
+        // ConnectionChanged is a notification: the engine cannot say the password was wrong. So a PostgreSQL connect first
+        // asks the engine to open the connection (the test), and only a server that accepted it becomes the session.
+        var tested = await TestPostgresAsync(target, ct).ConfigureAwait(false);
+        if (!tested.Ok) return tested;
+
+        var (pg, _) = ParsePostgresTarget(target);
+        var connectionString = BuildPostgresConnectionString(pg!);
+        try
+        {
+            await _bridge.SendNotificationAsync(
+                MessageTypes.ConnectionChanged,
+                new ConnectionInfo
+                {
+                    SessionId = SessionId,
+                    ConnectionString = connectionString,
+                    DatabaseName = pg!.Database,
+                    Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+                    RememberPassword = pg.RememberPassword,
+                },
+                ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"ConnectionChanged (PostgreSQL) send failed: {ex.Message}");
+            return ConnectResult.Failed("Could not reach the engine: " + ex.Message);
+        }
+
+        Server = pg.Host + ":" + pg.Port;
+        _schemaIdentity = PgConnectionString.ServerKey(pg.Host, pg.Port);
+        Database = pg.Database;
+        WindowsAuth = false;
+        Login = pg.User;
+        Kind = AkmlSql.Core.DatabaseKind.PostgreSql;
+        ServerVersionText = VersionNumberOf(tested.ServerVersion);
+        TransactionState = AkmlSql.Core.TransactionState.None;
+        IsConnected = true;
+        NewTarget();
+        _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
+            $"Requested engine connect to PostgreSQL {Server}/{Database} as {pg.User} (tls={pg.SslMode}). Schema loads asynchronously.");
+        StateChanged?.Invoke();
+        return tested;
+    }
+
+    public Task<bool> HasRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
+        AskCredentialAsync(CredentialAction.Has, host, port, user, ct);
+
+    public Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
+        AskCredentialAsync(CredentialAction.Forget, host, port, user, ct);
+
+    private async Task<bool> AskCredentialAsync(int action, string host, int? port, string user, CancellationToken ct)
+    {
+        if (_bridge.State != BridgeState.Open || !EngineSupportsPostgres) return false;
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user)) return false;
+        try
+        {
+            var response = await _bridge.SendAsync<CredentialRequest, CredentialResponse>(
+                MessageTypes.CredentialRequest,
+                new CredentialRequest
+                {
+                    Action = action,
+                    Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+                    Server = host.Trim(),
+                    Port = port ?? SavedSqlConnection.DefaultPostgresPort,
+                    Login = user.Trim(),
+                },
+                ct).ConfigureAwait(false);
+            return response is { Ok: true, Has: true };
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"Credential request failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task<ConnectResult> TestPostgresAsync(ConnectionTarget target, CancellationToken ct)
+    {
+        var (pg, error) = ParsePostgresTarget(target);
+        if (pg is null) return ConnectResult.Failed(error!);
+
+        if (_bridge.State != BridgeState.Open)
+            return ConnectResult.Failed("Pair an engine first (Engine connections → Add), then test the PostgreSQL connection.");
+        if (!EngineSupportsPostgres) return ConnectResult.Failed(PostgresUnavailable);
+
+        try
+        {
+            var response = await _bridge.SendAsync<TestSqlConnectionRequest, TestSqlConnectionResponse>(
+                MessageTypes.TestSqlConnection,
+                new TestSqlConnectionRequest { ConnectionString = BuildPostgresConnectionString(pg), Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql },
+                ct).ConfigureAwait(false);
+
+            if (response == null) return ConnectResult.Failed("The engine did not return a result for the connection test.");
+            if (response.Ok)
+            {
+                _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
+                    $"Test connection to PostgreSQL {pg.Host}:{pg.Port}/{pg.Database} succeeded ({response.ServerVersion}).");
+                return new ConnectResult(true, null, false, response.ServerVersion);
+            }
+
+            var passwordRequired = response.ErrorCode == DialectErrors.PasswordRequired;
+            return new ConnectResult(false,
+                string.IsNullOrEmpty(response.ErrorMessage) ? "The connection test failed." : response.ErrorMessage, passwordRequired);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"TestSqlConnection (PostgreSQL) send failed: {ex.Message}");
+            return ConnectResult.Failed("Could not reach the engine: " + ex.Message);
+        }
+    }
+
+    private static async Task<ConnectResult> AdaptAsync(Task<(bool Ok, string? Error)> inner)
+    {
+        var (ok, error) = await inner.ConfigureAwait(false);
+        return new ConnectResult(ok, error);
+    }
+
+    /// <summary>"PostgreSQL 18.1" becomes "18.1"; anything else is kept as the engine sent it.</summary>
+    internal static string? VersionNumberOf(string? serverVersion)
+    {
+        if (string.IsNullOrWhiteSpace(serverVersion)) return null;
+        const string prefix = "PostgreSQL ";
+        return serverVersion!.StartsWith(prefix, StringComparison.Ordinal) ? serverVersion.Substring(prefix.Length) : serverVersion;
+    }
+
+    // ── PostgreSQL target guard and connection string (spec 042, FR-102, FR-103) ──────────────────────────
+
+    /// <summary>A PostgreSQL target after validation: every value checked and normalised, ready for the connection string.</summary>
+    internal sealed record PgTarget(string Host, int Port, string Database, string User, string? Password, string SslMode,
+        string? RootCertificatePath, bool RememberPassword);
+
+    /// <summary>
+    /// SECURITY (spec 042): the browser-side half of the PostgreSQL target guard, shared by test and connect (the engine
+    /// repeats the rule in <c>PgTargetGuard</c>; this copy explains the refusal before a round trip). A PostgreSQL
+    /// connection is always an explicit user and password, so a remote host is fine: the engine forwards what it is
+    /// given and signs in as nothing of its own. What is refused is anything that would make it read a path or a
+    /// setting the page chose: metacharacters in an identifier, a socket or UNC path as the host, a relative or network
+    /// root certificate path, an unknown TLS mode.
+    /// </summary>
+    internal static (PgTarget? Target, string? Error) ParsePostgresTarget(ConnectionTarget target)
+    {
+        var (host, port, hostError) = ParseHostAndPort(target.Server, target.Port);
+        if (host is null) return (null, hostError);
+
+        var database = string.IsNullOrWhiteSpace(target.Database) ? "postgres" : target.Database.Trim();
+        if (!IsSafeIdentifier(database)) return (null, "Database name contains invalid characters.");
+
+        var user = (target.User ?? string.Empty).Trim();
+        if (user.Length == 0) return (null, "A user name is required for PostgreSQL.");
+        if (!IsSafeIdentifier(user)) return (null, "User name contains invalid characters.");
+
+        var sslMode = string.IsNullOrWhiteSpace(target.SslMode) ? "prefer" : target.SslMode!.Trim().ToLowerInvariant();
+        if (Array.IndexOf(SavedSqlConnection.SslModes, sslMode) < 0)
+            return (null, "The TLS mode must be disable, prefer, require, verify-ca or verify-full.");
+
+        var certificate = string.IsNullOrWhiteSpace(target.RootCertificatePath) ? null : target.RootCertificatePath!.Trim();
+        if (certificate != null && !IsLocalAbsolutePath(certificate))
+            return (null, "The root certificate must be a full local path on the engine machine, for example C:\\certs\\root.crt.");
+        // verify-ca / verify-full without a certificate path are allowed: the engine machine's own trust store is used.
+
+        // An empty password is "none": the engine fills in a remembered one, or asks for it.
+        var password = string.IsNullOrEmpty(target.Password) ? null : target.Password;
+        return (new PgTarget(host, port, database, user, password, sslMode, certificate, target.RememberPassword), null);
+    }
+
+    /// <summary>
+    /// <c>host</c>, <c>host:port</c>, <c>[ipv6]</c> or <c>[ipv6]:port</c>; an unbracketed text with several colons is
+    /// an IPv6 literal without a port. A port in the text wins over <paramref name="explicitPort"/>.
+    /// </summary>
+    internal static (string? Host, int Port, string? Error) ParseHostAndPort(string? server, int? explicitPort)
+    {
+        var text = (server ?? string.Empty).Trim();
+        if (text.Length == 0) return (null, 0, "Host is required.");
+        if (!IsSafeIdentifier(text)) return (null, 0, "Host name contains invalid characters.");
+        if (text[0] == '/' || text[0] == '\\' || text.Contains('\\') || text.Contains('/'))
+            return (null, 0, "A PostgreSQL server is addressed by host name or IP address, not by a path or a socket.");
+
+        string host = text;
+        string? portText = null;
+        if (text[0] == '[')
+        {
+            var close = text.IndexOf(']');
+            if (close < 0) return (null, 0, "The IPv6 address is missing its closing bracket.");
+            host = text.Substring(1, close - 1);
+            var rest = text.Substring(close + 1);
+            if (rest.Length > 0)
+            {
+                if (rest[0] != ':') return (null, 0, "Host name contains invalid characters.");
+                portText = rest.Substring(1);
+            }
+        }
+        else
+        {
+            var firstColon = text.IndexOf(':');
+            if (firstColon >= 0 && firstColon == text.LastIndexOf(':'))
+            {
+                host = text.Substring(0, firstColon);
+                portText = text.Substring(firstColon + 1);
+            }
+        }
+
+        if (host.Length == 0) return (null, 0, "Host is required.");
+
+        var port = explicitPort ?? SavedSqlConnection.DefaultPostgresPort;
+        if (portText != null)
+        {
+            if (!int.TryParse(portText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out port))
+                return (null, 0, "The port must be a number between 1 and 65535.");
+        }
+        if (port is < 1 or > 65535) return (null, 0, "The port must be between 1 and 65535.");
+        return (host, port, null);
+    }
+
+    /// <summary>A drive-rooted or slash-rooted local path without relative segments; network and device paths are not local.</summary>
+    internal static bool IsLocalAbsolutePath(string path)
+    {
+        if (path.StartsWith("\\\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal)) return false;
+        var rooted = (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
+                     || path[0] == '/';
+        if (!rooted) return false;
+        foreach (var segment in path.Split('\\', '/'))
+        {
+            if (segment == ".." || segment == ".") return false;
+        }
+        return !path.Any(char.IsControl);
+    }
+
+    internal static string BuildPostgresConnectionString(PgTarget target) =>
+        PgConnectionString.Build(target.Host, target.Port, target.Database, target.User, target.Password, target.SslMode, target.RootCertificatePath);
+
+    public Task<(bool Ok, string? Error)> ConnectAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
+        ConnectSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct);
+
+    private async Task<(bool Ok, string? Error)> ConnectSqlServerAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
     {
         // Identifier + loopback (SSRF) guard — single-sourced in ValidateTarget so ConnectAsync and
         // TestAsync enforce IDENTICAL rules. Runs before anything touches the bridge.
@@ -137,7 +531,14 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (_bridge.State != BridgeState.Open)
             return (false, "Pair an engine first (Engine connections → Add), then connect to SQL Server.");
 
-        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
+        // Review WEB-19: ConnectionChanged is a notification — the engine cannot say the password was wrong or the server
+        // is down. So, as for PostgreSQL, the engine first opens the connection (the test) and only a server that accepted
+        // it becomes the session; on failure the session and the form stay as they were. (A server that goes away between
+        // the two shows up on the first run, as any later drop does.)
+        var (tested, testError) = await TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate, ct).ConfigureAwait(false);
+        if (!tested) return (false, testError);
+
+        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password, trustServerCertificate);
 
         try
         {
@@ -163,15 +564,24 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         Database = database.Trim();
         WindowsAuth = windowsAuth;
         Login = windowsAuth ? null : user?.Trim();
+        Kind = AkmlSql.Core.DatabaseKind.SqlServer;
+        _schemaIdentity = null;
+        ServerVersionText = null;
+        TransactionState = AkmlSql.Core.TransactionState.None;
         IsConnected = true;
+        NewTarget();
         _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
             $"Requested engine connect to {Server}/{Database} (auth={(windowsAuth ? "Windows" : "SQL")}). Schema loads asynchronously.");
         StateChanged?.Invoke();
         return (true, null);
     }
 
-    public async Task<(bool Ok, string? Error)> TestAsync(
-        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    public Task<(bool Ok, string? Error)> TestAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
+        TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct);
+
+    private async Task<(bool Ok, string? Error)> TestSqlServerAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
     {
         // SECURITY (Phase 4): run the SAME identifier + loopback guard as ConnectAsync, and run it
         // FIRST — before building the connection string and before sending anything to the engine.
@@ -184,7 +594,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (_bridge.State != BridgeState.Open)
             return (false, "Pair an engine first (Engine connections → Add), then test the SQL connection.");
 
-        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
+        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password, trustServerCertificate);
 
         try
         {
@@ -215,8 +625,12 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    public async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
-        string server, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
+        string server, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
+        ListSqlServerDatabasesAsync(server, windowsAuth, user, password, trustServerCertificate: false, ct);
+
+    private async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListSqlServerDatabasesAsync(
+        string server, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
     {
         // SECURITY: identical loopback/identifier guard as Connect/Test, run FIRST — the engine opens
         // this connection under its own identity, so an unguarded server is an SSRF/confused-deputy
@@ -227,7 +641,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (_bridge.State != BridgeState.Open)
             return (false, Array.Empty<string>(), "Pair an engine first (Engine connections → Add), then list databases.");
 
-        var connStr = BuildConnectionString(server.Trim(), "master", windowsAuth, user, password);
+        var connStr = BuildConnectionString(server.Trim(), "master", windowsAuth, user, password, trustServerCertificate);
 
         try
         {
@@ -250,25 +664,82 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    public Task DisconnectAsync()
+    /// <summary>The engine capability that closes the session's connection on Disconnect (review WEB-06).</summary>
+    public const string CapabilitySessionDisconnect = "session.disconnect.v1";
+
+    internal const string DisconnectUnconfirmed =
+        "The engine could not be reached, so its connection for this session may stay open — with any open transaction and " +
+        "its locks — until the engine closes idle connections (20 minutes) or restarts.";
+
+    internal const string DisconnectNeedsNewerEngine =
+        "This engine is too old to close its connection on Disconnect, so it may stay open — with any open transaction and " +
+        "its locks — until the engine closes idle connections (20 minutes) or restarts.";
+
+    public async Task DisconnectAsync() => await DisconnectSessionAsync(CancellationToken.None).ConfigureAwait(false);
+
+    public async Task<DisconnectResult> DisconnectSessionAsync(CancellationToken ct)
     {
+        if (!IsConnected) return new DisconnectResult(true, false, null);
+
+        if (_bridge.State != BridgeState.Open)
+        {
+            ForgetConnection();
+            return new DisconnectResult(false, false, DisconnectUnconfirmed);
+        }
+        if (!_bridge.Advertises(CapabilitySessionDisconnect))
+        {
+            ForgetConnection();
+            return new DisconnectResult(false, false, DisconnectNeedsNewerEngine);
+        }
+
+        SessionDisconnectResponse? response;
+        try
+        {
+            response = await _bridge.SendAsync<SessionDisconnectRequest, SessionDisconnectResponse>(
+                MessageTypes.SessionDisconnect, new SessionDisconnectRequest { SessionId = SessionId }, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"SessionDisconnect failed: {ex.GetType().Name}");
+            ForgetConnection();
+            return new DisconnectResult(false, false, DisconnectUnconfirmed);
+        }
+
+        // Any reply means the engine has already forgotten the session's connection; a refusal only says the close
+        // itself waits for a statement that is still running.
+        ForgetConnection();
+        if (response == null) return new DisconnectResult(false, false, DisconnectUnconfirmed);
+        _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Disconnected (rolledBack={response.RolledBack}, ok={response.Ok}).");
+        return new DisconnectResult(response.Ok, response.RolledBack, response.Ok ? null : response.ErrorMessage);
+    }
+
+    private void ForgetConnection()
+    {
+        ConnectionGeneration++;
         IsConnected = false;
         Server = null;
         Database = null;
         Login = null;
         WindowsAuth = true;
+        Kind = AkmlSql.Core.DatabaseKind.SqlServer;
+        ServerVersionText = null;
+        _schemaIdentity = null;
+        TransactionState = AkmlSql.Core.TransactionState.None;
         StateChanged?.Invoke();
-        return Task.CompletedTask;
     }
 
     // ── Spec 041 (research R25–R28) — the database selector ─────────────────────────────────────────────
 
     public async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesForSessionAsync(CancellationToken ct)
     {
-        if (!IsConnected || Server == null) return (false, Array.Empty<string>(), "Connect to SQL Server first.");
-        // The same guard as connect, first — the engine lists under the session's identity.
-        var (ok, error) = ValidateTarget(Server, Database ?? "master", WindowsAuth);
-        if (!ok) return (false, Array.Empty<string>(), error);
+        if (!IsConnected || Server == null) return (false, Array.Empty<string>(), "Connect to a database server first.");
+        // The same guard as connect, first — the engine lists under the session's identity. Spec 042: the PostgreSQL session was
+        // judged by the PostgreSQL guard when it connected, and its server text (host:port) is not a SQL Server address.
+        if (Kind != AkmlSql.Core.DatabaseKind.PostgreSql)
+        {
+            var (ok, error) = ValidateTarget(Server, Database ?? "master", WindowsAuth);
+            if (!ok) return (false, Array.Empty<string>(), error);
+        }
         if (!CanChangeDatabase) return (false, Array.Empty<string>(), "Switching database needs a newer engine.");
         try
         {
@@ -288,9 +759,18 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public async Task<(bool Ok, string? Error, bool ConnectionWasReset)> ChangeDatabaseAsync(string database, CancellationToken ct)
     {
-        if (!IsConnected || Server == null) return (false, "Connect to SQL Server first.", false);
-        var (ok, error) = ValidateTarget(Server, database ?? string.Empty, WindowsAuth);
-        if (!ok) return (false, error, false);
+        if (!IsConnected || Server == null) return (false, "Connect to a database server first.", false);
+        if (Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+        {
+            var name = (database ?? string.Empty).Trim();
+            if (name.Length == 0) return (false, "Database is required.", false);
+            if (!IsSafeIdentifier(name)) return (false, "Database name contains invalid characters.", false);
+        }
+        else
+        {
+            var (ok, error) = ValidateTarget(Server, database ?? string.Empty, WindowsAuth);
+            if (!ok) return (false, error, false);
+        }
         if (!CanChangeDatabase) return (false, "Switching database needs a newer engine.", false);
         try
         {
@@ -300,6 +780,8 @@ internal sealed class SqlConnectionService : ISqlConnectionService
             if (!response.Ok) return (false, string.IsNullOrEmpty(response.ErrorMessage) ? "Could not switch database." : response.ErrorMessage, false);
             _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Switched to {response.DatabaseName}" + (response.ConnectionWasReset ? " (the connection was reopened)." : "."));
             ReportCurrentDatabase(string.IsNullOrEmpty(response.DatabaseName) ? database!.Trim() : response.DatabaseName);
+            // Spec 042 (FR-009): a PostgreSQL switch reconnects, and no transaction survives it.
+            if (Kind == AkmlSql.Core.DatabaseKind.PostgreSql) ReportTransactionState((AkmlSql.Core.TransactionState)response.TransactionState);
             return (true, null, response.ConnectionWasReset);
         }
         catch (Exception ex)
@@ -314,6 +796,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (!IsConnected || string.IsNullOrEmpty(database)) return;
         if (string.Equals(Database, database, StringComparison.Ordinal)) return;
         Database = database;
+        NewTarget();
         StateChanged?.Invoke();
     }
 
@@ -407,18 +890,25 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         return true;
     }
 
-    private static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password)
+    internal static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password,
+        bool trustServerCertificate = false)
     {
         // Use DbConnectionStringBuilder (System.Data.Common, BCL — WASM-safe, unlike
         // Microsoft.Data.SqlClient) so each value is validated and properly quoted/escaped. This
         // prevents connection-string injection: a value containing ';', '=' or quotes is wrapped
-        // rather than treated as a new keyword. TrustServerCertificate keeps a local/dev SQL Server
-        // (often self-signed) from failing the TLS handshake; Application Name aids diagnostics.
+        // rather than treated as a new keyword. Application Name aids diagnostics.
+        //
+        // Review WEB-02: the engine reaches a remote server over the network, where the bridge's TLS does not reach, so
+        // the connection is always encrypted and the server's certificate is validated — unless the user ticked "Trust
+        // server certificate" for this connection (a self-signed server they know). A SQL Server on the engine's own
+        // machine (often a self-signed dev instance) keeps skipping validation: that hop never leaves the computer.
+        bool loopback = IsLoopbackServer(server);
         var b = new System.Data.Common.DbConnectionStringBuilder
         {
             ["Server"] = server,
             ["Database"] = database,
-            ["TrustServerCertificate"] = true,
+            ["Encrypt"] = true,
+            ["TrustServerCertificate"] = loopback || trustServerCertificate,
             ["Application Name"] = "AKML SQL Web",
             ["Connect Timeout"] = 15,
         };
@@ -441,7 +931,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     /// protocol prefixes, and any non-loopback host. This is the confused-deputy/SSRF guard for the
     /// localhost-scoped build; a LAN deployment must replace it with a configured allow-list.
     /// </summary>
-    private static bool IsLoopbackServer(string server)
+    internal static bool IsLoopbackServer(string server)
     {
         var s = (server ?? string.Empty).Trim();
         if (s.Length == 0) return false;

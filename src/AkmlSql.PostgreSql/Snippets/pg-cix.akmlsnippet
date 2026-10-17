@@ -1,0 +1,26 @@
+{
+  "metadata": {
+    "id": "builtin-pg-cix",
+    "shortcode": "cix",
+    "name": "CREATE INDEX",
+    "description": "CREATE INDEX on a table",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [
+      "create",
+      "index"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "CREATE INDEX $CURSOR$ ON  (",
+    "    ",
+    ");"
+  ]
+}

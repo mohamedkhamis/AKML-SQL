@@ -32,11 +32,13 @@
     else
     {
         <table class="akml-table">
-            <thead><tr><th>Server</th><th>Database</th><th>Last used</th><th>Size</th><th></th></tr></thead>
+            <thead><tr><th>Kind</th><th>Server</th><th>Database</th><th>Last used</th><th>Size</th><th></th></tr></thead>
             <tbody>
                 @foreach (var entry in _snapshots.OrderByDescending(s => s.LastUsedAt))
                 {
                     <tr>
+                        @* Spec 042 (T087): a PostgreSQL server's identity starts pg://, so the two northwinds are told apart. *@
+                        <td data-testid="schema-cache-kind">@KindOf(entry.ServerCanonicalIdentity)</td>
                         <td>@entry.ServerCanonicalIdentity</td>
                         <td>@entry.DatabaseName</td>
                         <td>@entry.LastUsedAt.ToString("yyyy-MM-dd HH:mm")</td>
@@ -55,6 +57,9 @@
 @code {
     private IReadOnlyList<SchemaSnapshot>? _snapshots;
     private readonly Dictionary<string, long> _sizes = new();
+
+    private static string KindOf(string identity) =>
+        identity.StartsWith("pg://", StringComparison.Ordinal) ? "PostgreSQL" : "SQL Server";
 
     protected override async Task OnInitializedAsync() => await RefreshAsync();
 

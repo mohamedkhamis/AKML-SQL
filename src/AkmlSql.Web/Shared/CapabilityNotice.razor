@@ -11,22 +11,40 @@
 
     If the capability is present, the @ChildContent renders. Otherwise the inline
     notice renders in its place.
+
+    Spec 042 (task T121, FR-006). Two additions, both optional, so the usage above is unchanged:
+      - Available: a caller that already knows (the connection dialog reads SqlConn.EngineSupportsPostgres)
+        passes the answer and the component does not consult the bridge.
+      - Feature / EngineConnected / EngineVersion / TestId: the notice then names the feature, the capability and the
+        engine version found, or asks for an engine first, and carries the caller's test id.
+        <CapabilityNotice Available="false" Feature="PostgreSQL" RequiredCapability="dialect.postgresql.v1" />
 *@
 @using AkmlSql.Web.Services
 @implements IDisposable
-@inject IEngineBridge Bridge
+@inject IServiceProvider Services
 
-@if (_isAvailable)
+@if (IsAvailable)
 {
     @ChildContent
 }
 else
 {
-    <div class="akml-capability-notice">
+    <div class="akml-capability-notice" role="note" data-testid="@TestId" data-capability="@RequiredCapability">
         <span class="akml-capability-notice-icon">i</span>
         <span class="akml-capability-notice-text">
-            This feature requires engine capability <code>@RequiredCapability</code>,
-            which the paired engine does not advertise. Update the engine to use it.
+            @if (string.IsNullOrEmpty(Feature))
+            {
+                <text>This feature requires engine capability <code>@RequiredCapability</code>,
+                which the paired engine does not advertise. Update the engine to use it.</text>
+            }
+            else if (!EngineConnected)
+            {
+                <text>@Feature needs an engine that supports <code>@RequiredCapability</code>. Pair an engine first (Settings › Connections).</text>
+            }
+            else
+            {
+                <text>@Feature needs an engine that supports <code>@RequiredCapability</code>. @FoundText: update the engine, or check that postgreSql.enabled is not false in its config.json.</text>
+            }
         </span>
     </div>
 }
@@ -63,12 +81,42 @@ else
     [Parameter] public string RequiredCapability { get; set; } = string.Empty;
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>Spec 042: the caller already knows whether the engine offers the capability; the bridge is not consulted.</summary>
+    [Parameter] public bool? Available { get; set; }
+
+    /// <summary>Spec 042: what needs the capability, as the person knows it ("PostgreSQL"). Empty keeps the original wording.</summary>
+    [Parameter] public string? Feature { get; set; }
+
+    /// <summary>Spec 042: false when no engine is paired at all; the notice then asks for one first.</summary>
+    [Parameter] public bool EngineConnected { get; set; } = true;
+
+    /// <summary>Spec 042: the paired engine's version, when known.</summary>
+    [Parameter] public string? EngineVersion { get; set; }
+
+    [Parameter] public string TestId { get; set; } = "capability-notice";
+
     private bool _isAvailable;
+    private IEngineBridge? _bridge;
+
+    private bool IsAvailable => Available ?? _isAvailable;
+
+    private string FoundText
+    {
+        get
+        {
+            var version = AkmlSql.Core.AppVersion.StripBuildMetadata(EngineVersion);
+            return string.IsNullOrWhiteSpace(version)
+                ? "The paired engine does not advertise it"
+                : $"The paired engine (version {version}) does not advertise it";
+        }
+    }
 
     protected override void OnInitialized()
     {
+        // The bridge is optional: a caller that passes Available never needs it, and a host without one reads as "not offered".
+        _bridge = Services.GetService(typeof(IEngineBridge)) as IEngineBridge;
         Refresh();
-        Bridge.StateChanged += OnBridgeStateChanged;
+        if (_bridge != null) _bridge.StateChanged += OnBridgeStateChanged;
     }
 
     private void OnBridgeStateChanged(BridgeState _)
@@ -85,12 +133,12 @@ else
     private void Refresh()
     {
         _isAvailable = !string.IsNullOrEmpty(RequiredCapability)
-            && Bridge.EngineCapabilities != null
-            && System.Array.IndexOf(Bridge.EngineCapabilities, RequiredCapability) >= 0;
+            && _bridge != null
+            && _bridge.Advertises(RequiredCapability);
     }
 
     public void Dispose()
     {
-        Bridge.StateChanged -= OnBridgeStateChanged;
+        if (_bridge != null) _bridge.StateChanged -= OnBridgeStateChanged;
     }
 }

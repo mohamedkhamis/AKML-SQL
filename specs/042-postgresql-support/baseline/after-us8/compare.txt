@@ -1,0 +1,38 @@
+AI                               92 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\AI.passed.txt
+Analysis                          5 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\Analysis.passed.txt
+Core                           1457 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\Core.passed.txt
+Engine                         2376 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\Engine.passed.txt
+Formatting                     1635 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\Formatting.passed.txt
+IntelliSense                     25 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\IntelliSense.passed.txt
+Shell                           987 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\Shell.passed.txt
+Web                            1474 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us8\Web.passed.txt
+
+== Core
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllReferenceMarkdownFilesExistAndAreNonEmpty
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllSvgMockupsExist
+
+== Engine
+  passed -> Failed      AkmlSql.Engine.Tests.Refactoring.RefactoringPerformanceTests.SC001_RemoveSemicolons_Under100ms_On2000LineDocument
+
+
+Suite        BeforePassed AfterPassed Regressed Missing NowSkipped NowPassing Unexpected
+-----        ------------ ----------- --------- ------- ---------- ---------- ----------
+AI                     56          92         0       0          0          0          0
+Analysis                5           5         0       0          0          0          0
+Core                 1349        1457         0       0          0          2          0
+Engine               2133        2376         1       0          0          0          1
+Formatting           1635        1635         0       0          0          0          0
+IntelliSense           25          25         0       0          0          0          0
+Shell                 986         987         0       0          0          0          0
+Web                  1129        1474         0       0          0          0          0
+
+
+
+1 test(s) passed before and do not pass after (not on the allow-list).
+
+== Resolution of the one flagged test (after the full run)
+  Engine  RefactoringPerformanceTests.SC001_RemoveSemicolons_Under100ms_On2000LineDocument
+        A timing test of the T-SQL refactoring (a 2,000-line document in under 100 ms). It failed once in the full run and passes alone
+        (5 of 5 in the class); nothing it calls changed in this story. The failures that also failed before the feature are the same
+        as for US5: ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only (Core), the 66 FormatterServiceTests sp031
+        baselines (Web), PerformanceBaselineTests (Engine).

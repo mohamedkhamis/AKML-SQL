@@ -177,10 +177,89 @@ public sealed class ReconnectLoopTests
 
         await WaitForStateAsync(bridge, BridgeState.Failed, TimeSpan.FromSeconds(3));
         Assert.Equal(BridgeState.Failed, bridge.State);
+        // The failed handshake sets Failed before the loop clears the revoked token: wait for the clean-up itself.
+        for (var waited = 0; waited < 3000 && (vault.Removed.Count == 0 || (await connections.GetAsync(connection.Id))!.BearerTokenWrappedRef != null); waited += 20)
+            await Task.Delay(20);
         Assert.Contains(connection.Id, vault.Removed);
         var updated = await connections.GetAsync(connection.Id);
         Assert.Null(updated!.BearerTokenWrappedRef);
 
+        await bridge.DisconnectAsync();
+    }
+
+    /// <summary>An engine socket that accepts only <paramref name="acceptedBearer"/>; everything else is asked for its PIN. The
+    /// bearers it was offered are recorded.</summary>
+    private static FakeBridgeWebSocket BearerCheckingSocket(string acceptedBearer, List<string?> offered) => new(frame =>
+    {
+        var env = MessagePackSerializer.Deserialize<RpcMessage>(frame);
+        var request = MessagePackSerializer.Deserialize<HandshakeRequest>(env.Payload!);
+        offered.Add(request.BearerToken);
+        var ok = request.BearerToken == acceptedBearer;
+        return MessagePackSerializer.Serialize(new RpcMessage
+        {
+            MessageType = MessageTypes.HandshakeResponse,
+            RequestId = env.RequestId,
+            Payload = MessagePackSerializer.Serialize(new HandshakeResponse
+            {
+                Status = ok ? HandshakeStatus.Ok : HandshakeStatus.PinRequired,
+                ErrorMessage = ok ? null : "LAN mode requires a pairing PIN or bearer token.",
+            }),
+        });
+    });
+
+    /// <summary>Review WEB-05: first pairing with a PIN, then the socket drops — the reconnect offers the token that pairing
+    /// minted (it used to offer null, take the PinRequired answer for a revocation and delete the stored token).</summary>
+    [Fact]
+    public async Task A_reconnect_after_a_PIN_pairing_uses_the_token_that_pairing_issued()
+    {
+        var pairing = new FakeBridgeWebSocket(frame =>
+        {
+            var env = MessagePackSerializer.Deserialize<RpcMessage>(frame);
+            return MessagePackSerializer.Serialize(new RpcMessage
+            {
+                MessageType = MessageTypes.HandshakeResponse,
+                RequestId = env.RequestId,
+                Payload = MessagePackSerializer.Serialize(new HandshakeResponse { Status = HandshakeStatus.Ok, NewBearerToken = "minted" }),
+            });
+        });
+        var offered = new List<string?>();
+        var queue = new Queue<FakeBridgeWebSocket>(new[] { pairing, BearerCheckingSocket("minted", offered) });
+        var bridge = BuildBridge(queue, out var vault, out var connections);
+        var connection = LocalhostConnection();
+        connection.Host = "192.168.1.100";
+        connection.IsLocalhost = false;
+        await bridge.ConnectAsync(connection, bearerToken: null, pairingPin: "123456", CancellationToken.None);
+        // What the picker does with the minted token.
+        connection.BearerTokenWrappedRef = await vault.StoreAsync(connection.Id, "minted", DateTimeOffset.UtcNow.AddDays(60));
+        await connections.AddAsync(connection);
+
+        await pairing.DisposeAsync();
+        await WaitForStateAsync(bridge, BridgeState.Reconnecting, TimeSpan.FromSeconds(1));
+        await WaitForStateAsync(bridge, BridgeState.Open, TimeSpan.FromSeconds(3));
+
+        Assert.Equal(BridgeState.Open, bridge.State);
+        Assert.Equal(new string?[] { "minted" }, offered.ToArray());
+        Assert.Empty(vault.Removed);
+        Assert.NotNull((await connections.GetAsync(connection.Id))!.BearerTokenWrappedRef);
+        await bridge.DisconnectAsync();
+    }
+
+    /// <summary>Review WEB-05: with no token offered, PinRequired says nothing about a stored pairing — it is not deleted.</summary>
+    [Fact]
+    public async Task PinRequired_without_a_token_offered_is_not_treated_as_a_revocation()
+    {
+        var offered = new List<string?>();
+        var first = OkHandshakeSocket();
+        var queue = new Queue<FakeBridgeWebSocket>(new[] { first, BearerCheckingSocket("never-sent", offered) });
+        var bridge = BuildBridge(queue, out var vault, out _);
+
+        await bridge.ConnectAsync(LocalhostConnection(), null, null, CancellationToken.None);
+        await first.DisposeAsync();
+
+        await WaitForStateAsync(bridge, BridgeState.Failed, TimeSpan.FromSeconds(3));
+        Assert.Equal(BridgeState.Failed, bridge.State);
+        Assert.Equal(new string?[] { null }, offered.ToArray());
+        Assert.Empty(vault.Removed);
         await bridge.DisconnectAsync();
     }
 

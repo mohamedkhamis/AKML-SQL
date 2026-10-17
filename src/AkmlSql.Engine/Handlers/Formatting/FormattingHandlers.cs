@@ -18,6 +18,17 @@ namespace AkmlSql.Engine.Handlers.Formatting
     // requires a streaming-response extension to the transport contract -- tracked as a
     // separate follow-up under spec 021.
 
+    /// <summary>
+    /// Spec 042 (FR-090, SC-010, US7). The formatter pipeline behind these handlers is T-SQL's: it parses with ScriptDom and
+    /// lays out T-SQL, and a PostgreSQL session's text is never given to it. A request from a PostgreSQL session goes to the
+    /// PostgreSQL formatter (<c>FormatRequestHandler.HandleFormat*PostgresAsync</c>) instead; this is the one place that decides.
+    /// </summary>
+    internal static class PostgresFormatDispatch
+    {
+        public static bool IsPostgres(RpcContext ctx, string? sessionId) =>
+            ctx.Sessions.KindOf(sessionId) == AkmlSql.Core.DatabaseKind.PostgreSql;
+    }
+
     public sealed class FormatDocumentHandler : IRpcRequestHandler<FormatRequest, FormatResponse>
     {
         private readonly FormatRequestHandler _inner;
@@ -25,7 +36,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatDocument;
         public int ResponseMessageType => MessageTypes.FormatDocumentResult;
         public Task<FormatResponse> HandleAsync(FormatRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormat(request, ctx.SchemaCache, ctx.Sessions));   // spec 040: schema-aware Format SQL actions
+            => PostgresFormatDispatch.IsPostgres(ctx, request.SessionId)
+                ? _inner.HandleFormatPostgresAsync(request, ctx.SchemaCache, ctx.Sessions)                              // spec 042: the PostgreSQL formatter
+                : Task.FromResult(_inner.HandleFormat(request, ctx.SchemaCache, ctx.Sessions));   // spec 040: schema-aware Format SQL actions
     }
 
     public sealed class FormatSelectionHandler : IRpcRequestHandler<FormatSelectionRequest, FormatSelectionResponse>
@@ -35,7 +48,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatSelection;
         public int ResponseMessageType => MessageTypes.FormatSelectionResult;
         public Task<FormatSelectionResponse> HandleAsync(FormatSelectionRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatSelection(request, ctx.SchemaCache, ctx.Sessions));
+            => PostgresFormatDispatch.IsPostgres(ctx, request.SessionId)
+                ? _inner.HandleFormatSelectionPostgresAsync(request, ctx.SchemaCache, ctx.Sessions)
+                : Task.FromResult(_inner.HandleFormatSelection(request, ctx.SchemaCache, ctx.Sessions));
     }
 
     public sealed class FormatPreviewHandler : IRpcRequestHandler<FormatPreviewRequest, FormatPreviewResponse>
@@ -45,7 +60,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatPreview;
         public int ResponseMessageType => MessageTypes.FormatPreviewResult;
         public Task<FormatPreviewResponse> HandleAsync(FormatPreviewRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatPreview(request));
+            => request.Dialect == (int)AkmlSql.Core.DatabaseKind.PostgreSql || PostgresFormatDispatch.IsPostgres(ctx, request.SessionId)
+                ? _inner.HandleFormatPreviewPostgresAsync(request)
+                : Task.FromResult(_inner.HandleFormatPreview(request));
     }
 
     public sealed class FormatActionHandler : IRpcRequestHandler<FormatActionRequest, FormatActionResponse>
@@ -55,7 +72,9 @@ namespace AkmlSql.Engine.Handlers.Formatting
         public int RequestMessageType => MessageTypes.FormatAction;
         public int ResponseMessageType => MessageTypes.FormatActionResult;
         public Task<FormatActionResponse> HandleAsync(FormatActionRequest request, RpcContext ctx, CancellationToken ct)
-            => Task.FromResult(_inner.HandleFormatAction(request, ctx.SchemaCache, ctx.Sessions));
+            => PostgresFormatDispatch.IsPostgres(ctx, request.SessionId)
+                ? _inner.HandleFormatActionPostgresAsync(request, ctx.SchemaCache, ctx.Sessions)
+                : Task.FromResult(_inner.HandleFormatAction(request, ctx.SchemaCache, ctx.Sessions));
     }
 
     /// <summary>

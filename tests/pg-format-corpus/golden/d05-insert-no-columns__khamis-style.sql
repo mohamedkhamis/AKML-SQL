@@ -1,0 +1,2 @@
+INSERT INTO t
+VALUES ( 1 , 'a' , NULL , DEFAULT ) ;

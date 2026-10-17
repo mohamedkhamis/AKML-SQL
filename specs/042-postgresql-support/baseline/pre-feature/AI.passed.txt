@@ -1,0 +1,56 @@
+AkmlSql.AI.Tests.ExtractionSmokeTests.AiProviderFactory_KeyDecryptor_defaults_to_identity
+AkmlSql.AI.Tests.ExtractionSmokeTests.ExplainPrompt_builds_system_and_user_messages
+AkmlSql.AI.Tests.ExtractionSmokeTests.Privacy_namespace_types_are_reachable_from_extracted_library
+AkmlSql.AI.Tests.ExtractionSmokeTests.PromptTemplates_BuildSystemPrompt_includes_task_instruction
+AkmlSql.AI.Tests.ExtractionSmokeTests.SchemaContextBuilder_handles_unknown_session_gracefully
+AkmlSql.AI.Tests.GeminiAdapterCancellationTests.The_callers_cancellation_surfaces_as_OperationCanceledException
+AkmlSql.AI.Tests.GeminiAdapterTimeoutTests.Adapter_bounds_the_sdk_request_deadline_to_the_provider_timeout
+AkmlSql.AI.Tests.GeminiAdapterTimeoutTests.Adapter_defaults_to_the_90s_provider_timeout
+AkmlSql.AI.Tests.GeminiAdapterTimeoutTests.Nonsense_timeouts_fall_back_to_the_default
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Default_endpoint_matches_the_contract_value
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Kimi_does_not_fall_through_to_the_unguarded_custom_case
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Kimi_with_an_explicit_endpoint_creates_a_client
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Kimi_with_defaults_creates_a_client
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Kimi_without_a_model_throws_naming_kimi
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Kimi_without_an_api_key_throws_naming_kimi
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Unknown_provider_error_lists_the_canonical_ids
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Unnormalised_provider_spellings_resolve_to_kimi(provider: "Kimi (Moonshot)")
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Unnormalised_provider_spellings_resolve_to_kimi(provider: "kimi")
+AkmlSql.AI.Tests.KimiProviderFactoryTests.Unnormalised_provider_spellings_resolve_to_kimi(provider: "moonshot")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Custom_endpoint_serves_any_model_name
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "anthropic", model: "gemini-flash-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "anthropic", model: "gpt-4o")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "gemini", model: "claude-sonnet-5")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "gemini", model: "gpt-4o")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "gemini", model: "moonshot-v1-8k")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "kimi", model: "claude-sonnet-5")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "kimi", model: "gpt-4o")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "openai", model: "claude-sonnet-5")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "openai", model: "gemini-flash-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.First_party_provider_with_foreign_model_throws_actionable(provider: "openai", model: "kimi-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Kimi_and_moonshot_names_detect_as_the_kimi_family(model: "kimi-k2-0905-preview")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Kimi_and_moonshot_names_detect_as_the_kimi_family(model: "Kimi-K2-Instruct")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Kimi_and_moonshot_names_detect_as_the_kimi_family(model: "kimi-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Kimi_and_moonshot_names_detect_as_the_kimi_family(model: "models/kimi-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Kimi_and_moonshot_names_detect_as_the_kimi_family(model: "Moonshot-v1-128k")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Kimi_and_moonshot_names_detect_as_the_kimi_family(model: "moonshot-v1-8k")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Lmstudio_serves_any_model_name
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Matching_first_party_pairs_create_a_client(provider: "anthropic", model: "claude-sonnet-4-6")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Matching_first_party_pairs_create_a_client(provider: "gemini", model: "gemini-flash-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Matching_first_party_pairs_create_a_client(provider: "kimi", model: "kimi-k2-0905-preview")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Matching_first_party_pairs_create_a_client(provider: "kimi", model: "kimi-latest")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Matching_first_party_pairs_create_a_client(provider: "kimi", model: "moonshot-v1-8k")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Matching_first_party_pairs_create_a_client(provider: "openai", model: "gpt-4o")
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Ollama_serves_any_model_name
+AkmlSql.AI.Tests.ProviderModelMismatchTests.Unrecognised_names_still_return_null_family
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Assembly_on_a_500_object_database_stays_under_200ms
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Exceeding_the_budget_sets_truncation_and_signals_it_in_the_text
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Fk_one_hop_neighbours_of_named_object_are_promoted
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.General_prompt_yields_the_full_inventory
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Ghost_text_path_assembles_at_detail_level_1
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Named_object_is_promoted_to_level3_detail_with_columns_pk_and_fks
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Noise_token_incidental_match_still_yields_full_inventory
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Promoted_objects_survive_budget_truncation
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Promotion_cap_prefers_directly_named_over_fk_neighbours
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Prompt_naming_more_objects_than_the_budget_is_hard_capped
+AkmlSql.AI.Tests.SchemaContextAssemblyTests.Unbound_context_renders_distinctly_from_a_connected_but_empty_database

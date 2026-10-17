@@ -24,6 +24,7 @@
 @inject IDialogService Dialogs
 @inject EditorDocumentFlow Document
 @inject INotificationService Notifications
+@inject IServiceProvider Services
 
 <PageTitle>SQL History — AKML SQL</PageTitle>
 
@@ -44,7 +45,7 @@
     </div>
     <!-- Top bar: search + filters -->
     <div class="akml-hist-top">
-        <input class="akml-hist-search" placeholder="Search SQL history…  (server: db: name: starred:)"
+        <input class="akml-hist-search" placeholder="@(ShowKinds ? "Search SQL history…  (server: db: name: kind: starred:)" : "Search SQL history…  (server: db: name: starred:)")"
                value="@_search" @oninput="OnSearchInput"
                @onkeydown="OnSearchKey" data-testid="history-search" />
         <button class="akml-btn akml-hist-fav @(_favoritesOnly ? "is-active" : null)" title="Favorites only"
@@ -58,6 +59,16 @@
             <option value="">All databases</option>
             @foreach (var d in _databases) { <option value="@d">@d</option> }
         </select>
+        @if (ShowKinds)
+        {
+            @* Spec 042 (FR-070): only entries of one kind; the search box takes kind:pg / kind:mssql for the same. *@
+            <select class="akml-hist-select" value="@(_kind?.ToString() ?? "")" @onchange="OnKindChanged" title="Kind of server"
+                    aria-label="Kind of server" data-testid="history-kind-filter">
+                <option value="">All kinds</option>
+                <option value="0">SQL Server</option>
+                <option value="1">PostgreSQL</option>
+            </select>
+        }
         @if (_compare.Count == 2)
         {
             <button class="akml-btn" @onclick="OpenCompareAsync" data-testid="history-compare">Compare (2)</button>
@@ -81,8 +92,11 @@
         <div class="akml-hist-body">
             <!-- LEFT: master list (top) + version sub-panel (bottom) -->
             <div class="akml-hist-left">
-                <div class="akml-hist-list" data-testid="history-list" role="listbox" aria-label="History entries">
-                    @{ string? lastBucket = null; }
+                @* Review WEB-13: every action is a native control. Arrow keys, Home and End move between the group headers and
+                   the entries (one tab stop: the current one, then its favorite and compare controls); Enter or Space selects
+                   an entry or folds a group. A click anywhere on a row still selects it. *@
+                <div class="akml-hist-list" data-testid="history-list" role="group" aria-label="History entries" @onkeydown="OnListKeyDownAsync" @ref="_listRef">
+                    @{ string? lastBucket = null; var stopKey = CurrentStop; }
                     @foreach (var e in _entries)
                     {
                         var rv = RowFor(e);
@@ -91,24 +105,36 @@
                         {
                             lastBucket = bucket;
                             var b = bucket;
-                            <div class="akml-hist-group" @onclick="@(() => ToggleBucket(b))">
+                            var groupKey = GroupStop(b);
+                            <button type="button" class="akml-hist-group" id="@StopId(groupKey)" data-testid="history-group"
+                                    aria-expanded="@(_collapsed.Contains(b) ? "false" : "true")" tabindex="@(stopKey == groupKey ? 0 : -1)"
+                                    @onfocus="@(() => _focusStop = groupKey)" @onclick="@(() => ToggleBucket(b))">
                                 <span class="akml-hist-chevron"><Icon Name="@(_collapsed.Contains(b) ? "chevron-right" : "chevron-down")" Size="12" /></span>
                                 <span>@b</span>
-                            </div>
+                            </button>
                         }
                         if (!_collapsed.Contains(bucket))
                         {
                             var entry = e;
+                            var rowKey = RowStop(e.Id);
+                            var current = stopKey == rowKey;
                             <div class="akml-list-row akml-hist-row @(_selected?.Id == e.Id ? "is-selected" : null)" data-testid="history-row"
-                                 role="option" aria-selected="@(_selected?.Id == e.Id ? "true" : "false")"
                                  @onclick="@(() => SelectAsync(entry))">
-                                <span class="akml-hist-star @(e.IsFavorite ? "on" : "")" title="Toggle favorite"
-                                      @onclick="@(() => ToggleFavoriteAsync(entry))" @onclick:stopPropagation="true">
-                                    <Icon Name="star" Size="14" Label="@(e.IsFavorite ? "Favorite" : "Not a favorite")" />
-                                </span>
-                                <span class="akml-hist-rowmain">
+                                <button type="button" class="akml-hist-star @(e.IsFavorite ? "on" : "")" title="Toggle favorite" data-testid="history-row-favorite"
+                                        aria-pressed="@(e.IsFavorite ? "true" : "false")" aria-label="Favorite" tabindex="@(current ? 0 : -1)"
+                                        @onclick="@(() => ToggleFavoriteAsync(entry))" @onclick:stopPropagation="true">
+                                    <Icon Name="star" Size="14" />
+                                </button>
+                                <button type="button" class="akml-hist-rowmain" id="@StopId(rowKey)" data-testid="history-row-select"
+                                        aria-current="@(_selected?.Id == e.Id ? "true" : null)" tabindex="@(current ? 0 : -1)"
+                                        @onfocus="@(() => _focusStop = rowKey)">
                                     <span class="akml-hist-name">@rv.DisplayName</span>
                                     <span class="akml-hist-meta">
+                                        @if (ShowKinds)
+                                        {
+                                            <span class="akml-hist-kind" data-testid="history-kind"
+                                                  data-kind="@AkmlSql.Core.DatabaseKindNames.ToName(AkmlSql.Core.DatabaseKindNames.FromInt(e.Kind))">@WebHistoryLogic.KindLabel(e.Kind)</span>
+                                        }
                                         <span>@rv.RelativeTime</span>
                                         @if (!string.IsNullOrEmpty(rv.Meta)) { <span class="akml-hist-count"> · @rv.Meta</span> }
                                         <span class="akml-hist-conn">
@@ -116,9 +142,9 @@
                                             @rv.ServerDb
                                         </span>
                                     </span>
-                                </span>
-                                <input type="checkbox" class="akml-hist-cmp" title="Select for compare"
-                                       checked="@_compare.Contains(e.Id)"
+                                </button>
+                                <input type="checkbox" class="akml-hist-cmp" title="Select for compare" aria-label="Select for compare"
+                                       checked="@_compare.Contains(e.Id)" tabindex="@(current ? 0 : -1)"
                                        @onclick:stopPropagation="true"
                                        @onchange="@(args => ToggleCompare(entry, args))" />
                             </div>
@@ -158,11 +184,12 @@
                         {
                             var idx = i;
                             var vnum = _versions.Length - i;
-                            <div class="akml-hist-vrow @(_selectedVersion == idx ? "selected" : "")"
-                                 @onclick="@(() => SelectVersion(idx))">
+                            <button type="button" class="akml-hist-vrow @(_selectedVersion == idx ? "selected" : "")" data-testid="history-version"
+                                    aria-pressed="@(_selectedVersion == idx || (_selectedVersion < 0 && idx == 0) ? "true" : "false")"
+                                    @onclick="@(() => SelectVersion(idx))">
                                 <span class="akml-hist-vlabel">v@(vnum)@(i == 0 ? " (current)" : "")</span>
                                 <span class="akml-hist-vtime">@VersionTime(_versions[idx].SavedAt)</span>
-                            </div>
+                            </button>
                         }
                     </div>
                 </div>
@@ -174,7 +201,15 @@
                     <span class="akml-hist-pname">@(_selected == null ? "Preview" : RowFor(_selected).DisplayName)</span>
                     <span class="akml-hist-ptime">@(_selected == null ? "" : AbsTime(_selected.ExecutedAt))</span>
                 </div>
-                <pre class="akml-hist-preview" data-testid="history-preview">@if (_selected != null)
+                @if (_selected != null && !_detailLoading && !HasCompleteSql)
+                {
+                    <div class="akml-results-warning" role="alert" data-testid="history-excerpt-notice">
+                        The full query could not be loaded, so only its first 500 characters are shown. It cannot be copied,
+                        opened or run until it loads.
+                        <button type="button" class="akml-btn" data-testid="history-detail-retry" @onclick="@(() => SelectAsync(_selected))">Retry</button>
+                    </div>
+                }
+                <pre class="akml-hist-preview" data-testid="history-preview" aria-busy="@(_detailLoading ? "true" : null)">@if (_selected != null && !_detailLoading)
 {
     foreach (var seg in _previewSegments)
     {<span class="@SegClass(seg)">@seg.Text</span>}
@@ -192,12 +227,12 @@
                     <span class="akml-hist-spacer"></span>
                     @if (_selected != null)
                     {
-                        <button class="akml-btn" @onclick="CopySqlAsync" data-testid="history-copy">Copy</button>
+                        <button class="akml-btn" @onclick="CopySqlAsync" disabled="@(!HasCompleteSql)" title="@DetailWait" data-testid="history-copy">Copy</button>
                         <button class="akml-btn" @onclick="@(() => RenameAsync(_selected))" data-testid="history-rename">Rename</button>
                         <button class="akml-btn" @onclick="@(() => DeleteAsync(_selected))" data-testid="history-delete">Delete</button>
                         <button class="akml-btn" @onclick="@(() => RemoveOlderAsync(_selected))" data-testid="history-remove-older">Remove older</button>
-                        <button class="akml-btn" @onclick="ReExecuteAsync" data-testid="history-reexecute">Re-execute</button>
-                        <button class="akml-btn akml-btn--primary" @onclick="OpenInEditorAsync" data-testid="history-open">Open</button>
+                        <button class="akml-btn" @onclick="ReExecuteAsync" disabled="@(!HasCompleteSql)" title="@DetailWait" data-testid="history-reexecute">Re-execute</button>
+                        <button class="akml-btn akml-btn--primary" @onclick="OpenInEditorAsync" disabled="@(!HasCompleteSql)" title="@DetailWait" data-testid="history-open">Open</button>
                     }
                 </div>
             </div>
@@ -251,7 +286,11 @@
     .akml-hist-left { display: grid; grid-template-rows: 1fr auto; min-height: 0;
         border-right: 1px solid var(--akml-border-default); }
     .akml-hist-list { overflow: auto; background-color: var(--akml-surface-panel); }
-    .akml-hist-group { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
+    .akml-hist-group, .akml-hist-star, .akml-hist-rowmain, .akml-hist-vrow {
+        font: inherit; color: inherit; background: none; border: 0; margin: 0; text-align: left; }
+    .akml-hist-group:focus-visible, .akml-hist-star:focus-visible, .akml-hist-rowmain:focus-visible, .akml-hist-vrow:focus-visible {
+        outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
+    .akml-hist-group { width: 100%; display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
         color: var(--akml-text-secondary); font-size: 11px; font-weight: var(--akml-type-chrome-weight);
         text-transform: uppercase; border-bottom: 1px solid var(--akml-border-subtle); }
@@ -259,14 +298,20 @@
     .akml-hist-row { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer;
         border-left: 3px solid transparent; border-bottom: 1px solid var(--akml-border-subtle); }
-    .akml-hist-star { cursor: pointer; color: var(--akml-text-disabled); font-size: 14px; width: 16px; text-align: center; }
+    .akml-hist-star { cursor: pointer; color: var(--akml-text-disabled); font-size: 14px; width: 16px; padding: 0; text-align: center; }
     .akml-hist-star.on { color: var(--akml-history-star-active, var(--akml-status-warning)); }
     .akml-hist-star.on .akml-icon, .akml-hist-fav.is-active .akml-icon { fill: currentColor; }
-    .akml-hist-rowmain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+    .akml-hist-rowmain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: 0; cursor: pointer; }
     .akml-hist-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         color: var(--akml-text-primary); font-weight: var(--akml-type-chrome-weight); }
     .akml-hist-meta { display: flex; gap: 4px; align-items: center; color: var(--akml-text-secondary);
         font-size: 11px; overflow: hidden; }
+    .akml-hist-kind {
+        flex: none; padding: 0 var(--akml-scalar-spacing-xs); border: 1px solid var(--akml-border-subtle);
+        border-radius: var(--akml-scalar-radius-xs); font-size: 10px; line-height: 1.4; color: var(--akml-text-secondary);
+        white-space: nowrap;
+    }
+    .akml-hist-kind[data-kind="postgresql"] { color: var(--akml-text-primary); border-color: var(--akml-border-strong); }
     .akml-hist-conn { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .akml-hist-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
     .akml-hist-dot.is-open { background-color: var(--akml-status-success); }
@@ -280,7 +325,7 @@
         color: var(--akml-text-secondary); font-size: 11px; font-weight: var(--akml-type-chrome-weight);
         text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .akml-hist-vlist { overflow: auto; }
-    .akml-hist-vrow { display: flex; justify-content: space-between; cursor: pointer;
+    .akml-hist-vrow { width: 100%; display: flex; justify-content: space-between; cursor: pointer;
         padding: 2px var(--akml-scalar-spacing-s); }
     .akml-hist-vrow:hover { background-color: var(--akml-surface-hover); }
     .akml-hist-vrow.selected { background-color: var(--akml-surface-selection); }
@@ -339,6 +384,7 @@
     private bool _favoritesOnly;
     private string? _server;
     private string? _database;
+    private int? _kind;   // spec 042 (FR-070): the kind filter control; a kind: term in the search box overrides it
     private IReadOnlyList<string> _servers = Array.Empty<string>();
     private IReadOnlyList<string> _databases = Array.Empty<string>();
 
@@ -353,6 +399,103 @@
 
     private IJSObjectReference? _downloadModule;
     private IJSObjectReference? _ui;
+
+    // Review WEB-17: every search gets a number; only the latest one's rows are shown, and a Load more page belongs to the
+    // search it was asked for.
+    private int _loadGeneration;
+
+    // Review WEB-16: every selection gets a number; its SQL and versions are shown together, and only while it is still the
+    // selection. Until they arrive the preview is empty and the actions that use it wait.
+    private int _detailRequest;
+    private bool _detailLoading;
+
+    // Re-review REV-02: the complete query is known — not just the search result's 500-character excerpt.
+    private bool _fullSqlLoaded;
+
+    /// <summary>The preview holds the whole query (the entry's full text, or a stored version): it may be copied, opened, run.</summary>
+    private bool HasCompleteSql => !_detailLoading && (_fullSqlLoaded || _selectedVersion >= 0);
+
+    private string? DetailWait => _detailLoading ? "Wait for the entry to load"
+        : !HasCompleteSql ? "The full query could not be loaded; only its first 500 characters are shown" : null;
+
+    // Review WEB-13: the list's one tab stop — a group header ("g:<bucket>") or an entry ("r:<id>") — moved by the arrow keys.
+    private ElementReference _listRef;
+    private string? _focusStop;
+    private string? _focusAfterRender;
+    private string? _trappedListId;
+
+    private static string GroupStop(string bucket) => "g:" + bucket;
+    private static string RowStop(long id) => "r:" + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private static string StopId(string key) => "akml-hist-stop-" + Convert.ToHexString(System.Text.Encoding.UTF8.GetBytes(key));
+
+    /// <summary>The group headers and visible entries in list order.</summary>
+    private List<string> Stops()
+    {
+        var stops = new List<string>();
+        string? last = null;
+        foreach (var e in _entries)
+        {
+            var bucket = RowFor(e).Bucket;
+            if (bucket != last) { last = bucket; stops.Add(GroupStop(bucket)); }
+            if (!_collapsed.Contains(bucket)) stops.Add(RowStop(e.Id));
+        }
+        return stops;
+    }
+
+    /// <summary>The stop that takes Tab: the focused one, else the selected entry, else the first.</summary>
+    private string? CurrentStop
+    {
+        get
+        {
+            var stops = Stops();
+            if (_focusStop != null && stops.Contains(_focusStop)) return _focusStop;
+            if (_selected != null && stops.Contains(RowStop(_selected.Id))) return RowStop(_selected.Id);
+            return stops.Count > 0 ? stops[0] : null;
+        }
+    }
+
+    private async Task OnListKeyDownAsync(KeyboardEventArgs e)
+    {
+        var stops = Stops();
+        if (stops.Count == 0) return;
+        int at = Math.Max(0, CurrentStop is { } c ? stops.IndexOf(c) : 0);
+        int next = e.Key switch
+        {
+            "ArrowDown" => Math.Min(stops.Count - 1, at + 1),
+            "ArrowUp" => Math.Max(0, at - 1),
+            "Home" => 0,
+            "End" => stops.Count - 1,
+            _ => -1,
+        };
+        if (next < 0) return;
+        _focusStop = stops[next];
+        _focusAfterRender = StopId(stops[next]);
+        await Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The list exists only once the engine answers; trap its keys (Arrow scrolling, Home/End jumping) once per element.
+        if (!string.IsNullOrEmpty(_listRef.Id) && _listRef.Id != _trappedListId)
+        {
+            _trappedListId = _listRef.Id;
+            try
+            {
+                _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+                await _ui.InvokeVoidAsync("trapListKeys", _listRef);
+            }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+        if (_focusAfterRender is { } id && _ui != null)
+        {
+            _focusAfterRender = null;
+            try { await _ui.InvokeVoidAsync("focusById", id); }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -376,14 +519,20 @@
 
     private async Task LoadAsync(bool reset)
     {
-        if (_loading) return;
+        // Review WEB-17: a new search (or filter) replaces one still loading — it used to be dropped, leaving the old
+        // search's rows under the new controls. Load more waits for the current load instead of mixing pages.
+        if (_loading && !reset) return;
+        int generation = ++_loadGeneration;
         _loading = true;
         StateHasChanged();
         try
         {
+            // Spec 042 (FR-070): a kind: term is a filter, not words for the full-text index.
+            var parsed = WebHistoryLogic.ParseSearch(_search);
             var request = new HistorySearchRequest
             {
-                SearchText = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                SearchText = parsed.Text,
+                Kind = parsed.Kind ?? _kind,
                 Server = _server,
                 Database = _database,
                 FavoritesOnly = _favoritesOnly,
@@ -392,6 +541,7 @@
                 Limit = PageSize,
             };
             var resp = await HistorySvc.SearchAsync(request, CancellationToken.None);
+            if (generation != _loadGeneration) return;   // superseded: a later search owns the list
             if (reset)
             {
                 // A reset/filter reload REPLACES the result set; drop the cached row views too so a
@@ -410,31 +560,64 @@
         }
         finally
         {
-            _loading = false;
-            StateHasChanged();
+            if (generation == _loadGeneration)
+            {
+                _loading = false;
+                StateHasChanged();
+            }
         }
     }
 
     private async Task SelectAsync(HistoryEntryDto entry)
     {
+        // Review WEB-16: the heading changes at once, so the preview and the versions must too — never the previous entry's
+        // SQL under this entry's name, where Open or Re-execute would use it.
+        int request = ++_detailRequest;
         _selected = entry;
+        _focusStop = RowStop(entry.Id);
         _selectedVersion = -1;
-        _previewSql = await HistorySvc.GetFullSqlAsync(entry.Id, CancellationToken.None) ?? entry.SqlText ?? string.Empty;
-        _versions = await HistorySvc.GetVersionsAsync(entry.Id, CancellationToken.None);
+        _previewSql = string.Empty;
+        _versions = Array.Empty<HistoryVersionDto>();
+        _detailLoading = true;
+        _fullSqlLoaded = false;
+        RecomputePreviewSegments();
+        StateHasChanged();
+
+        // Re-review REV-02: the search result carries only the first 500 characters of the query. When the full text cannot be
+        // loaded (no answer, an error, a refusal) that excerpt may be shown — marked as an excerpt — but never copied, opened or
+        // run as if it were the query: running a prefix can drop its WHERE clause or its ROLLBACK. The versions are optional
+        // and load separately, so their failure never costs the full text.
+        string? sql = null;
+        try { sql = await HistorySvc.GetFullSqlAsync(entry.Id, CancellationToken.None); }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Full SQL failed: {ex.GetType().Name}"); }
+        if (request != _detailRequest) return;   // another entry was selected (or the selection went) meanwhile
+
+        var versions = Array.Empty<HistoryVersionDto>();
+        try { versions = await HistorySvc.GetVersionsAsync(entry.Id, CancellationToken.None) ?? versions; }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Versions failed: {ex.GetType().Name}"); }
+        if (request != _detailRequest) return;
+
+        _fullSqlLoaded = sql != null;
+        _previewSql = sql ?? entry.SqlText ?? string.Empty;
+        _versions = versions;
+        _detailLoading = false;
         RecomputePreviewSegments();
         StateHasChanged();
     }
 
     private void SelectVersion(int idx)
     {
-        if (idx < 0 || idx >= _versions.Length) return;
-        _selectedVersion = idx;
+        if (idx < 0 || idx >= _versions.Length || _versions[idx].SqlText == null) return;
+        _selectedVersion = idx;   // a version's text is stored whole: it is the complete query
         _previewSql = _versions[idx].SqlText ?? string.Empty;
         RecomputePreviewSegments();
     }
 
     private void ClearDetail()
     {
+        _detailRequest++;           // a details load still on its way belongs to nothing now
+        _detailLoading = false;
+        _fullSqlLoaded = false;
         _selected = null;
         _previewSql = string.Empty;
         _versions = Array.Empty<HistoryVersionDto>();
@@ -472,6 +655,18 @@
         _database = string.IsNullOrEmpty(v) ? null : v;
         await LoadAsync(true);
     }
+
+    private async Task OnKindChanged(ChangeEventArgs e)
+    {
+        _kind = int.TryParse(e.Value?.ToString(), out var kind) ? kind : null;
+        await LoadAsync(true);
+    }
+
+    /// <summary>
+    /// Spec 042 (FR-070): the kind badge, the kind filter and the kind: hint appear once PostgreSQL can be involved - the engine
+    /// supports it, an entry already is one, or a kind filter is on. Otherwise the page is the page it was.
+    /// </summary>
+    private bool ShowKinds => SqlConn.EngineSupportsPostgres || _kind != null || _entries.Any(e => e.Kind != 0);
 
     private void ToggleBucket(string bucket)
     {
@@ -513,7 +708,7 @@
 
     private void CloseCompare() => _compareOpen = false;
 
-    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _favoritesOnly || _server != null || _database != null;
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _favoritesOnly || _server != null || _database != null || _kind != null;
 
     private void OnCompareKeyDown(KeyboardEventArgs e)
     {
@@ -571,6 +766,7 @@
 
     private async Task CopySqlAsync()
     {
+        if (!HasCompleteSql) return;
         // Spec 041 (T201, R5, N14): copyText also works on the http LAN deployment, where navigator.clipboard is absent.
         bool copied;
         try
@@ -589,20 +785,69 @@
 
     private async Task OpenInEditorAsync()
     {
-        if (_selected == null) return;
+        if (_selected == null || !HasCompleteSql) return;
         // Spec 041 (R64): a past query opens as a new document, as Open does, and never overwrites a modified
         // document without asking.
+        var entry = _selected;
         if (!await Document.OpenQueryAsync(_previewSql, "Open in editor")) return;
         await SessionStore.FlushAsync();
+        await SuggestConnectionAsync(entry);
         Nav.NavigateTo("/");
     }
 
     private async Task ReExecuteAsync()
     {
-        if (_selected == null) return;
+        if (_selected == null || !HasCompleteSql) return;
+        var entry = _selected;
         if (!await Document.OpenQueryAsync(_previewSql, "Re-execute")) return;
         await SessionStore.FlushAsync();
+
+        // Spec 042 (FR-070): a script written for one kind of server is never run on the other. It is opened, and the user is told
+        // which connection it belongs to; running it is theirs to choose after connecting.
+        if (RanOnOtherKind(entry))
+        {
+            await SuggestConnectionAsync(entry, notRun: true);
+            Nav.NavigateTo("/");
+            return;
+        }
+
         Nav.NavigateTo("/?autorun=1");
+    }
+
+    /// <summary>The entry ran on the other kind of server than the connection that is active now.</summary>
+    private bool RanOnOtherKind(HistoryEntryDto entry) =>
+        SqlConn.IsConnected && (int)SqlConn.Kind != entry.Kind;
+
+    /// <summary>
+    /// Spec 042 (FR-070): on restore, name the saved connection the entry ran on when it still exists. Said only when it helps - the
+    /// active connection is of the other kind, or on another server or database. Nothing is connected or run on the user's behalf.
+    /// </summary>
+    private async Task SuggestConnectionAsync(HistoryEntryDto entry, bool notRun = false)
+    {
+        var kind = AkmlSql.Core.DatabaseKindNames.FromInt(entry.Kind);
+        var ranWhere = $"{WebHistoryLogic.KindLabel(entry.Kind)} {entry.Server}/{entry.Database}";
+        var active = SqlConn.IsConnected && SqlConn.Kind == kind
+            && string.Equals(SqlConn.Server, entry.Server, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(SqlConn.Database, entry.Database, StringComparison.OrdinalIgnoreCase);
+        var sameKind = SqlConn.IsConnected && SqlConn.Kind == kind;
+        if (active) return;
+        if (!notRun && sameKind && string.IsNullOrWhiteSpace(entry.Server)) return;
+
+        SavedSqlConnection? match = null;
+        if (Services.GetService(typeof(ISavedSqlConnectionStore)) is ISavedSqlConnectionStore store)
+        {
+            try { match = WebHistoryLogic.FindConnection(await store.ListAsync(), kind, entry.Server, entry.Database); }
+            catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Saved connections could not be read: {ex.Message}"); }
+        }
+
+        // Same kind and nothing saved to point to: the query simply opens on whatever is connected, as it always did.
+        if (match == null && sameKind && !notRun) return;
+
+        var text = match != null
+            ? $"This query ran on {ranWhere}. Saved connection: “{match.Name}”. Connect to it to run the query where it ran."
+            : $"This query ran on {ranWhere}. No saved connection matches it.";
+        if (notRun) text += " It was opened but not run.";
+        Notifications.Notify(text, NotificationKind.Info);
     }
 
     private async Task OnExportChanged(ChangeEventArgs e)
@@ -683,7 +928,7 @@
     private void RecomputePreviewSegments() =>
         _previewSegments = _selected == null
             ? Array.Empty<HistoryPreviewHighlighter.Segment>()
-            : HistoryPreviewHighlighter.BuildSegments(_previewSql, _search);
+            : HistoryPreviewHighlighter.BuildSegments(_previewSql, WebHistoryLogic.ParseSearch(_search).Text ?? string.Empty);
 
     /// <summary>
     /// The session name (query-NN, a saved file name, or the user's rename). The raw-SQL fallback

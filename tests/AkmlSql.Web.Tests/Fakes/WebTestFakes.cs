@@ -13,7 +13,7 @@ namespace AkmlSql.Web.Tests.Bridge;
 internal sealed class FakeEngineBridge : IEngineBridge
 {
     public BridgeState State { get; private set; } = BridgeState.Disconnected;
-    public string[] EngineCapabilities { get; } = Array.Empty<string>();
+    public string[] EngineCapabilities { get; set; } = Array.Empty<string>();
     public string? EngineVersion { get; set; }
     public string? EngineHostKind { get; set; }
     public string? EngineRunsAs { get; set; }
@@ -28,12 +28,26 @@ internal sealed class FakeEngineBridge : IEngineBridge
         StateChanged?.Invoke(newState);
     }
 
-    public Task<HandshakeResponse> ConnectAsync(EngineConnection connection, string? bearerToken, string? pairingPin, CancellationToken ct) =>
-        Task.FromResult(new HandshakeResponse { Status = HandshakeStatus.Ok });
+    /// <summary>Every handshake asked for, in order: the address dialled and what it carried.</summary>
+    public List<(string Host, int Port, string? BearerToken, string? PairingPin)> Handshakes { get; } = new();
+
+    /// <summary>The engine's answer to a handshake; defaults to Ok.</summary>
+    public Func<string? /*bearer*/, string? /*pin*/, HandshakeResponse> Answer { get; set; } =
+        (_, _) => new HandshakeResponse { Status = HandshakeStatus.Ok };
+
+    public Task<HandshakeResponse> ConnectAsync(EngineConnection connection, string? bearerToken, string? pairingPin, CancellationToken ct)
+    {
+        Handshakes.Add((connection.Host, connection.Port, bearerToken, pairingPin));
+        return Task.FromResult(Answer(bearerToken, pairingPin));
+    }
+
+    /// <summary>The engine's answer to a SQL Server connection test, which every SQL Server connect now starts with.</summary>
+    public TestSqlConnectionResponse TestSqlReply { get; set; } = new() { Ok = true };
 
     public Task<TResponse> SendAsync<TRequest, TResponse>(int requestMessageType, TRequest request, CancellationToken ct)
         where TRequest : class
-        where TResponse : class => Task.FromResult<TResponse>(default!);
+        where TResponse : class =>
+        Task.FromResult(requestMessageType == AkmlSql.Core.Ipc.MessageTypes.TestSqlConnection ? (TResponse)(object)TestSqlReply : default!);
 
     /// <summary>Spec 041 (T184) — every notification sent, in order.</summary>
     public List<(int Type, object Payload)> Notifications { get; } = new();

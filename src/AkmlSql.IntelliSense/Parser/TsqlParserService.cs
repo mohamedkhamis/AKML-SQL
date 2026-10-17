@@ -21,9 +21,17 @@ public partial class TsqlParserService
         }
     }
 
+    /// <summary>
+    /// Spec 042 (SC-010 evidence): how many times ANY instance in this process has tokenized or parsed T-SQL. A PostgreSQL
+    /// session must leave it where it was; the engine tests read it before and after. Diagnostic seam only.
+    /// </summary>
+    internal static long TotalInvocations => System.Threading.Interlocked.Read(ref _totalInvocations);
+    private static long _totalInvocations;
+
     /// Fast tier: tokenize only (~50-70ms for 10K lines)
     public IList<TSqlParserToken> GetTokenStream(string sql)
     {
+        System.Threading.Interlocked.Increment(ref _totalInvocations);
         var parser = GetParser();
         using var reader = new StringReader(sql);
         return parser.GetTokenStream(reader, out _);
@@ -41,6 +49,7 @@ public partial class TsqlParserService
     public TSqlScript? Parse(string sql, out IList<ParseError> errors)
     {
         System.Threading.Interlocked.Increment(ref _parseCount);
+        System.Threading.Interlocked.Increment(ref _totalInvocations);
         var parser = GetParser();
         using var reader = new StringReader(sql);
         var fragment = parser.Parse(reader, out errors);

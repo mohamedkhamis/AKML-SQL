@@ -1,0 +1,202 @@
+[
+  {
+    "id": "PGJSN-001",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE ship_name ->> |",
+    "expect": {
+      "mustContain": [
+        "ship_city",
+        "freight"
+      ]
+    },
+    "note": "Right of ->>"
+  },
+  {
+    "id": "PGJSN-002",
+    "family": "json-array-ops",
+    "doc": "SELECT ship_name -> 'a' ->> | FROM orders",
+    "expect": {
+      "mustContain": [
+        "ship_city"
+      ]
+    },
+    "note": "Chained JSON operators"
+  },
+  {
+    "id": "PGJSN-003",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE order_id = ANY(ARRAY[1,2]) AND |",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "freight"
+      ]
+    },
+    "note": "After ANY(ARRAY[..])"
+  },
+  {
+    "id": "PGJSN-004",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE ship_name @> |",
+    "expect": {
+      "mustContain": [
+        "ship_city"
+      ]
+    },
+    "note": "Right of @>"
+  },
+  {
+    "id": "PGJSN-005",
+    "family": "json-array-ops",
+    "doc": "SELECT ARRAY[order_id, |] FROM orders",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "freight"
+      ]
+    },
+    "note": "Inside an array constructor"
+  },
+  {
+    "id": "PGJSN-006",
+    "family": "json-array-ops",
+    "doc": "SELECT jsonb_build_object('a', |) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ]
+    },
+    "note": "Argument of jsonb_build_object"
+  },
+  {
+    "id": "PGJSN-007",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE ship_name = ANY(|)",
+    "expect": {
+      "mustContain": [
+        "ship_city",
+        "customer_id"
+      ]
+    },
+    "note": "Inside ANY ( )"
+  },
+  {
+    "id": "PGJSN-008",
+    "family": "json-array-ops",
+    "doc": "SELECT json_agg(o) FROM orders o WHERE |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight",
+        "o"
+      ]
+    },
+    "note": "After json_agg(o)"
+  },
+  {
+    "id": "PGJSN-009",
+    "family": "json-array-ops",
+    "doc": "SELECT unnest(ARRAY[1,2]) AS n, | FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "After a set-returning call"
+  },
+  {
+    "id": "PGJSN-010",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM jsonb_to_recordset('[]') AS x(a int, b text) WHERE x.|",
+    "expect": {
+      "mustContain": [
+        "a",
+        "b"
+      ],
+      "mustNotContain": [
+        "int",
+        "text"
+      ]
+    },
+    "note": "Column definition list: only the names"
+  },
+  {
+    "id": "PGJSN-011",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM json_each('{}') AS j(k, v) WHERE j.|",
+    "expect": {
+      "mustContain": [
+        "k",
+        "v"
+      ]
+    },
+    "note": "Alias with column names"
+  },
+  {
+    "id": "PGJSN-012",
+    "family": "json-array-ops",
+    "doc": "SELECT order_id::text || '-' || |",
+    "expect": {
+      "mustNotContain": [
+        "GETDATE"
+      ]
+    },
+    "note": "After string concatenation"
+  },
+  {
+    "id": "PGJSN-013",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE ship_name ~ |",
+    "expect": {
+      "mustContain": [
+        "ship_city"
+      ]
+    },
+    "note": "Right of a regex operator"
+  },
+  {
+    "id": "PGJSN-014",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE ship_name LIKE ANY (ARRAY['a%']) AND |",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "LIKE ANY then AND"
+  },
+  {
+    "id": "PGJSN-015",
+    "family": "json-array-ops",
+    "doc": "SELECT * FROM orders WHERE order_id = ALL(|)",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "Inside ALL ( )"
+  },
+  {
+    "id": "PGJSN-016",
+    "family": "json-array-ops",
+    "doc": "SELECT jsonb_agg(jsonb_build_object('id', |)) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "Nested calls"
+  },
+  {
+    "id": "PGJSN-017",
+    "family": "json-array-ops",
+    "doc": "SELECT a.b[1], | FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "After an array subscript item"
+  }
+]

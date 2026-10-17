@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "id": "builtin-pg-crt",
+    "shortcode": "crt",
+    "name": "CREATE TABLE",
+    "description": "CREATE TABLE with an identity primary key and a timestamp",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [
+      "create",
+      "table"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "CREATE TABLE $CURSOR$ (",
+    "    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,",
+    "    created_at timestamptz NOT NULL DEFAULT now()",
+    ");"
+  ]
+}

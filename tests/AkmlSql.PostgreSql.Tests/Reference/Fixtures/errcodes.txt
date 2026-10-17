@@ -1,0 +1,23 @@
+#
+# errcodes.txt
+#      PostgreSQL error codes (excerpt)
+#
+
+Section: Class 00 - Successful Completion
+
+# do not use this code; successful completion is not an error
+00000    S    ERRCODE_SUCCESSFUL_COMPLETION                                  successful_completion
+
+Section: Class 23 - Integrity Constraint Violation
+
+23000    E    ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION                         integrity_constraint_violation
+23505    E    ERRCODE_UNIQUE_VIOLATION                                       unique_violation
+23P01    E    ERRCODE_EXCLUSION_VIOLATION                                    exclusion_violation
+
+Section: Class 42 - Syntax Error or Access Rule Violation
+
+# never ever used in v. 14
+42601    E    ERRCODE_SYNTAX_ERROR                                           syntax_error
+42P01    E    ERRCODE_UNDEFINED_TABLE                                        undefined_table
+# a code with no condition name of its own
+42XXX    E    ERRCODE_MADE_UP_CODE

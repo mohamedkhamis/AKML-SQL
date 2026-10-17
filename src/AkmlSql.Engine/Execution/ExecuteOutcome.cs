@@ -75,6 +75,7 @@ namespace AkmlSql.Engine.Execution
         private readonly List<ExecuteMessageDto> _messages = new();
         private readonly List<ExecuteBatchDto> _batches = new();
         private readonly List<ExecuteResultSet> _sets = new();
+        private readonly HashSet<ExecuteMessageDto> _serverTags = new(ReferenceEqualityComparer.Instance);
         private long _budget;
         private int _messagesOmitted;
         private int _currentBatch = -1;
@@ -258,6 +259,67 @@ namespace AkmlSql.Engine.Execution
             });
         }
 
+        /// <summary>
+        /// Spec 042 (FR-012): a PostgreSQL statement's command tag (<c>UPDATE 12</c>, <c>CREATE TABLE</c>, <c>SELECT 3</c>)
+        /// as its row-count line, worded as the server words it. The count accounts like <see cref="AddRowCount"/>: the
+        /// first line after a set began is that SELECT's, any other count is DML; <paramref name="rowCount"/> of -1 (a
+        /// DDL tag) adds the line and counts nothing.
+        /// </summary>
+        public void AddCommandTag(string tag, long rowCount)
+        {
+            int set = _setAwaitingCount;
+            _setAwaitingCount = -1;
+            if (set == -1 && rowCount >= 0) _dmlRows = (_dmlRows < 0 ? 0 : _dmlRows) + rowCount;
+            if (set < 0) set = -1;
+            var message = new ExecuteMessageDto
+            {
+                Kind = ExecuteMessageKind.RowCount,
+                Text = tag ?? string.Empty,
+                RowCount = rowCount,
+                ResultSetIndex = set,
+            };
+            // The server's tag already says how many rows the statement returned; the row-cap rewrite in Build() is SSMS's wording.
+            _serverTags.Add(message);
+            Add(message);
+        }
+
+        /// <summary>
+        /// Spec 042 (FR-019): the current batch did not run (a psql meta-command or a client-side COPY), so its status is
+        /// Skipped even though a message about it was recorded.
+        /// </summary>
+        public void SetBatchStatus(int status)
+        {
+            if (_currentBatch >= 0) _batches[_currentBatch].Status = status;
+        }
+
+        /// <summary>
+        /// Spec 042 (FR-013, FR-014): a PostgreSQL notice, warning or error. <paramref name="kind"/> is Info for notices and
+        /// warnings (their level is in the text) and Error for errors, which also mark the statement. The error position
+        /// (<paramref name="line"/> within the script, <paramref name="column"/> within that line, both 1-based, 0 when
+        /// unknown) is what click-to-line uses.
+        /// </summary>
+        public void AddPostgresMessage(int kind, string text, int severity, string? sqlState = null, string? detail = null,
+            string? hint = null, int line = 0, int column = 0)
+        {
+            Add(new ExecuteMessageDto
+            {
+                Kind = kind,
+                Text = text ?? string.Empty,
+                Severity = severity,
+                SqlState = string.IsNullOrEmpty(sqlState) ? null : sqlState,
+                Detail = string.IsNullOrEmpty(detail) ? null : detail,
+                Hint = string.IsNullOrEmpty(hint) ? null : hint,
+                Line = Math.Max(0, line),
+                Column = Math.Max(0, column),
+            });
+            if (kind == ExecuteMessageKind.Error && _currentBatch >= 0)
+            {
+                var batch = _batches[_currentBatch];
+                batch.ErrorCount++;
+                if (batch.Status == ExecuteStatus.Ok) batch.Status = ExecuteStatus.Error;
+            }
+        }
+
         /// <summary>A line the engine adds.</summary>
         public void AddSystem(string text) => Add(new ExecuteMessageDto { Kind = ExecuteMessageKind.System, Text = text ?? string.Empty });
 
@@ -320,7 +382,7 @@ namespace AkmlSql.Engine.Execution
             {
                 // A count on a set the row cap cut reads as SSMS's "returned; more exist", with the rows kept.
                 if (m.Kind == ExecuteMessageKind.RowCount && m.ResultSetIndex >= 0 && m.ResultSetIndex < _sets.Count
-                    && _sets[m.ResultSetIndex].Truncated)
+                    && _sets[m.ResultSetIndex].Truncated && !_serverTags.Contains(m))
                 {
                     m.Text = SqlMessageText.RowCount(_sets[m.ResultSetIndex].Rows.Length, moreExist: true);
                 }

@@ -1,0 +1,47 @@
+AI                               92 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\AI.passed.txt
+Analysis                          5 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\Analysis.passed.txt
+Core                           1452 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\Core.passed.txt
+Engine                         2364 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\Engine.passed.txt
+Formatting                     1634 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\Formatting.passed.txt
+IntelliSense                     25 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\IntelliSense.passed.txt
+Shell                           986 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\Shell.passed.txt
+Web                            1452 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us7\Web.passed.txt
+
+== Core
+  passed -> Failed      AkmlSql.Core.Tests.Ipc.FormattingContractTests.Format_request_carries_actions_as_key_5
+  passed -> Failed      AkmlSql.Core.Tests.Ipc.FormattingContractTests.Format_selection_request_carries_actions_as_key_5
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllReferenceMarkdownFilesExistAndAreNonEmpty
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllSvgMockupsExist
+
+== Formatting
+  passed -> Failed      AkmlSql.Formatting.Tests.SqlPrompt.EditorSchemaFixtureTests.The_shell_test_snapshot_matches_the_catalog
+
+== Shell
+  passed -> Failed      AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Message_text_is_a_selectable_read_only_text_host
+
+
+Suite        BeforePassed AfterPassed Regressed Missing NowSkipped NowPassing Unexpected
+-----        ------------ ----------- --------- ------- ---------- ---------- ----------
+AI                     56          92         0       0          0          0          0
+Analysis                5           5         0       0          0          0          0
+Core                 1349        1452         2       0          0          2          2
+Engine               2133        2364         0       0          0          0          0
+Formatting           1635        1634         1       0          0          0          1
+IntelliSense           25          25         0       0          0          0          0
+Shell                 986         986         1       0          0          0          1
+Web                  1129        1452         0       0          0          0          0
+
+
+
+4 test(s) passed before and do not pass after (not on the allow-list).
+
+== Resolution of the four flagged tests (after the full run)
+  Core  FormattingContractTests.Format_request_carries_actions_as_key_5
+  Core  FormattingContractTests.Format_selection_request_carries_actions_as_key_5
+        Deliberate edit: they pinned the request array to 6 elements; key 6 (ProfileJson) is appended, so they now assert
+        "at least 6, and Actions still at position 5". New tests in PostgreSqlFormatContractTests cover key 6 and the preview's key 3.
+  Formatting  EditorSchemaFixtureTests.The_shell_test_snapshot_matches_the_catalog
+        The catalog gained schema version 2003 (noEffectForPostgreSql, samplePostgreSql). The shell snapshot was regenerated with
+        AKML_UPDATE_SNAPSHOTS=1; FormatStylesRowLayoutTests (which reads it) passes.
+  Shell  AiChatPanelCopyButtonTests.Message_text_is_a_selectable_read_only_text_host
+        The known clipboard flake; passes alone (11 of 11 with FormatStylesRowLayoutTests).

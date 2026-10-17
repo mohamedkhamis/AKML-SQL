@@ -1,0 +1,177 @@
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Web.Services;
+using AkmlSql.Web.Shared;
+using AkmlSql.Web.Tests.Grid;
+using AkmlSql.Web.Tests.Bridge;
+using AkmlSql.Web.Tests.Settings;
+using Bunit;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+using AiChatRequest = AkmlSql.Web.Services.AiChatRequest;
+
+namespace AkmlSql.Web.Tests;
+
+// Independent review acceptance probes. Preserve failing expectations; these are not fixes.
+public sealed class ReReviewAuditTests
+{
+    private sealed class DelayedWrite : IIndexedDbAdapter
+    {
+        private readonly InMemoryIndexedDbAdapter _inner = new();
+        public TaskCompletionSource Gate { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public bool Started { get; private set; }
+        public Task<string?> GetAsync(string store, string key) => _inner.GetAsync(store, key);
+        public Task<IReadOnlyList<KeyValuePair<string, string>>> ListAsync(string store) => _inner.ListAsync(store);
+        public Task DeleteAsync(string store, string key) => _inner.DeleteAsync(store, key);
+        public Task ClearAsync(string store) => _inner.ClearAsync(store);
+        public async Task SetAsync(string store, string key, string json)
+        {
+            await _inner.SetAsync(store, key, json);
+            if (store == StoreNames.Snippets) { Started = true; await Gate.Task; }
+        }
+    }
+
+    [Fact]
+    public void Typing_while_snippet_save_waits_must_preserve_the_new_draft()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        var adapter = new DelayedWrite();
+        context.Services.AddSingleton<ISnippetStore>(new SnippetStore(adapter));
+        context.Services.AddSingleton<IDiagnosticsRingBuffer>(new FakeDiagnosticsRingBuffer());
+        context.Services.AddSingleton<IDialogService>(new FakeDialogService { ConfirmAnswer = _ => false });
+        var page = context.Render<Pages.Snippets>();
+        page.WaitForElement("[data-testid=snippet-new]").Click();
+        page.Find("#akml-snippet-shortcode").Input("review_save_race");
+        page.Find("#akml-snippet-body").Input("SELECT 1;");
+        page.Find("[data-testid=snippet-save]").Click();
+        Assert.True(adapter.Started);
+        page.Find("#akml-snippet-body").Input("SELECT 2; -- typed while saving");
+        adapter.Gate.SetResult();
+        page.WaitForAssertion(() => Assert.Contains("Saved", page.Find("[data-testid=snippet-status]").TextContent));
+        page.WaitForAssertion(() => Assert.Equal("SELECT 2; -- typed while saving", page.Find("#akml-snippet-body").GetAttribute("value")));
+    }
+
+    [Fact]
+    public async Task Restored_diagnostics_must_not_export_legacy_credentials()
+    {
+        var adapter = new InMemoryIndexedDbAdapter();
+        const string marker = "sk-review0123456789abcdef0123456789";
+        adapter.Seed(StoreNames.Diagnostics, "ring", JsonSerializer.Serialize(new[] {
+            new DiagnosticEntry(DateTimeOffset.UtcNow, DiagnosticLevel.Error, "ai-chat", "Provider echoed api_key=" + marker, null)
+        }));
+        var ring = new DiagnosticsRingBuffer(adapter);
+        await ring.RestoreAsync();
+        await ring.FlushAsync();
+        Assert.DoesNotContain(marker, JsonSerializer.Serialize(ring.Snapshot()));
+        Assert.DoesNotContain(marker, await adapter.GetAsync(StoreNames.Diagnostics, "ring"));
+    }
+
+    private sealed class BrokenStream : IAiClientFactory
+    {
+        public Task<string> SendAsync(string id, AiChatRequest request, CancellationToken ct) => Task.FromResult("");
+        public bool IsOriginAllowed(string id, string origin) => true;
+        public bool IsBrowserDirectCapable(string id) => true;
+        public async IAsyncEnumerable<string> StreamAsync(string id, AiChatRequest request, [EnumeratorCancellation] CancellationToken ct)
+        {
+            yield return "SELECT unfinished";
+            await Task.Yield();
+            throw new AiStreamException(AiStreamFailure.Truncated);
+        }
+    }
+
+    [Fact]
+    public void Partial_AI_answer_must_stay_marked_incomplete_after_reopening()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        var history = new ChatHistoryStore(new InMemoryIndexedDbAdapter());
+        context.Services.AddSingleton<IAiClientFactory>(new BrokenStream());
+        context.Services.AddSingleton<IAiPreference>(new FakeAiPreference("anthropic"));
+        context.Services.AddSingleton<IAiFeatureSettings>(new FakeAiFeatureSettings());
+        context.Services.AddSingleton<IChatHistoryStore>(history);
+        context.Services.AddSingleton<IDiagnosticsRingBuffer>(new FakeDiagnosticsRingBuffer());
+        context.Services.AddSingleton<INotificationService>(new FakeNotificationService());
+        var panel = context.Render<AiChatPanel>();
+        panel.Find("textarea").Input("Generate SQL");
+        panel.Find(".akml-chat-send").Click();
+        panel.WaitForAssertion(() => Assert.Contains("incomplete", panel.Find("[data-testid=ai-chat-error]").TextContent));
+        panel.Dispose();
+        var reopened = context.Render<AiChatPanel>();
+        reopened.WaitForAssertion(() => Assert.Contains("SELECT unfinished", reopened.Markup));
+        Assert.Contains("incomplete", reopened.Markup);
+    }
+
+    [Fact]
+    public void Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch()
+    {
+        using var host = new GridTestHost();
+        var set = GridTestHost.EditableSet();
+        set.Provenance[2].HasDefault = true;
+        host.Exec.ApplyReply = new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = new[] {
+            new CrudEditResult { Index = 0, Ok = true, NewIdentity = "4" }
+        }};
+        var grid = host.Render(set);
+        grid.Find("[data-testid=results-add-row]").Click();
+        grid.Find("[data-testid=results-apply]").Click();
+        grid.WaitForAssertion(() => Assert.Equal(4, set.Rows.Length));
+        Assert.Equal("4", set.Rows[3][0]);
+    }
+
+    private sealed class NoThemeApply : IThemeApplier
+    {
+        public Task ApplyAsync(ThemeMode mode) => Task.CompletedTask;
+        public Task ForgetAsync() => Task.CompletedTask;
+    }
+
+    private sealed class NoDownload : IFileDownloader
+    {
+        public Task DownloadTextAsync(string name, string mime, string text, bool bom) => Task.CompletedTask;
+    }
+
+    private sealed class MissingHistoryDetails : IHistoryService
+    {
+        public bool IsAvailable => true;
+        public Task<HistorySearchResponse> SearchAsync(HistorySearchRequest request, CancellationToken ct) => Task.FromResult(new HistorySearchResponse {
+            Success = true, TotalCount = 1, Entries = new[] {new HistoryEntryDto {
+                Id = 1, TabTitle = "large-query", SqlText = new string(' ', 490) + "SELECT 1; ",
+                Server = "srv", Database = "db", ExecutedAt = "2026-10-17T10:00:00Z"
+            }}
+        });
+        public Task<string?> GetFullSqlAsync(long id, CancellationToken ct) => Task.FromResult<string?>(null);
+        public Task<HistoryVersionDto[]> GetVersionsAsync(long id, CancellationToken ct) => Task.FromResult(Array.Empty<HistoryVersionDto>());
+        public Task RecordAsync(HistoryRecordRequest request, CancellationToken ct) => Task.CompletedTask;
+        public Task<bool> ToggleFavoriteAsync(long id, CancellationToken ct) => Task.FromResult(true);
+        public Task<bool> RenameAsync(long id, string name, CancellationToken ct) => Task.FromResult(true);
+        public Task<int> DeleteAsync(long[] ids, CancellationToken ct) => Task.FromResult(0);
+        public Task<int> RemoveOlderThanAsync(long id, bool keep, CancellationToken ct) => Task.FromResult(0);
+        public Task<(string left, string right)?> GetDiffAsync(long a, long b, CancellationToken ct) => Task.FromResult<(string,string)?>(null);
+    }
+
+    [Fact]
+    public void Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt()
+    {
+        using var context = new BunitContext();
+        context.JSInterop.Mode = JSRuntimeMode.Loose;
+        var adapter = new InMemoryIndexedDbAdapter();
+        var bridge = new FakeEngineBridge();
+        bridge.SetState(BridgeState.Open);
+        context.Services.AddSingleton<IHistoryService>(new MissingHistoryDetails());
+        context.Services.AddSingleton<IEngineBridge>(bridge);
+        context.Services.AddSingleton<ISqlConnectionService>(new SettingsPageHost.FakeSql());
+        context.Services.AddSingleton<IThemeService>(new ThemeService(adapter, new NoThemeApply()));
+        context.Services.AddSingleton<IDiagnosticsRingBuffer>(new FakeDiagnosticsRingBuffer());
+        context.Services.AddSingleton<IEditorSessionStore>(new EditorSessionStore(adapter));
+        context.Services.AddSingleton<IDialogService>(new FakeDialogService());
+        context.Services.AddSingleton<INotificationService>(new FakeNotificationService());
+        context.Services.AddSingleton<IFileDownloader>(new NoDownload());
+        context.Services.AddSingleton<EditorDocumentFlow>();
+        var page = context.Render<Pages.History>();
+        page.WaitForElement("[data-testid=history-row]").Click();
+        page.WaitForAssertion(() => Assert.Contains("SELECT 1;", page.Find("[data-testid=history-preview]").TextContent));
+        Assert.True(page.Find("[data-testid=history-reexecute]").HasAttribute("disabled"),
+            "Full SQL failed to load; the 500-character search excerpt must not be executable.");
+    }
+}

@@ -1,0 +1,217 @@
+using AkmlSql.Core;
+using AkmlSql.Web.Services;
+using Bunit;
+using Xunit;
+
+namespace AkmlSql.Web.Tests.Settings;
+
+/// <summary>
+/// Spec 042 (task T112, FR-106, SC-018). Settings › Connections names the kind of every saved connection, writes a PostgreSQL
+/// server the way the status bar does, and can make the engine forget a remembered password: on request, and always before
+/// a connection that had one is deleted. A list with no PostgreSQL in it, on an engine without PostgreSQL, looks as it did.
+/// </summary>
+public sealed class ConnectionsSectionKindTests : IDisposable
+{
+    private readonly SettingsPageHost _host = new();
+
+    public void Dispose() => _host.Dispose();
+
+    private Task AddPgAsync(string id, bool remember, string name = "Local PG") =>
+        _host.Stores.SavedSql.AddAsync(new SavedSqlConnection
+        {
+            Id = id, Name = name, Kind = DatabaseKind.PostgreSql, Server = "pg1", Port = 5433, Database = "northwind",
+            WindowsAuth = false, Login = "alice", RememberPassword = remember,
+        });
+
+    private Task AddSqlAsync(string id) =>
+        _host.Stores.SavedSql.AddAsync(new SavedSqlConnection { Id = id, Name = "Local SQL", Server = "localhost", Database = "master", WindowsAuth = true });
+
+    private void EngineWithPostgres()
+    {
+        _host.Sql.EngineSupportsPostgres = true;
+        _host.Bridge.SetState(BridgeState.Open);
+    }
+
+    // ---- the kind of every connection ----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Every_saved_connection_shows_its_kind_and_a_PostgreSQL_server_shows_host_port_and_login()
+    {
+        await AddSqlAsync("s1");
+        await AddPgAsync("p1", remember: false);
+        EngineWithPostgres();
+
+        var cut = _host.Open("settings/connections");
+
+        var sqlRow = cut.WaitForElement("[data-testid=saved-connection-s1]");
+        var pgRow = cut.Find("[data-testid=saved-connection-p1]");
+        Assert.Equal("SQL Server", sqlRow.QuerySelector("[data-testid=settings-conn-kind]")!.TextContent.Trim());
+        Assert.Equal("PostgreSQL", pgRow.QuerySelector("[data-testid=settings-conn-kind]")!.TextContent.Trim());
+        Assert.Contains("pg1:5433 / northwind", pgRow.TextContent);
+        Assert.Contains("alice", pgRow.TextContent);
+        Assert.DoesNotContain("SQL Server login", pgRow.TextContent);
+    }
+
+    [Fact]
+    public async Task A_list_with_only_SQL_Server_connections_on_an_engine_without_PostgreSQL_shows_no_kind()
+    {
+        await AddSqlAsync("s1");
+
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-s1]");
+        Assert.Empty(cut.FindAll("[data-testid=settings-conn-kind]"));
+        Assert.Empty(cut.FindAll("[data-testid^=settings-conn-forget]"));
+    }
+
+    [Fact]
+    public async Task A_PostgreSQL_connection_whose_engine_lacks_PostgreSQL_support_is_still_listed_with_its_kind()
+    {
+        await AddPgAsync("p1", remember: false);
+
+        var cut = _host.Open("settings/connections");
+
+        var row = cut.WaitForElement("[data-testid=saved-connection-p1]");
+        Assert.Equal("PostgreSQL", row.QuerySelector("[data-testid=settings-conn-kind]")!.TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task Connect_for_a_PostgreSQL_connection_opens_the_connection_manager_on_PostgreSQL()
+    {
+        await AddPgAsync("p1", remember: false);
+        EngineWithPostgres();
+        var cut = _host.Open("settings/connections");
+        var opened = 0;
+        _host.ConnManager.OpenRequested += () => opened++;
+
+        cut.WaitForElement("[data-testid=settings-conn-connect-p1]").Click();
+
+        Assert.Equal(1, opened);
+        Assert.Equal(DatabaseKind.PostgreSql, _host.ConnManager.RequestedKind);
+    }
+
+    [Fact]
+    public async Task No_password_is_asked_for_or_shown_in_the_list()
+    {
+        await AddPgAsync("p1", remember: true);
+        EngineWithPostgres();
+
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-p1]");
+        Assert.Empty(cut.FindAll("input[type=password]"));
+    }
+
+    // ---- Forget password -----------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Forget_password_is_offered_only_for_a_connection_whose_password_is_remembered()
+    {
+        await AddPgAsync("p1", remember: true);
+        await AddPgAsync("p2", remember: false, name: "Other PG");
+        EngineWithPostgres();
+
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-p1]");
+        Assert.NotEmpty(cut.FindAll("[data-testid=settings-conn-forget-p1]"));
+        Assert.Empty(cut.FindAll("[data-testid=settings-conn-forget-p2]"));
+    }
+
+    [Fact]
+    public async Task Forget_password_asks_the_engine_for_this_server_and_login_and_clears_the_remember_flag()
+    {
+        await AddPgAsync("p1", remember: true);
+        EngineWithPostgres();
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=settings-conn-forget-p1]").Click();
+
+        cut.WaitForAssertion(() => Assert.Single(_host.Sql.Forgets));
+        Assert.Equal(("pg1", (int?)5433, "alice"), _host.Sql.Forgets[0]);
+        cut.WaitForAssertion(() => Assert.False(_host.Stores.SavedSql.GetAsync("p1").GetAwaiter().GetResult()!.RememberPassword));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=settings-conn-forget-p1]")));
+        Assert.Contains(_host.Notifications.Sent, n => n.Text.Contains("alice") && n.Text.Contains("forgot", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Forget_password_with_no_engine_says_so_and_keeps_the_flag()
+    {
+        await AddPgAsync("p1", remember: true);
+        _host.Sql.EngineSupportsPostgres = false;
+        _host.Bridge.SetState(BridgeState.Disconnected);
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=settings-conn-forget-p1]").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains(_host.Notifications.Sent, n => n.Kind == NotificationKind.Error));
+        Assert.Empty(_host.Sql.Forgets);
+        Assert.True((await _host.Stores.SavedSql.GetAsync("p1"))!.RememberPassword);
+    }
+
+    // ---- Delete forgets first ------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Deleting_a_connection_with_a_remembered_password_forgets_the_password_first()
+    {
+        await AddPgAsync("p1", remember: true);
+        EngineWithPostgres();
+        var stillSavedWhenForgotten = false;
+        _host.Sql.OnForget = async () => stillSavedWhenForgotten = await _host.Stores.SavedSql.GetAsync("p1") != null;
+        _host.Dialogs.ConfirmAnswer = _ => true;
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-delete-p1]").Click();
+
+        cut.WaitForAssertion(() => Assert.Null(_host.Stores.SavedSql.GetAsync("p1").GetAwaiter().GetResult()));
+        Assert.Single(_host.Sql.Forgets);
+        Assert.True(stillSavedWhenForgotten, "the password must be forgotten while the record still exists");
+        var confirm = Assert.Single(_host.Dialogs.Confirms);
+        Assert.Contains("Local PG", confirm.Message);
+        Assert.True(confirm.Destructive);
+    }
+
+    [Fact]
+    public async Task Declining_the_delete_forgets_nothing_and_keeps_the_connection()
+    {
+        await AddPgAsync("p1", remember: true);
+        EngineWithPostgres();
+        _host.Dialogs.ConfirmAnswer = _ => false;
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-delete-p1]").Click();
+
+        Assert.Single(_host.Dialogs.Confirms);
+        Assert.Empty(_host.Sql.Forgets);
+        Assert.NotNull(await _host.Stores.SavedSql.GetAsync("p1"));
+    }
+
+    [Fact]
+    public async Task Deleting_a_connection_without_a_remembered_password_does_not_touch_the_engine()
+    {
+        await AddPgAsync("p1", remember: false);
+        EngineWithPostgres();
+        _host.Dialogs.ConfirmAnswer = _ => true;
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-delete-p1]").Click();
+
+        cut.WaitForAssertion(() => Assert.Null(_host.Stores.SavedSql.GetAsync("p1").GetAwaiter().GetResult()));
+        Assert.Empty(_host.Sql.Forgets);
+    }
+
+    [Fact]
+    public async Task Deleting_when_the_engine_cannot_be_reached_says_the_password_stays_on_the_engine()
+    {
+        await AddPgAsync("p1", remember: true);
+        _host.Sql.EngineSupportsPostgres = false;
+        _host.Bridge.SetState(BridgeState.Disconnected);
+        _host.Dialogs.ConfirmAnswer = _ => true;
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=saved-connection-delete-p1]").Click();
+
+        var confirm = Assert.Single(_host.Dialogs.Confirms);
+        Assert.Contains(confirm.Details ?? Array.Empty<string>(), d => d.Contains("cannot be forgotten", StringComparison.OrdinalIgnoreCase));
+    }
+}

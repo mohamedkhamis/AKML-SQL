@@ -355,7 +355,7 @@ namespace AkmlSql.Engine.Execution
 
                 if (!string.IsNullOrEmpty(baseTable))
                 {
-                    CrossCheckPrimaryKey(SchemaFor(baseCatalog), prov, baseSchema, baseTable!);
+                    set.DefaultsKnown = CrossCheckPrimaryKey(SchemaFor(baseCatalog), prov, baseSchema, baseTable!);
                 }
 
                 // CRUD-eligibility predicate: single real base table across non-expression cols,
@@ -390,9 +390,10 @@ namespace AkmlSql.Engine.Execution
             }
         }
 
-        private static void CrossCheckPrimaryKey(DatabaseCache? dbCache, ColumnProvenanceDto[] prov, string? schema, string table)
+        /// <returns>True when the schema had the table's columns, so <see cref="ColumnProvenanceDto.HasDefault"/> is known.</returns>
+        private static bool CrossCheckPrimaryKey(DatabaseCache? dbCache, ColumnProvenanceDto[] prov, string? schema, string table)
         {
-            if (dbCache == null) return;
+            if (dbCache == null) return false;
             try
             {
                 var obj = dbCache.FindObject(schema ?? string.Empty, table);
@@ -400,14 +401,20 @@ namespace AkmlSql.Engine.Execution
                 {
                     obj = dbCache.FindObject(string.Empty, table);
                 }
-                if (obj == null || obj.Columns.Count == 0) return;
+                if (obj == null || obj.Columns.Count == 0) return false;
 
                 var pkNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var defaulted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var c in obj.Columns)
                 {
                     if (c.IsPrimaryKey) pkNames.Add(c.ColumnName);
+                    if (c.DefaultValue != null) defaulted.Add(c.ColumnName);   // review WEB-20: the server fills it in
                 }
-                if (pkNames.Count == 0) return;
+                foreach (var p in prov)
+                {
+                    if (!string.IsNullOrEmpty(p.BaseColumnName) && defaulted.Contains(p.BaseColumnName!)) p.HasDefault = true;
+                }
+                if (pkNames.Count == 0) return true;
 
                 foreach (var p in prov)
                 {
@@ -416,10 +423,12 @@ namespace AkmlSql.Engine.Execution
                         p.IsTruePrimaryKey = true;
                     }
                 }
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Debug(ex, "ResultSetReader: PK cross-check failed (non-fatal).");
+                return false;
             }
         }
 

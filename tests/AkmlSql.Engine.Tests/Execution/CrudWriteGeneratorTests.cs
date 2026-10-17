@@ -284,4 +284,29 @@ public sealed class CrudWriteGeneratorTests
         Assert.Contains("[Name]]; DROP TABLE Customers; --]", cmd.CommandText);
         Assert.DoesNotContain("] = @p0,", cmd.CommandText); // not broken out of the identifier.
     }
+
+    /// <summary>Review WEB-20: the grid sends only the cells the user set; a new row left to the table's defaults has none.</summary>
+    [Fact]
+    public void Insert_WithNoCells_TakesEveryDefault()
+    {
+        var req = new ApplyChangesRequest { BaseSchema = "dbo", BaseTable = "Orders" };
+        using var conn = NewClosedConnection();
+        using var cmd = CrudWriteGenerator.BuildCommand(req, new CrudEditDto { Op = CrudOp.Insert }, conn, null);
+
+        Assert.Equal("INSERT INTO [dbo].[Orders] DEFAULT VALUES; SELECT SCOPE_IDENTITY();", cmd.CommandText);
+        Assert.Empty(cmd.Parameters);
+    }
+    /// <summary>Re-review REV-06: an insert returns the stored row's columns through OUTPUT INSERTED (identity, defaults).</summary>
+    [Fact]
+    public void Insert_ReturningInserted_OutputsTheRequestedColumns()
+    {
+        var req = new ApplyChangesRequest { BaseSchema = "dbo", BaseTable = "Orders", ReturnColumns = new[] { "Id", "Name", "Created" } };
+        using var conn = NewClosedConnection();
+        using var cmd = CrudWriteGenerator.BuildCommand(req,
+            new CrudEditDto { Op = CrudOp.Insert, SetCells = new[] { Cell("Name", SqlDbType.NVarChar, "x") } }, conn, null, returnInserted: true);
+        using var all = CrudWriteGenerator.BuildCommand(req, new CrudEditDto { Op = CrudOp.Insert }, conn, null, returnInserted: true);
+
+        Assert.Equal("INSERT INTO [dbo].[Orders] ([Name]) OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[Created] VALUES (@p0); SELECT SCOPE_IDENTITY();", cmd.CommandText);
+        Assert.Equal("INSERT INTO [dbo].[Orders] OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[Created] DEFAULT VALUES; SELECT SCOPE_IDENTITY();", all.CommandText);
+    }
 }

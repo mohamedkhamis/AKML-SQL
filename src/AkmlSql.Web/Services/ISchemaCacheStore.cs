@@ -76,6 +76,26 @@ public sealed class SchemaSnapshot
     }
 }
 
+/// <summary>Re-review REV-01: which cached schema describes the database the editor works against.</summary>
+public static class ActiveSchemaSnapshot
+{
+    /// <summary>
+    /// With a connection, exactly its snapshot (keyed by the engine-scoped <see cref="ISqlConnectionService.SchemaIdentity"/>), or
+    /// none — never another database's, another engine's or the other kind's. Without one (the page reloaded while the engine is
+    /// unreachable) the most recently used snapshot, as offline completion always did.
+    /// </summary>
+    public static async Task<SchemaSnapshot?> GetActiveAsync(this ISchemaCacheStore cache, ISqlConnectionService? connection)
+    {
+        if (connection is { IsConnected: true } && !string.IsNullOrEmpty(connection.Database)
+            && (connection.SchemaIdentity ?? connection.Server) is { Length: > 0 } server)
+        {
+            return await cache.GetAsync(server, connection.Database!).ConfigureAwait(false);
+        }
+        var all = await cache.ListAsync().ConfigureAwait(false);   // sorted by LastUsedAt ascending
+        return all.Count > 0 ? all[all.Count - 1] : null;
+    }
+}
+
 internal sealed class SchemaCacheStore : ISchemaCacheStore
 {
     private readonly IIndexedDbAdapter _store;

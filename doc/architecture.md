@@ -442,6 +442,35 @@ AI configuration supports up to 20 named agents (`ai.agents` in `config.json`) w
 
 ---
 
+## 9g. Spec 042 — PostgreSQL support (engine and web)
+
+The same engine and the same web edition serve two databases. A connection has a **kind** (`DatabaseKind`: SQL Server 0, PostgreSQL 1) that travels on `ConnectionInfo.Kind`,
+is stored on the session (`SessionState.Kind`, read through `SessionManager.KindOf`) and decides which implementation answers.
+
+**Dispatch by kind.** Handlers that name a `SessionId` branch on the kind: a PostgreSQL session is given to the PostgreSQL implementation and never to the T-SQL one; a surface with no
+PostgreSQL implementation is answered by the router itself (`DialectGuard`, error `dialect.unsupported`) before any handler runs. In the browser `IDialectGate` plays the same role for
+the in-browser T-SQL services (ScriptDom formatter and analyser, offline completion, lightweight refactorings): they never see PostgreSQL text, and the PostgreSQL work is sent to the engine.
+The T-SQL parser's invocation count is a test instrument for this (SC-010).
+
+**Where the code is.**
+
+| Component | Path | Role |
+|-----------|------|------|
+| `AkmlSql.PostgreSql` | `src/AkmlSql.PostgreSql/` | The language library, engine-only: the parser wrapper (libpg_query through `pgsqlparser`), the lexical scanner and statement splitter, the manual-derived reference, completion, quick info, signature help, the formatter, the 52 analysis rules, snippets, the destructive-statement check |
+| `PgServices` | `src/AkmlSql.Engine/PostgreSql/PgServices.cs` | Composes the language services once, only when `postgreSql.enabled` is on |
+| Data path | `src/AkmlSql.Engine/PostgreSql/` | Npgsql: connections, the catalog reader (`PgSchemaMetadataService`), execution, provenance and keyed writes, credentials, the formatter and analysis services. The engine stays the only process that opens database connections |
+| `DialectGuard` | `src/AkmlSql.Engine/PostgreSql/DialectGuard.cs` | Router-level refusal for surfaces without a PostgreSQL implementation |
+| Web | `src/AkmlSql.Web/Services/` | `DialectGate`, `PostgresFormat`, `PostgresAnalysis`, `AiDialect`; the web project does not reference `AkmlSql.PostgreSql`, so the browser bundle gains no native code |
+
+**One command per statement.** A PostgreSQL script is split into statements (`PgStatementSplitter`) and each is sent as its own command. The extended protocol wraps a batch in one implicit
+transaction, so an error in the third statement would undo the first two; one command per statement gives scripts the behaviour of psql. There is no batch separator (`GO` is text).
+Transaction state is followed by statement (`PgTransactionTracker`) because Npgsql does not expose it.
+
+**The parser is native.** The engine publish carries `libpg_query` (a native library); single-file stays off for that reason as for SQL Server's native SNI. Positions from the parser are
+UTF-8 byte offsets and are mapped to the UTF-16 offsets of the editor in one place (`PgParser`, `PgScriptStatement.DocOffset`).
+
+---
+
 ## 10. Key Design Decisions
 
 | Decision | Rationale |

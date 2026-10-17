@@ -1,0 +1,564 @@
+[
+  {
+    "id": "PGSEL-001",
+    "family": "select-columns",
+    "doc": "SELECT | FROM customers",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name",
+        "country"
+      ],
+      "mustNotContain": [
+        "product_name",
+        "freight"
+      ],
+      "minCount": 11
+    },
+    "note": "Bare select list is scoped to the table in FROM"
+  },
+  {
+    "id": "PGSEL-002",
+    "family": "select-columns",
+    "doc": "SELECT | FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id",
+        "freight",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 14
+    },
+    "note": "Orders columns"
+  },
+  {
+    "id": "PGSEL-003",
+    "family": "select-columns",
+    "doc": "SELECT | FROM products",
+    "expect": {
+      "mustContain": [
+        "product_name",
+        "unit_price",
+        "units_in_stock"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 10
+    },
+    "note": "Products columns"
+  },
+  {
+    "id": "PGSEL-004",
+    "family": "select-columns",
+    "doc": "SELECT | FROM categories",
+    "expect": {
+      "mustContain": [
+        "category_name",
+        "description"
+      ],
+      "mustNotContain": [
+        "product_name"
+      ],
+      "minCount": 4
+    },
+    "note": "Categories columns"
+  },
+  {
+    "id": "PGSEL-005",
+    "family": "select-columns",
+    "doc": "SELECT | FROM employees",
+    "expect": {
+      "mustContain": [
+        "last_name",
+        "first_name",
+        "reports_to"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 15
+    },
+    "note": "Employees columns"
+  },
+  {
+    "id": "PGSEL-006",
+    "family": "select-columns",
+    "doc": "SELECT | FROM suppliers",
+    "expect": {
+      "mustContain": [
+        "supplier_id",
+        "homepage"
+      ],
+      "mustNotContain": [
+        "product_name"
+      ],
+      "minCount": 12
+    },
+    "note": "Suppliers columns"
+  },
+  {
+    "id": "PGSEL-007",
+    "family": "select-columns",
+    "doc": "SELECT | FROM shippers",
+    "expect": {
+      "mustContain": [
+        "shipper_id",
+        "company_name",
+        "phone"
+      ],
+      "mustNotContain": [
+        "country"
+      ],
+      "minCount": 3
+    },
+    "note": "Shippers columns"
+  },
+  {
+    "id": "PGSEL-008",
+    "family": "select-columns",
+    "doc": "SELECT | FROM order_details",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "product_id",
+        "quantity",
+        "discount"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 5
+    },
+    "note": "Order details columns"
+  },
+  {
+    "id": "PGSEL-009",
+    "family": "select-columns",
+    "doc": "SELECT | FROM sales.orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "total"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 3
+    },
+    "note": "Schema-qualified table has its own columns"
+  },
+  {
+    "id": "PGSEL-010",
+    "family": "select-columns",
+    "doc": "SELECT | FROM sales.invoices",
+    "expect": {
+      "mustContain": [
+        "invoice_id",
+        "amount",
+        "paid"
+      ],
+      "mustNotContain": [
+        "total"
+      ],
+      "minCount": 4
+    },
+    "note": "sales.invoices columns"
+  },
+  {
+    "id": "PGSEL-011",
+    "family": "select-columns",
+    "doc": "SELECT | FROM vw_customer_orders",
+    "expect": {
+      "mustContain": [
+        "company_name",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 4
+    },
+    "note": "A view's columns"
+  },
+  {
+    "id": "PGSEL-012",
+    "family": "select-columns",
+    "doc": "SELECT | FROM mv_product_sales",
+    "expect": {
+      "mustContain": [
+        "total_quantity",
+        "product_name"
+      ],
+      "mustNotContain": [
+        "unit_price"
+      ],
+      "minCount": 3
+    },
+    "note": "A materialized view's columns"
+  },
+  {
+    "id": "PGSEL-013",
+    "family": "select-columns",
+    "doc": "SELECT cust| FROM customers",
+    "expect": {
+      "mustContain": [
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "product_id"
+      ]
+    },
+    "note": "Prefix filters the columns"
+  },
+  {
+    "id": "PGSEL-014",
+    "family": "select-columns",
+    "doc": "SELECT comp| FROM customers",
+    "expect": {
+      "mustContain": [
+        "company_name"
+      ],
+      "mustNotContain": [
+        "country"
+      ]
+    },
+    "note": "Prefix company"
+  },
+  {
+    "id": "PGSEL-015",
+    "family": "select-columns",
+    "doc": "SELECT ship_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "ship_city",
+        "ship_country",
+        "ship_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Prefix ship_"
+  },
+  {
+    "id": "PGSEL-016",
+    "family": "select-columns",
+    "doc": "SELECT o.| FROM orders o",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight",
+        "ship_city"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 14
+    },
+    "note": "Alias dot lists that table's columns"
+  },
+  {
+    "id": "PGSEL-017",
+    "family": "select-columns",
+    "doc": "SELECT c.| FROM customers c JOIN orders o ON o.customer_id = c.customer_id",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 11
+    },
+    "note": "Only the aliased table's columns"
+  },
+  {
+    "id": "PGSEL-018",
+    "family": "select-columns",
+    "doc": "SELECT o.| FROM customers c JOIN orders o ON o.customer_id = c.customer_id",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 14
+    },
+    "note": "Second alias"
+  },
+  {
+    "id": "PGSEL-019",
+    "family": "select-columns",
+    "doc": "SELECT orders.| FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ],
+      "minCount": 14
+    },
+    "note": "Unaliased table name qualifies"
+  },
+  {
+    "id": "PGSEL-020",
+    "family": "select-columns",
+    "doc": "SELECT sales.orders.| FROM sales.orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "total"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 3
+    },
+    "note": "Schema.table.dot"
+  },
+  {
+    "id": "PGSEL-021",
+    "family": "select-columns",
+    "doc": "SELECT c.cust| FROM customers c",
+    "expect": {
+      "mustContain": [
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Prefix after the dot"
+  },
+  {
+    "id": "PGSEL-022",
+    "family": "select-columns",
+    "doc": "SELECT DISTINCT | FROM customers",
+    "expect": {
+      "mustContain": [
+        "country",
+        "city"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "After DISTINCT columns still offered"
+  },
+  {
+    "id": "PGSEL-023",
+    "family": "select-columns",
+    "doc": "SELECT DISTINCT ON (|) * FROM orders",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "DISTINCT ON takes columns"
+  },
+  {
+    "id": "PGSEL-024",
+    "family": "select-columns",
+    "doc": "SELECT count(*) FILTER (WHERE |) FROM orders",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "FILTER (WHERE ...) takes columns"
+  },
+  {
+    "id": "PGSEL-025",
+    "family": "select-columns",
+    "doc": "SELECT customer_id, | FROM customers",
+    "expect": {
+      "mustContain": [
+        "country",
+        "city"
+      ]
+    },
+    "note": "Second select item"
+  },
+  {
+    "id": "PGSEL-026",
+    "family": "select-columns",
+    "doc": "SELECT *, | FROM customers",
+    "expect": {
+      "mustContain": [
+        "company_name"
+      ]
+    },
+    "note": "After a star"
+  },
+  {
+    "id": "PGSEL-027",
+    "family": "select-columns",
+    "doc": "SELECT upper(|) FROM customers",
+    "expect": {
+      "mustContain": [
+        "company_name",
+        "country"
+      ]
+    },
+    "note": "Inside a function call"
+  },
+  {
+    "id": "PGSEL-028",
+    "family": "select-columns",
+    "doc": "SELECT coalesce(c.| , '') FROM customers c",
+    "expect": {
+      "mustContain": [
+        "company_name",
+        "region"
+      ]
+    },
+    "note": "Dot inside a call"
+  },
+  {
+    "id": "PGSEL-029",
+    "family": "select-columns",
+    "doc": "SELECT | FROM customers c JOIN orders o ON c.customer_id = o.customer_id",
+    "expect": {
+      "mustContain": [
+        "c.company_name",
+        "o.freight"
+      ],
+      "minCount": 20
+    },
+    "note": "Two tables: names carry the alias"
+  },
+  {
+    "id": "PGSEL-030",
+    "family": "select-columns",
+    "doc": "SELECT | FROM customers, orders",
+    "expect": {
+      "mustContain": [
+        "customers.company_name",
+        "orders.freight"
+      ]
+    },
+    "note": "Two unaliased tables: qualified by table"
+  },
+  {
+    "id": "PGSEL-031",
+    "family": "select-columns",
+    "doc": "SELECT d.| FROM (SELECT customer_id AS cid, country FROM customers) d",
+    "expect": {
+      "mustContain": [
+        "cid",
+        "country"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ],
+      "minCount": 2
+    },
+    "note": "Derived table exposes its output names"
+  },
+  {
+    "id": "PGSEL-032",
+    "family": "select-columns",
+    "doc": "SELECT | FROM \"Audit Log\"",
+    "expect": {
+      "mustContain": [
+        "log_id",
+        "Event Name",
+        "logged_at"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ],
+      "minCount": 3
+    },
+    "note": "Quoted table name, column with a space"
+  },
+  {
+    "id": "PGSEL-033",
+    "family": "select-columns",
+    "doc": "SELECT customer_id | FROM customers",
+    "expect": {
+      "mustContain": [
+        "AS",
+        "FROM"
+      ],
+      "mustNotContain": [
+        "country"
+      ]
+    },
+    "note": "After an expression: AS and FROM, not more columns"
+  },
+  {
+    "id": "PGSEL-034",
+    "family": "select-columns",
+    "doc": "SELECT | FROM customers",
+    "expect": {
+      "mustNotContain": [
+        "FROM",
+        "WHERE",
+        "GROUP BY"
+      ]
+    },
+    "note": "No clause keywords before an expression"
+  },
+  {
+    "id": "PGSEL-035",
+    "family": "select-columns",
+    "doc": "SELECT | FROM orders o",
+    "expect": {
+      "mustContain": [
+        "o"
+      ]
+    },
+    "note": "The alias itself is offered to qualify with"
+  },
+  {
+    "id": "PGSEL-036",
+    "family": "select-columns",
+    "doc": "SELECT e.| FROM employees e JOIN employees m ON e.reports_to = m.employee_id",
+    "expect": {
+      "mustContain": [
+        "last_name",
+        "reports_to"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 15
+    },
+    "note": "Self join first side"
+  },
+  {
+    "id": "PGSEL-037",
+    "family": "select-columns",
+    "doc": "SELECT m.| FROM employees e JOIN employees m ON e.reports_to = m.employee_id",
+    "expect": {
+      "mustContain": [
+        "last_name",
+        "employee_id"
+      ],
+      "mustNotContain": [
+        "freight"
+      ],
+      "minCount": 15
+    },
+    "note": "Self join second side"
+  }
+]

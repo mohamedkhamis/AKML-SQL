@@ -7,9 +7,9 @@
 .DESCRIPTION
     Creates (or updates) the IIS site `AkmlSqlWeb` bound to localhost on the
     chosen port, sets MIME types for .wasm / .dat / .blat / .br, applies
-    Cache-Control: no-cache for the framework files, and writes the
+    Cache-Control: no-cache for the framework files, writes the
     Content-Security-Policy header per contracts/ai-key-wrapping.md "Threat
-    model".
+    model", and serves index.html for unknown paths so deep links load.
 
 .PARAMETER Port
     The TCP port to bind. The installer page enforces 1024..65535.
@@ -26,7 +26,11 @@ param(
     [Parameter(Mandatory = $true)] [string] $PhysicalPath,
     # Spec 026 (M4 closure) M6: 'Lan' widens the CSP connect-src so the browser may open the
     # cross-host bridge socket (wss://<machineA>:<bridgePort>); 'Localhost' keeps the tight list.
-    [ValidateSet('Localhost', 'Lan')] [string] $Mode = 'Localhost'
+    [ValidateSet('Localhost', 'Lan')] [string] $Mode = 'Localhost',
+    # Review WEB-03: in LAN mode other computers load the app over HTTPS on this port, with the
+    # engine's certificate (web-tls-setup.ps1 creates it first). 0 = no HTTPS binding (localhost:
+    # http://localhost is already a secure context, so pairing tokens and API keys can be stored).
+    [int] $HttpsPort = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -41,6 +45,12 @@ New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 # failed re-run can't leave a stale "ok".
 $okMarker = Join-Path $logRoot 'iis-site.ok'
 Remove-Item $okMarker -Force -ErrorAction SilentlyContinue
+# Re-review REV-03: the same for the site's HTTPS binding (LAN mode): ok, or the reason it was not made.
+$httpsOkMarker = Join-Path $logRoot 'https-site.ok'
+$httpsFailMarker = Join-Path $logRoot 'https-site.failed'
+Remove-Item $httpsOkMarker, $httpsFailMarker -Force -ErrorAction SilentlyContinue
+$httpsFailure = $null
+. (Join-Path $PSScriptRoot 'web-https-binding.ps1')
 
 function Log {
     param([string] $msg)
@@ -59,7 +69,7 @@ if (-not [Environment]::Is64BitProcess -and [Environment]::Is64BitOperatingSyste
     Log '32-bit PowerShell detected -- relaunching in the 64-bit host (IIS config COM classes are 64-bit only).'
     & (Join-Path $env:WINDIR 'sysnative\WindowsPowerShell\v1.0\powershell.exe') `
         -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath `
-        -Port $Port -PhysicalPath $PhysicalPath -Mode $Mode
+        -Port $Port -PhysicalPath $PhysicalPath -Mode $Mode -HttpsPort $HttpsPort
     exit $LASTEXITCODE
 }
 
@@ -100,6 +110,61 @@ try {
         -ApplicationPool $appPoolName `
         -Force | Out-Null
     Log "Created IIS site AkmlSqlWeb on port $Port"
+
+    # Review WEB-03: a LAN browser must get the page itself over TLS. Over plain HTTP anyone on the
+    # path can replace the script that handles the pairing token and the AI keys (wss to the bridge
+    # does not protect the page), and the browser has no Web Crypto outside a secure context, so it
+    # could not store them anyway. The site gets an HTTPS binding with the bridge's certificate,
+    # whose names already cover this computer's host names and addresses.
+    #
+    # Re-review REV-03: the certificate binding belongs to the IP:port in HTTP.sys, not to this site, so
+    # it is only created or replaced when the port is free or already AKML's (web-https-binding.ps1);
+    # another application's binding is never touched. A change of port, or a reinstall in localhost
+    # mode, removes the binding AKML recorded -- if it is still AKML's.
+    $record = Read-HttpsRecord
+    if ($null -ne $record -and -not ($Mode -eq 'Lan' -and $HttpsPort -gt 0 -and [int]$record.Port -eq $HttpsPort)) {
+        Log (Remove-OwnedHttpsBinding)
+        $record = $null
+    }
+    if ($Mode -eq 'Lan' -and $HttpsPort -gt 0) {
+        $siteCert = Get-ChildItem 'Cert:\LocalMachine\My' |
+                    Where-Object { $_.Subject -eq 'CN=AKML SQL Web Engine' -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } |
+                    Sort-Object NotAfter -Descending | Select-Object -First 1
+        $otherSites = @(Get-Website | Where-Object {
+                $_.Name -ne 'AkmlSqlWeb' -and @($_.bindings.Collection | Where-Object {
+                    $_.protocol -eq 'https' -and $_.bindingInformation -match (':' + $HttpsPort + ':') }).Count -gt 0
+            } | ForEach-Object { $_.Name })
+        if ($null -eq $siteCert) {
+            $httpsFailure = 'No AKML SQL Web Engine certificate was found (web-tls-setup.ps1 did not run or failed).'
+        }
+        else {
+            $decision = Get-HttpsBindingDecision -ExistingHash (Read-BoundHash $HttpsPort) -OurThumbprint $siteCert.Thumbprint `
+                -Record $record -OtherSites $otherSites -Port $HttpsPort
+            Log "HTTPS port ${HttpsPort}: $($decision.Action) -- $($decision.Reason)"
+            if ($decision.Action -eq 'Refuse') {
+                $httpsFailure = $decision.Reason
+            }
+            else {
+                New-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort -IPAddress '*' | Out-Null
+                # Only AKML's own binding is ever replaced here (Rebind); a free port has nothing to delete.
+                if ($decision.Action -eq 'Rebind') { & netsh http delete sslcert "ipport=0.0.0.0:$HttpsPort" 2>$null | Out-Null }
+                (Get-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort).AddSslCertificate($siteCert.Thumbprint, 'My')
+                if ((Read-BoundHash $HttpsPort) -ine $siteCert.Thumbprint) {
+                    $httpsFailure = "The certificate could not be bound to port $HttpsPort."
+                }
+                else {
+                    Write-HttpsRecord -Port $HttpsPort -Thumbprint $siteCert.Thumbprint
+                    Set-Content -Path $httpsOkMarker -Value "https on port $HttpsPort" -Encoding UTF8 -Force
+                    Log "Added HTTPS binding on port $HttpsPort with certificate $($siteCert.Thumbprint)"
+                }
+            }
+        }
+        if ($httpsFailure) {
+            # The installer shows this in INSTALL-SUMMARY.txt instead of an https:// address that does not work.
+            Set-Content -Path $httpsFailMarker -Value $httpsFailure -Encoding UTF8 -Force
+            Log "WARNING: no HTTPS for other computers -- $httpsFailure"
+        }
+    }
 
     # MIME types -- IIS doesn't know about .wasm / .blat / .br by default.
     $mimes = @{
@@ -164,6 +229,24 @@ try {
     Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
         -Filter "system.webServer/staticContent/clientCache" `
         -Name "cacheControlMode" -Value "DisableCache"
+
+    # Deep links. The app's pages (/editor, /settings/connections, /history ...) are routes inside
+    # index.html, not files, so reloading any page but / -- or opening a bookmark or a link from the
+    # docs -- got IIS's 404. The usual fix is a URL Rewrite rule, but that module is not part of IIS
+    # and is missing on most servers, so use httpErrors instead: an unknown path executes /index.html
+    # (the status stays 404, which browsers render and Blazor routes like any other load). errorMode
+    # Custom, because the default DetailedLocalOnly would still show the 404 page to a browser on this
+    # computer. Remove-then-add for the same re-run reason as the CSP header above.
+    Remove-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpErrors" `
+        -Name "." -AtElement @{statusCode = 404} -ErrorAction SilentlyContinue
+    Add-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpErrors" `
+        -Name "." -Value @{statusCode = 404; subStatusCode = -1; path = '/index.html'; responseMode = 'ExecuteURL'}
+    Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpErrors" `
+        -Name "errorMode" -Value "Custom"
+    Log "Configured the index.html fallback for deep links"
 
     Log "IIS setup complete."
     Set-Content -Path $okMarker -Value "AkmlSqlWeb on port $Port" -Encoding UTF8 -Force

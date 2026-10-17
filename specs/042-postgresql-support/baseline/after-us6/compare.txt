@@ -1,0 +1,31 @@
+AI                               92 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\AI.passed.txt
+Analysis                          5 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\Analysis.passed.txt
+Core                           1454 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\Core.passed.txt
+Engine                         2350 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\Engine.passed.txt
+Formatting                     1635 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\Formatting.passed.txt
+IntelliSense                     25 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\IntelliSense.passed.txt
+Shell                           986 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\Shell.passed.txt
+Web                            1437 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists-us6\Web.passed.txt
+
+== Core
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllReferenceMarkdownFilesExistAndAreNonEmpty
+  skipped -> passed     AkmlSql.Core.Tests.Theme.VisualReferenceCoverageTests.AllSvgMockupsExist
+
+== Shell
+  passed -> Failed      AkmlSql.Shell.Shared.Tests.AiChatPanelCopyButtonTests.Copy_conversation_falls_back_to_Assistant_when_an_answer_has_no_agent_name
+
+
+Suite        BeforePassed AfterPassed Regressed Missing NowSkipped NowPassing Unexpected
+-----        ------------ ----------- --------- ------- ---------- ---------- ----------
+AI                     56          92         0       0          0          0          0
+Analysis                5           5         0       0          0          0          0
+Core                 1349        1454         0       0          0          2          0
+Engine               2133        2350         0       0          0          0          0
+Formatting           1635        1635         0       0          0          0          0
+IntelliSense           25          25         0       0          0          0          0
+Shell                 986         986         1       0          0          0          1
+Web                  1129        1437         0       0          0          0          0
+
+
+
+1 test(s) passed before and do not pass after (not on the allow-list).

@@ -30,6 +30,21 @@
     if (!_pointerRender) _rowRenderVersion++;
     _pointerRender = false;
 }
+@* Why the result cannot be edited (spec 042, FR-130): shown when the engine gave a reason; SQL Server results carry none. *@
+@if (!set.IsEditable && !string.IsNullOrEmpty(set.ReadOnlyReason))
+{
+    <div class="akml-results-readonly" role="note" data-testid="results-readonly-reason">
+        <Icon Name="info" Size="12" /> <span>Read-only: @set.ReadOnlyReason</span>
+    </div>
+}
+@* Why an editable result can't be changed right now (review WEB-01/WEB-08): a run in flight, or rows read through an
+   earlier connection. Pending edits stay visible and can be discarded, never applied. *@
+@if (set.IsEditable && FrozenReason != null)
+{
+    <div class="akml-results-readonly" role="note" data-testid="results-frozen-reason">
+        <Icon Name="info" Size="12" /> <span>@FrozenReason</span>
+    </div>
+}
 @* CRUD legend — only when the set is editable. Each chip pairs a glyph with the colour. *@
 @if (set.IsEditable)
 {
@@ -39,13 +54,13 @@
         <span class="akml-legend-chip akml-row-deleted"><Icon Name="x" Size="12" /> deleted</span>
         <span class="akml-results-spacer"></span>
         <button type="button" class="akml-btn" data-testid="results-add-row"
-                @onclick="AddNewRow" title="Add a new row"><Icon Name="plus" Size="12" /> Row</button>
+                @onclick="AddNewRow" disabled="@(!CanMutate)" title="@(LockReason ?? "Add a new row")"><Icon Name="plus" Size="12" /> Row</button>
     </div>
 }
 
 <div class="akml-results-grid" role="grid" data-testid="results-grid" tabindex="0"
      aria-label="@($"Result {SetIndex + 1}")" aria-multiselectable="true"
-     aria-readonly="@(set.IsEditable ? null : "true")"
+     aria-readonly="@(set.IsEditable && CanMutate ? null : "true")"
      aria-rowcount="@(set.Rows.Length + 1 + _inserts.Count)" aria-colcount="@(colCount + 1)"
      aria-activedescendant="@ActiveDescendantId"
      style="@($"--akml-grid-cols:{_layout.ToCssTracks()}")"
@@ -166,8 +181,8 @@
         <button type="button" class="akml-btn" data-testid="@($"results-discard{ApplyTestIdSuffix}")"
                 @onclick="DiscardEditsAsync" disabled="@_applying" title="@(_applying ? "Wait for changes to finish applying" : null)">Discard</button>
         <button type="button" class="akml-btn akml-btn--primary" data-testid="@($"results-apply{ApplyTestIdSuffix}")"
-                title="@(_applying ? "Wait for changes to finish applying" : invalid > 0 ? "Some cells need a value before the changes can be applied." : null)"
-                @onclick="ApplyEditsAsync" disabled="@(_applying || invalid > 0)">@(_applying ? "Applying…" : "Apply")</button>
+                title="@(_applying ? "Wait for changes to finish applying" : FrozenReason ?? (invalid > 0 ? "Some cells need a value before the changes can be applied." : null))"
+                @onclick="ApplyEditsAsync" disabled="@(_applying || FrozenReason != null || invalid > 0)">@(_applying ? "Applying…" : "Apply")</button>
     </div>
 }
 
@@ -215,6 +230,23 @@
 
     /// <summary>Appended to the Apply / Discard test ids when sets are stacked (<c>results-apply-1</c>).</summary>
     [Parameter] public string? ApplyTestIdSuffix { get; set; }
+
+    /// <summary>
+    /// Review findings WEB-01 / WEB-08: why the rows can't be changed right now — a query is running (its result replaces
+    /// this one), or the rows were read through an earlier connection. Null when they can. Pending edits stay and can be
+    /// discarded; nothing is added to them, and they are never applied.
+    /// </summary>
+    [Parameter] public string? FrozenReason { get; set; }
+
+    /// <summary>The engine's stamp of the connection the rows were read through; sent with the edits so the engine
+    /// refuses them on any other connection (WEB-01).</summary>
+    [Parameter] public string? ConnectionStamp { get; set; }
+
+    /// <summary>Review WEB-09: raised after a render in which <see cref="HasPendingEdits"/> changed, so the page can warn
+    /// before a reload or a closed tab drops them.</summary>
+    [Parameter] public EventCallback<bool> OnPendingEditsChanged { get; set; }
+
+    private bool _reportedPending;
 
     /// <summary>Shift+Alt+Left/Right resize step (FR-003).</summary>
     public const int ResizeStepPx = 16;
@@ -291,6 +323,23 @@
 
     /// <summary>How many pending changes this set holds (edited rows + deletes + new rows).</summary>
     public int PendingEditCount => _edits.Count + _deletes.Count + _inserts.Count;
+
+    /// <summary>An Apply is waiting for the engine's reply.</summary>
+    public bool IsApplying => _applying;
+
+    /// <summary>Why no change may be made now: an Apply in flight owns the pending edits (what was sent must be what is
+    /// marked committed), or the page froze the grid. Null when changes are allowed.</summary>
+    private string? LockReason => _applying ? "Wait for the changes to finish applying." : FrozenReason;
+
+    private bool CanMutate => LockReason == null;
+
+    /// <summary>Says why a change was refused; true when the grid is locked.</summary>
+    private bool RefuseWhileLocked()
+    {
+        if (CanMutate) return false;
+        Notify(LockReason!, NotificationKind.Info);
+        return true;
+    }
 
     /// <summary>Cells that need a value before Apply can run (FR-014).</summary>
     public int InvalidCellCount
@@ -457,14 +506,21 @@
         !_deletes.Contains(row) && _edits.TryGetValue(row, out var cells) && cells.TryGetValue(c, out var v) && IsInvalidValue(c, v);
 
     /// <summary>A new row's cell is invalid when it is blank on a non-character type, or left unset on a NOT
-    /// NULL, non-identity column the user must supply.</summary>
+    /// NULL, non-identity column the user must supply — one without a default the server fills in (review WEB-20).</summary>
     private bool IsInvalidInsert(int insIdx, int c)
     {
         if (!IsColumnInsertable(c)) return false;
         if (_inserts[insIdx].TryGetValue(c, out var v)) return IsInvalidValue(c, v);
         var p = Provenance(c);
-        return p != null && !p.AllowDBNull && !p.IsAutoIncrement;
+        // Re-review REV-06: only a column known to have no default must be typed; with unknown defaults the server decides.
+        return p != null && !p.AllowDBNull && !p.IsAutoIncrement && !p.HasDefault && Set.DefaultsKnown;
     }
+
+    /// <summary>An unset NOT NULL cell whose default is not known: the server fills it in or refuses the row.</summary>
+    private bool DefaultUnknown(int col) =>
+        !Set.DefaultsKnown && Provenance(col) is { AllowDBNull: false, IsAutoIncrement: false, HasDefault: false };
+
+    private bool HasDefault(int col) => Provenance(col)?.HasDefault == true;
 
     /// <summary>Editable in an EXISTING row: writable, non-identity, AND not a key column — the key is
     /// the WHERE identity, so editing it would retarget or orphan the row.</summary>
@@ -486,7 +542,7 @@
 
     private bool IsAutoIncrement(int col) => Provenance(col)?.IsAutoIncrement == true;
 
-    private bool IsCellEditable(int row, int col) => Set.IsEditable && IsColumnEditable(col) && !_deletes.Contains(row);
+    private bool IsCellEditable(int row, int col) => Set.IsEditable && CanMutate && IsColumnEditable(col) && !_deletes.Contains(row);
 
     // ── Rendering helpers ──────────────────────────────────────────────────────────────────────────
 
@@ -586,8 +642,8 @@
                 <span class="akml-rownum">@(d + 1)</span>
                 @if (Set.IsEditable)
                 {
-                    <button type="button" class="akml-rowmarker-btn" tabindex="-1"
-                            title="@(deleted ? "Restore row" : "Delete row")" aria-label="@(deleted ? "Restore row" : "Delete row")"
+                    <button type="button" class="akml-rowmarker-btn" tabindex="-1" disabled="@(!CanMutate)"
+                            title="@(LockReason ?? (deleted ? "Restore row" : "Delete row"))" aria-label="@(deleted ? "Restore row" : "Delete row")"
                             data-testid="@($"results-delete-{r}")"
                             @onmousedown:stopPropagation="true" @onclick="() => ToggleDelete(r)" @onclick:stopPropagation="true">
                         @if (deleted)
@@ -658,7 +714,7 @@
             <div class="akml-results-cell akml-results-rowmarker" role="rowheader">
                 <Icon Name="plus" Size="12" Class="akml-row-glyph" Label="New row" />
                 <span class="akml-rownum">*</span>
-                <button type="button" class="akml-rowmarker-btn" tabindex="-1" title="Remove new row" aria-label="Remove new row"
+                <button type="button" class="akml-rowmarker-btn" tabindex="-1" disabled="@(!CanMutate)" title="@(LockReason ?? "Remove new row")" aria-label="Remove new row"
                         data-testid="@($"results-remove-insert-{i}")" @onclick="() => RemoveInsert(i)">
                     <Icon Name="x" Size="12" />
                 </button>
@@ -680,8 +736,10 @@
                 bool has = ins.TryGetValue(col, out var value);
                 bool invalid = IsInvalidInsert(i, col);
                 bool auto = IsAutoIncrement(col);
-                // An unset cell inserts NULL (shown so), unless the column must be supplied (invalid, blank).
-                string text = auto ? "(auto)" : has ? Format(value, col, false).Text : invalid ? string.Empty : GridTextFormats.NullText;
+                // An unset cell is left out of the INSERT: the column's default applies (shown so), else NULL — unless the
+                // column must be supplied (invalid, blank). Review WEB-20.
+                string text = auto ? "(auto)" : has ? Format(value, col, false).Text : invalid ? string.Empty
+                    : HasDefault(col) ? "(default)" : DefaultUnknown(col) ? "(not set)" : GridTextFormats.NullText;
                 bool muted = auto || (has ? value == null : !invalid);
                 string cellClass = "akml-results-cell"
                     + (insertable ? " akml-cell-editable" : string.Empty)
@@ -1310,9 +1368,10 @@
         {
             Label = (restore ? "Restore " : "Delete ") + noun,
             TestId = "results-menu-delete-row",
-            Disabled = rows.Count == 0, DisabledReason = "Select a row first.",
+            Disabled = rows.Count == 0 || !CanMutate, DisabledReason = LockReason ?? "Select a row first.",
             OnSelect = Command(() =>
             {
+                if (RefuseWhileLocked()) return;
                 foreach (var r in rows)
                 {
                     if (restore) _deletes.Remove(r);
@@ -1370,7 +1429,8 @@
     /// given only for a column that comes from a table, so exotic sources show no false reason (R14).</summary>
     private string? SetNullBlockedReason(int row, int col)
     {
-        if (!Set.IsEditable) return "This result can't be edited.";
+        if (!Set.IsEditable) return Set.ReadOnlyReason ?? "This result can't be edited.";
+        if (LockReason != null) return LockReason;
         if (_deletes.Contains(row)) return "The row is marked for deletion.";
         if (!IsColumnEditable(col)) return $"{ColumnLabel(col)} can't be edited.";
         if (AllowsNull(col) == false) return $"{ColumnLabel(col)} does not allow NULL.";
@@ -1385,7 +1445,8 @@
         var reason = SetNullBlockedReason(row, f.Col);
         if (reason != null)
         {
-            if (Set.IsEditable) Notify(reason, NotificationKind.Info);
+            // A read-only result stays quiet unless the engine said why (spec 042): then the key press gets its answer.
+            if (Set.IsEditable || !string.IsNullOrEmpty(Set.ReadOnlyReason)) Notify(reason, NotificationKind.Info);
             return;
         }
         CommitEdit(row, f.Col, null);
@@ -1404,6 +1465,7 @@
     {
         int row = _rowIndexes[displayRow];
         if (_editInsert < 0 && _editRow == row && _editCol == col) return;   // already editing it
+        if (Set.IsEditable && RefuseWhileLocked()) return;
         if (!IsCellEditable(row, col)) return;
         _editSession++;
         _editRow = row;
@@ -1419,6 +1481,7 @@
     {
         if (insIdx < 0 || insIdx >= _inserts.Count || !IsColumnInsertable(col)) return;
         if (_editInsert == insIdx && _editCol == col) return;
+        if (RefuseWhileLocked()) return;
         _editSession++;
         _editRow = -1;
         _editDisplay = -1;
@@ -1510,7 +1573,7 @@
 
     private void CommitEdit(int row, int col, string? value)
     {
-        if (row < 0 || row >= Set.Rows.Length) return;
+        if (row < 0 || row >= Set.Rows.Length || RefuseWhileLocked()) return;
         // The cell value is stored in wire form: a date, time or binary value typed the way the grid shows it is
         // converted (ToWire); anything else verbatim (a blank input is kept as an empty string — invalid on a
         // non-character type until a value or NULL is set). The write path binds it through
@@ -1536,11 +1599,13 @@
 
     private void CommitInsert(int insIdx, int col, string? value)
     {
+        if (RefuseWhileLocked()) return;
         if (insIdx >= 0 && insIdx < _inserts.Count) _inserts[insIdx][col] = ToWire(value, col);
     }
 
     private void ToggleDelete(int row)
     {
+        if (RefuseWhileLocked()) return;
         if (!_deletes.Remove(row)) _deletes.Add(row);
         // A deleted row's pending edits are moot.
         if (_deletes.Contains(row)) _edits.Remove(row);
@@ -1548,11 +1613,13 @@
 
     private void AddNewRow()
     {
+        if (RefuseWhileLocked()) return;
         _inserts.Add(new Dictionary<int, string?>());
     }
 
     private void RemoveInsert(int insIdx)
     {
+        if (RefuseWhileLocked()) return;
         if (insIdx >= 0 && insIdx < _inserts.Count) _inserts.RemoveAt(insIdx);
         if (_editInsert >= 0) EndEdit();
     }
@@ -1560,6 +1627,7 @@
     /// <summary>The Discard button: ask first (FR-015), then drop this set's pending edits only.</summary>
     private async Task DiscardEditsAsync()
     {
+        if (_applying) return;
         if (Dialogs is { } dialogs)
         {
             int n = PendingEditCount;
@@ -1588,8 +1656,10 @@
     /// replaces these rows. Server-filled identity/computed values on INSERT aren't known here — a
     /// manual re-Execute surfaces them.
     /// </summary>
-    private void BakeCommittedChangesIntoSet(ExecuteResultSet set)
+    private void BakeCommittedChangesIntoSet(ExecuteResultSet set, IReadOnlyDictionary<int, string?[]>? storedUpdates = null,
+        IReadOnlyDictionary<int, string?[]>? storedInserts = null, IReadOnlyDictionary<int, string>? identities = null)
     {
+        int identityCol = Array.FindIndex(set.Provenance, p => p.IsAutoIncrement);
         int colCount = set.ColumnNames.Length;
         var rows = new List<string?[]>(set.Rows.Length + _inserts.Count);
         for (int r = 0; r < set.Rows.Length; r++)
@@ -1601,22 +1671,43 @@
                 foreach (var (c, v) in rowEdits)
                     if (c >= 0 && c < row.Length) row[c] = v;
             }
+            // Spec 042 (FR-133): a PostgreSQL write returns the row as the server stored it (defaults, a trigger's changes,
+            // the form the type prints in); that replaces what was typed.
+            if (storedUpdates != null && storedUpdates.TryGetValue(r, out var storedRow)) OverlayStored(row, storedRow);
             rows.Add(row);
         }
-        foreach (var ins in _inserts)                            // committed inserts → append rows
+        for (int i = 0; i < _inserts.Count; i++)                 // committed inserts → append rows
         {
             var row = new string?[colCount];
-            foreach (var (c, v) in ins)
+            foreach (var (c, v) in _inserts[i])
                 if (c >= 0 && c < colCount) row[c] = v;
+            if (storedInserts != null && storedInserts.TryGetValue(i, out var storedRow)) OverlayStored(row, storedRow);
+            else if (identityCol >= 0 && identityCol < colCount && identities != null && identities.TryGetValue(i, out var id)) row[identityCol] = id;
             rows.Add(row);
         }
         set.Rows = rows.ToArray();
     }
 
+    /// <summary>Writes a returned row's values over the cells of the columns that were asked for (<see cref="_returnOrdinals"/>).</summary>
+    private void OverlayStored(string?[] row, string?[] stored)
+    {
+        for (int k = 0; k < stored.Length && k < _returnOrdinals.Length; k++)
+        {
+            int c = _returnOrdinals[k];
+            if (c >= 0 && c < row.Length) row[c] = stored[k];
+        }
+    }
+
+    /// <summary>What each edit of the request in flight stands for, in request order, so a result can be matched back to its row.</summary>
+    private readonly List<(int Op, int Index)> _applyTargets = new();
+
+    /// <summary>Result-column ordinals of the columns the request asked the server to return, in the same order.</summary>
+    private int[] _returnOrdinals = System.Array.Empty<int>();
+
     private async Task ApplyEditsAsync()
     {
         var set = Set;
-        if (set == null || !set.IsEditable || InvalidCellCount > 0) return;
+        if (set == null || !set.IsEditable || _applying || FrozenReason != null || InvalidCellCount > 0) return;
 
         _applying = true;
         _applyMessage = null;
@@ -1627,11 +1718,29 @@
             var req = BuildApplyRequest(set);
             var result = await QueryExec.ApplyAsync(req, System.Threading.CancellationToken.None);
 
+            // A new run replaced the result while the reply was on its way: the pending state now belongs to that result, so
+            // nothing here may be baked in or cleared. (The page refuses to run while an Apply is waiting; this is the backstop.)
+            if (!ReferenceEquals(Set, set)) return;
+
             if (result.Status == ExecuteStatus.Ok)
             {
                 // Reflect the committed changes in-memory BEFORE clearing the overlay so the grid shows
                 // the new values even when the page declines to re-run the query (multi-statement batch).
-                BakeCommittedChangesIntoSet(set);
+                var storedUpdates = new Dictionary<int, string?[]>();
+                var storedInserts = new Dictionary<int, string?[]>();
+                var identities = new Dictionary<int, string>();
+                foreach (var edit in result.Results ?? System.Array.Empty<CrudEditResult>())
+                {
+                    if (!edit.Ok || edit.Index < 0 || edit.Index >= _applyTargets.Count) continue;
+                    var (op, index) = _applyTargets[edit.Index];
+                    // Re-review REV-06: a SQL Server insert into a table with a trigger returns only its identity; keep it, so the
+                    // new row has its key for the next edit or delete.
+                    if (op == CrudOp.Insert && edit.Row == null && !string.IsNullOrEmpty(edit.NewIdentity)) identities[index] = edit.NewIdentity!;
+                    if (edit.Row == null) continue;
+                    if (op == CrudOp.Update) storedUpdates[index] = edit.Row;
+                    else if (op == CrudOp.Insert) storedInserts[index] = edit.Row;
+                }
+                BakeCommittedChangesIntoSet(set, storedUpdates, storedInserts, identities);
                 ResetEditState();
                 RebuildRowIndexes();             // deletes/inserts changed the row set.
                 _layout.SetRowCount(set.Rows.Length);
@@ -1668,6 +1777,7 @@
     private ApplyChangesRequest BuildApplyRequest(ExecuteResultSet set)
     {
         var edits = new List<CrudEditDto>();
+        _applyTargets.Clear();
 
         // Key columns: prefer true PK; fall back to any IsKey column.
         var keyProv = set.Provenance.Where(p => p.IsTruePrimaryKey).ToList();
@@ -1691,6 +1801,7 @@
                 Op = CrudOp.Delete,
                 KeyCells = keyProv.Select(p => KeyCell(set, rowIdx, p)).ToArray(),
             });
+            _applyTargets.Add((CrudOp.Delete, rowIdx));
         }
 
         // Updates (skip rows also marked for delete).
@@ -1702,6 +1813,7 @@
                 .Select(e => new CrudCellDto
                 {
                     BaseColumnName = set.Provenance[e.Key].BaseColumnName!,
+                    TypeName = DeclaredTypeOrNull(set.Provenance[e.Key].Ordinal),
                     ProviderType = set.Provenance[e.Key].ProviderType,
                     Size = set.Provenance[e.Key].ColumnSize,
                     Precision = set.Provenance[e.Key].Precision,
@@ -1716,20 +1828,24 @@
                 SetCells = setCells,
                 KeyCells = keyProv.Select(p => KeyCell(set, kv.Key, p)).ToArray(),
             });
+            _applyTargets.Add((CrudOp.Update, kv.Key));
         }
 
-        // Inserts.
-        foreach (var ins in _inserts)
+        // Inserts. Review WEB-20: only the cells the user set — an explicit NULL included — go to the server. A cell left
+        // unset is omitted so the column's default applies; sending NULL for it would suppress that default. A row with no
+        // cell set is all defaults (the engine writes DEFAULT VALUES).
+        for (int insIdx = 0; insIdx < _inserts.Count; insIdx++)
         {
+            var ins = _inserts[insIdx];
             var setCells = new List<CrudCellDto>();
             for (int c = 0; c < set.Provenance.Length; c++)
             {
                 var p = set.Provenance[c];
-                if (!IsInsertable(p)) continue;
-                ins.TryGetValue(c, out var v);
+                if (!IsInsertable(p) || !ins.TryGetValue(c, out var v)) continue;
                 setCells.Add(new CrudCellDto
                 {
                     BaseColumnName = p.BaseColumnName!,
+                    TypeName = DeclaredTypeOrNull(p.Ordinal),
                     ProviderType = p.ProviderType,
                     Size = p.ColumnSize,
                     Precision = p.Precision,
@@ -1737,9 +1853,16 @@
                     Value = v,
                 });
             }
-            if (setCells.Count == 0) continue;
             edits.Add(new CrudEditDto { Op = CrudOp.Insert, SetCells = setCells.ToArray() });
+            _applyTargets.Add((CrudOp.Insert, insIdx));
         }
+
+        // The columns a PostgreSQL write reads back from the stored row; SQL Server ignores them.
+        var returned = set.Provenance
+            .Where(p => !p.IsExpression && !string.IsNullOrEmpty(p.BaseColumnName))
+            .OrderBy(p => p.Ordinal)
+            .ToArray();
+        _returnOrdinals = returned.Select(p => p.Ordinal).ToArray();
 
         return new ApplyChangesRequest
         {
@@ -1748,13 +1871,23 @@
             BaseCatalog = string.IsNullOrEmpty(set.BaseCatalog) ? FallbackCatalog : set.BaseCatalog,
             BaseSchema = set.BaseSchema ?? string.Empty,
             BaseTable = set.BaseTable ?? string.Empty,
+            ConnectionStamp = ConnectionStamp,
             Edits = edits.ToArray(),
+            ReturnColumns = returned.Select(p => p.BaseColumnName!).ToArray(),
         };
     }
 
-    private static CrudCellDto KeyCell(ExecuteResultSet set, int rowIdx, ColumnProvenanceDto p) => new()
+    /// <summary>The column's declared type as the engine printed it ("numeric(10,2)", "text[]"); the PostgreSQL write casts to it.</summary>
+    private string? DeclaredTypeOrNull(int ordinal)
+    {
+        var type = Set.ColumnSqlTypes.ElementAtOrDefault(ordinal);
+        return string.IsNullOrWhiteSpace(type) ? null : type;
+    }
+
+    private CrudCellDto KeyCell(ExecuteResultSet set, int rowIdx, ColumnProvenanceDto p) => new()
     {
         BaseColumnName = p.BaseColumnName!,
+        TypeName = DeclaredTypeOrNull(p.Ordinal),
         ProviderType = p.ProviderType,
         Size = p.ColumnSize,
         Precision = p.Precision,
@@ -1789,6 +1922,11 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_disposed) return;
+        if (HasPendingEdits != _reportedPending)
+        {
+            _reportedPending = HasPendingEdits;
+            await OnPendingEditsChanged.InvokeAsync(_reportedPending);
+        }
         if (firstRender)
         {
             _selfRef = DotNetObjectReference.Create(this);

@@ -44,12 +44,14 @@
 @inject IConnectionManagerController ConnManager
 @inject EditorDocumentFlow Document
 @inject ISchemaSync SchemaSync
+@inject IDialectGate DialectGate
 
 @* Spec 041 (R64, FR-089): the title SSMS's window reads like — orders-audit* - SERVER.db - AKML SQL. *@
 <PageTitle>@EditorDocument.TitleFor(Document.Name, Document.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null)</PageTitle>
 
-@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. *@
-<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" />
+@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. Review WEB-09: so does a
+   reload, a closed tab or a link to another site (the browser's own prompt), but only while there are edits to lose. *@
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="@_gridHasPendingEdits" />
 
 <div class="akml-editor-page">
     @* Spec 041 (FR-081): SSMS's grouping — database | Execute, Parse | Format, Analyse | Refactor, AI | documents |
@@ -95,8 +97,11 @@
         </button>
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
+        @* Spec 042 (FR-092): the refactorings are written for T-SQL; on a PostgreSQL connection the button is off and says why. *@
         <button type="button" class="akml-btn" data-testid="refactor-button" aria-label="Refactor" aria-haspopup="menu"
-                @onclick="OpenRefactorMenu" title="@WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor")">
+                disabled="@(!Surfaces.IsEnabled(WorkspaceSurface.Refactor))"
+                data-unavailable="@Surfaces.Unavailable(WorkspaceSurface.Refactor)"
+                @onclick="OpenRefactorMenu" title="@Surfaces.Tooltip(WorkspaceSurface.Refactor, WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor"))">
             <Icon Name="replace" /><span>Refactor</span><Icon Name="chevron-down" Size="12" />
         </button>
         <button type="button" class="akml-btn @(AiShown ? "is-active" : null)" data-testid="ai-button" aria-label="AI"
@@ -156,7 +161,8 @@
            conversation; the AI dock mounts the first time it is shown. *@
         <div class="akml-ws-schema @(SchemaShown ? null : "akml-ws-hidden")" id="akml-ws-schema" data-testid="workspace-schema"
              role="region" aria-label="Schema" tabindex="-1">
-            <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
+            <SchemaTreeComponent Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)"
+                                     ServerCanonicalIdentity="@_activeServerIdentity"
                                  DatabaseName="@_activeDatabaseName"
                                  SessionId="@(SqlConn.IsConnected ? SqlConn.SessionId : null)"
                                  OnObjectClicked="OnSchemaObjectClickedAsync"
@@ -190,7 +196,8 @@
                 }
             </div>
             <div class="akml-ws-editor">
-                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
+                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync"
+                                 Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)" />
             </div>
         </div>
 
@@ -214,12 +221,14 @@
             @* Spec 030 — Phase 5 / spec 041 (R34): Results, Messages and Problems tabs. Always mounted. *@
             <div class="akml-ws-results-host @(Fitted.ResultsVisible ? null : "akml-ws-hidden")" data-testid="workspace-results"
                  role="region" aria-label="Results" tabindex="-1">
-                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
+                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" FrozenReason="@ResultsFrozenReason" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
                                       Findings="_findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
                                       OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
-                                      SelectionStartLine="_selectionStartLine" ReceivedAt="_resultReceivedAt" OnNavigateToLine="OnNavigateToLineAsync"
+                                      SelectionStartLine="_selectionStartLine" SelectionStartColumn="_selectionStartColumn" ReceivedAt="_resultReceivedAt"
+                                      OnNavigateToLine="OnNavigateToLineAsync" OnNavigateToPosition="OnNavigateToPositionAsync"
                                       OnApplied="OnAppliedReExecuteAsync" DocumentName="@Document.Name"
-                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy" />
+                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy"
+                                      HasPendingEditsChanged="OnGridPendingEditsChanged" />
             </div>
         </div>
 
@@ -265,7 +274,7 @@
                     }
                     else
                     {
-                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
+                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" LastErrorProvider="GetLastExecuteError" />
                     }
                 </div>
             </div>
@@ -742,9 +751,28 @@
     // Spec 030 — Phase 5: query execution + results pane state.
     private ResultsPaneComponent? _resultsPane;
     private ExecuteQueryResult? _result;
+
+    // Review WEB-09: the results grid holds edits not yet applied; the browser asks before a reload or a closed tab drops them.
+    private bool _gridHasPendingEdits;
+
+    private void OnGridPendingEditsChanged(bool pending) => _gridHasPendingEdits = pending;
+
+    // Review finding WEB-01: the connection generation the shown result was read under. Once the session moves to another
+    // server, database, login, kind or engine, its rows are frozen: an edit could only be written to the new target.
+    private int _resultGeneration;
+
+    internal const string StaleResultsReason =
+        "These results came from an earlier connection. Run the query again to edit rows on the current one.";
+
+    private string? ResultsFrozenReason =>
+        _result != null && _resultGeneration != SqlConn.ConnectionGeneration ? StaleResultsReason : null;
     private string _resultsTab = ResultsPaneComponent.ResultsTab;
     private DateTimeOffset _resultReceivedAt = DateTimeOffset.Now;
     private int _selectionStartLine = 1;
+
+    // Spec 042: where the executed text began on its first line; a PostgreSQL error on that line maps from it.
+    private int _selectionStartColumn = 1;
+    private int _pendingStartColumn = 1;
     private int _executeVersion;
     private int _lastExecuteStatus;
     private bool _analysisEnabled = true;
@@ -856,6 +884,10 @@
         _commandRegistration = Commands.Register(_contextActions);
     }
 
+    // Spec 042 (FR-092): what this connection kind may use. Stateless, so it follows a switch of connection by itself.
+    private SurfaceGate? _surfaces;
+    private SurfaceGate Surfaces => _surfaces ??= new SurfaceGate(DialectGate, Notifications);
+
     private void OnSqlConnStateChanged()
     {
         RefreshSchemaTarget();
@@ -872,7 +904,7 @@
     {
         if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Server) && !string.IsNullOrEmpty(SqlConn.Database))
         {
-            _activeServerIdentity = SqlConn.Server;
+            _activeServerIdentity = SqlConn.SchemaIdentity ?? SqlConn.Server;
             _activeDatabaseName = SqlConn.Database;
         }
         else
@@ -900,7 +932,7 @@
         {
             if (!SqlConn.IsConnected)
             {
-                _status = "Connect to a SQL Server first (Connect button / palette).";
+                _status = "Connect to a database first (Connect button / palette).";
                 return;
             }
 
@@ -908,6 +940,9 @@
             // line maps back to the document (spec 041 R24).
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
+
+            // Review WEB-08: an Apply waiting for its reply owns the grid's edits; a new result would orphan them.
+            if (RefuseWhileApplying()) return;
 
             // Spec 041 (FR-015): a new result replaces the grid, so its pending edits go — ask first.
             if (!await ConfirmDiscardPendingEditsAsync()) return;
@@ -928,7 +963,12 @@
     {
         if (_editor == null) return (string.Empty, 1);
         var selection = await _editor.GetSelectionInfoAsync();
-        if (!string.IsNullOrWhiteSpace(selection.Text)) return (selection.Text, Math.Max(1, selection.StartLine));
+        if (!string.IsNullOrWhiteSpace(selection.Text))
+        {
+            _pendingStartColumn = Math.Max(1, selection.StartColumn);
+            return (selection.Text, Math.Max(1, selection.StartLine));
+        }
+        _pendingStartColumn = 1;
         return (await _editor.GetTextAsync(), 1);
     }
 
@@ -951,7 +991,7 @@
         if (WebHistoryLogic.ShouldRecord(result.Status))
         {
             // Spec 041 (R27): the database the script ended in (a USE moves it).
-            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name);
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name, SqlConn.Kind);
             _ = History.RecordAsync(rec, CancellationToken.None);
         }
 
@@ -969,8 +1009,10 @@
     private void ShowResult(ExecuteQueryResult result, int startLine, bool chooseTab)
     {
         _result = result;
+        _resultGeneration = SqlConn.ConnectionGeneration;
         _resultReceivedAt = DateTimeOffset.Now;
         _selectionStartLine = startLine;
+        _selectionStartColumn = _pendingStartColumn;
         if (chooseTab)
         {
             _resultsTab = result.ResultSets.Length > 0 && result.Status == ExecuteStatus.Ok
@@ -980,6 +1022,18 @@
         Workspace.Complete(result);
         _executeVersion++;
         _lastExecuteStatus = result.Status;
+
+        // Spec 042 (FR-043): a PostgreSQL run that created, altered or dropped something shows in the explorer without a manual
+        // refresh. The engine says when it has started reloading its catalog (SchemaChangeSignal); this waits for it to settle and
+        // fetches the result.
+        if (SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && SchemaChangeSignal.RefetchAfter(result))
+            _ = RefreshSchemaAfterRunAsync();
+    }
+
+    private async Task RefreshSchemaAfterRunAsync()
+    {
+        try { await SchemaSync.RefreshAsync(); }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "schema-sync", $"Refresh after a run failed: {ex.Message}"); }
     }
 
     /// <summary>The engine understands Parse (it advertises execute.v2).</summary>
@@ -997,6 +1051,7 @@
         {
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
+            if (RefuseWhileApplying()) return;
             if (!await ConfirmDiscardPendingEditsAsync()) return;
 
             await ClearErrorMarkAsync();
@@ -1024,6 +1079,22 @@
             .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == line);
         var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
         _errorDiagnostic = new EditorDiagnostic(line, 3, text, Source: "execute");
+        await ShowDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// Spec 042 (FR-014): a PostgreSQL error was clicked, in Messages or Problems: put the caret at its line and column and mark
+    /// the line, so the failing token is where the caret is.
+    /// </summary>
+    private async Task OnNavigateToPositionAsync(DocumentPosition position)
+    {
+        if (_editor == null) return;
+        await _editor.GotoPositionAsync(position.Line, position.Column);
+        var message = _result?.MessageDetails?.FirstOrDefault(m =>
+            ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == position.Line
+            && ExecuteLineMapper.DocumentColumn(_selectionStartColumn, m) == position.Column);
+        var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
+        _errorDiagnostic = new EditorDiagnostic(position.Line, 3, text, StartColumn: position.Column, Source: "execute");
         await ShowDiagnosticsAsync();
     }
 
@@ -1116,6 +1187,10 @@
     {
         if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
 
+        // PostgreSQL (spec 042, FR-133): the write returned the rows as the server stored them and the grid already shows
+        // them, so the script is not run again - not even a single SELECT - and only the written rows were ever read back.
+        if (DialectGate.IsPostgres) return;
+
         // Refresh by re-running the query ONLY when it is a single read-only SELECT. Re-running a
         // multi-statement batch or any mutating statement would REPEAT its side effects on the
         // persistent connection: a `CREATE TABLE #t; …; SELECT` errors ("object already exists") and,
@@ -1176,6 +1251,13 @@
     /// Spec 041 (FR-015) — ask before an action that would drop the results grid's pending edits (Execute,
     /// leaving the page; New and Open in US5). True when there are none, or the user chose to discard them.
     /// </summary>
+    private bool RefuseWhileApplying()
+    {
+        if (_resultsPane?.IsApplying != true) return false;
+        Notifications.Notify("Wait for the grid's changes to finish applying.", NotificationKind.Info);
+        return true;
+    }
+
     private async Task<bool> ConfirmDiscardPendingEditsAsync()
     {
         int n = _resultsPane?.PendingEditCount ?? 0;
@@ -1236,6 +1318,9 @@
         {
             Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
             Icon = "replace", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+            // Spec 042 (FR-092): off on a PostgreSQL connection, with the reason on the palette row.
+            IsEnabled = () => Surfaces.IsEnabled(WorkspaceSurface.Refactor),
+            DisabledReason = () => UnsupportedSurfaces.Reason(WorkspaceSurface.Refactor, DialectGate.Kind),
         };
         yield return new CommandAction
         {
@@ -1357,14 +1442,33 @@
         await Task.CompletedTask;
     }
 
+    // Review WEB-10: each Format takes a ticket; only the latest one's reply, for the same document and dialect, may change it.
+    private readonly FormatRequestGate _formatGate = new();
+
+    internal const string FormatSupersededStatus =
+        "The document changed while it was being formatted, so the result was not applied. Format again.";
+
     private async Task FormatAsync()
     {
+        if (_editor == null) return;
         try
         {
-            var result = Formatter.Format(_currentText, _activeProfile);
-            if (result.Success && _editor != null)
+            // The live text (not the debounced copy), the document and the dialect it is formatted for: a PostgreSQL format
+            // crosses the bridge, and the reply can arrive after the user typed, opened another document or switched kind.
+            var ticket = _formatGate.Begin(await _editor.GetTextAsync(), SessionKey, SqlConn.Kind);
+            var result = await Formatter.FormatAsync(ticket.Text, _activeProfile);
+            if (!_formatGate.IsLatest(ticket) || _editor == null) return;   // a newer Format owns the document now
+            if (result.Success && (!_formatGate.Applies(ticket, SessionKey, SqlConn.Kind)
+                                   || !await _editor.ReplaceTextIfUnchangedAsync(ticket.Text, result.FormattedText)))
             {
-                await _editor.SetTextAsync(result.FormattedText);
+                _status = FormatSupersededStatus;
+                Notifications.Notify(_status, NotificationKind.Info);
+                Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
+                StateHasChanged();
+                return;
+            }
+            if (result.Success)
+            {
                 _currentText = result.FormattedText;
                 _status = result.WasModified ? "Formatted." : "Already canonical.";
                 _hasFormatted = true;
@@ -1513,7 +1617,8 @@
     // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
     private async Task OpenSurroundPickerAsync()
     {
-        var all = await Snippets.ListAsync();
+        // Spec 042 (FR-066): a snippet is offered only in its own dialect.
+        var all = await Snippets.ListAsync(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer);
         _surroundSnippets = all.Where(s => s.Metadata.SurroundsWith).ToList();
         _showSurroundPicker = true;
         StateHasChanged();
@@ -1675,6 +1780,17 @@
     /// back to the whole document when nothing is selected (so a user can run Explain on the
     /// full script without selecting first). Evaluated lazily at action time via
     /// <see cref="AiPanel.SelectedSqlProvider"/> so it is always current.</summary>
+    /// <summary>
+    /// Spec 042 (FR-082): the first error of the last run, for AI Fix. A PostgreSQL error carries its SQLSTATE, the server's
+    /// message, detail and hint. Only for a PostgreSQL connection: on SQL Server Fix sends what it always sent.
+    /// </summary>
+    private AiErrorInfo? GetLastExecuteError()
+    {
+        if (SqlConn.Kind != AkmlSql.Core.DatabaseKind.PostgreSql) return null;
+        var error = _result?.MessageDetails?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
+        return error == null ? null : new AiErrorInfo(error.Text, 0, error.SqlState, error.Detail, error.Hint);
+    }
+
     private async Task<string> GetAiInputSqlAsync()
     {
         if (_editor == null) return _currentText;
@@ -1869,7 +1985,13 @@
     {
         var action = _contextActions.FirstOrDefault(a => a.Id == commandId)
                      ?? Commands.Snapshot().FirstOrDefault(a => a.Id == commandId);
-        if (action == null || !action.IsAvailable) return;
+        if (action == null) return;
+        if (!action.IsAvailable)
+        {
+            // Spec 042 (FR-092): a shortcut for a surface this connection kind does not have is answered, not ignored.
+            if (Surfaces.ExplainRefusal(commandId)) StateHasChanged();
+            return;
+        }
         await action.Run();
         StateHasChanged();
     }

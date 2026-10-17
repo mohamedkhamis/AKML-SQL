@@ -1,0 +1,12 @@
+insert into log (n, msg) values (1, 'line 1');
+insert into log (n, msg) values (2, 'line 2');
+insert into log (n, msg) values (3, 'line 3');
+insert into log (n, msg) values (4, 'line 4');
+insert into log (n, msg) values (5, 'line 5');
+insert into log (n, msg) values (6, 'line 6');
+insert into log (n, msg) values (7, 'line 7');
+insert into log (n, msg) values (8, 'line 8');
+insert into log (n, msg) values (9, 'line 9');
+insert into log (n, msg) values (10, 'line 10');
+insert into log (n, msg) values (11, 'line 11');
+insert into log (n, msg) values (12, 'line 12');

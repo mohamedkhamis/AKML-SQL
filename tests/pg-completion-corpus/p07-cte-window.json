@@ -1,0 +1,396 @@
+[
+  {
+    "id": "PGCTE-001",
+    "family": "cte-window",
+    "doc": "WITH |",
+    "expect": {
+      "mustContain": [
+        "RECURSIVE"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "WITH takes RECURSIVE or a new name"
+  },
+  {
+    "id": "PGCTE-002",
+    "family": "cte-window",
+    "doc": "WITH x AS |",
+    "expect": {
+      "mustContain": [
+        "MATERIALIZED",
+        "NOT MATERIALIZED"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "AS [NOT] MATERIALIZED"
+  },
+  {
+    "id": "PGCTE-003",
+    "family": "cte-window",
+    "doc": "WITH x AS (|",
+    "expect": {
+      "mustContain": [
+        "SELECT",
+        "INSERT",
+        "VALUES"
+      ]
+    },
+    "note": "A CTE body starts a statement"
+  },
+  {
+    "id": "PGCTE-004",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT | FROM orders) SELECT * FROM x",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Inside the CTE body"
+  },
+  {
+    "id": "PGCTE-005",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT order_id, freight FROM orders) SELECT | FROM x",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "minCount": 2
+    },
+    "note": "CTE columns"
+  },
+  {
+    "id": "PGCTE-006",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT order_id, freight FROM orders) SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "x",
+        "customers"
+      ]
+    },
+    "note": "CTE name in FROM"
+  },
+  {
+    "id": "PGCTE-007",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT order_id AS id, freight AS cost FROM orders) SELECT x.| FROM x",
+    "expect": {
+      "mustContain": [
+        "id",
+        "cost"
+      ],
+      "mustNotContain": [
+        "order_id",
+        "freight"
+      ],
+      "minCount": 2
+    },
+    "note": "Output names are the aliases"
+  },
+  {
+    "id": "PGCTE-008",
+    "family": "cte-window",
+    "doc": "WITH x (a, b) AS (SELECT order_id, freight FROM orders) SELECT | FROM x",
+    "expect": {
+      "mustContain": [
+        "a",
+        "b"
+      ],
+      "mustNotContain": [
+        "order_id",
+        "freight"
+      ],
+      "minCount": 2
+    },
+    "note": "Declared column names"
+  },
+  {
+    "id": "PGCTE-009",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT * FROM customers) SELECT | FROM x",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "A star CTE exposes the table's columns"
+  },
+  {
+    "id": "PGCTE-010",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT * FROM customers) SELECT x.| FROM x",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "country"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Star CTE with a dot"
+  },
+  {
+    "id": "PGCTE-011",
+    "family": "cte-window",
+    "doc": "WITH a AS (SELECT 1 AS n), b AS (SELECT n FROM a) SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "a",
+        "b"
+      ]
+    },
+    "note": "Several CTEs"
+  },
+  {
+    "id": "PGCTE-012",
+    "family": "cte-window",
+    "doc": "WITH a AS (SELECT 1 AS n), b AS (SELECT | FROM a) SELECT 1",
+    "expect": {
+      "mustContain": [
+        "n"
+      ]
+    },
+    "note": "A later CTE reads an earlier one"
+  },
+  {
+    "id": "PGCTE-013",
+    "family": "cte-window",
+    "doc": "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE |) SELECT * FROM t",
+    "expect": {
+      "mustContain": [
+        "n"
+      ]
+    },
+    "note": "A recursive CTE sees itself"
+  },
+  {
+    "id": "PGCTE-014",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT 1) SELECT * FROM x JOIN |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "x"
+      ]
+    },
+    "note": "CTE in a JOIN"
+  },
+  {
+    "id": "PGCTE-015",
+    "family": "cte-window",
+    "doc": "WITH x AS MATERIALIZED (SELECT order_id FROM orders) SELECT | FROM x",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "AS MATERIALIZED body"
+  },
+  {
+    "id": "PGCTE-016",
+    "family": "cte-window",
+    "doc": "WITH x AS NOT MATERIALIZED (SELECT order_id FROM orders) SELECT | FROM x",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "AS NOT MATERIALIZED body"
+  },
+  {
+    "id": "PGCTE-017",
+    "family": "cte-window",
+    "doc": "WITH ins AS (INSERT INTO orders (order_id) VALUES (1) RETURNING order_id, freight) SELECT | FROM ins",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ]
+    },
+    "note": "A data-modifying CTE exposes its RETURNING list"
+  },
+  {
+    "id": "PGCTE-018",
+    "family": "cte-window",
+    "doc": "WITH del AS (DELETE FROM orders WHERE order_id = 1 RETURNING *) SELECT | FROM del",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id",
+        "freight"
+      ]
+    },
+    "note": "RETURNING * expands over the target"
+  },
+  {
+    "id": "PGCTE-019",
+    "family": "cte-window",
+    "doc": "WITH x AS (SELECT 1 AS n) |",
+    "expect": {
+      "mustContain": [
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the CTE list: the main statement"
+  },
+  {
+    "id": "PGCTE-020",
+    "family": "cte-window",
+    "doc": "SELECT row_number() OVER (|) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "order_date",
+        "PARTITION BY",
+        "ORDER BY"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "OVER ( ) takes partition and order"
+  },
+  {
+    "id": "PGCTE-021",
+    "family": "cte-window",
+    "doc": "SELECT row_number() OVER (PARTITION BY |) FROM orders",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "ship_country"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "PARTITION BY columns"
+  },
+  {
+    "id": "PGCTE-022",
+    "family": "cte-window",
+    "doc": "SELECT row_number() OVER (PARTITION BY customer_id ORDER BY |) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_date",
+        "freight"
+      ]
+    },
+    "note": "ORDER BY inside OVER"
+  },
+  {
+    "id": "PGCTE-023",
+    "family": "cte-window",
+    "doc": "SELECT * FROM orders WINDOW w AS (|)",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "PARTITION BY"
+      ]
+    },
+    "note": "WINDOW definition"
+  },
+  {
+    "id": "PGCTE-024",
+    "family": "cte-window",
+    "doc": "SELECT row_number() OVER w FROM orders WINDOW w AS (PARTITION BY |)",
+    "expect": {
+      "mustContain": [
+        "customer_id"
+      ]
+    },
+    "note": "PARTITION BY in a named window"
+  },
+  {
+    "id": "PGCTE-025",
+    "family": "cte-window",
+    "doc": "SELECT sum(freight) OVER (ORDER BY order_date |) FROM orders",
+    "expect": {
+      "mustContain": [
+        "ASC",
+        "DESC",
+        "ROWS",
+        "RANGE"
+      ]
+    },
+    "note": "After an ORDER BY item in OVER"
+  },
+  {
+    "id": "PGCTE-026",
+    "family": "cte-window",
+    "doc": "SELECT * FROM orders o WHERE o.freight > (SELECT avg(freight) FROM orders WHERE customer_id = o.|)",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id"
+      ]
+    },
+    "note": "Correlated scalar subquery"
+  },
+  {
+    "id": "PGCTE-027",
+    "family": "cte-window",
+    "doc": "SELECT * FROM (SELECT customer_id, country FROM customers) d WHERE d.|",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "country"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Derived table columns"
+  },
+  {
+    "id": "PGCTE-028",
+    "family": "cte-window",
+    "doc": "SELECT * FROM (SELECT customer_id AS cid FROM customers) AS d WHERE |",
+    "expect": {
+      "mustContain": [
+        "cid"
+      ]
+    },
+    "note": "Derived table alias columns"
+  },
+  {
+    "id": "PGCTE-029",
+    "family": "cte-window",
+    "doc": "SELECT * FROM (VALUES (1, 'a')) AS v(id, label) WHERE v.|",
+    "expect": {
+      "mustContain": [
+        "id",
+        "label"
+      ]
+    },
+    "note": "VALUES with column aliases"
+  }
+]

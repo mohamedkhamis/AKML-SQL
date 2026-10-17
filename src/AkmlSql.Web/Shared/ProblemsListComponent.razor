@@ -10,6 +10,23 @@
 @using AkmlSql.Web.Services
 
 <div class="akml-problems">
+    @* Spec 042 (FR-014): the errors the last PostgreSQL run reported, each at its line and column. They are not analysis
+       findings, so they show whatever the analysis switch says. *@
+    @if (_executionErrors.Count > 0)
+    {
+        <ul class="akml-problems-list akml-problems-exec" data-testid="problems-execution">
+            @foreach (var error in _executionErrors)
+            {
+                <li class="akml-problems-row akml-severity-error" data-testid="problem-execution"
+                    data-line="@error.Line" data-column="@error.Column" title="@error.Title"
+                    @onclick="@(() => JumpToExecutionAsync(error))">
+                    <span class="akml-problems-rule">@error.Code</span>
+                    <span class="akml-problems-message">@error.Message</span>
+                    <span class="akml-problems-location">L@(error.Line):@(error.Column)</span>
+                </li>
+            }
+        </ul>
+    }
     @if (!AnalysisEnabled)
     {
         @* Spec 041 (FR-034, FR-055): switched off in Settings › Code analysis — say so and offer to turn it on. *@
@@ -39,7 +56,11 @@
         </label>
     </div>
 
-    @if (_filtered == null || _filtered.Count == 0)
+    @if ((_filtered == null || _filtered.Count == 0) && _executionErrors.Count > 0)
+    {
+        @* The list above is the problem; there is no analysis finding to add to it. *@
+    }
+    else if (_filtered == null || _filtered.Count == 0)
     {
         @* Spec 041 (T205, FR-034, FR-088): truthful about what was analysed, and what to do next. *@
         <div class="akml-empty akml-problems-empty" data-testid="problems-empty">
@@ -76,6 +97,15 @@
                     @if (!string.IsNullOrEmpty(issue.RuleId))
                     {
                         <span class="akml-problems-actions">
+                            @* Spec 042 (FR-150): a finding that carries a documentation page (every PostgreSQL rule does) links to it. *@
+                            @if (DocumentationUrl(issue) is { } documentation)
+                            {
+                                <a class="akml-problems-suppress akml-problems-doc"
+                                   data-testid="problem-doc"
+                                   href="@documentation" target="_blank" rel="noopener noreferrer"
+                                   title="@($"{issue.RuleId} in the documentation")"
+                                   @onclick:stopPropagation="true">docs</a>
+                            }
                             <button class="akml-problems-suppress"
                                     data-testid="suppress-line"
                                     title="@($"Suppress {issue.RuleId} for this line")"
@@ -164,6 +194,8 @@
         padding: 0 var(--akml-scalar-spacing-xs); cursor: pointer;
     }
     .akml-problems-suppress:hover { background-color: var(--akml-surface-hover); color: var(--akml-text-primary); }
+    .akml-problems-doc { text-decoration: none; }
+    .akml-problems-row:focus-within .akml-problems-actions { opacity: 1; }
     .akml-severity-error .akml-problems-rule { color: var(--akml-status-danger); font-weight: bold; }
     .akml-severity-warning .akml-problems-rule { color: var(--akml-status-warning); font-weight: bold; }
     .akml-severity-info .akml-problems-rule { color: var(--akml-status-info); }
@@ -188,6 +220,20 @@
 
     private bool _defaultFilterApplied;
 
+    /// <summary>Spec 042 (FR-014): the last run. Its PostgreSQL errors (those with a SQLSTATE) are listed above the findings.</summary>
+    [Parameter] public ExecuteQueryResult? ExecutionResult { get; set; }
+
+    /// <summary>The document line / column the executed text started at (error positions map from them).</summary>
+    [Parameter] public int SelectionStartLine { get; set; } = 1;
+    [Parameter] public int SelectionStartColumn { get; set; } = 1;
+
+    /// <summary>Spec 042: an execution error was clicked: its line and column.</summary>
+    [Parameter] public EventCallback<DocumentPosition> OnJumpToPosition { get; set; }
+
+    private sealed record ExecutionProblem(string Code, string Message, int Line, int Column, string Title);
+
+    private List<ExecutionProblem> _executionErrors = new();
+
     [Parameter] public CodeAnalysisResponse? Findings { get; set; }
     [Parameter] public EventCallback<IssueLocation> OnJumpToIssue { get; set; }
     // Spec 027 T025/T026 (US4) — suppression actions surfaced up to the editor page.
@@ -203,6 +249,10 @@
     [Parameter] public EventCallback<int> OnVisibleCountChanged { get; set; }
 
     private int _lastVisibleCount = -1;
+
+    // Only an http(s) address becomes a link: the engine supplies it, and a link is something a person will click.
+    private static string? DocumentationUrl(CodeIssueInfo issue) =>
+        Uri.TryCreate(issue.ReferenceUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.AbsoluteUri : null;
 
     private bool _showInfo = true;
     private bool _showWarn = true;
@@ -224,8 +274,30 @@
             _showWarn = DefaultFilter.ShowWarning;
             _showError = DefaultFilter.ShowError;
         }
+        _executionErrors = ExecutionProblems();
         Recompute();
     }
+
+    // Errors of a PostgreSQL run that map to a place in the document, in the order they happened.
+    private List<ExecutionProblem> ExecutionProblems()
+    {
+        var found = new List<ExecutionProblem>();
+        var details = ExecutionResult?.MessageDetails;
+        if (details == null) return found;
+        foreach (var message in details)
+        {
+            if (message.Kind != ExecuteMessageKind.Error || string.IsNullOrEmpty(message.SqlState)) continue;
+            var line = ExecuteLineMapper.DocumentLine(SelectionStartLine, ExecutionResult!, message);
+            if (line is not int documentLine) continue;
+            var column = ExecuteLineMapper.DocumentColumn(SelectionStartColumn, message) ?? 1;
+            found.Add(new ExecutionProblem(message.SqlState!, message.Text ?? string.Empty, documentLine, column,
+                AkmlSql.Core.Text.SqlMessageText.ForPostgres(message) + " (line " + documentLine + ", column " + column + ")"));
+        }
+        return found;
+    }
+
+    private Task JumpToExecutionAsync(ExecutionProblem problem) =>
+        OnJumpToPosition.InvokeAsync(new DocumentPosition(problem.Line, problem.Column));
 
     private void Recompute()
     {
@@ -237,7 +309,7 @@
                 .ThenBy(i => i.Column)
                 .ToList();
 
-        int count = _filtered?.Count ?? 0;
+        int count = (_filtered?.Count ?? 0) + _executionErrors.Count;
         if (count != _lastVisibleCount)
         {
             _lastVisibleCount = count;

@@ -1,0 +1,4 @@
+EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+SELECT  *
+FROM    products
+WHERE   id = 1 ;

@@ -70,7 +70,9 @@ checkboxes is valid (FR-002).
 4. **TLS cert** (if "LAN exposed"): `New-SelfSignedCertificate` with
    `KeyExportPolicy NonExportable`, bound via
    `netsh http add sslcert ipport=0.0.0.0:<bridge-port>` (the cert protects the **engine bridge**
-   WebSocket, not the IIS site — the IIS bundle is served over plain HTTP in both modes).
+   WebSocket; in LAN mode the IIS site also gets an HTTPS binding on the secure site port, default
+   443, with the same cert — other computers load the bundle over HTTPS, `http://localhost/` stays
+   for the engine's own computer).
 5. **Firewall rule** (if "LAN exposed"): inbound TCP on the **bridge** port (default 47291).
 6. **Windows service**: `AkmlSqlWebEngine` (via `sc.exe create`) running the
    engine with `--web --config "%CommonAppData%\AKML SQL Web\config.json"` (machine-wide

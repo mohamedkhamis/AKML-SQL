@@ -1,0 +1,365 @@
+[
+  {
+    "id": "PGFUN-001",
+    "family": "functions",
+    "doc": "SELECT | FROM customers",
+    "expect": {
+      "mustContain": [
+        "count",
+        "lower",
+        "coalesce",
+        "now"
+      ],
+      "mustNotContain": [
+        "GETDATE",
+        "ISNULL"
+      ]
+    },
+    "note": "Everyday functions in the select list"
+  },
+  {
+    "id": "PGFUN-002",
+    "family": "functions",
+    "doc": "SELECT date_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "date_trunc",
+        "date_part"
+      ],
+      "mustNotContain": [
+        "GETDATE"
+      ]
+    },
+    "note": "Prefix date_"
+  },
+  {
+    "id": "PGFUN-003",
+    "family": "functions",
+    "doc": "SELECT string_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "string_agg",
+        "string_to_array"
+      ]
+    },
+    "note": "Prefix string_"
+  },
+  {
+    "id": "PGFUN-004",
+    "family": "functions",
+    "doc": "SELECT json_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "json_agg",
+        "json_build_object"
+      ]
+    },
+    "note": "Prefix json_"
+  },
+  {
+    "id": "PGFUN-005",
+    "family": "functions",
+    "doc": "SELECT jsonb_build| FROM orders",
+    "expect": {
+      "mustContain": [
+        "jsonb_build_object",
+        "jsonb_build_array"
+      ]
+    },
+    "note": "Prefix jsonb_build"
+  },
+  {
+    "id": "PGFUN-006",
+    "family": "functions",
+    "doc": "SELECT regexp_| FROM customers",
+    "expect": {
+      "mustContain": [
+        "regexp_replace",
+        "regexp_match"
+      ]
+    },
+    "note": "Prefix regexp_"
+  },
+  {
+    "id": "PGFUN-007",
+    "family": "functions",
+    "doc": "SELECT to_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "to_char",
+        "to_date",
+        "to_timestamp",
+        "to_number"
+      ]
+    },
+    "note": "Prefix to_"
+  },
+  {
+    "id": "PGFUN-008",
+    "family": "functions",
+    "doc": "SELECT gen_random| FROM orders",
+    "expect": {
+      "mustContain": [
+        "gen_random_uuid"
+      ]
+    },
+    "note": "gen_random_uuid"
+  },
+  {
+    "id": "PGFUN-009",
+    "family": "functions",
+    "doc": "SELECT * FROM json_each|",
+    "expect": {
+      "mustContain": [
+        "json_each",
+        "jsonb_each"
+      ]
+    },
+    "note": "Set-returning JSON functions"
+  },
+  {
+    "id": "PGFUN-010",
+    "family": "functions",
+    "doc": "SELECT order_total(|) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ]
+    },
+    "note": "Columns inside a user function call"
+  },
+  {
+    "id": "PGFUN-011",
+    "family": "functions",
+    "doc": "SELECT order_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_total",
+        "order_id",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "archive_orders"
+      ]
+    },
+    "note": "User function next to columns; a procedure is not a select item"
+  },
+  {
+    "id": "PGFUN-012",
+    "family": "functions",
+    "doc": "SELECT * FROM orders WHERE order_date > cur|",
+    "expect": {
+      "mustContain": [
+        "CURRENT_DATE",
+        "CURRENT_TIMESTAMP",
+        "current_setting"
+      ]
+    },
+    "note": "Prefix cur"
+  },
+  {
+    "id": "PGFUN-013",
+    "family": "functions",
+    "doc": "SELECT * FROM orders WHERE lower(|)",
+    "expect": {
+      "mustContain": [
+        "ship_city",
+        "ship_name"
+      ]
+    },
+    "note": "Inside lower"
+  },
+  {
+    "id": "PGFUN-014",
+    "family": "functions",
+    "doc": "SELECT pg_| FROM orders",
+    "expect": {
+      "mustContain": [
+        "pg_sleep",
+        "pg_typeof"
+      ]
+    },
+    "note": "pg_ functions"
+  },
+  {
+    "id": "PGFUN-015",
+    "family": "functions",
+    "doc": "CALL |",
+    "expect": {
+      "mustContain": [
+        "archive_orders",
+        "sales.mark_invoice_paid"
+      ],
+      "mustNotContain": [
+        "order_total",
+        "customers",
+        "GETDATE"
+      ]
+    },
+    "note": "CALL takes procedures"
+  },
+  {
+    "id": "PGFUN-016",
+    "family": "functions",
+    "doc": "CALL arch|",
+    "expect": {
+      "mustContain": [
+        "archive_orders"
+      ],
+      "mustNotContain": [
+        "order_total"
+      ]
+    },
+    "note": "Procedure by prefix"
+  },
+  {
+    "id": "PGFUN-017",
+    "family": "functions",
+    "doc": "SELECT pg_catalog.|",
+    "expect": {
+      "mustContain": [
+        "lower",
+        "count",
+        "now"
+      ]
+    },
+    "note": "Built-ins under pg_catalog"
+  },
+  {
+    "id": "PGFUN-018",
+    "family": "functions",
+    "doc": "SELECT json_exi|",
+    "expect": {
+      "mustContain": [
+        "json_exists"
+      ]
+    },
+    "note": "Available on a current server",
+    "serverMajor": 18
+  },
+  {
+    "id": "PGFUN-019",
+    "family": "functions",
+    "doc": "SELECT json_exi|",
+    "expect": {
+      "mustNotContain": [
+        "json_exists"
+      ]
+    },
+    "note": "json_exists is PostgreSQL 17 and later",
+    "serverMajor": 14
+  },
+  {
+    "id": "PGFUN-020",
+    "family": "functions",
+    "doc": "SELECT mark_| FROM orders",
+    "expect": {
+      "mustNotContain": [
+        "mark_invoice_paid"
+      ]
+    },
+    "note": "A procedure is not a scalar function"
+  },
+  {
+    "id": "PGFUN-021",
+    "family": "functions",
+    "doc": "SELECT subs| FROM orders",
+    "expect": {
+      "mustContain": [
+        "substring"
+      ]
+    },
+    "note": "Prefix subs"
+  },
+  {
+    "id": "PGFUN-022",
+    "family": "functions",
+    "doc": "SELECT tri| FROM orders",
+    "expect": {
+      "mustContain": [
+        "trim"
+      ]
+    },
+    "note": "Prefix tri"
+  },
+  {
+    "id": "PGFUN-023",
+    "family": "functions",
+    "doc": "SELECT rou| FROM orders",
+    "expect": {
+      "mustContain": [
+        "round"
+      ]
+    },
+    "note": "Prefix rou"
+  },
+  {
+    "id": "PGFUN-024",
+    "family": "functions",
+    "doc": "SELECT ab| FROM orders",
+    "expect": {
+      "mustContain": [
+        "abs"
+      ]
+    },
+    "note": "Prefix ab"
+  },
+  {
+    "id": "PGFUN-025",
+    "family": "functions",
+    "doc": "SELECT leng| FROM orders",
+    "expect": {
+      "mustContain": [
+        "length"
+      ]
+    },
+    "note": "Prefix leng"
+  },
+  {
+    "id": "PGFUN-026",
+    "family": "functions",
+    "doc": "SELECT count(|) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ]
+    },
+    "note": "Columns inside count"
+  },
+  {
+    "id": "PGFUN-027",
+    "family": "functions",
+    "doc": "SELECT * FROM generate_series(1, 3) g WHERE |",
+    "expect": {
+      "mustContain": [
+        "g"
+      ]
+    },
+    "note": "A set-returning function in FROM is a source"
+  },
+  {
+    "id": "PGFUN-028",
+    "family": "functions",
+    "doc": "SELECT array_agg(|) FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id"
+      ]
+    },
+    "note": "Columns inside an aggregate"
+  },
+  {
+    "id": "PGFUN-029",
+    "family": "functions",
+    "doc": "SELECT now() - interval '1 day' AS d, | FROM orders",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ]
+    },
+    "note": "After a call item"
+  }
+]

@@ -45,6 +45,14 @@ namespace AkmlSql.Engine
         public bool IsRegistered(int requestMessageType) => _adapters.ContainsKey(requestMessageType);
 
         /// <summary>
+        /// Spec 042 (FR-092): an optional check that runs before the handler is looked up. It returns a ready
+        /// response to answer the request itself (a PostgreSQL session asking for a surface that has no PostgreSQL
+        /// implementation) or <see langword="null"/> to let the request through. Null by default, so a router
+        /// built without it behaves exactly as before.
+        /// </summary>
+        public Func<RpcMessage, RpcContext, RpcMessage?>? DialectGuard { get; set; }
+
+        /// <summary>
         /// Spec 022 (M0 closure) -- P2 / US2. Register a raw-envelope handler that processes the
         /// inbound <see cref="RpcMessage"/> directly and produces the full response envelope. Used
         /// for delegating handlers (session save/restore/delete, history, productivity, navigation,
@@ -137,6 +145,12 @@ namespace AkmlSql.Engine
             if (!_adapters.TryGetValue(msg.MessageType, out var adapter))
             {
                 return null;
+            }
+
+            var refusal = DialectGuard?.Invoke(msg, ctx);
+            if (refusal != null)
+            {
+                return refusal;
             }
             return await adapter.RouteAsync(msg, ctx, ct).ConfigureAwait(false);
         }

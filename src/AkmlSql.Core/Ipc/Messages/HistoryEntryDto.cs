@@ -86,5 +86,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(17)]
         public string? SessionKey { get; set; }
+
+        /// <summary>Spec 042: the <see cref="DatabaseKind"/> the entry ran against (0 SQL Server, 1 PostgreSQL).</summary>
+        [Key(18)]
+        public int Kind { get; set; }
     }
 }

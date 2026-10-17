@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "id": "builtin-pg-cfn",
+    "shortcode": "cfn",
+    "name": "CREATE FUNCTION",
+    "description": "CREATE OR REPLACE FUNCTION in PL/pgSQL",
+    "author": "AKML SQL",
+    "version": "1.0",
+    "category": "DDL",
+    "tags": [
+      "create",
+      "function"
+    ],
+    "context": [
+      "global"
+    ],
+    "surroundsWith": false,
+    "dialect": "postgresql"
+  },
+  "variables": [],
+  "body": [
+    "CREATE OR REPLACE FUNCTION $CURSOR$()",
+    "RETURNS void",
+    "LANGUAGE plpgsql",
+    "AS $$",
+    "BEGIN",
+    "    ",
+    "END;",
+    "$$;"
+  ]
+}

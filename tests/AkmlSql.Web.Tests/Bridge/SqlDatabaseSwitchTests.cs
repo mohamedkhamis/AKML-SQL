@@ -34,6 +34,7 @@ public sealed class SqlDatabaseSwitchTests
             {
                 MessageTypes.ListDatabases => ListReply,
                 MessageTypes.ChangeDatabase => ChangeReply,
+                MessageTypes.TestSqlConnection => new TestSqlConnectionResponse { Ok = true },
                 _ => throw new InvalidOperationException($"Unexpected request {type}"),
             };
             return Task.FromResult((TResponse)reply);

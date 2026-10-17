@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Engine.Ai;
 using AkmlSql.Engine.Ai.Prompts;
 
 namespace AkmlSql.Web.Services;
@@ -37,26 +38,32 @@ internal sealed class AiGhostTextService : IAiGhostTextService
     private readonly IAiSchemaContextProvider _schema;
     private readonly IAiFeatureSettings _settings;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly AiOutboundGate _gate;
 
     private readonly Dictionary<string, string> _cache = new(StringComparer.Ordinal);
     private readonly Queue<DateTimeOffset> _recent = new();
 
     public AiGhostTextService(
         IAiClientFactory client, IAiPreference preference,
-        IAiSchemaContextProvider schema, IAiFeatureSettings settings)
-        : this(client, preference, schema, settings, () => DateTimeOffset.UtcNow)
+        IAiSchemaContextProvider schema, IAiFeatureSettings settings,
+        IAiDialectContext? dialect = null, IPostgresRedactor? redactor = null)
+        : this(client, preference, schema, settings, () => DateTimeOffset.UtcNow, dialect, redactor)
     {
     }
 
     internal AiGhostTextService(
         IAiClientFactory client, IAiPreference preference,
-        IAiSchemaContextProvider schema, IAiFeatureSettings settings, Func<DateTimeOffset> clock)
+        IAiSchemaContextProvider schema, IAiFeatureSettings settings, Func<DateTimeOffset> clock,
+        IAiDialectContext? dialect = null, IPostgresRedactor? redactor = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _preference = preference ?? throw new ArgumentNullException(nameof(preference));
         _schema = schema ?? throw new ArgumentNullException(nameof(schema));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        // Spec 042 (FR-081): ghost text fails silently, so nobody can be asked. A script whose literals cannot be removed is
+        // simply not sent; there is no consent dialog on a keystroke.
+        _gate = new AiOutboundGate(dialect, redactor, dialogs: null);
     }
 
     public int SessionRequestCount { get; private set; }
@@ -70,7 +77,9 @@ internal sealed class AiGhostTextService : IAiGhostTextService
 
         // Schema is read from the local cache (no provider call), so the cache key is cheap.
         var schemaText = await _schema.GetSchemaTextAsync("ghosttext", precedingText, ct).ConfigureAwait(false);
-        var key = schemaText.GetHashCode().ToString("x") + "" + precedingText;
+        // The dialect is part of the key: the same text before the caret must not serve a T-SQL suggestion to a PostgreSQL
+        // connection (spec 042).
+        var key = _gate.Dialect + "|" + schemaText.GetHashCode().ToString("x") + "|" + precedingText;
 
         // Cache hit: serve immediately, no provider call, no rate-limit consumption (FR-025).
         if (_cache.TryGetValue(key, out var cached)) return cached;
@@ -88,10 +97,17 @@ internal sealed class AiGhostTextService : IAiGhostTextService
         var mode = await _settings.ResolveModeAsync("ghosttext").ConfigureAwait(false);
         if (mode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(providerId)) return null; // silent FR-004
 
+        // PostgreSQL text bound for a cloud provider has its literals removed first. When that is not possible nothing is sent
+        // and nothing is counted (spec 042, FR-081).
+        AiOutbound outbound;
+        try { outbound = await _gate.PrepareSqlAsync(providerId, precedingText, askUser: false, ct).ConfigureAwait(false); }
+        catch (Exception) { return null; } // ghost text never surfaces an error into the editor
+        if (outbound.Withheld) return null;
+
         _recent.Enqueue(now);
         SessionRequestCount++;
 
-        var (system, user) = GhostTextPrompt.Build(schemaText, precedingText);
+        var (system, user) = GhostTextPrompt.Build(schemaText, outbound.Text, _gate.Dialect, _gate.ServerVersion);
         string raw;
         try
         {
@@ -108,7 +124,7 @@ internal sealed class AiGhostTextService : IAiGhostTextService
             return null; // ghost text never surfaces an error into the editor
         }
 
-        var suggestion = StripFences(raw).TrimEnd();
+        var suggestion = StripFences(outbound.Restore(raw)).TrimEnd();
         if (string.IsNullOrWhiteSpace(suggestion)) return null; // don't cache an empty suggestion
         _cache[key] = suggestion;
         return suggestion;

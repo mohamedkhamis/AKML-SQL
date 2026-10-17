@@ -688,3 +688,68 @@ The original report is preserved; new HTML/TRX evidence is under
 %LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
 missing alias/spike configuration, and pre-existing scenario placeholders. This was
 a focused fix verification, not another full-suite run.
+
+## 2026-10-17 — Web review fixes (AKML_WEB_REVIEW_2026-10-17.md)
+
+The implementation pass reported all 22 findings fixed; those changes are now committed as
+`1d09ef4c`. Its per-ID ledger remains at the end of the original review file (root, not doc/).
+**That completion claim is superseded by the independent follow-up below: seven remain partial.**
+Facts that changed:
+
+- Editable results are bound to the connection they were read through: `ExecuteQueryResult.ConnectionStamp`
+  (key 15, HMAC under a per-process key) goes back as `ApplyChangesRequest.ConnectionStamp` (key 6) and the
+  engine refuses a stale one; the web freezes results read under an older `ISqlConnectionService.ConnectionGeneration`.
+  Grids are also frozen while a query runs or their Apply is waiting.
+- Disconnect is a real engine operation: `SessionDisconnect` 225 → 226 (`session.disconnect.v1`). Every
+  session-connection close rolls back an open transaction explicitly.
+- SQL Server Connect tests the login first (as PostgreSQL already did). Remote SQL Server connections are
+  encrypted and certificate-validated unless the saved connection's "Trust the server certificate" is ticked;
+  loopback still skips validation.
+- LAN installs serve the site over HTTPS on a "Secure site port" (default 443, `/WEB_HTTPS_PORT`, registry
+  `HttpsPort`) with the bridge certificate; the app refuses to ask for secrets in an insecure context.
+- `akml-crypto.js` creates the wrapping key once (one readwrite transaction, shared promise) and closes its
+  IndexedDB connections. AI schema context resolves the connected database only. AI streams that end badly
+  raise `AiStreamException`; provider error bodies never reach messages or diagnostics, and the diagnostics
+  ring masks credential-shaped text (`DiagnosticRedaction`).
+- `ColumnProvenanceDto.HasDefault` (key 12): new grid rows send only the cells the user set; an empty row is
+  `INSERT … DEFAULT VALUES`.
+- Browser regressions: `tests/AkmlSql.Web.E2E.Tests/SecretStorageTests.cs` (no engine needed) and
+  `ReviewFixBrowserTests.cs`. Not verified: a real LAN install over HTTPS, Firefox, a PostgreSQL server,
+  a screen reader.
+
+### Independent follow-up review — 2026-10-17
+
+See [AKML_WEB_RE_REVIEW_2026-10-17.md](AKML_WEB_RE_REVIEW_2026-10-17.md) for the current disposition:
+15 original findings resolved for the current build, 7 partial (WEB-03, 07, 11, 13, 18, 20, 21),
+plus an additional History full-SQL retrieval failure path. Eight actionable application findings
+cover cross-engine schema-cache collisions, executable History excerpts, HTTPS binding ownership,
+snippet save races, restored diagnostic secrets, SQL Server inserted-row values, persisted AI
+incomplete status, and keyboard scrolling. Dependency advisory remediation is tracked separately.
+
+Fresh verification: Web 1,632/1,632; JavaScript 131/131; serial Chromium 48/48; targeted Engine 97/97
+(live local SQL included), with no skips in those .NET runs. Six separate independent acceptance
+probes fail and reproduce remaining defects; an additional browser probe reproduces invisible
+Snippets keyboard focus. Evidence and replayable probe sources: `.review-artifacts/2026-10-17-followup/`.
+Temporary probe tests were removed from the normal test project after recording evidence, and that
+project was rebuilt. This was review/documentation work, with no production fixes or deployment.
+Actual LAN installer operation, remote certificate validation and live PostgreSQL remain unverified.
+
+## 2026-10-17 — Web re-review fixes (AKML_WEB_RE_REVIEW_2026-10-17.md)
+
+The follow-up review's REV-01..REV-08 and SEC-01 are fixed in the working tree (uncommitted); per-ID matrix at the end of that report.
+Facts that changed:
+
+- `ISqlConnectionService.SchemaIdentity` (the browser schema-cache key) is now `"<server> (engine <host:port>)"`, scoped to the engine the
+  session was opened through (`SqlConnectionService.ScopeToEngine`): a loopback SQL address is relative to the engine. Older unscoped
+  cache entries no longer match and are refetched. The AI schema provider also re-checks the connection generation.
+- History never copies, opens or re-executes the 500-character search excerpt: those wait for the full SQL (or a stored version).
+- LAN HTTPS binding ownership: `src/AkmlSql.Installer/web-https-binding.ps1` (decision functions + `-RemoveOwned`), record at
+  `%ProgramData%\AKML SQL Web\https-binding.json`, markers `https-site.ok` / `https-site.failed`; uninstall removes only AKML's still-owned
+  binding. Script-level tests: `tests/AkmlSql.Installer.Tests/HttpsBindingDecisionTests.cs` (no admin needed).
+- Diagnostics ring is persisted as a versioned envelope; a legacy (pre-fix) ring is migrated on restore (AI entries purged).
+- `ChatTurn.IncompleteReason` persists an incomplete AI answer's status.
+- SQL Server inserts return the stored row via `OUTPUT INSERTED` when the table has no enabled trigger; `ExecuteResultSet.DefaultsKnown`
+  (key 13).
+- Dependencies: MessagePack 3.1.9 (Core, Engine, E2E tests); System.Security.Cryptography.Pkcs pinned to 9.0.21 in the Engine.
+- Running `ISCC /O-` deletes `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`; for a syntax check compile with `/O<scratch dir>` instead.
+

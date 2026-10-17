@@ -16,9 +16,11 @@ namespace AkmlSql.Engine.Handlers.Completion
     public sealed class WildcardExpansionHandler : IRpcRequestHandler<WildcardExpansionRequest, WildcardExpansionResponse>
     {
         private readonly Engine.Completion.WildcardExpansionHandler _inner;
+        private readonly PostgreSql.PgServices? _pg;
 
-        public WildcardExpansionHandler(Engine.Completion.WildcardExpansionHandler inner)
+        public WildcardExpansionHandler(Engine.Completion.WildcardExpansionHandler inner, PostgreSql.PgServices? pg = null)
         {
+            _pg = pg;
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         }
 
@@ -34,6 +36,9 @@ namespace AkmlSql.Engine.Handlers.Completion
             var cache = session != null
                 ? ctx.SchemaCache.GetCache(request.SessionId, session.DatabaseName)
                 : null;
+            if (session?.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _pg != null)
+                return Task.FromResult(_pg.Wildcard.Handle(request.DocumentText, request.CursorOffset, request.Qualifier, cache));
+
             var response = _inner.Handle(request.DocumentText, request.CursorOffset, request.Qualifier, cache);
             return Task.FromResult(response);
         }
