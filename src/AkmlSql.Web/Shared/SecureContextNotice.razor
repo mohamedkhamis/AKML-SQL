@@ -1,0 +1,27 @@
+@*
+    Review finding WEB-03 — the browser stores pairing tokens and API keys wrapped with Web Crypto, which exists only in a
+    secure context: HTTPS, or the page's own computer (localhost). Opened over plain HTTP from another computer, the page
+    cannot store them — and anyone on the network path could have changed the page itself. This says so, with the HTTPS
+    address of the same site, wherever a secret would be asked for. Nothing is ever stored in plain text instead.
+*@
+@inject NavigationManager Nav
+
+<div class="akml-results-warning" role="alert" data-testid="secure-context-notice">
+    This page was opened over plain HTTP from another computer, so the browser cannot keep @What safely.
+    Open <a href="@HttpsAddress" data-testid="secure-context-https-link">@HttpsAddress</a> instead (the installer's
+    INSTALL-SUMMARY.txt gives the address and how to trust its certificate).
+</div>
+
+@code {
+    /// <summary>What could not be stored, for the sentence ("the pairing token", "API keys").</summary>
+    [Parameter] public string What { get; set; } = "secrets";
+
+    /// <summary>The same site over HTTPS on its default port — the installer's default for LAN mode.</summary>
+    internal string HttpsAddress => HttpsAddressOf(Nav.BaseUri);
+
+    internal static string HttpsAddressOf(string baseUri)
+    {
+        var uri = new Uri(baseUri);
+        return new UriBuilder(uri) { Scheme = Uri.UriSchemeHttps, Port = -1 }.Uri.GetLeftPart(UriPartial.Path);
+    }
+}

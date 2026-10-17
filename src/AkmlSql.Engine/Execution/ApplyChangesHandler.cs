@@ -48,10 +48,16 @@ namespace AkmlSql.Engine.Execution
                 if (string.IsNullOrEmpty(connStr))
                     return Respond(request.RequestId, Err(ExecuteStatus.NoConnection, "No active database connection for this session."));
 
+                // The rows were read through one connection; the session may since have moved to another server, login,
+                // database, kind or engine. Writing them there would update whatever row has the same key.
+                var kind = _kindOf(req.SessionId);
+                if (!ConnectionStamp.Allows(req.ConnectionStamp, kind, connStr))
+                    return Respond(request.RequestId, Err(ExecuteStatus.Error, ConnectionStamp.StaleMessage));
+
                 if (req.Edits.Length == 0)
                     return Respond(request.RequestId, new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = Array.Empty<CrudEditResult>() });
 
-                if (_kindOf(req.SessionId) == DatabaseKind.PostgreSql)
+                if (kind == DatabaseKind.PostgreSql)
                     return await ApplyPostgresAsync(request.RequestId, req, connStr!, ct).ConfigureAwait(false);
 
                 var sessionConn = _registry.GetOrCreate(req.SessionId, connStr!);

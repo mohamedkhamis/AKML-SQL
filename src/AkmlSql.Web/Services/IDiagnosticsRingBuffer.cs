@@ -59,7 +59,8 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
 
     public void Log(DiagnosticLevel level, string source, string message, object? data = null)
     {
-        _entries.Enqueue(new DiagnosticEntry(DateTimeOffset.UtcNow, level, source, message, data));
+        // Review WEB-21: the ring is persisted and exported — mask credential-shaped text and bound the length first.
+        _entries.Enqueue(new DiagnosticEntry(DateTimeOffset.UtcNow, level, source, DiagnosticRedaction.Clean(message), data));
         while (_entries.Count > CapacityBound && _entries.TryDequeue(out _)) { }
         ScheduleFlush();
     }

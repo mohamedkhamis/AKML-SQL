@@ -63,6 +63,7 @@ if (-not (Test-Path $defaultRoot)) { $defaultRoot = Join-Path $env:ProgramFiles 
 
 $port = Read-RegString 'IisPort'  '80'
 $mode = Read-RegString 'IisMode'  'Localhost'
+$httpsPort = Read-RegString 'HttpsPort' '0'
 $root = Read-RegString 'WebRoot'  $defaultRoot
 if ($mode -ne 'Lan' -and $mode -ne 'Localhost') { $mode = 'Localhost' }
 
@@ -96,7 +97,7 @@ if (-not (Get-Module -ListAvailable -Name WebAdministration)) {
 
 # --- Provision ------------------------------------------------------------------------------
 Write-Host '  Creating the AkmlSqlWeb IIS site...' -ForegroundColor Gray
-& $setup -Port ([int]$port) -PhysicalPath $root -Mode $mode
+& $setup -Port ([int]$port) -PhysicalPath $root -Mode $mode -HttpsPort ([int]$httpsPort)
 
 # --- Report (web-iis-setup.ps1 writes the ok-marker only on success) ------------------------
 $marker = Join-Path $env:ProgramData 'AKML SQL Web\iis-site.ok'
@@ -104,6 +105,9 @@ $log    = Join-Path $env:ProgramData 'AKML SQL Web\install.log'
 Write-Host ''
 if (Test-Path $marker) {
     if ($port -eq '80') { $url = 'http://localhost/' } else { $url = "http://localhost:$port/" }
+    if ($mode -eq 'Lan' -and [int]$httpsPort -gt 0) {
+        if ($httpsPort -eq '443') { $url += " (other computers: https://$env:COMPUTERNAME/)" } else { $url += " (other computers: https://${env:COMPUTERNAME}:$httpsPort/)" }
+    }
     Write-Host "  SUCCESS - the AkmlSqlWeb site is provisioned." -ForegroundColor Green
     Write-Host "  Browse to: $url" -ForegroundColor Green
 } else {

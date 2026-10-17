@@ -30,11 +30,20 @@ public interface ISqlConnectionService
     event Action? StateChanged;
 
     /// <summary>
+    /// Review finding WEB-01: changes whenever the session's target does — a connect, a disconnect, another database, or the
+    /// bridge reopening on another engine. Results read under one generation are never edited under another. A fake that does
+    /// not implement it never changes.
+    /// </summary>
+    int ConnectionGeneration => 0;
+
+    /// <summary>
     /// Tell the paired engine to open a SQL Server connection. <paramref name="windowsAuth"/> = true
     /// builds an Integrated-Security connection string (no password — the engine uses its own Windows
     /// identity); otherwise SQL auth with <paramref name="user"/>/<paramref name="password"/>.
-    /// The send is fire-and-forget (ConnectionChanged is a notification); schema population runs
-    /// asynchronously engine-side, so a successful return means "request sent", not "schema ready".
+    /// The engine first opens the connection (the TestSqlConnection round trip), so a wrong password or an
+    /// unreachable server fails here and the session is left as it was (review WEB-19). Only then is the
+    /// ConnectionChanged notification sent; schema population runs asynchronously engine-side, so a
+    /// successful return means "the server accepted the login", not "schema ready".
     /// </summary>
     Task<(bool Ok, string? Error)> ConnectAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct);
@@ -63,8 +72,24 @@ public interface ISqlConnectionService
     Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
         string server, bool windowsAuth, string? user, string? password, CancellationToken ct);
 
-    /// <summary>Clears the local connected state. (The engine session lingers harmlessly.)</summary>
+    /// <summary>Disconnects (see <see cref="DisconnectSessionAsync"/>) and ignores the outcome.</summary>
     Task DisconnectAsync();
+
+    /// <summary>
+    /// Review finding WEB-06: end the session's database connection. An engine that advertises
+    /// <c>session.disconnect.v1</c> rolls back an open transaction, closes the connection and confirms; only then is the
+    /// browser's state cleared. When the engine cannot be reached (or is too old) the browser still forgets the
+    /// connection, and the result says the engine's session could not be closed.
+    /// </summary>
+    async Task<DisconnectResult> DisconnectSessionAsync(CancellationToken ct)
+    {
+        await DisconnectAsync().ConfigureAwait(false);
+        return new DisconnectResult(true, false, null);
+    }
+
+    /// <summary>Review finding WEB-02: list databases with the target's certificate choice (see <see cref="ConnectionTarget"/>).</summary>
+    Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
+        ListDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, ct);
 
     /// <summary>
     /// Pushes the current editor text to the engine session (DocumentChanged) so the next completion
@@ -156,6 +181,29 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        _bridge.StateChanged += OnBridgeStateChanged;
+    }
+
+    public int ConnectionGeneration { get; private set; }
+
+    // The engine the session was opened on: the bridge reopening on another one is a new target.
+    private string? _engineUrl;
+
+    private void OnBridgeStateChanged(BridgeState state)
+    {
+        if (state != BridgeState.Open || !IsConnected) return;
+        var url = _bridge.ConnectedUrl;
+        if (string.Equals(url, _engineUrl, StringComparison.OrdinalIgnoreCase)) return;
+        _engineUrl = url;
+        ConnectionGeneration++;
+        StateChanged?.Invoke();
+    }
+
+    /// <summary>A new target: the session now writes to a different server, database, login, kind or engine.</summary>
+    private void NewTarget()
+    {
+        ConnectionGeneration++;
+        _engineUrl = _bridge.ConnectedUrl;
     }
 
     // One stable id per browser session — used by ConnectionChanged, DocumentChanged, and completion.
@@ -208,12 +256,15 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     public Task<ConnectResult> TestAsync(ConnectionTarget target, CancellationToken ct) =>
         target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
             ? TestPostgresAsync(target, ct)
-            : AdaptAsync(TestAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, ct));
+            : AdaptAsync(TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct));
+
+    public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
+        ListSqlServerDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct);
 
     public async Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
     {
         if (target.Kind != AkmlSql.Core.DatabaseKind.PostgreSql)
-            return await AdaptAsync(ConnectAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, ct)).ConfigureAwait(false);
+            return await AdaptAsync(ConnectSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct)).ConfigureAwait(false);
 
         // ConnectionChanged is a notification: the engine cannot say the password was wrong. So a PostgreSQL connect first
         // asks the engine to open the connection (the test), and only a server that accepted it becomes the session.
@@ -251,6 +302,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         ServerVersionText = VersionNumberOf(tested.ServerVersion);
         TransactionState = AkmlSql.Core.TransactionState.None;
         IsConnected = true;
+        NewTarget();
         _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
             $"Requested engine connect to PostgreSQL {Server}/{Database} as {pg.User} (tls={pg.SslMode}). Schema loads asynchronously.");
         StateChanged?.Invoke();
@@ -443,8 +495,12 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     internal static string BuildPostgresConnectionString(PgTarget target) =>
         PgConnectionString.Build(target.Host, target.Port, target.Database, target.User, target.Password, target.SslMode, target.RootCertificatePath);
 
-    public async Task<(bool Ok, string? Error)> ConnectAsync(
-        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    public Task<(bool Ok, string? Error)> ConnectAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
+        ConnectSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct);
+
+    private async Task<(bool Ok, string? Error)> ConnectSqlServerAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
     {
         // Identifier + loopback (SSRF) guard — single-sourced in ValidateTarget so ConnectAsync and
         // TestAsync enforce IDENTICAL rules. Runs before anything touches the bridge.
@@ -454,7 +510,14 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (_bridge.State != BridgeState.Open)
             return (false, "Pair an engine first (Engine connections → Add), then connect to SQL Server.");
 
-        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
+        // Review WEB-19: ConnectionChanged is a notification — the engine cannot say the password was wrong or the server
+        // is down. So, as for PostgreSQL, the engine first opens the connection (the test) and only a server that accepted
+        // it becomes the session; on failure the session and the form stay as they were. (A server that goes away between
+        // the two shows up on the first run, as any later drop does.)
+        var (tested, testError) = await TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate, ct).ConfigureAwait(false);
+        if (!tested) return (false, testError);
+
+        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password, trustServerCertificate);
 
         try
         {
@@ -485,14 +548,19 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         ServerVersionText = null;
         TransactionState = AkmlSql.Core.TransactionState.None;
         IsConnected = true;
+        NewTarget();
         _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
             $"Requested engine connect to {Server}/{Database} (auth={(windowsAuth ? "Windows" : "SQL")}). Schema loads asynchronously.");
         StateChanged?.Invoke();
         return (true, null);
     }
 
-    public async Task<(bool Ok, string? Error)> TestAsync(
-        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    public Task<(bool Ok, string? Error)> TestAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
+        TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct);
+
+    private async Task<(bool Ok, string? Error)> TestSqlServerAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
     {
         // SECURITY (Phase 4): run the SAME identifier + loopback guard as ConnectAsync, and run it
         // FIRST — before building the connection string and before sending anything to the engine.
@@ -505,7 +573,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (_bridge.State != BridgeState.Open)
             return (false, "Pair an engine first (Engine connections → Add), then test the SQL connection.");
 
-        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password);
+        var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password, trustServerCertificate);
 
         try
         {
@@ -536,8 +604,12 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    public async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
-        string server, bool windowsAuth, string? user, string? password, CancellationToken ct)
+    public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(
+        string server, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
+        ListSqlServerDatabasesAsync(server, windowsAuth, user, password, trustServerCertificate: false, ct);
+
+    private async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListSqlServerDatabasesAsync(
+        string server, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
     {
         // SECURITY: identical loopback/identifier guard as Connect/Test, run FIRST — the engine opens
         // this connection under its own identity, so an unguarded server is an SSRF/confused-deputy
@@ -548,7 +620,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (_bridge.State != BridgeState.Open)
             return (false, Array.Empty<string>(), "Pair an engine first (Engine connections → Add), then list databases.");
 
-        var connStr = BuildConnectionString(server.Trim(), "master", windowsAuth, user, password);
+        var connStr = BuildConnectionString(server.Trim(), "master", windowsAuth, user, password, trustServerCertificate);
 
         try
         {
@@ -571,8 +643,58 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    public Task DisconnectAsync()
+    /// <summary>The engine capability that closes the session's connection on Disconnect (review WEB-06).</summary>
+    public const string CapabilitySessionDisconnect = "session.disconnect.v1";
+
+    internal const string DisconnectUnconfirmed =
+        "The engine could not be reached, so its connection for this session may stay open — with any open transaction and " +
+        "its locks — until the engine closes idle connections (20 minutes) or restarts.";
+
+    internal const string DisconnectNeedsNewerEngine =
+        "This engine is too old to close its connection on Disconnect, so it may stay open — with any open transaction and " +
+        "its locks — until the engine closes idle connections (20 minutes) or restarts.";
+
+    public async Task DisconnectAsync() => await DisconnectSessionAsync(CancellationToken.None).ConfigureAwait(false);
+
+    public async Task<DisconnectResult> DisconnectSessionAsync(CancellationToken ct)
     {
+        if (!IsConnected) return new DisconnectResult(true, false, null);
+
+        if (_bridge.State != BridgeState.Open)
+        {
+            ForgetConnection();
+            return new DisconnectResult(false, false, DisconnectUnconfirmed);
+        }
+        if (!_bridge.Advertises(CapabilitySessionDisconnect))
+        {
+            ForgetConnection();
+            return new DisconnectResult(false, false, DisconnectNeedsNewerEngine);
+        }
+
+        SessionDisconnectResponse? response;
+        try
+        {
+            response = await _bridge.SendAsync<SessionDisconnectRequest, SessionDisconnectResponse>(
+                MessageTypes.SessionDisconnect, new SessionDisconnectRequest { SessionId = SessionId }, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"SessionDisconnect failed: {ex.GetType().Name}");
+            ForgetConnection();
+            return new DisconnectResult(false, false, DisconnectUnconfirmed);
+        }
+
+        // Any reply means the engine has already forgotten the session's connection; a refusal only says the close
+        // itself waits for a statement that is still running.
+        ForgetConnection();
+        if (response == null) return new DisconnectResult(false, false, DisconnectUnconfirmed);
+        _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Disconnected (rolledBack={response.RolledBack}, ok={response.Ok}).");
+        return new DisconnectResult(response.Ok, response.RolledBack, response.Ok ? null : response.ErrorMessage);
+    }
+
+    private void ForgetConnection()
+    {
+        ConnectionGeneration++;
         IsConnected = false;
         Server = null;
         Database = null;
@@ -583,7 +705,6 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         _schemaIdentity = null;
         TransactionState = AkmlSql.Core.TransactionState.None;
         StateChanged?.Invoke();
-        return Task.CompletedTask;
     }
 
     // ── Spec 041 (research R25–R28) — the database selector ─────────────────────────────────────────────
@@ -654,6 +775,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         if (!IsConnected || string.IsNullOrEmpty(database)) return;
         if (string.Equals(Database, database, StringComparison.Ordinal)) return;
         Database = database;
+        NewTarget();
         StateChanged?.Invoke();
     }
 
@@ -747,18 +869,25 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         return true;
     }
 
-    private static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password)
+    internal static string BuildConnectionString(string server, string database, bool windowsAuth, string? user, string? password,
+        bool trustServerCertificate = false)
     {
         // Use DbConnectionStringBuilder (System.Data.Common, BCL — WASM-safe, unlike
         // Microsoft.Data.SqlClient) so each value is validated and properly quoted/escaped. This
         // prevents connection-string injection: a value containing ';', '=' or quotes is wrapped
-        // rather than treated as a new keyword. TrustServerCertificate keeps a local/dev SQL Server
-        // (often self-signed) from failing the TLS handshake; Application Name aids diagnostics.
+        // rather than treated as a new keyword. Application Name aids diagnostics.
+        //
+        // Review WEB-02: the engine reaches a remote server over the network, where the bridge's TLS does not reach, so
+        // the connection is always encrypted and the server's certificate is validated — unless the user ticked "Trust
+        // server certificate" for this connection (a self-signed server they know). A SQL Server on the engine's own
+        // machine (often a self-signed dev instance) keeps skipping validation: that hop never leaves the computer.
+        bool loopback = IsLoopbackServer(server);
         var b = new System.Data.Common.DbConnectionStringBuilder
         {
             ["Server"] = server,
             ["Database"] = database,
-            ["TrustServerCertificate"] = true,
+            ["Encrypt"] = true,
+            ["TrustServerCertificate"] = loopback || trustServerCertificate,
             ["Application Name"] = "AKML SQL Web",
             ["Connect Timeout"] = 15,
         };
@@ -781,7 +910,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     /// protocol prefixes, and any non-loopback host. This is the confused-deputy/SSRF guard for the
     /// localhost-scoped build; a LAN deployment must replace it with a configured allow-list.
     /// </summary>
-    private static bool IsLoopbackServer(string server)
+    internal static bool IsLoopbackServer(string server)
     {
         var s = (server ?? string.Empty).Trim();
         if (s.Length == 0) return false;

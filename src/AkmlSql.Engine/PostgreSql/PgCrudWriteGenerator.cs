@@ -73,8 +73,13 @@ public static class PgCrudWriteGenerator
 
     private static PgCrudStatement BuildInsert(string table, CrudEditDto edit, string[]? returnColumns)
     {
+        // Review WEB-20: only the cells the user set are sent; a row left entirely to the table's defaults has none.
         if (edit.SetCells.Length == 0)
-            throw new InvalidOperationException("INSERT has no column values.");
+        {
+            var defaults = new StringBuilder("INSERT INTO ").Append(table).Append(" DEFAULT VALUES");
+            var returnedDefaults = AppendReturning(defaults, returnColumns);
+            return new PgCrudStatement(defaults.ToString(), new List<PgCrudParameter>(), returnedDefaults);
+        }
 
         var columns = new StringBuilder();
         var values = new StringBuilder();

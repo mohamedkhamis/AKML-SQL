@@ -293,6 +293,8 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ListDatabasesHandler());
         // Spec 041 (R26): the toolbar's database selector (217 → 218), advertised as session.database.v1.
         router.Register(new Handlers.Control.ChangeDatabaseHandler());
+        // The web edition's Disconnect (225 → 226), advertised as session.disconnect.v1.
+        router.Register(new Handlers.Control.SessionDisconnectHandler());
 
         // === WebSocket bridge handshake (spec 025 US5 wire-up; spec 026 M4 closure auth) ===
         // The HandshakeHandler exists from spec 021 T060. The named-pipe transport doesn't need

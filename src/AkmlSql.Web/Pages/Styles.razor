@@ -22,6 +22,14 @@
 
 <PageTitle>Format styles — AKML SQL</PageTitle>
 
+@* Review WEB-12: leaving the page with unsaved changes asks first, as switching styles does — in-app links and browser
+   back/forward through the same discard question, a reload or a closed tab through the browser's own prompt. *@
+@* Only while there is something to lose: a clean page navigates at once, with no round trip through the lock. *@
+@if (_dirty)
+{
+    <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="true" />
+}
+
 <div class="akml-styles" data-testid="styles-page">
     @* Spec 041 (T203, FR-085): the one page header; the storage line stays beside the title. *@
     <div class="akml-page-header akml-styles-header" data-testid="page-header">
@@ -34,7 +42,7 @@
             <button type="button" class="akml-btn" @onclick="NewStyleAsync" data-testid="style-new">New</button>
             <label class="akml-btn" data-testid="style-import-label">
                 Import SQL Prompt style
-                <InputFile OnChange="ImportAsync" accept=".json" class="akml-hidden-file" data-testid="style-import" />
+                <InputFile OnChange="ImportAsync" accept=".json" class="akml-visually-hidden" data-testid="style-import" />
             </label>
         </div>
     </div>
@@ -283,7 +291,6 @@
     .akml-preview-output { flex: 1 1 auto; margin: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); padding: var(--akml-scalar-spacing-s); overflow: auto; font-family: var(--akml-type-editor-family); font-size: 13px; line-height: 1.45; background-color: var(--akml-surface-input); border: 1px solid var(--akml-border-default); tab-size: @_tabSize; white-space: pre; }
     .akml-preview-output .moved { background-color: color-mix(in srgb, var(--akml-accent-primary) 22%, transparent); }
     .akml-preview-status { padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); font-size: 12px; }
-    .akml-hidden-file { display: none; }
     @@media (max-width: 900px) {
         /* minmax(0, 1fr), not 1fr: a 1fr track never shrinks below its widest content (a long
            preview line, a style name), so the one-column layout was wider than the phone. */
@@ -779,6 +786,11 @@
     {
         _status = text;
         _statusIsError = error;
+    }
+
+    private async Task OnBeforeInternalNavigationAsync(LocationChangingContext context)
+    {
+        if (_dirty && !await ConfirmDiscardAsync()) context.PreventNavigation();
     }
 
     // Spec 041 (R59, FR-086): asked in the app; a dialog that cannot be shown answers "no" — never a silent yes.

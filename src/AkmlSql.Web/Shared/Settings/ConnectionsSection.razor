@@ -175,8 +175,27 @@
 
     private async Task DisconnectAsync()
     {
-        await SqlConn.DisconnectAsync();
-        Notifications.Notify("Disconnected from SQL Server.", NotificationKind.Success);
+        // Review WEB-06: Disconnect closes the engine's connection, which rolls back an open transaction (it never commits).
+        // A PostgreSQL session knows it has one, so it asks first; a SQL Server session is told afterwards.
+        if (SqlConn.TransactionState != AkmlSql.Core.TransactionState.None)
+        {
+            var aborted = SqlConn.TransactionState == AkmlSql.Core.TransactionState.Aborted;
+            var ok = await Dialogs.ConfirmAsync(new DialogRequest
+            {
+                Title = aborted ? "Aborted transaction" : "Open transaction",
+                Message = (aborted ? "The session has a transaction that an error aborted. " : "The session has an open transaction. ")
+                          + "Disconnecting rolls it back. Nothing is committed.",
+                ConfirmLabel = "Roll back and disconnect",
+                Destructive = true,
+            });
+            if (!ok) return;
+        }
+
+        var result = await SqlConn.DisconnectSessionAsync(CancellationToken.None);
+        if (result.Warning != null)
+            Notifications.Notify("Disconnected in this browser. " + result.Warning, NotificationKind.Warning);
+        else
+            Notifications.Notify(result.RolledBack ? "Disconnected. The open transaction was rolled back." : "Disconnected.", NotificationKind.Success);
     }
 
     private async Task DeleteAsync(SavedSqlConnection c)

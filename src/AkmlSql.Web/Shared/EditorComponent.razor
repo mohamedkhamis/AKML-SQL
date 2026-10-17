@@ -632,6 +632,23 @@
         await _module.InvokeVoidAsync("setText", HostId, text);
     }
 
+    /// <summary>
+    /// Review WEB-10: replace the document with <paramref name="text"/> only if it still reads <paramref name="expected"/>, as one
+    /// undoable change; false (nothing changed) when it was edited or replaced in the meantime.
+    /// </summary>
+    public async Task<bool> ReplaceTextIfUnchangedAsync(string expected, string text)
+    {
+        if (_module == null)
+        {
+            if (!string.Equals(InitialText, expected, StringComparison.Ordinal)) return false;
+            InitialText = text;
+            return true;
+        }
+        if (!await _module.InvokeAsync<bool>("replaceTextIfUnchanged", HostId, expected, text)) return false;
+        _appliedInitialText = text;
+        return true;
+    }
+
     public async Task SetSelectionAsync(int anchor, int head)
     {
         if (_module == null) return;

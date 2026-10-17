@@ -59,6 +59,13 @@ public sealed class SavedSqlConnection
 
     public DateTimeOffset? LastConnectedAt { get; set; }
 
+    /// <summary>
+    /// Review WEB-02 (SQL Server): skip validating a remote server's certificate for THIS connection — the user's explicit
+    /// choice for a self-signed server they trust. Missing on older records = validate. A server on the engine's own
+    /// machine is never validated, whatever this says.
+    /// </summary>
+    public bool TrustServerCertificate { get; set; }
+
     // ── Spec 042 (PostgreSQL support, data-model §2) ───────────────────────────────────────────────────────
     // IndexedDB values are schemaless JSON: a record saved before the feature has none of these, and they read
     // back as defaults - a SQL Server connection, exactly as before. No password here either: even with

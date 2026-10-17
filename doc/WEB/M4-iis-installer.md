@@ -107,7 +107,7 @@ appcmd.exe set config "Default Web Site/akmlsql" -section:staticContent ^
 
 URL after install: `http://localhost/akmlsql/`
 
-If the user chose LAN mode, the URL becomes `http://<machine-name>/akmlsql/` and the firewall rule for port 80 is verified (it's typically open by default for IIS).
+If the user chose LAN mode, other computers use `https://<machine-name>/` (the secure site port, default 443, bound with the engine's certificate and opened in the firewall); `http://localhost/` stays for the engine's own computer. A page that handles pairing tokens and API keys must itself arrive over TLS — Web Crypto exists only in a secure context, and over plain HTTP anyone on the path could change the page.
 
 ### 4.4 Engine WebSocket configuration
 

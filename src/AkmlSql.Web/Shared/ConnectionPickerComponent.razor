@@ -18,6 +18,7 @@
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IDialogService Dialogs
 @inject INotificationService Notifications
+@inject IServiceProvider ServiceProvider
 
 <div class="akml-connections">
     <div class="akml-connections-header">
@@ -83,6 +84,10 @@
                 Use the <b>Bridge port</b> from <code>%ProgramData%\AKML SQL Web\INSTALL-SUMMARY.txt</code> on the engine
                 computer. The default is @EngineEndpoint.DefaultPort, but the installer can choose another.
             </p>
+            @if (NeedsPin && !_secureStorage)
+            {
+                <SecureContextNotice What="the pairing token" />
+            }
             @if (NeedsPin)
             {
                 <label class="akml-field"><span class="akml-field-label">Pairing PIN</span>
@@ -236,7 +241,20 @@
         || (EngineEndpoint.TryParseAddress(_form.Host, _form.Port, out var host, out _)
             && !EngineEndpoint.IsLoopbackHost(host));
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    // Review WEB-03: whether a pairing token can be stored here (a secure context). Assumed until the browser says otherwise.
+    private bool _secureStorage = true;
+
+    internal const string InsecurePairingMessage =
+        "This page was opened over plain HTTP from another computer, so the pairing token could not be stored. " +
+        "Open the site's HTTPS address, then pair again.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _secureStorage = ServiceProvider.GetService(typeof(IWebCryptoWrapper)) is not IWebCryptoWrapper crypto || await crypto.IsSecureStorageAvailableAsync(); }
+        catch (JSException) { _secureStorage = false; }
+        catch (JSDisconnectedException) { }
+        await ReloadAsync();
+    }
 
     private async Task ReloadAsync()
     {
@@ -268,6 +286,13 @@
 
         var isLocalhost = EngineEndpoint.IsLoopbackHost(host);
         var sendPin = !isLocalhost || _pinRequested;
+        // Review WEB-03: a PIN pairing returns a token that must be stored; without a secure context it cannot be, and the
+        // engine has already spent the PIN. Refuse before the handshake.
+        if (sendPin && !_secureStorage)
+        {
+            _lastError = InsecurePairingMessage;
+            return;
+        }
         if (sendPin && string.IsNullOrWhiteSpace(_form.PairingPin))
         {
             _lastError = isLocalhost ? "Enter the engine's pairing PIN." : "An engine on another computer needs its pairing PIN.";
@@ -422,6 +447,13 @@
     /// <summary>Spec 041 (FR-057): pair again with a new PIN; the new token replaces the stored one.</summary>
     private async Task RepairAsync(EngineConnection c)
     {
+        // Review WEB-03: the new token could not be stored; ask for no PIN the engine would spend for nothing.
+        if (!_secureStorage)
+        {
+            _lastError = InsecurePairingMessage;
+            StateHasChanged();
+            return;
+        }
         var pin = await Dialogs.PromptAsync(new PromptRequest
         {
             Title = "Re-pair engine",

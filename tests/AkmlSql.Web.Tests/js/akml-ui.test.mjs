@@ -180,6 +180,43 @@ test('trapTabStripKeys tolerates a missing element', () => {
     assert.doesNotThrow(() => ui.trapTabStripKeys(null));
 });
 
+// ── trapListKeys (review WEB-13: History and Snippets lists) ──────────────────────────────────
+function listElement() {
+    const listeners = [];
+    const el = {
+        dataset: {},
+        addEventListener(type, fn) { assert.equal(type, 'keydown'); listeners.push(fn); },
+        fire(key, target = el) {
+            const e = { key, target, prevented: false, preventDefault() { this.prevented = true; } };
+            listeners.forEach(fn => fn(e));
+            return e.prevented;
+        },
+        count: () => listeners.length,
+    };
+    return el;
+}
+
+test('trapListKeys cancels the list keys, Space only on the list itself, and never Tab', () => {
+    const el = listElement();
+    ui.trapListKeys(el);
+    for (const key of ['ArrowUp', 'ArrowDown', 'Home', 'End']) {
+        assert.equal(el.fire(key), true, `${key} is owned by the list`);
+    }
+    assert.equal(el.fire(' '), true, 'Space selects in a focused listbox');
+    assert.equal(el.fire(' ', {}), false, 'Space on a button or checkbox inside keeps its default');
+    for (const key of ['Tab', 'Enter', 'Escape', 'a']) {
+        assert.equal(el.fire(key), false, `${key} keeps its default`);
+    }
+});
+
+test('trapListKeys is idempotent per element and tolerates a missing one', () => {
+    const el = listElement();
+    ui.trapListKeys(el);
+    ui.trapListKeys(el);
+    assert.equal(el.count(), 1);
+    assert.doesNotThrow(() => ui.trapListKeys(null));
+});
+
 // ── clampToViewport (context menus) ───────────────────────────────────────────────────────────
 test('clampToViewport keeps a menu inside the window, flipping at the right and bottom edges', () => {
     assert.deepEqual(ui.clampToViewport(10, 20, 200, 100, 1000, 800), { left: 10, top: 20 });

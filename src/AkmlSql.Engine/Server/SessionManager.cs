@@ -127,6 +127,17 @@ public class SessionManager
         }
     }
 
+    /// <summary>
+    /// The session no longer has a database connection: requests that need one answer "no connection" until the next
+    /// <c>ConnectionChanged</c>. Its document is kept (completion still works offline).
+    /// </summary>
+    public void Disconnect(string sessionId)
+    {
+        if (!_sessions.TryGetValue(sessionId, out var session)) return;
+        session.IsConnected = false;
+        session.ConnectionString = string.Empty;
+    }
+
     public void RemoveSession(string sessionId)
     {
         _sessions.TryRemove(sessionId, out _);

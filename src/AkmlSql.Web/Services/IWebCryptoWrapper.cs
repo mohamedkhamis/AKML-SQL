@@ -37,6 +37,12 @@ public interface IWebCryptoWrapper
 
     /// <summary>SHA-256 hex of a UTF-8 string. Used for TLS-fingerprint pinning.</summary>
     Task<string> Sha256HexAsync(string text);
+
+    /// <summary>
+    /// Review WEB-03: whether secrets can be wrapped and stored at all — Web Crypto exists only in a secure context (HTTPS,
+    /// or localhost). Asked before a secret is requested, so a pairing PIN is not spent on a token that cannot be kept.
+    /// </summary>
+    Task<bool> IsSecureStorageAvailableAsync() => Task.FromResult(true);
 }
 
 /// <summary>
@@ -87,6 +93,12 @@ internal sealed class JsWebCryptoWrapper : IWebCryptoWrapper
     {
         var mod = await _moduleLoader.Value.ConfigureAwait(false);
         return await mod.InvokeAsync<string>("sha256Hex", text).ConfigureAwait(false);
+    }
+
+    public async Task<bool> IsSecureStorageAvailableAsync()
+    {
+        var mod = await _moduleLoader.Value.ConfigureAwait(false);
+        return await mod.InvokeAsync<bool>("isSecureStorageAvailable").ConfigureAwait(false);
     }
 }
 

@@ -366,5 +366,13 @@ namespace AkmlSql.Core.Ipc
         /// <summary>Web -> Engine: remove literals from PostgreSQL text before it is sent to a cloud AI provider.</summary>
         public const int RedactRequest = 223;
         public const int RedactResponse = 224;
+
+        /// <summary>
+        /// Web -> Engine: end the session's database connection — roll back any open transaction, close the physical
+        /// connection and forget the session's connection — and reply when that is done. Sent only when the engine
+        /// advertises <c>session.disconnect.v1</c>.
+        /// </summary>
+        public const int SessionDisconnect = 225;
+        public const int SessionDisconnectResult = 226;
     }
 }

@@ -71,6 +71,18 @@ namespace AkmlSql.Engine.Execution
         }
 
         /// <summary>
+        /// The web edition's Disconnect: remove the session's connection and close it — rolling back an open transaction —
+        /// before returning. False when the session had no connection or nothing was rolled back. A command still running
+        /// after <paramref name="wait"/> surfaces as <see cref="TimeoutException"/>; the entry is removed regardless, so the
+        /// next run opens a fresh connection, and the old one closes when its command ends.
+        /// </summary>
+        public async Task<bool> CloseAsync(string sessionId, TimeSpan wait, System.Threading.CancellationToken ct)
+        {
+            if (!_connections.TryRemove(sessionId, out var conn)) return false;
+            return await conn.CloseAsync(wait, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Synchronous fire-and-forget dispose for the ConnectionChanged handler (which is synchronous).
         /// Removes the entry immediately so a fresh GetOrCreate makes a new connection; the actual
         /// SqlConnection teardown runs on a background task.

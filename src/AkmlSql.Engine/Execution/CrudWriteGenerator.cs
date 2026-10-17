@@ -127,8 +127,13 @@ namespace AkmlSql.Engine.Execution
 
         private static void BuildInsert(SqlCommand cmd, string table, CrudEditDto edit)
         {
+            // Review WEB-20: the grid sends only the cells the user set, so a row left entirely to the table's defaults (and
+            // identity) has none — every column takes its default.
             if (edit.SetCells.Length == 0)
-                throw new InvalidOperationException("INSERT has no column values.");
+            {
+                cmd.CommandText = "INSERT INTO " + table + " DEFAULT VALUES; SELECT SCOPE_IDENTITY();";
+                return;
+            }
 
             var cols = new StringBuilder();
             var vals = new StringBuilder();

@@ -71,6 +71,12 @@ namespace AkmlSql.Engine
         public const string SessionDatabaseV1 = "session.database.v1";
 
         /// <summary>
+        /// <c>SessionDisconnect</c> (225 → 226): the web edition's Disconnect rolls back the session's open transaction and
+        /// closes its connection before it reports success.
+        /// </summary>
+        public const string SessionDisconnectV1 = "session.disconnect.v1";
+
+        /// <summary>
         /// Spec 042 (contracts/ipc.md): the engine can connect to, run scripts against, browse and
         /// provide language services for PostgreSQL servers. Advertised only when
         /// <c>config.json</c> <c>postgreSql.enabled</c> is true (the default), so an engine built
@@ -99,6 +105,7 @@ namespace AkmlSql.Engine
             StylesSqlPromptV1,
             ExecuteV2,
             SessionDatabaseV1,
+            SessionDisconnectV1,
         };
 
         /// <summary>

@@ -90,11 +90,12 @@ This is the operator-facing flow for the M3 PRD §1 promise.
    *Verification*: `netstat -an | findstr :47291` on Machine A shows a `TCP 0.0.0.0:47291 ... LISTENING` row. If the engine is bound but Machine B can't connect, the firewall rule is the most likely cause.
 
 3. **On Machine B, open the web edition** at the IIS URL from Machine A's install summary —
-   `http://<machine-a-hostname-or-ip>/` (the IIS site serves the bundle over HTTP on the IIS port,
-   default 80). **Not** `:47291` — that's the WebSocket engine bridge and does not serve the HTML
-   bundle. The bundle's JavaScript later opens the TLS bridge socket `wss://<machine-a>:47291`; for
-   that the browser must trust the self-signed cert — accept it for trusted-LAN deployments, or
-   pre-install `%ProgramData%\AKML SQL Web\certs\bridge.cer` into Trusted Root on Machine B (per the
+   `https://<machine-a-hostname-or-ip>/` (the IIS site's secure port, default 443, with the same
+   certificate as the bridge). **Not** `:47291` — that's the WebSocket engine bridge and does not serve
+   the HTML bundle. Over plain `http://` from another computer the browser has no Web Crypto, so the
+   pairing token and API keys cannot be stored (the page says so). The bundle's JavaScript later opens
+   the TLS bridge socket `wss://<machine-a>:47291`; for both the browser must trust the self-signed
+   cert — pre-install `%ProgramData%\AKML SQL Web\certs\bridge.cer` into Trusted Root on Machine B (per the
    install summary's instructions).
 
    *Verification*: The editor page loads; the connection picker is empty (no connections yet); the bridge state pill shows `Disconnected`.

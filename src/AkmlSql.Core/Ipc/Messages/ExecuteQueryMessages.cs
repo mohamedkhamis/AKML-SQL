@@ -100,6 +100,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>True when the IsKey column cross-checks to the schema-cache declared PRIMARY KEY.</summary>
         [Key(11)]
         public bool IsTruePrimaryKey { get; set; }
+
+        /// <summary>
+        /// Review WEB-20: the column has a default the server fills in when an INSERT leaves it out, so a new row need not
+        /// supply it (and an unset cell must be omitted, not sent as NULL, or the default never applies). False when unknown —
+        /// an older engine, or a SQL Server schema whose columns have not loaded yet — and the grid then asks for a value.
+        /// </summary>
+        [Key(12)]
+        public bool HasDefault { get; set; }
     }
 
     /// <summary>One result set: column metadata + SAFE text rows + CRUD eligibility + base-table identity.</summary>
@@ -233,6 +241,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(14)]
         public bool SchemaChanged { get; set; }
+
+        /// <summary>
+        /// The engine's stamp of the session's connection after the run (server, login, database, kind and engine process);
+        /// the grid sends it back with its edits (<see cref="ApplyChangesRequest.ConnectionStamp"/>) so they are never written
+        /// through a different connection. Opaque to the browser; null from older engines.
+        /// </summary>
+        [Key(15)]
+        public string? ConnectionStamp { get; set; }
     }
 
     /// <summary>Spec 041 (R20) — one server or engine message of an execute, in stream order.</summary>
@@ -427,6 +443,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(5)]
         public string[]? ReturnColumns { get; set; }
+
+        /// <summary>
+        /// The <see cref="ExecuteQueryResult.ConnectionStamp"/> of the run the edited rows came from. The engine refuses the
+        /// edits when the session's connection has changed since. Null (an older web bundle, or an older engine's result) is
+        /// not checked.
+        /// </summary>
+        [Key(6)]
+        public string? ConnectionStamp { get; set; }
     }
 
     /// <summary>Per-edit result so the grid can flag the exact row that failed.</summary>

@@ -78,19 +78,29 @@ Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Co
 ; host, where WebAdministration's IIS config COM classes are unregistered -- provisioning then dies
 ; with 0x80040154 REGDB_E_CLASSNOTREG on EVERY install, even with IIS fully present. The script now
 ; also self-relaunches 64-bit, but launching the native host directly keeps the log single-run.
-Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode}"; \
-    StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
-    Components: web\iis; \
-    Flags: runhidden
-
 ; FR-004 -- web-tls-setup.ps1 receives the BRIDGE port (the cert is bound to the engine's
-; WebSocket listener, not the IIS site). LAN mode only.
+; WebSocket listener). LAN mode only. Review WEB-03: it runs BEFORE the IIS setup below, which binds
+; the same certificate to the site's HTTPS port -- the page that handles pairing tokens and API keys
+; must itself arrive over TLS (and Web Crypto, which wraps them, exists only in a secure context).
 Filename: "powershell.exe"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
     StatusMsg: "Generating self-signed TLS certificate..."; \
     Check: IsLanExposed; \
     Components: web; \
+    Flags: runhidden
+
+Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode} -HttpsPort {code:GetHttpsPortArg}"; \
+    StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
+    Components: web\iis; \
+    Flags: runhidden
+
+; Review WEB-03: other computers reach the site on its HTTPS port. LAN mode with IIS hosting only.
+Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetHttpsPortArg} -Action Add -RuleName ""AKML SQL Web Site (HTTPS)"""; \
+    StatusMsg: "Adding Windows Firewall rule..."; \
+    Check: IsLanExposed; \
+    Components: web\iis; \
     Flags: runhidden
 
 ; FR-004 -- web-firewall.ps1 receives the BRIDGE port. LAN mode only.
@@ -164,6 +174,9 @@ Filename: "sc.exe"; Parameters: "delete AkmlSqlWebEngine"; Flags: runhidden; Com
 Filename: "powershell.exe"; \
     Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetBridgePort} -Action Remove"; \
     Flags: runhidden; Components: web
+Filename: "powershell.exe"; \
+    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port 0 -Action Remove -RuleName ""AKML SQL Web Site (HTTPS)"""; \
+    Flags: runhidden; Components: web\iis
 
 ; Note: cert + IIS site removal is done in Web_Uninstall (CurUninstallStepChanged / usUninstall)
 ; so we can inspect the install-summary file for the cert thumbprint.
@@ -203,6 +216,7 @@ var
     InstallSummaryPage: TOutputMsgWizardPage;
     WebIisPort: Integer;
     WebBridgePort: Integer;
+    WebHttpsPort: Integer;        { Review WEB-03: the site's HTTPS port in LAN mode (default 443) }
     PairingPin: String;
     TlsThumbprint: String;
     WebSilentActive: Boolean;     { US4: a /WEB_HOST / /WEB_EXPOSURE / /WEB_PORT / /BRIDGE_PORT flag was passed }
@@ -259,11 +273,16 @@ begin
         'Choose the ports the web edition uses.',
         'The site port is the address you open in the browser (80 means http://localhost/). ' +
         'The engine port is where the browser talks to the AKML SQL engine; other computers pairing ' +
-        'with this one need it. The two must be different. Keep the defaults unless something else uses them.');
+        'with this one need it. In LAN mode other computers open the site over HTTPS on the secure site port. ' +
+        'The ports must all differ. Keep the defaults unless something else uses them.');
     WebPortsPage.Add('Site port (IIS) -- 80, or 1024 to 65535:', False);
     WebPortsPage.Add('Engine port -- 1024 to 65535:', False);
+    { Review WEB-03: in LAN mode other computers open the site over HTTPS on this port (with the
+      engine's certificate); http:// stays for this computer. Ignored for a localhost install. }
+    WebPortsPage.Add('Secure site port for other computers (HTTPS, LAN only) -- 443, or 1024 to 65535:', False);
     WebPortsPage.Values[0] := '80';
     WebPortsPage.Values[1] := '47291';
+    WebPortsPage.Values[2] := '443';
 
     { Install-summary page (shown on the post-install success path). Web_PostInstall always
       replaces this placeholder with the real summary text -- including on a partial-failure
@@ -289,12 +308,16 @@ begin
     begin
         WebIisPort := 80;
         WebBridgePort := 47291;
+        WebHttpsPort := 443;
         if WebRegQueryDWord('IisPort', prevPort) and (prevPort > 0) then
             WebIisPort := prevPort;
         if WebRegQueryDWord('BridgePort', prevPort) and (prevPort > 0) then
             WebBridgePort := prevPort;
+        if WebRegQueryDWord('HttpsPort', prevPort) and (prevPort > 0) then
+            WebHttpsPort := prevPort;
         WebPortsPage.Values[0] := IntToStr(WebIisPort);
         WebPortsPage.Values[1] := IntToStr(WebBridgePort);
+        WebPortsPage.Values[2] := IntToStr(WebHttpsPort);
         if WebRegQueryString('IisMode', prevMode) and (prevMode = 'Lan') then
             WebNetworkPage.SelectedValueIndex := 1;
     end;
@@ -329,16 +352,18 @@ end;
   plugin-only installs are unaffected. Called from AkmlSqlSetup.iss InitializeSetup. }
 function Web_ValidateSilentFlags(): Boolean;
 var
-    host, exposure, portStr, bridgeStr: String;
-    iisPort, bridgePort: Integer;
+    host, exposure, portStr, bridgeStr, httpsStr: String;
+    iisPort, bridgePort, httpsPort: Integer;
 begin
     Result := True;
     host := Uppercase(Trim(ExpandConstant('{param:WEB_HOST|}')));
     exposure := Uppercase(Trim(ExpandConstant('{param:WEB_EXPOSURE|}')));
     portStr := Trim(ExpandConstant('{param:WEB_PORT|}'));
     bridgeStr := Trim(ExpandConstant('{param:BRIDGE_PORT|}'));
+    httpsStr := Trim(ExpandConstant('{param:WEB_HTTPS_PORT|}'));
+    WebHttpsPort := 443;
 
-    if (host = '') and (exposure = '') and (portStr = '') and (bridgeStr = '') then
+    if (host = '') and (exposure = '') and (portStr = '') and (bridgeStr = '') and (httpsStr = '') then
         Exit;   { no web flags -> nothing to do }
 
     WebSilentActive := True;
@@ -354,6 +379,7 @@ begin
 
     if portStr = '' then iisPort := 80 else iisPort := StrToIntDef(portStr, -1);
     if bridgeStr = '' then bridgePort := 47291 else bridgePort := StrToIntDef(bridgeStr, -1);
+    if httpsStr = '' then httpsPort := 443 else httpsPort := StrToIntDef(httpsStr, -1);
 
     if (iisPort <> 80) and ((iisPort < 1024) or (iisPort > 65535)) then
     begin
@@ -371,8 +397,20 @@ begin
         Log('ERROR: IIS port and Bridge port must differ.');
         Result := False; Exit;
     end;
+    { Review WEB-03: the site's HTTPS port (LAN mode). }
+    if (httpsPort <> 443) and ((httpsPort < 1024) or (httpsPort > 65535)) then
+    begin
+        Log('ERROR: /WEB_HTTPS_PORT must be 443 or in the range 1024..65535.');
+        Result := False; Exit;
+    end;
+    if (httpsPort = iisPort) or (httpsPort = bridgePort) then
+    begin
+        Log('ERROR: /WEB_HTTPS_PORT must differ from the IIS port and the bridge port.');
+        Result := False; Exit;
+    end;
     WebIisPort := iisPort;
     WebBridgePort := bridgePort;
+    WebHttpsPort := httpsPort;
 
     { FR-019: silent + Host on IIS + IIS missing -> abort (no dialog in silent mode). }
     if WizardSilent and (not WebSilentDontHost) and (not IsIisInstalled()) then
@@ -402,6 +440,17 @@ begin
         Result := 'Lan'
     else
         Result := 'Localhost';
+end;
+
+{ Review WEB-03: the HTTPS port handed to web-iis-setup.ps1 -- 0 (no HTTPS binding) for a
+  localhost install, where the browser runs on the site's own computer and http://localhost is
+  already a secure context. }
+function GetHttpsPortArg(Param: String): String;
+begin
+    if IsLanExposed() then
+        Result := IntToStr(WebHttpsPort)
+    else
+        Result := '0';
 end;
 
 { True when the AkmlSqlWebEngine Windows service exists (any state). Locale-safe: sc.exe query
@@ -520,6 +569,24 @@ begin
         end;
         WebBridgePort := portInt;
 
+        { Review WEB-03: the HTTPS port other computers use in LAN mode. }
+        portStr := Trim(WebPortsPage.Values[2]);
+        portInt := StrToIntDef(portStr, -1);
+        if (portInt <> 443) and ((portInt < 1024) or (portInt > 65535)) then
+        begin
+            MsgBox('The secure site port must be 443 or between 1024 and 65535.', mbError, MB_OK);
+            Result := False;
+            Exit;
+        end;
+        if (portInt = WebIisPort) or (portInt = WebBridgePort) then
+        begin
+            MsgBox('The secure site port must differ from the site port and the engine port.', mbError, MB_OK);
+            Result := False;
+            Exit;
+        end;
+        WebHttpsPort := portInt;
+        portInt := WebBridgePort;   { the in-use check below is for the engine port }
+
         { FR-003a: non-blocking warning if the bridge port is already in use. Degrades to
           no-warning when PowerShell / Test-NetConnection is unavailable. Skipped entirely when
           the port is held by our OWN previous install (IsOwnPreviousBridgePort) -- that case is
@@ -571,6 +638,7 @@ var
     bridgeArgs: String;
     bridgeResult: Integer;
     iisPortSuffix: String;
+    httpsPortSuffix: String;
     pollTries: Integer;
     svcTries: Integer;
     aclResult: Integer;
@@ -604,6 +672,7 @@ begin
     if WizardIsComponentSelected('web\iis') then
     begin
         RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'IisPort', WebIisPort);
+        RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'HttpsPort', WebHttpsPort);
         RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'WebRoot', ExpandConstant('{app}\Web'));
         if IsLanExposed() then
             RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', 'Lan')
@@ -696,13 +765,18 @@ begin
         end;
     end;
 
-    { FR-005 (reconciled): the IIS bundle is served over HTTP in both modes (localhost and LAN) --
-      only the engine bridge uses TLS (wss on the bridge port); see spec 026 Out-of-scope #3. The
-      URL line shows the IIS port, omitting ':80'. The separate 'Bridge port' line notes wss/TLS. }
+    { The URL line shows the IIS port, omitting ':80'. The separate 'Bridge port' line notes wss/TLS.
+      Review WEB-03 (replacing spec 026 Out-of-scope #3): in LAN mode other computers use the HTTPS
+      address (omitting ':443'). Over plain HTTP anyone on the path could replace the script that
+      handles the pairing token and API keys, and the browser would refuse to store them anyway. }
     if WebIisPort = 80 then
         iisPortSuffix := ''
     else
         iisPortSuffix := ':' + IntToStr(WebIisPort);
+    if WebHttpsPort = 443 then
+        httpsPortSuffix := ''
+    else
+        httpsPortSuffix := ':' + IntToStr(WebHttpsPort);
 
     except
         { A post-install failure must never leave the wizard summary page empty: record it and
@@ -719,7 +793,8 @@ begin
         summary.Add('');
         if IsLanExposed() then
         begin
-            summary.Add('URL:         http://' + GetComputerNameString() + iisPortSuffix + '/');
+            summary.Add('URL:         https://' + GetComputerNameString() + httpsPortSuffix + '/');
+            summary.Add('             (on this computer also http://localhost' + iisPortSuffix + '/)');
             summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (wss, TLS)');
             if PairingPin <> '' then
                 summary.Add('Pairing PIN: ' + PairingPin)
@@ -727,7 +802,7 @@ begin
                 summary.Add('Pairing PIN: not yet generated -- start the AkmlSqlWebEngine service, then re-read this file.');
             summary.Add('TLS thumb:   ' + TlsThumbprint);
             summary.Add('');
-            summary.Add('To trust the certificate on a different machine:');
+            summary.Add('To trust the certificate (it serves the site and the bridge) on a different machine:');
             summary.Add('  1. Open ' + appdata + '\certs\bridge.cer');
             summary.Add('  2. Install certificate -> Local Machine -> Trusted Root Certification Authorities');
         end
@@ -822,6 +897,7 @@ var
     appdata: String;
     resultCode: Integer;
     bridgePort: Cardinal;
+    httpsPort: Cardinal;
 begin
     appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
 
@@ -835,6 +911,12 @@ begin
       DelTree below so certs\thumbprint.txt still exists as the LAN-install marker. }
     if FileExists(appdata + '\certs\thumbprint.txt') then
         Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(bridgePort),
+             '', SW_HIDE, ewWaitUntilTerminated, resultCode);
+
+    { Review WEB-03: the site's HTTPS binding put the certificate on its port too, and removing the
+      site does not remove that binding. }
+    if FileExists(appdata + '\certs\thumbprint.txt') and WebRegQueryDWord('HttpsPort', httpsPort) and (httpsPort > 0) then
+        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(httpsPort),
              '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
     { Remove the IIS site if installed. sysnative: the 32-bit uninstaller must use the native

@@ -131,6 +131,8 @@ class RpcMessage {
 | Engine→Shell | `ChangeDatabaseResult` | 218 |
 | Shell→Engine | `ExecuteParse` | 219 |
 | Engine→Shell | `ExecuteParseResult` | 220 |
+| Shell→Engine | `SessionDisconnect` | 225 |
+| Engine→Shell | `SessionDisconnectResult` | 226 |
 
 Note: codes 200–203 are part of the spec 021 web-edition bridge. They carry over named-pipe transports unchanged, but their primary purpose is the browser ↔ engine WebSocket bridge introduced in M3.
 
@@ -1020,6 +1022,7 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `ai.text-to-sql.v1` (reserved) | `Capabilities.AiTextToSqlV1` | AI Text-to-SQL via the bridge. AI invocation in the web edition normally goes direct-to-provider (FR-030); this capability covers any engine-hosted helpers a future M6 design adds. |
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
 | `session.database.v1` | `Capabilities.SessionDatabaseV1` | Spec 041 — the database selector: `ListDatabasesRequest.SessionId` (key 1), `ChangeDatabase` (217 → 218) and `ExecuteQueryResult.CurrentDatabase` (key 12). |
+| `session.disconnect.v1` | `Capabilities.SessionDisconnectV1` | `SessionDisconnect` (225 → 226): the web edition's Disconnect rolls back the session's open transaction and closes its connection before it reports success. |
 | `execute.v2` | `Capabilities.ExecuteV2` | Spec 041 — scripts split on GO and keep running after a failing batch; the execute reply carries structured messages, batches, the completion time and the omitted-message count (keys 8–11), sets carry their batch (key 11), and `ExecuteParse` (219 → 220) is understood. |
 
 ### SchemaIdentify (202 / 203) — `contracts/schema-cache-shape.md`
@@ -1085,6 +1088,9 @@ ExecuteQueryResult (type 213; also the payload of 220)
     14 SchemaChanged          bool      dialect.postgresql.v1 — the engine started reloading its catalog after this run (a
                                         statement changed it, and the change is visible: outside a transaction, or the
                                         transaction has ended). A client that shows the schema refetches it when true.
+    15 ConnectionStamp        string?   The session's connection after the run (server, login, database, kind, engine
+                                        process) as an opaque HMAC under a per-process key; sent back with edits
+                                        (ApplyChangesRequest key 6). Null from older engines.
 
 ExecuteResultSet
     0  ColumnNames            string[]
@@ -1163,7 +1169,18 @@ failed edit carries the error and every other edit the note "Rolled back — edi
 Spec 042 adds, append-only, for a PostgreSQL session (SQL Server ignores them): `ApplyChangesRequest.ReturnColumns` (key 5, the set's
 base columns in result order) and `CrudCellDto.TypeName` (key 6, the column's type as the server prints it, which the write casts
 to), and `CrudEditResult.Row` (key 5, the written row as the server stored it, in `ReturnColumns` order, from `RETURNING`; null for
-a delete). On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
+a delete).
+
+`ApplyChangesRequest.ConnectionStamp` (key 6) is the `ExecuteQueryResult.ConnectionStamp` of the run the rows came from. When it is
+set and is not the stamp of the session's current connection — another server, login, database or kind, or another engine process —
+the engine refuses the whole batch (`Status` Error, nothing written), so rows read on one connection are never written through the
+next one with the same table and key names. An empty stamp (an older web bundle) is not checked.
+
+`ColumnProvenanceDto.HasDefault` (key 12) says the column has a default. The grid leaves an unset cell of a new row out of the INSERT
+(an explicit NULL is still sent), so the default applies; a new row with no cell set is written as `INSERT ... DEFAULT VALUES`. False
+when unknown (an older engine, or a SQL Server schema whose columns have not loaded), and the grid then asks for a value.
+
+On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
 transaction, which is joined and left open; an aborted transaction is refused with a message to roll back. Every edit must touch
 exactly one row.
 
@@ -1193,6 +1210,16 @@ command, each batch once (results ignored, no row counts), then `SET PARSEONLY O
 connection is closed so the next execute reopens it and reports `ConnectionWasReset`. `Status` Ok means the
 server found no syntax error ("Commands completed successfully."); errors carry batch-relative lines like an
 execute's. Sent only when the engine advertises `execute.v2`: an engine that does not know 219 gives no reply.
+
+### `SessionDisconnect` (225) → `SessionDisconnectResult` (226) — session.disconnect.v1
+
+`SessionDisconnectRequest { 0 SessionId }` → `SessionDisconnectResponse { 0 Ok, 1 ErrorMessage, 2 RolledBack }`. The session forgets
+its connection first (requests answer "no connection" until the next `ConnectionChanged`; the document is kept), then the persistent
+connection is closed: queued executes are cancelled, a running command may finish within 15 s, an open transaction is rolled back —
+never committed — and the physical connection is disposed. `RolledBack` says a transaction was open. `Ok = false` means a command was
+still running after the wait; the connection closes, and its transaction rolls back, when that command ends. Every close of a
+session connection (credential change, idle eviction, disconnect) rolls back an open transaction explicitly: a pooled SqlConnection
+closed inside a script-begun transaction would otherwise keep it, and its locks, until the pool reuses the connection.
 
 ## PostgreSQL Messages (221–224) — spec 042, `dialect.postgresql.v1`
 

@@ -41,9 +41,13 @@ internal sealed class FakeEngineBridge : IEngineBridge
         return Task.FromResult(Answer(bearerToken, pairingPin));
     }
 
+    /// <summary>The engine's answer to a SQL Server connection test, which every SQL Server connect now starts with.</summary>
+    public TestSqlConnectionResponse TestSqlReply { get; set; } = new() { Ok = true };
+
     public Task<TResponse> SendAsync<TRequest, TResponse>(int requestMessageType, TRequest request, CancellationToken ct)
         where TRequest : class
-        where TResponse : class => Task.FromResult<TResponse>(default!);
+        where TResponse : class =>
+        Task.FromResult(requestMessageType == AkmlSql.Core.Ipc.MessageTypes.TestSqlConnection ? (TResponse)(object)TestSqlReply : default!);
 
     /// <summary>Spec 041 (T184) — every notification sent, in order.</summary>
     public List<(int Type, object Payload)> Notifications { get; } = new();

@@ -9,61 +9,105 @@ const DB_NAME = 'AkmlSqlWeb';
 const STORE_KEY_MATERIAL = 'keyMaterial';
 const PRIMARY_WRAP_KEY = 'primaryWrap';
 
-// We piggy-back on the akml-indexeddb.js shim's database connection -- the keyMaterial
-// store is created in its upgrade transaction (we add it to the STORES array there).
+// The keyMaterial store is created in akml-indexeddb.js's upgrade transaction (it is in its STORES array). This module
+// opens its own short-lived connections: each is closed as soon as its transaction completes, and closes itself if another
+// tab asks for a version change meanwhile — a connection held open here would block every later upgrade (review WEB-15).
 function openDbDirect() {
     return new Promise((resolve, reject) => {
-        const req = indexedDB.open(DB_NAME);   // version 1 already created by akml-indexeddb.js
-        req.onsuccess = () => resolve(req.result);
+        const req = indexedDB.open(DB_NAME);   // the version the shim created; never an upgrade from here
+        req.onsuccess = () => {
+            const db = req.result;
+            db.onversionchange = () => db.close();
+            resolve(db);
+        };
         req.onerror = () => reject(req.error);
     });
 }
 
-async function getStoredWrapKey() {
+/** Runs `body(store)` in one transaction on the keyMaterial store and resolves with its result once the transaction has
+ * COMPLETED (so a write is durable before anyone is told), then closes the connection. */
+async function withKeyStore(mode, body) {
     const db = await openDbDirect();
-    return await new Promise((resolve, reject) => {
+    try {
         if (!db.objectStoreNames.contains(STORE_KEY_MATERIAL)) {
-            resolve(null);
-            return;
+            if (mode === 'readonly') return null;
+            throw new Error('The browser database has no keyMaterial store yet; reload the page and try again.');
         }
-        const tx = db.transaction(STORE_KEY_MATERIAL, 'readonly');
-        const req = tx.objectStore(STORE_KEY_MATERIAL).get(PRIMARY_WRAP_KEY);
-        req.onsuccess = () => resolve(req.result ?? null);
-        req.onerror = () => reject(req.error);
-    });
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(STORE_KEY_MATERIAL, mode);
+            let result = null;
+            body(tx.objectStore(STORE_KEY_MATERIAL), value => { result = value; });
+            tx.oncomplete = () => resolve(result);
+            tx.onerror = () => reject(tx.error);
+            tx.onabort = () => reject(tx.error ?? new Error('The key transaction was aborted.'));
+        });
+    } finally {
+        db.close();
+    }
 }
 
-async function storeWrapKey(cryptoKey) {
-    const db = await openDbDirect();
-    return await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_KEY_MATERIAL, 'readwrite');
-        const req = tx.objectStore(STORE_KEY_MATERIAL).put(cryptoKey, PRIMARY_WRAP_KEY);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
+function getStoredWrapKey() {
+    return withKeyStore('readonly', (store, done) => {
+        const req = store.get(PRIMARY_WRAP_KEY);
+        req.onsuccess = () => done(req.result ?? null);
     });
 }
-
-let _wrapKeyCache = null;
 
 /**
- * Lazy-create or load the per-profile wrapping key. extractable=false guarantees the
- * key material is never observable from JS.
+ * Stores `candidate` as the wrapping key unless one is already there, in ONE readwrite transaction — IndexedDB runs
+ * readwrite transactions on a store one at a time, so of several tabs (or calls) racing to create the key exactly one
+ * writes it and every other reads that one back. Resolves with the key that won. An established key is never replaced.
  */
-async function getOrCreateWrapKey() {
-    if (_wrapKeyCache) return _wrapKeyCache;
-    const existing = await getStoredWrapKey();
-    if (existing) {
-        _wrapKeyCache = existing;
-        return existing;
+function storeWrapKeyIfAbsent(candidate) {
+    return withKeyStore('readwrite', (store, done) => {
+        const req = store.get(PRIMARY_WRAP_KEY);
+        req.onsuccess = () => {
+            if (req.result) { done(req.result); return; }
+            store.add(candidate, PRIMARY_WRAP_KEY).onsuccess = () => done(candidate);
+        };
+    });
+}
+
+/** Review WEB-03: Web Crypto exists only in a secure context (HTTPS, or the page's own computer). Without it no secret
+ * can be stored, and nothing is ever stored in plain text instead. */
+export function isSecureStorageAvailable() {
+    return !!(globalThis.isSecureContext !== false && globalThis.crypto && globalThis.crypto.subtle);
+}
+
+export const INSECURE_CONTEXT_MESSAGE =
+    'Secrets can only be stored when AKML SQL is opened over HTTPS (or on this computer as localhost). ' +
+    'Open the HTTPS address of this site, then pair or save the key again.';
+
+let _wrapKeyPromise = null;
+
+/**
+ * Load the per-profile wrapping key, or create it. extractable=false guarantees the key material is never observable
+ * from JS. Concurrent first calls share one promise (review WEB-04: twelve concurrent wraps used to generate twelve keys
+ * and store whichever finished last, so every other record became undecryptable); concurrent tabs settle on the one key
+ * the store kept.
+ */
+function getOrCreateWrapKey() {
+    if (!_wrapKeyPromise) {
+        _wrapKeyPromise = loadOrCreateWrapKey().catch(err => { _wrapKeyPromise = null; throw err; });
     }
-    const generated = await crypto.subtle.generateKey(
+    return _wrapKeyPromise;
+}
+
+async function loadOrCreateWrapKey() {
+    if (!isSecureStorageAvailable()) throw new Error(INSECURE_CONTEXT_MESSAGE);
+    const existing = await getStoredWrapKey();
+    if (existing) return existing;
+    const candidate = await crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
         /* extractable */ false,
         ['encrypt', 'decrypt'],
     );
-    await storeWrapKey(generated);
-    _wrapKeyCache = generated;
-    return generated;
+    return await storeWrapKeyIfAbsent(candidate);
+}
+
+/** Test seam: forget the cached key, as a fresh page load would. */
+export function _resetForTests() {
+    _wrapKeyPromise = null;
 }
 
 /**

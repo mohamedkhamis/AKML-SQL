@@ -403,9 +403,15 @@ namespace AkmlSql.Engine.Execution
                 if (obj == null || obj.Columns.Count == 0) return;
 
                 var pkNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var defaulted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var c in obj.Columns)
                 {
                     if (c.IsPrimaryKey) pkNames.Add(c.ColumnName);
+                    if (c.DefaultValue != null) defaulted.Add(c.ColumnName);   // review WEB-20: the server fills it in
+                }
+                foreach (var p in prov)
+                {
+                    if (!string.IsNullOrEmpty(p.BaseColumnName) && defaulted.Contains(p.BaseColumnName!)) p.HasDefault = true;
                 }
                 if (pkNames.Count == 0) return;
 

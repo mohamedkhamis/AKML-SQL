@@ -974,6 +974,22 @@ export function setText(hostElementId, newText) {
 }
 
 /**
+ * Review WEB-10 — replace the whole document only if it is still exactly `expected` (what a Format sent), as one undoable
+ * change. The check and the change happen in the same turn, so no keystroke can land between them. Returns false, changing
+ * nothing, when the document moved on.
+ */
+export function replaceIfUnchanged(view, expected, newText) {
+    if (!view || view.state.doc.toString() !== (expected ?? '')) return false;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: newText ?? '' } });
+    return true;
+}
+
+export function replaceTextIfUnchanged(hostElementId, expected, newText) {
+    const inst = _instances.get(hostElementId);
+    return !!inst && replaceIfUnchanged(inst.view, expected, newText);
+}
+
+/**
  * Spec 025 (M3 bridge closure) US4 — insert text at the current caret. Used by
  * SchemaTreeComponent's click-to-insert: clicking [dbo].[Customer] drops that
  * literal at the caret as-typed; CodeMirror's standard Ctrl+Z undoes it.

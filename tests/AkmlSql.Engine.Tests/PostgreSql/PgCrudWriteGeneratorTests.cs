@@ -191,10 +191,20 @@ public class PgCrudWriteGeneratorTests
     }
 
     [Fact]
-    public void An_update_with_nothing_to_set_and_an_insert_with_no_values_are_refused()
+    public void An_update_with_nothing_to_set_is_refused()
     {
         Assert.Throws<InvalidOperationException>(() => PgCrudWriteGenerator.Build(Request(), Update(Array.Empty<CrudCellDto>(), new[] { Cell("k", "1", "integer") })));
-        Assert.Throws<InvalidOperationException>(() => PgCrudWriteGenerator.Build(Request(), new CrudEditDto { Op = CrudOp.Insert }));
+    }
+
+    /// <summary>Review WEB-20: the grid sends only the cells the user set, so a new row left to the table's defaults has none.</summary>
+    [Fact]
+    public void An_insert_with_no_values_takes_every_default_and_returns_the_row()
+    {
+        var statement = PgCrudWriteGenerator.Build(Request(returning: new[] { "id", "created" }), new CrudEditDto { Op = CrudOp.Insert });
+
+        Assert.StartsWith("INSERT INTO public.orders DEFAULT VALUES RETURNING", statement.Sql);
+        Assert.Empty(statement.Parameters);
+        Assert.Equal(new[] { "id", "created" }, statement.ReturnedColumns);
     }
 
     [Fact]

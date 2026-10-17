@@ -70,7 +70,11 @@
             }
             @if (!string.IsNullOrEmpty(_lastError))
             {
-                <p class="akml-chat-error">@_lastError</p>
+                <p class="akml-chat-error" role="alert" data-testid="ai-chat-error">@_lastError</p>
+                @if (_retryMessage != null && !_busy)
+                {
+                    <button type="button" class="akml-btn" data-testid="ai-chat-retry" @onclick="RetryAsync">Retry</button>
+                }
             }
         </div>
 
@@ -211,6 +215,9 @@
     private bool _busy;
     private string _pending = string.Empty;
     private string? _lastError;
+
+    // Review WEB-18: the message of a turn whose answer failed or broke off; Retry sends it again in place of that turn.
+    private string? _retryMessage;
     private ChatConversation _conversation = NewConversation();
     private CancellationTokenSource? _cts;
     private IJSObjectReference? _downloadModule;
@@ -275,6 +282,7 @@
 
         var userMessage = _pending.Trim();
         _lastError = null;
+        _retryMessage = null;
 
         // FR-004 / FR-012: chat honours the fully-local guard too -- refuse a cloud provider
         // under Fully local before anything is sent.
@@ -337,10 +345,18 @@
             _lastError = ex.Message;
             Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", ex.Message);
         }
+        catch (AiStreamException ex)
+        {
+            // Review WEB-18: the provider accepted the request, then the answer broke off. What arrived stays, marked incomplete.
+            _lastError = ex.Message + (sb.Length > 0 ? " The answer above is incomplete." : string.Empty);
+            _retryMessage = userMessage;
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Stream failed: {ex.Failure} {ex.Code}");
+        }
         catch (Exception ex)
         {
             _lastError = "Chat call failed: " + ex.Message;
-            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", _lastError);
+            _retryMessage = userMessage;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", $"Chat call failed: {ex.GetType().Name}");
         }
         finally
         {
@@ -365,6 +381,20 @@
     /// <summary>Every existing NON-EMPTY turn (oldest-first) to send as conversation context.
     /// Skipping empty turns is defence-in-depth: a stray empty assistant turn must never reach
     /// the provider wire (Anthropic 400s on empty content).</summary>
+    /// <summary>Review WEB-18: send the failed turn's message again, in place of the failed (or partial) turn.</summary>
+    private async Task RetryAsync()
+    {
+        if (_busy || _retryMessage == null) return;
+        var message = _retryMessage;
+        _retryMessage = null;
+        // The failed pair is the last two turns (the user message and its partial answer), when the answer kept any text.
+        int n = _conversation.Turns.Count;
+        if (n >= 2 && _conversation.Turns[n - 1].Role == "assistant" && _conversation.Turns[n - 2].Content == message)
+            _conversation.Turns.RemoveRange(n - 2, 2);
+        _pending = message;
+        await SendAsync();
+    }
+
     private AiChatMessage[] BuildHistorySnapshot()
     {
         var list = new List<AiChatMessage>(_conversation.Turns.Count);

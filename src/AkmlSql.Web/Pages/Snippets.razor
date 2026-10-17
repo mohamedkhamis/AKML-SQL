@@ -32,31 +32,37 @@
                 <option value="0">SQL Server</option>
                 <option value="1">PostgreSQL</option>
             </select>
-            <button type="button" class="akml-btn" @onclick="NewSnippet" data-testid="snippet-new">New</button>
-            <label class="akml-btn">
+            <button type="button" class="akml-btn" @onclick="NewSnippetAsync" data-testid="snippet-new">New</button>
+            <label class="akml-btn" data-testid="snippet-import-label">
                 Import
-                <InputFile OnChange="OnImportAsync" accept=".akmlsnippet" class="akml-hidden-file" />
+                <InputFile OnChange="OnImportAsync" accept=".akmlsnippet" class="akml-visually-hidden" data-testid="snippet-import" />
             </label>
-            <button type="button" class="akml-btn" @onclick="RefreshAsync">Refresh</button>
+            <button type="button" class="akml-btn" @onclick="RefreshClickedAsync" data-testid="snippet-refresh">Refresh</button>
         </div>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
     {
-        <p class="akml-snippets-status">@_status</p>
+        <p class="akml-snippets-status" role="status" data-testid="snippet-status">@_status</p>
     }
 
     <div class="akml-snippets-body">
-        <ul class="akml-snippets-list" data-testid="snippet-list" role="listbox" aria-label="Snippets" aria-busy="@(_loaded ? "false" : "true")">
+        @* Review WEB-13: one tab stop; Arrow keys, Home and End move the active option, Enter or Space selects it (asking
+           first when the open draft has unsaved changes, WEB-11). *@
+        <ul class="akml-snippets-list" data-testid="snippet-list" role="listbox" aria-label="Snippets" aria-busy="@(_loaded ? "false" : "true")"
+            tabindex="0" aria-activedescendant="@ActiveOptionId" @ref="_listRef" @onkeydown="OnListKeyDownAsync">
             @if (!_loaded)
             {
                 <li class="akml-empty" data-testid="snippet-loading" role="status"><Icon Name="loader-circle" Class="akml-spin" /><span>Loading snippets…</span></li>
             }
-            @foreach (var s in Visible)
+            @{ var visible = Visible.ToList(); var active = ActiveIndex(visible); }
+            @for (int i = 0; i < visible.Count; i++)
             {
-                <li class="akml-list-row akml-snippets-row @(IsSelected(s) ? "is-selected" : null)" role="option" aria-selected="@(IsSelected(s) ? "true" : "false")"
+                var s = visible[i];
+                <li class="akml-list-row akml-snippets-row @(IsSelected(s) ? "is-selected" : null) @(i == active ? "is-active" : null)"
+                    role="option" aria-selected="@(IsSelected(s) ? "true" : "false")" id="@OptionId(i)"
                     data-testid="snippet-row" data-shortcode="@s.Metadata.Shortcode"
-                    @onclick="@(() => SelectSnippet(s))">
+                    @onclick="@(() => SelectSnippetAsync(s))">
                     <span class="akml-snippets-code">@s.Metadata.Shortcode</span>
                     <span class="akml-snippets-name">@s.Metadata.Title</span>
                     @if (s.Metadata.Kind == 1)
@@ -158,8 +164,16 @@
     .akml-snippets-hint code { font-family: var(--akml-type-editor-family); color: var(--akml-text-primary); }
     .akml-snippets-actions { display: flex; gap: var(--akml-scalar-spacing-s); align-items: center; }
     .akml-snippets-readonly { color: var(--akml-text-secondary); font-style: italic; }
-    .akml-hidden-file { display: none; }
+    .akml-snippets-list:focus-visible { outline: none; }
+    .akml-snippets-list:focus-visible .akml-snippets-row.is-active { outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
 </style>
+
+@* Review WEB-11: leaving the page with an unsaved draft asks first; a reload or a closed tab gets the browser's prompt. *@
+@* Only while there is something to lose: a clean page navigates at once, with no round trip through the lock. *@
+@if (IsDirty)
+{
+    <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="true" />
+}
 
 @code {
     private const long MaxImportBytes = 1024 * 1024;   // 1 MB, mirrors the engine snippet JSON limit.
@@ -175,6 +189,89 @@
     private string _editDescription = string.Empty;
     private string _editBody = string.Empty;
 
+    // Review WEB-11: what the buffers held when the snippet was loaded (or created); different = an unsaved draft.
+    private (string Shortcode, string Title, string Description, string Body) _baseline;
+
+    private (string, string, string, string) Buffers => (_editShortcode, _editTitle, _editDescription, _editBody);
+
+    /// <summary>The open snippet has changes that are not saved. Built-ins are read-only, so never.</summary>
+    private bool IsDirty => _selected != null && !_selected.IsBuiltIn && Buffers != _baseline;
+
+    /// <summary>True when there is no draft to lose, or the user chose to discard it.</summary>
+    private async Task<bool> ConfirmLeaveDraftAsync()
+    {
+        if (!IsDirty) return true;
+        return await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Unsaved changes",
+            Message = $"Discard the unsaved changes to the snippet “{(string.IsNullOrWhiteSpace(_editShortcode) ? "new snippet" : _editShortcode)}”?",
+            ConfirmLabel = "Discard",
+            CancelLabel = "Keep editing",
+            Destructive = true,
+        });
+    }
+
+    private async Task OnBeforeInternalNavigationAsync(LocationChangingContext context)
+    {
+        if (!await ConfirmLeaveDraftAsync()) context.PreventNavigation();
+    }
+
+    // Review WEB-13: the listbox's active option (the one Enter selects), an index into the visible list.
+    private ElementReference _listRef;
+    private bool _listTrapped;
+    private int _active = -1;
+
+    private string OptionId(int i) => "akml-snippet-option-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private int ActiveIndex(IReadOnlyList<WebSnippet> visible)
+    {
+        if (visible.Count == 0) return -1;
+        if (_active >= 0 && _active < visible.Count) return _active;
+        var selected = _selected == null ? -1 : visible.ToList().FindIndex(IsSelected);
+        return selected >= 0 ? selected : 0;
+    }
+
+    private string? ActiveOptionId
+    {
+        get
+        {
+            var at = ActiveIndex(Visible.ToList());
+            return at < 0 ? null : OptionId(at);
+        }
+    }
+
+    private async Task OnListKeyDownAsync(KeyboardEventArgs e)
+    {
+        var visible = Visible.ToList();
+        if (visible.Count == 0) return;
+        int at = ActiveIndex(visible);
+        switch (e.Key)
+        {
+            case "ArrowDown": _active = Math.Min(visible.Count - 1, at + 1); break;
+            case "ArrowUp": _active = Math.Max(0, at - 1); break;
+            case "Home": _active = 0; break;
+            case "End": _active = visible.Count - 1; break;
+            case "Enter":
+            case " ":
+                await SelectSnippetAsync(visible[at]);
+                break;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_listTrapped || string.IsNullOrEmpty(_listRef.Id)) return;
+        _listTrapped = true;
+        try
+        {
+            var ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            await ui.InvokeVoidAsync("trapListKeys", _listRef);
+        }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+
     // Spec 042 (FR-066): -1 shows every snippet, 0 SQL Server's, 1 PostgreSQL's. It starts at the connection's kind.
     private int _kindFilter = -1;
 
@@ -183,7 +280,9 @@
     private void OnKindFilterChanged(ChangeEventArgs e)
     {
         _kindFilter = int.TryParse(e.Value?.ToString(), out var v) ? v : -1;
-        if (_selected != null && _kindFilter >= 0 && _selected.Metadata.Kind != _kindFilter) _selected = null;
+        _active = -1;
+        // Review WEB-11: a filter that hides the open snippet closes it — unless it is an unsaved draft, which stays open.
+        if (_selected != null && !IsDirty && _kindFilter >= 0 && _selected.Metadata.Kind != _kindFilter) _selected = null;
     }
 
     protected override async Task OnInitializedAsync()
@@ -200,8 +299,10 @@
     {
         _all = await SnippetStore.ListAsync();
         _loaded = true;
-        // Keep the current selection if it still exists; else clear the editor.
-        if (_selected != null)
+        _active = -1;
+        // Keep the current selection if it still exists; else clear the editor. Review WEB-11: an unsaved draft (an import
+        // refreshes the list too) keeps its buffers — only the list is new.
+        if (_selected != null && !IsDirty)
         {
             _selected = _all.FirstOrDefault(s => s.Metadata.Id == _selected.Metadata.Id);
             if (_selected != null) LoadEditFields(_selected);
@@ -209,11 +310,23 @@
         StateHasChanged();
     }
 
+    /// <summary>The Refresh button reloads the open snippet too, so it asks first when that would drop a draft.</summary>
+    private async Task RefreshClickedAsync()
+    {
+        if (!await ConfirmLeaveDraftAsync()) return;
+        if (_selected != null) _baseline = Buffers;   // discarded: let the reload replace the buffers
+        if (_selected != null && string.IsNullOrEmpty(_selected.Metadata.Id)) _selected = null;   // a new, unsaved one goes
+        await RefreshAsync();
+    }
+
     private bool IsSelected(WebSnippet s) => _selected != null && s.Metadata.Id == _selected.Metadata.Id;
 
-    private void SelectSnippet(WebSnippet s)
+    private async Task SelectSnippetAsync(WebSnippet s)
     {
+        if (IsSelected(s) && !string.IsNullOrEmpty(s.Metadata.Id)) return;   // already open: nothing to replace
+        if (!await ConfirmLeaveDraftAsync()) return;
         _selected = s;
+        _active = -1;
         LoadEditFields(s);
         _status = null;
     }
@@ -224,15 +337,18 @@
         _editTitle = s.Metadata.Title;
         _editDescription = s.Metadata.Description ?? string.Empty;
         _editBody = string.Join("\n", s.Body);
+        _baseline = Buffers;
     }
 
-    private void NewSnippet()
+    private async Task NewSnippetAsync()
     {
+        if (!await ConfirmLeaveDraftAsync()) return;
         _selected = new WebSnippet { Metadata = new WebSnippetMetadata { Shortcode = "", Title = "New snippet", Kind = _kindFilter == 1 ? 1 : 0 } };
         _editShortcode = string.Empty;
         _editTitle = "New snippet";
         _editDescription = string.Empty;
         _editBody = string.Empty;
+        _baseline = Buffers;
         _status = null;
     }
 
@@ -251,6 +367,7 @@
         try
         {
             await SnippetStore.SaveAsync(_selected);
+            _baseline = Buffers;   // saved: no longer a draft
             _status = $"Saved '{_selected.Metadata.Shortcode}'.";
             Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
             await RefreshAsync();
@@ -279,6 +396,7 @@
             _status = $"Deleted '{_selected.Metadata.Shortcode}'.";
             Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
             _selected = null;
+            _baseline = default;
             await RefreshAsync();
         }
         catch (Exception ex)

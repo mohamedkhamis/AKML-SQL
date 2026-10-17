@@ -26,7 +26,11 @@ param(
     [Parameter(Mandatory = $true)] [string] $PhysicalPath,
     # Spec 026 (M4 closure) M6: 'Lan' widens the CSP connect-src so the browser may open the
     # cross-host bridge socket (wss://<machineA>:<bridgePort>); 'Localhost' keeps the tight list.
-    [ValidateSet('Localhost', 'Lan')] [string] $Mode = 'Localhost'
+    [ValidateSet('Localhost', 'Lan')] [string] $Mode = 'Localhost',
+    # Review WEB-03: in LAN mode other computers load the app over HTTPS on this port, with the
+    # engine's certificate (web-tls-setup.ps1 creates it first). 0 = no HTTPS binding (localhost:
+    # http://localhost is already a secure context, so pairing tokens and API keys can be stored).
+    [int] $HttpsPort = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,7 +63,7 @@ if (-not [Environment]::Is64BitProcess -and [Environment]::Is64BitOperatingSyste
     Log '32-bit PowerShell detected -- relaunching in the 64-bit host (IIS config COM classes are 64-bit only).'
     & (Join-Path $env:WINDIR 'sysnative\WindowsPowerShell\v1.0\powershell.exe') `
         -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath `
-        -Port $Port -PhysicalPath $PhysicalPath -Mode $Mode
+        -Port $Port -PhysicalPath $PhysicalPath -Mode $Mode -HttpsPort $HttpsPort
     exit $LASTEXITCODE
 }
 
@@ -100,6 +104,27 @@ try {
         -ApplicationPool $appPoolName `
         -Force | Out-Null
     Log "Created IIS site AkmlSqlWeb on port $Port"
+
+    # Review WEB-03: a LAN browser must get the page itself over TLS. Over plain HTTP anyone on the
+    # path can replace the script that handles the pairing token and the AI keys (wss to the bridge
+    # does not protect the page), and the browser has no Web Crypto outside a secure context, so it
+    # could not store them anyway. The site gets an HTTPS binding with the bridge's certificate,
+    # whose names already cover this computer's host names and addresses.
+    if ($Mode -eq 'Lan' -and $HttpsPort -gt 0) {
+        $siteCert = Get-ChildItem 'Cert:\LocalMachine\My' |
+                    Where-Object { $_.Subject -eq 'CN=AKML SQL Web Engine' -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } |
+                    Sort-Object NotAfter -Descending | Select-Object -First 1
+        if ($null -eq $siteCert) {
+            Log "WARNING: no AKML SQL Web Engine certificate found -- the site has no HTTPS binding. Run web-tls-setup.ps1, then the repair."
+        }
+        else {
+            New-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort -IPAddress '*' | Out-Null
+            # Replace whatever certificate an earlier install (or another site) left on this port.
+            & netsh http delete sslcert "ipport=0.0.0.0:$HttpsPort" 2>$null | Out-Null
+            (Get-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort).AddSslCertificate($siteCert.Thumbprint, 'My')
+            Log "Added HTTPS binding on port $HttpsPort with certificate $($siteCert.Thumbprint)"
+        }
+    }
 
     # MIME types -- IIS doesn't know about .wasm / .blat / .br by default.
     $mimes = @{

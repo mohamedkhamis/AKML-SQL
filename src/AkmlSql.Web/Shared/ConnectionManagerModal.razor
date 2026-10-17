@@ -235,6 +235,18 @@
                             <span class="akml-connmgr-hint">Not saved — re-entered each time you connect.</span>
                         </div>
                     }
+                    @* Review WEB-02: a remote server's certificate is validated unless the user says otherwise, for this connection only. *@
+                    <div class="akml-field akml-connmgr-field">
+                        <label class="akml-connmgr-radio" for="conn-trust-cert">
+                            <input id="conn-trust-cert" type="checkbox" @bind="_trustServerCertificate" data-testid="conn-trust-cert" />
+                            Trust the server certificate without validating it
+                        </label>
+                        <span class="akml-connmgr-hint" data-testid="conn-trust-cert-help">
+                            The connection is always encrypted. Tick this only for a remote server with a self-signed certificate you
+                            trust: without validation, anyone on the network path could pose as the server. A SQL Server on the
+                            engine's own computer is never validated.
+                        </span>
+                    </div>
                     }
 
                     @if (!string.IsNullOrEmpty(_message))
@@ -441,6 +453,7 @@
     private bool _windowsAuth = true;
     private string _login = string.Empty;
     private string _password = string.Empty;
+    private bool _trustServerCertificate;
 
     // Database dropdown (spec 030). _databases is the list fetched from the server; the current
     // _database is always kept selectable even when absent from (or ahead of) the fetched list.
@@ -505,6 +518,7 @@
         _windowsAuth = true;
         _login = string.Empty;
         _password = string.Empty;
+        _trustServerCertificate = false;
         ResetPostgresFields();
         _message = null;
         ClearDatabaseList();
@@ -539,6 +553,7 @@
             _windowsAuth = true;
             _login = string.Empty;
             _password = string.Empty;
+            _trustServerCertificate = false;
             ClearDatabaseList();
         }
     }
@@ -570,6 +585,7 @@
         _windowsAuth = c.WindowsAuth;
         _login = c.Login ?? string.Empty;
         _password = string.Empty;   // never stored — re-prompt for SQL auth
+        _trustServerCertificate = c.TrustServerCertificate;
         _message = null;
         ClearDatabaseList();
 
@@ -617,10 +633,7 @@
         StateHasChanged();
         try
         {
-            var (ok, dbs, error) = await SqlConn.ListDatabasesAsync(
-                _server, _windowsAuth,
-                _windowsAuth ? null : _login, _windowsAuth ? null : _password,
-                CancellationToken.None);
+            var (ok, dbs, error) = await SqlConn.ListDatabasesAsync(SqlServerTarget(), CancellationToken.None);
 
             if (ok)
             {
@@ -638,6 +651,10 @@
             StateHasChanged();
         }
     }
+
+    /// <summary>The SQL Server form as a target; the certificate choice travels with it (review WEB-02).</summary>
+    private ConnectionTarget SqlServerTarget() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth,
+        User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate);
 
     // ── PostgreSQL (spec 042) ────────────────────────────────────────────────────────────────────────────
 
@@ -832,9 +849,8 @@
         StateHasChanged();
         try
         {
-            var (ok, error) = await SqlConn.TestAsync(_server, _database, _windowsAuth,
-                _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
-            SetMessage(ok ? "Connection test succeeded." : (error ?? "Connection test failed."), isError: !ok);
+            var result = await SqlConn.TestAsync(SqlServerTarget(), CancellationToken.None);
+            SetMessage(result.Ok ? "Connection test succeeded." : (result.Error ?? "Connection test failed."), isError: !result.Ok);
         }
         finally
         {
@@ -862,6 +878,7 @@
                     Database = _database.Trim(),
                     WindowsAuth = _windowsAuth,
                     Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
+                    TrustServerCertificate = _trustServerCertificate,
                 };
                 await Store.AddAsync(record);
                 _selectedId = record.Id;
@@ -876,6 +893,7 @@
                     Database = _database.Trim(),
                     WindowsAuth = _windowsAuth,
                     Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
+                    TrustServerCertificate = _trustServerCertificate,
                 };
                 await Store.UpdateAsync(record);
             }
@@ -937,9 +955,10 @@
         StateHasChanged();
         try
         {
-            var (ok, error) = await SqlConn.ConnectAsync(_server, _database, _windowsAuth,
-                _windowsAuth ? null : _login, _windowsAuth ? null : _password, CancellationToken.None);
-            if (ok)
+            // Review WEB-19: the engine opens the connection before the session switches; a refusal keeps the dialog open
+            // with what was typed, so it can be corrected.
+            var result = await SqlConn.ConnectAsync(SqlServerTarget(), CancellationToken.None);
+            if (result.Ok)
             {
                 // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
                 if (!string.IsNullOrEmpty(_selectedId))
@@ -959,7 +978,7 @@
                 Close();   // MainLayout's StateChanged owner starts SchemaSync on SqlConn.SessionId.
                 return;
             }
-            SetMessage(error ?? "Connect failed.", isError: true);
+            SetMessage(result.Error ?? "Connect failed.", isError: true);
         }
         finally
         {

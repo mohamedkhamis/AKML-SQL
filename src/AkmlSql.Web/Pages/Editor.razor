@@ -49,8 +49,9 @@
 @* Spec 041 (R64, FR-089): the title SSMS's window reads like — orders-audit* - SERVER.db - AKML SQL. *@
 <PageTitle>@EditorDocument.TitleFor(Document.Name, Document.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null)</PageTitle>
 
-@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. *@
-<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" />
+@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. Review WEB-09: so does a
+   reload, a closed tab or a link to another site (the browser's own prompt), but only while there are edits to lose. *@
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="@_gridHasPendingEdits" />
 
 <div class="akml-editor-page">
     @* Spec 041 (FR-081): SSMS's grouping — database | Execute, Parse | Format, Analyse | Refactor, AI | documents |
@@ -220,13 +221,14 @@
             @* Spec 030 — Phase 5 / spec 041 (R34): Results, Messages and Problems tabs. Always mounted. *@
             <div class="akml-ws-results-host @(Fitted.ResultsVisible ? null : "akml-ws-hidden")" data-testid="workspace-results"
                  role="region" aria-label="Results" tabindex="-1">
-                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
+                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" FrozenReason="@ResultsFrozenReason" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
                                       Findings="_findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
                                       OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
                                       SelectionStartLine="_selectionStartLine" SelectionStartColumn="_selectionStartColumn" ReceivedAt="_resultReceivedAt"
                                       OnNavigateToLine="OnNavigateToLineAsync" OnNavigateToPosition="OnNavigateToPositionAsync"
                                       OnApplied="OnAppliedReExecuteAsync" DocumentName="@Document.Name"
-                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy" />
+                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy"
+                                      HasPendingEditsChanged="OnGridPendingEditsChanged" />
             </div>
         </div>
 
@@ -749,6 +751,21 @@
     // Spec 030 — Phase 5: query execution + results pane state.
     private ResultsPaneComponent? _resultsPane;
     private ExecuteQueryResult? _result;
+
+    // Review WEB-09: the results grid holds edits not yet applied; the browser asks before a reload or a closed tab drops them.
+    private bool _gridHasPendingEdits;
+
+    private void OnGridPendingEditsChanged(bool pending) => _gridHasPendingEdits = pending;
+
+    // Review finding WEB-01: the connection generation the shown result was read under. Once the session moves to another
+    // server, database, login, kind or engine, its rows are frozen: an edit could only be written to the new target.
+    private int _resultGeneration;
+
+    internal const string StaleResultsReason =
+        "These results came from an earlier connection. Run the query again to edit rows on the current one.";
+
+    private string? ResultsFrozenReason =>
+        _result != null && _resultGeneration != SqlConn.ConnectionGeneration ? StaleResultsReason : null;
     private string _resultsTab = ResultsPaneComponent.ResultsTab;
     private DateTimeOffset _resultReceivedAt = DateTimeOffset.Now;
     private int _selectionStartLine = 1;
@@ -924,6 +941,9 @@
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
 
+            // Review WEB-08: an Apply waiting for its reply owns the grid's edits; a new result would orphan them.
+            if (RefuseWhileApplying()) return;
+
             // Spec 041 (FR-015): a new result replaces the grid, so its pending edits go — ask first.
             if (!await ConfirmDiscardPendingEditsAsync()) return;
 
@@ -989,6 +1009,7 @@
     private void ShowResult(ExecuteQueryResult result, int startLine, bool chooseTab)
     {
         _result = result;
+        _resultGeneration = SqlConn.ConnectionGeneration;
         _resultReceivedAt = DateTimeOffset.Now;
         _selectionStartLine = startLine;
         _selectionStartColumn = _pendingStartColumn;
@@ -1030,6 +1051,7 @@
         {
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
+            if (RefuseWhileApplying()) return;
             if (!await ConfirmDiscardPendingEditsAsync()) return;
 
             await ClearErrorMarkAsync();
@@ -1229,6 +1251,13 @@
     /// Spec 041 (FR-015) — ask before an action that would drop the results grid's pending edits (Execute,
     /// leaving the page; New and Open in US5). True when there are none, or the user chose to discard them.
     /// </summary>
+    private bool RefuseWhileApplying()
+    {
+        if (_resultsPane?.IsApplying != true) return false;
+        Notifications.Notify("Wait for the grid's changes to finish applying.", NotificationKind.Info);
+        return true;
+    }
+
     private async Task<bool> ConfirmDiscardPendingEditsAsync()
     {
         int n = _resultsPane?.PendingEditCount ?? 0;
@@ -1413,14 +1442,33 @@
         await Task.CompletedTask;
     }
 
+    // Review WEB-10: each Format takes a ticket; only the latest one's reply, for the same document and dialect, may change it.
+    private readonly FormatRequestGate _formatGate = new();
+
+    internal const string FormatSupersededStatus =
+        "The document changed while it was being formatted, so the result was not applied. Format again.";
+
     private async Task FormatAsync()
     {
+        if (_editor == null) return;
         try
         {
-            var result = await Formatter.FormatAsync(_currentText, _activeProfile);
-            if (result.Success && _editor != null)
+            // The live text (not the debounced copy), the document and the dialect it is formatted for: a PostgreSQL format
+            // crosses the bridge, and the reply can arrive after the user typed, opened another document or switched kind.
+            var ticket = _formatGate.Begin(await _editor.GetTextAsync(), SessionKey, SqlConn.Kind);
+            var result = await Formatter.FormatAsync(ticket.Text, _activeProfile);
+            if (!_formatGate.IsLatest(ticket) || _editor == null) return;   // a newer Format owns the document now
+            if (result.Success && (!_formatGate.Applies(ticket, SessionKey, SqlConn.Kind)
+                                   || !await _editor.ReplaceTextIfUnchangedAsync(ticket.Text, result.FormattedText)))
             {
-                await _editor.SetTextAsync(result.FormattedText);
+                _status = FormatSupersededStatus;
+                Notifications.Notify(_status, NotificationKind.Info);
+                Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
+                StateHasChanged();
+                return;
+            }
+            if (result.Success)
+            {
                 _currentText = result.FormattedText;
                 _status = result.WasModified ? "Formatted." : "Already canonical.";
                 _hasFormatted = true;

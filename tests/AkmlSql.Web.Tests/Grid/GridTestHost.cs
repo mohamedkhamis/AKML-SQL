@@ -21,10 +21,14 @@ internal sealed class RecordingQueryExecution : IQueryExecutionService
 
     public Task CancelAsync(string queryId, CancellationToken ct) => Task.CompletedTask;
 
-    public Task<ApplyChangesResult> ApplyAsync(ApplyChangesRequest request, CancellationToken ct)
+    /// <summary>When set, Apply waits for it before answering (a slow engine).</summary>
+    public TaskCompletionSource? ApplyGate { get; set; }
+
+    public async Task<ApplyChangesResult> ApplyAsync(ApplyChangesRequest request, CancellationToken ct)
     {
         Applied.Add(request);
-        return Task.FromResult(ApplyReply);
+        if (ApplyGate != null) await ApplyGate.Task;
+        return ApplyReply;
     }
 }
 

@@ -126,6 +126,7 @@ public sealed class PgProvenanceCollector
             dto.AllowDBNull = !column.NotNull;
             dto.IsAutoIncrement = column.IsIdentity || column.IsSequenceDefault;
             dto.IsReadOnly = column.IsGenerated;                    // a stored generated column cannot be written
+            dto.HasDefault = column.HasDefault;                     // review WEB-20: left out of an INSERT, the server fills it in
         }
 
         if (info.PrimaryKey.Count == 0) { Refuse(pending, PgReadOnlyReasons.NoPrimaryKey); return; }
@@ -159,7 +160,7 @@ public sealed class PgProvenanceCollector
         foreach (var column in pending.Columns) { column.IsKey = false; column.IsTruePrimaryKey = false; }
     }
 
-    private sealed record ColumnInfo(string Name, bool NotNull, bool IsIdentity, bool IsGenerated, bool IsSequenceDefault);
+    private sealed record ColumnInfo(string Name, bool NotNull, bool IsIdentity, bool IsGenerated, bool IsSequenceDefault, bool HasDefault);
 
     private sealed record TableInfo(string Kind, string Schema, string Name, List<string> PrimaryKey, Dictionary<int, ColumnInfo> Columns);
 
@@ -173,7 +174,8 @@ public sealed class PgProvenanceCollector
                            JOIN pg_attribute pa ON pa.attrelid = i.indrelid AND pa.attnum = k.attnum
                           WHERE i.indrelid = c.oid AND i.indisprimary), ARRAY[]::text[]),
                a.attnum::int, a.attname::text, a.attnotnull, a.attidentity::text <> '', a.attgenerated::text <> '',
-               COALESCE(pg_get_expr(d.adbin, d.adrelid) LIKE 'nextval(%', false)
+               COALESCE(pg_get_expr(d.adbin, d.adrelid) LIKE 'nextval(%', false),
+               d.adbin IS NOT NULL
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
@@ -193,7 +195,7 @@ public sealed class PgProvenanceCollector
             info ??= new TableInfo(reader.GetString(0), reader.GetString(1), reader.GetString(2),
                 ((string[])reader.GetValue(3)).ToList(), new Dictionary<int, ColumnInfo>());
             info.Columns[reader.GetInt32(4)] = new ColumnInfo(reader.GetString(5), reader.GetBoolean(6), reader.GetBoolean(7),
-                reader.GetBoolean(8), reader.GetBoolean(9));
+                reader.GetBoolean(8), reader.GetBoolean(9), reader.GetBoolean(10));
         }
         return info;
     }

@@ -168,12 +168,7 @@ internal sealed class AiClientFactory : IAiClientFactory
 
         if (!response.IsSuccessStatusCode)
         {
-            _diagnostics.Log(DiagnosticLevel.Warn, "ai",
-                $"{providerId} returned {(int)response.StatusCode}: {response.ReasonPhrase}");
-            throw new HttpRequestException(
-                $"{providerId} returned {(int)response.StatusCode}: {response.ReasonPhrase}. {respBody}",
-                inner: null,
-                statusCode: response.StatusCode);
+            throw ProviderFailure(providerId, response, respBody);
         }
 
         return IsAnthropic(providerId) ? AnthropicWire.ExtractText(respBody) : OpenAiWire.ExtractText(respBody);
@@ -197,12 +192,7 @@ internal sealed class AiClientFactory : IAiClientFactory
         if (!response.IsSuccessStatusCode)
         {
             var errBody = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            _diagnostics.Log(DiagnosticLevel.Warn, "ai",
-                $"{providerId} (stream) returned {(int)response.StatusCode}: {response.ReasonPhrase}");
-            throw new HttpRequestException(
-                $"{providerId} returned {(int)response.StatusCode}: {response.ReasonPhrase}. {errBody}",
-                inner: null,
-                statusCode: response.StatusCode);
+            throw ProviderFailure(providerId, response, errBody);
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
@@ -216,6 +206,19 @@ internal sealed class AiClientFactory : IAiClientFactory
         {
             yield return token;
         }
+    }
+
+    /// <summary>
+    /// Review WEB-21: an HTTP failure as a message a user can act on — status and the provider's short error code — and never
+    /// the body, which can echo the prompt, the schema or a key (it used to be appended to the exception message, shown in
+    /// the chat and persisted with the diagnostics).
+    /// </summary>
+    private HttpRequestException ProviderFailure(string providerId, HttpResponseMessage response, string? body)
+    {
+        var code = AiErrorText.ExtractCode(body);
+        var message = AiErrorText.ForStatus(providerId, response.StatusCode, code);
+        _diagnostics.Log(DiagnosticLevel.Warn, "ai", message);
+        return new HttpRequestException(message, inner: null, statusCode: response.StatusCode);
     }
 
     /// <summary>Browser-direct + origin gating shared by both call paths.</summary>
@@ -349,33 +352,58 @@ internal static class OpenAiWire
         }
     }
 
-    /// <summary>Parse OpenAI SSE: <c>data: {json}</c> lines, <c>delta.content</c> tokens, <c>data: [DONE]</c>.</summary>
+    /// <summary>
+    /// Parse OpenAI SSE: <c>data: {json}</c> lines, <c>delta.content</c> tokens, <c>data: [DONE]</c>. Review WEB-18: the answer
+    /// is complete only when the provider says so — <c>[DONE]</c>, or a choice with a <c>finish_reason</c> — so an error event,
+    /// a chunk that is not JSON, or a connection that ends first raises <see cref="AiStreamException"/> instead of passing
+    /// for a finished answer. The text already yielded stays with the caller.
+    /// </summary>
     public static async IAsyncEnumerable<string> ParseSse(
         System.IO.StreamReader reader, [EnumeratorCancellation] CancellationToken ct)
     {
         string? line;
+        var finished = false;
         while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) != null)
         {
             if (line.Length == 0 || !line.StartsWith("data:", StringComparison.Ordinal)) continue;
             var data = line.Substring(5).Trim();
+            if (data.Length == 0) continue;   // a keep-alive
             if (data == "[DONE]") yield break;
 
             string? token = null;
+            string? errorCode = null;
+            var isError = false;
             try
             {
                 using var doc = JsonDocument.Parse(data);
-                if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0
-                    && choices[0].TryGetProperty("delta", out var delta)
-                    && delta.TryGetProperty("content", out var content)
-                    && content.ValueKind == JsonValueKind.String)
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out _))
                 {
-                    token = content.GetString();
+                    isError = true;
+                    errorCode = AiErrorText.ExtractCode(data);
+                }
+                else if (root.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
+                {
+                    var choice = choices[0];
+                    if (choice.TryGetProperty("delta", out var delta)
+                        && delta.TryGetProperty("content", out var content)
+                        && content.ValueKind == JsonValueKind.String)
+                    {
+                        token = content.GetString();
+                    }
+                    if (choice.TryGetProperty("finish_reason", out var reason) && reason.ValueKind == JsonValueKind.String)
+                        finished = true;
                 }
             }
-            catch (JsonException) { /* skip malformed chunk */ }
+            catch (JsonException)
+            {
+                throw new AiStreamException(AiStreamFailure.Malformed);
+            }
 
+            if (isError) throw new AiStreamException(AiStreamFailure.ProviderError, errorCode);
             if (!string.IsNullOrEmpty(token)) yield return token!;
         }
+        if (!finished) throw new AiStreamException(AiStreamFailure.Truncated);
     }
 }
 
@@ -434,7 +462,11 @@ internal static class AnthropicWire
         return responseBody;
     }
 
-    /// <summary>Parse Anthropic SSE: <c>content_block_delta</c>/<c>text_delta</c> tokens; stop on <c>message_stop</c>.</summary>
+    /// <summary>
+    /// Parse Anthropic SSE: <c>content_block_delta</c>/<c>text_delta</c> tokens; stop on <c>message_stop</c>. Review WEB-18: an
+    /// <c>error</c> event (overloaded, rate limit…), data that is not JSON, or a stream that ends without <c>message_stop</c>
+    /// raises <see cref="AiStreamException"/>; <c>ping</c> and the other bookkeeping events are skipped as before.
+    /// </summary>
     public static async IAsyncEnumerable<string> ParseSse(
         System.IO.StreamReader reader, [EnumeratorCancellation] CancellationToken ct)
     {
@@ -447,6 +479,7 @@ internal static class AnthropicWire
 
             string? token = null;
             var stop = false;
+            var isError = false;
             try
             {
                 using var doc = JsonDocument.Parse(data);
@@ -454,6 +487,10 @@ internal static class AnthropicWire
                 if (type == "message_stop")
                 {
                     stop = true;
+                }
+                else if (type == "error")
+                {
+                    isError = true;
                 }
                 else if (type == "content_block_delta"
                     && doc.RootElement.TryGetProperty("delta", out var delta)
@@ -463,10 +500,15 @@ internal static class AnthropicWire
                     token = txt.GetString();
                 }
             }
-            catch (JsonException) { /* skip ping/malformed */ }
+            catch (JsonException)
+            {
+                throw new AiStreamException(AiStreamFailure.Malformed);
+            }
 
+            if (isError) throw new AiStreamException(AiStreamFailure.ProviderError, AiErrorText.ExtractCode(data));
             if (stop) yield break;
             if (!string.IsNullOrEmpty(token)) yield return token!;
         }
+        throw new AiStreamException(AiStreamFailure.Truncated);
     }
 }

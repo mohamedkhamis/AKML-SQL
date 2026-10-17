@@ -93,6 +93,8 @@
                                 <h3 class="akml-results-set-header akml-visually-hidden" data-testid="@($"results-set-header-{n}")">@SetHeader(n, set)</h3>
                             }
                             <ResultSetGrid @ref="_grids[n]" Set="set" SetIndex="n" OnApplied="OnApplied"
+                                           FrozenReason="@(IsRunning ? RunningReason : FrozenReason)" ConnectionStamp="@Result?.ConnectionStamp"
+                                           OnPendingEditsChanged="OnGridPendingEditsChanged"
                                            DocumentName="@DocumentName" FallbackCatalog="@Result?.CurrentDatabase" ShowColumnTypes="ShowColumnTypes"
                                            RetainLineBreaksOnCopy="RetainLineBreaksOnCopy"
                                            ApplyTestIdSuffix="@(Sets.Length > 1 ? $"-{n}" : null)" />
@@ -142,6 +144,32 @@
 
     /// <summary>A query is running: the indicator shows and the previous results are marked stale.</summary>
     [Parameter] public bool IsRunning { get; set; }
+
+    /// <summary>
+    /// Review finding WEB-01: why the shown results can no longer be edited (they were read through an earlier connection);
+    /// null when they can. While a query runs the grids are frozen anyway (WEB-08): the new result replaces them.
+    /// </summary>
+    [Parameter] public string? FrozenReason { get; set; }
+
+    internal const string RunningReason = "A query is running. These results can't be changed until it finishes.";
+
+    /// <summary>Review WEB-09: whether any set holds pending edits, raised when that changes (the page warns before a
+    /// reload or a closed tab while it is true).</summary>
+    [Parameter] public EventCallback<bool> HasPendingEditsChanged { get; set; }
+
+    private bool _reportedPending;
+
+    // A grid's own edits re-render only the grid; its callback re-renders the pane, whose after-render reports the total.
+    private void OnGridPendingEditsChanged(bool _) { }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Computed after every render: a set that went away (a new result with fewer sets) takes its edits with it.
+        bool pending = HasPendingEdits;
+        if (pending == _reportedPending) return;
+        _reportedPending = pending;
+        await HasPendingEditsChanged.InvokeAsync(pending);
+    }
 
     [Parameter] public string ActiveTab { get; set; } = ResultsTab;
     [Parameter] public EventCallback<string> ActiveTabChanged { get; set; }
@@ -198,6 +226,9 @@
 
     /// <summary>The pending changes of every set together.</summary>
     public int PendingEditCount => _grids.Sum(g => g?.PendingEditCount ?? 0);
+
+    /// <summary>A set's Apply is waiting for the engine: a new run must wait for it (WEB-08).</summary>
+    public bool IsApplying => _grids.Any(g => g?.IsApplying == true);
 
     private IReadOnlyList<TabItem> Tabs => new[]
     {

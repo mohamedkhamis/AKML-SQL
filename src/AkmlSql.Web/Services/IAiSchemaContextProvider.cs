@@ -38,15 +38,34 @@ internal sealed class AiSchemaContextProvider : IAiSchemaContextProvider
 {
     private readonly ISchemaCacheStore _cache;
     private readonly IAiFeatureSettings _settings;
+    private readonly ISqlConnectionService _connection;
 
-    public AiSchemaContextProvider(ISchemaCacheStore cache, IAiFeatureSettings settings)
+    public AiSchemaContextProvider(ISchemaCacheStore cache, IAiFeatureSettings settings, ISqlConnectionService connection)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+    }
+
+    /// <summary>The database a prompt is about: the cache key SchemaSync stores it under, and its kind.</summary>
+    private readonly record struct Target(string Server, string Database, AkmlSql.Core.DatabaseKind Kind);
+
+    private Target? ActiveTarget()
+    {
+        if (!_connection.IsConnected) return null;
+        var server = _connection.SchemaIdentity ?? _connection.Server;
+        var database = _connection.Database;
+        if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(database)) return null;
+        return new Target(server!, database!, _connection.Kind);
     }
 
     public async Task<string> GetSchemaTextAsync(string featureId, string? promptOrSql, CancellationToken ct)
     {
+        // Review WEB-07: the schema of exactly the database the editor is connected to, captured before anything is awaited —
+        // never "the most recently used snapshot", which could be another database, another server or the other kind (another
+        // tab touches it; a newly selected database has no snapshot yet). If the connection moves while this runs, nothing
+        // is sent rather than the old database's schema under the new dialect.
+        var target = ActiveTarget();
         var mode = await _settings.ResolveModeAsync(featureId).ConfigureAwait(false);
 
         // FR-007: the no-schema guarantee holds unconditionally — return before touching the cache.
@@ -55,10 +74,11 @@ internal sealed class AiSchemaContextProvider : IAiSchemaContextProvider
             return string.Empty;
         }
 
-        var active = await GetActiveSnapshotAsync().ConfigureAwait(false);
-        if (active == null)
+        if (target is not { } t) return string.Empty;   // not connected: there is no active database to describe
+        var active = await _cache.GetAsync(t.Server, t.Database).ConfigureAwait(false);
+        if (active == null || ActiveTarget() != t)
         {
-            return string.Empty; // no cached schema → degrade to none (edge case), never throw.
+            return string.Empty; // no snapshot of THIS database yet, or the connection moved: degrade to none, never throw.
         }
 
         var cache = SchemaPhaseRehydrator.Rehydrate(
@@ -86,21 +106,7 @@ internal sealed class AiSchemaContextProvider : IAiSchemaContextProvider
             compressionLevel: 4,
             maxObjects: maxObjects).ConfigureAwait(false);
 
-        return SchemaContextFormatter.Format(context);
-    }
-
-    /// <summary>
-    /// The active database is the most-recently-used cached snapshot (the M5 LRU-last
-    /// heuristic the spec's Assumptions adopt). This is safe in practice because
-    /// <c>ISchemaSync</c> bumps the foreground (server, db) every 30 s via <c>TouchAsync</c>,
-    /// keeping it LRU-last; there is no competing background sync of a non-foreground DB.
-    /// Follow-up: thread the editor's explicit active (server, db) identity in and resolve via
-    /// <see cref="ISchemaCacheStore.GetAsync"/> to remove the multi-DB ambiguity entirely.
-    /// </summary>
-    private async Task<SchemaSnapshot?> GetActiveSnapshotAsync()
-    {
-        var all = await _cache.ListAsync().ConfigureAwait(false); // sorted by LastUsedAt ascending
-        return all.Count > 0 ? all[all.Count - 1] : null;
+        return ActiveTarget() == t ? SchemaContextFormatter.Format(context) : string.Empty;
     }
 
     private static SchemaPhasePayload? Deserialize(byte[]? bytes)

@@ -172,6 +172,27 @@ export function trapTabStripKeys(el) {
     });
 }
 
+// ── Keyboard lists (Pages/History.razor, Pages/Snippets.razor) ──────────────────────────────────────
+
+const LIST_KEYS = new Set(['ArrowUp', 'ArrowDown', 'Home', 'End']);
+
+/** Review WEB-13: cancel the browser's default for the keys a list owns (Arrow scrolling, Home/End jumping), and for Space
+ *  when the list itself has focus (a listbox: Space selects, it does not scroll). Tab is left alone, so focus can always
+ *  leave. The list's own @onkeydown still runs. Idempotent per element. */
+export function trapListKeys(el) {
+    if (!el || el.dataset.akmlListTrapped === '1') return;
+    el.dataset.akmlListTrapped = '1';
+    el.addEventListener('keydown', (e) => {
+        if (LIST_KEYS.has(e.key) || (e.key === ' ' && e.target === el)) e.preventDefault();
+    });
+}
+
+/** Focus the element with this id, if it is there (a list moving its one tab stop). */
+export function focusById(id) {
+    const el = document.getElementById(id);
+    if (el && typeof el.focus === 'function') el.focus();
+}
+
 // ── Context menus (Shared/ContextMenu.razor) ────────────────────────────────────────────────────
 
 /**

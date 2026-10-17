@@ -269,7 +269,37 @@ namespace AkmlSql.Engine.Execution
             }
         }
 
-        private async Task DisposeCoreAsync()
+        /// <summary>
+        /// The web edition's Disconnect: stop what is queued, wait (up to <paramref name="wait"/>) for a running command to
+        /// finish, then roll back any open transaction and close the connection. Returns whether a transaction was rolled
+        /// back. Throws <see cref="TimeoutException"/> when a command still holds the connection after the wait — the
+        /// connection is then left as it is (closed later, when that command ends), and the caller says so.
+        /// </summary>
+        public async Task<bool> CloseAsync(TimeSpan wait, CancellationToken ct)
+        {
+            _disposeRequested = true;
+            foreach (var kv in _activeQueries)
+            {
+                try { kv.Value.Cancel(); } catch { /* ignore */ }
+            }
+            if (!await _gate.WaitAsync(wait, ct).ConfigureAwait(false))
+                throw new TimeoutException("A statement is still running on the connection.");
+            try
+            {
+                return await DisposeCoreAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        /// <summary>
+        /// Ends the connection; true when it rolled back an open transaction first. A pooled SqlConnection closed inside a
+        /// transaction that a script began goes back to the pool with that transaction — and its locks — still open on the
+        /// server until the pool reuses it, so a close always rolls back explicitly. It never commits.
+        /// </summary>
+        private async Task<bool> DisposeCoreAsync()
         {
             foreach (var kv in _activeQueries)
             {
@@ -278,10 +308,41 @@ namespace AkmlSql.Engine.Execution
             }
             _activeQueries.Clear();
 
+            bool rolledBack = false;
             if (_conn != null)
             {
+                rolledBack = await RollBackOpenTransactionAsync(_conn).ConfigureAwait(false);
                 try { await _conn.DisposeAsync().ConfigureAwait(false); } catch { }
                 _conn = null;
+            }
+            TransactionState = TransactionState.None;
+            return rolledBack;
+        }
+
+        private async Task<bool> RollBackOpenTransactionAsync(DbConnection conn)
+        {
+            if (conn.State != ConnectionState.Open) return false;
+            try
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandTimeout = 10;
+                if (conn is SqlConnection)
+                {
+                    cmd.CommandText = "IF @@TRANCOUNT > 0 BEGIN ROLLBACK TRANSACTION; SELECT 1; END ELSE SELECT 0;";
+                    return Convert.ToInt32(await cmd.ExecuteScalarAsync().ConfigureAwait(false)) == 1;
+                }
+                // PostgreSQL: the runner tracks the state the driver does not expose; a ROLLBACK outside a transaction only warns.
+                if (TransactionState == TransactionState.None) return false;
+                cmd.CommandText = "ROLLBACK";
+                await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Closing the connection below still ends the server session for PostgreSQL; for a pooled SQL Server
+                // connection, sp_reset_connection rolls back on its next use.
+                Log.Warning("SessionConnection: rollback before close failed for session {Session}: {Type}", _sessionId, ex.GetType().Name);
+                return false;
             }
         }
     }

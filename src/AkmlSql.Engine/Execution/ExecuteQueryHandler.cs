@@ -181,6 +181,8 @@ namespace AkmlSql.Engine.Execution
                     result.ConnectionWasReset = wasReset;
                     result.CurrentDatabase = currentDatabase;
                     NoteDatabase(req.SessionId, dbName, currentDatabase);
+                    // Stamped after a USE re-keyed the session: the stamp is the connection the grid's edits will be written through.
+                    result.ConnectionStamp = ConnectionStamp.Of(DatabaseKind.SqlServer, sessionLookup(req.SessionId).ConnectionString);
                     return Respond(request.RequestId, replyType, result);
                 }
                 finally
@@ -250,6 +252,7 @@ namespace AkmlSql.Engine.Execution
                 result.QueryId = queryId;
                 result.ElapsedMs = sw.ElapsedMilliseconds;
                 result.ConnectionWasReset = wasReset;
+                result.ConnectionStamp = ConnectionStamp.Of(DatabaseKind.PostgreSql, connStr);
                 return Respond(requestId, replyType, result);
             }
             catch (OperationCanceledException)

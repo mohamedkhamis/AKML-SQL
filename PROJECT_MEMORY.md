@@ -688,3 +688,31 @@ The original report is preserved; new HTML/TRX evidence is under
 %LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
 missing alias/spike configuration, and pre-existing scenario placeholders. This was
 a focused fix verification, not another full-suite run.
+
+## 2026-10-17 — Web review fixes (AKML_WEB_REVIEW_2026-10-17.md)
+
+All 22 findings of the 2026-10-17 web review are fixed in the working tree (uncommitted); the per-ID
+ledger with tests and limitations is at the end of that review file (repository root, not doc/).
+Facts that changed:
+
+- Editable results are bound to the connection they were read through: `ExecuteQueryResult.ConnectionStamp`
+  (key 15, HMAC under a per-process key) goes back as `ApplyChangesRequest.ConnectionStamp` (key 6) and the
+  engine refuses a stale one; the web freezes results read under an older `ISqlConnectionService.ConnectionGeneration`.
+  Grids are also frozen while a query runs or their Apply is waiting.
+- Disconnect is a real engine operation: `SessionDisconnect` 225 → 226 (`session.disconnect.v1`). Every
+  session-connection close rolls back an open transaction explicitly.
+- SQL Server Connect tests the login first (as PostgreSQL already did). Remote SQL Server connections are
+  encrypted and certificate-validated unless the saved connection's "Trust the server certificate" is ticked;
+  loopback still skips validation.
+- LAN installs serve the site over HTTPS on a "Secure site port" (default 443, `/WEB_HTTPS_PORT`, registry
+  `HttpsPort`) with the bridge certificate; the app refuses to ask for secrets in an insecure context.
+- `akml-crypto.js` creates the wrapping key once (one readwrite transaction, shared promise) and closes its
+  IndexedDB connections. AI schema context resolves the connected database only. AI streams that end badly
+  raise `AiStreamException`; provider error bodies never reach messages or diagnostics, and the diagnostics
+  ring masks credential-shaped text (`DiagnosticRedaction`).
+- `ColumnProvenanceDto.HasDefault` (key 12): new grid rows send only the cells the user set; an empty row is
+  `INSERT … DEFAULT VALUES`.
+- Browser regressions: `tests/AkmlSql.Web.E2E.Tests/SecretStorageTests.cs` (no engine needed) and
+  `ReviewFixBrowserTests.cs`. Not verified: a real LAN install over HTTPS, Firefox, a PostgreSQL server,
+  a screen reader.
+
