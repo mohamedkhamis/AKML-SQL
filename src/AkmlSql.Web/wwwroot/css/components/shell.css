@@ -429,6 +429,10 @@ a.akml-btn { text-decoration: none; }
 [data-akml-theme="high-contrast"] .akml-table tbody tr:hover *,
 [data-akml-theme="high-contrast"] .akml-table tbody tr[aria-selected="true"] *,
 [data-akml-theme="high-contrast"] .akml-list-row:hover * { color: var(--akml-text-onaccent); }
+/* A pressed or open button is filled with the inverse colour too, so its label and icon take the other one of the pair. */
+[data-akml-theme="high-contrast"] .akml-btn.is-active,
+[data-akml-theme="high-contrast"] .akml-btn[aria-pressed="true"],
+[data-akml-theme="high-contrast"] .akml-btn[aria-expanded="true"] { color: var(--akml-text-onaccent); }
 .akml-menu-item:focus-visible, .akml-splitter:focus-visible {
     outline: 2px solid var(--akml-border-focus);
     outline-offset: -2px;

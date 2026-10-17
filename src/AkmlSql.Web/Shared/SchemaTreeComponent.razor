@@ -53,9 +53,19 @@
             @* Spec 042 (FR-040): pg_catalog and information_schema are loaded so names resolve, and shown only on request. *@
             @if (HasSystemSchemas)
             {
-                <button type="button" class="akml-btn akml-btn--icon akml-schema-system-toggle @(_showSystem ? "selected" : null)"
+                @* A toggle that reads as one in every theme: a check box that fills with the accent when on (the old
+                   28 px icon button squeezed the word and showed "on" only as a faint inset line in dark mode). *@
+                <button type="button" class="akml-btn akml-schema-system-toggle @(_showSystem ? "is-on" : null)"
                         data-testid="schema-system-toggle" aria-pressed="@(_showSystem ? "true" : "false")"
-                        title="@(_showSystem ? "Hide system objects" : "Show system objects")" @onclick="ToggleSystem">System</button>
+                        title="@(_showSystem ? "Hide system objects" : "Show system objects")" @onclick="ToggleSystem">
+                    <span class="akml-schema-system-box" data-testid="schema-system-box" aria-hidden="true">
+                        @if (_showSystem)
+                        {
+                            <Icon Name="check" Size="12" />
+                        }
+                    </span>
+                    <span>System</span>
+                </button>
             }
         </div>
     }
@@ -283,10 +293,39 @@
         padding: 0 var(--akml-scalar-spacing-xs);
     }
     .akml-schema-tree-empty-kind { padding-left: 32px; color: var(--akml-text-secondary); font-style: italic; }
-    .akml-schema-system-toggle.selected {
-        background-color: var(--akml-surface-selection);
-        box-shadow: inset 0 0 0 1px var(--akml-accent-primary);
+    .akml-schema-system-toggle {
+        flex: 0 0 auto;
+        gap: var(--akml-scalar-spacing-xs);
+        padding: 0 var(--akml-scalar-spacing-s) 0 var(--akml-scalar-spacing-xs);
+        color: var(--akml-text-secondary);
+    }
+    .akml-schema-system-toggle:hover:not(:disabled) { color: var(--akml-text-primary); }
+    .akml-schema-system-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border: 1.5px solid currentColor;
+        border-radius: 3px;
+    }
+    /* On: the accent fills the box and outlines the button, the label is full-strength — not a shade of the panel. */
+    .akml-schema-system-toggle.is-on {
+        color: var(--akml-text-primary);
+        border-color: var(--akml-accent-primary);
         font-weight: 600;
+    }
+    .akml-schema-system-toggle.is-on .akml-schema-system-box {
+        color: var(--akml-text-onaccent);
+        background-color: var(--akml-accent-primary);
+        border-color: var(--akml-accent-primary);
+    }
+    .akml-schema-system-box .akml-icon { stroke-width: 3; }
+    /* High contrast fills a pressed or hovered button with the inverse colour, so the box takes the other one of the pair. */
+    [data-akml-theme="high-contrast"] .akml-schema-system-toggle.is-on .akml-schema-system-box {
+        color: var(--akml-accent-primary);
+        background-color: var(--akml-text-onaccent);
+        border-color: var(--akml-text-onaccent);
     }
 </style>
 

@@ -149,6 +149,32 @@ public sealed class SchemaTreeComponentPgTests : BunitContext
     }
 
     [Fact]
+    public async Task The_system_toggle_is_a_labelled_check_box_whose_on_state_shows_a_check()
+    {
+        var cut = await RenderAsync(Sample());
+
+        var toggle = cut.Find("[data-testid='schema-system-toggle']");
+        // Not the fixed 28 px icon button that squeezed the word, and the label is visible text.
+        Assert.DoesNotContain("akml-btn--icon", toggle.ClassList);
+        Assert.Contains("System", toggle.TextContent);
+        Assert.Equal("Show system objects", toggle.GetAttribute("title"));
+        Assert.DoesNotContain("is-on", toggle.ClassList);
+        Assert.Empty(cut.Find("[data-testid='schema-system-box']").QuerySelectorAll("svg"));
+
+        toggle.Click();
+
+        toggle = cut.Find("[data-testid='schema-system-toggle']");
+        Assert.Contains("is-on", toggle.ClassList);
+        Assert.Equal("Hide system objects", toggle.GetAttribute("title"));
+        Assert.Single(cut.Find("[data-testid='schema-system-box']").QuerySelectorAll("svg"));
+
+        toggle.Click();
+
+        Assert.DoesNotContain("is-on", cut.Find("[data-testid='schema-system-toggle']").ClassList);
+        Assert.Empty(cut.Find("[data-testid='schema-system-box']").QuerySelectorAll("svg"));
+    }
+
+    [Fact]
     public async Task Without_system_schemas_in_the_payload_there_is_no_toggle()
     {
         var cut = await RenderAsync(new SchemaPhasePayload
