@@ -48,7 +48,7 @@ internal sealed class AiSchemaContextProvider : IAiSchemaContextProvider
     }
 
     /// <summary>The database a prompt is about: the cache key SchemaSync stores it under, and its kind.</summary>
-    private readonly record struct Target(string Server, string Database, AkmlSql.Core.DatabaseKind Kind);
+    private readonly record struct Target(string Server, string Database, AkmlSql.Core.DatabaseKind Kind, int Generation);
 
     private Target? ActiveTarget()
     {
@@ -56,7 +56,9 @@ internal sealed class AiSchemaContextProvider : IAiSchemaContextProvider
         var server = _connection.SchemaIdentity ?? _connection.Server;
         var database = _connection.Database;
         if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(database)) return null;
-        return new Target(server!, database!, _connection.Kind);
+        // The generation moves on every change of target (re-review REV-01): a switch that completed while this request awaited
+        // is caught even when the new target has the same name.
+        return new Target(server!, database!, _connection.Kind, _connection.ConnectionGeneration);
     }
 
     public async Task<string> GetSchemaTextAsync(string featureId, string? promptOrSql, CancellationToken ct)

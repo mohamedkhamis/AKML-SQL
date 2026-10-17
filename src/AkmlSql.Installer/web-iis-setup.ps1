@@ -45,6 +45,12 @@ New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
 # failed re-run can't leave a stale "ok".
 $okMarker = Join-Path $logRoot 'iis-site.ok'
 Remove-Item $okMarker -Force -ErrorAction SilentlyContinue
+# Re-review REV-03: the same for the site's HTTPS binding (LAN mode): ok, or the reason it was not made.
+$httpsOkMarker = Join-Path $logRoot 'https-site.ok'
+$httpsFailMarker = Join-Path $logRoot 'https-site.failed'
+Remove-Item $httpsOkMarker, $httpsFailMarker -Force -ErrorAction SilentlyContinue
+$httpsFailure = $null
+. (Join-Path $PSScriptRoot 'web-https-binding.ps1')
 
 function Log {
     param([string] $msg)
@@ -110,19 +116,53 @@ try {
     # does not protect the page), and the browser has no Web Crypto outside a secure context, so it
     # could not store them anyway. The site gets an HTTPS binding with the bridge's certificate,
     # whose names already cover this computer's host names and addresses.
+    #
+    # Re-review REV-03: the certificate binding belongs to the IP:port in HTTP.sys, not to this site, so
+    # it is only created or replaced when the port is free or already AKML's (web-https-binding.ps1);
+    # another application's binding is never touched. A change of port, or a reinstall in localhost
+    # mode, removes the binding AKML recorded -- if it is still AKML's.
+    $record = Read-HttpsRecord
+    if ($null -ne $record -and -not ($Mode -eq 'Lan' -and $HttpsPort -gt 0 -and [int]$record.Port -eq $HttpsPort)) {
+        Log (Remove-OwnedHttpsBinding)
+        $record = $null
+    }
     if ($Mode -eq 'Lan' -and $HttpsPort -gt 0) {
         $siteCert = Get-ChildItem 'Cert:\LocalMachine\My' |
                     Where-Object { $_.Subject -eq 'CN=AKML SQL Web Engine' -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) } |
                     Sort-Object NotAfter -Descending | Select-Object -First 1
+        $otherSites = @(Get-Website | Where-Object {
+                $_.Name -ne 'AkmlSqlWeb' -and @($_.bindings.Collection | Where-Object {
+                    $_.protocol -eq 'https' -and $_.bindingInformation -match (':' + $HttpsPort + ':') }).Count -gt 0
+            } | ForEach-Object { $_.Name })
         if ($null -eq $siteCert) {
-            Log "WARNING: no AKML SQL Web Engine certificate found -- the site has no HTTPS binding. Run web-tls-setup.ps1, then the repair."
+            $httpsFailure = 'No AKML SQL Web Engine certificate was found (web-tls-setup.ps1 did not run or failed).'
         }
         else {
-            New-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort -IPAddress '*' | Out-Null
-            # Replace whatever certificate an earlier install (or another site) left on this port.
-            & netsh http delete sslcert "ipport=0.0.0.0:$HttpsPort" 2>$null | Out-Null
-            (Get-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort).AddSslCertificate($siteCert.Thumbprint, 'My')
-            Log "Added HTTPS binding on port $HttpsPort with certificate $($siteCert.Thumbprint)"
+            $decision = Get-HttpsBindingDecision -ExistingHash (Read-BoundHash $HttpsPort) -OurThumbprint $siteCert.Thumbprint `
+                -Record $record -OtherSites $otherSites -Port $HttpsPort
+            Log "HTTPS port ${HttpsPort}: $($decision.Action) -- $($decision.Reason)"
+            if ($decision.Action -eq 'Refuse') {
+                $httpsFailure = $decision.Reason
+            }
+            else {
+                New-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort -IPAddress '*' | Out-Null
+                # Only AKML's own binding is ever replaced here (Rebind); a free port has nothing to delete.
+                if ($decision.Action -eq 'Rebind') { & netsh http delete sslcert "ipport=0.0.0.0:$HttpsPort" 2>$null | Out-Null }
+                (Get-WebBinding -Name 'AkmlSqlWeb' -Protocol https -Port $HttpsPort).AddSslCertificate($siteCert.Thumbprint, 'My')
+                if ((Read-BoundHash $HttpsPort) -ine $siteCert.Thumbprint) {
+                    $httpsFailure = "The certificate could not be bound to port $HttpsPort."
+                }
+                else {
+                    Write-HttpsRecord -Port $HttpsPort -Thumbprint $siteCert.Thumbprint
+                    Set-Content -Path $httpsOkMarker -Value "https on port $HttpsPort" -Encoding UTF8 -Force
+                    Log "Added HTTPS binding on port $HttpsPort with certificate $($siteCert.Thumbprint)"
+                }
+            }
+        }
+        if ($httpsFailure) {
+            # The installer shows this in INSTALL-SUMMARY.txt instead of an https:// address that does not work.
+            Set-Content -Path $httpsFailMarker -Value $httpsFailure -Encoding UTF8 -Force
+            Log "WARNING: no HTTPS for other computers -- $httpsFailure"
         }
     }
 

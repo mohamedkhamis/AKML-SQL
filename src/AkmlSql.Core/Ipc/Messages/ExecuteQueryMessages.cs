@@ -168,6 +168,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(12)]
         public string? ReadOnlyReason { get; set; }
+
+        /// <summary>
+        /// Re-review REV-06: every column's <see cref="ColumnProvenanceDto.HasDefault"/> is known (the engine read the table's
+        /// columns). False when it is not — a SQL Server schema whose columns have not loaded, a temp table, an older engine —
+        /// and then an unset NOT NULL cell of a new row is left to the server to accept or refuse, never assumed to need a value.
+        /// </summary>
+        [Key(13)]
+        public bool DefaultsKnown { get; set; }
     }
 
     /// <summary>Engine → Browser: the full execute outcome (NEVER null — a missing frame hangs the bridge).</summary>

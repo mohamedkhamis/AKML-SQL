@@ -85,7 +85,8 @@ public sealed class StatusIndicatorTests : BunitContext
     {
         await _cache.SetAsync(new SchemaSnapshot
         {
-            ServerCanonicalIdentity = SqlServer,
+            // Re-review REV-01: the cache key is the server scoped to the engine that reaches it (this bridge has no URL).
+            ServerCanonicalIdentity = SqlConnectionService.ScopeToEngine(SqlServer, null),
             DatabaseName = SqlDatabase,
             PhaseA = new byte[] { 1, 2, 3 },   // non-empty ⇒ "cache present"
             Checksum = "x",

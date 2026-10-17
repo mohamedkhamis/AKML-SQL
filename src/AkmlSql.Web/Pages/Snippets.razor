@@ -115,7 +115,7 @@
                 <div class="akml-snippets-actions">
                     @if (!_selected.IsBuiltIn)
                     {
-                        <button class="akml-btn" @onclick="SaveAsync" data-testid="snippet-save">Save</button>
+                        <button class="akml-btn" @onclick="SaveAsync" disabled="@_saving" title="@(_saving ? "Saving…" : null)" data-testid="snippet-save">Save</button>
                         <button class="akml-btn" @onclick="DeleteAsync" data-testid="snippet-delete">Delete</button>
                     }
                     else
@@ -256,16 +256,30 @@
                 await SelectSnippetAsync(visible[at]);
                 break;
         }
+        if (_active >= 0 && _active != at) _revealOption = OptionId(_active);
     }
+
+    // Re-review REV-08: the option the keys moved to, to scroll into the list's view after the render that marked it.
+    private string? _revealOption;
+    private IJSObjectReference? _ui;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_listTrapped || string.IsNullOrEmpty(_listRef.Id)) return;
-        _listTrapped = true;
+        if (string.IsNullOrEmpty(_listRef.Id)) return;
         try
         {
-            var ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
-            await ui.InvokeVoidAsync("trapListKeys", _listRef);
+            if (!_listTrapped)
+            {
+                _listTrapped = true;
+                _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+                await _ui.InvokeVoidAsync("trapListKeys", _listRef);
+            }
+            if (_revealOption is { } option && _ui != null)
+            {
+                _revealOption = null;
+                // Focus stays on the listbox (aria-activedescendant); only the list scrolls, never the page.
+                await _ui.InvokeVoidAsync("revealInList", _listRef, option);
+            }
         }
         catch (JSException) { }
         catch (JSDisconnectedException) { }
@@ -352,30 +366,43 @@
         _status = null;
     }
 
+    // Re-review REV-04: a Save is waiting for the store (IndexedDB, and the engine when one is paired).
+    private bool _saving;
+
     private async Task SaveAsync()
     {
-        if (_selected == null || _selected.IsBuiltIn) return;
+        if (_selected == null || _selected.IsBuiltIn || _saving) return;
         if (string.IsNullOrWhiteSpace(_editShortcode))
         {
             _status = "A shortcode is required.";
             return;
         }
-        _selected.Metadata.Shortcode = _editShortcode.Trim();
-        _selected.Metadata.Title = string.IsNullOrWhiteSpace(_editTitle) ? _editShortcode.Trim() : _editTitle.Trim();
-        _selected.Metadata.Description = _editDescription;
-        _selected.Body = _editBody.Replace("\r\n", "\n").Split('\n');
+        // Re-review REV-04: what is saved is the buffers as they are NOW. The fields stay editable while the store works,
+        // so only this snapshot becomes the baseline: anything typed meanwhile stays a draft (it used to be taken for saved,
+        // and the reload after the save put the stored text back over it).
+        var saved = Buffers;
+        var snippet = _selected;
+        snippet.Metadata.Shortcode = saved.Item1.Trim();
+        snippet.Metadata.Title = string.IsNullOrWhiteSpace(saved.Item2) ? saved.Item1.Trim() : saved.Item2.Trim();
+        snippet.Metadata.Description = saved.Item3;
+        snippet.Body = saved.Item4.Replace("\r\n", "\n").Split('\n');
+        _saving = true;
         try
         {
-            await SnippetStore.SaveAsync(_selected);
-            _baseline = Buffers;   // saved: no longer a draft
-            _status = $"Saved '{_selected.Metadata.Shortcode}'.";
+            await SnippetStore.SaveAsync(snippet);
+            _status = $"Saved '{snippet.Metadata.Shortcode}'.";
             Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
-            await RefreshAsync();
+            if (ReferenceEquals(_selected, snippet)) _baseline = saved;   // another snippet opened meanwhile keeps its own baseline
+            await RefreshAsync();   // keeps the buffers while they still differ from what was saved
         }
         catch (Exception ex)
         {
-            _status = $"Save failed: {ex.Message}";
+            _status = $"Save failed: {ex.Message}";   // the draft and its baseline are untouched
             Diagnostics.Log(DiagnosticLevel.Error, "snippets", _status);
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 
@@ -465,6 +492,11 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { /* tab closing */ }
+        }
         if (_downloadModule != null)
         {
             try { await _downloadModule.DisposeAsync(); }

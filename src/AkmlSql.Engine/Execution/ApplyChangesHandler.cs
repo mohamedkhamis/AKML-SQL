@@ -112,14 +112,39 @@ namespace AkmlSql.Engine.Execution
             {
                 tx = (SqlTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
 
+                // Re-review REV-06: read inserted rows back through OUTPUT when the grid asked for them and the table allows it.
+                bool returnInserted = req.ReturnColumns is { Length: > 0 }
+                    && Array.Exists(req.Edits, e => e.Op == CrudOp.Insert)
+                    && !await HasEnabledTriggersAsync(conn, tx, req, ct).ConfigureAwait(false);
+
                 for (int i = 0; i < req.Edits.Length; i++)
                 {
                     var edit = req.Edits[i];
                     try
                     {
-                        await using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, tx);
+                        await using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, tx, returnInserted);
 
-                        if (edit.Op == CrudOp.Insert)
+                        if (edit.Op == CrudOp.Insert && returnInserted)
+                        {
+                            // INSERT ... OUTPUT INSERTED.<columns> ...; SELECT SCOPE_IDENTITY(); — the stored row, then the identity.
+                            string?[]? row = null;
+                            string? newId = null;
+                            await using (var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false))
+                            {
+                                if (await reader.ReadAsync(ct).ConfigureAwait(false))
+                                {
+                                    row = new string?[reader.FieldCount];
+                                    for (int c = 0; c < reader.FieldCount; c++) row[c] = SqlScalarEncoder.Encode(reader.GetValue(c));
+                                }
+                                if (await reader.NextResultAsync(ct).ConfigureAwait(false) && await reader.ReadAsync(ct).ConfigureAwait(false))
+                                {
+                                    var scalar = reader.GetValue(0);
+                                    newId = scalar is DBNull ? null : SqlScalarEncoder.Encode(scalar);
+                                }
+                            }
+                            results[i] = new CrudEditResult { Index = i, Ok = true, RowsAffected = 1, NewIdentity = newId, Row = row };
+                        }
+                        else if (edit.Op == CrudOp.Insert)
                         {
                             // INSERT ...; SELECT SCOPE_IDENTITY(); — ExecuteScalar returns the identity
                             // (or DBNull when the table has no identity column).
@@ -179,6 +204,23 @@ namespace AkmlSql.Engine.Execution
                 await SafeRollbackAsync(tx).ConfigureAwait(false);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// SQL Server refuses OUTPUT without INTO on a table with an enabled trigger, and the OUTPUT values would not show what the
+        /// trigger did anyway. Such a table's inserts keep the identity-only path.
+        /// </summary>
+        private static async Task<bool> HasEnabledTriggersAsync(SqlConnection conn, SqlTransaction tx, ApplyChangesRequest req, CancellationToken ct)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "SELECT COUNT(*) FROM sys.triggers WHERE parent_id = OBJECT_ID(@t) AND is_disabled = 0;";
+            cmd.Parameters.Add(new SqlParameter("@t", System.Data.SqlDbType.NVarChar, 4000)
+            {
+                Value = CrudWriteGenerator.BuildQualifiedTable(req.BaseCatalog, req.BaseSchema, req.BaseTable),
+            });
+            var count = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+            return count is int n && n > 0;
         }
 
         private static async Task SafeRollbackAsync(SqlTransaction? tx)

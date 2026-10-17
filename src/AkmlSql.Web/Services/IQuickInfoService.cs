@@ -27,16 +27,19 @@ internal sealed class QuickInfoService : IQuickInfoService
     private readonly ISchemaCacheStore? _cache;
     private readonly IEditorSessionStore? _session;
     private readonly IDialectGate? _gate;
+    private readonly ISqlConnectionService? _connection;
 
     public QuickInfoService(
         IEngineBridge bridge,
         ISchemaCacheStore? cache = null,
         IEditorSessionStore? session = null,
-        IDialectGate? gate = null)
+        IDialectGate? gate = null,
+        ISqlConnectionService? connection = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _cache = cache;
         _session = session;
+        _connection = connection;
         _gate = gate;
     }
 
@@ -66,9 +69,9 @@ internal sealed class QuickInfoService : IQuickInfoService
         var token = OfflineSqlScanner.FindIdentifierAt(session.DocumentText, request.CursorOffset);
         if (!token.IsValid) return new QuickInfoResponse();
 
-        var snapshots = await _cache.ListAsync().ConfigureAwait(false);
-        if (snapshots.Count == 0) return new QuickInfoResponse();
-        var active = snapshots[snapshots.Count - 1];
+        // Re-review REV-01: the connected database's snapshot only (the last-used one only when no connection is known).
+        var active = await _cache.GetActiveAsync(_connection).ConfigureAwait(false);
+        if (active == null) return new QuickInfoResponse();
 
         // Prefer Phase B (carries columns + descriptions); fall back to A.
         SchemaPhasePayload? payload = TryDeserialise(active.PhaseB) ?? TryDeserialise(active.PhaseA);

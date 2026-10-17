@@ -143,4 +143,81 @@ public sealed class ReviewFixBrowserTests
         await page.Keyboard.PressAsync("Tab");
         Assert.Equal("snippet-import", await page.EvaluateAsync<string>("() => document.activeElement?.dataset?.testid ?? ''"));
     }
+    /// <summary>Re-review REV-08: with more snippets than the list shows, End and Home keep the active option inside the
+    /// list's visible area (the list scrolls, the page does not), and Enter selects it.</summary>
+    [SkippableFact]
+    public async Task The_active_snippet_stays_visible_while_the_keys_move_it()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output, contextOptions: new() { ViewportSize = new() { Width = 1440, Height = 900 } });
+        var page = s.Page;
+        await page.ClickAsync("nav >> text=Snippets");
+        await Assertions.Expect(Id(page, "snippet-row").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        await page.SelectOptionAsync("[data-testid='snippet-kind-filter']", "-1");   // every snippet, as in the review
+        var list = Id(page, "snippet-list");
+        // The review's case: more options than the list shows (22 built-ins at 1440 x 900).
+        Assert.True(await list.EvaluateAsync<bool>("l => l.scrollHeight > l.clientHeight"), "The snippet list does not overflow; the test needs it to.");
+
+        const string Visible = """
+            l => { const o = document.getElementById(l.getAttribute('aria-activedescendant'));
+                   const a = l.getBoundingClientRect(), b = o.getBoundingClientRect();
+                   return b.top >= a.top - 1 && b.bottom <= a.bottom + 1; }
+            """;
+        await list.FocusAsync();
+        await page.Keyboard.PressAsync("End");
+        Assert.True(await list.EvaluateAsync<bool>(Visible), "End: the last option is out of view");
+        Assert.True(await list.EvaluateAsync<int>("l => l.scrollTop") > 0);
+        Assert.Equal(0, await page.EvaluateAsync<int>("() => window.scrollY"));
+
+        await page.Keyboard.PressAsync("Home");
+        Assert.True(await list.EvaluateAsync<bool>(Visible), "Home: the first option is out of view");
+        for (int i = 0; i < 12; i++) await page.Keyboard.PressAsync("ArrowDown");
+        Assert.True(await list.EvaluateAsync<bool>(Visible), "ArrowDown: the active option is out of view");
+
+        var active = await list.GetAttributeAsync("aria-activedescendant");
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(page.Locator("#" + active)).ToHaveAttributeAsync("aria-selected", "true");
+    }
+
+    /// <summary>Re-review REV-06 through the real grid: a result from a multi-statement batch is not re-run after Apply, so the
+    /// inserted row must show what the server stored — identity, NOT NULL and nullable defaults, an explicit NULL — and be
+    /// editable at once by its key.</summary>
+    [SkippableFact]
+    public async Task An_inserted_row_shows_what_the_server_stored_and_can_be_edited_without_a_rerun()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        var table = "akml_e2e_insert_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        await s.ExecuteAsync($"CREATE TABLE dbo.{table} (id int IDENTITY PRIMARY KEY, name nvarchar(50) NOT NULL, " +
+                             "tag nvarchar(50) NOT NULL DEFAULT N'tagged', note nvarchar(50) NULL DEFAULT N'noted'); " +
+                             $"INSERT dbo.{table} (name) VALUES (N'alpha');");
+        try
+        {
+            // Two statements: the page will not re-run them after Apply.
+            await s.ExecuteAsync($"SELECT id, name, tag, note FROM dbo.{table}; SELECT 1 AS other;");
+            var first = s.Page.Locator("[data-testid='results-set-0']");
+            await first.Locator("[data-testid='results-add-row']").ClickAsync();
+            await first.Locator("[data-testid='results-insert-cell-0-1']").ClickAsync();
+            await s.Page.Keyboard.TypeAsync("bravo");
+            await s.Page.Keyboard.PressAsync("Enter");
+            await first.Locator("[data-testid='results-apply-0']").ClickAsync();
+            await Assertions.Expect(first.Locator("[data-testid='results-applybar']")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-0']")).ToHaveTextAsync("2");
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-2']")).ToHaveTextAsync("tagged");
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-3']")).ToHaveTextAsync("noted");
+
+            // The new row has its key: edit it without running anything again.
+            await first.Locator("[data-testid='results-cell-1-1']").ClickAsync();
+            await s.Page.Keyboard.TypeAsync("charlie");
+            await s.Page.Keyboard.PressAsync("Enter");
+            await first.Locator("[data-testid='results-apply-0']").ClickAsync();
+            await Assertions.Expect(first.Locator("[data-testid='results-applybar']")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+
+            await s.ExecuteAsync($"SELECT name FROM dbo.{table} WHERE id = 2;");
+            await Assertions.Expect(Cell(s.Page, 0, 0)).ToHaveTextAsync("charlie");
+        }
+        finally
+        {
+            await DropAsync(s, table);
+        }
+    }
 }

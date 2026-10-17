@@ -97,6 +97,7 @@ internal sealed class GridTestHost : IDisposable
             new string?[] { "3", null, "33", null, null },
         },
         IsEditable = true,
+        DefaultsKnown = true,   // the engine read dbo.demo's columns (a warm schema cache)
         BaseSchema = "dbo",
         BaseTable = "demo",
         Provenance = new[]

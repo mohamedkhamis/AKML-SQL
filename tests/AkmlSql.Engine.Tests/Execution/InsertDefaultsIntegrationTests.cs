@@ -133,4 +133,71 @@ public sealed class InsertDefaultsIntegrationTests
             await ExecuteAsync(transport, sid, $"IF OBJECT_ID('dbo.[{table}]') IS NOT NULL DROP TABLE dbo.[{table}];", 99);
         }
     }
+    /// <summary>Re-review REV-06: the insert returns the row as the server stored it — identity and defaults — so the grid shows
+    /// it without running the batch again; a table with a trigger (no OUTPUT allowed) still returns its identity.</summary>
+    [SkippableFact]
+    public async Task An_insert_returns_the_stored_row_and_a_trigger_table_its_identity()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+        var sid = Guid.NewGuid().ToString("N");
+        var transport = await ConnectedEngineAsync(sid);
+        var table = "akml_returned_" + Guid.NewGuid().ToString("N");
+        var triggered = "akml_triggered_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            await ExecuteAsync(transport, sid,
+                $"CREATE TABLE dbo.[{table}] (Id int IDENTITY PRIMARY KEY, Name nvarchar(50) NOT NULL, Tag nvarchar(50) NOT NULL DEFAULT N'tagged');", 1);
+            await ExecuteAsync(transport, sid,
+                $"CREATE TABLE dbo.[{triggered}] (Id int IDENTITY PRIMARY KEY, Name nvarchar(50) NOT NULL);", 2);
+            await ExecuteAsync(transport, sid,
+                $"CREATE TRIGGER dbo.[trg_{triggered}] ON dbo.[{triggered}] AFTER INSERT AS SET NOCOUNT ON;", 3);
+
+            ApplyChangesRequest Insert(string t) => new()
+            {
+                SessionId = sid, BaseSchema = "dbo", BaseTable = t, ReturnColumns = new[] { "Id", "Name", "Tag" }[..(t == table ? 3 : 2)],
+                Edits = new[] { new CrudEditDto { Op = CrudOp.Insert, SetCells = new[] { Text("Name", "first") } } },
+            };
+
+            var plain = await SendAsync<ApplyChangesRequest, ApplyChangesResult>(transport, MessageTypes.ApplyChanges, Insert(table), 4);
+            Assert.Equal(ExecuteStatus.Ok, plain.Status);
+            Assert.Equal(new string?[] { "1", "first", "tagged" }, Assert.Single(plain.Results).Row);
+            Assert.Equal("1", plain.Results[0].NewIdentity);
+
+            var withTrigger = await SendAsync<ApplyChangesRequest, ApplyChangesResult>(transport, MessageTypes.ApplyChanges, Insert(triggered), 5);
+            Assert.Equal(ExecuteStatus.Ok, withTrigger.Status);
+            Assert.Null(Assert.Single(withTrigger.Results).Row);
+            Assert.Equal("1", withTrigger.Results[0].NewIdentity);
+        }
+        finally
+        {
+            await ExecuteAsync(transport, sid, $"IF OBJECT_ID('dbo.[{table}]') IS NOT NULL DROP TABLE dbo.[{table}]; IF OBJECT_ID('dbo.[{triggered}]') IS NOT NULL DROP TABLE dbo.[{triggered}];", 99);
+        }
+    }
+
+    /// <summary>Re-review REV-06: a table the schema cache has not loaded yet says its defaults are unknown, rather than none.</summary>
+    [SkippableFact]
+    public async Task A_freshly_created_table_reports_its_defaults_as_unknown()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
+        var sid = Guid.NewGuid().ToString("N");
+        var transport = await ConnectedEngineAsync(sid);
+        var table = "akml_cold_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            var read = await SendAsync<ExecuteQueryRequest, ExecuteQueryResult>(transport, MessageTypes.ExecuteQuery, new ExecuteQueryRequest
+            {
+                SessionId = sid, MaxRows = 10, CommandTimeoutSeconds = 30, QueryId = Guid.NewGuid().ToString("N"), IncludeProvenance = true,
+                Sql = $"CREATE TABLE dbo.[{table}] (Id int IDENTITY PRIMARY KEY, Tag nvarchar(50) NOT NULL DEFAULT N'x'); SELECT Id, Tag FROM dbo.[{table}];",
+            }, 1);
+
+            var set = Assert.Single(read.ResultSets);
+            Assert.True(set.IsEditable);
+            Assert.False(set.DefaultsKnown);
+            Assert.False(set.Provenance[1].HasDefault);   // not "no default" — unknown, which DefaultsKnown says
+        }
+        finally
+        {
+            await ExecuteAsync(transport, sid, $"IF OBJECT_ID('dbo.[{table}]') IS NOT NULL DROP TABLE dbo.[{table}];", 99);
+        }
+    }
 }

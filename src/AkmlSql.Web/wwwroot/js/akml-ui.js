@@ -187,6 +187,17 @@ export function trapListKeys(el) {
     });
 }
 
+/** Re-review REV-08: scroll the list so the option with this id is fully visible, the least distance needed, without
+ *  scrolling the page or moving focus (a listbox with aria-activedescendant keeps focus on itself). */
+export function revealInList(listEl, optionId) {
+    const option = typeof document !== 'undefined' ? document.getElementById(optionId) : null;
+    if (!listEl || !option) return;
+    const list = listEl.getBoundingClientRect();
+    const box = option.getBoundingClientRect();
+    if (box.top < list.top) listEl.scrollTop -= (list.top - box.top);
+    else if (box.bottom > list.bottom) listEl.scrollTop += (box.bottom - list.bottom);
+}
+
 /** Focus the element with this id, if it is there (a list moving its one tab stop). */
 export function focusById(id) {
     const el = document.getElementById(id);

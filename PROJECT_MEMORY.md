@@ -734,3 +734,22 @@ Temporary probe tests were removed from the normal test project after recording 
 project was rebuilt. This was review/documentation work, with no production fixes or deployment.
 Actual LAN installer operation, remote certificate validation and live PostgreSQL remain unverified.
 
+## 2026-10-17 — Web re-review fixes (AKML_WEB_RE_REVIEW_2026-10-17.md)
+
+The follow-up review's REV-01..REV-08 and SEC-01 are fixed in the working tree (uncommitted); per-ID matrix at the end of that report.
+Facts that changed:
+
+- `ISqlConnectionService.SchemaIdentity` (the browser schema-cache key) is now `"<server> (engine <host:port>)"`, scoped to the engine the
+  session was opened through (`SqlConnectionService.ScopeToEngine`): a loopback SQL address is relative to the engine. Older unscoped
+  cache entries no longer match and are refetched. The AI schema provider also re-checks the connection generation.
+- History never copies, opens or re-executes the 500-character search excerpt: those wait for the full SQL (or a stored version).
+- LAN HTTPS binding ownership: `src/AkmlSql.Installer/web-https-binding.ps1` (decision functions + `-RemoveOwned`), record at
+  `%ProgramData%\AKML SQL Web\https-binding.json`, markers `https-site.ok` / `https-site.failed`; uninstall removes only AKML's still-owned
+  binding. Script-level tests: `tests/AkmlSql.Installer.Tests/HttpsBindingDecisionTests.cs` (no admin needed).
+- Diagnostics ring is persisted as a versioned envelope; a legacy (pre-fix) ring is migrated on restore (AI entries purged).
+- `ChatTurn.IncompleteReason` persists an incomplete AI answer's status.
+- SQL Server inserts return the stored row via `OUTPUT INSERTED` when the table has no enabled trigger; `ExecuteResultSet.DefaultsKnown`
+  (key 13).
+- Dependencies: MessagePack 3.1.9 (Core, Engine, E2E tests); System.Security.Cryptography.Pkcs pinned to 9.0.21 in the Engine.
+- Running `ISCC /O-` deletes `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`; for a syntax check compile with `/O<scratch dir>` instead.
+

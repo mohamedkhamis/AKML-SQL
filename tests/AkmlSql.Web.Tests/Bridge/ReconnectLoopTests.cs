@@ -177,6 +177,9 @@ public sealed class ReconnectLoopTests
 
         await WaitForStateAsync(bridge, BridgeState.Failed, TimeSpan.FromSeconds(3));
         Assert.Equal(BridgeState.Failed, bridge.State);
+        // The failed handshake sets Failed before the loop clears the revoked token: wait for the clean-up itself.
+        for (var waited = 0; waited < 3000 && (vault.Removed.Count == 0 || (await connections.GetAsync(connection.Id))!.BearerTokenWrappedRef != null); waited += 20)
+            await Task.Delay(20);
         Assert.Contains(connection.Id, vault.Removed);
         var updated = await connections.GetAsync(connection.Id);
         Assert.Null(updated!.BearerTokenWrappedRef);

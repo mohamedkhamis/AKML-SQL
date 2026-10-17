@@ -238,7 +238,28 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     private string? _schemaIdentity;
 
-    public string? SchemaIdentity => Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _schemaIdentity != null ? _schemaIdentity : Server;
+    /// <summary>
+    /// The browser's schema-cache key for this connection: the server as the engine reaches it, scoped to the engine the session
+    /// was opened through. Re-review REV-01: a SQL Server address is relative to the engine's computer — two engines can both
+    /// reach a different <c>localhost/Sales</c> — so without the scope their schemas shared one cache entry, and the AI could be
+    /// given the other engine's schema. The engine part goes last so a PostgreSQL key still starts <c>pg://</c>. Entries
+    /// cached before the scope existed no longer match and are refetched.
+    /// </summary>
+    public string? SchemaIdentity
+    {
+        get
+        {
+            var server = Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _schemaIdentity != null ? _schemaIdentity : Server;
+            return server == null ? null : ScopeToEngine(server, _engineUrl);
+        }
+    }
+
+    /// <summary><c>"localhost (engine 10.0.0.5:47291)"</c>: <paramref name="server"/> as reached by the engine at <paramref name="engineUrl"/>.</summary>
+    internal static string ScopeToEngine(string server, string? engineUrl)
+    {
+        var engine = Uri.TryCreate(engineUrl, UriKind.Absolute, out var uri) ? uri.Authority.ToLowerInvariant() : engineUrl ?? "unknown";
+        return server + " (engine " + engine + ")";
+    }
 
     public bool EngineSupportsPostgres => _bridge.Advertises(CapabilityPostgreSql);
 

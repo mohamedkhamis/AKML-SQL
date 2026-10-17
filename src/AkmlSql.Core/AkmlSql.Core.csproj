@@ -10,7 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MessagePack" Version="3.1.8" />
+    <!-- Re-review SEC-01: 3.1.9 fixes GHSA-qhrr-8q5h-9q3h (memory exhaustion deserializing untrusted object data). -->
+    <PackageReference Include="MessagePack" Version="3.1.9" />
     <PackageReference Include="Serilog" Version="4.*" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.*" />
   </ItemGroup>

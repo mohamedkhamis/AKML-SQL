@@ -105,14 +105,14 @@ public sealed class ConnectionSwitchTests
         await sql.ConnectAsync(Postgres(), default);
         sql.ReportTransactionState(TransactionState.Open);
         Assert.Equal(TransactionState.Open, sql.TransactionState);
-        Assert.Equal("pg://pg1:5433", sql.SchemaIdentity);
+        Assert.Equal(SqlConnectionService.ScopeToEngine("pg://pg1:5433", null), sql.SchemaIdentity);
 
         Assert.True((await ConnectSqlServer(sql)).Ok);
 
         Assert.Equal(DatabaseKind.SqlServer, sql.Kind);
         Assert.Null(sql.ServerVersionText);
         Assert.Equal(TransactionState.None, sql.TransactionState);
-        Assert.Equal("localhost", sql.SchemaIdentity);
+        Assert.Equal(SqlConnectionService.ScopeToEngine("localhost", null), sql.SchemaIdentity);
         Assert.Null(sql.Login);
         Assert.True(sql.WindowsAuth);
     }
@@ -129,7 +129,7 @@ public sealed class ConnectionSwitchTests
         Assert.Equal("northwind", sql.Database);
         Assert.Equal("app", sql.Login);
         Assert.False(sql.WindowsAuth);
-        Assert.Equal("pg://pg1:5433", sql.SchemaIdentity);
+        Assert.Equal(SqlConnectionService.ScopeToEngine("pg://pg1:5433", null), sql.SchemaIdentity);
         Assert.Equal(TransactionState.None, sql.TransactionState);
     }
 

@@ -1177,8 +1177,15 @@ the engine refuses the whole batch (`Status` Error, nothing written), so rows re
 next one with the same table and key names. An empty stamp (an older web bundle) is not checked.
 
 `ColumnProvenanceDto.HasDefault` (key 12) says the column has a default. The grid leaves an unset cell of a new row out of the INSERT
-(an explicit NULL is still sent), so the default applies; a new row with no cell set is written as `INSERT ... DEFAULT VALUES`. False
-when unknown (an older engine, or a SQL Server schema whose columns have not loaded), and the grid then asks for a value.
+(an explicit NULL is still sent), so the default applies; a new row with no cell set is written as `INSERT ... DEFAULT VALUES`.
+`ExecuteResultSet.DefaultsKnown` (key 13) says the engine read the table's columns, so `HasDefault` is reliable. When it is false (an
+older engine, a SQL Server schema whose columns have not loaded, a table created in the same script) the grid does not assume "no
+default": an unset NOT NULL cell is left to the server, which fills it in or refuses the row.
+
+On SQL Server an INSERT now returns the stored row too: when `ReturnColumns` is set and the table has no enabled trigger (SQL Server
+refuses `OUTPUT` without `INTO` on such a table), the writer adds `OUTPUT INSERTED.<columns>` and `CrudEditResult.Row` carries identity,
+defaults and computed values in `ReturnColumns` order; `NewIdentity` is still set. With a trigger only `NewIdentity` comes back, and the
+grid puts it in the row's identity column so the new row can be edited or deleted by its key without running the query again.
 
 On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
 transaction, which is joined and left open; an aborted transaction is refused with a message to roll back. Every edit must touch

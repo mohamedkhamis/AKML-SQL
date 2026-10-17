@@ -41,12 +41,15 @@ internal sealed class CompletionService : ICompletionService
     private readonly ISchemaCacheStore? _cache;
     private readonly IDialectGate? _gate;
 
-    public CompletionService(IEngineBridge bridge, ISchemaCacheStore? cache = null, IDialectGate? gate = null)
+    public CompletionService(IEngineBridge bridge, ISchemaCacheStore? cache = null, IDialectGate? gate = null, ISqlConnectionService? connection = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _cache = cache;   // null in tests that only exercise the online path
         _gate = gate;
+        _connection = connection;
     }
+
+    private readonly ISqlConnectionService? _connection;
 
     public async Task<CompletionResponse> CompleteAsync(
         CompletionRequest request, CancellationToken ct, string? liveDocumentText = null)
@@ -99,11 +102,8 @@ internal sealed class CompletionService : ICompletionService
         // so it works even when no schema snapshot has been fetched yet.
         TryPrependSmartGroupBy(items, cursorOffset, liveDocumentText);
 
-        // Pick the most-recently-used snapshot. The store sorts ascending; the user's
-        // active session collapses to the LAST entry. Multi-server scenarios would
-        // need an explicit active-session pointer; deferred for T109.
-        var snapshots = await _cache!.ListAsync().ConfigureAwait(false);
-        var active = snapshots.Count > 0 ? snapshots[snapshots.Count - 1] : null;
+        // Re-review REV-01: the connected database's snapshot only (the last-used one only when no connection is known).
+        var active = await _cache!.GetActiveAsync(_connection).ConfigureAwait(false);
         if (active?.PhaseA != null && active.PhaseA.Length > 0)
         {
             SchemaPhasePayload? payloadA = null;

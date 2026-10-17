@@ -73,12 +73,24 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
         ScheduleFlush();
     }
 
+    /// <summary>
+    /// Re-review REV-05: the stored ring is an envelope with a format version. Version 1 (a bare array, written before the
+    /// 2026-10-17 fixes) may hold whole AI provider responses — echoed prompts, schema, keys — that no pattern can reliably
+    /// mask, so it is migrated on restore and written back at once as version 2.
+    /// </summary>
+    private sealed record StoredRing(int Version, DiagnosticEntry[] Entries);
+
+    private const int StoredRingVersion = 2;
+
+    internal const string PurgedLegacyAiMessage =
+        "An AI diagnostic recorded by an earlier version was removed: it could hold a provider's response.";
+
     public Task FlushAsync()
     {
         var snapshot = Snapshot();
         try
         {
-            var json = JsonSerializer.Serialize(snapshot);
+            var json = JsonSerializer.Serialize(new StoredRing(StoredRingVersion, snapshot.ToArray()));
             return _store.SetAsync(StoreNames.Diagnostics, PersistenceKey, json);
         }
         catch
@@ -95,16 +107,30 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
         {
             var raw = await _store.GetAsync(StoreNames.Diagnostics, PersistenceKey).ConfigureAwait(false);
             if (string.IsNullOrEmpty(raw)) return;
-            var entries = JsonSerializer.Deserialize<DiagnosticEntry[]>(raw);
+            var legacy = raw.TrimStart().StartsWith("[", StringComparison.Ordinal);
+            var entries = legacy
+                ? JsonSerializer.Deserialize<DiagnosticEntry[]>(raw)
+                : JsonSerializer.Deserialize<StoredRing>(raw)?.Entries;
             if (entries == null) return;
-            foreach (var e in entries) _entries.Enqueue(e);
+            foreach (var e in entries) _entries.Enqueue(legacy ? Migrate(e) : e with { Message = DiagnosticRedaction.Clean(e.Message) });
             while (_entries.Count > CapacityBound && _entries.TryDequeue(out _)) { }
+            // The legacy record is replaced now, not at the next log line: until then an export would carry the old text.
+            if (legacy) await FlushAsync().ConfigureAwait(false);
         }
         catch
         {
             // Corrupt record -- ignore.
         }
     }
+
+    /// <summary>
+    /// A version-1 entry: AI entries lose their message and data (they could carry a provider's response body); every other
+    /// entry is masked and bounded as a new one would be, and keeps its data (the earlier version logged type names there).
+    /// </summary>
+    private static DiagnosticEntry Migrate(DiagnosticEntry e) =>
+        e.Source.StartsWith("ai", StringComparison.OrdinalIgnoreCase)
+            ? e with { Message = PurgedLegacyAiMessage, Data = null }
+            : e with { Message = DiagnosticRedaction.Clean(e.Message) };
 
     private void ScheduleFlush()
     {

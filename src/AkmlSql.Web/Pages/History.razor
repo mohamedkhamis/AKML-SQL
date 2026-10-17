@@ -201,6 +201,14 @@
                     <span class="akml-hist-pname">@(_selected == null ? "Preview" : RowFor(_selected).DisplayName)</span>
                     <span class="akml-hist-ptime">@(_selected == null ? "" : AbsTime(_selected.ExecutedAt))</span>
                 </div>
+                @if (_selected != null && !_detailLoading && !HasCompleteSql)
+                {
+                    <div class="akml-results-warning" role="alert" data-testid="history-excerpt-notice">
+                        The full query could not be loaded, so only its first 500 characters are shown. It cannot be copied,
+                        opened or run until it loads.
+                        <button type="button" class="akml-btn" data-testid="history-detail-retry" @onclick="@(() => SelectAsync(_selected))">Retry</button>
+                    </div>
+                }
                 <pre class="akml-hist-preview" data-testid="history-preview" aria-busy="@(_detailLoading ? "true" : null)">@if (_selected != null && !_detailLoading)
 {
     foreach (var seg in _previewSegments)
@@ -219,12 +227,12 @@
                     <span class="akml-hist-spacer"></span>
                     @if (_selected != null)
                     {
-                        <button class="akml-btn" @onclick="CopySqlAsync" disabled="@_detailLoading" title="@DetailWait" data-testid="history-copy">Copy</button>
+                        <button class="akml-btn" @onclick="CopySqlAsync" disabled="@(!HasCompleteSql)" title="@DetailWait" data-testid="history-copy">Copy</button>
                         <button class="akml-btn" @onclick="@(() => RenameAsync(_selected))" data-testid="history-rename">Rename</button>
                         <button class="akml-btn" @onclick="@(() => DeleteAsync(_selected))" data-testid="history-delete">Delete</button>
                         <button class="akml-btn" @onclick="@(() => RemoveOlderAsync(_selected))" data-testid="history-remove-older">Remove older</button>
-                        <button class="akml-btn" @onclick="ReExecuteAsync" disabled="@_detailLoading" title="@DetailWait" data-testid="history-reexecute">Re-execute</button>
-                        <button class="akml-btn akml-btn--primary" @onclick="OpenInEditorAsync" disabled="@_detailLoading" title="@DetailWait" data-testid="history-open">Open</button>
+                        <button class="akml-btn" @onclick="ReExecuteAsync" disabled="@(!HasCompleteSql)" title="@DetailWait" data-testid="history-reexecute">Re-execute</button>
+                        <button class="akml-btn akml-btn--primary" @onclick="OpenInEditorAsync" disabled="@(!HasCompleteSql)" title="@DetailWait" data-testid="history-open">Open</button>
                     }
                 </div>
             </div>
@@ -401,7 +409,14 @@
     private int _detailRequest;
     private bool _detailLoading;
 
-    private string? DetailWait => _detailLoading ? "Wait for the entry to load" : null;
+    // Re-review REV-02: the complete query is known — not just the search result's 500-character excerpt.
+    private bool _fullSqlLoaded;
+
+    /// <summary>The preview holds the whole query (the entry's full text, or a stored version): it may be copied, opened, run.</summary>
+    private bool HasCompleteSql => !_detailLoading && (_fullSqlLoaded || _selectedVersion >= 0);
+
+    private string? DetailWait => _detailLoading ? "Wait for the entry to load"
+        : !HasCompleteSql ? "The full query could not be loaded; only its first 500 characters are shown" : null;
 
     // Review WEB-13: the list's one tab stop — a group header ("g:<bucket>") or an entry ("r:<id>") — moved by the arrow keys.
     private ElementReference _listRef;
@@ -564,26 +579,26 @@
         _previewSql = string.Empty;
         _versions = Array.Empty<HistoryVersionDto>();
         _detailLoading = true;
+        _fullSqlLoaded = false;
         RecomputePreviewSegments();
         StateHasChanged();
 
-        string sql;
-        HistoryVersionDto[] versions;
-        try
-        {
-            sql = await HistorySvc.GetFullSqlAsync(entry.Id, CancellationToken.None) ?? entry.SqlText ?? string.Empty;
-            versions = await HistorySvc.GetVersionsAsync(entry.Id, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            if (request != _detailRequest) return;
-            Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Entry details failed: {ex.GetType().Name}");
-            sql = entry.SqlText ?? string.Empty;
-            versions = Array.Empty<HistoryVersionDto>();
-        }
+        // Re-review REV-02: the search result carries only the first 500 characters of the query. When the full text cannot be
+        // loaded (no answer, an error, a refusal) that excerpt may be shown — marked as an excerpt — but never copied, opened or
+        // run as if it were the query: running a prefix can drop its WHERE clause or its ROLLBACK. The versions are optional
+        // and load separately, so their failure never costs the full text.
+        string? sql = null;
+        try { sql = await HistorySvc.GetFullSqlAsync(entry.Id, CancellationToken.None); }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Full SQL failed: {ex.GetType().Name}"); }
         if (request != _detailRequest) return;   // another entry was selected (or the selection went) meanwhile
 
-        _previewSql = sql;
+        var versions = Array.Empty<HistoryVersionDto>();
+        try { versions = await HistorySvc.GetVersionsAsync(entry.Id, CancellationToken.None) ?? versions; }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "history", $"Versions failed: {ex.GetType().Name}"); }
+        if (request != _detailRequest) return;
+
+        _fullSqlLoaded = sql != null;
+        _previewSql = sql ?? entry.SqlText ?? string.Empty;
         _versions = versions;
         _detailLoading = false;
         RecomputePreviewSegments();
@@ -592,8 +607,8 @@
 
     private void SelectVersion(int idx)
     {
-        if (idx < 0 || idx >= _versions.Length) return;
-        _selectedVersion = idx;
+        if (idx < 0 || idx >= _versions.Length || _versions[idx].SqlText == null) return;
+        _selectedVersion = idx;   // a version's text is stored whole: it is the complete query
         _previewSql = _versions[idx].SqlText ?? string.Empty;
         RecomputePreviewSegments();
     }
@@ -602,6 +617,7 @@
     {
         _detailRequest++;           // a details load still on its way belongs to nothing now
         _detailLoading = false;
+        _fullSqlLoaded = false;
         _selected = null;
         _previewSql = string.Empty;
         _versions = Array.Empty<HistoryVersionDto>();
@@ -750,7 +766,7 @@
 
     private async Task CopySqlAsync()
     {
-        if (_detailLoading) return;
+        if (!HasCompleteSql) return;
         // Spec 041 (T201, R5, N14): copyText also works on the http LAN deployment, where navigator.clipboard is absent.
         bool copied;
         try
@@ -769,7 +785,7 @@
 
     private async Task OpenInEditorAsync()
     {
-        if (_selected == null || _detailLoading) return;
+        if (_selected == null || !HasCompleteSql) return;
         // Spec 041 (R64): a past query opens as a new document, as Open does, and never overwrites a modified
         // document without asking.
         var entry = _selected;
@@ -781,7 +797,7 @@
 
     private async Task ReExecuteAsync()
     {
-        if (_selected == null || _detailLoading) return;
+        if (_selected == null || !HasCompleteSql) return;
         var entry = _selected;
         if (!await Document.OpenQueryAsync(_previewSql, "Re-execute")) return;
         await SessionStore.FlushAsync();

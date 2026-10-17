@@ -66,6 +66,9 @@ Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
 ; DNS name behind NAT: -ExtraNames ... -RestartEngine). The other helpers are bundled to {tmp} and
 ; removed after install.
 Source: "web-iis-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
+; Re-review REV-03: decides and records the site's HTTPS binding (dot-sourced by web-iis-setup.ps1; run
+; with -RemoveOwned at uninstall). Kept in Support so repair and uninstall find it.
+Source: "web-https-binding.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
 Source: "web-iis-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
 Source: "web-tls-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
@@ -793,8 +796,21 @@ begin
         summary.Add('');
         if IsLanExposed() then
         begin
-            summary.Add('URL:         https://' + GetComputerNameString() + httpsPortSuffix + '/');
-            summary.Add('             (on this computer also http://localhost' + iisPortSuffix + '/)');
+            { Re-review REV-03: an https:// address only when the binding was actually made. }
+            if FileExists(appdata + '\https-site.ok') then
+            begin
+                summary.Add('URL:         https://' + GetComputerNameString() + httpsPortSuffix + '/');
+                summary.Add('             (on this computer also http://localhost' + iisPortSuffix + '/)');
+            end
+            else
+            begin
+                summary.Add('URL:         http://localhost' + iisPortSuffix + '/  (this computer only)');
+                summary.Add('WARNING: other computers have no HTTPS address, so they cannot pair or store AI keys.');
+                if LoadStringFromFile(appdata + '\https-site.failed', rawText) then
+                    summary.Add('  ' + Trim(String(rawText)));
+                summary.Add('  Re-run the installer with another secure site port (or free the port), or run');
+                summary.Add('  "Repair AKML SQL Web hosting" once the certificate exists.');
+            end;
             summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (wss, TLS)');
             if PairingPin <> '' then
                 summary.Add('Pairing PIN: ' + PairingPin)
@@ -897,7 +913,6 @@ var
     appdata: String;
     resultCode: Integer;
     bridgePort: Cardinal;
-    httpsPort: Cardinal;
 begin
     appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
 
@@ -913,10 +928,13 @@ begin
         Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(bridgePort),
              '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
-    { Review WEB-03: the site's HTTPS binding put the certificate on its port too, and removing the
-      site does not remove that binding. }
-    if FileExists(appdata + '\certs\thumbprint.txt') and WebRegQueryDWord('HttpsPort', httpsPort) and (httpsPort > 0) then
-        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(httpsPort),
+    { Review WEB-03 / re-review REV-03: the site's HTTPS binding put the certificate on its port, and
+      removing the site does not remove it. Only the binding AKML recorded creating is removed, and only
+      while the port still carries that certificate -- never by port number alone, which could delete
+      another application's binding (it may have held the port all along, or taken it since). }
+    if FileExists(ExpandConstant('{app}\Support\web-https-binding.ps1')) then
+        Exec(ExpandConstant('{sysnative}\WindowsPowerShell\v1.0\powershell.exe'),
+             '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\Support\web-https-binding.ps1') + '" -RemoveOwned',
              '', SW_HIDE, ewWaitUntilTerminated, resultCode);
 
     { Remove the IIS site if installed. sysnative: the 32-bit uninstaller must use the native

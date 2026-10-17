@@ -209,6 +209,36 @@ test('trapListKeys cancels the list keys, Space only on the list itself, and nev
     }
 });
 
+// ── revealInList (re-review REV-08) ───────────────────────────────────────────────────────────
+function scrollList(top, bottom) {
+    return { scrollTop: 0, getBoundingClientRect() { return { top, bottom }; } };
+}
+
+function withOption(rect, fn) {
+    const saved = globalThis.document.getElementById;
+    globalThis.document.getElementById = id => id === 'opt' ? { getBoundingClientRect: () => rect } : null;
+    try { fn(); } finally { globalThis.document.getElementById = saved; }
+}
+
+test('revealInList scrolls the least needed to show an option below the list, and above it', () => {
+    const list = scrollList(100, 856);
+    withOption({ top: 882, bottom: 924 }, () => ui.revealInList(list, 'opt'));
+    assert.equal(list.scrollTop, 68, 'down by exactly the hidden part');
+
+    list.scrollTop = 300;
+    withOption({ top: 60, bottom: 102 }, () => ui.revealInList(list, 'opt'));
+    assert.equal(list.scrollTop, 260, 'up by exactly the hidden part');
+});
+
+test('revealInList leaves a visible option, a missing option and a missing list alone', () => {
+    const list = scrollList(100, 856);
+    withOption({ top: 200, bottom: 242 }, () => ui.revealInList(list, 'opt'));
+    assert.equal(list.scrollTop, 0);
+    withOption({ top: 900, bottom: 942 }, () => ui.revealInList(list, 'other'));
+    assert.equal(list.scrollTop, 0);
+    assert.doesNotThrow(() => withOption({ top: 0, bottom: 1 }, () => ui.revealInList(null, 'opt')));
+});
+
 test('trapListKeys is idempotent per element and tolerates a missing one', () => {
     const el = listElement();
     ui.trapListKeys(el);

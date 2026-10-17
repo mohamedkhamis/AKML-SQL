@@ -512,8 +512,13 @@
         if (!IsColumnInsertable(c)) return false;
         if (_inserts[insIdx].TryGetValue(c, out var v)) return IsInvalidValue(c, v);
         var p = Provenance(c);
-        return p != null && !p.AllowDBNull && !p.IsAutoIncrement && !p.HasDefault;
+        // Re-review REV-06: only a column known to have no default must be typed; with unknown defaults the server decides.
+        return p != null && !p.AllowDBNull && !p.IsAutoIncrement && !p.HasDefault && Set.DefaultsKnown;
     }
+
+    /// <summary>An unset NOT NULL cell whose default is not known: the server fills it in or refuses the row.</summary>
+    private bool DefaultUnknown(int col) =>
+        !Set.DefaultsKnown && Provenance(col) is { AllowDBNull: false, IsAutoIncrement: false, HasDefault: false };
 
     private bool HasDefault(int col) => Provenance(col)?.HasDefault == true;
 
@@ -734,7 +739,7 @@
                 // An unset cell is left out of the INSERT: the column's default applies (shown so), else NULL — unless the
                 // column must be supplied (invalid, blank). Review WEB-20.
                 string text = auto ? "(auto)" : has ? Format(value, col, false).Text : invalid ? string.Empty
-                    : HasDefault(col) ? "(default)" : GridTextFormats.NullText;
+                    : HasDefault(col) ? "(default)" : DefaultUnknown(col) ? "(not set)" : GridTextFormats.NullText;
                 bool muted = auto || (has ? value == null : !invalid);
                 string cellClass = "akml-results-cell"
                     + (insertable ? " akml-cell-editable" : string.Empty)
@@ -1652,8 +1657,9 @@
     /// manual re-Execute surfaces them.
     /// </summary>
     private void BakeCommittedChangesIntoSet(ExecuteResultSet set, IReadOnlyDictionary<int, string?[]>? storedUpdates = null,
-        IReadOnlyDictionary<int, string?[]>? storedInserts = null)
+        IReadOnlyDictionary<int, string?[]>? storedInserts = null, IReadOnlyDictionary<int, string>? identities = null)
     {
+        int identityCol = Array.FindIndex(set.Provenance, p => p.IsAutoIncrement);
         int colCount = set.ColumnNames.Length;
         var rows = new List<string?[]>(set.Rows.Length + _inserts.Count);
         for (int r = 0; r < set.Rows.Length; r++)
@@ -1676,6 +1682,7 @@
             foreach (var (c, v) in _inserts[i])
                 if (c >= 0 && c < colCount) row[c] = v;
             if (storedInserts != null && storedInserts.TryGetValue(i, out var storedRow)) OverlayStored(row, storedRow);
+            else if (identityCol >= 0 && identityCol < colCount && identities != null && identities.TryGetValue(i, out var id)) row[identityCol] = id;
             rows.Add(row);
         }
         set.Rows = rows.ToArray();
@@ -1721,14 +1728,19 @@
                 // the new values even when the page declines to re-run the query (multi-statement batch).
                 var storedUpdates = new Dictionary<int, string?[]>();
                 var storedInserts = new Dictionary<int, string?[]>();
+                var identities = new Dictionary<int, string>();
                 foreach (var edit in result.Results ?? System.Array.Empty<CrudEditResult>())
                 {
-                    if (!edit.Ok || edit.Row == null || edit.Index < 0 || edit.Index >= _applyTargets.Count) continue;
+                    if (!edit.Ok || edit.Index < 0 || edit.Index >= _applyTargets.Count) continue;
                     var (op, index) = _applyTargets[edit.Index];
+                    // Re-review REV-06: a SQL Server insert into a table with a trigger returns only its identity; keep it, so the
+                    // new row has its key for the next edit or delete.
+                    if (op == CrudOp.Insert && edit.Row == null && !string.IsNullOrEmpty(edit.NewIdentity)) identities[index] = edit.NewIdentity!;
+                    if (edit.Row == null) continue;
                     if (op == CrudOp.Update) storedUpdates[index] = edit.Row;
                     else if (op == CrudOp.Insert) storedInserts[index] = edit.Row;
                 }
-                BakeCommittedChangesIntoSet(set, storedUpdates, storedInserts);
+                BakeCommittedChangesIntoSet(set, storedUpdates, storedInserts, identities);
                 ResetEditState();
                 RebuildRowIndexes();             // deletes/inserts changed the row set.
                 _layout.SetRowCount(set.Rows.Length);

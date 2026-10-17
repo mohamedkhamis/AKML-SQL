@@ -194,3 +194,34 @@ dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj -c Debug --no
 ```
 
 To rerun the independent acceptance probes, copy the two `.cs.txt` evidence files into `tests/AkmlSql.Web.Tests` as `.cs`, then run that project with `--filter 'FullyQualifiedName~ReReviewAuditTests|FullyQualifiedName~ReReviewSchemaAuditTests'`. They deliberately assert the desired safe behavior and currently fail. Integrate them properly when fixing the defects; do not weaken them to make the review green. The browser probe script assumes a Debug Web development server at `http://127.0.0.1:5077` and uses the Playwright package supplied by the E2E project.
+
+## Fix completion matrix (2026-10-17, working tree on top of `1d09ef4c`, uncommitted)
+
+Every reviewer probe was moved into a permanent suite with its assertions unchanged; each failed before its fix and passes after.
+
+| ID | Status | Changed files | Before → after regression | Remaining limitations |
+| --- | --- | --- | --- | --- |
+| REV-01 | Fixed | `Services/ISqlConnectionService.cs` (`SchemaIdentity` = `"<server> (engine <host:port>)"`, `ScopeToEngine`), `Services/IAiSchemaContextProvider.cs` (target includes `ConnectionGeneration`), `Services/ISchemaCacheStore.cs` (`GetActiveAsync`), `Services/ICompletionService.cs`, `Services/IQuickInfoService.cs` (offline completion / quick info use the connected database's snapshot) | `Ai/AiSchemaEngineScopeTests` (probe + PostgreSQL localhost + legacy key), `CompletionServiceOfflineTests.Offline_completion_follows_the_connected_database…`; `StatusIndicatorTests`/`ConnectionSwitchTests` updated to the scoped key | The engine scope is the bridge URL's authority: two different engines answering at the same URL in one browser profile (a reinstall on the same machine) count as one. Old unscoped cache entries are no longer read and age out through LRU eviction. Two real engines not exercised. |
+| REV-02 | Fixed | `Pages/History.razor` (`_fullSqlLoaded`, `HasCompleteSql`, excerpt notice + Retry; versions load separately) | `History/HistoryFullSqlTests` (probe; throw; retry; versions failing; stored version) | — |
+| REV-03 | Fixed in scripts, **not executed** | new `src/AkmlSql.Installer/web-https-binding.ps1` (decision/ownership functions, `-RemoveOwned`), `web-iis-setup.ps1` (refuse foreign/other-site ports, rebind only owned, clean up owned binding on port/mode change, `https-site.ok`/`.failed` markers), `web-installer.iss` (ships the library; uninstall via `-RemoveOwned`; https URL only after success), `web-iis-repair.ps1` | `AkmlSql.Installer.Tests/HttpsBindingDecisionTests` (14: free/own/recorded/foreign/other site/record on another port; removal only while still owned; netsh parsing incl. localized labels) | Installer not run: install/repair/uninstall on a disposable IIS host with a foreign 443 binding, a port change, a LAN→localhost upgrade and pairing from a second machine remain to be done. Scripts parse; `ISCC` compiles. |
+| REV-04 | Fixed | `Pages/Snippets.razor` (save snapshots the buffers; baseline = snapshot; `_saving` blocks a second Save) | `Snippets/SnippetSaveRaceTests` (probe; still a draft afterwards + same snippet updated; second Save waits; failed save keeps the draft) | Delayed engine sync covered through the same awaited store call, not with a live engine. |
+| REV-05 | Fixed | `Services/IDiagnosticsRingBuffer.cs` (versioned envelope; legacy ring migrated on restore — AI entries purged, others masked — and rewritten at once) | `Diagnostics/DiagnosticsLegacyMigrationTests` (probe; prompt/schema markers; non-AI kept and masked; current format round-trips) | — |
+| REV-06 | Fixed | Core `ExecuteResultSet.DefaultsKnown` (key 13); `ResultSetReader.cs`, `PgProvenanceCollector.cs`; `CrudWriteGenerator.cs` + `ApplyChangesHandler.cs` (`OUTPUT INSERTED.<ReturnColumns>` when no enabled trigger; else identity only); `ResultSetGrid.razor` (unknown defaults left to the server, "(not set)"; identity merged when no row) | grid `ResultsGridInsertDefaultsTests` (probe; stored row shown and editable by key; unknown defaults); engine `CrudWriteGeneratorTests.Insert_ReturningInserted…`, live `InsertDefaultsIntegrationTests` (returned row; trigger table; fresh table reports unknown); browser `ReviewFixBrowserTests.An_inserted_row_shows_what_the_server_stored…` (multi-statement batch, edit without rerun) | A trigger table's other trigger effects are not reflected (identity only). Temp tables are not editable at all (unchanged). PostgreSQL unchanged (already returned the row). |
+| REV-07 | Fixed | `Services/IChatHistoryStore.cs` (`ChatTurn.IncompleteReason`, export note), `Shared/AiChatPanel.razor` (mark kept on the turn, shown under it; incomplete answers go into context with a cut-off note) | `Ai/AiChatIncompleteTurnTests` (probe; survives next message and export, complete turn unmarked, context note; retry replaces it) | The AI panel's one-shot actions are not persisted, so they have no reload case. |
+| REV-08 | Fixed | `Pages/Snippets.razor` (reveal the active option after the keys move it), `wwwroot/js/akml-ui.js` (`revealInList`) | `js/akml-ui.test.mjs` (2), browser `ReviewFixBrowserTests.The_active_snippet_stays_visible_while_the_keys_move_it` (1440×900, all 22 snippets: failed on the previous build, passes now) | Screen-reader spot check not done. |
+| SEC-01 | Fixed | `AkmlSql.Core.csproj`, `AkmlSql.Engine.csproj`, `tests/AkmlSql.E2E.Tests/*.csproj`: MessagePack 3.1.8 → **3.1.9**; Engine pins System.Security.Cryptography.Pkcs **9.0.21** (SqlClient's `>= 9.0.18`) | `dotnet list package --vulnerable --include-transitive`: 0 for every project in the solution; restore and the full MSBuild build show no NU190x; published Engine `deps.json` resolves MessagePack 3.1.9 and Pkcs 9.0.21; Web resolves MessagePack 3.1.9 | No exploit testing (as in the review). |
+
+### Verification
+
+| Check | Result |
+| --- | --- |
+| Full solution, MSBuild Release | Succeeded, 0 errors, no NU190x |
+| Web .NET | 1,655 passed, 0 failed (four consecutive runs) |
+| Web JavaScript | 133 passed, 0 failed |
+| Engine (full, live local SQL Server tests included) | 2,469 passed, 0 failed, 128 skipped |
+| Shell.Shared / PostgreSql / AI | 987 / 2,237 / 92 passed |
+| Core | 1,455 passed, 1 failed (pre-existing `ProfileGetMessageTests` key count — no profile message changed), 3 skipped |
+| Installer unit classes | 57 passed (incl. the 14 new) |
+| Browser (Chromium, serial) | BROWSER_RESULT |
+
+Two pre-existing test races were tightened while verifying (`ReconnectLoopTests.RevocationTerminatesLoop` now waits for the clean-up it asserts; one new snippet test waits for the list reload). Side effect: a syntax check with `ISCC /O-` again deleted `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe` (untracked build output; the next installer build recreates it).

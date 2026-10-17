@@ -61,6 +61,10 @@
                             }
                         </div>
                         <pre class="akml-chat-turn-text">@turn.Content</pre>
+                        @if (turn.IncompleteReason != null)
+                        {
+                            <p class="akml-chat-incomplete" role="note" data-testid="ai-chat-incomplete">This answer is incomplete: @turn.IncompleteReason</p>
+                        }
                     </div>
                 }
             }
@@ -167,6 +171,7 @@
     }
     .akml-chat-thinking { color: var(--akml-text-secondary); font-style: italic; }
     .akml-chat-error { color: var(--akml-status-danger); }
+    .akml-chat-incomplete { margin: var(--akml-scalar-spacing-xs) 0 0; color: var(--akml-status-warning); font-style: italic; }
     .akml-chat-composer {
         display: flex;
         gap: var(--akml-scalar-spacing-s);
@@ -333,7 +338,8 @@
         }
         catch (OperationCanceledException)
         {
-            // Superseded by a newer message -- keep whatever partial text rendered.
+            // Superseded by a newer message -- keep whatever partial text rendered, marked as stopped.
+            assistant.IncompleteReason = StoppedReason;
         }
         catch (ProviderNotBrowserDirectException ex)
         {
@@ -350,12 +356,14 @@
             // Review WEB-18: the provider accepted the request, then the answer broke off. What arrived stays, marked incomplete.
             _lastError = ex.Message + (sb.Length > 0 ? " The answer above is incomplete." : string.Empty);
             _retryMessage = userMessage;
+            assistant.IncompleteReason = ex.Message;   // re-review REV-07: stays with the turn, not only on screen
             Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Stream failed: {ex.Failure} {ex.Code}");
         }
         catch (Exception ex)
         {
             _lastError = "Chat call failed: " + ex.Message;
             _retryMessage = userMessage;
+            assistant.IncompleteReason = FailedReason;
             Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", $"Chat call failed: {ex.GetType().Name}");
         }
         finally
@@ -378,9 +386,9 @@
         }
     }
 
-    /// <summary>Every existing NON-EMPTY turn (oldest-first) to send as conversation context.
-    /// Skipping empty turns is defence-in-depth: a stray empty assistant turn must never reach
-    /// the provider wire (Anthropic 400s on empty content).</summary>
+    internal const string StoppedReason = "it was stopped before it finished.";
+    internal const string FailedReason = "the call failed before the answer finished.";
+
     /// <summary>Review WEB-18: send the failed turn's message again, in place of the failed (or partial) turn.</summary>
     private async Task RetryAsync()
     {
@@ -395,6 +403,10 @@
         await SendAsync();
     }
 
+    /// <summary>Every existing NON-EMPTY turn (oldest-first) to send as conversation context.
+    /// Skipping empty turns is defence-in-depth: a stray empty assistant turn must never reach
+    /// the provider wire (Anthropic 400s on empty content). Re-review REV-07: an incomplete answer is sent
+    /// with a note that it was cut off, so the model never builds on it as if it were finished.</summary>
     private AiChatMessage[] BuildHistorySnapshot()
     {
         var list = new List<AiChatMessage>(_conversation.Turns.Count);
@@ -402,7 +414,8 @@
         {
             if (!string.IsNullOrEmpty(t.Content))
             {
-                list.Add(new AiChatMessage { Role = t.Role, Content = t.Content });
+                var content = t.IncompleteReason == null ? t.Content : t.Content + "\n\n[This answer was cut off before it finished.]";
+                list.Add(new AiChatMessage { Role = t.Role, Content = content });
             }
         }
         return list.ToArray();

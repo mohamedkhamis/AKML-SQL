@@ -147,6 +147,7 @@ public sealed class PgProvenanceCollector
         }
 
         pending.Set.IsEditable = true;
+        pending.Set.DefaultsKnown = true;   // read from pg_attrdef with the table's columns
         pending.Set.ReadOnlyReason = null;
         pending.Set.BaseSchema = info.Schema;
         pending.Set.BaseTable = info.Name;
