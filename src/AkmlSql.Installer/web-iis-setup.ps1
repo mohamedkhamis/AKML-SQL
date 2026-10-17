@@ -7,9 +7,9 @@
 .DESCRIPTION
     Creates (or updates) the IIS site `AkmlSqlWeb` bound to localhost on the
     chosen port, sets MIME types for .wasm / .dat / .blat / .br, applies
-    Cache-Control: no-cache for the framework files, and writes the
+    Cache-Control: no-cache for the framework files, writes the
     Content-Security-Policy header per contracts/ai-key-wrapping.md "Threat
-    model".
+    model", and serves index.html for unknown paths so deep links load.
 
 .PARAMETER Port
     The TCP port to bind. The installer page enforces 1024..65535.
@@ -164,6 +164,24 @@ try {
     Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
         -Filter "system.webServer/staticContent/clientCache" `
         -Name "cacheControlMode" -Value "DisableCache"
+
+    # Deep links. The app's pages (/editor, /settings/connections, /history ...) are routes inside
+    # index.html, not files, so reloading any page but / -- or opening a bookmark or a link from the
+    # docs -- got IIS's 404. The usual fix is a URL Rewrite rule, but that module is not part of IIS
+    # and is missing on most servers, so use httpErrors instead: an unknown path executes /index.html
+    # (the status stays 404, which browsers render and Blazor routes like any other load). errorMode
+    # Custom, because the default DetailedLocalOnly would still show the 404 page to a browser on this
+    # computer. Remove-then-add for the same re-run reason as the CSP header above.
+    Remove-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpErrors" `
+        -Name "." -AtElement @{statusCode = 404} -ErrorAction SilentlyContinue
+    Add-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpErrors" `
+        -Name "." -Value @{statusCode = 404; subStatusCode = -1; path = '/index.html'; responseMode = 'ExecuteURL'}
+    Set-WebConfigurationProperty -PSPath "MACHINE/WEBROOT/APPHOST/AkmlSqlWeb" `
+        -Filter "system.webServer/httpErrors" `
+        -Name "errorMode" -Value "Custom"
+    Log "Configured the index.html fallback for deep links"
 
     Log "IIS setup complete."
     Set-Content -Path $okMarker -Value "AkmlSqlWeb on port $Port" -Encoding UTF8 -Force

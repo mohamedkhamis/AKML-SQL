@@ -28,8 +28,18 @@ internal sealed class FakeEngineBridge : IEngineBridge
         StateChanged?.Invoke(newState);
     }
 
-    public Task<HandshakeResponse> ConnectAsync(EngineConnection connection, string? bearerToken, string? pairingPin, CancellationToken ct) =>
-        Task.FromResult(new HandshakeResponse { Status = HandshakeStatus.Ok });
+    /// <summary>Every handshake asked for, in order: the address dialled and what it carried.</summary>
+    public List<(string Host, int Port, string? BearerToken, string? PairingPin)> Handshakes { get; } = new();
+
+    /// <summary>The engine's answer to a handshake; defaults to Ok.</summary>
+    public Func<string? /*bearer*/, string? /*pin*/, HandshakeResponse> Answer { get; set; } =
+        (_, _) => new HandshakeResponse { Status = HandshakeStatus.Ok };
+
+    public Task<HandshakeResponse> ConnectAsync(EngineConnection connection, string? bearerToken, string? pairingPin, CancellationToken ct)
+    {
+        Handshakes.Add((connection.Host, connection.Port, bearerToken, pairingPin));
+        return Task.FromResult(Answer(bearerToken, pairingPin));
+    }
 
     public Task<TResponse> SendAsync<TRequest, TResponse>(int requestMessageType, TRequest request, CancellationToken ct)
         where TRequest : class

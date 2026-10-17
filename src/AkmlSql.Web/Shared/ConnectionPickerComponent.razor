@@ -51,7 +51,8 @@
                 <li class="akml-connections-row @(c.Id == _activeId ? "akml-connections-row-active" : "")">
                     <span class="akml-connections-name">@c.Name</span>
                     <span class="akml-connections-host">@c.Host:@c.Port</span>
-                    <span class="akml-connections-badge">@(c.IsLocalhost ? "Local" : "LAN")</span>
+                    @* Where the engine is, from its address: a network-mode engine paired at localhost is still local. *@
+                    <span class="akml-connections-badge">@(EngineEndpoint.IsLoopbackHost(c.Host) ? "Local" : "LAN")</span>
                     <button class="akml-btn" @onclick="@(() => ConnectAsync(c))">Connect</button>
                     @if (!c.IsLocalhost)
                     {
@@ -88,9 +89,17 @@
                     <input class="akml-input" @bind="_form.PairingPin" inputmode="numeric" autocomplete="off" placeholder="PIN from the engine computer"
                            data-testid="engine-add-pin" />
                 </label>
-                <p class="akml-connections-hint">
-                    An engine on another computer needs its PIN, from
-                    <code>%ProgramData%\AKML SQL Web\pairing-pin.txt</code> on that computer.
+                <p class="akml-connections-hint" data-testid="engine-add-pin-hint">
+                    @if (_pinRequested)
+                    {
+                        <text>This engine was installed for network (LAN) use, so it needs its PIN even from this computer. The PIN is in
+                        <code>%ProgramData%\AKML SQL Web\pairing-pin.txt</code>, and it changes each time it is used.</text>
+                    }
+                    else
+                    {
+                        <text>An engine on another computer needs its PIN, from
+                        <code>%ProgramData%\AKML SQL Web\pairing-pin.txt</code> on that computer.</text>
+                    }
                 </p>
             }
             <div class="akml-connections-dialog-buttons">
@@ -211,12 +220,21 @@
     private EngineConnectDiagnosis? _diagnosis;
 
     /// <summary>
-    /// A PIN is needed for any engine that is not on this computer. Worked out from the address as
-    /// it is typed, rather than from a "Localhost" checkbox the user had to remember to untick.
+    /// The engine answered a PIN-less handshake at a loopback address with <see cref="HandshakeStatus.PinRequired"/>:
+    /// it was installed for network (LAN) use, and such an engine wants pairing from every browser,
+    /// this computer's included. Until then nothing in the address says so.
+    /// </summary>
+    private bool _pinRequested;
+
+    /// <summary>
+    /// A PIN is needed for any engine that is not on this computer, and for one on this computer that
+    /// asked for it. Worked out from the address as it is typed, rather than from a "Localhost"
+    /// checkbox the user had to remember to untick.
     /// </summary>
     private bool NeedsPin =>
-        EngineEndpoint.TryParseAddress(_form.Host, _form.Port, out var host, out _)
-        && !EngineEndpoint.IsLoopbackHost(host);
+        _pinRequested
+        || (EngineEndpoint.TryParseAddress(_form.Host, _form.Port, out var host, out _)
+            && !EngineEndpoint.IsLoopbackHost(host));
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -232,6 +250,7 @@
         _form = new AddForm();
         _lastError = null;
         _diagnosis = null;
+        _pinRequested = false;
         _showAdd = true;
     }
 
@@ -248,9 +267,10 @@
         }
 
         var isLocalhost = EngineEndpoint.IsLoopbackHost(host);
-        if (!isLocalhost && string.IsNullOrWhiteSpace(_form.PairingPin))
+        var sendPin = !isLocalhost || _pinRequested;
+        if (sendPin && string.IsNullOrWhiteSpace(_form.PairingPin))
         {
-            _lastError = "An engine on another computer needs its pairing PIN.";
+            _lastError = isLocalhost ? "Enter the engine's pairing PIN." : "An engine on another computer needs its pairing PIN.";
             return;
         }
 
@@ -267,10 +287,19 @@
                 IsLocalhost = isLocalhost,
             };
 
-            // Attempt the handshake first. On localhost we skip the PIN; on LAN we send it.
+            // Attempt the handshake first. On localhost we skip the PIN unless the engine asked for it; on LAN we send it.
             var response = await Bridge.ConnectAsync(
-                connection, bearerToken: null, pairingPin: isLocalhost ? null : _form.PairingPin.Trim(),
+                connection, bearerToken: null, pairingPin: sendPin ? _form.PairingPin.Trim() : null,
                 CancellationToken.None);
+
+            if (response.Status == HandshakeStatus.PinRequired && !sendPin)
+            {
+                // A network-mode engine reached at its loopback address: show the PIN field rather than a dead end.
+                _pinRequested = true;
+                _lastError = "This engine needs its pairing PIN, even from this computer. Enter it and press Pair again.";
+                Diagnostics.Log(DiagnosticLevel.Info, "connections", $"{host}:{port} asked for a pairing PIN.");
+                return;
+            }
 
             if (response.Status != HandshakeStatus.Ok)
             {
@@ -279,9 +308,11 @@
                 return;
             }
 
-            // Persist the bearer token (LAN only -- localhost handshake returns null).
+            // Persist the bearer token (a PIN pairing only -- a localhost-mode handshake returns null). A connection
+            // that paired needs its token on every reconnect, whatever its address, so it is not "localhost" any more.
             if (!string.IsNullOrEmpty(response.NewBearerToken))
             {
+                connection.IsLocalhost = false;
                 connection.BearerTokenWrappedRef = await Vault.StoreAsync(
                     connection.Id, response.NewBearerToken!, DateTimeOffset.UtcNow.AddDays(60));
             }

@@ -92,13 +92,27 @@ public sealed class EngineConnectDiagnosisTests
         Assert.Equal("WebSocket connect failed (wss://h:1/akmlsql).", d.RawError);
     }
 
-    [Fact]
-    public void ALocalEngine_ThatDidNotAnswer_PointsAtTheService_NotAtCertificates()
+    /// <summary>
+    /// The report that prompted this: a network-mode engine on the same computer, with its new certificate
+    /// not yet trusted. The browser refused wss://localhost:59417 (ERR_CERT_AUTHORITY_INVALID) and the page
+    /// said "Nothing answered at localhost:59417", pointing at a service that was running fine.
+    /// </summary>
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    public void ALocalEngine_ThatDidNotAnswer_NamesTheServiceAndTheCertificate_AndOffersTheTrustLink(string host)
     {
-        var d = EngineConnectDiagnosis.For("localhost", 47291, new JSException("WebSocket connect failed (ws://localhost:47291/akmlsql)."));
+        var d = EngineConnectDiagnosis.For(host, 59417, new JSException("WebSocket connect failed (wss://localhost:59417/akmlsql)."));
 
-        Assert.Null(d.TrustUrl);
+        Assert.Equal(EngineConnectProblem.NotReachable, d.Problem);
+        Assert.DoesNotContain("Nothing answered", d.Summary, StringComparison.Ordinal);
+        Assert.Contains("certificate", d.Summary, StringComparison.Ordinal);
+        Assert.Equal(host == "::1" ? "https://[::1]:59417/akmlsql" : $"https://{host}:59417/akmlsql", d.TrustUrl);
         Assert.Contains(d.Steps, s => s.Contains("AkmlSqlWebEngine", StringComparison.Ordinal));
+        Assert.Contains(d.Steps, s => s.Contains(d.TrustUrl!, StringComparison.Ordinal));
+        Assert.Contains(d.Steps, s => s.Contains("bridge.cer", StringComparison.Ordinal));
+        Assert.DoesNotContain(d.Steps, s => s.Contains("pairing-pin.txt", StringComparison.Ordinal)); // the form asks for it when needed
     }
 
     [Fact]

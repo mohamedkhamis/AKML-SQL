@@ -6,8 +6,8 @@
     `netsh http add sslcert`.
 
 .DESCRIPTION
-    Creates `CN=AKML SQL Web Engine` with DnsName entries for hostname + FQDN +
-    primary LAN IP. Exports PFX (private key) + CER (public part for trust
+    Creates `CN=AKML SQL Web Engine` with SAN entries for hostname + FQDN + NetBIOS
+    name + every LAN IPv4 + localhost / 127.0.0.1 / ::1. Exports PFX (private key) + CER (public part for trust
     rollout to other machines). Writes the thumbprint to thumbprint.txt so the
     installer can bake it into INSTALL-SUMMARY.txt.
 
@@ -68,16 +68,24 @@ function Log {
 try {
     $subject = 'CN=AKML SQL Web Engine'
 
-    # The names browsers may use: hostname + FQDN (DNS), every local IPv4 that isn't loopback or
-    # link-local (IP), and any -ExtraNames (typed by what they parse as).
+    # The names browsers may use: hostname + FQDN (DNS), the NetBIOS computer name, every local IPv4
+    # that isn't loopback or link-local (IP), the loopback names, and any -ExtraNames (typed by what
+    # they parse as).
+    #
+    # The NetBIOS name ($env:COMPUTERNAME, at most 15 characters) differs from the DNS host name on any
+    # machine whose name is longer, and it is the one INSTALL-SUMMARY.txt links to -- so a browser that
+    # followed the summary's URL got a certificate that did not name the host it had dialled. The
+    # loopback names cover the engine's own computer: a browser there dials localhost / 127.0.0.1, and
+    # without them even a trusted certificate failed with a name mismatch.
     $hostname = [System.Net.Dns]::GetHostName()
     $fqdn = ([System.Net.Dns]::GetHostEntry($hostname)).HostName
     $localIps = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                 Where-Object { $_.IPAddress -notmatch '^127\.' -and $_.IPAddress -notmatch '^169\.254\.' } |
                 Select-Object -ExpandProperty IPAddress
+    $loopback = @('localhost', '127.0.0.1', '::1')
 
     $wanted = New-Object System.Collections.Generic.List[string]
-    foreach ($name in @($hostname, $fqdn) + @($localIps) + @($ExtraNames)) {
+    foreach ($name in @($hostname, $fqdn, $env:COMPUTERNAME) + @($localIps) + $loopback + @($ExtraNames)) {
         if ([string]::IsNullOrWhiteSpace($name)) { continue }
         $n = $name.Trim()
         $ip = $null

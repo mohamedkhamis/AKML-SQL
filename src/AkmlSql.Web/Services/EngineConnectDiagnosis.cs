@@ -9,7 +9,7 @@ public enum EngineConnectProblem
     /// <summary>This page's own Content-Security-Policy refused the address; nothing left the computer.</summary>
     BlockedByPagePolicy,
 
-    /// <summary>The WebSocket did not open: nothing answered, the port is closed, or the certificate was refused.</summary>
+    /// <summary>The WebSocket did not open: nothing answered, the port is closed, or the certificate was refused (on any host, loopback included).</summary>
     NotReachable,
 }
 
@@ -56,20 +56,27 @@ public sealed record EngineConnectDiagnosis(
                 raw);
         }
 
+        var trustUrl = $"https://{address}{EngineEndpoint.Path}";
+
+        // A loopback address is tried as ws:// and then wss://, and both fail the same way whether nothing
+        // is listening or the browser refused the certificate of an engine installed for network use (which
+        // takes TLS only). So the summary names both causes and the trust link is offered here too: saying
+        // "nothing answered" sent people to a service that was running fine.
         if (EngineEndpoint.IsLoopbackHost(host))
         {
             return new EngineConnectDiagnosis(
                 EngineConnectProblem.NotReachable,
-                $"Nothing answered at {address} on this computer.",
+                $"Couldn't connect to the engine at {address} on this computer: either nothing is listening there, or the browser refused the engine's certificate.",
                 [
                     "Check that the AkmlSqlWebEngine service is running (services.msc, or: sc start AkmlSqlWebEngine).",
+                    $"If AKML SQL Web was installed for network (LAN) use, the engine only takes secure connections. Open {trustUrl} in a new tab. If the browser warns about the certificate, choose Advanced, then continue to the site. You should see \"AKML SQL engine: reachable\". Come back here and pair again.",
+                    "To stop the warning for good, install C:\\ProgramData\\AKML SQL Web\\certs\\bridge.cer under Local Machine › Trusted Root Certification Authorities.",
                     $"Check the port. The engine's port is the \"Bridge port\" line in C:\\ProgramData\\AKML SQL Web\\INSTALL-SUMMARY.txt; the default is {EngineEndpoint.DefaultPort}, but the installer can choose another.",
                 ],
-                TrustUrl: null,
+                trustUrl,
                 raw);
         }
 
-        var trustUrl = $"https://{address}{EngineEndpoint.Path}";
         return new EngineConnectDiagnosis(
             EngineConnectProblem.NotReachable,
             $"Couldn't open a secure connection to the engine at {address}.",
