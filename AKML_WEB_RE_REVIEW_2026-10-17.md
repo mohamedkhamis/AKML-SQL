@@ -222,6 +222,6 @@ Every reviewer probe was moved into a permanent suite with its assertions unchan
 | Shell.Shared / PostgreSql / AI | 987 / 2,237 / 92 passed |
 | Core | 1,455 passed, 1 failed (pre-existing `ProfileGetMessageTests` key count — no profile message changed), 3 skipped |
 | Installer unit classes | 57 passed (incl. the 14 new) |
-| Browser (Chromium, serial) | BROWSER_RESULT |
+| Browser (Chromium, serial: ReviewFix, SecretStorage, Settings, DocumentFlow, TabStrip, WorkspaceAccessibility, ResultsGrid, ShellPolish, FormatStyles, ReviewRegression) | 60 passed, 0 failed, 0 skipped |
 
 Two pre-existing test races were tightened while verifying (`ReconnectLoopTests.RevocationTerminatesLoop` now waits for the clean-up it asserts; one new snippet test waits for the list reload). Side effect: a syntax check with `ISCC /O-` again deleted `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe` (untracked build output; the next installer build recreates it).
