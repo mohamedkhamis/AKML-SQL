@@ -691,8 +691,9 @@ a focused fix verification, not another full-suite run.
 
 ## 2026-10-17 — Web review fixes (AKML_WEB_REVIEW_2026-10-17.md)
 
-All 22 findings of the 2026-10-17 web review are fixed in the working tree (uncommitted); the per-ID
-ledger with tests and limitations is at the end of that review file (repository root, not doc/).
+The implementation pass reported all 22 findings fixed; those changes are now committed as
+`1d09ef4c`. Its per-ID ledger remains at the end of the original review file (root, not doc/).
+**That completion claim is superseded by the independent follow-up below: seven remain partial.**
 Facts that changed:
 
 - Editable results are bound to the connection they were read through: `ExecuteQueryResult.ConnectionStamp`
@@ -715,4 +716,21 @@ Facts that changed:
 - Browser regressions: `tests/AkmlSql.Web.E2E.Tests/SecretStorageTests.cs` (no engine needed) and
   `ReviewFixBrowserTests.cs`. Not verified: a real LAN install over HTTPS, Firefox, a PostgreSQL server,
   a screen reader.
+
+### Independent follow-up review — 2026-10-17
+
+See [AKML_WEB_RE_REVIEW_2026-10-17.md](AKML_WEB_RE_REVIEW_2026-10-17.md) for the current disposition:
+15 original findings resolved for the current build, 7 partial (WEB-03, 07, 11, 13, 18, 20, 21),
+plus an additional History full-SQL retrieval failure path. Eight actionable application findings
+cover cross-engine schema-cache collisions, executable History excerpts, HTTPS binding ownership,
+snippet save races, restored diagnostic secrets, SQL Server inserted-row values, persisted AI
+incomplete status, and keyboard scrolling. Dependency advisory remediation is tracked separately.
+
+Fresh verification: Web 1,632/1,632; JavaScript 131/131; serial Chromium 48/48; targeted Engine 97/97
+(live local SQL included), with no skips in those .NET runs. Six separate independent acceptance
+probes fail and reproduce remaining defects; an additional browser probe reproduces invisible
+Snippets keyboard focus. Evidence and replayable probe sources: `.review-artifacts/2026-10-17-followup/`.
+Temporary probe tests were removed from the normal test project after recording evidence, and that
+project was rebuilt. This was review/documentation work, with no production fixes or deployment.
+Actual LAN installer operation, remote certificate validation and live PostgreSQL remain unverified.
 

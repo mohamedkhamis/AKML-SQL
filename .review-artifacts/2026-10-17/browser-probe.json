@@ -1,0 +1,320 @@
+{
+  "editor": {
+    "390": {
+      "vw": 390,
+      "body": 390,
+      "main": {
+        "width": 390,
+        "scroll": 968
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "block",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "768": {
+      "vw": 768,
+      "body": 768,
+      "main": {
+        "width": 768,
+        "scroll": 968
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "block",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "1440": {
+      "vw": 1440,
+      "body": 1440,
+      "main": {
+        "width": 1440,
+        "scroll": 1440
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "block",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    }
+  },
+  "snippets": {
+    "390": {
+      "vw": 390,
+      "body": 390,
+      "main": {
+        "width": 390,
+        "scroll": 390
+      },
+      "options": [
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        }
+      ],
+      "hiddenFiles": [
+        {
+          "display": "none",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "768": {
+      "vw": 768,
+      "body": 768,
+      "main": {
+        "width": 768,
+        "scroll": 768
+      },
+      "options": [
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        }
+      ],
+      "hiddenFiles": [
+        {
+          "display": "none",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "1440": {
+      "vw": 1440,
+      "body": 1440,
+      "main": {
+        "width": 1440,
+        "scroll": 1440
+      },
+      "options": [
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        },
+        {
+          "tag": "LI",
+          "tab": -1
+        }
+      ],
+      "hiddenFiles": [
+        {
+          "display": "none",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    }
+  },
+  "styles": {
+    "390": {
+      "vw": 390,
+      "body": 390,
+      "main": {
+        "width": 390,
+        "scroll": 390
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "none",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "768": {
+      "vw": 768,
+      "body": 768,
+      "main": {
+        "width": 768,
+        "scroll": 768
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "none",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "1440": {
+      "vw": 1440,
+      "body": 1440,
+      "main": {
+        "width": 1440,
+        "scroll": 1440
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "none",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    }
+  },
+  "settings": {
+    "390": {
+      "vw": 390,
+      "body": 390,
+      "main": {
+        "width": 390,
+        "scroll": 390
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "block",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "768": {
+      "vw": 768,
+      "body": 768,
+      "main": {
+        "width": 768,
+        "scroll": 768
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "block",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    },
+    "1440": {
+      "vw": 1440,
+      "body": 1440,
+      "main": {
+        "width": 1440,
+        "scroll": 1440
+      },
+      "options": [],
+      "hiddenFiles": [
+        {
+          "display": "block",
+          "visibility": "visible",
+          "parent": "LABEL",
+          "tab": -1
+        }
+      ]
+    }
+  },
+  "history": {
+    "390": {
+      "vw": 390,
+      "body": 390,
+      "main": {
+        "width": 390,
+        "scroll": 406
+      },
+      "options": [],
+      "hiddenFiles": []
+    },
+    "768": {
+      "vw": 768,
+      "body": 768,
+      "main": {
+        "width": 768,
+        "scroll": 768
+      },
+      "options": [],
+      "hiddenFiles": []
+    },
+    "1440": {
+      "vw": 1440,
+      "body": 1440,
+      "main": {
+        "width": 1440,
+        "scroll": 1440
+      },
+      "options": [],
+      "hiddenFiles": []
+    }
+  },
+  "snippetFields": [
+    {
+      "id": "",
+      "placeholder": ""
+    },
+    {
+      "id": "akml-snippet-shortcode",
+      "placeholder": ""
+    },
+    {
+      "id": "akml-snippet-title",
+      "placeholder": ""
+    },
+    {
+      "id": "akml-snippet-description",
+      "placeholder": ""
+    },
+    {
+      "id": "akml-snippet-body",
+      "placeholder": ""
+    }
+  ],
+  "errors": []
+}

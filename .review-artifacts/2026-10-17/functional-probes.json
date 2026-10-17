@@ -1,0 +1,102 @@
+{
+  "snippetDiscard": {
+    "dialogs": 0,
+    "body": "WITH $name$ AS (\n    $query$\n)\nSELECT * FROM $name$;"
+  },
+  "styleDirtyBefore": true,
+  "styleNav": {
+    "url": "http://127.0.0.1:5077/snippets",
+    "dialogs": 0
+  },
+  "workspace": [
+    {
+      "class": "akml-workspace",
+      "width": 768,
+      "scroll": 968,
+      "style": "--akml-ws-left:24px;--akml-ws-vsplit-l:0px;--akml-ws-right:24px;--akml-ws-vsplit-r:0px;--akml-ws-results:272px;--akml-ws-hsplit:6px;--akml-ws-editor-min:920px;--akml-ws-editor-min-h:320px",
+      "cols": "24px 0px 920px 0px 24px"
+    },
+    {
+      "class": "akml-ws-schema akml-ws-hidden",
+      "width": 0,
+      "scroll": 0,
+      "style": null,
+      "cols": "none"
+    },
+    {
+      "class": "akml-ws-centre",
+      "width": 920,
+      "scroll": 920,
+      "style": null,
+      "cols": "none"
+    }
+  ],
+  "crypto": {
+    "outcomes": [
+      {
+        "i": 0,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 1,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 2,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 3,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 4,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 5,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 6,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 7,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 8,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 9,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 10,
+        "ok": false,
+        "error": "OperationError"
+      },
+      {
+        "i": 11,
+        "ok": true
+      }
+    ],
+    "upgrade": "blocked"
+  },
+  "lanHttp": {
+    "secureContext": false,
+    "subtle": "undefined"
+  }
+}
