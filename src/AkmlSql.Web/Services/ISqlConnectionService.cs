@@ -280,7 +280,36 @@ internal sealed class SqlConnectionService : ISqlConnectionService
             : AdaptAsync(TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct));
 
     public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
-        ListSqlServerDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct);
+        target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
+            ? ListPostgresDatabasesAsync(target, ct)
+            : ListSqlServerDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct);
+
+    /// <summary>The databases the role may connect to (templates left out), listed by the engine through the typed database, or
+    /// <c>postgres</c> when none is typed. The same parse and guard as Test; a remembered password is filled in by the engine.</summary>
+    private async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListPostgresDatabasesAsync(ConnectionTarget target, CancellationToken ct)
+    {
+        var (pg, error) = ParsePostgresTarget(target);
+        if (pg is null) return (false, Array.Empty<string>(), error);
+        if (_bridge.State != BridgeState.Open)
+            return (false, Array.Empty<string>(), "Pair an engine first (Engine connections → Add), then list databases.");
+        if (!EngineSupportsPostgres) return (false, Array.Empty<string>(), PostgresUnavailable);
+
+        try
+        {
+            var response = await _bridge.SendAsync<ListDatabasesRequest, ListDatabasesResponse>(
+                MessageTypes.ListDatabases,
+                new ListDatabasesRequest { ConnectionString = BuildPostgresConnectionString(pg), Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql },
+                ct).ConfigureAwait(false);
+            if (response == null) return (false, Array.Empty<string>(), "The engine did not return a database list.");
+            if (response.Ok) return (true, response.Databases ?? new List<string>(), null);
+            return (false, Array.Empty<string>(), string.IsNullOrEmpty(response.ErrorMessage) ? "Could not list databases." : response.ErrorMessage);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"ListDatabases (PostgreSQL) send failed: {ex.Message}");
+            return (false, Array.Empty<string>(), "Could not reach the engine: " + ex.Message);
+        }
+    }
 
     public async Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
     {

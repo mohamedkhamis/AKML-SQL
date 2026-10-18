@@ -146,6 +146,11 @@ export function postKeywordTrigger(kind) {
     return isPostgresKind(kind) ? POST_KEYWORD_POSTGRES : POST_KEYWORD_SQLSERVER;
 }
 
+/** True when the text before the caret ends a statement (`;`), where no completion list belongs. */
+export function endsStatement(lineUpToCaret) {
+    return typeof lineUpToCaret === 'string' && lineUpToCaret.endsWith(';');
+}
+
 /** The characters that, typed last, may open the popup (a space, a dot, a comma ...); PostgreSQL adds ':' for '::'. */
 export function typedTriggerCharacters(kind) {
     return isPostgresKind(kind) ? /[\s.,()=<>!+\-*/:]/ : /[\s.,()=<>!+\-*/]/;
@@ -296,6 +301,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         // by itself (after `SELECT `) is an explicit session that CodeMirror re-queries on every keystroke, so the sigil
         // has to end it here, or the list would stay open over the character that makes no sense.
         if (isPostgresKind(kind) && /[@#\[]$/.test(lineAtCaret.text.slice(0, context.pos - lineAtCaret.from))) return null;
+        // A `;` ends the statement: the popup never opens on it, and a session already open (after `SELECT `) ends with it
+        // instead of offering every statement keyword over the end of the line.
+        if (endsStatement(lineAtCaret.text.slice(0, context.pos - lineAtCaret.from))) return null;
         const wordValid = word && (word.from !== word.to || context.explicit);
 
         // Detect "after a trigger keyword + whitespace" or "after a member-access
@@ -800,6 +808,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         extensions: [
             wrapCompartment.of(optionExt.wrap),
             tabCompartment.of(optionExt.tab),
+            // The undo history. historyKeymap below binds Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, but without this extension
+            // there is no history for them to act on, and undo did nothing anywhere in the editor.
+            cm.commands.history(),
             cm.view.lineNumbers(),
             cm.view.highlightActiveLine(),
             ghostKeymap,
@@ -994,6 +1005,44 @@ export function replaceTextIfUnchanged(hostElementId, expected, newText) {
  * SchemaTreeComponent's click-to-insert: clicking [dbo].[Customer] drops that
  * literal at the caret as-typed; CodeMirror's standard Ctrl+Z undoes it.
  */
+/**
+ * A name from the schema explorer, ready to insert between `before` and `after` (the characters either side of the
+ * caret): a space is added where the name would otherwise run into a word, a closing bracket or quote, or a
+ * parenthesis - `[dbo].[Customers]SELECT` cannot happen.
+ */
+export function padName(before, after, text) {
+    const joins = /[\w\]")@#$]/;
+    const lead = before && joins.test(before) ? ' ' : '';
+    const trail = after && /[\w\["(@#]/.test(after) ? ' ' : '';
+    return lead + text + trail;
+}
+
+/**
+ * The explorer's Insert name (double-click or the context menu): replaces the selection, or goes in at the caret,
+ * padded by padName. One transaction, so a single Ctrl+Z takes it out again.
+ */
+export function insertNameAtCaret(hostElementId, text) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || typeof text !== 'string' || text.length === 0) return;
+    const { from, to } = inst.view.state.selection.main;
+    const doc = inst.view.state.doc;
+    const before = from > 0 ? doc.sliceString(from - 1, from) : '';
+    const after = to < doc.length ? doc.sliceString(to, to + 1) : '';
+    const insert = padName(before, after, text);
+    inst.view.dispatch({
+        changes: { from, to, insert },
+        selection: { anchor: from + insert.length },
+        userEvent: 'input',
+    });
+    inst.view.focus();
+}
+
+/** Close the completion list, if open: Execute closes it, so it does not sit over the editor while the query runs. */
+export function closeCompletion(hostElementId) {
+    const inst = _instances.get(hostElementId);
+    if (inst && inst.cm && inst.cm.autocomplete && inst.cm.autocomplete.closeCompletion) inst.cm.autocomplete.closeCompletion(inst.view);
+}
+
 export function insertAtCaret(hostElementId, text) {
     const inst = _instances.get(hostElementId);
     if (!inst || typeof text !== 'string' || text.length === 0) return;

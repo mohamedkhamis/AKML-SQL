@@ -10,6 +10,7 @@
         UI dialog lands with the M4 installer cert work).
 *@
 @using AkmlSql.Web.Services
+@implements IDisposable
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Core.Ipc
 @inject IConnectionStore Connections
@@ -54,7 +55,16 @@
                     <span class="akml-connections-host">@c.Host:@c.Port</span>
                     @* Where the engine is, from its address: a network-mode engine paired at localhost is still local. *@
                     <span class="akml-connections-badge">@(EngineEndpoint.IsLoopbackHost(c.Host) ? "Local" : "LAN")</span>
-                    <button class="akml-btn" @onclick="@(() => ConnectAsync(c))">Connect</button>
+                    @if (c.Id == _activeId && Bridge.State == BridgeState.Open)
+                    {
+                        @* The engine this page is using says so, instead of offering to connect to it again. *@
+                        <span class="akml-connections-badge akml-connections-badge--active" data-testid="@($"engine-connected-{c.Id}")"
+                              title="This page is using this engine">Connected</span>
+                    }
+                    else
+                    {
+                        <button class="akml-btn" data-testid="@($"engine-connect-{c.Id}")" @onclick="@(() => ConnectAsync(c))">Connect</button>
+                    }
                     @if (!c.IsLocalhost)
                     {
                         @* Spec 041 (FR-057): a new PIN replaces the stored pairing token (an engine re-installed, or
@@ -176,6 +186,7 @@
         border-radius: var(--akml-scalar-radius-xs);
         text-align: center;
     }
+    .akml-connections-badge--active { background-color: var(--akml-status-success); }
     .akml-connections-dialog {
         margin-top: var(--akml-scalar-spacing-l);
         padding: var(--akml-scalar-spacing-m);
@@ -253,8 +264,14 @@
         try { _secureStorage = ServiceProvider.GetService(typeof(IWebCryptoWrapper)) is not IWebCryptoWrapper crypto || await crypto.IsSecureStorageAvailableAsync(); }
         catch (JSException) { _secureStorage = false; }
         catch (JSDisconnectedException) { }
+        Bridge.StateChanged += OnBridgeStateChanged;
         await ReloadAsync();
     }
+
+    // Connected / Connect follows the bridge, and the active engine can change from another page or tab.
+    private void OnBridgeStateChanged(BridgeState state) => _ = InvokeAsync(ReloadAsync);
+
+    public void Dispose() => Bridge.StateChanged -= OnBridgeStateChanged;
 
     private async Task ReloadAsync()
     {

@@ -58,6 +58,13 @@
             @if (failure.Kind == EngineConnectFailureKind.NotPaired
                  || failure.Kind == EngineConnectFailureKind.PairingRequired)
             {
+                @if (failure.Kind == EngineConnectFailureKind.NotPaired && PageIsLocal)
+                {
+                    @* The page is served from this computer, so its engine is most likely here too: one click pairs it. *@
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="UseLocalEngineAsync" disabled="@_pairingLocal"
+                            title="Pair with the engine on this computer (localhost:47291); Settings opens if it does not answer"
+                            data-testid="engine-use-local">Use this computer's engine</button>
+                }
                 <button type="button" class="akml-btn akml-btn--compact"
                         @onclick="@(() => Nav.NavigateTo("settings/connections"))"
                         data-testid="engine-setup">Set up engine</button>
@@ -333,6 +340,24 @@
     // Spec 025 US3: reconnect countdown plumbing (preserved).
     private DateTimeOffset? _nextRetryAt;
     private System.Threading.Timer? _countdownTimer;
+
+    private bool _pairingLocal;
+
+    private bool PageIsLocal =>
+        Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && EngineEndpoint.IsLoopbackHost(page.Host);
+
+    private async Task UseLocalEngineAsync()
+    {
+        _pairingLocal = true;
+        try
+        {
+            if (!await AutoConnect.PairLocalEngineAsync()) Nav.NavigateTo("settings/connections");
+        }
+        finally
+        {
+            _pairingLocal = false;
+        }
+    }
 
     protected override void OnInitialized()
     {

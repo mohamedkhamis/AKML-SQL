@@ -3,8 +3,9 @@
     Contract reference: specs/025-m3-bridge-closure/contracts/schema-tree-contract.md.
 
     Reads SchemaSnapshot bytes from ISchemaCacheStore (never sends IPC). Renders
-    Database → Schema → Object-Kind → Object → Column. Click on Object inserts the
-    bracketed qualifier into the editor via the OnObjectClicked EventCallback.
+    Database → Schema → Object-Kind → Object → Column. A click on a folder or its label opens it; a click on an Object
+    selects it (and shows its columns), a double-click inserts its name into the editor, and right-click opens its context
+    menu (Select Top 1000 Rows, Script as …, Insert / Copy name, Refresh) through OnObjectAction.
     Stale-indicator badge shows when bridge != Open. Virtualises children > 200.
 
     Spec 041 (research R40, N27, FR-093): the header names the server and database listed; Refresh asks the
@@ -23,6 +24,7 @@
 @inject ISchemaCacheStore Cache
 @inject IEngineBridge Bridge
 @inject ISchemaSync Sync
+@inject IServiceProvider ServiceProvider
 
 <div class="akml-schema-tree" data-testid="schema-tree">
     <div class="akml-schema-tree-header">
@@ -40,6 +42,23 @@
             <button type="button" class="akml-btn akml-btn--icon" data-testid="schema-refresh" aria-label="Refresh schema"
                     title="@RefreshTitle" disabled="@(!CanRefresh)" @onclick="RefreshAsync">
                 <Icon Name="refresh-cw" Size="14" />
+            </button>
+        }
+        @if (OnPinToggled.HasDelegate)
+        {
+            @* Pinned: the panel keeps its column. Unpinned: it hides to its edge strip and opens over the editor. *@
+            <button type="button" class="akml-btn akml-btn--icon akml-btn--ghost" data-testid="schema-pin"
+                    aria-pressed="@(Pinned ? "true" : "false")" aria-label="@(Pinned ? "Auto-hide the Schema panel" : "Pin the Schema panel")"
+                    title="@(Pinned ? "Auto-hide: show the panel only while you use it" : "Pin: keep the panel open beside the editor")"
+                    @onclick="() => OnPinToggled.InvokeAsync()">
+                <Icon Name="@(Pinned ? "pin" : "pin-off")" Size="14" />
+            </button>
+        }
+        @if (OnClose.HasDelegate)
+        {
+            <button type="button" class="akml-btn akml-btn--icon akml-btn--ghost" data-testid="schema-close"
+                    aria-label="Close the Schema panel" title="Close (F8)" @onclick="() => OnClose.InvokeAsync()">
+                <Icon Name="x" Size="14" />
             </button>
         }
     </div>
@@ -70,11 +89,11 @@
         </div>
     }
 
-    @if (_refreshing || (IsTargeted && _payload == null && IsEngineLive))
+    @if (IsRefreshing || (IsTargeted && _payload == null && IsEngineLive))
     {
         <div class="akml-schema-tree-loading" data-testid="schema-loading" role="status">
             <Icon Name="loader-circle" Size="14" Class="akml-spin" />
-            <span>@(_refreshing ? "Refreshing schema…" : "Loading schema…")</span>
+            <span>@(IsRefreshing ? "Refreshing schema…" : "Loading schema…")</span>
         </div>
     }
     @if (_refreshError != null)
@@ -93,8 +112,8 @@
     {
         @* Spec 041 (FR-048): the panel stays, and says how to fill it. *@
         <div class="akml-schema-tree-empty">
-            <p>Not connected to a SQL Server.</p>
-            <button type="button" class="akml-btn" data-testid="schema-connect" @onclick="OnConnectRequested">Connect to SQL Server…</button>
+            <p>Not connected to a database.</p>
+            <button type="button" class="akml-btn" data-testid="schema-connect" @onclick="OnConnectRequested">Connect…</button>
         </div>
     }
     else if (_payload == null)
@@ -108,8 +127,8 @@
     {
         var filtering = _filter.Length > 0;
         <ul class="akml-schema-tree-list" data-testid="schema-tree-root">
-            <li class="akml-schema-tree-node akml-schema-tree-db">
-                <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(DbPath))"><Icon Name="@Chevron(IsOpen(DbPath))" Size="12" Class="akml-schema-chevron" /></span>
+            <li class="akml-schema-tree-node akml-schema-tree-db akml-schema-tree-folder" @onclick="@(() => Toggle(DbPath))">
+                <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(DbPath))" Size="12" Class="akml-schema-chevron" /></span>
                 <Icon Name="database" Size="14" Class="akml-schema-icon akml-schema-icon--database" />
                 <span class="akml-schema-tree-label">Database "@_databaseName"</span>
             </li>
@@ -122,8 +141,8 @@
                     var schemaPath = DbPath + "/" + schema.Name;
                     var kinds = EnumerateKinds(schema, _filter, Kind).Where(k => !filtering || k.Objects.Count > 0).ToList();
                     if (filtering && (kinds.Count == 0 || inaccessible)) continue;
-                    <li class="akml-schema-tree-node akml-schema-tree-schema">
-                        <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(schemaPath))"><Icon Name="@Chevron(IsOpen(schemaPath))" Size="12" Class="akml-schema-chevron" /></span>
+                    <li class="akml-schema-tree-node akml-schema-tree-schema akml-schema-tree-folder" @onclick="@(() => Toggle(schemaPath))">
+                        <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(schemaPath))" Size="12" Class="akml-schema-chevron" /></span>
                         <Icon Name="folder-open" Size="14" Class="akml-schema-icon akml-schema-icon--schema" />
                         <span class="akml-schema-tree-label">Schema "@schema.Name"</span>
                         @if (inaccessible)
@@ -144,12 +163,19 @@
                         @foreach (var kind in kinds)
                         {
                             var kindPath = schemaPath + "/" + kind.Label;
-                            <li class="akml-schema-tree-node akml-schema-tree-kind">
-                                <span class="akml-schema-tree-expand" @onclick="@(() => Toggle(kindPath))"><Icon Name="@Chevron(IsOpen(kindPath))" Size="12" Class="akml-schema-chevron" /></span>
+                            var empty = kind.Objects.Count == 0;
+                            <li class="@("akml-schema-tree-node akml-schema-tree-kind" + (empty ? null : " akml-schema-tree-folder"))"
+                                @onclick="@(() => { if (!empty) Toggle(kindPath); })">
+                                <span class="akml-schema-tree-expand">
+                                    @if (!empty)
+                                    {
+                                        <Icon Name="@Chevron(IsOpen(kindPath))" Size="12" Class="akml-schema-chevron" />
+                                    }
+                                </span>
                                 <Icon Name="@kind.Icon" Size="14" Class="@("akml-schema-icon akml-schema-icon--" + kind.Badge)" />
                                 <span class="akml-schema-tree-label">@kind.Label (@kind.Objects.Count)</span>
                             </li>
-                            @if (IsOpen(kindPath))
+                            @if (!empty && IsOpen(kindPath))
                             {
                                 if (kind.Objects.Count > VirtualizeThreshold)
                                 {
@@ -174,6 +200,37 @@
             }
         </ul>
     }
+
+    @if (_menu != null)
+    {
+        var menuObject = _menu.Object;
+        var commands = SchemaObjectScripts.CommandsFor(menuObject.ObjectType);
+        @* A transparent layer under the menu: any click or right-click outside it closes it. *@
+        <div class="akml-schema-menu-backdrop" @onclick="CloseMenu" @oncontextmenu="CloseMenu" @oncontextmenu:preventDefault="true"></div>
+        <div class="akml-schema-menu" role="menu" tabindex="-1" data-testid="schema-context-menu" @ref="_menuElement"
+             aria-label="@($"Actions for {_menu.Qualifier}")"
+             style="@($"left: min({_menu.X}px, calc(100vw - 240px)); top: min({_menu.Y}px, calc(100vh - 300px));")"
+             @onkeydown="OnMenuKeyDown">
+            @foreach (var command in commands)
+            {
+                var script = SchemaObjectScripts.Script(command, Kind, _menu.SchemaName, menuObject);
+                <button type="button" role="menuitem" class="akml-schema-menu-item" data-testid="@($"schema-menu-{command}")"
+                        disabled="@(script == null)" title="@(script == null ? "The columns have not loaded yet." : null)"
+                        @onclick="@(() => RunMenuAsync(command))">@SchemaObjectScripts.Label(command, Kind, menuObject.ObjectType)</button>
+            }
+            @if (commands.Count > 0)
+            {
+                <div class="akml-schema-menu-separator" role="separator"></div>
+            }
+            <button type="button" role="menuitem" class="akml-schema-menu-item" data-testid="schema-menu-InsertName"
+                    @onclick="@(() => RunMenuAsync(SchemaObjectCommand.InsertName))">Insert name</button>
+            <button type="button" role="menuitem" class="akml-schema-menu-item" data-testid="schema-menu-CopyName"
+                    @onclick="@(() => RunMenuAsync(SchemaObjectCommand.CopyName))">Copy name</button>
+            <div class="akml-schema-menu-separator" role="separator"></div>
+            <button type="button" role="menuitem" class="akml-schema-menu-item" data-testid="schema-menu-Refresh"
+                    disabled="@(!CanRefresh)" title="@RefreshTitle" @onclick="RefreshFromMenuAsync">Refresh</button>
+        </div>
+    }
 </div>
 
 <style>
@@ -187,6 +244,7 @@
         font-size: var(--akml-type-chrome-size);
         color: var(--akml-text-primary);
         overflow-y: auto;
+        overflow-x: hidden;
     }
     .akml-schema-tree-header {
         display: flex;
@@ -272,15 +330,46 @@
         width: 12px;
         flex: 0 0 12px;
     }
-    .akml-schema-tree-label { flex: 1 1 auto; }
+    .akml-schema-tree-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .akml-schema-tree-folder { cursor: pointer; }
     .akml-schema-tree-schema { padding-left: 16px; }
     .akml-schema-tree-kind { padding-left: 32px; }
     .akml-schema-tree-object {
         padding-left: 48px;
         cursor: pointer;
-        color: var(--akml-text-link);
+        user-select: none;
     }
-    .akml-schema-tree-object:hover { text-decoration: underline; }
+    .akml-schema-tree-object.selected {
+        background-color: var(--akml-surface-selection);
+        color: var(--akml-text-primary);
+    }
+    .akml-schema-menu-backdrop { position: fixed; inset: 0; z-index: 900; }
+    .akml-schema-menu {
+        position: fixed;
+        z-index: 901;
+        min-width: 200px;
+        padding: var(--akml-scalar-spacing-xs) 0;
+        background-color: var(--akml-surface-panel);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-s);
+        box-shadow: 0 8px 24px var(--akml-surface-scrim);
+        display: flex;
+        flex-direction: column;
+        outline: none;
+    }
+    .akml-schema-menu-item {
+        background: none;
+        border: none;
+        text-align: left;
+        padding: 4px 12px;
+        font: inherit;
+        color: var(--akml-text-primary);
+        cursor: pointer;
+    }
+    .akml-schema-menu-item:hover:not(:disabled),
+    .akml-schema-menu-item:focus-visible { background-color: var(--akml-surface-hover); outline: none; }
+    .akml-schema-menu-item:disabled { color: var(--akml-text-secondary); cursor: default; }
+    .akml-schema-menu-separator { height: 1px; margin: var(--akml-scalar-spacing-xs) 0; background-color: var(--akml-border-default); }
     .akml-schema-tree-column { padding-left: 64px; color: var(--akml-text-secondary); }
     .akml-schema-tree-virtual { padding: 0; }
     .akml-schema-tree-noaccess {
@@ -334,12 +423,25 @@
     [Parameter, EditorRequired] public string? ServerCanonicalIdentity { get; set; }
     [Parameter, EditorRequired] public string? DatabaseName { get; set; }
 
-    /// <summary>Raised when the user clicks an Object node. Payload is the qualified
-    /// identifier "[schema].[name]"; subscribers insert it at the editor caret.</summary>
+    /// <summary>Raised when the user double-clicks an Object node (or picks Insert name) and there is no
+    /// <see cref="OnObjectAction"/> handler. Payload is the qualified identifier "[schema].[name]"; subscribers insert it at
+    /// the editor caret. A single click only selects the node, so browsing the tree never changes the query.</summary>
     [Parameter] public EventCallback<string> OnObjectClicked { get; set; }
 
-    /// <summary>Spec 041 (FR-048) — the "Connect to SQL Server…" button of a panel with no connection.</summary>
+    /// <summary>A double-click (Insert name) or a context-menu choice on an object. Refresh is handled here.</summary>
+    [Parameter] public EventCallback<SchemaObjectAction> OnObjectAction { get; set; }
+
+    /// <summary>Spec 041 (FR-048) — the "Connect…" button of a panel with no connection.</summary>
     [Parameter] public EventCallback OnConnectRequested { get; set; }
+
+    /// <summary>The panel keeps its own column (true) or hides to its edge strip when not in use (false).</summary>
+    [Parameter] public bool Pinned { get; set; } = true;
+
+    /// <summary>The header's pin button; shown only with a handler.</summary>
+    [Parameter] public EventCallback OnPinToggled { get; set; }
+
+    /// <summary>The header's close button; shown only with a handler.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
 
     /// <summary>Spec 041 (R40) — the engine session whose schema Refresh reloads.</summary>
     [Parameter] public string? SessionId { get; set; }
@@ -371,6 +473,8 @@
 
     private bool IsTargeted => !string.IsNullOrEmpty(_serverIdentity) && !string.IsNullOrEmpty(_databaseName);
     private bool IsEngineLive => _bridgeState == BridgeState.Open || _bridgeState == BridgeState.Connecting;
+    private bool IsRefreshing => _refreshing || Sync.IsRefreshing;
+
     private bool CanRefresh => !_refreshing && _bridgeState == BridgeState.Open && !string.IsNullOrEmpty(SessionId);
 
     private string RefreshTitle =>
@@ -431,7 +535,13 @@
     private string? _databaseName;
     private SchemaPhasePayload? _payload;
     private DateTimeOffset _fetchedAt;
-    private readonly HashSet<string> _expanded = new();
+    private HashSet<string> _expanded = new();
+    private string? _selectedPath;
+    private ContextMenuState? _menu;
+    private ElementReference _menuElement;
+    private bool _focusMenu;
+
+    private sealed record ContextMenuState(SchemaPhaseObject Object, string SchemaName, string Qualifier, double X, double Y);
     private bool _showStaleBadge;
     private BridgeState _bridgeState;
     private string DbPath => _databaseName ?? string.Empty;
@@ -443,6 +553,8 @@
         _bridgeState = Bridge.State;
         Bridge.StateChanged += OnBridgeStateChanged;
         Sync.ChecksumDrifted += OnChecksumDrifted;
+        Sync.RefreshingChanged += OnRefreshingChanged;
+        UseExpansionOf(_serverIdentity, _databaseName);
         await LoadSnapshotAsync();
         UpdateStaleBadge();
     }
@@ -453,8 +565,32 @@
         {
             _serverIdentity = ServerCanonicalIdentity;
             _databaseName = DatabaseName;
+            _menu = null;
+            _selectedPath = null;
+            UseExpansionOf(_serverIdentity, _databaseName);
             await LoadSnapshotAsync();
             UpdateStaleBadge();
+        }
+    }
+
+    // The folders open for a server and database are remembered for the browser tab (SchemaTreeExpansion), so a reconnect - or
+    // the page being created again - shows the tree as it was left. The database node starts open.
+    private void UseExpansionOf(string? server, string? database)
+    {
+        if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(database)) return;
+        var memory = ServiceProvider.GetService(typeof(SchemaTreeExpansion)) as SchemaTreeExpansion;
+        _expanded = memory?.For(server!, database!) ?? new HashSet<string>(StringComparer.Ordinal) { database! };
+    }
+
+    private void OnRefreshingChanged() => InvokeAsync(StateHasChanged);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusMenu && _menu != null)
+        {
+            _focusMenu = false;
+            try { await _menuElement.FocusAsync(); }
+            catch (Exception) { /* focus only lets Escape close the menu; a click outside still does */ }
         }
     }
 
@@ -604,12 +740,19 @@
             : $"[{schemaName}].[{obj.ObjectName}]";
         var hasColumns = obj.Columns is { Length: > 0 };
         builder.OpenElement(0, "li");
-        builder.AddAttribute(1, "class", "akml-schema-tree-node akml-schema-tree-object");
+        var selected = _selectedPath == objPath;
+        builder.AddAttribute(1, "class", "akml-schema-tree-node akml-schema-tree-object" + (selected ? " selected" : string.Empty));
         builder.AddAttribute(2, "data-testid", "schema-tree-object");
         builder.AddAttribute(3, "data-qualifier", qualifier);
         builder.AddAttribute(4, "title", obj.Description ?? qualifier);
         builder.AddAttribute(5, "onclick",
-            Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => OnObjectClick(qualifier, objPath, hasColumns)));
+            Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => OnObjectClick(objPath, hasColumns)));
+        builder.AddAttribute(30, "ondblclick",
+            Microsoft.AspNetCore.Components.EventCallback.Factory.Create(this, () => InsertNameAsync(qualifier, schemaName, obj)));
+        builder.AddAttribute(31, "oncontextmenu",
+            Microsoft.AspNetCore.Components.EventCallback.Factory.Create<MouseEventArgs>(this, e => OpenMenu(e, obj, schemaName, qualifier, objPath)));
+        builder.AddEventPreventDefaultAttribute(32, "oncontextmenu", true);
+        builder.AddAttribute(33, "aria-selected", selected ? "true" : "false");
 
         builder.OpenElement(6, "span");
         builder.AddAttribute(7, "class", "akml-schema-tree-expand");
@@ -658,18 +801,53 @@
         }
     };
 
-    private async Task OnObjectClick(string qualifier, string objPath, bool hasColumns)
+    // A click selects the object and shows (or hides) its columns. It never touches the query: a double-click (two clicks, so the
+    // columns end as they were) or the context menu inserts the name.
+    private void OnObjectClick(string objPath, bool hasColumns)
     {
-        if (OnObjectClicked.HasDelegate)
-        {
+        _selectedPath = objPath;
+        if (hasColumns) Toggle(objPath);
+    }
+
+    private async Task InsertNameAsync(string qualifier, string schemaName, SchemaPhaseObject obj)
+    {
+        if (OnObjectAction.HasDelegate)
+            await OnObjectAction.InvokeAsync(new SchemaObjectAction(SchemaObjectCommand.InsertName, Kind, schemaName, obj));
+        else if (OnObjectClicked.HasDelegate)
             await OnObjectClicked.InvokeAsync(qualifier);
-        }
-        if (hasColumns)
+    }
+
+    private void OpenMenu(MouseEventArgs e, SchemaPhaseObject obj, string schemaName, string qualifier, string objPath)
+    {
+        _selectedPath = objPath;
+        _menu = new ContextMenuState(obj, schemaName, qualifier, e.ClientX, e.ClientY);
+        _focusMenu = true;
+    }
+
+    private void CloseMenu() => _menu = null;
+
+    private void OnMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _menu = null;
+    }
+
+    private async Task RunMenuAsync(SchemaObjectCommand command)
+    {
+        var menu = _menu;
+        _menu = null;
+        if (menu == null) return;
+        if (command == SchemaObjectCommand.InsertName)
         {
-            // Object click both inserts the qualifier AND toggles its column expansion —
-            // matches the SSMS Object Explorer feel.
-            Toggle(objPath);
+            await InsertNameAsync(menu.Qualifier, menu.SchemaName, menu.Object);
+            return;
         }
+        await OnObjectAction.InvokeAsync(new SchemaObjectAction(command, Kind, menu.SchemaName, menu.Object));
+    }
+
+    private async Task RefreshFromMenuAsync()
+    {
+        _menu = null;
+        await RefreshAsync();
     }
 
     private static string FormatRelative(DateTimeOffset fetchedAt)
@@ -687,5 +865,6 @@
         _filterCts?.Cancel();
         Bridge.StateChanged -= OnBridgeStateChanged;
         Sync.ChecksumDrifted -= OnChecksumDrifted;
+        Sync.RefreshingChanged -= OnRefreshingChanged;
     }
 }

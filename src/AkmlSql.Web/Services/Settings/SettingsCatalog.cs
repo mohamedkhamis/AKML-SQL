@@ -73,7 +73,7 @@ public static class SettingsCatalog
         new SettingEntry("ai-ghost-text", AiAssistance, "Ghost text", "Suggest the rest of a line as you type.", "inline completion suggestion"),
 
         new SettingEntry("connections-engines", Connections, "Engine connections", "The AKML SQL engines this browser is paired with.", "pair pin engine"),
-        new SettingEntry("connections-sql", Connections, "SQL Server connections", "Saved SQL Server connections. Passwords are never saved.", "server database login"),
+        new SettingEntry("connections-sql", Connections, "Database connections", "Saved SQL Server and PostgreSQL connections. Passwords are never saved in the browser.", "server database login postgresql sql server"),
 
         new SettingEntry("schema-cache-databases", SchemaCache, "Cached databases", "Schema kept in this browser for completion and the Schema panel.", "refresh clear"),
 

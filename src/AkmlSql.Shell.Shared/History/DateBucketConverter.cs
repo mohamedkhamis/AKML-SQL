@@ -8,7 +8,7 @@ namespace AkmlSql.Shell.Shared.History
     /// <summary>
     /// Buckets a <see cref="HistoryEntryDto.ExecutedAt"/> ISO-8601 timestamp into one of four
     /// coarse date groups used by the SQL History master list grouping:
-    /// <c>Today</c> / <c>This Week</c> / <c>Two Months Ago</c> / <c>Older</c>.
+    /// <c>Today</c> / <c>This Week</c> / <c>Last Two Months</c> / <c>Older</c>.
     /// <para>
     /// Used as the converter on a <see cref="System.Windows.Data.PropertyGroupDescription"/> over
     /// <see cref="HistoryEntryDto.ExecutedAt"/>. WPF group order follows item order, so the buckets
@@ -17,7 +17,7 @@ namespace AkmlSql.Shell.Shared.History
     /// </para>
     /// <para>
     /// The four buckets are contiguous and cover every date: <c>Today</c> (the same calendar day),
-    /// <c>This Week</c> (the preceding six days), <c>Two Months Ago</c> (7 to 59 days back), and
+    /// <c>This Week</c> (the preceding six days), <c>Last Two Months</c> (7 to 59 days back), and
     /// <c>Older</c> (60+ days). The labels mirror the Red Gate SQL Prompt history reference; there
     /// is no separate "This Month" bucket by design.
     /// </para>
