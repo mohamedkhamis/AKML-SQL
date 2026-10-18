@@ -141,12 +141,18 @@ public sealed class EditorDocumentFlow
 
     // ── New, Open ────────────────────────────────────────────────────────────────────────────────────────
 
-    public async Task<bool> NewAsync()
+    public Task<bool> NewAsync() => NewWithTextAsync(string.Empty, "Start a new query");
+
+    /// <summary>
+    /// New, already holding a script: the explorer's Select Top 1000 Rows and Script as. The script is the baseline, so the new
+    /// document is not modified until it is edited. Asks the same "Discard the changes to {Name}?" first; false when the user kept theirs.
+    /// </summary>
+    public async Task<bool> NewWithTextAsync(string text, string action)
     {
-        if (!await CanReplaceAsync("Start a new query").ConfigureAwait(false)) return false;
+        if (!await CanReplaceAsync(action).ConfigureAwait(false)) return false;
         var name = EditorDocument.DefaultName(NextDefaultNumber);
         NextDefaultNumber++;
-        await StartAsync(name, string.Empty).ConfigureAwait(false);
+        await StartAsync(name, text ?? string.Empty).ConfigureAwait(false);
         return true;
     }
 

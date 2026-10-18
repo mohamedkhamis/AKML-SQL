@@ -22,7 +22,7 @@ public static class WebHistoryLogic
 
     /// <summary>
     /// Classifies an ISO-8601 timestamp into one of four contiguous buckets relative to <paramref name="now"/>:
-    /// Today (same calendar day), This Week (the prior six days), Two Months Ago (7–59 days back),
+    /// Today (same calendar day), This Week (the prior six days), Last Two Months (7–59 days back),
     /// Older (60+ days, or an unparseable value). Delegates to the shared Core bucketing helper.
     /// </summary>
     public static string DateBucket(string? executedAtIso, DateTime now) =>

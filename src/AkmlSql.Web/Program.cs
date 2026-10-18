@@ -59,6 +59,7 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 //   IWorkspaceStatus      R41 -- execution phase / rows / time / caret / document, read by the status bar
 //                                and the results pane's running indicator.
 builder.Services.AddSingleton<IWorkspaceStatus, WorkspaceStatus>();
+builder.Services.AddSingleton<SchemaTreeExpansion>();
 // Spec 041 (R36) — the remembered editor workspace layout (one IndexedDB record per field).
 builder.Services.AddSingleton<IWorkspaceLayoutStore, WorkspaceLayoutStore>();
 

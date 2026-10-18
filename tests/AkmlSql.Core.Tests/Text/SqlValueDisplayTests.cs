@@ -197,4 +197,14 @@ public class SqlValueDisplayTests
     {
         Assert.Equal(wire, SqlValueDisplay.EditText(wire, SqlTypeName.Parse(declared), ClrTypeHint.String));
     }
+
+    [Fact]
+    public void A_PostgreSQL_boolean_reads_true_or_false_and_edits_back_to_its_wire_text()
+    {
+        Assert.Equal("true", Show("t", "boolean"));
+        Assert.Equal("false", Show("f", "boolean"));
+        Assert.Equal("true", SqlValueDisplay.EditText("t", SqlTypeName.Parse("boolean"), ClrTypeHint.String));
+        Assert.Equal("f", SqlValueDisplay.ToWire("FALSE", SqlTypeName.Parse("boolean"), ClrTypeHint.String));
+        Assert.Equal("1", Show("1", "bit"));   // SQL Server's bit is unchanged
+    }
 }

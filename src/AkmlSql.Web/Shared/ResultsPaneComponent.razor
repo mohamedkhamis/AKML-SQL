@@ -271,7 +271,14 @@
         _elapsedTimer?.Change(IsRunning ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
     }
 
-    private void OnWorkspaceChanged() => _ = InvokeAsync(StateHasChanged);
+    // The running clock follows the workspace's phase as well as IsRunning: a run started from a key (no render of the page yet)
+    // still ticks from its first second.
+    private void OnWorkspaceChanged() => _ = InvokeAsync(() =>
+    {
+        bool running = IsRunning || _workspace?.Phase == ExecutionPhase.Running;
+        _elapsedTimer?.Change(running ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
+        StateHasChanged();
+    });
 
     private async Task OnTabChanged(string tab)
     {

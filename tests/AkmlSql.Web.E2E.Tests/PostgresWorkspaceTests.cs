@@ -203,8 +203,13 @@ public sealed class PostgresWorkspaceTests
     private static ILocator TreeNode(IPage page, string text) =>
         page.Locator("li.akml-schema-tree-node").Filter(new() { HasText = text });
 
-    private static async Task ExpandAsync(IPage page, string text) =>
-        await TreeNode(page, text).First.Locator(".akml-schema-tree-expand").ClickAsync();
+    // Opens a folder that is closed; one already open (the database node starts open) stays open.
+    private static async Task ExpandAsync(IPage page, string text)
+    {
+        var expander = TreeNode(page, text).First.Locator(".akml-schema-tree-expand");
+        if (await expander.Locator("use[href$='chevron-down']").CountAsync() > 0) return;
+        await expander.ClickAsync();
+    }
 
     private static async Task SwitchDatabaseAsync(IPage page, string database)
     {

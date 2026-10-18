@@ -59,7 +59,25 @@ public interface IWorkspaceStatus
     void SetCaret(int line, int column);
 
     void SetDocument(string name, bool modified);
+
+    /// <summary>
+    /// The last result the editor page showed and what produced it. The page is created again on every visit (Editor →
+    /// History → Editor), so it keeps the result here and shows it again instead of an empty results pane; null before the first.
+    /// </summary>
+    WorkspaceResult? LastResult { get; }
+
+    void KeepResult(WorkspaceResult result);
+
+    /// <summary>
+    /// Forget the last execution's outcome (phase, rows, time) - the connection changed, so "196 rows · 28 ms" and "Query executed
+    /// successfully." describe another server. The kept result stays: the page shows it as from an earlier connection.
+    /// </summary>
+    void ClearOutcome();
 }
+
+/// <summary>A result as the editor page showed it: the reply, the connection generation it was read under, where the executed text
+/// began in the document (errors map their lines from it) and the text that ran. The open results tab is kept by the layout store.</summary>
+public sealed record WorkspaceResult(ExecuteQueryResult Result, int ConnectionGeneration, int StartLine, int StartColumn, string Sql);
 
 /// <summary>The app's <see cref="IWorkspaceStatus"/> (one per browser tab).</summary>
 public sealed class WorkspaceStatus : IWorkspaceStatus
@@ -159,6 +177,21 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         if (name == DocumentName && modified == IsModified) return;
         DocumentName = name;
         IsModified = modified;
+        Changed?.Invoke();
+    }
+
+    public WorkspaceResult? LastResult { get; private set; }
+
+    public void KeepResult(WorkspaceResult result) => LastResult = result ?? throw new ArgumentNullException(nameof(result));
+
+    public void ClearOutcome()
+    {
+        if (Phase is ExecutionPhase.Idle or ExecutionPhase.Running) return;      // a run in flight reports its own outcome
+        Phase = ExecutionPhase.Idle;
+        StartedAt = null;
+        _elapsedMs = 0;
+        RowCount = 0;
+        ErrorMessage = null;
         Changed?.Invoke();
     }
 }

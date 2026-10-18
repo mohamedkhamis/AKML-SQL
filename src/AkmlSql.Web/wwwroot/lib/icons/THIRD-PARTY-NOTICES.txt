@@ -46,6 +46,8 @@ Lucide derives from the Feather project. Icons used:
   panel-left
   panel-right
   pencil
+  pin
+  pin-off
   play
   plug
   plug-zap

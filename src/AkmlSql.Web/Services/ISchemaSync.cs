@@ -43,6 +43,13 @@ public interface ISchemaSync : IAsyncDisposable
     /// bridge is not open.
     /// </summary>
     Task RefreshAsync(CancellationToken ct = default);
+
+    /// <summary>True while <see cref="RefreshAsync"/> runs (the Refresh button, or a run that changed the schema), so the
+    /// explorer can say it is refreshing instead of changing silently seconds later.</summary>
+    bool IsRefreshing { get; }
+
+    /// <summary>Raised when <see cref="IsRefreshing"/> changes.</summary>
+    event Action? RefreshingChanged;
 }
 
 public sealed record ChecksumDriftNotice(string ServerCanonicalIdentity, string DatabaseName, string NewChecksum);
@@ -72,6 +79,12 @@ internal sealed class SchemaSync : ISchemaSync
     }
 
     public event Action<ChecksumDriftNotice>? ChecksumDrifted;
+
+    public event Action? RefreshingChanged;
+
+    private int _refreshes;
+
+    public bool IsRefreshing => Volatile.Read(ref _refreshes) > 0;
 
     public Task StartAsync(string sessionId, string serverCanonicalIdentity, string databaseName)
     {
@@ -158,11 +171,19 @@ internal sealed class SchemaSync : ISchemaSync
         var session = _sessionId; var server = _server; var database = _database;
         if (_bridge.State != BridgeState.Open || session == null || server == null || database == null) return;
 
-        var checksum = await WaitForSettledAsync(session, server, database, ct).ConfigureAwait(false);
-        await FetchPhaseAAsync(ct).ConfigureAwait(false);
-        await FetchPhaseBAsync(ct).ConfigureAwait(false);
-        _diagnostics.Log(DiagnosticLevel.Info, "schema-sync", $"Refreshed {server}/{database} ({checksum}).");
-        ChecksumDrifted?.Invoke(new ChecksumDriftNotice(server, database, checksum ?? string.Empty));
+        if (Interlocked.Increment(ref _refreshes) == 1) RefreshingChanged?.Invoke();
+        try
+        {
+            var checksum = await WaitForSettledAsync(session, server, database, ct).ConfigureAwait(false);
+            await FetchPhaseAAsync(ct).ConfigureAwait(false);
+            await FetchPhaseBAsync(ct).ConfigureAwait(false);
+            _diagnostics.Log(DiagnosticLevel.Info, "schema-sync", $"Refreshed {server}/{database} ({checksum}).");
+            ChecksumDrifted?.Invoke(new ChecksumDriftNotice(server, database, checksum ?? string.Empty));
+        }
+        finally
+        {
+            if (Interlocked.Decrement(ref _refreshes) == 0) RefreshingChanged?.Invoke();
+        }
     }
 
     /// <summary>
@@ -272,9 +293,16 @@ internal sealed class SchemaSync : ISchemaSync
             // completion has data to fall back on, then fire-and-forget Phase B
             // so column-aware completions become available in the background.
             await FetchPhaseAAsync(ct).ConfigureAwait(false);
-            _ = Task.Run(() => FetchPhaseBAsync(CancellationToken.None));
+            var notice = new ChecksumDriftNotice(_server!, _database!, response.Checksum);
+            // Raised again once Phase B is in the cache: the explorer read Phase A (no columns) on the first notice, and
+            // without the second one its tables could not be expanded until the next schema change.
+            _ = Task.Run(async () =>
+            {
+                await FetchPhaseBAsync(CancellationToken.None).ConfigureAwait(false);
+                ChecksumDrifted?.Invoke(notice);
+            });
 
-            ChecksumDrifted?.Invoke(new ChecksumDriftNotice(_server!, _database!, response.Checksum));
+            ChecksumDrifted?.Invoke(notice);
         }
         else
         {

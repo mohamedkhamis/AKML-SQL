@@ -71,17 +71,22 @@
             <Icon Name="@(_executing ? "loader-circle" : "play")" Class="@(_executing ? "akml-spin akml-run-icon" : "akml-run-icon")" />
             <span>@(_executing ? "Running…" : "Execute")</span>
         </button>
-        @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
-        <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
-                @onclick="ParseAsync" disabled="@(!CanParse)"
-                title="@(_executing ? "A query is running" : !SqlConn.IsConnected ? "Parse needs a SQL Server connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
-            <Icon Name="file-check" /><span>Parse</span>
-        </button>
+        @* While a query runs, Cancel takes Parse's place (Parse cannot run then anyway), so the toolbar does not reflow
+           and push the last buttons onto a second row. *@
         @if (_executing)
         {
-            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync"
-                    title="Stops the query only if the engine has not started it. A running statement cannot be interrupted.">
-                <Icon Name="x" /><span>Cancel if not started</span>
+            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync" aria-label="Cancel if not started"
+                    title="Cancel if not started: stops the query only if the engine has not started it. A running statement cannot be interrupted.">
+                <Icon Name="x" /><span>Cancel</span>
+            </button>
+        }
+        else
+        {
+            @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
+            <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
+                    @onclick="ParseAsync" disabled="@(!CanParse)"
+                    title="@(!SqlConn.IsConnected ? "Parse needs a database connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
+                <Icon Name="file-check" /><span>Parse</span>
             </button>
         }
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
@@ -159,14 +164,17 @@
     <div @ref="_workspaceEl" class="@WorkspaceClass" style="@WorkspaceStyle" data-testid="workspace" data-splitter-host>
         @* The side panels stay mounted while hidden, so the tree keeps what was expanded and the chat its
            conversation; the AI dock mounts the first time it is shown. *@
-        <div class="akml-ws-schema @(SchemaShown ? null : "akml-ws-hidden")" id="akml-ws-schema" data-testid="workspace-schema"
-             role="region" aria-label="Schema" tabindex="-1">
+        <div class="akml-ws-schema @(SchemaShown ? null : SchemaPeeking ? "akml-ws-schema--overlay" : "akml-ws-hidden")" id="akml-ws-schema"
+             data-testid="workspace-schema" role="region" aria-label="Schema" tabindex="-1"
+             style="@(SchemaPeeking ? $"width: {Fitted.SchemaWidth}px;" : null)" @onkeydown="OnSchemaPanelKeyDown">
             <SchemaTreeComponent Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)"
                                      ServerCanonicalIdentity="@_activeServerIdentity"
                                  DatabaseName="@_activeDatabaseName"
                                  SessionId="@(SqlConn.IsConnected ? SqlConn.SessionId : null)"
                                  OnObjectClicked="OnSchemaObjectClickedAsync"
-                                 OnConnectRequested="() => ConnManager.Open()" />
+                                 OnObjectAction="OnSchemaObjectActionAsync"
+                                 OnConnectRequested="() => ConnManager.Open()"
+                                 Pinned="@(!Layout.Current.SchemaAutoHide)" OnPinToggled="ToggleSchemaPinAsync" OnClose="CloseSchemaPanelAsync" />
         </div>
         @if (SchemaShown)
         {
@@ -181,11 +189,12 @@
         }
         else
         {
-            <button type="button" class="akml-ws-edge akml-ws-edge--left" data-testid="workspace-edge-left"
-                    title="Show Schema (F8)" @onclick="@(() => RestoreFromStripAsync(WorkspacePanel.Schema))">Schema</button>
+            <button type="button" class="akml-ws-edge akml-ws-edge--left @(SchemaPeeking ? "is-active" : null)" data-testid="workspace-edge-left"
+                    title="Show Schema (F8)" aria-expanded="@(SchemaPeeking ? "true" : "false")"
+                    @onclick="OnSchemaStripClickAsync">Schema</button>
         }
 
-        <div class="akml-ws-centre" id="akml-ws-centre">
+        <div class="akml-ws-centre" id="akml-ws-centre" @onfocusin="CloseSchemaPeek" @onpointerdown="CloseSchemaPeek">
             @* Spec 041 (FR-073): the document bar — its name, and * while it has unsaved changes. *@
             <div class="akml-docbar" data-testid="doc-bar">
                 <Icon Name="file-code" Size="14" />
@@ -212,7 +221,7 @@
                                    OnCollapseToggled="@(() => CollapseFromSplitterAsync(WorkspacePanel.None))" />
             </div>
         }
-        <div class="akml-ws-results" id="akml-ws-results">
+        <div class="akml-ws-results" id="akml-ws-results" @onpointerdown="CloseSchemaPeek">
             @if (!Fitted.ResultsVisible)
             {
                 <button type="button" class="akml-ws-edge akml-ws-edge--bottom" data-testid="workspace-edge-bottom"
@@ -466,6 +475,18 @@
             "schema sl results sr ai";
     }
     .akml-workspace--maximised { grid-template-rows: 0 0 minmax(0, 1fr); }
+    .akml-workspace { position: relative; }
+    /* An unpinned Schema panel, opened from its strip: over the editor, beside the strip, until the editor is used. */
+    .akml-workspace .akml-ws-schema--overlay {
+        grid-area: auto;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: var(--akml-ws-left);
+        z-index: 40;
+        box-shadow: 0 8px 24px var(--akml-surface-scrim);
+    }
+    .akml-ws-edge.is-active { color: var(--akml-text-primary); background-color: var(--akml-surface-selection); }
     .akml-workspace--maximised .akml-ws-centre { visibility: hidden; }
     .akml-workspace--maximised .akml-editor { min-height: 0; }
     .akml-ws-schema, .akml-ws-edge--left { grid-area: schema; min-height: 0; overflow: hidden; }
@@ -660,7 +681,49 @@
 
     private WorkspaceFold Fold => _wsWidth > 0 ? WorkspaceLayout.Fold(Fitted, _wsWidth, Limits, _keep) : WorkspaceFold.None;
 
-    private bool SchemaShown => Fitted.SchemaVisible && (!Fold.SchemaFolded || _forced == WorkspacePanel.Schema);
+    // Pinned and on screen: the panel has its own column. An unpinned panel never does; it is an edge strip that opens over
+    // the editor (SchemaPeeking) until the editor is clicked or focused.
+    private bool SchemaShown => !Layout.Current.SchemaAutoHide && Fitted.SchemaVisible && (!Fold.SchemaFolded || _forced == WorkspacePanel.Schema);
+
+    private bool _schemaPeek;
+
+    private bool SchemaPeeking => Layout.Current.SchemaAutoHide && _schemaPeek;
+
+    private void CloseSchemaPeek()
+    {
+        if (_schemaPeek) _schemaPeek = false;
+    }
+
+    private void OnSchemaPanelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && SchemaPeeking) _schemaPeek = false;
+    }
+
+    private async Task OnSchemaStripClickAsync()
+    {
+        if (Layout.Current.SchemaAutoHide) _schemaPeek = !_schemaPeek;
+        else await RestoreFromStripAsync(WorkspacePanel.Schema);
+    }
+
+    /// <summary>The pin in the Schema header: unpinning folds the panel to its strip (it then opens over the editor); pinning
+    /// gives it its column back.</summary>
+    private async Task ToggleSchemaPinAsync()
+    {
+        _schemaPeek = false;
+        bool autoHide = !Layout.Current.SchemaAutoHide;
+        await Layout.SetAsync(WorkspaceLayoutFields.SchemaAutoHide, autoHide);
+        if (!autoHide) await ShowPanelAsync(WorkspacePanel.Schema);
+    }
+
+    private Task CloseSchemaPanelAsync()
+    {
+        if (SchemaPeeking)
+        {
+            _schemaPeek = false;
+            return Task.CompletedTask;
+        }
+        return HidePanelAsync(WorkspacePanel.Schema);
+    }
 
     private bool AiShown => Fitted.AiVisible && (!Fold.AiFolded || _forced == WorkspacePanel.Ai);
 
@@ -805,6 +868,18 @@
         if (_disposed) return;
         _resultsTab = Layout.Current.ResultsTab;
 
+        // The page is created again on every visit: the result shown before leaving it comes back (as from an earlier connection
+        // when the connection has changed since), instead of an empty results pane.
+        if (Workspace.LastResult is { } kept)
+        {
+            _result = kept.Result;
+            _resultGeneration = kept.ConnectionGeneration;
+            _selectionStartLine = kept.StartLine;
+            _selectionStartColumn = kept.StartColumn;
+            _lastExecutedSql = kept.Sql;
+        }
+        _seenConnectionGeneration = SqlConn.ConnectionGeneration;
+
         // T051: restore the last editor session.
         var restored = await SessionStore.RestoreAsync();
         if (_disposed) return;
@@ -891,7 +966,45 @@
     private void OnSqlConnStateChanged()
     {
         RefreshSchemaTarget();
+        // Another server, database, login or kind: the last run's outcome in the status bar describes the old one, and the problems
+        // were found for the old dialect - clear the one, and read the document again for the other.
+        if (SqlConn.ConnectionGeneration != _seenConnectionGeneration)
+        {
+            _seenConnectionGeneration = SqlConn.ConnectionGeneration;
+            Workspace.ClearOutcome();
+            ScheduleFindingsRefresh();
+        }
         InvokeAsync(StateHasChanged);
+    }
+
+    private int _seenConnectionGeneration;
+
+    // The Problems list is a snapshot of the last Analyse. When the connection changes kind or server it is read again for the
+    // new connection, quietly: no tab switch, no notification, and not counted as an Analyse.
+    private CancellationTokenSource? _refreshFindingsCts;
+
+    private void ScheduleFindingsRefresh()
+    {
+        if (_findings == null || !_analysisEnabled) return;
+        _refreshFindingsCts?.Cancel();
+        var cts = _refreshFindingsCts = new CancellationTokenSource();
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(800, cts.Token);
+                var findings = await Analyser.AnalyseAsync(_currentText, null, cts.Token);
+                if (cts.IsCancellationRequested || _disposed || _findings == null) return;
+                _findings = findings;
+                await ShowDiagnosticsAsync();
+                StateHasChanged();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Diagnostics.Log(DiagnosticLevel.Warn, "analyser", $"The problems could not be refreshed: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>
@@ -938,6 +1051,8 @@
 
             // LIVE text — selection if any, else the whole document — and where it starts, so an error's
             // line maps back to the document (spec 041 R24).
+            // The completion list is not left open over the editor while the query runs.
+            await _editor.CloseCompletionAsync();
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
 
@@ -1020,6 +1135,7 @@
                 : ResultsPaneComponent.MessagesTab;
         }
         Workspace.Complete(result);
+        Workspace.KeepResult(new WorkspaceResult(result, _resultGeneration, startLine, _selectionStartColumn, _lastExecutedSql));
         _executeVersion++;
         _lastExecuteStatus = result.Status;
 
@@ -1607,11 +1723,41 @@
         await AnalyseAsync();
     }
 
-    /// <summary>Spec 025 US4 — schema tree's click-to-insert callback. Drops the
-    /// bracketed qualifier at the caret; CodeMirror's standard Ctrl+Z undoes it.</summary>
+    /// <summary>Spec 025 US4 — the schema tree's insert-name callback (a double-click). Puts the qualifier at the caret, or over the
+    /// selection, with a separating space where it would run into the text; one Ctrl+Z undoes it.</summary>
     private async Task OnSchemaObjectClickedAsync(string qualifiedName)
     {
-        if (_editor != null) await _editor.InsertAtCaretAsync(qualifiedName);
+        if (_editor != null) await _editor.InsertNameAsync(qualifiedName);
+    }
+
+    /// <summary>The schema tree's double-click and context menu: insert or copy the name, or open a script as a new query
+    /// (Select Top 1000 Rows also runs it).</summary>
+    private async Task OnSchemaObjectActionAsync(SchemaObjectAction action)
+    {
+        var name = SchemaObjectScripts.Name(action.Kind, action.SchemaName, action.Object.ObjectName);
+        switch (action.Command)
+        {
+            case SchemaObjectCommand.InsertName:
+                await OnSchemaObjectClickedAsync(name);
+                return;
+            case SchemaObjectCommand.CopyName:
+                bool copied = false;
+                try
+                {
+                    _uiModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+                    copied = await _uiModule.InvokeAsync<bool>("copyText", name);
+                }
+                catch (JSException ex) { Diagnostics.Log(DiagnosticLevel.Warn, "editor", $"Copy name: {ex.Message}"); }
+                Notifications.Notify(copied ? $"Copied {name}." : "The name could not be copied.", copied ? NotificationKind.Success : NotificationKind.Error);
+                return;
+        }
+
+        var script = SchemaObjectScripts.Script(action.Command, action.Kind, action.SchemaName, action.Object);
+        if (script == null) return;
+        var label = SchemaObjectScripts.Label(action.Command, action.Kind, action.Object.ObjectType);
+        if (!await Document.NewWithTextAsync(script, $"{label}: {name}")) return;
+        await AfterDocumentReplacedAsync();
+        if (action.Command == SchemaObjectCommand.SelectTop) await ExecuteAsync();
     }
 
     // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
@@ -1647,7 +1793,16 @@
 
     public Task ToggleNavAsync() => Layout.SetAsync(WorkspaceLayoutFields.NavVisible, !Layout.Current.NavVisible);
 
-    public Task ToggleSchemaAsync() => SchemaShown ? HidePanelAsync(WorkspacePanel.Schema) : ShowPanelAsync(WorkspacePanel.Schema);
+    public Task ToggleSchemaAsync()
+    {
+        if (Layout.Current.SchemaAutoHide)
+        {
+            _schemaPeek = !_schemaPeek;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+        return SchemaShown ? HidePanelAsync(WorkspacePanel.Schema) : ShowPanelAsync(WorkspacePanel.Schema);
+    }
 
     public Task ToggleAiAsync() => AiShown ? HidePanelAsync(WorkspacePanel.Ai) : ShowPanelAsync(WorkspacePanel.Ai);
 
@@ -2023,6 +2178,7 @@
         Layout.Changed -= OnLayoutChanged;
         Document.Changed -= OnDocumentChanged;
         _analyseCts?.Cancel();
+        _refreshFindingsCts?.Cancel();
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();
         await Diagnostics.FlushAsync();

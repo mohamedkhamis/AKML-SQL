@@ -211,7 +211,7 @@ public sealed class SchemaTreeComponentPgTests : BunitContext
     }
 
     [Fact]
-    public async Task Clicking_an_object_inserts_its_PostgreSQL_name()
+    public async Task Double_clicking_an_object_inserts_its_PostgreSQL_name()
     {
         var cut = await RenderAsync(Sample());
         string? inserted = null;
@@ -220,7 +220,7 @@ public sealed class SchemaTreeComponentPgTests : BunitContext
         cut.Instance.ExpandForTest(Db + "/sales/Views");
         cut.Render();
 
-        cut.Find("[data-testid='schema-tree-object']").Click();
+        cut.Find("[data-testid='schema-tree-object']").DoubleClick();
 
         Assert.Equal("sales.big_orders", inserted);
     }

@@ -129,6 +129,11 @@
                                         aria-current="@(_selected?.Id == e.Id ? "true" : null)" tabindex="@(current ? 0 : -1)"
                                         @onfocus="@(() => _focusStop = rowKey)">
                                     <span class="akml-hist-name">@rv.DisplayName</span>
+                                    @if (rv.Snippet != null)
+                                    {
+                                        @* An automatic name (query-NN restarts every day) says nothing about the query: its start does. *@
+                                        <span class="akml-hist-snippet" data-testid="history-row-snippet">@rv.Snippet</span>
+                                    }
                                     <span class="akml-hist-meta">
                                         @if (ShowKinds)
                                         {
@@ -138,7 +143,9 @@
                                         <span>@rv.RelativeTime</span>
                                         @if (!string.IsNullOrEmpty(rv.Meta)) { <span class="akml-hist-count"> · @rv.Meta</span> }
                                         <span class="akml-hist-conn">
-                                            <span class="akml-hist-dot @(e.IsOpen ? "is-open" : "is-closed")" title="@(e.IsOpen ? "Open" : "Closed")"></span>
+                                            <span class="akml-hist-dot @(e.IsOpen ? "is-open" : "is-closed")" role="img"
+                                                  aria-label="@(e.IsOpen ? "Open in an editor" : "Not open in an editor")"
+                                                  title="@(e.IsOpen ? "Open in an editor" : "Not open in an editor")"></span>
                                             @rv.ServerDb
                                         </span>
                                     </span>
@@ -315,7 +322,10 @@
     .akml-hist-conn { margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .akml-hist-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
     .akml-hist-dot.is-open { background-color: var(--akml-status-success); }
-    .akml-hist-dot.is-closed { background-color: var(--akml-status-danger); }
+    /* Closed is the normal state of a past query, not an error: a hollow neutral ring, not a red dot. */
+    .akml-hist-dot.is-closed { background-color: transparent; box-shadow: inset 0 0 0 1px var(--akml-text-secondary); }
+    .akml-hist-snippet { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                         font-family: var(--akml-type-editor-family); font-size: 11px; color: var(--akml-text-secondary); }
     .akml-hist-count { font-style: italic; }
     .akml-hist-cmp { flex: 0 0 auto; }
     .akml-hist-more { margin: var(--akml-scalar-spacing-s); }
@@ -373,7 +383,16 @@
     // Per-entry derived display values computed once per load (keyed by entry id) so the render tree
     // never re-runs the regex/date/relative-time work per row per render. See RebuildRowViews.
     private readonly Dictionary<long, RowView> _rowViews = new();
-    private sealed record RowView(string DisplayName, string Meta, string Bucket, string RelativeTime, string ServerDb);
+    private sealed record RowView(string DisplayName, string Meta, string Bucket, string RelativeTime, string ServerDb, string? Snippet = null);
+
+    private static readonly System.Text.RegularExpressions.Regex AutoSessionName =
+        new(@"^query-\d{2,}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>The start of the query, for a session the engine named query-NN; null for a name the user gave.</summary>
+    internal static string? SnippetFor(HistoryEntryDto e) =>
+        e.TabTitle is { } title && AutoSessionName.IsMatch(title.Trim()) && !string.IsNullOrWhiteSpace(e.SqlText)
+            ? HistoryDisplayName.Of(null, e.SqlText)
+            : null;
 
     // Cached preview segments — recomputed only when _previewSql or _search changes (SelectAsync,
     // SelectVersion, ClearDetail, OnSearchInput), never inside the render tree.
@@ -923,7 +942,7 @@
 
     private static RowView BuildRowView(HistoryEntryDto e, DateTime now) =>
         new(DisplayNameFor(e), MetaFor(e.ExecutionCount, e.VersionCount),
-            WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e));
+            WebHistoryLogic.DateBucket(e.ExecutedAt, now), RelativeTime(e.ExecutedAt), ServerDb(e), SnippetFor(e));
 
     private void RecomputePreviewSegments() =>
         _previewSegments = _selected == null

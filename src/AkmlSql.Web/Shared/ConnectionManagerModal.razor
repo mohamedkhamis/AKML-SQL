@@ -113,8 +113,26 @@
                         </div>
                         <div class="akml-field akml-connmgr-field">
                             <label class="akml-field-label" for="conn-pg-database">Database</label>
-                            <input id="conn-pg-database" class="akml-input" @bind="_pgDatabase" @bind:event="oninput"
-                                   placeholder="postgres" data-testid="conn-pg-database" />
+                            @* Typed, or picked from the server's list (the refresh button, or automatically once a password
+                               is remembered): the same choice SQL Server's form offers. *@
+                            <div class="akml-connmgr-db-row">
+                                <input id="conn-pg-database" class="akml-input akml-connmgr-select" @bind="_pgDatabase" @bind:event="oninput"
+                                       list="conn-pg-database-list" autocomplete="off" placeholder="postgres" data-testid="conn-pg-database" />
+                                <datalist id="conn-pg-database-list">
+                                    @foreach (var db in _databases)
+                                    {
+                                        <option value="@db"></option>
+                                    }
+                                </datalist>
+                                <button type="button" class="akml-btn akml-connmgr-db-refresh"
+                                        @onclick="LoadPgDatabasesAsync" disabled="@(_busy || _dbLoading)"
+                                        title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
+                                        data-testid="conn-pg-database-refresh"><Icon Name="refresh-cw" /></button>
+                            </div>
+                            @if (!string.IsNullOrEmpty(_dbMessage))
+                            {
+                                <span class="akml-connmgr-hint" data-testid="conn-pg-database-hint">@_dbMessage</span>
+                            }
                         </div>
                         <div class="akml-field akml-connmgr-field">
                             <label class="akml-field-label" for="conn-pg-user">User name</label>
@@ -180,11 +198,14 @@
                                 @if (!string.IsNullOrEmpty(_database) &&
                                      !_databases.Contains(_database, StringComparer.OrdinalIgnoreCase))
                                 {
-                                    <option value="@_database">@_database</option>
+                                    <option value="@_database" selected>@_database</option>
                                 }
                                 @foreach (var db in _databases)
                                 {
-                                    <option value="@db">@db</option>
+                                    @* The list arrives after the value is bound: without `selected` the browser shows the first
+                                       option while the connection uses _database, so the dialog connected to another database
+                                       than the one it showed. *@
+                                    <option value="@db" selected="@string.Equals(db, _database, StringComparison.OrdinalIgnoreCase)">@db</option>
                                 }
                             </select>
                             <button type="button" class="akml-btn akml-connmgr-db-refresh"
@@ -200,7 +221,9 @@
                            account — databases it lacks grants for are silently absent, which
                            surprised even the campaign (the sandbox needed a grant to appear). *@
                         <span class="akml-connmgr-hint" data-testid="conn-database-scope-hint">
-                            Lists databases the engine's service account can access.
+                            @(_windowsAuth
+                                ? "With Windows authentication only the databases the engine's account can open are listed. For another database, grant that account access or use SQL Server authentication."
+                                : "Lists the databases this login can open.")
                         </span>
                     </div>
                     <div class="akml-field akml-connmgr-field">
@@ -249,12 +272,14 @@
                     </div>
                     }
 
-                    @if (!string.IsNullOrEmpty(_message))
-                    {
-                        <p class="akml-connmgr-msg @(_messageIsError ? "error" : "ok")" data-testid="conn-message">@_message</p>
-                    }
                 </div>
             </div>
+
+            @* Outside the scrolling form, so the result of Test or Connect is always in view. *@
+            @if (!string.IsNullOrEmpty(_message))
+            {
+                <p class="akml-connmgr-msg @(_messageIsError ? "error" : "ok")" role="status" data-testid="conn-message">@_message</p>
+            }
 
             <div class="akml-connmgr-footer">
                 <button type="button" class="akml-btn" @onclick="TestAsync"
@@ -402,7 +427,14 @@
     }
     .akml-connmgr-hint { color: var(--akml-text-secondary); font-size: 11px; font-style: italic; }
 
-    .akml-connmgr-msg { font-size: 12px; margin: var(--akml-scalar-spacing-xs) 0 0; }
+    .akml-connmgr-msg {
+        flex: 0 0 auto;
+        font-size: 12px;
+        margin: 0;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        border-top: 1px solid var(--akml-border-default);
+        overflow-wrap: anywhere;
+    }
     .akml-connmgr-msg.error { color: var(--akml-status-danger); }
     .akml-connmgr-msg.ok { color: var(--akml-status-success); }
 
@@ -538,13 +570,16 @@
     }
 
     // The kind switch: the other kind's fields start from their defaults, so nothing typed for one server leaks into the other.
-    private void SetKind(DatabaseKind kind)
+    // A switch is a new connection of the other kind: the selected saved connection's name does not carry over to it.
+    private async Task SetKind(DatabaseKind kind)
     {
         if (_kind == kind) return;
         if (kind == DatabaseKind.PostgreSql && !SqlConn.EngineSupportsPostgres) return;
         _kind = kind;
         _message = null;
+        if (_selectedId != null) _name = string.Empty;
         _selectedId = null;
+        ClearDatabaseList();
         if (kind == DatabaseKind.PostgreSql) ResetPostgresFields();
         else
         {
@@ -554,7 +589,32 @@
             _login = string.Empty;
             _password = string.Empty;
             _trustServerCertificate = false;
-            ClearDatabaseList();
+            await LoadDatabasesAsync();   // Windows authentication needs no password: the list fills as it did on open
+        }
+    }
+
+    private async Task LoadPgDatabasesAsync()
+    {
+        _dbLoading = true;
+        _dbMessage = null;
+        StateHasChanged();
+        try
+        {
+            var (ok, dbs, error) = await SqlConn.ListDatabasesAsync(PgTarget(), CancellationToken.None);
+            if (ok)
+            {
+                _databases = dbs.ToList();
+                _dbMessage = _databases.Count == 0 ? "No databases this role can connect to." : $"{_databases.Count} database(s): type or pick one.";
+            }
+            else
+            {
+                _dbMessage = error;
+            }
+        }
+        finally
+        {
+            _dbLoading = false;
+            StateHasChanged();
         }
     }
 
@@ -669,6 +729,8 @@
         var (host, port, _) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
         _pgHasRemembered = host != null && !string.IsNullOrWhiteSpace(_pgUser)
             && await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+        // With a remembered password the list needs nothing more from the user, so it fills as SQL Server's does on open.
+        if (_pgHasRemembered && _databases.Count == 0 && !_dbLoading) await LoadPgDatabasesAsync();
         await InvokeAsync(StateHasChanged);
     }
 

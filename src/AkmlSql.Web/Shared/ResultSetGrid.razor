@@ -1588,6 +1588,13 @@
                 _edits[row] = rowEdits;
             }
             rowEdits[col] = value;
+            // A value longer than its column widens it, so the edit is not shown cut short ("beta ed…"). A width the user
+            // set stays: WidthPx keeps returning it.
+            if (value != null)
+            {
+                int px = GridColumnLayout.Fit(GridColumnLayout.EstimatePx(ColumnLabel(col)), GridColumnLayout.EstimatePx(Format(value, col, false).Text));
+                if (px > _layout.WidthPx(col)) _layout.ApplyFit(col, px);
+            }
         }
         else if (_edits.TryGetValue(row, out var rowEdits))
         {

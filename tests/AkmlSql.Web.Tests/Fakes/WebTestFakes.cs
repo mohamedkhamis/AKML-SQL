@@ -85,6 +85,15 @@ internal sealed class FakeSchemaSync : ISchemaSync
     public int Refreshes { get; private set; }
     public Func<Task>? OnRefresh { get; set; }
 
+    public bool IsRefreshing { get; private set; }
+    public event Action? RefreshingChanged;
+
+    public void SetRefreshing(bool refreshing)
+    {
+        IsRefreshing = refreshing;
+        RefreshingChanged?.Invoke();
+    }
+
     public async Task RefreshAsync(CancellationToken ct = default)
     {
         Refreshes++;

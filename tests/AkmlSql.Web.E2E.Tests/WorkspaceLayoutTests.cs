@@ -440,7 +440,7 @@ public sealed class WorkspaceLayoutTests
 
         await Assertions.Expect(Id(page, "workspace-schema")).ToBeVisibleAsync();
         var connect = Id(page, "schema-connect");
-        await Assertions.Expect(connect).ToHaveTextAsync("Connect to SQL Server…");
+        await Assertions.Expect(connect).ToHaveTextAsync("Connect…");
         await connect.ClickAsync();
         await Assertions.Expect(Id(page, "connection-manager")).ToBeVisibleAsync();
     }
