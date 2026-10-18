@@ -220,4 +220,123 @@ public sealed class ReviewFixBrowserTests
             await DropAsync(s, table);
         }
     }
+
+    /// <summary>Applies the pending edits of the set and waits for the apply bar to close. (The Apply button's test id has a
+    /// "-n" suffix only when result sets are stacked.)</summary>
+    private static async Task ApplyFirstSetAsync(ILocator set)
+    {
+        await set.Locator("button[data-testid^='results-apply']").ClickAsync();
+        await Assertions.Expect(set.Locator("[data-testid='results-applybar']")).ToHaveCountAsync(0, new() { Timeout = 30_000 });
+    }
+
+    private static async Task TypeIntoAsync(IPage page, ILocator cell, string value)
+    {
+        await cell.ClickAsync();
+        await page.Keyboard.TypeAsync(value);
+        await page.Keyboard.PressAsync("Enter");
+    }
+
+    /// <summary>Review round 3 (REV-06) through the real grid: a table with an AFTER INSERT trigger that changes the row, loaded
+    /// by a batch with a side effect of its own. After Apply the new row shows its identity, its default and the trigger's value,
+    /// the batch is not run again, and the next edit and delete find the rows by their keys.</summary>
+    [SkippableFact]
+    public async Task A_triggered_insert_from_a_batch_shows_the_stored_row_and_the_next_edit_and_delete_find_it()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        var suffix = Guid.NewGuid().ToString("N").Substring(0, 8);
+        string table = "akml_e2e_trg_" + suffix, log = "akml_e2e_trglog_" + suffix;
+        await s.ExecuteAsync(
+            $"CREATE TABLE dbo.{log} (n int NOT NULL); " +
+            $"CREATE TABLE dbo.{table} (id int IDENTITY PRIMARY KEY, name nvarchar(50) NOT NULL, " +
+            "tag nvarchar(50) NOT NULL DEFAULT N'tagged', stamp nvarchar(80) NULL); " +
+            $"INSERT dbo.{table} (name) VALUES (N'alpha');");
+        await s.ExecuteAsync(
+            $"CREATE TRIGGER dbo.trg_{table} ON dbo.{table} AFTER INSERT AS BEGIN SET NOCOUNT ON; " +
+            $"UPDATE x SET stamp = N'by trigger: ' + x.name FROM dbo.{table} AS x JOIN inserted AS i ON i.id = x.id; END;");
+        try
+        {
+            // A batch that writes before it reads: running it again after Apply would log a second row.
+            await s.ExecuteAsync($"INSERT dbo.{log} (n) VALUES (1); SELECT id, name, tag, stamp FROM dbo.{table};");
+            var first = s.Page.Locator("[data-testid='results-set-0']");
+            await first.Locator("[data-testid='results-add-row']").ClickAsync();
+            await TypeIntoAsync(s.Page, first.Locator("[data-testid='results-insert-cell-0-1']"), "bravo");
+            await ApplyFirstSetAsync(first);
+
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-0']")).ToHaveTextAsync("2");
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-1']")).ToHaveTextAsync("bravo");
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-2']")).ToHaveTextAsync("tagged");
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-3']")).ToHaveTextAsync("by trigger: bravo");
+            await Assertions.Expect(first.Locator("[data-testid^='results-unconfirmed-']")).ToHaveCountAsync(0);
+
+            await TypeIntoAsync(s.Page, first.Locator("[data-testid='results-cell-1-1']"), "charlie");
+            await ApplyFirstSetAsync(first);
+            await first.Locator("[data-testid='results-delete-0']").ClickAsync();
+            await ApplyFirstSetAsync(first);
+
+            await s.ExecuteAsync($"SELECT (SELECT COUNT(*) FROM dbo.{log}) AS runs, id, name, stamp FROM dbo.{table};");
+            await Assertions.Expect(Cell(s.Page, 0, 0)).ToHaveTextAsync("1");                    // the batch ran once
+            await Assertions.Expect(Cell(s.Page, 0, 1)).ToHaveTextAsync("2");
+            await Assertions.Expect(Cell(s.Page, 0, 2)).ToHaveTextAsync("charlie");
+            await Assertions.Expect(Cell(s.Page, 0, 3)).ToHaveTextAsync("by trigger: bravo");
+            await Assertions.Expect(Cell(s.Page, 1, 0)).ToHaveCountAsync(0);                      // alpha is gone
+        }
+        finally
+        {
+            await DropAsync(s, table);
+            await s.ExecuteAsync($"DROP TABLE IF EXISTS dbo.{log};");
+        }
+    }
+
+    /// <summary>Review round 3 (REV-09) through the real grid: the session is moved to master, the table is in tempdb by its three-part
+    /// name, has an enabled trigger and a server-generated uniqueidentifier key. The insert applies, shows the generated key and
+    /// the default, and the next edit and delete reach the right rows.</summary>
+    [SkippableFact]
+    public async Task A_three_part_name_insert_into_a_triggered_table_with_a_generated_key_applies_from_master()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        var table = "akml_e2e_xdb_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        await s.ExecuteAsync(
+            $"CREATE TABLE tempdb.dbo.{table} (id uniqueidentifier NOT NULL DEFAULT NEWSEQUENTIALID() PRIMARY KEY, " +
+            "name nvarchar(50) NOT NULL, tag nvarchar(50) NOT NULL DEFAULT N'tagged'); " +
+            $"INSERT tempdb.dbo.{table} (name) VALUES (N'alpha'); " +
+            $"EXEC tempdb.sys.sp_executesql N'CREATE TRIGGER dbo.trg_{table} ON dbo.{table} AFTER INSERT AS SET NOCOUNT ON;';");
+        try
+        {
+            // USE moves the session to master; the result's table stays tempdb's, by its three-part name.
+            await s.ExecuteAsync($"USE master; SET NOCOUNT ON; SELECT id, name, tag FROM tempdb.dbo.{table};");
+            var first = s.Page.Locator("[data-testid='results-set-0']");
+            await first.Locator("[data-testid='results-add-row']").ClickAsync();
+            await TypeIntoAsync(s.Page, first.Locator("[data-testid='results-insert-cell-0-1']"), "bravo");
+            await ApplyFirstSetAsync(first);
+
+            await Assertions.Expect(first.Locator("[data-testid='results-apply-message']")).Not.ToContainTextAsync("failed");
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-0']"))
+                .ToHaveTextAsync(new System.Text.RegularExpressions.Regex("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"));
+            await Assertions.Expect(first.Locator("[data-testid='results-cell-1-2']")).ToHaveTextAsync("tagged");
+            await Assertions.Expect(first.Locator("[data-testid^='results-unconfirmed-']")).ToHaveCountAsync(0);
+
+            await TypeIntoAsync(s.Page, first.Locator("[data-testid='results-cell-1-1']"), "charlie");
+            await ApplyFirstSetAsync(first);
+            await first.Locator("[data-testid='results-delete-0']").ClickAsync();
+            await ApplyFirstSetAsync(first);
+
+            await s.ExecuteAsync($"SELECT DB_NAME() AS db, name, tag FROM tempdb.dbo.{table};");
+            await Assertions.Expect(Cell(s.Page, 0, 0)).ToHaveTextAsync("master");
+            await Assertions.Expect(Cell(s.Page, 0, 1)).ToHaveTextAsync("charlie");
+            await Assertions.Expect(Cell(s.Page, 0, 2)).ToHaveTextAsync("tagged");
+            await Assertions.Expect(Cell(s.Page, 1, 0)).ToHaveCountAsync(0);
+        }
+        finally
+        {
+            try
+            {
+                if (await Id(s.Page, "dialog-cancel").CountAsync() > 0) await Id(s.Page, "dialog-cancel").ClickAsync();
+                await s.ExecuteAsync($"DROP TABLE IF EXISTS tempdb.dbo.{table};");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"cleanup of {table} failed: {ex.Message}");
+            }
+        }
+    }
 }

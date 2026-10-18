@@ -133,10 +133,10 @@ public sealed class InsertDefaultsIntegrationTests
             await ExecuteAsync(transport, sid, $"IF OBJECT_ID('dbo.[{table}]') IS NOT NULL DROP TABLE dbo.[{table}];", 99);
         }
     }
-    /// <summary>Re-review REV-06: the insert returns the row as the server stored it — identity and defaults — so the grid shows
-    /// it without running the batch again; a table with a trigger (no OUTPUT allowed) still returns its identity.</summary>
+    /// <summary>Re-review REV-06 / round 3: the insert returns the row as the server stored it — identity and defaults — so the
+    /// grid shows it without running the batch again; a table with a trigger (no bare OUTPUT allowed) returns it too, read by key.</summary>
     [SkippableFact]
-    public async Task An_insert_returns_the_stored_row_and_a_trigger_table_its_identity()
+    public async Task An_insert_returns_the_stored_row_with_and_without_a_trigger()
     {
         Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local)/tempdb.");
         var sid = Guid.NewGuid().ToString("N");
@@ -165,7 +165,7 @@ public sealed class InsertDefaultsIntegrationTests
 
             var withTrigger = await SendAsync<ApplyChangesRequest, ApplyChangesResult>(transport, MessageTypes.ApplyChanges, Insert(triggered), 5);
             Assert.Equal(ExecuteStatus.Ok, withTrigger.Status);
-            Assert.Null(Assert.Single(withTrigger.Results).Row);
+            Assert.Equal(new string?[] { "1", "first" }, Assert.Single(withTrigger.Results).Row);
             Assert.Equal("1", withTrigger.Results[0].NewIdentity);
         }
         finally

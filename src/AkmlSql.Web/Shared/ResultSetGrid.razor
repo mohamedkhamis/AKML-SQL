@@ -368,6 +368,7 @@
     {
         if (ReferenceEquals(Set, _boundSet)) return;
         _boundSet = Set;
+        _unconfirmed = new();
 
         int cols = Set.ColumnNames.Length;
         _types = new SqlTypeName[cols];
@@ -386,6 +387,18 @@
         FitByEstimate(AllColumns, replaceUser: false);
         _fitPending = true;
     }
+
+    /// <summary>
+    /// Review round 3 (REV-06): committed inserts the server could not say how it stored (no key to read them back by, an INSTEAD OF
+    /// trigger, an older engine) — set row → the columns whose value is known (typed, or the returned identity). The other cells
+    /// show as not read back, and the row can be neither edited nor deleted: its key would be a guess. Running the query again
+    /// replaces the set and clears this.
+    /// </summary>
+    private Dictionary<int, HashSet<int>> _unconfirmed = new();
+
+    private const string UnconfirmedTitle = "Added, but not read back from the server — run the query again to see what was stored.";
+
+    private bool IsUnconfirmed(int row) => _unconfirmed.ContainsKey(row);
 
     private void ResetEditState()
     {
@@ -542,7 +555,8 @@
 
     private bool IsAutoIncrement(int col) => Provenance(col)?.IsAutoIncrement == true;
 
-    private bool IsCellEditable(int row, int col) => Set.IsEditable && CanMutate && IsColumnEditable(col) && !_deletes.Contains(row);
+    private bool IsCellEditable(int row, int col) =>
+        Set.IsEditable && CanMutate && IsColumnEditable(col) && !_deletes.Contains(row) && !IsUnconfirmed(row);
 
     // ── Rendering helpers ──────────────────────────────────────────────────────────────────────────
 
@@ -622,8 +636,10 @@
         int r = _rowIndexes[d];
         bool deleted = _deletes.Contains(r);
         bool edited = !deleted && _edits.ContainsKey(r);
+        _unconfirmed.TryGetValue(r, out var knownCols);
         bool rowFocus = _area == FocusArea.RowNumber && !_selection.IsEmpty && _selection.Focus.Row == d;
-        string rowClass = "akml-results-row" + (deleted ? " akml-row-deleted" : edited ? " akml-row-edited" : string.Empty);
+        string rowClass = "akml-results-row" + (deleted ? " akml-row-deleted" : edited ? " akml-row-edited" : string.Empty)
+            + (knownCols != null ? " akml-row-unconfirmed" : string.Empty);
         string markerClass = "akml-results-cell akml-results-rowmarker"
             + (RowHasSelection(d) ? " akml-cell-selected" : string.Empty)
             + (rowFocus ? " akml-cell-focus" : string.Empty);
@@ -639,11 +655,15 @@
                 {
                     <Icon Name="pencil" Size="12" Class="akml-row-glyph" Label="Edited row" />
                 }
+                else if (knownCols != null)
+                {
+                    <span title="@UnconfirmedTitle" data-testid="@($"results-unconfirmed-{r}")"><Icon Name="circle-alert" Size="12" Class="akml-row-glyph" Label="@UnconfirmedTitle" /></span>
+                }
                 <span class="akml-rownum">@(d + 1)</span>
                 @if (Set.IsEditable)
                 {
-                    <button type="button" class="akml-rowmarker-btn" tabindex="-1" disabled="@(!CanMutate)"
-                            title="@(LockReason ?? (deleted ? "Restore row" : "Delete row"))" aria-label="@(deleted ? "Restore row" : "Delete row")"
+                    <button type="button" class="akml-rowmarker-btn" tabindex="-1" disabled="@(!CanMutate || knownCols != null)"
+                            title="@(LockReason ?? (knownCols != null ? UnconfirmedTitle : deleted ? "Restore row" : "Delete row"))" aria-label="@(deleted ? "Restore row" : "Delete row")"
                             data-testid="@($"results-delete-{r}")"
                             @onmousedown:stopPropagation="true" @onclick="() => ToggleDelete(r)" @onclick:stopPropagation="true">
                         @if (deleted)
@@ -672,6 +692,13 @@
                                         Label="@($"Edit {ColumnLabel(col)}, row {d + 1}")"
                                         OnDone="@(res => OnEditorDoneAsync(session, res))" />
                     </div>
+                    continue;
+                }
+                if (knownCols != null && !knownCols.Contains(col))
+                {
+                    <div id="@CellId(d, col)" class="@("akml-results-cell akml-cell-unknown" + (selected ? " akml-cell-selected" : string.Empty) + (focus ? " akml-cell-focus" : string.Empty))"
+                         role="gridcell" aria-selected="@(selected ? "true" : "false")" aria-describedby="@(focus && tooltip != null ? TooltipId : null)"
+                         title="@UnconfirmedTitle" data-testid="@($"results-cell-{r}-{col}")" data-unknown="true" data-r="@d" data-c="@col">…</div>
                     continue;
                 }
                 var v = CellDisplay(r, col);
@@ -1374,6 +1401,7 @@
                 if (RefuseWhileLocked()) return;
                 foreach (var r in rows)
                 {
+                    if (IsUnconfirmed(r)) continue;   // its key is not known
                     if (restore) _deletes.Remove(r);
                     else if (_deletes.Add(r)) _edits.Remove(r);
                 }
@@ -1432,6 +1460,7 @@
         if (!Set.IsEditable) return Set.ReadOnlyReason ?? "This result can't be edited.";
         if (LockReason != null) return LockReason;
         if (_deletes.Contains(row)) return "The row is marked for deletion.";
+        if (IsUnconfirmed(row)) return UnconfirmedTitle;
         if (!IsColumnEditable(col)) return $"{ColumnLabel(col)} can't be edited.";
         if (AllowsNull(col) == false) return $"{ColumnLabel(col)} does not allow NULL.";
         return null;
@@ -1605,7 +1634,7 @@
 
     private void ToggleDelete(int row)
     {
-        if (RefuseWhileLocked()) return;
+        if (RefuseWhileLocked() || IsUnconfirmed(row)) return;
         if (!_deletes.Remove(row)) _deletes.Add(row);
         // A deleted row's pending edits are moot.
         if (_deletes.Contains(row)) _edits.Remove(row);
@@ -1653,8 +1682,8 @@
     /// <see cref="QueryRefreshSafety"/>); for a multi-statement batch we must NOT re-run it (that
     /// would repeat its side effects), so without this the grid would revert to the stale pre-edit
     /// values when the overlay is cleared. When the page DOES re-run, the fresh result simply
-    /// replaces these rows. Server-filled identity/computed values on INSERT aren't known here — a
-    /// manual re-Execute surfaces them.
+    /// replaces these rows. An INSERT's server-filled values come back as the stored row (PostgreSQL RETURNING, SQL Server's
+    /// key-based read-back); one that comes back without it is marked not read back (<see cref="_unconfirmed"/>).
     /// </summary>
     private void BakeCommittedChangesIntoSet(ExecuteResultSet set, IReadOnlyDictionary<int, string?[]>? storedUpdates = null,
         IReadOnlyDictionary<int, string?[]>? storedInserts = null, IReadOnlyDictionary<int, string>? identities = null)
@@ -1662,9 +1691,11 @@
         int identityCol = Array.FindIndex(set.Provenance, p => p.IsAutoIncrement);
         int colCount = set.ColumnNames.Length;
         var rows = new List<string?[]>(set.Rows.Length + _inserts.Count);
+        var unconfirmed = new Dictionary<int, HashSet<int>>();
         for (int r = 0; r < set.Rows.Length; r++)
         {
             if (_deletes.Contains(r)) continue;                  // committed delete → drop the row
+            if (_unconfirmed.TryGetValue(r, out var stillUnknown)) unconfirmed[rows.Count] = stillUnknown;   // still not read back
             var row = set.Rows[r];
             if (_edits.TryGetValue(r, out var rowEdits))         // committed edits → overwrite cells
             {
@@ -1682,10 +1713,22 @@
             foreach (var (c, v) in _inserts[i])
                 if (c >= 0 && c < colCount) row[c] = v;
             if (storedInserts != null && storedInserts.TryGetValue(i, out var storedRow)) OverlayStored(row, storedRow);
-            else if (identityCol >= 0 && identityCol < colCount && identities != null && identities.TryGetValue(i, out var id)) row[identityCol] = id;
+            else
+            {
+                // Review round 3 (REV-06): the server did not return the stored row. Show what is known — the typed cells and the
+                // returned identity — and mark the rest as not read back instead of presenting them as committed values.
+                var known = new HashSet<int>(_inserts[i].Keys);
+                if (identityCol >= 0 && identityCol < colCount && identities != null && identities.TryGetValue(i, out var id))
+                {
+                    row[identityCol] = id;
+                    known.Add(identityCol);
+                }
+                unconfirmed[rows.Count] = known;
+            }
             rows.Add(row);
         }
         set.Rows = rows.ToArray();
+        _unconfirmed = unconfirmed;
     }
 
     /// <summary>Writes a returned row's values over the cells of the columns that were asked for (<see cref="_returnOrdinals"/>).</summary>
@@ -1740,6 +1783,7 @@
                     if (op == CrudOp.Update) storedUpdates[index] = edit.Row;
                     else if (op == CrudOp.Insert) storedInserts[index] = edit.Row;
                 }
+                int notReadBack = _inserts.Count - storedInserts.Count;
                 BakeCommittedChangesIntoSet(set, storedUpdates, storedInserts, identities);
                 ResetEditState();
                 RebuildRowIndexes();             // deletes/inserts changed the row set.
@@ -1749,6 +1793,10 @@
                 // actually surfaces (previously it was set then immediately nulled by the reset).
                 _applyOk = true;
                 _applyMessage = $"Applied {req.Edits.Length} change(s).";
+                if (notReadBack > 0)
+                    _applyMessage += notReadBack == 1
+                        ? " 1 new row could not be read back — run the query again to see what was stored."
+                        : $" {notReadBack} new rows could not be read back — run the query again to see what was stored.";
                 // Caller may re-run the query to refresh; we surface the success and clear tints.
                 await OnApplied.InvokeAsync();
             }
@@ -1857,7 +1905,7 @@
             _applyTargets.Add((CrudOp.Insert, insIdx));
         }
 
-        // The columns a PostgreSQL write reads back from the stored row; SQL Server ignores them.
+        // The columns a write reads back from the stored row: PostgreSQL's UPDATE and INSERT, SQL Server's INSERT.
         var returned = set.Provenance
             .Where(p => !p.IsExpression && !string.IsNullOrEmpty(p.BaseColumnName))
             .OrderBy(p => p.Ordinal)

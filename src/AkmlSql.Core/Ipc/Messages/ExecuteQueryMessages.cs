@@ -447,7 +447,8 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>
         /// Spec 042 (FR-133, R11): the result set's base columns, in result order. A PostgreSQL UPDATE or INSERT returns exactly these
         /// from the written row (<c>RETURNING a, b, c</c>), so the grid shows what the server stored - defaults, generated keys, what
-        /// a trigger changed - and reads back nothing else. SQL Server ignores it. Null or empty returns nothing.
+        /// a trigger changed - and reads back nothing else. A SQL Server INSERT reads these back by the table's key after its
+        /// triggers ran (review round 3; see doc/ipc-api.md). Null or empty returns nothing.
         /// </summary>
         [Key(5)]
         public string[]? ReturnColumns { get; set; }
@@ -483,7 +484,8 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>
         /// Spec 042 (FR-133): the written row as the server holds it, in the order of <see cref="ApplyChangesRequest.ReturnColumns"/>
-        /// (PostgreSQL <c>RETURNING</c>). Null for a delete, for SQL Server, and when no columns were asked for.
+        /// (PostgreSQL <c>RETURNING</c>; a SQL Server INSERT's key-based read-back). Null for a delete, a SQL Server UPDATE, when no
+        /// columns were asked for, and for a SQL Server insert whose stored row could not be named (the grid then asks for a refresh).
         /// </summary>
         [Key(5)]
         public string?[]? Row { get; set; }

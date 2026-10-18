@@ -60,7 +60,8 @@ public sealed class SnippetSaveRaceTests
         var (context, adapter, page) = Open();
         using var _ = context;
         page.Find("[data-testid=snippet-save]").Click();
-        Assert.True(adapter.Started);
+        // The save has taken its snapshot once it reaches the store; under load the click's handler can still be queued.
+        page.WaitForAssertion(() => Assert.True(adapter.Started));
         page.Find("#akml-snippet-body").Input("SELECT 2; -- typed while saving");
         adapter.Gate.SetResult();
         page.WaitForAssertion(() => Assert.Contains("Saved", page.Find("[data-testid=snippet-status]").TextContent));
@@ -73,6 +74,7 @@ public sealed class SnippetSaveRaceTests
         var (context, adapter, page) = Open();
         using var _ = context;
         page.Find("[data-testid=snippet-save]").Click();
+        page.WaitForAssertion(() => Assert.True(adapter.Started));   // the snapshot is taken: what follows is typed during the save
         page.Find("#akml-snippet-body").Input("SELECT 2;");
         adapter.Gate.SetResult();
         page.WaitForAssertion(() => Assert.Contains("Saved", page.Find("[data-testid=snippet-status]").TextContent));

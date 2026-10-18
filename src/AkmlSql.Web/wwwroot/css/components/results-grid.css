@@ -204,6 +204,8 @@
 }
 
 .akml-cell-null { color: var(--akml-text-secondary); font-style: italic; }
+/* Review round 3: a committed insert's cell the server did not return — not a value, so not shown as one. */
+.akml-cell-unknown { color: var(--akml-text-secondary); font-style: italic; }
 .akml-cell-editable { cursor: cell; }
 .akml-cell-editable:hover { background-color: var(--akml-surface-selection); }
 

@@ -125,6 +125,70 @@ public sealed class ResultsGridInsertDefaultsTests : IDisposable
         Assert.Equal("4", Assert.Single(update.KeyCells).Value);
     }
 
+    /// <summary>Review round 3 (REV-06): an insert the server committed but did not return shows only what is known — the typed
+    /// cell and the identity — marks the rest as not read back, and refuses edits and deletes until the query runs again: its
+    /// other values, and so possibly its key, would be guesses.</summary>
+    [Fact]
+    public void An_insert_that_was_not_read_back_shows_its_unknown_cells_and_cannot_be_edited_or_deleted()
+    {
+        var set = WithDefaults();
+        _host.Exec.ApplyReply = new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = new[] {
+            new CrudEditResult { Index = 0, Ok = true, NewIdentity = "4", Row = null },
+        } };
+        var cut = _host.Render(set);
+        cut.Find("[data-testid=results-add-row]").Click();
+        EditInsert(cut, 0, 1, "new name");
+        cut.Find("[data-testid=results-apply]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(4, set.Rows.Length));
+        Assert.Contains("could not be read back", cut.Find("[data-testid=results-apply-message]").TextContent);
+        Assert.NotNull(cut.Find("[data-testid=results-unconfirmed-3]"));
+        Assert.Equal("4", Cell(cut, 3, 0).TextContent.Trim());
+        Assert.Equal("new name", Cell(cut, 3, 1).TextContent.Trim());
+        foreach (var c in new[] { 2, 3, 4 })   // qty and flag took defaults the grid was not told; not shown as NULL
+        {
+            Assert.Equal("true", Cell(cut, 3, c).GetAttribute("data-unknown"));
+            Assert.DoesNotContain("NULL", Cell(cut, 3, c).TextContent);
+        }
+
+        Assert.DoesNotContain("akml-cell-editable", Cell(cut, 3, 1).ClassList);
+        ClickCell(cut, 3, 1);
+        Press(cut, "F2");                                  // the keyboard way in is refused too
+        Assert.Empty(cut.FindAll("[data-testid=results-cell-input]"));
+        Assert.True(cut.Find("[data-testid=results-delete-3]").HasAttribute("disabled"));
+        cut.Find("[data-testid=results-delete-3]").Click();
+        Assert.Empty(cut.FindAll("[data-testid=results-apply]"));   // nothing pending: the click was refused
+
+        // The other rows stay editable, and the marker survives the next Apply, which deletes a row before it.
+        _host.Exec.ApplyReply = new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = new[] { new CrudEditResult { Index = 0, Ok = true, RowsAffected = 1 } } };
+        cut.Find("[data-testid=results-delete-0]").Click();
+        cut.Find("[data-testid=results-apply]").Click();
+        cut.WaitForAssertion(() => Assert.Equal(3, set.Rows.Length));
+        Assert.NotNull(cut.Find("[data-testid=results-unconfirmed-2]"));
+        Assert.Equal("true", Cell(cut, 2, 2).GetAttribute("data-unknown"));
+        Assert.Empty(cut.FindAll("[data-testid=results-unconfirmed-0]"));
+    }
+
+    /// <summary>Review round 3: the stored row from the server carries no not-read-back marker.</summary>
+    [Fact]
+    public void A_read_back_insert_has_no_unknown_cells()
+    {
+        var set = WithDefaults();
+        _host.Exec.ApplyReply = new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = new[] {
+            new CrudEditResult { Index = 0, Ok = true, NewIdentity = "4", Row = new string?[] { "4", "new name", "0", "1", null } },
+        } };
+        var cut = _host.Render(set);
+        cut.Find("[data-testid=results-add-row]").Click();
+        EditInsert(cut, 0, 1, "new name");
+        cut.Find("[data-testid=results-apply]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(4, set.Rows.Length));
+        Assert.Empty(cut.FindAll("[data-testid^=results-unconfirmed-]"));
+        Assert.Empty(cut.FindAll("[data-unknown]"));
+        Assert.DoesNotContain("read back", cut.Find("[data-testid=results-apply-message]").TextContent);
+        Assert.False(cut.Find("[data-testid=results-delete-3]").HasAttribute("disabled"));
+    }
+
     [Fact]
     public void A_row_with_nothing_set_is_sent_as_all_defaults()
     {

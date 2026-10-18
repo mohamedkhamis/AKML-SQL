@@ -753,3 +753,36 @@ Facts that changed:
 - Dependencies: MessagePack 3.1.9 (Core, Engine, E2E tests); System.Security.Cryptography.Pkcs pinned to 9.0.21 in the Engine.
 - Running `ISCC /O-` deletes `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`; for a syntax check compile with `/O<scratch dir>` instead.
 
+## 2026-10-17 — Third independent Web review
+
+The latest verdict is [AKML_WEB_REVIEW_ROUND3_2026-10-17.md](AKML_WEB_REVIEW_ROUND3_2026-10-17.md),
+which supersedes the preceding blanket claim that every follow-up finding is fixed. The fixes were
+committed as `1e08a9c1`; the checkout advanced to `3826c552` during review. REV-06 remains partial:
+triggered SQL Server inserts return only an identity, leaving other committed values absent from
+the grid. New REV-09: trigger detection queries the session catalog even when the insert targets
+another catalog, causing a cross-database triggered insert to fail with OUTPUT-without-INTO.
+Both were independently reproduced against uniquely named disposable tempdb tables through the
+real Engine router. The two desired-behavior tests are `Round3InsertAuditTests` (a concurrent commit
+captured them in the Engine test project); they currently fail and must not be weakened to close
+the review. Evidence copies and results are in `.review-artifacts/2026-10-17-round3/` (now ignored).
+
+The other follow-up fixes pass their relevant component/service/JS tests; HTTPS ownership has
+14 passing decision tests but still lacks disposable-host install/repair/uninstall and second-PC
+acceptance. Web/Engine dependency audits report no vulnerable packages from current sources;
+Engine resolves MessagePack 3.1.9 and Pkcs 9.0.21. Final verification: Web 1,656 passed, JavaScript
+133 passed, selected serial Chromium 17 passed, installer ownership decisions 14 passed; targeted
+Engine 93 passed plus the 2 failing independent acceptance probes, no skips in those .NET runs.
+See the new report for build provenance and scope.
+
+
+## 2026-10-18 — Round-3 fixes (REV-09, REV-06 remainder)
+
+- SQL Server grid inserts read the stored row back by key: `InsertReadBack` (Engine/Execution) loads the target table's enabled
+  triggers + key (PK → narrowest unfiltered unique index → identity) from `[catalog].sys.*` of the TABLE's database, then each insert
+  runs `OUTPUT INSERTED.<key> INTO @akml_k` + `SET @akml_id = SCOPE_IDENTITY()` + `SELECT ReturnColumns ... WHERE key IN @akml_k`.
+  Table-variable key columns carry the column's collation (a cross-database BIN2 key fails without it).
+- `CrudEditResult.Row == null` for a successful SQL Server insert means "not read back"; the grid (`_unconfirmed` in
+  `ResultSetGrid.razor`) shows unknown cells as "…", refuses edit/delete of that row until the query re-runs.
+- E2E: Apply's test id is `results-apply` for a single result set and `results-apply-n` only when sets are stacked — match
+  `button[data-testid^='results-apply']`. `WithSqlOrSkipAsync(database: "master")` fails to connect here; use `USE master;` in the batch.
+- Full Engine runs alongside the browser suite can trip `RefactoringPerformanceTests` budgets; re-run alone.

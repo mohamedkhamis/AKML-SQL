@@ -1182,10 +1182,18 @@ next one with the same table and key names. An empty stamp (an older web bundle)
 older engine, a SQL Server schema whose columns have not loaded, a table created in the same script) the grid does not assume "no
 default": an unset NOT NULL cell is left to the server, which fills it in or refuses the row.
 
-On SQL Server an INSERT now returns the stored row too: when `ReturnColumns` is set and the table has no enabled trigger (SQL Server
-refuses `OUTPUT` without `INTO` on such a table), the writer adds `OUTPUT INSERTED.<columns>` and `CrudEditResult.Row` carries identity,
-defaults and computed values in `ReturnColumns` order; `NewIdentity` is still set. With a trigger only `NewIdentity` comes back, and the
-grid puts it in the row's identity column so the new row can be edited or deleted by its key without running the query again.
+On SQL Server an INSERT returns the stored row too when `ReturnColumns` is set (review round 3, REV-06 / REV-09). Once per Apply
+the engine reads the target table's enabled triggers and a read-back key — the primary key, else the narrowest unfiltered unique
+index, else the identity column — from the catalog views of the **table's own database** (`[catalog].sys.triggers`, `sys.indexes`,
+`sys.columns`), never the session's: a three-part name in another database has its own metadata. Each insert then writes its key
+`OUTPUT INSERTED.<key> INTO @akml_k` (allowed with triggers), takes `SCOPE_IDENTITY()` into an output parameter and selects
+`ReturnColumns` from the table by that key, after the triggers ran; the table variable declares each key column with its own type
+and collation (`InsertReadBack`). `CrudEditResult.Row` is the one row that select found — identity, defaults, server-generated keys,
+computed values and what a trigger changed — and `NewIdentity` is still set. A table without a usable key and without enabled
+triggers returns the row from a plain `OUTPUT INSERTED.<columns>`. `Row` is null when the stored row cannot be named: no key and a
+trigger, an INSTEAD OF trigger that wrote elsewhere, a trigger that changed the key. The grid then shows the typed cells and the
+identity, marks the rest "not read back", and refuses edits and deletes of that row until the query runs again (it never re-runs a
+batch for it). Everything stays in the Apply's one transaction with parameterized values.
 
 On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
 transaction, which is joined and left open; an aborted transaction is refused with a message to roll back. Every edit must touch

@@ -112,19 +112,27 @@ namespace AkmlSql.Engine.Execution
             {
                 tx = (SqlTransaction)await conn.BeginTransactionAsync(ct).ConfigureAwait(false);
 
-                // Re-review REV-06: read inserted rows back through OUTPUT when the grid asked for them and the table allows it.
-                bool returnInserted = req.ReturnColumns is { Length: > 0 }
-                    && Array.Exists(req.Edits, e => e.Op == CrudOp.Insert)
-                    && !await HasEnabledTriggersAsync(conn, tx, req, ct).ConfigureAwait(false);
+                // Review round 3 (REV-06, REV-09): when the grid asks for the inserted rows, read the table's key and triggers in
+                // the table's own database, then return each row as stored — by its key after the triggers ran, or straight from
+                // OUTPUT INSERTED when there is no key and nothing can change it. Otherwise the row comes back null (refresh needed).
+                InsertReadBack? readBack = req.ReturnColumns is { Length: > 0 } && Array.Exists(req.Edits, e => e.Op == CrudOp.Insert)
+                    ? await InsertReadBack.LoadAsync(conn, tx, req, ct).ConfigureAwait(false)
+                    : null;
+                bool keyedInsert = readBack is { Key.Count: > 0 };
+                bool returnInserted = readBack is { CanReturnRow: true } && !keyedInsert;
 
                 for (int i = 0; i < req.Edits.Length; i++)
                 {
                     var edit = req.Edits[i];
                     try
                     {
-                        await using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, tx, returnInserted);
+                        await using var cmd = CrudWriteGenerator.BuildCommand(req, edit, conn, tx, returnInserted, keyedInsert ? readBack : null);
 
-                        if (edit.Op == CrudOp.Insert && returnInserted)
+                        if (edit.Op == CrudOp.Insert && keyedInsert)
+                        {
+                            results[i] = await RunKeyedInsertAsync(cmd, i, ct).ConfigureAwait(false);
+                        }
+                        else if (edit.Op == CrudOp.Insert && returnInserted)
                         {
                             // INSERT ... OUTPUT INSERTED.<columns> ...; SELECT SCOPE_IDENTITY(); — the stored row, then the identity.
                             string?[]? row = null;
@@ -207,20 +215,33 @@ namespace AkmlSql.Engine.Execution
         }
 
         /// <summary>
-        /// SQL Server refuses OUTPUT without INTO on a table with an enabled trigger, and the OUTPUT values would not show what the
-        /// trigger did anyway. Such a table's inserts keep the identity-only path.
+        /// The keyed insert's batch ends with the SELECT of the stored row; a trigger that returns rows of its own comes before it, so
+        /// the last result set is the one read. Exactly one row is the inserted one; none (an INSTEAD OF trigger wrote elsewhere, or a
+        /// trigger changed the key) or several means the grid cannot be told what was stored, and the row is returned as null.
         /// </summary>
-        private static async Task<bool> HasEnabledTriggersAsync(SqlConnection conn, SqlTransaction tx, ApplyChangesRequest req, CancellationToken ct)
+        private static async Task<CrudEditResult> RunKeyedInsertAsync(SqlCommand cmd, int index, CancellationToken ct)
         {
-            await using var cmd = conn.CreateCommand();
-            cmd.Transaction = tx;
-            cmd.CommandText = "SELECT COUNT(*) FROM sys.triggers WHERE parent_id = OBJECT_ID(@t) AND is_disabled = 0;";
-            cmd.Parameters.Add(new SqlParameter("@t", System.Data.SqlDbType.NVarChar, 4000)
+            string?[]? row = null;
+            await using (var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false))
             {
-                Value = CrudWriteGenerator.BuildQualifiedTable(req.BaseCatalog, req.BaseSchema, req.BaseTable),
-            });
-            var count = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
-            return count is int n && n > 0;
+                do
+                {
+                    if (reader.FieldCount == 0) continue;
+                    row = null;
+                    int count = 0;
+                    while (await reader.ReadAsync(ct).ConfigureAwait(false))
+                    {
+                        if (++count > 1) { row = null; continue; }
+                        row = new string?[reader.FieldCount];
+                        for (int c = 0; c < reader.FieldCount; c++) row[c] = SqlScalarEncoder.Encode(reader.GetValue(c));
+                    }
+                }
+                while (await reader.NextResultAsync(ct).ConfigureAwait(false));
+            }
+            // An output parameter is filled once the reader is closed.
+            var identity = cmd.Parameters[InsertReadBack.IdentityParameter].Value;
+            string? newId = identity is null or DBNull ? null : SqlScalarEncoder.Encode(identity);
+            return new CrudEditResult { Index = index, Ok = true, RowsAffected = 1, NewIdentity = newId, Row = row };
         }
 
         private static async Task SafeRollbackAsync(SqlTransaction? tx)

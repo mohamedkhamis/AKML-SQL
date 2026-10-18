@@ -309,4 +309,60 @@ public sealed class CrudWriteGeneratorTests
         Assert.Equal("INSERT INTO [dbo].[Orders] ([Name]) OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[Created] VALUES (@p0); SELECT SCOPE_IDENTITY();", cmd.CommandText);
         Assert.Equal("INSERT INTO [dbo].[Orders] OUTPUT INSERTED.[Id], INSERTED.[Name], INSERTED.[Created] DEFAULT VALUES; SELECT SCOPE_IDENTITY();", all.CommandText);
     }
+
+    /// <summary>Review round 3: with a read-back key, the insert writes its key INTO a table variable (allowed with triggers) and
+    /// selects the stored row by it; values stay parameters and the identity comes back in an output parameter.</summary>
+    [Fact]
+    public void Insert_WithReadBackKey_SelectsTheStoredRowByItsKey()
+    {
+        var readBack = new InsertReadBack(hasEnabledTriggers: true, new[]
+        {
+            new ReadBackKeyColumn("Code]x", "nvarchar(20) COLLATE Latin1_General_100_BIN2", IsNullable: false),
+            new ReadBackKeyColumn("Seq", "int", IsNullable: true),
+        });
+        var req = new ApplyChangesRequest { BaseCatalog = "tempdb", BaseSchema = "dbo", BaseTable = "Orders", ReturnColumns = new[] { "Code]x", "Note" } };
+        using var conn = NewClosedConnection();
+        using var cmd = CrudWriteGenerator.BuildCommand(req,
+            new CrudEditDto { Op = CrudOp.Insert, SetCells = new[] { Cell("Code]x", SqlDbType.NVarChar, "a'); DROP TABLE x;--") } }, conn, null,
+            readBack: readBack);
+        using var all = CrudWriteGenerator.BuildCommand(req, new CrudEditDto { Op = CrudOp.Insert }, conn, null, readBack: readBack);
+
+        Assert.Equal(
+            "DECLARE @akml_k TABLE ([k0] nvarchar(20) COLLATE Latin1_General_100_BIN2, [k1] int); " +
+            "INSERT INTO [tempdb].[dbo].[Orders] ([Code]]x]) OUTPUT INSERTED.[Code]]x], INSERTED.[Seq] INTO @akml_k ([k0], [k1]) VALUES (@p0); " +
+            "SET @akml_id = SCOPE_IDENTITY(); " +
+            "SELECT akml_t.[Code]]x], akml_t.[Note] FROM [tempdb].[dbo].[Orders] AS akml_t WHERE EXISTS (SELECT 1 FROM @akml_k AS akml_k " +
+            "WHERE akml_t.[Code]]x] = akml_k.[k0] AND (akml_t.[Seq] = akml_k.[k1] OR (akml_t.[Seq] IS NULL AND akml_k.[k1] IS NULL)));",
+            cmd.CommandText);
+        Assert.DoesNotContain("DROP TABLE", cmd.CommandText);
+        Assert.Equal("a'); DROP TABLE x;--", cmd.Parameters["@p0"].Value);
+        Assert.Equal(ParameterDirection.Output, cmd.Parameters[InsertReadBack.IdentityParameter].Direction);
+        Assert.Contains("INTO @akml_k ([k0], [k1]) DEFAULT VALUES;", all.CommandText);
+    }
+
+    /// <summary>Review round 3: only a plain system type the catalog printed is written into the batch.</summary>
+    [Theory]
+    [InlineData("int", null, "int")]
+    [InlineData("nvarchar(max)", null, "nvarchar(max)")]
+    [InlineData("decimal(18,2)", null, "decimal(18,2)")]
+    [InlineData("nvarchar(20)", "Latin1_General_100_BIN2", "nvarchar(20) COLLATE Latin1_General_100_BIN2")]
+    [InlineData(null, null, null)]                       // a CLR type: no declaration
+    [InlineData("int); DROP TABLE x;--", null, null)]
+    [InlineData("nvarchar(20)", "x; DROP TABLE y", null)]
+    public void ReadBack_Declare_AcceptsOnlyPlainTypes(string? type, string? collation, string? expected)
+    {
+        Assert.Equal(expected, InsertReadBack.Declare(type, collation));
+    }
+
+    /// <summary>Review round 3 (REV-09): the trigger and key metadata are read from the table's own database.</summary>
+    [Fact]
+    public void ReadBack_Metadata_ReadsTheCatalogViewsOfTheTableDatabase()
+    {
+        var sql = InsertReadBack.MetadataSql("other]db");
+        Assert.Contains("FROM [other]]db].sys.triggers", sql);
+        Assert.Contains("FROM [other]]db].sys.indexes", sql);
+        Assert.Contains("FROM [other]]db].sys.columns", sql);
+        Assert.DoesNotContain(" sys.", sql.Replace("[other]]db].sys.", string.Empty));
+        Assert.Contains("FROM sys.triggers", InsertReadBack.MetadataSql(null));
+    }
 }
