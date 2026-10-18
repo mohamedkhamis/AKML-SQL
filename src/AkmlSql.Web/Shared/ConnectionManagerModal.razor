@@ -61,7 +61,7 @@
                             @foreach (var c in _saved)
                             {
                                 <li class="akml-connmgr-row @(c.Id == _selectedId ? "selected" : "")"
-                                    @onclick="@(() => SelectSaved(c))" data-testid="conn-row" data-conn-id="@c.Id">
+                                    @onclick="@(() => OnSavedRowClickAsync(c))" data-testid="conn-row" data-conn-id="@c.Id">
                                     <span class="akml-connmgr-row-name">@c.Name</span>
                                     <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
                                     <span class="akml-connmgr-row-badge" data-testid="conn-row-kind"
@@ -616,6 +616,14 @@
             _dbLoading = false;
             StateHasChanged();
         }
+    }
+
+    // A click on a saved connection: its fields, then - for SQL Server with Windows authentication, which needs no password -
+    // its server's database list, as opening the dialog on it does. Without this the list offered only the saved database.
+    private async Task OnSavedRowClickAsync(SavedSqlConnection c)
+    {
+        SelectSaved(c);
+        if (c.Kind == DatabaseKind.SqlServer && c.WindowsAuth) await LoadDatabasesAsync();
     }
 
     private void SelectSaved(SavedSqlConnection c)

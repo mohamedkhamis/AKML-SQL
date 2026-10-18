@@ -81,4 +81,22 @@ public sealed class DiagnosticsLegacyMigrationTests
 
         Assert.Equal("Explain completed (120 chars).", Assert.Single(second.Snapshot()).Message);   // a current AI entry is kept
     }
+
+    [Fact]
+    public async Task A_late_restore_of_entries_this_page_already_saved_keeps_each_once_and_oldest_first()
+    {
+        var adapter = new InMemoryIndexedDbAdapter();
+        var earlier = new DiagnosticsRingBuffer(adapter);
+        earlier.Log(DiagnosticLevel.Info, "bridge", "From the last visit.");
+        await earlier.FlushAsync();
+
+        // This page logs and saves before the Diagnostics section first opens and restores.
+        var ring = new DiagnosticsRingBuffer(adapter);
+        await Task.Delay(5);
+        ring.Log(DiagnosticLevel.Info, "bridge", "Connected to engine.");
+        await ring.FlushAsync();
+        await ring.RestoreAsync();
+
+        Assert.Equal(new[] { "From the last visit.", "Connected to engine." }, ring.Snapshot().Select(e => e.Message).ToArray());
+    }
 }

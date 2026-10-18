@@ -69,6 +69,8 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
 
     public void Clear()
     {
+        // Cleared means nothing is wanted from the record either: a later save must not restore it first.
+        Interlocked.Exchange(ref _restored, 1);
         while (_entries.TryDequeue(out _)) { }
         ScheduleFlush();
     }
@@ -85,18 +87,20 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
     internal const string PurgedLegacyAiMessage =
         "An AI diagnostic recorded by an earlier version was removed: it could hold a provider's response.";
 
-    public Task FlushAsync()
+    public async Task FlushAsync()
     {
+        // A save before the first restore would overwrite the record with this page's entries alone, and the earlier visits'
+        // entries would be lost; restore (merge) first. RestoreAsync marks itself done before it can call back here.
+        if (Volatile.Read(ref _restored) == 0) await RestoreAsync().ConfigureAwait(false);
         var snapshot = Snapshot();
         try
         {
             var json = JsonSerializer.Serialize(new StoredRing(StoredRingVersion, snapshot.ToArray()));
-            return _store.SetAsync(StoreNames.Diagnostics, PersistenceKey, json);
+            await _store.SetAsync(StoreNames.Diagnostics, PersistenceKey, json).ConfigureAwait(false);
         }
         catch
         {
             // Best-effort -- diagnostics persistence must never throw to the caller.
-            return Task.CompletedTask;
         }
     }
 
@@ -112,7 +116,17 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
                 ? JsonSerializer.Deserialize<DiagnosticEntry[]>(raw)
                 : JsonSerializer.Deserialize<StoredRing>(raw)?.Entries;
             if (entries == null) return;
-            foreach (var e in entries) _entries.Enqueue(legacy ? Migrate(e) : e with { Message = DiagnosticRedaction.Clean(e.Message) });
+            // The restore runs when the editor or the Diagnostics section first opens, so this page may already have logged - and
+            // saved - entries the record now holds. Merge instead of appending: each entry once, oldest first (appending showed
+            // every line of this page load twice, after the newer ones).
+            var current = _entries.ToArray();
+            var seen = new HashSet<(DateTimeOffset, string, string)>(current.Select(e => (e.Timestamp, e.Source, e.Message)));
+            var restored = entries
+                .Select(e => legacy ? Migrate(e) : e with { Message = DiagnosticRedaction.Clean(e.Message) })
+                .Where(e => seen.Add((e.Timestamp, e.Source, e.Message)))
+                .ToArray();
+            while (_entries.TryDequeue(out _)) { }
+            foreach (var e in restored.Concat(current).OrderBy(e => e.Timestamp)) _entries.Enqueue(e);
             while (_entries.Count > CapacityBound && _entries.TryDequeue(out _)) { }
             // The legacy record is replaced now, not at the next log line: until then an export would carry the old text.
             if (legacy) await FlushAsync().ConfigureAwait(false);

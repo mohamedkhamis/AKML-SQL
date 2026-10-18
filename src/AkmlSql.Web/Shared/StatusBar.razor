@@ -467,7 +467,19 @@
             var activeId = await SavedSqlConnections.GetActiveIdAsync();
             if (string.IsNullOrEmpty(activeId)) return;
             var saved = await SavedSqlConnections.GetAsync(activeId!);
-            if (saved == null || !saved.WindowsAuth) return;
+            if (saved == null) return;
+
+            // A PostgreSQL connection whose password the engine remembers needs nothing from the user either: it comes back
+            // too (the browser sends no password; the engine fills in the one it holds).
+            if (saved.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+            {
+                if (!saved.RememberPassword || !SqlConn.EngineSupportsPostgres) return;
+                await SqlConn.ConnectAsync(new ConnectionTarget(AkmlSql.Core.DatabaseKind.PostgreSql, saved.Server, saved.Database,
+                    WindowsAuth: false, User: saved.Login, Password: null, Port: saved.EffectivePort, SslMode: saved.SslMode,
+                    RootCertificatePath: saved.RootCertificatePath, RememberPassword: true), System.Threading.CancellationToken.None);
+                return;
+            }
+            if (!saved.WindowsAuth) return;
 
             await SqlConn.ConnectAsync(saved.Server, saved.Database, windowsAuth: true,
                 user: null, password: null, System.Threading.CancellationToken.None);

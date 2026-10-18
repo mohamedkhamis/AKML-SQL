@@ -47,6 +47,39 @@ The fixes are not deployed. `:8083` is the IIS install, and updating it needs an
 
 **Still open:** E4–E12; from E2, View definition, Drop… and Execute with parameters; and an auto-sized results pane (E7).
 
+### Round 2: the deployed build (1.26.1018.1601 on `:8083`)
+
+This round ran the full cycle on the installed web app and engine: SQL Server (Northwind_AutoTest) and PostgreSQL (USERDB_dev, through the remembered password). The round-1 fixes held: the explorer menu, the scripts (EXEC lists the real parameters, scalar functions get `SELECT f(NULL)`, PostgreSQL names keep their quotes), Select Top / first 1000 rows, booleans and boolean edits with Apply, DDL refresh (0.65 s), quoted completion (`"AkmlCycle"`), History open, every Settings section, Snippets and Format styles. The scratch table was dropped again.
+
+New issues, fixed in code. They need the next build and deploy.
+
+| # | Severity | Issue | Fix |
+| --- | --- | --- | --- |
+| F1 | High | **Format broke scripts with batches.** The statement after `GO` was joined onto the GO line (`GO PRINT 'x';`, `GO EXEC …`, `GO 3 PRINT …`), so GO no longer split the script there. This happens in every style, in SSMS too (shared formatter). | The first statement of each batch after the first is now a statement start: a new line, and a reset of the clause state. A `GO n` count stays on its line. ScriptDom does not parse `GO n`, so that case is token-based. |
+| F2 | Medium | **Alias alignment crossed statements and batches.** `SELECT a AS x` was padded to another statement's column, and two aliases on one line were padded against each other (`… AS y, c AS z`). | Aliases align within one statement, and only when each is on its own line. The one golden that had recorded the bug (`sp031-18-semicolons-go`, compact style) was updated. |
+| I1 | Low | Clicking a saved SQL Server connection offered only its saved database; the list loaded only after clicking refresh. | A row click loads the server's database list, as opening the dialog does. |
+| I2 | Medium | **All times were UTC** (Completion time, History, the Diagnostics log), because time-zone support was off in the browser build. | `BlazorEnableTimeZoneSupport` is on. |
+| I5 | Low | **Every Diagnostics line appeared twice**, and the previous visit's log could be lost. A save ran before the late restore, and the restore then appended the same entries. | A save restores (merges) first, the restore merges each entry once in time order, and Clear stays cleared. |
+| I6 | Low | After a reload, a PostgreSQL connection with a remembered password was not reconnected (only SQL Server with Windows authentication was). | It reconnects too; the engine supplies the password. |
+
+Not bugs: the Khamis style's PostgreSQL output (tabs before leading commas, a space before `;`) follows its own settings ("Use tabs where possible", 2 spaces per tab, "Space before" semicolons).
+
+**Full test cycle** (Release build of the solution, then every test project, then the browser suites):
+
+| Suite | Result |
+| --- | --- |
+| Core | 1458 / 1460 — 1 failed (`ProfileGetMessageTests`, not touched by this work) |
+| AI, Analysis, IntelliSense, Installer (unit classes) | all pass |
+| Formatting | 1642 / 1642 (with F1/F2) |
+| PostgreSql | 2237 / 2237 |
+| Shell.Shared | 986 / 987 — clipboard busy (`CLIPBRD_E_CANT_OPEN`), environmental |
+| Site | 910 / 911 — `F1SlugTests` expects 30 Options-page anchors and finds 27 (Options tree redesign) |
+| Web | 1674 / 1674 (with I1/I2/I5/I6) |
+| E2E (engine bridge, CLIs) | 111 / 112, 1 skipped |
+| Engine | 2467 / 2597, 129 skipped — 1 failed: the M0 performance baseline is 5.2 % over a 5 % limit while the machine was busy |
+| JS | 137 / 137 |
+| Playwright (browser) | 102 passed, 55 skipped, 6 failed: 5 `EngineAutoConnectTests` need the engine service restarted as administrator ("No pairing PIN published"), and 1 large-grid timing check took 108 ms under load. The PostgreSQL classes were skipped because Windows reserves port 55432 (range 55403–55502); they were re-run on port 58432. |
+
 ---
 
 ## 1. Issues found
