@@ -40,7 +40,8 @@ namespace AkmlSql.Engine.Execution
         public bool HasEnabledTriggers { get; }
 
         /// <summary>The primary key, else the narrowest unfiltered unique index, else the identity column; empty when none can be
-        /// declared (a CLR type), and then the row is read back only when no trigger can have changed it.</summary>
+        /// declared (a CLR type), or when an INSTEAD OF INSERT trigger prevents correlation with the attempted key.
+        /// Without a key the row is read back only when no trigger can have changed it.</summary>
         public IReadOnlyList<ReadBackKeyColumn> Key { get; }
 
         /// <summary>Whether this insert can say what the server stored: by its key, or straight from OUTPUT when nothing can change it after.</summary>
@@ -65,7 +66,13 @@ namespace AkmlSql.Engine.Execution
             bool usable = true;
             await using (var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false))
             {
-                if (await reader.ReadAsync(ct).ConfigureAwait(false)) triggers = reader.GetInt32(0) > 0;
+                if (await reader.ReadAsync(ct).ConfigureAwait(false))
+                {
+                    triggers = reader.GetInt32(0) > 0;
+                    // INSTEAD OF INSERT can discard the write or send it elsewhere. OUTPUT holds the attempted key,
+                    // which may identify an unrelated existing row; it is not proof that a row was inserted here.
+                    if (reader.GetInt32(1) > 0) usable = false;
+                }
                 if (await reader.NextResultAsync(ct).ConfigureAwait(false))
                 {
                     while (await reader.ReadAsync(ct).ConfigureAwait(false))
@@ -97,7 +104,10 @@ namespace AkmlSql.Engine.Execution
             var c = string.IsNullOrEmpty(catalog) ? string.Empty : CrudWriteGenerator.QuoteName(catalog!) + ".";
             return
 $@"DECLARE @id int = OBJECT_ID(@t);
-SELECT COUNT(*) FROM {c}sys.triggers WHERE parent_id = @id AND is_disabled = 0;
+SELECT COUNT(*), COUNT(CASE WHEN tr.is_instead_of_trigger = 1 AND ev.type_desc = N'INSERT' THEN 1 END)
+FROM {c}sys.triggers AS tr
+LEFT JOIN {c}sys.trigger_events AS ev ON ev.object_id = tr.object_id AND ev.type_desc = N'INSERT'
+WHERE tr.parent_id = @id AND tr.is_disabled = 0;
 DECLARE @ix int = (SELECT TOP (1) i.index_id FROM {c}sys.indexes AS i
     WHERE i.object_id = @id AND i.is_unique = 1 AND i.has_filter = 0 AND i.is_disabled = 0 AND i.is_hypothetical = 0
     ORDER BY i.is_primary_key DESC,

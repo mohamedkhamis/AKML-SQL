@@ -287,6 +287,45 @@ public sealed class ReviewFixBrowserTests
         }
     }
 
+    [SkippableFact]
+    public async Task An_instead_of_insert_does_not_make_an_existing_row_editable_as_a_new_row()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output,
+            contextOptions: new() { ViewportSize = new() { Width = 1440, Height = 900 }, Permissions = new[] { "clipboard-read", "clipboard-write" } });
+        var table = "akml_e2e_instead_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+        await s.ExecuteAsync($"CREATE TABLE dbo.{table} (id int PRIMARY KEY, name nvarchar(50) NOT NULL, tag nvarchar(50) DEFAULT N'tagged'); INSERT dbo.{table} (id, name) VALUES (7, N'existing');");
+        try
+        {
+            await s.ExecuteAsync($"CREATE TRIGGER dbo.trg_{table} ON dbo.{table} INSTEAD OF INSERT AS SET NOCOUNT ON;");
+            await s.ExecuteAsync($"SET NOCOUNT ON; SELECT id, name, tag FROM dbo.{table};");
+            var first = s.Page.GetByTestId("results-set-0");
+            await first.GetByTestId("results-add-row").ClickAsync();
+            await TypeIntoAsync(s.Page, first.GetByTestId("results-insert-cell-0-0"), "7");
+            await TypeIntoAsync(s.Page, first.GetByTestId("results-insert-cell-0-1"), "new");
+            await ApplyFirstSetAsync(first);
+
+            await Assertions.Expect(first.GetByTestId("results-apply-message")).ToContainTextAsync("could not be read back");
+            await Assertions.Expect(first.GetByTestId("results-unconfirmed-1")).ToBeVisibleAsync();
+            await Assertions.Expect(first.GetByTestId("results-delete-1")).ToBeDisabledAsync();
+            await Assertions.Expect(first.GetByTestId("results-cell-1-2")).ToHaveAttributeAsync("data-unknown", "true");
+            await Assertions.Expect(first.GetByTestId("results-cell-0-1")).ToHaveTextAsync("existing");
+
+            await s.Page.EvaluateAsync("navigator.clipboard.writeText('unchanged-review-marker')");
+            await first.GetByTestId("results-cell-1-2").ClickAsync();
+            await s.Page.Keyboard.PressAsync("Control+c");
+            await Assertions.Expect(s.Page.GetByText("Some inserted rows could not be read back. Run a SELECT query before copying or saving those rows.", new() { Exact = true })).ToBeVisibleAsync();
+            Assert.Equal("unchanged-review-marker", await s.Page.EvaluateAsync<string>("navigator.clipboard.readText()"));
+
+            await s.ExecuteAsync($"SELECT id, name, tag FROM dbo.{table};");
+            await Assertions.Expect(Cell(s.Page, 0, 1)).ToHaveTextAsync("existing");
+            await Assertions.Expect(Cell(s.Page, 1, 0)).ToHaveCountAsync(0);
+        }
+        finally
+        {
+            await DropAsync(s, table);
+        }
+    }
+
     /// <summary>Review round 3 (REV-09) through the real grid: the session is moved to master, the table is in tempdb by its three-part
     /// name, has an enabled trigger and a server-generated uniqueidentifier key. The insert applies, shows the generated key and
     /// the default, and the next edit and delete reach the right rows.</summary>

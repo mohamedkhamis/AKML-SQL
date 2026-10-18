@@ -368,7 +368,7 @@
     {
         if (ReferenceEquals(Set, _boundSet)) return;
         _boundSet = Set;
-        _unconfirmed = new();
+        _unconfirmed = UnconfirmedRows.GetOrCreateValue(Set);
 
         int cols = Set.ColumnNames.Length;
         _types = new SqlTypeName[cols];
@@ -394,9 +394,15 @@
     /// show as not read back, and the row can be neither edited nor deleted: its key would be a guess. Running the query again
     /// replaces the set and clears this.
     /// </summary>
+    // Keep the safety marker for the lifetime of the result, even if its grid is disposed and recreated.
+    // Weak keys let discarded query results be collected; this browser-only state never changes the IPC contract.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ExecuteResultSet, Dictionary<int, HashSet<int>>>
+        UnconfirmedRows = new();
+
     private Dictionary<int, HashSet<int>> _unconfirmed = new();
 
-    private const string UnconfirmedTitle = "Added, but not read back from the server — run the query again to see what was stored.";
+    private const string UnconfirmedTitle = "Insert completed, but the row could not be read back — use a SELECT query to check what was stored.";
+    private const string UnconfirmedExportMessage = "Some inserted rows could not be read back. Run a SELECT query before copying or saving those rows.";
 
     private bool IsUnconfirmed(int row) => _unconfirmed.ContainsKey(row);
 
@@ -1166,6 +1172,11 @@
     private async Task CopyAsync(CopyFormat format, bool includeHeader)
     {
         if (_selection.IsEmpty) return;
+        if (_unconfirmed.Count > 0 && _selection.SelectedRows().Any(d => IsUnconfirmed(_rowIndexes[d])))
+        {
+            Notify(UnconfirmedExportMessage, NotificationKind.Warning);
+            return;
+        }
         var kinds = Enumerable.Range(0, ColumnCount)
             .Select(c => GridTextFormats.KindOf(TypeOf(c), Set.ClrTypeHints.ElementAtOrDefault(c))).ToArray();
         var result = GridClipboard.Build(_selection, Headers(), _rowIndexes, DisplayText, format, includeHeader, RetainLineBreaksOnCopy,
@@ -1224,6 +1235,11 @@
     /// tab-delimited…" ('\t'): every row in display order, the text the grid shows, a header row.</summary>
     private async Task SaveResultsAsync(char delimiter)
     {
+        if (_unconfirmed.Count > 0)
+        {
+            Notify(UnconfirmedExportMessage, NotificationKind.Warning);
+            return;
+        }
         bool csv = delimiter == ',';
         int cut = CountEngineCut();
         if ((Set.Truncated || cut > 0) && Dialogs is { } dialogs)
@@ -1365,11 +1381,12 @@
     private MenuItem ViewValueItem()
     {
         var (d, c) = _menuCell;
+        bool unconfirmed = d >= 0 && d < RowCount && IsUnconfirmed(_rowIndexes[d]);
         string? wire = d >= 0 && d < RowCount && c >= 0 && c < ColumnCount ? CurrentWire(_rowIndexes[d], c) : null;
         return new MenuItem
         {
             Label = "View value", TestId = "results-menu-view-value",
-            Disabled = wire == null, DisabledReason = "The value is NULL.",
+            Disabled = unconfirmed || wire == null, DisabledReason = unconfirmed ? UnconfirmedTitle : "The value is NULL.",
             OnSelect = Command(() => OpenViewValue(_rowIndexes[d], c)),
         };
     }
@@ -1439,6 +1456,7 @@
 
     private void OpenViewValue(int row, int col)
     {
+        if (IsUnconfirmed(row)) return;
         var wire = CurrentWire(row, col);
         if (wire == null) return;
         _viewValue = new CellValueView(ColumnLabel(col), DeclaredType(col), AllowsNull(col), DisplayText(row, col)!,
@@ -1728,7 +1746,8 @@
             rows.Add(row);
         }
         set.Rows = rows.ToArray();
-        _unconfirmed = unconfirmed;
+        _unconfirmed.Clear();
+        foreach (var (row, columns) in unconfirmed) _unconfirmed[row] = columns;
     }
 
     /// <summary>Writes a returned row's values over the cells of the columns that were asked for (<see cref="_returnOrdinals"/>).</summary>
@@ -1795,8 +1814,8 @@
                 _applyMessage = $"Applied {req.Edits.Length} change(s).";
                 if (notReadBack > 0)
                     _applyMessage += notReadBack == 1
-                        ? " 1 new row could not be read back — run the query again to see what was stored."
-                        : $" {notReadBack} new rows could not be read back — run the query again to see what was stored.";
+                        ? " 1 new row could not be read back — use a SELECT query to check what was stored."
+                        : $" {notReadBack} new rows could not be read back — use a SELECT query to check what was stored.";
                 // Caller may re-run the query to refresh; we surface the success and clear tints.
                 await OnApplied.InvokeAsync();
             }

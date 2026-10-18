@@ -786,3 +786,22 @@ See the new report for build provenance and scope.
 - E2E: Apply's test id is `results-apply` for a single result set and `results-apply-n` only when sets are stacked — match
   `button[data-testid^='results-apply']`. `WithSqlOrSkipAsync(database: "master")` fails to connect here; use `USE master;` in the batch.
 - Full Engine runs alongside the browser suite can trip `RefactoringPerformanceTests` budgets; re-run alone.
+
+### Independent verification and additional corrections — 2026-10-18
+
+See [AKML_WEB_FIX_VERIFICATION_2026-10-18.md](AKML_WEB_FIX_VERIFICATION_2026-10-18.md).
+The original two round-3 acceptance tests pass with the staged fixes. Additional live SQL testing found that
+an INSTEAD OF INSERT trigger could make the attempted key match an unrelated existing row. `InsertReadBack`
+now checks the target catalog's `sys.trigger_events` and disables read-back for every enabled INSTEAD OF INSERT
+trigger. The insert may still complete, but the grid cannot treat any row under that attempted key as confirmed.
+Unconfirmed grid-row metadata now follows the `ExecuteResultSet` object's lifetime through a `ConditionalWeakTable`,
+surviving component recreation without adding wire fields; a newly fetched result clears the state. User guidance
+asks for a SELECT to check stored values. Both new regressions failed before correction and pass afterward.
+Copy/export also refuses unconfirmed rows rather than turning their unknown values into SQL NULL; copying confirmed
+rows remains available. Three additional Copy/CSV/TSV regressions reproduced the prior false-success behavior.
+The latest report records this run's results separately from earlier agents' results. HTTPS deployment acceptance
+still needs a disposable IIS host and a second machine.
+Final checks for this follow-up: Engine targeted 112 passed; Web full 1,662 passed; Chromium 30 passed plus a
+focused final clipboard regression. A snippet test assertion was made to await its async click handler/save
+readiness after a reproduced timing failure; production snippet behavior was unchanged. Evidence and scope
+are in `.review-artifacts/2026-10-18-fix-verification/` and the root verification report.

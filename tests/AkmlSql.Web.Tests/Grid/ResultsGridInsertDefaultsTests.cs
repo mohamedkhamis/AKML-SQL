@@ -169,6 +169,71 @@ public sealed class ResultsGridInsertDefaultsTests : IDisposable
         Assert.Empty(cut.FindAll("[data-testid=results-unconfirmed-0]"));
     }
 
+    [Fact]
+    public void An_unconfirmed_row_stays_locked_when_its_result_grid_is_recreated()
+    {
+        var set = WithDefaults();
+        _host.Exec.ApplyReply = new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = new[] {
+            new CrudEditResult { Index = 0, Ok = true, NewIdentity = "4", Row = null },
+        } };
+        var cut = _host.Render(set);
+        cut.Find("[data-testid=results-add-row]").Click();
+        cut.Find("[data-testid=results-apply]").Click();
+        cut.WaitForAssertion(() => Assert.Equal(4, set.Rows.Length));
+        cut.Dispose();
+
+        var reopened = _host.Render(set);
+        Assert.True(reopened.Find("[data-testid=results-delete-3]").HasAttribute("disabled"));
+        Assert.NotNull(reopened.Find("[data-testid=results-unconfirmed-3]"));
+        Assert.Equal("true", Cell(reopened, 3, 2).GetAttribute("data-unknown"));
+        ClickCell(reopened, 3, 1);
+        Press(reopened, "F2");
+        Assert.Empty(reopened.FindAll("[data-testid=results-cell-input]"));
+
+        // A new query result has no unresolved inserts, even if it contains the same values.
+        var refreshed = WithDefaults();
+        refreshed.Rows = set.Rows;
+        var fresh = _host.Render(refreshed);
+        Assert.False(fresh.Find("[data-testid=results-delete-3]").HasAttribute("disabled"));
+        Assert.Empty(fresh.FindAll("[data-testid=results-unconfirmed-3]"));
+    }
+
+    [Theory]
+    [InlineData("copy")]
+    [InlineData("results-save-csv")]
+    [InlineData("results-save-tsv")]
+    public void Unconfirmed_rows_cannot_be_exported_as_fabricated_NULLs(string action)
+    {
+        var ui = _host.Context.JSInterop.SetupModule("./js/akml-ui.js");
+        ui.Setup<bool>("copyText", _ => true).SetResult(true);
+        var download = _host.Context.JSInterop.SetupModule("./js/akml-download.js");
+        download.SetupVoid("downloadText", _ => true).SetVoidResult();
+        var set = WithDefaults();
+        _host.Exec.ApplyReply = new ApplyChangesResult { Status = ExecuteStatus.Ok, Results = new[] {
+            new CrudEditResult { Index = 0, Ok = true, NewIdentity = "4", Row = null },
+        } };
+        var cut = _host.Render(set);
+        cut.Find("[data-testid=results-add-row]").Click();
+        cut.Find("[data-testid=results-apply]").Click();
+        cut.WaitForAssertion(() => Assert.Equal(4, set.Rows.Length));
+        ClickCell(cut, 3, 2);
+        if (action == "copy") Press(cut, "c", ctrl: true);
+        else
+        {
+            OpenCellMenu(cut, 3, 2);
+            cut.Find($"[data-testid={action}]").Click();
+        }
+
+        cut.WaitForAssertion(() => Assert.Contains(_host.Notes.Sent, n => n.Text.Contains("read back") && n.Text.Contains("SELECT")));
+        Assert.Empty(ui.Invocations["copyText"]);
+        Assert.Empty(download.Invocations["downloadText"]);
+
+        // Confirmed rows remain available for copying.
+        ClickCell(cut, 0, 1);
+        Press(cut, "c", ctrl: true);
+        cut.WaitForAssertion(() => Assert.Single(ui.Invocations["copyText"]));
+    }
+
     /// <summary>Review round 3: the stored row from the server carries no not-read-back marker.</summary>
     [Fact]
     public void A_read_back_insert_has_no_unknown_cells()

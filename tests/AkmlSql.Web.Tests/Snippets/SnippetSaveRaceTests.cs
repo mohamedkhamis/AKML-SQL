@@ -82,9 +82,10 @@ public sealed class SnippetSaveRaceTests
         // Still a draft: leaving it asks first.
         var dialogs = (FakeDialogService)context.Services.GetRequiredService<IDialogService>();
         page.Find("[data-testid=snippet-new]").Click();
-        Assert.Single(dialogs.Confirms);
+        page.WaitForAssertion(() => Assert.Single(dialogs.Confirms));
         Assert.Equal("SELECT 2;", Body(page));
 
+        page.WaitForAssertion(() => Assert.False(page.Find("[data-testid=snippet-save]").HasAttribute("disabled")));
         page.Find("[data-testid=snippet-save]").Click();
         page.WaitForAssertion(() => Assert.Equal(2, adapter.Writes));
         // The list reloads after the write: one row for the snippet, not a second copy.
@@ -118,6 +119,6 @@ public sealed class SnippetSaveRaceTests
         Assert.Equal("SELECT 1;", Body(page));
         var dialogs = (FakeDialogService)context.Services.GetRequiredService<IDialogService>();
         page.Find("[data-testid=snippet-new]").Click();
-        Assert.Single(dialogs.Confirms);                     // still a draft
+        page.WaitForAssertion(() => Assert.Single(dialogs.Confirms));  // still a draft; wait for the async click handler
     }
 }

@@ -247,6 +247,32 @@ public sealed class InsertReadBackIntegrationTests
     }
 
     [SkippableFact]
+    public async Task An_INSTEAD_OF_insert_must_not_return_an_existing_row_with_the_attempted_key()
+    {
+        Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local).");
+        var engine = await StartAsync();
+        string t = NewName("instead_collision"), audit = NewName("collision_audit");
+        try
+        {
+            await SqlAsync(engine, $"CREATE TABLE dbo.[{t}] (Id int PRIMARY KEY, Name nvarchar(50) NOT NULL); INSERT dbo.[{t}] VALUES (7, N'existing');");
+            await SqlAsync(engine, $"CREATE TABLE dbo.[{audit}] (Name nvarchar(50) NOT NULL);");
+            await SqlAsync(engine, $"CREATE TRIGGER dbo.[trg_{t}] ON dbo.[{t}] INSTEAD OF INSERT AS BEGIN SET NOCOUNT ON; INSERT dbo.[{audit}] SELECT Name FROM inserted; END;");
+
+            var result = await ApplyAsync(engine, t, new[] { "Id", "Name" }, Insert(
+                new CrudCellDto { BaseColumnName = "Id", ProviderType = (int)SqlDbType.Int, Value = "7" }, Text("Name", "new")));
+
+            AssertOk(result);
+            Assert.Null(Assert.Single(result.Results).Row);
+            Assert.Equal("existing", Assert.Single(await SqlAsync(engine, $"SELECT Name FROM dbo.[{t}];"))[0]);
+            Assert.Equal("new", Assert.Single(await SqlAsync(engine, $"SELECT Name FROM dbo.[{audit}];"))[0]);
+        }
+        finally
+        {
+            await DropAsync(engine, t, audit);
+        }
+    }
+
+    [SkippableFact]
     public async Task A_table_without_a_key_returns_its_row_only_when_no_trigger_can_change_it()
     {
         Skip.IfNot(TryReachLocalSql(), "No local SQL Server reachable on (local).");

@@ -1166,7 +1166,7 @@ failed edit carries the error and every other edit the note "Rolled back — edi
 `ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity, Row }`) and
 `ConnectionWasReset`.
 
-Spec 042 adds, append-only, for a PostgreSQL session (SQL Server ignores them): `ApplyChangesRequest.ReturnColumns` (key 5, the set's
+Spec 042 adds, append-only, for a PostgreSQL session: `ApplyChangesRequest.ReturnColumns` (key 5, the set's
 base columns in result order) and `CrudCellDto.TypeName` (key 6, the column's type as the server prints it, which the write casts
 to), and `CrudEditResult.Row` (key 5, the written row as the server stored it, in `ReturnColumns` order, from `RETURNING`; null for
 a delete).
@@ -1191,9 +1191,14 @@ index, else the identity column — from the catalog views of the **table's own 
 and collation (`InsertReadBack`). `CrudEditResult.Row` is the one row that select found — identity, defaults, server-generated keys,
 computed values and what a trigger changed — and `NewIdentity` is still set. A table without a usable key and without enabled
 triggers returns the row from a plain `OUTPUT INSERTED.<columns>`. `Row` is null when the stored row cannot be named: no key and a
-trigger, an INSTEAD OF trigger that wrote elsewhere, a trigger that changed the key. The grid then shows the typed cells and the
+trigger, any enabled INSTEAD OF INSERT trigger, or a trigger that changed the key. An INSTEAD OF INSERT trigger may discard or
+reroute the write while its attempted key matches an existing row, so key-based read-back is deliberately disabled for it.
+The grid then shows the typed cells and the
 identity, marks the rest "not read back", and refuses edits and deletes of that row until the query runs again (it never re-runs a
-batch for it). Everything stays in the Apply's one transaction with parameterized values.
+batch for it). Unconfirmed-row markers belong to the result object's lifetime and survive grid recreation; a new query result
+clears them. The UI recommends checking with a SELECT query, rather than repeating the original batch's side effects.
+Copy and export do not emit unconfirmed rows as if their missing values were SQL NULL; confirmed rows remain copyable.
+Everything stays in the Apply's one transaction with parameterized values.
 
 On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
 transaction, which is joined and left open; an aborted transaction is refused with a message to roll back. Every edit must touch

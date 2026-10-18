@@ -1,5 +1,7 @@
 # AKML Web: third review of the fixes
 
+**2026-10-18 update:** REV-06 and REV-09 now pass the original acceptance tests. Three further edge cases found during verification were also corrected. See [the latest fix verification](AKML_WEB_FIX_VERIFICATION_2026-10-18.md) for current results and the remaining HTTPS deployment validation gap. The dated review below is preserved as historical evidence.
+
 Date: 2026-10-17. **Verdict: not all issues are done. Two confirmed defects remain.**
 
 This supersedes the completion verdict in [the second review](AKML_WEB_RE_REVIEW_2026-10-17.md), while preserving its historical findings and evidence. The fixes substantially improve the application. Of REV-01 through REV-08, six are resolved in the tested paths, REV-03 is corrected in scripts with deployment acceptance still pending, and REV-06 remains partial. A regression in the REV-06 implementation is recorded below as REV-09. SEC-01's identified dependency versions are remediated.

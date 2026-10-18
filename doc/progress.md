@@ -2563,3 +2563,19 @@ identity and generated columns read in one catalog query after the reader closes
 **Deferred or not done** (reasons in the spec folder): the hallway tests SC-001 and SC-012 (need people); the SSMS 22 manual check T129; the elevated ACL read of spike S7; formatting inside PL/pgSQL bodies;
 refactorings and Find invalid objects for PostgreSQL (out of scope by the clarification session); the pgAdmin client (a later spec); PostgreSQL 19 (reference pinned to 18).
 
+## Web result-grid insert verification — 2026-10-18
+
+SQL Server insert read-back now uses metadata from the target catalog and returns defaults, generated keys and
+AFTER-trigger values without rerunning the original batch. The two original cross-database/trigger acceptance
+tests pass. Additional verification found and corrected an INSTEAD OF INSERT key-collision case: an attempted
+key cannot establish which row that trigger actually stored, so these inserts remain unconfirmed in the grid.
+Unconfirmed-row warnings and edit/delete protection now survive grid recreation for the same result. The UI
+recommends checking stored values with a SELECT query. No IPC layout changed.
+Copy/export now refuses unconfirmed rows instead of serializing unknown values as SQL NULL; confirmed rows remain copyable.
+
+Fresh checks: targeted Engine 112 passed; final full Web 1,662 passed; Chromium 30 passed plus the final clipboard
+regression retest. The new live SQL and component regressions failed before correction and passed afterward.
+A snippet test now waits for its asynchronous confirmation handler and save readiness, preserving its assertions.
+Actual HTTPS install/repair/uninstall and second-machine
+pairing remain deferred until a disposable IIS environment is available. No deployment was performed.
+
