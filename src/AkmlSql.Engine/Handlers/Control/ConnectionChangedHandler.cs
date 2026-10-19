@@ -250,8 +250,9 @@ namespace AkmlSql.Engine.Handlers.Control
             try
             {
                 // What a role may see is part of what was read: a catalog loaded as one role is wrong for another, which may
-                // have more or fewer schemas it can use. A new connection string starts the cache over.
-                if (identityChanged && cache.Phase != PopulationPhase.NotLoaded)
+                // have more or fewer schemas it can use. A new connection string starts the cache over - including a cache
+                // whose load was refused (PermissionDenied, still NotLoaded), or the new credentials would never be tried.
+                if (identityChanged && (cache.Phase != PopulationPhase.NotLoaded || cache.PermissionDenied))
                 {
                     cache.Schemas.Clear();
                     cache.ForeignKeys.Clear();

@@ -124,8 +124,9 @@ public sealed class PgExecuteRunner
                 {
                     ran++;
                     // A change is there for the catalog reader (another connection) once no transaction holds it: at once outside a
-                    // transaction, otherwise when the transaction ends - in this run or a later one (FR-043).
-                    if (PgCommandTags.ChangesSchema(fate.Tag))
+                    // transaction, otherwise when the transaction ends - in this run or a later one (FR-043). CREATE TABLE … AS
+                    // and SELECT … INTO report "SELECT n", so the statement is read as well as its tag.
+                    if (PgCatalogChange.Changes(statement, fate.Tag, PgCommandTags.ChangesSchema))
                     {
                         if (fate.State == TransactionState.None) reload = true;
                         else owed = true;

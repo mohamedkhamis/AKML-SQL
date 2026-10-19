@@ -850,11 +850,14 @@
     // web History "Re-execute": set from the ?autorun=1 query flag; consumed once the restored
     // document is populated (which happens AFTER firstRender via the async session restore).
     private bool _autorunPending;
+    // Spec 042 (FR-070): the kind of server the re-executed entry ran on (?kind=); a connection of the other kind never runs it.
+    private int? _autorunKind;
 
     protected override async Task OnInitializedAsync()
     {
         // web History "Re-execute" intent — read before any await so it is known by the first render.
         _autorunPending = new Uri(Nav.Uri).Query.Contains("autorun=1");
+        _autorunKind = AutorunKind(new Uri(Nav.Uri).Query);
 
         // T034: apply the persisted theme as soon as we have services. The shim is wired
         // for "system" already (index.html runs apply('system') inline), so this is an
@@ -1280,12 +1283,29 @@
         _autorunPending = false;            // connected -> consume exactly once
         if (_executing) return;             // a manual run is already in flight -> don't double-run
 
+        // History re-executed it while nothing was connected; the connection that came up is of the other kind. A script written
+        // for one kind of server is never run on the other: it stays open, unrun, and the user is told why.
+        if (_autorunKind is { } kind && kind != (int)SqlConn.Kind)
+        {
+            Notifications.Notify($"This query ran on {WebHistoryLogic.KindLabel(kind)}. The connection is {WebHistoryLogic.KindLabel((int)SqlConn.Kind)}, so it was opened but not run.",
+                NotificationKind.Info);
+            Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
+            return;
+        }
+
         _executing = true;
         try { await RunSqlAsync(_initialText, 1); }
         finally { _executing = false; _activeQueryId = null; }
 
         Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
         await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>The <c>kind=</c> of a Re-execute link (a <see cref="AkmlSql.Core.DatabaseKind"/> number), or null without one.</summary>
+    internal static int? AutorunKind(string query)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(query ?? string.Empty, @"[?&]kind=(\d+)(?:&|$)");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var kind) ? kind : null;
     }
 
     private async Task CancelExecuteAsync()

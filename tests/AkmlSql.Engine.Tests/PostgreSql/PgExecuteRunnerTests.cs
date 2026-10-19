@@ -521,6 +521,22 @@ public class PgExecuteRunnerTests
         Assert.False(s.SchemaChangePending);
     }
 
+    [SkippableTheory]
+    [InlineData("CREATE TABLE copy_a AS SELECT 1 AS x;")]
+    [InlineData("SELECT 1 AS x INTO copy_b;")]
+    [InlineData("CREATE MATERIALIZED VIEW copy_c AS SELECT 1 AS x;")]
+    public async Task Objects_made_from_a_query_are_reported_although_their_tag_reads_SELECT(string sql)
+    {
+        PgTestServer.SkipUnlessAvailable();
+        await using var s = await Session.OpenAsync();
+        var calls = 0;
+
+        var result = await s.RunAsync(sql, schemaChanged: () => calls++);
+
+        Assert.Equal(1, calls);
+        Assert.True(result.SchemaChanged);
+    }
+
     [SkippableFact]
     public async Task A_change_committed_in_the_same_run_is_reported_at_once()
     {

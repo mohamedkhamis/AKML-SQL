@@ -235,6 +235,30 @@ public class ConnectionChangedPgTests
     }
 
     [SkippableFact]
+    public async Task A_load_that_was_refused_is_tried_again_when_the_user_reconnects_with_other_credentials()
+    {
+        PgTestServer.SkipUnlessAvailable();
+        await using var database = await PgTestServer.CreateDatabaseAsync("CREATE TABLE t (k int);");
+        var (transport, engine) = BuildEngine();
+        var session = Guid.NewGuid().ToString("N");
+
+        await ConnectAsync(transport, session, database.ConnectionString, database.Name);
+        Assert.True(await WaitForAsync(() => engine.Context.SchemaCache.GetCache(session, database.Name)?.Phase == AkmlSql.Engine.Schema.PopulationPhase.PhaseB));
+
+        // The state a refused Phase A leaves: nothing loaded, and the refusal remembered.
+        var cache = engine.Context.SchemaCache.GetCache(session, database.Name)!;
+        cache.Schemas.Clear();
+        cache.Phase = AkmlSql.Engine.Schema.PopulationPhase.NotLoaded;
+        cache.PermissionDenied = true;
+
+        // Other credentials: the same server and database, a different connection string.
+        var other = new NpgsqlConnectionStringBuilder(database.ConnectionString) { ApplicationName = "akml-reconnect" }.ConnectionString;
+        await ConnectAsync(transport, session, other, database.Name);
+
+        Assert.True(await WaitForAsync(() => engine.Context.SchemaCache.GetCache(session, database.Name) is { Phase: AkmlSql.Engine.Schema.PopulationPhase.PhaseB, PermissionDenied: false }));
+    }
+
+    [SkippableFact]
     public async Task Reconnecting_as_another_role_reads_the_catalog_again_as_that_role()
     {
         PgTestServer.SkipUnlessAvailable();

@@ -297,4 +297,20 @@ public sealed class HistoryPageKindTests : BunitContext
         page.WaitForAssertion(() => Assert.Contains("autorun=1", Services.GetRequiredService<NavigationManager>().Uri));
         Assert.Empty(_notes.Sent);
     }
+
+    [Fact]
+    public void Re_executing_while_disconnected_carries_the_entrys_kind_so_the_editor_never_runs_it_on_the_other_kind()
+    {
+        _sql.EngineSupportsPostgres = true;
+        _sql.IsConnected = false;
+        var page = Render<HistoryPage>();
+        page.WaitForElement("[data-testid=history-row]");
+        OpenEntry(page, 1);   // the PostgreSQL entry
+
+        page.Find("[data-testid=history-reexecute]").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("autorun=1&kind=1", Services.GetRequiredService<NavigationManager>().Uri));
+        Assert.Equal((int)DatabaseKind.PostgreSql, AkmlSql.Web.Pages.Editor.AutorunKind("?autorun=1&kind=1"));
+        Assert.Null(AkmlSql.Web.Pages.Editor.AutorunKind("?autorun=1"));
+    }
 }

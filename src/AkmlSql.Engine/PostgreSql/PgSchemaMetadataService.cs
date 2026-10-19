@@ -177,7 +177,8 @@ public sealed class PgSchemaMetadataService : ISchemaMetadataProvider
         catch (PostgresException ex) when (IsAccessFailure(ex))
         {
             // The role cannot open this database (wrong password, no CONNECT, unknown database). Retrying changes nothing
-            // until the user connects as someone else, which arrives as a new ConnectionChanged and a new cache.
+            // until the user connects as someone else: that ConnectionChanged has a new connection string, and
+            // ConnectionChangedHandler then clears this flag and loads the same cache again.
             cache.PermissionDenied = true;
             Log.Warning("PostgreSQL Phase A skipped for {Key}: access refused (SQLSTATE {SqlState}). {ConnDesc}",
                 cache.CacheKey, ex.SqlState, connDesc);

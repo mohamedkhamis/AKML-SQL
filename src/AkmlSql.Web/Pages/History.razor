@@ -830,7 +830,9 @@
             return;
         }
 
-        Nav.NavigateTo("/?autorun=1");
+        // Not connected: the editor runs it once a connection comes up - the entry's kind goes with it, so a connection of the
+        // other kind opens it without running it.
+        Nav.NavigateTo($"/?autorun=1&kind={entry.Kind}");
     }
 
     /// <summary>The entry ran on the other kind of server than the connection that is active now.</summary>

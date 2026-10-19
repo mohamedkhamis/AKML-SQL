@@ -53,6 +53,9 @@ public static class AiErrorText
 {
     private static readonly Regex CodeShape = new("^[A-Za-z0-9_.\\-]{1,64}$", RegexOptions.CultureInvariant);
 
+    /// <summary>Google's reason for a key it rejects. It answers with HTTP 400, not 401 / 403, so the status alone would not say so.</summary>
+    public const string GoogleRejectedKey = "API_KEY_INVALID";
+
     /// <summary>The message for an HTTP failure from <paramref name="providerId"/>.</summary>
     public static string ForStatus(string providerId, HttpStatusCode status, string? code)
     {
@@ -60,6 +63,7 @@ public static class AiErrorText
         string suffix = code != null ? $", {code}" : string.Empty;
         string what = n switch
         {
+            _ when string.Equals(code, GoogleRejectedKey, StringComparison.Ordinal) => "rejected the API key. Check the key in Settings › AI",
             401 or 403 => "rejected the API key. Check the key in Settings › AI",
             404 => "does not know the endpoint or the model. Check them in Settings › AI",
             408 or 504 => "did not answer in time. Try again",
@@ -85,10 +89,22 @@ public static class AiErrorText
             if (root.ValueKind != JsonValueKind.Object) return null;
             if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
             {
+                // Google says why in details[].reason (API_KEY_INVALID for a bad key); that is the code that tells the user what to do.
+                if (error.TryGetProperty("details", out var details) && details.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var detail in details.EnumerateArray())
+                    {
+                        if (detail.ValueKind == JsonValueKind.Object && detail.TryGetProperty("reason", out var reason)
+                            && reason.ValueKind == JsonValueKind.String && Shaped(reason) is { } why)
+                            return why;
+                    }
+                }
                 foreach (var name in new[] { "code", "type", "status" })
                 {
-                    if (error.TryGetProperty(name, out var v) && Shaped(v) is { } code) return code;
+                    // A numeric code only repeats the HTTP status ("HTTP 400, 400"); a named one says something.
+                    if (error.TryGetProperty(name, out var v) && v.ValueKind != JsonValueKind.Number && Shaped(v) is { } code) return code;
                 }
+                if (error.TryGetProperty("code", out var number) && Shaped(number) is { } numeric) return numeric;
             }
             return null;
         }
