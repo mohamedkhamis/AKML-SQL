@@ -219,6 +219,11 @@
         _ => string.Empty,
     };
 
+    /// <summary>The model an empty Model box stands for: its placeholder, except Azure's, which names no real model.</summary>
+    internal static string? DefaultModel(string id) => id == "azure" ? null : NullIfEmpty(ModelPlaceholder(id));
+
+    private static string? NullIfEmpty(string text) => string.IsNullOrEmpty(text) ? null : text;
+
     private static bool RequiresEndpoint(string id) => id is "azure" or "ollama" or "lmstudio";
 
     // Local providers (Ollama, LM Studio) authenticate by network reachability, not a key.
@@ -305,8 +310,11 @@
     private async Task SubmitAsync()
     {
         _errors = new List<string>();
+        // The model shown in the empty box is the one used: "Model is required" under a box that reads gemini-flash-latest told
+        // the user to type what the form already showed. Azure has no default (it is the user's deployment name).
+        var model = string.IsNullOrWhiteSpace(_form.Model) ? DefaultModel(_form.ProviderId) : _form.Model.Trim();
         if (string.IsNullOrEmpty(_form.ProviderId)) _errors.Add("Provider is required.");
-        if (string.IsNullOrEmpty(_form.Model)) _errors.Add("Model is required.");
+        if (string.IsNullOrEmpty(model)) _errors.Add("Model is required.");
         if (RequiresApiKey(_form.ProviderId) && string.IsNullOrEmpty(_form.ApiKey)) _errors.Add("API key is required.");
         if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
             _errors.Add("This page was opened over plain HTTP from another computer, so the key cannot be stored. Open the site's HTTPS address.");
@@ -318,12 +326,16 @@
         {
             ProviderId = _form.ProviderId,
             DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? DefaultDisplayName(_form.ProviderId) : _form.DisplayName,
-            Model = _form.Model,
+            Model = model!,
             Endpoint = string.IsNullOrEmpty(_form.Endpoint) || !RequiresEndpoint(_form.ProviderId) ? null : _form.Endpoint,
         }, _form.ApiKey);
         _form.ApiKey = string.Empty;   // tighten the residual exposure window
-        Notifications.Notify($"Saved {DefaultDisplayName(_form.ProviderId)}.", NotificationKind.Success);
+        var saved = _form.ProviderId;
+        Notifications.Notify($"Saved {DefaultDisplayName(saved)}.", NotificationKind.Success);
         await ReloadAsync();
+        // With no active provider the AI panel says none is configured, even right after one was saved: the one saved then
+        // becomes the active one (still refused for a cloud provider in Fully local mode).
+        if (string.IsNullOrEmpty(_activeId)) await SetActiveAsync(saved);
     }
 
     private void ClearForm()
