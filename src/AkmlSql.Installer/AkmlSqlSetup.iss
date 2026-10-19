@@ -167,13 +167,16 @@ DisableWelcomePage=no
 ; An icon file, not a DLL: AkmlSql.Core.dll carries no icon, so Apps & features showed a blank.
 UninstallDisplayIcon={app}\AKMLSQL.ico
 UninstallDisplayName={#MyAppName}
-; T030: Prompt user to close running SSMS instances before installing.
-; Note: AppMutex is not used because SSMS does not create named mutexes that
-; we can reliably detect. CloseApplications with CloseApplicationsFilter is the
-; correct approach — Inno Setup uses the Windows Restart Manager API to detect
-; which apps hold locks on files being replaced.
+; T030: running SSMS is closed by PrepareToInstall (prompt, then a verified taskkill), which also
+; stops the AKML engine/updater/analyzer. Restart Manager is the safety net after it: anything
+; that still holds a file setup replaces is listed and offered for closing. CloseApplicationsFilter
+; filters the FILES Restart Manager checks, not process names -- the old "Ssms.exe" value matched no
+; installed file, so the engine's locked Engine\*.dll were never checked. AppMutex is not used:
+; SSMS creates no named mutex we can rely on. Nothing is restarted afterwards (a restarted engine
+; or SSMS would only re-lock the files of a later step).
 CloseApplications=yes
-CloseApplicationsFilter=Ssms.exe
+CloseApplicationsFilter=*.exe,*.dll
+RestartApplications=no
 
 ; --- Code signing (off unless a thumbprint is supplied) ------------------------------
 ; SmartScreen builds reputation from the SIGNATURE, not the download domain: an unsigned
@@ -1355,19 +1358,22 @@ begin
   // silent mode, exactly as /FORCECLOSEAPPS does interactively-by-request.
   ForceClose := (ExpandConstant('{param:FORCECLOSEAPPS|}') <> '') or WizardSilent;
 
-  // First pass: flag WHICH hosts need closing (selected + running only).
-  for I := 0 to TargetCount - 1 do
+  // First pass: flag WHICH hosts need closing. Checked NOW, not taken from the scan page (SSMS may
+  // have been started or closed since), and whether or not the SSMS target is ticked: {app}\Engine is
+  // replaced on every run, and a running SSMS keeps (re)starting the engine that locks it.
+  CheckRunningIDEs;
+  if IsProcessRunning('SSMS.exe') then
   begin
-    if Targets[I].IsSelected and Targets[I].IsRunning then
+    KillSsms := True;
+    if not ForceClose then
     begin
-      KillSsms := True;
-
-      if not ForceClose then
-      begin
-        if RunningList <> '' then
-          RunningList := RunningList + ', ';
-        RunningList := RunningList + Targets[I].Name;
-      end;
+      RunningList := 'SQL Server Management Studio';
+      for I := 0 to TargetCount - 1 do
+        if Targets[I].IsRunning and (Targets[I].Name <> '') then
+        begin
+          RunningList := Targets[I].Name;
+          Break;
+        end;
     end;
   end;
 
@@ -1390,10 +1396,10 @@ begin
     // at minimum the install log must say so honestly.
     if KillSsms then
     begin
-      Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-      WaitForProcessExit('Ssms.exe', 15);
-      if IsProcessRunning('Ssms.exe') then
-        Log('WARNING: Ssms.exe survived the silent force-close — Engine\*.dll may still be locked.');
+      Exec('taskkill.exe', '/F /IM SSMS.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+      WaitForProcessExit('SSMS.exe', 15);
+      if IsProcessRunning('SSMS.exe') then
+        Log('WARNING: SSMS.exe survived the silent force-close — Engine\*.dll may still be locked.');
     end;
     if KillDevenv then
     begin
@@ -1418,13 +1424,13 @@ begin
       Exit;
     end;
 
-    while (KillSsms and IsProcessRunning('Ssms.exe'))
+    while (KillSsms and IsProcessRunning('SSMS.exe'))
        or (KillDevenv and IsProcessRunning('devenv.exe')) do
     begin
-      if KillSsms and IsProcessRunning('Ssms.exe') then
+      if KillSsms and IsProcessRunning('SSMS.exe') then
       begin
-        Exec('taskkill.exe', '/F /IM Ssms.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-        WaitForProcessExit('Ssms.exe', 15);
+        Exec('taskkill.exe', '/F /IM SSMS.exe', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        WaitForProcessExit('SSMS.exe', 15);
       end;
       if KillDevenv and IsProcessRunning('devenv.exe') then
       begin
@@ -1432,7 +1438,7 @@ begin
         WaitForProcessExit('devenv.exe', 15);
       end;
 
-      if (KillSsms and IsProcessRunning('Ssms.exe'))
+      if (KillSsms and IsProcessRunning('SSMS.exe'))
          or (KillDevenv and IsProcessRunning('devenv.exe')) then
       begin
         Log('WARNING: a running IDE host survived taskkill /F — asking the user to close it.');
