@@ -1,7 +1,33 @@
 ﻿{
     "product":  "AKML SQL",
-    "generatedAt":  "2026-10-18T08:07:14Z",
+    "generatedAt":  "2026-10-18T15:19:38Z",
     "releases":  [
+                     {
+                         "version":  "1.26.1018.1706",
+                         "releasedAt":  "2026-10-18",
+                         "supportedHosts":  [
+                                                "SSMS 22"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.1018.1706.exe",
+                         "sha256Hash":  "ac16ad38c17aaa39539ecce45d826ddc271872338c89df2052bc240e2848d0b7",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.1018.1706 installer for SQL Server Management Studio 22 (55.64 MB).",
+                         "minimumOsVersion":  "10.0.17763",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.1018.1706/AKMLSQLSetup-1.26.1018.1706.exe"
+                     },
+                     {
+                         "version":  "1.26.1018.1601",
+                         "releasedAt":  "2026-10-18",
+                         "supportedHosts":  [
+                                                "SSMS 22"
+                                            ],
+                         "downloadUrl":  "downloads/AKMLSQLSetup-1.26.1018.1601.exe",
+                         "sha256Hash":  "7b79675dbbfe309ebff2f21244bb462b606b042eb0350c8f6fb911f91b037080",
+                         "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
+                         "notesSummary":  "AKML SQL 1.26.1018.1601 installer for SQL Server Management Studio 22 (55.64 MB).",
+                         "minimumOsVersion":  "10.0.17763",
+                         "cdnUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.1018.1601/AKMLSQLSetup-1.26.1018.1601.exe"
+                     },
                      {
                          "version":  "1.26.1018.0955",
                          "releasedAt":  "2026-10-18",

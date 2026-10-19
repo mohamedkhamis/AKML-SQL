@@ -132,6 +132,12 @@ consistency invariant is enforced by `tests/AkmlSql.Site.Tests`. The manifest mu
 before the site publish because `MapStaticAssets` resolves its asset list at build time; a file
 dropped into `wwwroot` afterwards would 404 silently.
 
+After a successful deploy (smoke tests passed) the script commits the files it generated —
+`docs-metadata.json`, `releases.json` and `update-manifest.json` under `src/AkmlSql.Site/wwwroot` —
+and pushes the current branch to `origin`. Only those three paths go into the commit (other staged or
+modified files are left alone), nothing is committed when they did not change, and a git failure is
+logged as a warning without failing the deploy. `-SkipGitPush` leaves them uncommitted.
+
 ---
 
 ## Extension Install Paths
