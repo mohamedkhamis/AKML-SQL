@@ -48,6 +48,27 @@ namespace AkmlSql.Core.Text
         public static string CompletionLine(DateTimeOffset local) =>
             "Completion time: " + local.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffffzzz", CultureInfo.InvariantCulture);
 
+        /// <summary>
+        /// Spec 042 (FR-014): a PostgreSQL error as the Messages tab shows it - <c>SQLSTATE 42P01: message</c>, then the
+        /// server's <c>DETAIL:</c> and <c>HINT:</c> on their own lines when it sent them. The position is not in the text;
+        /// it is what the Problems list and the click-to-line use.
+        /// </summary>
+        public static string ForPostgres(ExecuteMessageDto message)
+        {
+            if (message == null) return string.Empty;
+            var text = "SQLSTATE " + (message.SqlState ?? string.Empty) + ": " + (message.Text ?? string.Empty);
+            if (!string.IsNullOrEmpty(message.Detail)) text += NewLine + "DETAIL: " + message.Detail;
+            if (!string.IsNullOrEmpty(message.Hint)) text += NewLine + "HINT: " + message.Hint;
+            return text;
+        }
+
+        private static string AppendDetailAndHint(string text, ExecuteMessageDto message)
+        {
+            if (!string.IsNullOrEmpty(message.Detail)) text += NewLine + "DETAIL: " + message.Detail;
+            if (!string.IsNullOrEmpty(message.Hint)) text += NewLine + "HINT: " + message.Hint;
+            return text;
+        }
+
         /// <summary>One structured message as its line.</summary>
         public static string Format(ExecuteMessageDto message)
         {
@@ -55,6 +76,8 @@ namespace AkmlSql.Core.Text
             switch (message.Kind)
             {
                 case ExecuteMessageKind.Error:
+                    // Spec 042: a PostgreSQL error carries a SQLSTATE and is worded its own way.
+                    if (!string.IsNullOrEmpty(message.SqlState)) return ForPostgres(message);
                     // An engine-raised error (a refused script) has no server number: its text says it all.
                     if (message.Number == 0 && message.Severity == 0) return message.Text ?? string.Empty;
                     return Error(message.Number, message.Severity, message.State, message.Line, message.Procedure, message.Text);
@@ -63,7 +86,8 @@ namespace AkmlSql.Core.Text
                 case ExecuteMessageKind.System:
                     return System(message.Text);
                 default:
-                    return Info(message.Text);
+                    // Spec 042: a PostgreSQL notice may carry the server's DETAIL and HINT; SQL Server messages never do.
+                    return AppendDetailAndHint(Info(message.Text), message);
             }
         }
     }

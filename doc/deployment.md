@@ -45,6 +45,11 @@ dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj -c Release -r win-x64
 
 Output: `src/AkmlSql.Engine/bin/Release/net10.0/win-x64/publish/AkmlSql.Engine.exe`
 
+PostgreSQL support (spec 042) adds a **native parser library** (`libpg_query`, loaded by the `pgsqlparser` package) to the engine publish, beside the managed `AkmlSql.PostgreSql.dll`
+and `Npgsql.dll`. It needs nothing installed on the machine (it imports only the Windows base library) and the installer already packs `publish\*`, so no installer step is added;
+that is also why single-file stays off. `postgreSql.enabled` in `config.json` (default true) switches the whole dialect off without removing any file. The engine publish must be
+replaced as a whole: the `AkmlSql.*` assemblies are versioned per build, so a partial swap fails at load time.
+
 ### Updater
 
 ```bash
@@ -88,6 +93,19 @@ in-product flow — it remains the unattended-deployment path documented below o
 dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj -v minimal
 ```
 
+**Live PostgreSQL tests (spec 042).** The tests that talk to a server read `AKML_PG_TEST_CONNECTION`, an Npgsql connection string, and skip when it is unset or the server is unreachable.
+`scripts/pg-test-server.ps1 -Action Start|Status|Stop` runs a private cluster on port 55432 from a local PostgreSQL install (it never touches the installed service):
+
+```powershell
+scripts/pg-test-server.ps1 -Action Start
+$env:AKML_PG_TEST_CONNECTION = 'Host=localhost;Port=55432;Database=postgres;Username=postgres;Password=akml'
+dotnet test tests/AkmlSql.PostgreSql.Tests -v minimal                                         # language library, corpora, rules
+dotnet test tests/AkmlSql.Engine.Tests --filter Category=PostgreSql -v minimal                # engine against the server
+```
+
+The browser tests (`tests/AkmlSql.Web.E2E.Tests`, class `PostgresWorkspaceTests`) need Debug builds of `AkmlSql.Web` and `AkmlSql.Engine`, the same variable, and a serial run
+(`-- xUnit.ParallelizeTestCollections=false`).
+
 ### Installer (Inno Setup 7)
 
 Requires that Engine and all shell targets are already built/published:
@@ -113,6 +131,12 @@ upload succeeded, otherwise the site's own `/dl/<file>` URL. Never hand-edit eit
 consistency invariant is enforced by `tests/AkmlSql.Site.Tests`. The manifest must be written
 before the site publish because `MapStaticAssets` resolves its asset list at build time; a file
 dropped into `wwwroot` afterwards would 404 silently.
+
+After a successful deploy (smoke tests passed) the script commits the files it generated —
+`docs-metadata.json`, `releases.json` and `update-manifest.json` under `src/AkmlSql.Site/wwwroot` —
+and pushes the current branch to `origin`. Only those three paths go into the commit (other staged or
+modified files are left alone), nothing is committed when they did not change, and a git failure is
+logged as a warning without failing the deploy. `-SkipGitPush` leaves them uncommitted.
 
 ---
 

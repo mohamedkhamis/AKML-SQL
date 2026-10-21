@@ -12,6 +12,10 @@ namespace AkmlSql.Core.Ipc.Messages
     {
         [Key(0)]
         public string ConnectionString { get; set; } = string.Empty;
+
+        /// <summary>Spec 042: the <see cref="DatabaseKind"/> to test with (0 SQL Server, 1 PostgreSQL).</summary>
+        [Key(1)]
+        public int Kind { get; set; }
     }
 
     /// <summary>Engine → Shell (spec 029): result of <see cref="TestSqlConnectionRequest"/>.</summary>
@@ -24,5 +28,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>SQL error text on failure (e.g. "Login failed for user 'sa'."); null on success.</summary>
         [Key(1)]
         public string? ErrorMessage { get; set; }
+
+        /// <summary>Spec 042 (FR-002): the server's product and version, e.g. <c>PostgreSQL 18.1</c>; null on failure or from older engines.</summary>
+        [Key(2)]
+        public string? ServerVersion { get; set; }
+
+        /// <summary>Spec 042: a stable id from <see cref="DialectErrors"/> when the failure has one (a password is needed, credentials are required); otherwise null.</summary>
+        [Key(3)]
+        public string? ErrorCode { get; set; }
     }
 }

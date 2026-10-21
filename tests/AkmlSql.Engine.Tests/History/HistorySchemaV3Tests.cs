@@ -99,7 +99,7 @@ public sealed class HistorySchemaV3Tests : IAsyncLifetime
         Assert.Equal(0, await _db.CountAsync("SELECT COUNT(*) FROM history_fts WHERE history_fts MATCH 'alpha'"));
 
         Assert.Equal("1", (await ColumnAsync("SELECT value FROM metadata WHERE key = 'history_v3'"))[0]);
-        Assert.Equal("3", (await ColumnAsync("SELECT value FROM metadata WHERE key = 'schema_version'"))[0]);
+        Assert.Equal("4", (await ColumnAsync("SELECT value FROM metadata WHERE key = 'schema_version'"))[0]);   // v4 since spec 042 (this test upgrades v2 -> current)
         Assert.Equal(1, await _db.CountAsync("SELECT COUNT(*) FROM pragma_table_info('history') WHERE name = 'open_pid'"));
         Assert.Equal(1, await _db.CountAsync("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND name = 'history_au'"));
     }

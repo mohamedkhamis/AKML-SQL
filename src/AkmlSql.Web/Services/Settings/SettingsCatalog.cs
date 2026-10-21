@@ -66,17 +66,19 @@ public static class SettingsCatalog
         new SettingEntry("analysis-reanalyse-after-format", CodeAnalysis, "Re-analyse after format", "Analyse the document again after Format SQL.", "analyze"),
         new SettingEntry("analysis-problems-filter", CodeAnalysis, "Default Problems filters", "The severities the Problems tab shows when it opens.", "info warning error severity"),
         new SettingEntry("analysis-suppressed-rules", CodeAnalysis, "Suppressed rules", "Rules turned off everywhere. Undo brings a rule back.", "disabled ignore"),
+        new SettingEntry("analysis-rules", CodeAnalysis, "Rules", "Every rule, grouped by database: SQL Server and PostgreSQL. A PostgreSQL rule links to the manual page it rests on.", "catalog list severity category sql server postgres postgresql manual"),
 
         new SettingEntry("ai-providers", AiAssistance, "Providers", "The AI services you use and which one is active. Keys never leave this browser.", "openai anthropic ollama key model"),
         new SettingEntry("ai-privacy", AiAssistance, "Privacy", "How much of your schema is sent with an AI request.", "schema disclosure"),
         new SettingEntry("ai-ghost-text", AiAssistance, "Ghost text", "Suggest the rest of a line as you type.", "inline completion suggestion"),
 
         new SettingEntry("connections-engines", Connections, "Engine connections", "The AKML SQL engines this browser is paired with.", "pair pin engine"),
-        new SettingEntry("connections-sql", Connections, "SQL Server connections", "Saved SQL Server connections. Passwords are never saved.", "server database login"),
+        new SettingEntry("connections-sql", Connections, "Database connections", "Saved SQL Server and PostgreSQL connections. Passwords are never saved in the browser.", "server database login postgresql sql server"),
 
         new SettingEntry("schema-cache-databases", SchemaCache, "Cached databases", "Schema kept in this browser for completion and the Schema panel.", "refresh clear"),
 
         new SettingEntry("diagnostics-engine", Diagnostics, "Engine", "The paired engine: its version, how it runs and the account it runs as.", "service account version"),
+        new SettingEntry("diagnostics-postgresql", Diagnostics, "PostgreSQL support", "Whether the paired engine offers PostgreSQL, and what the active connection is.", "postgres capability kind version connection"),
         new SettingEntry("diagnostics-levels", Diagnostics, "Levels shown", "Which log entries the table shows.", "log info warn error debug"),
         new SettingEntry("diagnostics-log", Diagnostics, "Log", "Recent events in this browser. Export or clear them.", "export clear"),
     };

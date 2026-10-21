@@ -1,0 +1,1 @@
+create table m_2024 partition of measurements for values from ('2024-01-01') to ('2025-01-01');

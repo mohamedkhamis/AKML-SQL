@@ -44,12 +44,14 @@
 @inject IConnectionManagerController ConnManager
 @inject EditorDocumentFlow Document
 @inject ISchemaSync SchemaSync
+@inject IDialectGate DialectGate
 
 @* Spec 041 (R64, FR-089): the title SSMS's window reads like — orders-audit* - SERVER.db - AKML SQL. *@
 <PageTitle>@EditorDocument.TitleFor(Document.Name, Document.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null)</PageTitle>
 
-@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. *@
-<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" />
+@* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. Review WEB-09: so does a
+   reload, a closed tab or a link to another site (the browser's own prompt), but only while there are edits to lose. *@
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="@_gridHasPendingEdits" />
 
 <div class="akml-editor-page">
     @* Spec 041 (FR-081): SSMS's grouping — database | Execute, Parse | Format, Analyse | Refactor, AI | documents |
@@ -69,17 +71,22 @@
             <Icon Name="@(_executing ? "loader-circle" : "play")" Class="@(_executing ? "akml-spin akml-run-icon" : "akml-run-icon")" />
             <span>@(_executing ? "Running…" : "Execute")</span>
         </button>
-        @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
-        <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
-                @onclick="ParseAsync" disabled="@(!CanParse)"
-                title="@(_executing ? "A query is running" : !SqlConn.IsConnected ? "Parse needs a SQL Server connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
-            <Icon Name="file-check" /><span>Parse</span>
-        </button>
+        @* While a query runs, Cancel takes Parse's place (Parse cannot run then anyway), so the toolbar does not reflow
+           and push the last buttons onto a second row. *@
         @if (_executing)
         {
-            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync"
-                    title="Stops the query only if the engine has not started it. A running statement cannot be interrupted.">
-                <Icon Name="x" /><span>Cancel if not started</span>
+            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync" aria-label="Cancel if not started"
+                    title="Cancel if not started: stops the query only if the engine has not started it. A running statement cannot be interrupted.">
+                <Icon Name="x" /><span>Cancel</span>
+            </button>
+        }
+        else
+        {
+            @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
+            <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
+                    @onclick="ParseAsync" disabled="@(!CanParse)"
+                    title="@(!SqlConn.IsConnected ? "Parse needs a database connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
+                <Icon Name="file-check" /><span>Parse</span>
             </button>
         }
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
@@ -95,8 +102,11 @@
         </button>
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
+        @* Spec 042 (FR-092): the refactorings are written for T-SQL; on a PostgreSQL connection the button is off and says why. *@
         <button type="button" class="akml-btn" data-testid="refactor-button" aria-label="Refactor" aria-haspopup="menu"
-                @onclick="OpenRefactorMenu" title="@WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor")">
+                disabled="@(!Surfaces.IsEnabled(WorkspaceSurface.Refactor))"
+                data-unavailable="@Surfaces.Unavailable(WorkspaceSurface.Refactor)"
+                @onclick="OpenRefactorMenu" title="@Surfaces.Tooltip(WorkspaceSurface.Refactor, WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor"))">
             <Icon Name="replace" /><span>Refactor</span><Icon Name="chevron-down" Size="12" />
         </button>
         <button type="button" class="akml-btn @(AiShown ? "is-active" : null)" data-testid="ai-button" aria-label="AI"
@@ -154,13 +164,17 @@
     <div @ref="_workspaceEl" class="@WorkspaceClass" style="@WorkspaceStyle" data-testid="workspace" data-splitter-host>
         @* The side panels stay mounted while hidden, so the tree keeps what was expanded and the chat its
            conversation; the AI dock mounts the first time it is shown. *@
-        <div class="akml-ws-schema @(SchemaShown ? null : "akml-ws-hidden")" id="akml-ws-schema" data-testid="workspace-schema"
-             role="region" aria-label="Schema" tabindex="-1">
-            <SchemaTreeComponent ServerCanonicalIdentity="@_activeServerIdentity"
+        <div class="akml-ws-schema @(SchemaShown ? null : SchemaPeeking ? "akml-ws-schema--overlay" : "akml-ws-hidden")" id="akml-ws-schema"
+             data-testid="workspace-schema" role="region" aria-label="Schema" tabindex="-1"
+             style="@(SchemaPeeking ? $"width: {Fitted.SchemaWidth}px;" : null)" @onkeydown="OnSchemaPanelKeyDown">
+            <SchemaTreeComponent Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)"
+                                     ServerCanonicalIdentity="@_activeServerIdentity"
                                  DatabaseName="@_activeDatabaseName"
                                  SessionId="@(SqlConn.IsConnected ? SqlConn.SessionId : null)"
                                  OnObjectClicked="OnSchemaObjectClickedAsync"
-                                 OnConnectRequested="() => ConnManager.Open()" />
+                                 OnObjectAction="OnSchemaObjectActionAsync"
+                                 OnConnectRequested="() => ConnManager.Open()"
+                                 Pinned="@(!Layout.Current.SchemaAutoHide)" OnPinToggled="ToggleSchemaPinAsync" OnClose="CloseSchemaPanelAsync" />
         </div>
         @if (SchemaShown)
         {
@@ -175,11 +189,12 @@
         }
         else
         {
-            <button type="button" class="akml-ws-edge akml-ws-edge--left" data-testid="workspace-edge-left"
-                    title="Show Schema (F8)" @onclick="@(() => RestoreFromStripAsync(WorkspacePanel.Schema))">Schema</button>
+            <button type="button" class="akml-ws-edge akml-ws-edge--left @(SchemaPeeking ? "is-active" : null)" data-testid="workspace-edge-left"
+                    title="Show Schema (F8)" aria-expanded="@(SchemaPeeking ? "true" : "false")"
+                    @onclick="OnSchemaStripClickAsync">Schema</button>
         }
 
-        <div class="akml-ws-centre" id="akml-ws-centre">
+        <div class="akml-ws-centre" id="akml-ws-centre" @onfocusin="CloseSchemaPeek" @onpointerdown="CloseSchemaPeek">
             @* Spec 041 (FR-073): the document bar — its name, and * while it has unsaved changes. *@
             <div class="akml-docbar" data-testid="doc-bar">
                 <Icon Name="file-code" Size="14" />
@@ -190,7 +205,8 @@
                 }
             </div>
             <div class="akml-ws-editor">
-                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync" />
+                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync"
+                                 Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)" />
             </div>
         </div>
 
@@ -205,7 +221,7 @@
                                    OnCollapseToggled="@(() => CollapseFromSplitterAsync(WorkspacePanel.None))" />
             </div>
         }
-        <div class="akml-ws-results" id="akml-ws-results">
+        <div class="akml-ws-results" id="akml-ws-results" @onpointerdown="CloseSchemaPeek">
             @if (!Fitted.ResultsVisible)
             {
                 <button type="button" class="akml-ws-edge akml-ws-edge--bottom" data-testid="workspace-edge-bottom"
@@ -214,12 +230,14 @@
             @* Spec 030 — Phase 5 / spec 041 (R34): Results, Messages and Problems tabs. Always mounted. *@
             <div class="akml-ws-results-host @(Fitted.ResultsVisible ? null : "akml-ws-hidden")" data-testid="workspace-results"
                  role="region" aria-label="Results" tabindex="-1">
-                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
+                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" FrozenReason="@ResultsFrozenReason" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
                                       Findings="_findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
                                       OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
-                                      SelectionStartLine="_selectionStartLine" ReceivedAt="_resultReceivedAt" OnNavigateToLine="OnNavigateToLineAsync"
+                                      SelectionStartLine="_selectionStartLine" SelectionStartColumn="_selectionStartColumn" ReceivedAt="_resultReceivedAt"
+                                      OnNavigateToLine="OnNavigateToLineAsync" OnNavigateToPosition="OnNavigateToPositionAsync"
                                       OnApplied="OnAppliedReExecuteAsync" DocumentName="@Document.Name"
-                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy" />
+                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy"
+                                      HasPendingEditsChanged="OnGridPendingEditsChanged" />
             </div>
         </div>
 
@@ -265,7 +283,7 @@
                     }
                     else
                     {
-                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" />
+                        <AiPanel SelectedSqlProvider="@GetAiInputSqlAsync" OnAcceptResult="OnAiAcceptResultAsync" LastErrorProvider="GetLastExecuteError" />
                     }
                 </div>
             </div>
@@ -457,6 +475,18 @@
             "schema sl results sr ai";
     }
     .akml-workspace--maximised { grid-template-rows: 0 0 minmax(0, 1fr); }
+    .akml-workspace { position: relative; }
+    /* An unpinned Schema panel, opened from its strip: over the editor, beside the strip, until the editor is used. */
+    .akml-workspace .akml-ws-schema--overlay {
+        grid-area: auto;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: var(--akml-ws-left);
+        z-index: 40;
+        box-shadow: 0 8px 24px var(--akml-surface-scrim);
+    }
+    .akml-ws-edge.is-active { color: var(--akml-text-primary); background-color: var(--akml-surface-selection); }
     .akml-workspace--maximised .akml-ws-centre { visibility: hidden; }
     .akml-workspace--maximised .akml-editor { min-height: 0; }
     .akml-ws-schema, .akml-ws-edge--left { grid-area: schema; min-height: 0; overflow: hidden; }
@@ -651,7 +681,49 @@
 
     private WorkspaceFold Fold => _wsWidth > 0 ? WorkspaceLayout.Fold(Fitted, _wsWidth, Limits, _keep) : WorkspaceFold.None;
 
-    private bool SchemaShown => Fitted.SchemaVisible && (!Fold.SchemaFolded || _forced == WorkspacePanel.Schema);
+    // Pinned and on screen: the panel has its own column. An unpinned panel never does; it is an edge strip that opens over
+    // the editor (SchemaPeeking) until the editor is clicked or focused.
+    private bool SchemaShown => !Layout.Current.SchemaAutoHide && Fitted.SchemaVisible && (!Fold.SchemaFolded || _forced == WorkspacePanel.Schema);
+
+    private bool _schemaPeek;
+
+    private bool SchemaPeeking => Layout.Current.SchemaAutoHide && _schemaPeek;
+
+    private void CloseSchemaPeek()
+    {
+        if (_schemaPeek) _schemaPeek = false;
+    }
+
+    private void OnSchemaPanelKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && SchemaPeeking) _schemaPeek = false;
+    }
+
+    private async Task OnSchemaStripClickAsync()
+    {
+        if (Layout.Current.SchemaAutoHide) _schemaPeek = !_schemaPeek;
+        else await RestoreFromStripAsync(WorkspacePanel.Schema);
+    }
+
+    /// <summary>The pin in the Schema header: unpinning folds the panel to its strip (it then opens over the editor); pinning
+    /// gives it its column back.</summary>
+    private async Task ToggleSchemaPinAsync()
+    {
+        _schemaPeek = false;
+        bool autoHide = !Layout.Current.SchemaAutoHide;
+        await Layout.SetAsync(WorkspaceLayoutFields.SchemaAutoHide, autoHide);
+        if (!autoHide) await ShowPanelAsync(WorkspacePanel.Schema);
+    }
+
+    private Task CloseSchemaPanelAsync()
+    {
+        if (SchemaPeeking)
+        {
+            _schemaPeek = false;
+            return Task.CompletedTask;
+        }
+        return HidePanelAsync(WorkspacePanel.Schema);
+    }
 
     private bool AiShown => Fitted.AiVisible && (!Fold.AiFolded || _forced == WorkspacePanel.Ai);
 
@@ -742,9 +814,28 @@
     // Spec 030 — Phase 5: query execution + results pane state.
     private ResultsPaneComponent? _resultsPane;
     private ExecuteQueryResult? _result;
+
+    // Review WEB-09: the results grid holds edits not yet applied; the browser asks before a reload or a closed tab drops them.
+    private bool _gridHasPendingEdits;
+
+    private void OnGridPendingEditsChanged(bool pending) => _gridHasPendingEdits = pending;
+
+    // Review finding WEB-01: the connection generation the shown result was read under. Once the session moves to another
+    // server, database, login, kind or engine, its rows are frozen: an edit could only be written to the new target.
+    private int _resultGeneration;
+
+    internal const string StaleResultsReason =
+        "These results came from an earlier connection. Run the query again to edit rows on the current one.";
+
+    private string? ResultsFrozenReason =>
+        _result != null && _resultGeneration != SqlConn.ConnectionGeneration ? StaleResultsReason : null;
     private string _resultsTab = ResultsPaneComponent.ResultsTab;
     private DateTimeOffset _resultReceivedAt = DateTimeOffset.Now;
     private int _selectionStartLine = 1;
+
+    // Spec 042: where the executed text began on its first line; a PostgreSQL error on that line maps from it.
+    private int _selectionStartColumn = 1;
+    private int _pendingStartColumn = 1;
     private int _executeVersion;
     private int _lastExecuteStatus;
     private bool _analysisEnabled = true;
@@ -759,11 +850,14 @@
     // web History "Re-execute": set from the ?autorun=1 query flag; consumed once the restored
     // document is populated (which happens AFTER firstRender via the async session restore).
     private bool _autorunPending;
+    // Spec 042 (FR-070): the kind of server the re-executed entry ran on (?kind=); a connection of the other kind never runs it.
+    private int? _autorunKind;
 
     protected override async Task OnInitializedAsync()
     {
         // web History "Re-execute" intent — read before any await so it is known by the first render.
         _autorunPending = new Uri(Nav.Uri).Query.Contains("autorun=1");
+        _autorunKind = AutorunKind(new Uri(Nav.Uri).Query);
 
         // T034: apply the persisted theme as soon as we have services. The shim is wired
         // for "system" already (index.html runs apply('system') inline), so this is an
@@ -776,6 +870,18 @@
         await Layout.LoadAsync();
         if (_disposed) return;
         _resultsTab = Layout.Current.ResultsTab;
+
+        // The page is created again on every visit: the result shown before leaving it comes back (as from an earlier connection
+        // when the connection has changed since), instead of an empty results pane.
+        if (Workspace.LastResult is { } kept)
+        {
+            _result = kept.Result;
+            _resultGeneration = kept.ConnectionGeneration;
+            _selectionStartLine = kept.StartLine;
+            _selectionStartColumn = kept.StartColumn;
+            _lastExecutedSql = kept.Sql;
+        }
+        _seenConnectionGeneration = SqlConn.ConnectionGeneration;
 
         // T051: restore the last editor session.
         var restored = await SessionStore.RestoreAsync();
@@ -856,10 +962,52 @@
         _commandRegistration = Commands.Register(_contextActions);
     }
 
+    // Spec 042 (FR-092): what this connection kind may use. Stateless, so it follows a switch of connection by itself.
+    private SurfaceGate? _surfaces;
+    private SurfaceGate Surfaces => _surfaces ??= new SurfaceGate(DialectGate, Notifications);
+
     private void OnSqlConnStateChanged()
     {
         RefreshSchemaTarget();
+        // Another server, database, login or kind: the last run's outcome in the status bar describes the old one, and the problems
+        // were found for the old dialect - clear the one, and read the document again for the other.
+        if (SqlConn.ConnectionGeneration != _seenConnectionGeneration)
+        {
+            _seenConnectionGeneration = SqlConn.ConnectionGeneration;
+            Workspace.ClearOutcome();
+            ScheduleFindingsRefresh();
+        }
         InvokeAsync(StateHasChanged);
+    }
+
+    private int _seenConnectionGeneration;
+
+    // The Problems list is a snapshot of the last Analyse. When the connection changes kind or server it is read again for the
+    // new connection, quietly: no tab switch, no notification, and not counted as an Analyse.
+    private CancellationTokenSource? _refreshFindingsCts;
+
+    private void ScheduleFindingsRefresh()
+    {
+        if (_findings == null || !_analysisEnabled) return;
+        _refreshFindingsCts?.Cancel();
+        var cts = _refreshFindingsCts = new CancellationTokenSource();
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(800, cts.Token);
+                var findings = await Analyser.AnalyseAsync(_currentText, null, cts.Token);
+                if (cts.IsCancellationRequested || _disposed || _findings == null) return;
+                _findings = findings;
+                await ShowDiagnosticsAsync();
+                StateHasChanged();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Diagnostics.Log(DiagnosticLevel.Warn, "analyser", $"The problems could not be refreshed: {ex.Message}");
+            }
+        });
     }
 
     /// <summary>
@@ -872,7 +1020,7 @@
     {
         if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Server) && !string.IsNullOrEmpty(SqlConn.Database))
         {
-            _activeServerIdentity = SqlConn.Server;
+            _activeServerIdentity = SqlConn.SchemaIdentity ?? SqlConn.Server;
             _activeDatabaseName = SqlConn.Database;
         }
         else
@@ -900,14 +1048,19 @@
         {
             if (!SqlConn.IsConnected)
             {
-                _status = "Connect to a SQL Server first (Connect button / palette).";
+                _status = "Connect to a database first (Connect button / palette).";
                 return;
             }
 
             // LIVE text — selection if any, else the whole document — and where it starts, so an error's
             // line maps back to the document (spec 041 R24).
+            // The completion list is not left open over the editor while the query runs.
+            await _editor.CloseCompletionAsync();
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
+
+            // Review WEB-08: an Apply waiting for its reply owns the grid's edits; a new result would orphan them.
+            if (RefuseWhileApplying()) return;
 
             // Spec 041 (FR-015): a new result replaces the grid, so its pending edits go — ask first.
             if (!await ConfirmDiscardPendingEditsAsync()) return;
@@ -928,7 +1081,12 @@
     {
         if (_editor == null) return (string.Empty, 1);
         var selection = await _editor.GetSelectionInfoAsync();
-        if (!string.IsNullOrWhiteSpace(selection.Text)) return (selection.Text, Math.Max(1, selection.StartLine));
+        if (!string.IsNullOrWhiteSpace(selection.Text))
+        {
+            _pendingStartColumn = Math.Max(1, selection.StartColumn);
+            return (selection.Text, Math.Max(1, selection.StartLine));
+        }
+        _pendingStartColumn = 1;
         return (await _editor.GetTextAsync(), 1);
     }
 
@@ -951,7 +1109,7 @@
         if (WebHistoryLogic.ShouldRecord(result.Status))
         {
             // Spec 041 (R27): the database the script ended in (a USE moves it).
-            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name);
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name, SqlConn.Kind);
             _ = History.RecordAsync(rec, CancellationToken.None);
         }
 
@@ -969,8 +1127,10 @@
     private void ShowResult(ExecuteQueryResult result, int startLine, bool chooseTab)
     {
         _result = result;
+        _resultGeneration = SqlConn.ConnectionGeneration;
         _resultReceivedAt = DateTimeOffset.Now;
         _selectionStartLine = startLine;
+        _selectionStartColumn = _pendingStartColumn;
         if (chooseTab)
         {
             _resultsTab = result.ResultSets.Length > 0 && result.Status == ExecuteStatus.Ok
@@ -978,8 +1138,21 @@
                 : ResultsPaneComponent.MessagesTab;
         }
         Workspace.Complete(result);
+        Workspace.KeepResult(new WorkspaceResult(result, _resultGeneration, startLine, _selectionStartColumn, _lastExecutedSql));
         _executeVersion++;
         _lastExecuteStatus = result.Status;
+
+        // Spec 042 (FR-043): a PostgreSQL run that created, altered or dropped something shows in the explorer without a manual
+        // refresh. The engine says when it has started reloading its catalog (SchemaChangeSignal); this waits for it to settle and
+        // fetches the result.
+        if (SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && SchemaChangeSignal.RefetchAfter(result))
+            _ = RefreshSchemaAfterRunAsync();
+    }
+
+    private async Task RefreshSchemaAfterRunAsync()
+    {
+        try { await SchemaSync.RefreshAsync(); }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "schema-sync", $"Refresh after a run failed: {ex.Message}"); }
     }
 
     /// <summary>The engine understands Parse (it advertises execute.v2).</summary>
@@ -997,6 +1170,7 @@
         {
             var (sql, startLine) = await ReadExecuteTextAsync();
             if (string.IsNullOrWhiteSpace(sql)) return;
+            if (RefuseWhileApplying()) return;
             if (!await ConfirmDiscardPendingEditsAsync()) return;
 
             await ClearErrorMarkAsync();
@@ -1024,6 +1198,22 @@
             .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == line);
         var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
         _errorDiagnostic = new EditorDiagnostic(line, 3, text, Source: "execute");
+        await ShowDiagnosticsAsync();
+    }
+
+    /// <summary>
+    /// Spec 042 (FR-014): a PostgreSQL error was clicked, in Messages or Problems: put the caret at its line and column and mark
+    /// the line, so the failing token is where the caret is.
+    /// </summary>
+    private async Task OnNavigateToPositionAsync(DocumentPosition position)
+    {
+        if (_editor == null) return;
+        await _editor.GotoPositionAsync(position.Line, position.Column);
+        var message = _result?.MessageDetails?.FirstOrDefault(m =>
+            ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == position.Line
+            && ExecuteLineMapper.DocumentColumn(_selectionStartColumn, m) == position.Column);
+        var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
+        _errorDiagnostic = new EditorDiagnostic(position.Line, 3, text, StartColumn: position.Column, Source: "execute");
         await ShowDiagnosticsAsync();
     }
 
@@ -1093,12 +1283,29 @@
         _autorunPending = false;            // connected -> consume exactly once
         if (_executing) return;             // a manual run is already in flight -> don't double-run
 
+        // History re-executed it while nothing was connected; the connection that came up is of the other kind. A script written
+        // for one kind of server is never run on the other: it stays open, unrun, and the user is told why.
+        if (_autorunKind is { } kind && kind != (int)SqlConn.Kind)
+        {
+            Notifications.Notify($"This query ran on {WebHistoryLogic.KindLabel(kind)}. The connection is {WebHistoryLogic.KindLabel((int)SqlConn.Kind)}, so it was opened but not run.",
+                NotificationKind.Info);
+            Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
+            return;
+        }
+
         _executing = true;
         try { await RunSqlAsync(_initialText, 1); }
         finally { _executing = false; _activeQueryId = null; }
 
         Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
         await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>The <c>kind=</c> of a Re-execute link (a <see cref="AkmlSql.Core.DatabaseKind"/> number), or null without one.</summary>
+    internal static int? AutorunKind(string query)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(query ?? string.Empty, @"[?&]kind=(\d+)(?:&|$)");
+        return match.Success && int.TryParse(match.Groups[1].Value, out var kind) ? kind : null;
     }
 
     private async Task CancelExecuteAsync()
@@ -1115,6 +1322,10 @@
     private async Task OnAppliedReExecuteAsync()
     {
         if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
+
+        // PostgreSQL (spec 042, FR-133): the write returned the rows as the server stored them and the grid already shows
+        // them, so the script is not run again - not even a single SELECT - and only the written rows were ever read back.
+        if (DialectGate.IsPostgres) return;
 
         // Refresh by re-running the query ONLY when it is a single read-only SELECT. Re-running a
         // multi-statement batch or any mutating statement would REPEAT its side effects on the
@@ -1176,6 +1387,13 @@
     /// Spec 041 (FR-015) — ask before an action that would drop the results grid's pending edits (Execute,
     /// leaving the page; New and Open in US5). True when there are none, or the user chose to discard them.
     /// </summary>
+    private bool RefuseWhileApplying()
+    {
+        if (_resultsPane?.IsApplying != true) return false;
+        Notifications.Notify("Wait for the grid's changes to finish applying.", NotificationKind.Info);
+        return true;
+    }
+
     private async Task<bool> ConfirmDiscardPendingEditsAsync()
     {
         int n = _resultsPane?.PendingEditCount ?? 0;
@@ -1236,6 +1454,9 @@
         {
             Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
             Icon = "replace", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+            // Spec 042 (FR-092): off on a PostgreSQL connection, with the reason on the palette row.
+            IsEnabled = () => Surfaces.IsEnabled(WorkspaceSurface.Refactor),
+            DisabledReason = () => UnsupportedSurfaces.Reason(WorkspaceSurface.Refactor, DialectGate.Kind),
         };
         yield return new CommandAction
         {
@@ -1357,14 +1578,33 @@
         await Task.CompletedTask;
     }
 
+    // Review WEB-10: each Format takes a ticket; only the latest one's reply, for the same document and dialect, may change it.
+    private readonly FormatRequestGate _formatGate = new();
+
+    internal const string FormatSupersededStatus =
+        "The document changed while it was being formatted, so the result was not applied. Format again.";
+
     private async Task FormatAsync()
     {
+        if (_editor == null) return;
         try
         {
-            var result = Formatter.Format(_currentText, _activeProfile);
-            if (result.Success && _editor != null)
+            // The live text (not the debounced copy), the document and the dialect it is formatted for: a PostgreSQL format
+            // crosses the bridge, and the reply can arrive after the user typed, opened another document or switched kind.
+            var ticket = _formatGate.Begin(await _editor.GetTextAsync(), SessionKey, SqlConn.Kind);
+            var result = await Formatter.FormatAsync(ticket.Text, _activeProfile);
+            if (!_formatGate.IsLatest(ticket) || _editor == null) return;   // a newer Format owns the document now
+            if (result.Success && (!_formatGate.Applies(ticket, SessionKey, SqlConn.Kind)
+                                   || !await _editor.ReplaceTextIfUnchangedAsync(ticket.Text, result.FormattedText)))
             {
-                await _editor.SetTextAsync(result.FormattedText);
+                _status = FormatSupersededStatus;
+                Notifications.Notify(_status, NotificationKind.Info);
+                Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
+                StateHasChanged();
+                return;
+            }
+            if (result.Success)
+            {
                 _currentText = result.FormattedText;
                 _status = result.WasModified ? "Formatted." : "Already canonical.";
                 _hasFormatted = true;
@@ -1503,17 +1743,48 @@
         await AnalyseAsync();
     }
 
-    /// <summary>Spec 025 US4 — schema tree's click-to-insert callback. Drops the
-    /// bracketed qualifier at the caret; CodeMirror's standard Ctrl+Z undoes it.</summary>
+    /// <summary>Spec 025 US4 — the schema tree's insert-name callback (a double-click). Puts the qualifier at the caret, or over the
+    /// selection, with a separating space where it would run into the text; one Ctrl+Z undoes it.</summary>
     private async Task OnSchemaObjectClickedAsync(string qualifiedName)
     {
-        if (_editor != null) await _editor.InsertAtCaretAsync(qualifiedName);
+        if (_editor != null) await _editor.InsertNameAsync(qualifiedName);
+    }
+
+    /// <summary>The schema tree's double-click and context menu: insert or copy the name, or open a script as a new query
+    /// (Select Top 1000 Rows also runs it).</summary>
+    private async Task OnSchemaObjectActionAsync(SchemaObjectAction action)
+    {
+        var name = SchemaObjectScripts.Name(action.Kind, action.SchemaName, action.Object.ObjectName);
+        switch (action.Command)
+        {
+            case SchemaObjectCommand.InsertName:
+                await OnSchemaObjectClickedAsync(name);
+                return;
+            case SchemaObjectCommand.CopyName:
+                bool copied = false;
+                try
+                {
+                    _uiModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+                    copied = await _uiModule.InvokeAsync<bool>("copyText", name);
+                }
+                catch (JSException ex) { Diagnostics.Log(DiagnosticLevel.Warn, "editor", $"Copy name: {ex.Message}"); }
+                Notifications.Notify(copied ? $"Copied {name}." : "The name could not be copied.", copied ? NotificationKind.Success : NotificationKind.Error);
+                return;
+        }
+
+        var script = SchemaObjectScripts.Script(action.Command, action.Kind, action.SchemaName, action.Object);
+        if (script == null) return;
+        var label = SchemaObjectScripts.Label(action.Command, action.Kind, action.Object.ObjectType);
+        if (!await Document.NewWithTextAsync(script, $"{label}: {name}")) return;
+        await AfterDocumentReplacedAsync();
+        if (action.Command == SchemaObjectCommand.SelectTop) await ExecuteAsync();
     }
 
     // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
     private async Task OpenSurroundPickerAsync()
     {
-        var all = await Snippets.ListAsync();
+        // Spec 042 (FR-066): a snippet is offered only in its own dialect.
+        var all = await Snippets.ListAsync(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer);
         _surroundSnippets = all.Where(s => s.Metadata.SurroundsWith).ToList();
         _showSurroundPicker = true;
         StateHasChanged();
@@ -1542,7 +1813,16 @@
 
     public Task ToggleNavAsync() => Layout.SetAsync(WorkspaceLayoutFields.NavVisible, !Layout.Current.NavVisible);
 
-    public Task ToggleSchemaAsync() => SchemaShown ? HidePanelAsync(WorkspacePanel.Schema) : ShowPanelAsync(WorkspacePanel.Schema);
+    public Task ToggleSchemaAsync()
+    {
+        if (Layout.Current.SchemaAutoHide)
+        {
+            _schemaPeek = !_schemaPeek;
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+        return SchemaShown ? HidePanelAsync(WorkspacePanel.Schema) : ShowPanelAsync(WorkspacePanel.Schema);
+    }
 
     public Task ToggleAiAsync() => AiShown ? HidePanelAsync(WorkspacePanel.Ai) : ShowPanelAsync(WorkspacePanel.Ai);
 
@@ -1675,6 +1955,17 @@
     /// back to the whole document when nothing is selected (so a user can run Explain on the
     /// full script without selecting first). Evaluated lazily at action time via
     /// <see cref="AiPanel.SelectedSqlProvider"/> so it is always current.</summary>
+    /// <summary>
+    /// Spec 042 (FR-082): the first error of the last run, for AI Fix. A PostgreSQL error carries its SQLSTATE, the server's
+    /// message, detail and hint. Only for a PostgreSQL connection: on SQL Server Fix sends what it always sent.
+    /// </summary>
+    private AiErrorInfo? GetLastExecuteError()
+    {
+        if (SqlConn.Kind != AkmlSql.Core.DatabaseKind.PostgreSql) return null;
+        var error = _result?.MessageDetails?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
+        return error == null ? null : new AiErrorInfo(error.Text, 0, error.SqlState, error.Detail, error.Hint);
+    }
+
     private async Task<string> GetAiInputSqlAsync()
     {
         if (_editor == null) return _currentText;
@@ -1869,7 +2160,13 @@
     {
         var action = _contextActions.FirstOrDefault(a => a.Id == commandId)
                      ?? Commands.Snapshot().FirstOrDefault(a => a.Id == commandId);
-        if (action == null || !action.IsAvailable) return;
+        if (action == null) return;
+        if (!action.IsAvailable)
+        {
+            // Spec 042 (FR-092): a shortcut for a surface this connection kind does not have is answered, not ignored.
+            if (Surfaces.ExplainRefusal(commandId)) StateHasChanged();
+            return;
+        }
         await action.Run();
         StateHasChanged();
     }
@@ -1901,6 +2198,7 @@
         Layout.Changed -= OnLayoutChanged;
         Document.Changed -= OnDocumentChanged;
         _analyseCts?.Cancel();
+        _refreshFindingsCts?.Cancel();
         _analyseCts?.Dispose();
         await SessionStore.FlushAsync();
         await Diagnostics.FlushAsync();

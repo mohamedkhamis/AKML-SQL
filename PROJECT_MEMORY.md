@@ -688,3 +688,120 @@ The original report is preserved; new HTML/TRX evidence is under
 %LOCALAPPDATA%/AKML SQL/report-fix-20261013/. Original skips are opt-in native checks,
 missing alias/spike configuration, and pre-existing scenario placeholders. This was
 a focused fix verification, not another full-suite run.
+
+## 2026-10-17 — Web review fixes (AKML_WEB_REVIEW_2026-10-17.md)
+
+The implementation pass reported all 22 findings fixed; those changes are now committed as
+`1d09ef4c`. Its per-ID ledger remains at the end of the original review file (root, not doc/).
+**That completion claim is superseded by the independent follow-up below: seven remain partial.**
+Facts that changed:
+
+- Editable results are bound to the connection they were read through: `ExecuteQueryResult.ConnectionStamp`
+  (key 15, HMAC under a per-process key) goes back as `ApplyChangesRequest.ConnectionStamp` (key 6) and the
+  engine refuses a stale one; the web freezes results read under an older `ISqlConnectionService.ConnectionGeneration`.
+  Grids are also frozen while a query runs or their Apply is waiting.
+- Disconnect is a real engine operation: `SessionDisconnect` 225 → 226 (`session.disconnect.v1`). Every
+  session-connection close rolls back an open transaction explicitly.
+- SQL Server Connect tests the login first (as PostgreSQL already did). Remote SQL Server connections are
+  encrypted and certificate-validated unless the saved connection's "Trust the server certificate" is ticked;
+  loopback still skips validation.
+- LAN installs serve the site over HTTPS on a "Secure site port" (default 443, `/WEB_HTTPS_PORT`, registry
+  `HttpsPort`) with the bridge certificate; the app refuses to ask for secrets in an insecure context.
+- `akml-crypto.js` creates the wrapping key once (one readwrite transaction, shared promise) and closes its
+  IndexedDB connections. AI schema context resolves the connected database only. AI streams that end badly
+  raise `AiStreamException`; provider error bodies never reach messages or diagnostics, and the diagnostics
+  ring masks credential-shaped text (`DiagnosticRedaction`).
+- `ColumnProvenanceDto.HasDefault` (key 12): new grid rows send only the cells the user set; an empty row is
+  `INSERT … DEFAULT VALUES`.
+- Browser regressions: `tests/AkmlSql.Web.E2E.Tests/SecretStorageTests.cs` (no engine needed) and
+  `ReviewFixBrowserTests.cs`. Not verified: a real LAN install over HTTPS, Firefox, a PostgreSQL server,
+  a screen reader.
+
+### Independent follow-up review — 2026-10-17
+
+See [AKML_WEB_RE_REVIEW_2026-10-17.md](AKML_WEB_RE_REVIEW_2026-10-17.md) for the current disposition:
+15 original findings resolved for the current build, 7 partial (WEB-03, 07, 11, 13, 18, 20, 21),
+plus an additional History full-SQL retrieval failure path. Eight actionable application findings
+cover cross-engine schema-cache collisions, executable History excerpts, HTTPS binding ownership,
+snippet save races, restored diagnostic secrets, SQL Server inserted-row values, persisted AI
+incomplete status, and keyboard scrolling. Dependency advisory remediation is tracked separately.
+
+Fresh verification: Web 1,632/1,632; JavaScript 131/131; serial Chromium 48/48; targeted Engine 97/97
+(live local SQL included), with no skips in those .NET runs. Six separate independent acceptance
+probes fail and reproduce remaining defects; an additional browser probe reproduces invisible
+Snippets keyboard focus. Evidence and replayable probe sources: `.review-artifacts/2026-10-17-followup/`.
+Temporary probe tests were removed from the normal test project after recording evidence, and that
+project was rebuilt. This was review/documentation work, with no production fixes or deployment.
+Actual LAN installer operation, remote certificate validation and live PostgreSQL remain unverified.
+
+## 2026-10-17 — Web re-review fixes (AKML_WEB_RE_REVIEW_2026-10-17.md)
+
+The follow-up review's REV-01..REV-08 and SEC-01 are fixed in the working tree (uncommitted); per-ID matrix at the end of that report.
+Facts that changed:
+
+- `ISqlConnectionService.SchemaIdentity` (the browser schema-cache key) is now `"<server> (engine <host:port>)"`, scoped to the engine the
+  session was opened through (`SqlConnectionService.ScopeToEngine`): a loopback SQL address is relative to the engine. Older unscoped
+  cache entries no longer match and are refetched. The AI schema provider also re-checks the connection generation.
+- History never copies, opens or re-executes the 500-character search excerpt: those wait for the full SQL (or a stored version).
+- LAN HTTPS binding ownership: `src/AkmlSql.Installer/web-https-binding.ps1` (decision functions + `-RemoveOwned`), record at
+  `%ProgramData%\AKML SQL Web\https-binding.json`, markers `https-site.ok` / `https-site.failed`; uninstall removes only AKML's still-owned
+  binding. Script-level tests: `tests/AkmlSql.Installer.Tests/HttpsBindingDecisionTests.cs` (no admin needed).
+- Diagnostics ring is persisted as a versioned envelope; a legacy (pre-fix) ring is migrated on restore (AI entries purged).
+- `ChatTurn.IncompleteReason` persists an incomplete AI answer's status.
+- SQL Server inserts return the stored row via `OUTPUT INSERTED` when the table has no enabled trigger; `ExecuteResultSet.DefaultsKnown`
+  (key 13).
+- Dependencies: MessagePack 3.1.9 (Core, Engine, E2E tests); System.Security.Cryptography.Pkcs pinned to 9.0.21 in the Engine.
+- Running `ISCC /O-` deletes `src/AkmlSql.Installer/Output/AKMLSQLSetup.exe`; for a syntax check compile with `/O<scratch dir>` instead.
+
+## 2026-10-17 — Third independent Web review
+
+The latest verdict is [AKML_WEB_REVIEW_ROUND3_2026-10-17.md](AKML_WEB_REVIEW_ROUND3_2026-10-17.md),
+which supersedes the preceding blanket claim that every follow-up finding is fixed. The fixes were
+committed as `1e08a9c1`; the checkout advanced to `3826c552` during review. REV-06 remains partial:
+triggered SQL Server inserts return only an identity, leaving other committed values absent from
+the grid. New REV-09: trigger detection queries the session catalog even when the insert targets
+another catalog, causing a cross-database triggered insert to fail with OUTPUT-without-INTO.
+Both were independently reproduced against uniquely named disposable tempdb tables through the
+real Engine router. The two desired-behavior tests are `Round3InsertAuditTests` (a concurrent commit
+captured them in the Engine test project); they currently fail and must not be weakened to close
+the review. Evidence copies and results are in `.review-artifacts/2026-10-17-round3/` (now ignored).
+
+The other follow-up fixes pass their relevant component/service/JS tests; HTTPS ownership has
+14 passing decision tests but still lacks disposable-host install/repair/uninstall and second-PC
+acceptance. Web/Engine dependency audits report no vulnerable packages from current sources;
+Engine resolves MessagePack 3.1.9 and Pkcs 9.0.21. Final verification: Web 1,656 passed, JavaScript
+133 passed, selected serial Chromium 17 passed, installer ownership decisions 14 passed; targeted
+Engine 93 passed plus the 2 failing independent acceptance probes, no skips in those .NET runs.
+See the new report for build provenance and scope.
+
+
+## 2026-10-18 — Round-3 fixes (REV-09, REV-06 remainder)
+
+- SQL Server grid inserts read the stored row back by key: `InsertReadBack` (Engine/Execution) loads the target table's enabled
+  triggers + key (PK → narrowest unfiltered unique index → identity) from `[catalog].sys.*` of the TABLE's database, then each insert
+  runs `OUTPUT INSERTED.<key> INTO @akml_k` + `SET @akml_id = SCOPE_IDENTITY()` + `SELECT ReturnColumns ... WHERE key IN @akml_k`.
+  Table-variable key columns carry the column's collation (a cross-database BIN2 key fails without it).
+- `CrudEditResult.Row == null` for a successful SQL Server insert means "not read back"; the grid (`_unconfirmed` in
+  `ResultSetGrid.razor`) shows unknown cells as "…", refuses edit/delete of that row until the query re-runs.
+- E2E: Apply's test id is `results-apply` for a single result set and `results-apply-n` only when sets are stacked — match
+  `button[data-testid^='results-apply']`. `WithSqlOrSkipAsync(database: "master")` fails to connect here; use `USE master;` in the batch.
+- Full Engine runs alongside the browser suite can trip `RefactoringPerformanceTests` budgets; re-run alone.
+
+### Independent verification and additional corrections — 2026-10-18
+
+See [AKML_WEB_FIX_VERIFICATION_2026-10-18.md](AKML_WEB_FIX_VERIFICATION_2026-10-18.md).
+The original two round-3 acceptance tests pass with the staged fixes. Additional live SQL testing found that
+an INSTEAD OF INSERT trigger could make the attempted key match an unrelated existing row. `InsertReadBack`
+now checks the target catalog's `sys.trigger_events` and disables read-back for every enabled INSTEAD OF INSERT
+trigger. The insert may still complete, but the grid cannot treat any row under that attempted key as confirmed.
+Unconfirmed grid-row metadata now follows the `ExecuteResultSet` object's lifetime through a `ConditionalWeakTable`,
+surviving component recreation without adding wire fields; a newly fetched result clears the state. User guidance
+asks for a SELECT to check stored values. Both new regressions failed before correction and pass afterward.
+Copy/export also refuses unconfirmed rows rather than turning their unknown values into SQL NULL; copying confirmed
+rows remains available. Three additional Copy/CSV/TSV regressions reproduced the prior false-success behavior.
+The latest report records this run's results separately from earlier agents' results. HTTPS deployment acceptance
+still needs a disposable IIS host and a second machine.
+Final checks for this follow-up: Engine targeted 112 passed; Web full 1,662 passed; Chromium 30 passed plus a
+focused final clipboard regression. A snippet test assertion was made to await its async click handler/save
+readiness after a reproduced timing failure; production snippet behavior was unchanged. Evidence and scope
+are in `.review-artifacts/2026-10-18-fix-verification/` and the root verification report.

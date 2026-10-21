@@ -39,7 +39,8 @@ internal sealed class QuerySessionStore
     /// rename (name_source = 2) is never overwritten.
     /// </summary>
     internal async Task<long> GetOrCreateAsync(
-        string sessionKey, DateTime executedAtUtc, string? tabTitle, string? server, string? database)
+        string sessionKey, DateTime executedAtUtc, string? tabTitle, string? server, string? database,
+        string kind = "sqlserver")
     {
         var localDate = QuerySessionNamer.LocalDateKey(executedAtUtc);
 
@@ -77,7 +78,7 @@ internal sealed class QuerySessionStore
 
             try
             {
-                return await InsertAsync(conn, sessionKey, localDate, tabTitle, server, database);
+                return await InsertAsync(conn, sessionKey, localDate, tabTitle, server, database, kind);
             }
             catch (SqliteException ex) when (IsRetryableRaceError(ex))
             {
@@ -116,7 +117,7 @@ internal sealed class QuerySessionStore
 
     private static async Task<long> InsertAsync(
         SqliteConnection conn, string sessionKey, string localDate,
-        string? tabTitle, string? server, string? database)
+        string? tabTitle, string? server, string? database, string kind)
     {
         var isScratch = QuerySessionNamer.IsScratchTabTitle(tabTitle);
 
@@ -144,8 +145,8 @@ internal sealed class QuerySessionStore
 
         await using var insert = new SqliteCommand(@"
             INSERT INTO query_sessions
-                (session_key, local_date, ordinal, name, name_source, server, database_name, created_at)
-            VALUES (@key, @d, @ord, @name, @src, @server, @db, @created);
+                (session_key, local_date, ordinal, name, name_source, server, database_name, created_at, kind)
+            VALUES (@key, @d, @ord, @name, @src, @server, @db, @created, @kind);
             SELECT last_insert_rowid();", conn, tx);
         insert.Parameters.AddWithValue("@key", sessionKey);
         insert.Parameters.AddWithValue("@d", localDate);
@@ -154,6 +155,7 @@ internal sealed class QuerySessionStore
         insert.Parameters.AddWithValue("@src", nameSource);
         insert.Parameters.AddWithValue("@server", (object?)server ?? DBNull.Value);
         insert.Parameters.AddWithValue("@db", (object?)database ?? DBNull.Value);
+        insert.Parameters.AddWithValue("@kind", kind);
         insert.Parameters.AddWithValue("@created",
             DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
 

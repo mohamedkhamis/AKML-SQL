@@ -1,0 +1,175 @@
+<chapter id="functions">
+ <title>Functions and Operators</title>
+
+ <sect1 id="functions-math">
+  <title>Mathematical Functions and Operators</title>
+
+   <table id="functions-math-table">
+    <title>Mathematical Operators</title>
+    <tgroup cols="1">
+     <tbody>
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <type>numeric</type> <literal>+</literal> <type>numeric</type>
+        <returnvalue>numeric</returnvalue>
+       </para>
+       <para>
+        Addition
+       </para></entry>
+      </row>
+      <row>
+       <entry id="function-pi" role="func_table_entry"><para role="func_signature">
+        <indexterm>
+         <primary>pi</primary>
+        </indexterm>
+        <function>pi</function> ( )
+        <returnvalue>double precision</returnvalue>
+       </para>
+       <para>
+        Approximate value of <phrase role="symbol_font">&pi;</phrase>
+       </para>
+       <para>
+        <literal>pi()</literal>
+        <returnvalue>3.141592653589793</returnvalue>
+       </para></entry>
+      </row>
+     </tbody>
+    </tgroup>
+   </table>
+ </sect1>
+
+ <sect1 id="functions-datetime">
+  <title>Date/Time Functions and Operators</title>
+
+   <table id="functions-datetime-table">
+    <title>Date/Time Functions</title>
+    <tgroup cols="1">
+     <tbody>
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <indexterm>
+         <primary>date_trunc</primary>
+        </indexterm>
+        <function>date_trunc</function> ( <parameter>field</parameter> <type>text</type>, <parameter>source</parameter> <type>timestamp</type> )
+        <returnvalue>timestamp</returnvalue>
+       </para>
+       <para>
+        Truncate to specified precision; see <xref linkend="functions-datetime-trunc"/>.
+        This sentence is not part of the summary.
+       </para></entry>
+      </row>
+      <row>
+       <entry id="now-row" xreflabel="now" role="func_table_entry"><para role="func_signature">
+        <function>now</function> ()
+        <returnvalue>timestamp with time zone</returnvalue>
+       </para>
+       <para>
+        Current date and time (start of current transaction), e.g. for logging.
+       </para></entry>
+      </row>
+     </tbody>
+    </tgroup>
+   </table>
+
+   <sect2 id="functions-datetime-delay">
+    <title>Delaying Execution</title>
+
+<synopsis>
+pg_sleep ( <type>double precision</type> )
+pg_sleep_for ( <type>interval</type> )
+</synopsis>
+
+    <function>pg_sleep</function> makes the current session's process
+    sleep until the given number of seconds have elapsed.
+    <function>pg_sleep_for</function> is a convenience function to
+    allow the sleep time to be specified as an <type>interval</type>.
+   </sect2>
+ </sect1>
+
+ <sect1 id="functions-conditional">
+  <title>Conditional Expressions</title>
+
+<synopsis>
+<function>COALESCE</function>(<replaceable>value</replaceable> <optional>, ...</optional>)
+</synopsis>
+
+   <para>
+    The <function>COALESCE</function> function returns the first of its
+    arguments that is not null. Null is returned only if all arguments are null.
+   </para>
+
+<synopsis>
+<function>GREATEST</function>(<replaceable>value</replaceable> <optional>, ...</optional>)
+</synopsis>
+<synopsis>
+<function>LEAST</function>(<replaceable>value</replaceable> <optional>, ...</optional>)
+</synopsis>
+
+   <para>
+    The <function>GREATEST</function> and <function>LEAST</function> functions select the largest or smallest value.
+   </para>
+ </sect1>
+
+ <sect1 id="functions-aggregate">
+  <title>Aggregate Functions</title>
+
+   <table id="functions-aggregate-table">
+    <title>General-Purpose Aggregate Functions</title>
+    <tgroup cols="1">
+     <tbody>
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <function>string_agg</function> ( <parameter>value</parameter> <type>text</type>, <parameter>delimiter</parameter> <type>text</type> )
+        <returnvalue>text</returnvalue>
+       </para>
+       <para>
+        Concatenates the non-null input values into a string.
+       </para></entry>
+      </row>
+     </tbody>
+    </tgroup>
+   </table>
+ </sect1>
+
+ <sect1 id="functions-window">
+  <title>Window Functions</title>
+
+   <table id="functions-window-table">
+    <title>General-Purpose Window Functions</title>
+    <tgroup cols="1">
+     <tbody>
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <function>row_number</function> ()
+        <returnvalue>bigint</returnvalue>
+       </para>
+       <para>
+        Returns the number of the current row within its partition, counting from 1.
+       </para></entry>
+      </row>
+     </tbody>
+    </tgroup>
+   </table>
+ </sect1>
+
+ <sect1 id="functions-srf">
+  <title>Set Returning Functions</title>
+
+   <table id="functions-srf-series">
+    <title>Series Generating Functions</title>
+    <tgroup cols="1">
+     <tbody>
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <function>generate_series</function> ( <parameter>start</parameter> <type>integer</type>, <parameter>stop</parameter> <type>integer</type> )
+        <returnvalue>setof integer</returnvalue>
+       </para>
+       <para>
+        Generates a series of values from start to stop.
+       </para></entry>
+      </row>
+     </tbody>
+    </tgroup>
+   </table>
+ </sect1>
+</chapter>

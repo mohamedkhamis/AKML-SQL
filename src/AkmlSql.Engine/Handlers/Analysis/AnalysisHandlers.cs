@@ -6,6 +6,7 @@ using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Analysis;
 using AkmlSql.Engine.Server;
+using AkmlSql.PostgreSql.Analysis;
 using AkmlSql.Engine.Transports;
 
 namespace AkmlSql.Engine.Handlers.Analysis
@@ -22,11 +23,17 @@ namespace AkmlSql.Engine.Handlers.Analysis
     {
         private readonly AnalysisEngine _engine;
         private readonly Func<AppSettings> _settingsProvider;
+        private readonly PgAnalysisEngine? _pg;
 
-        public AnalysisHandler(AnalysisEngine engine, Func<AppSettings> settingsProvider)
+        /// <param name="pg">
+        /// Spec 042: the PostgreSQL analyser, present when <c>postgreSql.enabled</c> is on. A PostgreSQL session is analysed by it and
+        /// never by <paramref name="engine"/>; with the dialect off the answer for such a session is "no findings".
+        /// </param>
+        public AnalysisHandler(AnalysisEngine engine, Func<AppSettings> settingsProvider, PgAnalysisEngine? pg = null)
         {
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
             _settingsProvider = settingsProvider ?? throw new ArgumentNullException(nameof(settingsProvider));
+            _pg = pg;
         }
 
         public int RequestMessageType => MessageTypes.RequestAnalyze;
@@ -37,6 +44,27 @@ namespace AkmlSql.Engine.Handlers.Analysis
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             if (ctx == null) throw new ArgumentNullException(nameof(ctx));
+
+            // Spec 042 (FR-090, FR-092, FR-152, SC-010): the rules, the parser and the suppressions behind this engine are T-SQL's. A
+            // PostgreSQL session's text is never given to them - they would report PostgreSQL syntax as T-SQL syntax errors. It is
+            // analysed by the PostgreSQL rules (the schema cache of the connection lets the schema-aware ones run); with the dialect
+            // switched off the answer is "no findings", the version echoed so the client moves on.
+            if (ctx.Sessions.KindOf(request.SessionId) == AkmlSql.Core.DatabaseKind.PostgreSql)
+            {
+                if (_pg == null)
+                {
+                    return Task.FromResult(new CodeAnalysisResponse
+                    {
+                        RequestId = request.RequestId,
+                        Issues = Array.Empty<CodeIssueInfo>(),
+                        AnalyzedVersion = request.DocumentVersion,
+                    });
+                }
+
+                var pgSession = ctx.Sessions.GetSession(request.SessionId);
+                var pgCache = pgSession != null ? ctx.SchemaCache.GetCache(pgSession.SessionId, pgSession.DatabaseName) : null;
+                return Task.FromResult(_pg.Analyze(request, pgCache, _settingsProvider().CodeAnalysis, ct));
+            }
 
             var settings = _settingsProvider();
 

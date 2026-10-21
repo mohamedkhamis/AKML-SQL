@@ -22,6 +22,10 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(1)]
         public string? SessionId { get; set; }
+
+        /// <summary>Spec 042: the <see cref="DatabaseKind"/> when no <see cref="SessionId"/> is given (0 SQL Server, 1 PostgreSQL).</summary>
+        [Key(2)]
+        public int Kind { get; set; }
     }
 
     /// <summary>Engine → Web/Shell (spec 030): result of <see cref="ListDatabasesRequest"/>.</summary>
@@ -38,5 +42,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>SQL/connection error text on failure (e.g. "Login failed for user 'sa'."); null on success.</summary>
         [Key(2)]
         public string? ErrorMessage { get; set; }
+
+        /// <summary>Spec 042: a stable id from <see cref="DialectErrors"/> when the failure has one; otherwise null.</summary>
+        [Key(3)]
+        public string? ErrorCode { get; set; }
     }
 }

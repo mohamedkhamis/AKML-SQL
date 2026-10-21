@@ -71,6 +71,21 @@ public sealed class CommandAction
     /// palette and the View menu show a check mark. Null = not a toggle.</summary>
     public Func<bool>? IsChecked { get; init; }
 
+    /// <summary>Spec 042 (FR-092) - optional "why is this command off right now" ("Not available for PostgreSQL"). The palette shows
+    /// it as the row's tooltip while the command is unavailable. Null = no reason to give.</summary>
+    public Func<string?>? DisabledReason { get; init; }
+
+    /// <summary><see cref="DisabledReason"/> evaluated safely: null when unset, when the command is available, or when it throws.</summary>
+    public string? WhyUnavailable
+    {
+        get
+        {
+            if (DisabledReason == null || IsAvailable) return null;
+            try { return DisabledReason(); }
+            catch { return null; }
+        }
+    }
+
     /// <summary><see cref="IsEnabled"/> evaluated safely: true when unset, false when it throws.</summary>
     public bool IsAvailable
     {

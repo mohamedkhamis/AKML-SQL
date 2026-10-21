@@ -16,10 +16,19 @@
 @implements IAsyncDisposable
 @inject IProfileStore Store
 @inject IFormatterService Formatter
+@inject IServiceProvider Services
 @inject IJSRuntime JS
 @inject IDialogService Dialogs
 
 <PageTitle>Format styles — AKML SQL</PageTitle>
+
+@* Review WEB-12: leaving the page with unsaved changes asks first, as switching styles does — in-app links and browser
+   back/forward through the same discard question, a reload or a closed tab through the browser's own prompt. *@
+@* Only while there is something to lose: a clean page navigates at once, with no round trip through the lock. *@
+@if (_dirty)
+{
+    <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="true" />
+}
 
 <div class="akml-styles" data-testid="styles-page">
     @* Spec 041 (T203, FR-085): the one page header; the storage line stays beside the title. *@
@@ -33,7 +42,7 @@
             <button type="button" class="akml-btn" @onclick="NewStyleAsync" data-testid="style-new">New</button>
             <label class="akml-btn" data-testid="style-import-label">
                 Import SQL Prompt style
-                <InputFile OnChange="ImportAsync" accept=".json" class="akml-hidden-file" data-testid="style-import" />
+                <InputFile OnChange="ImportAsync" accept=".json" class="akml-visually-hidden" data-testid="style-import" />
             </label>
         </div>
     </div>
@@ -159,7 +168,9 @@
                                 var value = _document.Get(option.Path);
                                 var enabled = IsEnabled(option);
                                 var changed = value != option.Default;
-                                <div class="akml-option @(changed ? "changed" : "") @(enabled ? "" : "disabled")" data-testid="option-row" data-option="@option.Path">
+                                var noEffect = IsPostgres ? SqlPromptApplicability.ReasonNoEffect(option.Path) : null;
+                                <div class="akml-option @(changed ? "changed" : "") @(enabled ? "" : "disabled") @(noEffect != null ? "no-effect" : "")" data-testid="option-row" data-option="@option.Path"
+                                     data-no-effect="@(noEffect != null ? "postgresql" : null)">
                                     <label class="akml-option-label" for="@Id(option)" title="@option.Description">@option.Label</label>
                                     <div class="akml-option-control">
                                         @switch (option.Kind)
@@ -192,6 +203,10 @@
                                         }
                                     </div>
                                     <div class="akml-option-help">
+                                        @if (noEffect != null)
+                                        {
+                                            <span class="akml-option-noeffect" data-testid="option-no-effect" title="@noEffect">@SqlPromptApplicability.NoEffectLabel</span>
+                                        }
                                         @option.Description
                                         @if (!enabled && option.EnabledWhen is { } gate)
                                         {
@@ -267,6 +282,8 @@
     .akml-option-control input[type=number] { width: 72px; }
     .akml-option-reset { background: transparent; border: 0; color: var(--akml-text-secondary); cursor: pointer; font-size: 14px; }
     .akml-option-help { grid-column: 1 / span 2; color: var(--akml-text-secondary); font-size: 11px; }
+    .akml-option-noeffect { display: inline-block; margin-right: 6px; padding: 0 6px; border: 1px solid var(--akml-border-default); border-radius: 8px; color: var(--akml-text-secondary); font-size: 10px; }
+    .akml-option.no-effect .akml-option-label { color: var(--akml-text-secondary); }
     .akml-styles-preview { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .akml-preview-tabs { padding: 0 var(--akml-scalar-spacing-m); }
     .akml-preview-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
@@ -274,7 +291,6 @@
     .akml-preview-output { flex: 1 1 auto; margin: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); padding: var(--akml-scalar-spacing-s); overflow: auto; font-family: var(--akml-type-editor-family); font-size: 13px; line-height: 1.45; background-color: var(--akml-surface-input); border: 1px solid var(--akml-border-default); tab-size: @_tabSize; white-space: pre; }
     .akml-preview-output .moved { background-color: color-mix(in srgb, var(--akml-accent-primary) 22%, transparent); }
     .akml-preview-status { padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-s); color: var(--akml-text-secondary); font-size: 12px; }
-    .akml-hidden-file { display: none; }
     @@media (max-width: 900px) {
         /* minmax(0, 1fr), not 1fr: a 1fr track never shrinks below its widest content (a long
            preview line, a style name), so the one-column layout was wider than the phone. */
@@ -475,6 +491,9 @@
 
     // ── preview ──────────────────────────────────────────────────────────────
 
+    /// <summary>The active connection is PostgreSQL (spec 042): the options with no PostgreSQL meaning are marked and the preview is a PostgreSQL sample.</summary>
+    private bool IsPostgres => (Services.GetService(typeof(IDialectGate)) as IDialectGate)?.IsPostgres == true;
+
     private void SchedulePreview()
     {
         _previewDelay?.Cancel();
@@ -490,7 +509,8 @@
     private void RenderPreview(bool markChanges)
     {
         if (_document == null) return;
-        var sql = _mySql ? _customSql : SqlPromptPreviewSamples.For(_sectionId);
+        var postgres = IsPostgres;
+        var sql = _mySql ? _customSql : postgres ? SqlPromptPreviewSamples.ForPostgreSql(_sectionId) : SqlPromptPreviewSamples.For(_sectionId);
         _tabSize = _document.GetInt("whitespace.numberOfSpacesInTabs");
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -499,10 +519,33 @@
             return;
         }
 
+        if (postgres)
+        {
+            // The PostgreSQL formatter lives in the engine: ask it, and show the answer when it comes.
+            _ = ShowPostgresPreviewAsync(sql, markChanges, _document.Root);
+            return;
+        }
+
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var result = Formatter.Format(sql, new FormattingProfile { SqlPrompt = _document.Root });
         watch.Stop();
+        ShowPreview(result, markChanges, watch.ElapsedMilliseconds);
+    }
 
+    private async Task ShowPostgresPreviewAsync(string sql, bool markChanges, System.Text.Json.Nodes.JsonObject root)
+    {
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = await Formatter.PreviewAsync(sql, new FormattingProfile { SqlPrompt = root });
+        watch.Stop();
+        await InvokeAsync(() =>
+        {
+            ShowPreview(result, markChanges, watch.ElapsedMilliseconds);
+            StateHasChanged();
+        });
+    }
+
+    private void ShowPreview(AkmlSql.Formatting.Pipeline.FormatResult result, bool markChanges, long elapsedMs)
+    {
         var lines = result.FormattedText.Replace("\r\n", "\n").TrimEnd('\n').Split('\n');
         var moved = 0;
         _previewLines = new List<(string, bool)>(lines.Length);
@@ -516,7 +559,7 @@
         var changedText = !markChanges || _previousPreview.Length == 0 ? "" : moved == 0 ? " · no lines changed" : $" · {moved} line{(moved == 1 ? "" : "s")} changed";
         _previewStatus = !result.Success || !result.ValidationPassed
             ? "The preview could not be formatted with this style: " + string.Join(" ", result.Diagnostics.Select(d => d.Message))
-            : $"Preview updated{changedText} · {watch.ElapsedMilliseconds} ms";
+            : $"Preview updated{changedText} · {elapsedMs} ms";
         _previousPreview = lines;
     }
 
@@ -743,6 +786,11 @@
     {
         _status = text;
         _statusIsError = error;
+    }
+
+    private async Task OnBeforeInternalNavigationAsync(LocationChangingContext context)
+    {
+        if (_dirty && !await ConfirmDiscardAsync()) context.PreventNavigation();
     }
 
     // Spec 041 (R59, FR-086): asked in the app; a dialog that cannot be shown answers "no" — never a silent yes.

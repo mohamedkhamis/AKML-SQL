@@ -17,10 +17,16 @@ public static class GhostTextPrompt
     /// </summary>
     /// <param name="schemaText">Formatted schema context (compact, level 1-2).</param>
     /// <param name="precedingText">The SQL text immediately before the cursor position.</param>
+    /// <param name="dialect">The SQL language of the active connection (spec 042). SQL Server by default.</param>
+    /// <param name="serverVersion">The PostgreSQL server version when known; ignored for SQL Server.</param>
     /// <returns>A tuple of (systemMessage, userMessage). The user message is the preceding text.</returns>
-    public static (string systemMessage, string userMessage) Build(string schemaText, string precedingText)
+    public static (string systemMessage, string userMessage) Build(
+        string schemaText,
+        string precedingText,
+        SqlDialect dialect = SqlDialect.SqlServer,
+        string? serverVersion = null)
     {
-        var system = PromptTemplates.BuildSystemPrompt(schemaText, TaskInstruction);
+        var system = PromptTemplates.BuildSystemPrompt(schemaText, TaskInstruction, dialect, serverVersion);
         return (system, precedingText);
     }
 }

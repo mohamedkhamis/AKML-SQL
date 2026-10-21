@@ -76,6 +76,31 @@ public sealed class CompletionServiceOfflineTests
         return MessagePackSerializer.Serialize(payload);
     }
 
+    /// <summary>Re-review REV-01: with a connection, offline completion uses exactly that database's snapshot — never the most
+    /// recently used one, which can be another database or another engine's; with none cached it offers keywords only. Without a
+    /// connection (a reload while the engine is down) the last-used snapshot stays the fallback.</summary>
+    [Fact]
+    public async Task Offline_completion_follows_the_connected_database_not_the_last_used_one()
+    {
+        var store = new SchemaCacheStore(new InMemoryIndexedDbAdapter());
+        var connection = new FakeActiveConnection { Server = "srv", Database = "Hr" };
+        await store.SetAsync(new SchemaSnapshot { ServerCanonicalIdentity = "srv", DatabaseName = "Hr", PhaseA = BuildPhaseABlob("Hr", ("dbo", "SentinelHr")) });
+        await store.SetAsync(new SchemaSnapshot { ServerCanonicalIdentity = "srv", DatabaseName = "Sales", PhaseA = BuildPhaseABlob("Sales", ("dbo", "SentinelSales")) });
+        await store.TouchAsync("srv", "Sales");   // used last
+
+        var connected = await new CompletionService(ClosedBridge(), store, null, connection).CompleteAsync(new CompletionRequest(), CancellationToken.None);
+        Assert.Contains(connected.Items, i => i.SourceObject == "dbo.SentinelHr");
+        Assert.DoesNotContain(connected.Items, i => i.SourceObject == "dbo.SentinelSales");
+
+        connection.Database = "Payroll";   // no snapshot of it yet
+        var missing = await new CompletionService(ClosedBridge(), store, null, connection).CompleteAsync(new CompletionRequest(), CancellationToken.None);
+        Assert.All(missing.Items, i => Assert.Equal((int)CompletionObjectType.Keyword, i.ObjectType));
+
+        connection.IsConnected = false;
+        var offline = await new CompletionService(ClosedBridge(), store, null, connection).CompleteAsync(new CompletionRequest(), CancellationToken.None);
+        Assert.Contains(offline.Items, i => i.SourceObject == "dbo.SentinelSales");
+    }
+
     [Fact]
     public async Task With_no_cache_entry_returns_keywords_only()
     {

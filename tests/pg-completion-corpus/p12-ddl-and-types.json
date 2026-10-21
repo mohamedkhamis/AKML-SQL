@@ -1,0 +1,595 @@
+[
+  {
+    "id": "PGDDL-001",
+    "family": "ddl-and-types",
+    "doc": "CREATE |",
+    "expect": {
+      "mustContain": [
+        "TABLE",
+        "INDEX",
+        "VIEW",
+        "FUNCTION",
+        "SEQUENCE",
+        "SCHEMA",
+        "MATERIALIZED VIEW",
+        "UNIQUE INDEX",
+        "OR REPLACE FUNCTION"
+      ],
+      "mustNotContain": [
+        "customers"
+      ],
+      "minCount": 10
+    },
+    "note": "CREATE takes an object kind"
+  },
+  {
+    "id": "PGDDL-002",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE |",
+    "expect": {
+      "mustNotContain": [
+        "customers",
+        "orders",
+        "SELECT"
+      ]
+    },
+    "note": "A new name: nothing to suggest"
+  },
+  {
+    "id": "PGDDL-003",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (|",
+    "expect": {
+      "mustContain": [
+        "PRIMARY KEY",
+        "CONSTRAINT",
+        "UNIQUE",
+        "CHECK",
+        "FOREIGN KEY"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "Start of a column or constraint"
+  },
+  {
+    "id": "PGDDL-004",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "bigint",
+        "text",
+        "uuid",
+        "timestamp with time zone"
+      ],
+      "mustNotContain": [
+        "customers"
+      ],
+      "minCount": 10
+    },
+    "note": "Column type"
+  },
+  {
+    "id": "PGDDL-005",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int |",
+    "expect": {
+      "mustContain": [
+        "NOT NULL",
+        "PRIMARY KEY",
+        "DEFAULT",
+        "REFERENCES",
+        "GENERATED ALWAYS AS IDENTITY",
+        "UNIQUE",
+        "CHECK"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "Column constraints"
+  },
+  {
+    "id": "PGDDL-006",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int PRIMARY |",
+    "expect": {
+      "mustContain": [
+        "KEY"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "PRIMARY takes KEY"
+  },
+  {
+    "id": "PGDDL-007",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int REFERENCES |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "REFERENCES takes a table"
+  },
+  {
+    "id": "PGDDL-008",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id text REFERENCES customers (|",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Referenced column"
+  },
+  {
+    "id": "PGDDL-009",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int, name text, PRIMARY KEY (|",
+    "expect": {
+      "mustContain": [
+        "id",
+        "name"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ]
+    },
+    "note": "Key columns are the ones declared"
+  },
+  {
+    "id": "PGDDL-010",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int, name text, UNIQUE (|",
+    "expect": {
+      "mustContain": [
+        "id",
+        "name"
+      ]
+    },
+    "note": "UNIQUE columns"
+  },
+  {
+    "id": "PGDDL-011",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (a int, FOREIGN KEY (a) REFERENCES |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "customers"
+      ]
+    },
+    "note": "FOREIGN KEY ... REFERENCES"
+  },
+  {
+    "id": "PGDDL-012",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id serial, name text NOT |",
+    "expect": {
+      "mustContain": [
+        "NULL"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "NOT takes NULL"
+  },
+  {
+    "id": "PGDDL-013",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int GENERATED |",
+    "expect": {
+      "mustContain": [
+        "ALWAYS AS IDENTITY",
+        "BY DEFAULT AS IDENTITY"
+      ]
+    },
+    "note": "GENERATED"
+  },
+  {
+    "id": "PGDDL-014",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (id int, created timestamptz DEFAULT |",
+    "expect": {
+      "mustContain": [
+        "now",
+        "CURRENT_TIMESTAMP",
+        "NULL"
+      ]
+    },
+    "note": "DEFAULT expression"
+  },
+  {
+    "id": "PGDDL-015",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (a int, b |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text"
+      ]
+    },
+    "note": "Second column type"
+  },
+  {
+    "id": "PGDDL-016",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (a int) |",
+    "expect": {
+      "mustContain": [
+        "PARTITION BY",
+        "INHERITS",
+        "TABLESPACE"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the column list"
+  },
+  {
+    "id": "PGDDL-017",
+    "family": "ddl-and-types",
+    "doc": "CREATE INDEX ix |",
+    "expect": {
+      "mustContain": [
+        "ON",
+        "USING"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the index name"
+  },
+  {
+    "id": "PGDDL-018",
+    "family": "ddl-and-types",
+    "doc": "CREATE INDEX ix ON |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "customers"
+      ]
+    },
+    "note": "CREATE INDEX ... ON takes a table"
+  },
+  {
+    "id": "PGDDL-019",
+    "family": "ddl-and-types",
+    "doc": "CREATE INDEX ix ON orders USING |",
+    "expect": {
+      "mustContain": [
+        "btree",
+        "hash",
+        "gin",
+        "gist"
+      ]
+    },
+    "note": "Index method"
+  },
+  {
+    "id": "PGDDL-020",
+    "family": "ddl-and-types",
+    "doc": "CREATE INDEX ix ON orders (|",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Index columns"
+  },
+  {
+    "id": "PGDDL-021",
+    "family": "ddl-and-types",
+    "doc": "CREATE UNIQUE INDEX ix ON customers (|",
+    "expect": {
+      "mustContain": [
+        "company_name",
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Unique index columns"
+  },
+  {
+    "id": "PGDDL-022",
+    "family": "ddl-and-types",
+    "doc": "CREATE VIEW v AS SELECT | FROM customers",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "View body columns"
+  },
+  {
+    "id": "PGDDL-023",
+    "family": "ddl-and-types",
+    "doc": "CREATE VIEW v AS SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "View body tables"
+  },
+  {
+    "id": "PGDDL-024",
+    "family": "ddl-and-types",
+    "doc": "CREATE MATERIALIZED VIEW mv AS SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "products"
+      ]
+    },
+    "note": "Materialized view body"
+  },
+  {
+    "id": "PGDDL-025",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t AS SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "CREATE TABLE AS"
+  },
+  {
+    "id": "PGDDL-026",
+    "family": "ddl-and-types",
+    "doc": "ALTER TABLE |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "ALTER TABLE takes a table"
+  },
+  {
+    "id": "PGDDL-027",
+    "family": "ddl-and-types",
+    "doc": "ALTER TABLE orders |",
+    "expect": {
+      "mustContain": [
+        "ADD COLUMN",
+        "DROP COLUMN",
+        "ALTER COLUMN",
+        "RENAME TO",
+        "ADD CONSTRAINT",
+        "OWNER TO"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "ALTER TABLE actions"
+  },
+  {
+    "id": "PGDDL-028",
+    "family": "ddl-and-types",
+    "doc": "ALTER TABLE orders ADD COLUMN note |",
+    "expect": {
+      "mustContain": [
+        "text",
+        "integer"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "New column type"
+  },
+  {
+    "id": "PGDDL-029",
+    "family": "ddl-and-types",
+    "doc": "ALTER TABLE orders DROP COLUMN |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "ship_city"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Existing columns"
+  },
+  {
+    "id": "PGDDL-030",
+    "family": "ddl-and-types",
+    "doc": "ALTER TABLE orders ALTER COLUMN freight |",
+    "expect": {
+      "mustContain": [
+        "SET DATA TYPE",
+        "SET DEFAULT",
+        "DROP DEFAULT",
+        "SET NOT NULL",
+        "DROP NOT NULL"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "ALTER COLUMN actions"
+  },
+  {
+    "id": "PGDDL-031",
+    "family": "ddl-and-types",
+    "doc": "ALTER TABLE orders RENAME COLUMN |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_date"
+      ]
+    },
+    "note": "RENAME COLUMN"
+  },
+  {
+    "id": "PGDDL-032",
+    "family": "ddl-and-types",
+    "doc": "DROP TABLE |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "IF EXISTS"
+      ]
+    },
+    "note": "DROP TABLE"
+  },
+  {
+    "id": "PGDDL-033",
+    "family": "ddl-and-types",
+    "doc": "DROP TABLE IF EXISTS |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "customers"
+      ]
+    },
+    "note": "DROP TABLE IF EXISTS"
+  },
+  {
+    "id": "PGDDL-034",
+    "family": "ddl-and-types",
+    "doc": "DROP |",
+    "expect": {
+      "mustContain": [
+        "TABLE",
+        "VIEW",
+        "INDEX"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "DROP takes an object kind"
+  },
+  {
+    "id": "PGDDL-035",
+    "family": "ddl-and-types",
+    "doc": "COMMENT ON |",
+    "expect": {
+      "mustContain": [
+        "TABLE",
+        "COLUMN"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "COMMENT ON"
+  },
+  {
+    "id": "PGDDL-036",
+    "family": "ddl-and-types",
+    "doc": "CREATE FUNCTION f(a |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "Parameter type"
+  },
+  {
+    "id": "PGDDL-037",
+    "family": "ddl-and-types",
+    "doc": "CREATE FUNCTION f(a int, OUT b |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "text"
+      ]
+    },
+    "note": "OUT parameter type"
+  },
+  {
+    "id": "PGDDL-038",
+    "family": "ddl-and-types",
+    "doc": "CREATE FUNCTION f(a int) RETURNS |",
+    "expect": {
+      "mustContain": [
+        "integer",
+        "TABLE",
+        "SETOF",
+        "void",
+        "trigger"
+      ]
+    },
+    "note": "RETURNS"
+  },
+  {
+    "id": "PGDDL-039",
+    "family": "ddl-and-types",
+    "doc": "CREATE FUNCTION f() RETURNS int |",
+    "expect": {
+      "mustContain": [
+        "LANGUAGE",
+        "AS",
+        "IMMUTABLE",
+        "STABLE",
+        "VOLATILE"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After RETURNS"
+  },
+  {
+    "id": "PGDDL-040",
+    "family": "ddl-and-types",
+    "doc": "CREATE SEQUENCE |",
+    "expect": {
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "A new name"
+  },
+  {
+    "id": "PGDDL-041",
+    "family": "ddl-and-types",
+    "doc": "CREATE TABLE t (a int) PARTITION |",
+    "expect": {
+      "mustContain": [
+        "BY"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "PARTITION takes BY"
+  }
+]

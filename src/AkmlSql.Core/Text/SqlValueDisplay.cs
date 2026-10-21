@@ -74,6 +74,10 @@ namespace AkmlSql.Core.Text
                 case "uniqueidentifier": return new DisplayValue(wire.ToUpperInvariant());
                 case "money":
                 case "smallmoney": return new DisplayValue(MoneyText(wire));
+                // PostgreSQL's boolean arrives as its text form t / f and reads true / false, as pgAdmin shows it. (SQL Server
+                // has no type of this name: bit stays 1 / 0.)
+                case "boolean":
+                case "bool": return new DisplayValue(wire == "t" ? "true" : wire == "f" ? "false" : wire);
                 case "":
                     break;
                 default:
@@ -214,6 +218,11 @@ namespace AkmlSql.Core.Text
                     return OffsetToWire(trimmed) ?? text;
                 case "time":
                     return TimeToWire(trimmed) ?? text;
+                case "boolean":
+                case "bool":
+                    return string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase) ? "t"
+                        : string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase) ? "f"
+                        : text;
                 case "":
                     break;
                 default:

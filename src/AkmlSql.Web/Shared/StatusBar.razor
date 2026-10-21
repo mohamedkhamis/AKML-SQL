@@ -6,6 +6,7 @@
     the already-shipped offline IntelliSense legible: "disconnected but cached completions
     still work" reads as **Cached**, distinct from **Offline** (keyword-only).
 *@
+@using AkmlSql.Core
 @using AkmlSql.Web.Services
 @using Microsoft.Extensions.DependencyInjection
 @implements IDisposable
@@ -57,6 +58,13 @@
             @if (failure.Kind == EngineConnectFailureKind.NotPaired
                  || failure.Kind == EngineConnectFailureKind.PairingRequired)
             {
+                @if (failure.Kind == EngineConnectFailureKind.NotPaired && PageIsLocal)
+                {
+                    @* The page is served from this computer, so its engine is most likely here too: one click pairs it. *@
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="UseLocalEngineAsync" disabled="@_pairingLocal"
+                            title="Pair with the engine on this computer (localhost:47291); Settings opens if it does not answer"
+                            data-testid="engine-use-local">Use this computer's engine</button>
+                }
                 <button type="button" class="akml-btn akml-btn--compact"
                         @onclick="@(() => Nav.NavigateTo("settings/connections"))"
                         data-testid="engine-setup">Set up engine</button>
@@ -81,6 +89,14 @@
     {
         <span class="akml-status-text" data-testid="status-caret">Ln @Workspace.CaretLine, Col @Workspace.CaretColumn</span>
     }
+    @* Spec 042 (FR-005): which kind of server this is, in words and an icon, never by colour alone. *@
+    @if (SqlConn.IsConnected)
+    {
+        <span class="akml-status-text akml-status-kind" data-testid="status-kind" title="@KindTooltip">
+            <Icon Name="@(SqlConn.Kind == DatabaseKind.PostgreSql ? "database" : "plug")" Size="12" />
+            <span>@(SqlConn.Kind == DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server")</span>
+        </span>
+    }
     <button type="button" class="akml-status-conn" @onclick="@(() => ConnManager.Open())"
             aria-label="Manage SQL connection" title="@ConnTooltip" data-testid="status-connection">
         <span class="akml-status-conn-icon"><Icon Name="plug" Size="12" /></span>
@@ -88,7 +104,24 @@
     </button>
     @if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Login))
     {
-        <span class="akml-status-text" data-testid="status-login" title="SQL Server login">@SqlConn.Login</span>
+        <span class="akml-status-text" data-testid="status-login" title="@(SqlConn.Kind == DatabaseKind.PostgreSql ? "Login" : "SQL Server login")">@SqlConn.Login</span>
+    }
+    @* Spec 042 (FR-016): an open transaction, or one an error has aborted, with a one-click rollback. *@
+    @if (SqlConn.IsConnected && SqlConn.TransactionState != TransactionState.None)
+    {
+        var aborted = SqlConn.TransactionState == TransactionState.Aborted;
+        <span class="akml-status-txn @(aborted ? "akml-status-txn--aborted" : null)" role="status" aria-live="polite" data-testid="status-txn">
+            <Icon Name="@(aborted ? "triangle-alert" : "database")" Size="12" />
+            <span>@(aborted ? "Transaction aborted" : "Transaction open")</span>
+            @if (aborted)
+            {
+                <span class="akml-status-txn-note" data-testid="status-txn-note">Every statement fails until ROLLBACK.</span>
+            }
+            <button type="button" class="akml-btn akml-btn--compact" @onclick="RollbackAsync" disabled="@_rollingBack"
+                    title="Run ROLLBACK; to end the transaction" data-testid="status-txn-rollback">
+                <Icon Name="rotate-ccw" Size="12" /> Rollback
+            </button>
+        </span>
     }
     @* Short versions; the full build string on hover; a marker when the web app and the engine are different builds. *@
     @if (!string.IsNullOrEmpty(Bridge.EngineVersion))
@@ -165,6 +198,10 @@
 
     /* Clickable connection indicator — the third entry point into the connection manager
        (alongside the command palette + Settings). Token-styled button reset. */
+    .akml-status-kind { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .akml-status-txn { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .akml-status-txn--aborted { color: var(--akml-statustext-danger); font-weight: 600; }
+    .akml-status-txn-note { font-weight: normal; }
     .akml-status-conn {
         flex: 0 0 auto;
         display: inline-flex;
@@ -304,6 +341,24 @@
     private DateTimeOffset? _nextRetryAt;
     private System.Threading.Timer? _countdownTimer;
 
+    private bool _pairingLocal;
+
+    private bool PageIsLocal =>
+        Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && EngineEndpoint.IsLoopbackHost(page.Host);
+
+    private async Task UseLocalEngineAsync()
+    {
+        _pairingLocal = true;
+        try
+        {
+            if (!await AutoConnect.PairLocalEngineAsync()) Nav.NavigateTo("settings/connections");
+        }
+        finally
+        {
+            _pairingLocal = false;
+        }
+    }
+
     protected override void OnInitialized()
     {
         _bridgeState = Bridge.State;
@@ -342,7 +397,7 @@
                 _cachePresent = false;
                 return;
             }
-            var snapshot = await SchemaCache.GetAsync(SqlConn.Server!, SqlConn.Database!);
+            var snapshot = await SchemaCache.GetAsync(SqlConn.SchemaIdentity ?? SqlConn.Server!, SqlConn.Database!);
             _cachePresent = snapshot?.PhaseA is { Length: > 0 };
         }
         catch
@@ -412,7 +467,19 @@
             var activeId = await SavedSqlConnections.GetActiveIdAsync();
             if (string.IsNullOrEmpty(activeId)) return;
             var saved = await SavedSqlConnections.GetAsync(activeId!);
-            if (saved == null || !saved.WindowsAuth) return;
+            if (saved == null) return;
+
+            // A PostgreSQL connection whose password the engine remembers needs nothing from the user either: it comes back
+            // too (the browser sends no password; the engine fills in the one it holds).
+            if (saved.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+            {
+                if (!saved.RememberPassword || !SqlConn.EngineSupportsPostgres) return;
+                await SqlConn.ConnectAsync(new ConnectionTarget(AkmlSql.Core.DatabaseKind.PostgreSql, saved.Server, saved.Database,
+                    WindowsAuth: false, User: saved.Login, Password: null, Port: saved.EffectivePort, SslMode: saved.SslMode,
+                    RootCertificatePath: saved.RootCertificatePath, RememberPassword: true), System.Threading.CancellationToken.None);
+                return;
+            }
+            if (!saved.WindowsAuth) return;
 
             await SqlConn.ConnectAsync(saved.Server, saved.Database, windowsAuth: true,
                 user: null, password: null, System.Threading.CancellationToken.None);
@@ -451,6 +518,37 @@
     private bool VersionsDiffer =>
         !string.IsNullOrEmpty(Bridge.EngineVersion)
         && !string.Equals(AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion), AkmlSql.Core.AppVersion.Current, StringComparison.Ordinal);
+
+    private bool _rollingBack;
+
+    /// <summary>Spec 042 (FR-016): the version, so the segment can stay short.</summary>
+    private string KindTooltip => SqlConn.Kind == DatabaseKind.PostgreSql
+        ? (string.IsNullOrEmpty(SqlConn.ServerVersionText) ? "PostgreSQL" : $"PostgreSQL {SqlConn.ServerVersionText}")
+        : "SQL Server";
+
+    // Spec 042 (FR-016): ends the transaction through the same execute path as any statement, so the session's
+    // transaction state follows the engine's answer. Resolved when used: a bare status bar needs no execute service.
+    private async Task RollbackAsync()
+    {
+        if (_rollingBack) return;
+        _rollingBack = true;
+        try
+        {
+            var exec = Services.GetService<IQueryExecutionService>();
+            if (exec == null) return;
+            var result = await exec.ExecuteAsync("ROLLBACK;", 1, 30, Guid.NewGuid().ToString("N"), System.Threading.CancellationToken.None);
+            if (result.Status != AkmlSql.Core.Ipc.Messages.ExecuteStatus.Ok)
+            {
+                Services.GetService<INotificationService>()?.Notify(
+                    "Rollback failed: " + (result.ErrorMessage ?? "the engine reported an error."), NotificationKind.Error);
+            }
+        }
+        finally
+        {
+            _rollingBack = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
 
     private string ConnTooltip => SqlConn.IsConnected
         ? $"Connected to {SqlConn.Server} / {SqlConn.Database} — click to manage connections"

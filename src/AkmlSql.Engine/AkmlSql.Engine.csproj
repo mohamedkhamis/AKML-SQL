@@ -28,10 +28,15 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.11" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="7.*" />
+    <!-- Re-review SEC-01: SqlClient asks only for Pkcs >= 9.0.18, whose SignedCms/EnvelopedCms have advisories
+         (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7); 9.0.21 is the patched 9.x release. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
+    <!-- Spec 042: the PostgreSQL data path (sessions, catalog, execution, CRUD). Engine-only. -->
+    <PackageReference Include="Npgsql" Version="10.0.3" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.102.0" />
     <PackageReference Include="ClosedXML" Version="0.105.*" />
-    <PackageReference Include="MessagePack" Version="3.1.8" />
+    <PackageReference Include="MessagePack" Version="3.1.9" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.*" />
 
     <!-- Spec 026 (M4 closure) C2: host the web-edition engine as the AkmlSqlWebEngine Windows
@@ -56,6 +61,7 @@
     <ProjectReference Include="..\AkmlSql.Core\AkmlSql.Core.csproj" />
     <ProjectReference Include="..\AkmlSql.Formatting\AkmlSql.Formatting.csproj" />
     <ProjectReference Include="..\AkmlSql.IntelliSense\AkmlSql.IntelliSense.csproj" />
+    <ProjectReference Include="..\AkmlSql.PostgreSql\AkmlSql.PostgreSql.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -65,6 +71,12 @@
          case-safe) and Link into the output as snippets/ to match the runtime path. The installer ships
          the whole engine publish output recursively (AkmlSqlSetup.iss), so they ride along; hot-swap too. -->
     <Content Include="SnippetPack\*.akmlsnippet" Link="snippets\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <!-- Spec 042 (T104, FR-066): the PostgreSQL snippet pack rides in the same folder. Its files are named pg-*.akmlsnippet and carry
+         dialect=postgresql, so the index keeps them apart from the SQL Server shortcodes of the same name. -->
+    <Content Include="..\AkmlSql.PostgreSql\Snippets\*.akmlsnippet" Link="snippets\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

@@ -171,7 +171,15 @@
     /// running the query. Same shape as <see cref="OnTextChanged"/>.</summary>
     [Parameter] public EventCallback OnExecute { get; set; }
 
+    /// <summary>
+    /// Spec 042 (FR-060, FR-065): the database kind of the active connection. PostgreSQL highlights as PostgreSQL; SQL
+    /// Server, and no connection, keep the language the editor always had. A change reconfigures the open editor in
+    /// place, so switching connections keeps the text, caret and diagnostics.
+    /// </summary>
+    [Parameter] public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
+
     private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
+    private AkmlSql.Core.DatabaseKind _appliedKind = AkmlSql.Core.DatabaseKind.SqlServer;
     private ElementReference _host;
     private IJSObjectReference? _module;
     // Set when the page is left. Start-up awaits JS several times; leaving mid-way (e.g. the style
@@ -179,6 +187,12 @@
     private bool _disposed;
     private DotNetObjectReference<EditorComponent>? _selfRef;
     private bool _initialised;
+    // The InitialText value the parent last passed. Only a change of the PARAMETER is pushed into CodeMirror: comparing it
+    // with what the editor holds instead (as before) made any re-render after an edit made from inside the editor (Format,
+    // a fix, an insert) push the parent's older value back over the document - a connection switch replaced the query
+    // with the text the page had restored at start-up.
+    private string? _lastInitialTextParameter;
+
     // The InitialText value last pushed into CodeMirror. CM is created once (below); if the parent
     // later changes InitialText (async session restore, or History "Open in editor"), OnParametersSetAsync
     // pushes it via setText so the new document actually appears. User edits flow OUT via OnTextChanged
@@ -198,8 +212,11 @@
         // Spec 041 (R53): the editor options from Settings › Editor, applied at create and on every change.
         var options = await EditorSettings.GetAsync();
         if (_disposed) return;
-        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options));
+        var kindAtCreate = Kind;
+        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate));
+        _appliedKind = kindAtCreate;
         _appliedInitialText = seed;
+        _lastInitialTextParameter = seed;
         EditorSettings.Changed += OnEditorSettingsChanged;
 
         // Spec 028 (M6) US5: tell the editor whether ghost text is enabled + the debounce.
@@ -211,10 +228,21 @@
         // A parameter change (async session restore, or History "Open in editor"/"Re-execute") may have
         // landed while _module was still null above — OnParametersSetAsync would have skipped it. Apply
         // the latest InitialText now that the editor exists, so the restored document actually appears.
-        if (!_disposed && InitialText != _appliedInitialText)
+        if (!_disposed && InitialText != _lastInitialTextParameter)
         {
-            _appliedInitialText = InitialText;
-            await _module.InvokeVoidAsync("setText", HostId, InitialText);
+            _lastInitialTextParameter = InitialText;
+            if (InitialText != _appliedInitialText)
+            {
+                _appliedInitialText = InitialText;
+                await _module.InvokeVoidAsync("setText", HostId, InitialText);
+            }
+        }
+
+        // Same race for the connection kind: it may have changed while the module was loading.
+        if (!_disposed && Kind != _appliedKind)
+        {
+            _appliedKind = Kind;
+            await _module.InvokeVoidAsync("setDialect", HostId, AkmlSql.Core.DatabaseKindNames.ToName(Kind));
         }
     }
 
@@ -223,10 +251,23 @@
     /// the editor. Guarded so it only fires on an actual change post-init.</summary>
     protected override async Task OnParametersSetAsync()
     {
-        if (_initialised && _module != null && InitialText != _appliedInitialText)
+        // Only when the parent passed a new value: a re-render that passes the same (possibly older) value again must not
+        // overwrite what the user has done in the editor since.
+        if (_initialised && _module != null && InitialText != _lastInitialTextParameter)
         {
-            _appliedInitialText = InitialText;
-            await _module.InvokeVoidAsync("setText", HostId, InitialText);
+            _lastInitialTextParameter = InitialText;
+            if (InitialText != _appliedInitialText)
+            {
+                _appliedInitialText = InitialText;
+                await _module.InvokeVoidAsync("setText", HostId, InitialText);
+            }
+        }
+
+        // Spec 042: the active connection changed kind; reconfigure the open editor's language in place.
+        if (_initialised && _module != null && Kind != _appliedKind)
+        {
+            _appliedKind = Kind;
+            await _module.InvokeVoidAsync("setDialect", HostId, AkmlSql.Core.DatabaseKindNames.ToName(Kind));
         }
     }
 
@@ -608,6 +649,23 @@
         await _module.InvokeVoidAsync("setText", HostId, text);
     }
 
+    /// <summary>
+    /// Review WEB-10: replace the document with <paramref name="text"/> only if it still reads <paramref name="expected"/>, as one
+    /// undoable change; false (nothing changed) when it was edited or replaced in the meantime.
+    /// </summary>
+    public async Task<bool> ReplaceTextIfUnchangedAsync(string expected, string text)
+    {
+        if (_module == null)
+        {
+            if (!string.Equals(InitialText, expected, StringComparison.Ordinal)) return false;
+            InitialText = text;
+            return true;
+        }
+        if (!await _module.InvokeAsync<bool>("replaceTextIfUnchanged", HostId, expected, text)) return false;
+        _appliedInitialText = text;
+        return true;
+    }
+
     public async Task SetSelectionAsync(int anchor, int head)
     {
         if (_module == null) return;
@@ -618,6 +676,13 @@
     {
         if (_module == null) return;
         await _module.InvokeVoidAsync("gotoLine", HostId, lineNumber);
+    }
+
+    /// <summary>Spec 042 (FR-014): put the caret at a 1-based line and column (a PostgreSQL error's position).</summary>
+    public async Task GotoPositionAsync(int lineNumber, int column)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("gotoPosition", HostId, lineNumber, column);
     }
 
     /// <summary>Spec 041 (R39) — show findings in the editor (underline, gutter marker, message on hover),
@@ -651,6 +716,22 @@
         await _module.InvokeVoidAsync("insertAtCaret", HostId, text);
     }
 
+    /// <summary>A name from the schema explorer: replaces the selection or goes in at the caret, with a separating space where it
+    /// would run into the text around it. One undo step.</summary>
+    public async Task InsertNameAsync(string name)
+    {
+        if (_module == null) return;
+        await _module.InvokeVoidAsync("insertNameAtCaret", HostId, name);
+    }
+
+    /// <summary>Close the completion list, if it is open.</summary>
+    public async Task CloseCompletionAsync()
+    {
+        if (_module == null) return;
+        try { await _module.InvokeVoidAsync("closeCompletion", HostId); }
+        catch (JSException) { /* a closed list is the goal either way */ }
+    }
+
     /// <summary>Spec 027 (M5 offline closure) T010 — expand a snippet body at the caret with
     /// tab-stops. <paramref name="body"/> is engine-native (<c>$Name$</c> / <c>$CURSOR$</c>);
     /// the JS layer translates it to CodeMirror placeholders.</summary>
@@ -678,7 +759,8 @@
         return await _module.InvokeAsync<string>("getText", HostId);
     }
 
-    private static object ToJs(EditorSettings o) => new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize };
+    private static object ToJs(EditorSettings o, AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer) =>
+        new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize, dialect = AkmlSql.Core.DatabaseKindNames.ToName(kind) };
 
     private void OnEditorSettingsChanged() => _ = InvokeAsync(async () =>
     {

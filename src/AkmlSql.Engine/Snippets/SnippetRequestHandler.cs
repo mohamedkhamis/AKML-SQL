@@ -33,9 +33,9 @@ public class SnippetRequestHandler
         Log.Information("Snippet index rebuilt: {Count} snippets from {Sources} sources", _index.Count, _sources.Count);
     }
 
-    public SnippetExpandResponse HandleExpand(SnippetExpandRequest request, string? databaseName = null, string? serverName = null, string? sqlUserName = null)
+    public SnippetExpandResponse HandleExpand(SnippetExpandRequest request, string? databaseName = null, string? serverName = null, string? sqlUserName = null, string dialect = SnippetDialects.SqlServer)
     {
-        var snippet = _index.GetByShortcode(request.Shortcode);
+        var snippet = _index.GetByShortcode(request.Shortcode, dialect);
         if (snippet == null)
             return new SnippetExpandResponse { Success = false, ErrorMessage = $"No snippet found for shortcode: {request.Shortcode}" };
 
@@ -100,14 +100,16 @@ public class SnippetRequestHandler
 
     public SnippetListResponse HandleList(SnippetListRequest request)
     {
+        // Spec 042: the dialect of the list the caller asked for (SQL Server unless it says PostgreSQL)
+        var dialect = SnippetDialects.For((AkmlSql.Core.DatabaseKind)request.Kind);
         IEnumerable<(Snippet Snippet, SnippetSourceType Source)> results;
 
         if (!string.IsNullOrEmpty(request.Query))
-            results = _index.Search(request.Query);
+            results = _index.Search(request.Query, dialect);
         else if (!string.IsNullOrEmpty(request.Context) || request.HasSelection)
-            results = _index.GetByContext(request.Context, request.HasSelection);
+            results = _index.GetByContext(request.Context, request.HasSelection, dialect);
         else
-            results = _index.GetAll();
+            results = _index.GetAll(dialect);
 
         if (request.SourceFilter > 0)
             results = results.Where(r => (int)r.Source == request.SourceFilter);

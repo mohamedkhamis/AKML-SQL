@@ -1,0 +1,18 @@
+[
+
+{ oid => '16', array_type_oid => '1000',
+  descr => 'boolean, \'true\'/\'false\'',
+  typname => 'bool', typlen => '1', typbyval => 't', typcategory => 'B',
+  typinput => 'boolin', typoutput => 'boolout', typreceive => 'boolrecv',
+  typsend => 'boolsend', typalign => 'c' },
+{ oid => '23', array_type_oid => '1007',
+  descr => '-2 billion to 2 billion integer, 4-byte storage',
+  typname => 'int4', typlen => '4', typbyval => 't', typcategory => 'N',
+  typinput => 'int4in', typoutput => 'int4out', typreceive => 'int4recv',
+  typsend => 'int4send', typalign => 'i' },
+{ oid => '2249', descr => 'pseudo-type representing any composite type',
+  typname => 'record', typlen => '-1', typbyval => 'f', typtype => 'p',
+  typcategory => 'P', typinput => 'record_in', typoutput => 'record_out',
+  typreceive => 'record_recv', typsend => 'record_send', typalign => 'd' },
+
+]

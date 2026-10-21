@@ -152,6 +152,22 @@ public sealed class FormatterServiceTests
             $"entry.\n\n=== DIFF (expected → actual) ===\n{diff}");
     }
 
+    /// <summary>
+    /// The parity gate compares LF-normalised output with the baseline body. A CRLF checkout
+    /// (no .gitattributes) rewrites the committed LF bodies, so the loader must normalise the
+    /// expected side too — otherwise every pair fails on line endings alone.
+    /// </summary>
+    [Fact]
+    public void Formatter_baselines_load_LF_normalised_whatever_the_checkout()
+    {
+        foreach (var (corpusId, profileId) in ParityCorpusLoader.EnumerateFormatterPairs())
+        {
+            var expected = ParityCorpusLoader.LoadFormatterBaseline(corpusId, profileId);
+            Assert.DoesNotContain('\r', expected);
+            Assert.Equal(ParityCorpusLoader.NormaliseLineEndings(expected), expected);
+        }
+    }
+
     public static IEnumerable<object[]> FormatterParityPairs() =>
         ParityCorpusLoader.EnumerateFormatterPairs()
             .Select(p => new object[] { p.CorpusId, p.ProfileId });

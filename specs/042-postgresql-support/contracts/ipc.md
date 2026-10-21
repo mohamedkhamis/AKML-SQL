@@ -1,0 +1,175 @@
+# Contract: engine IPC changes for PostgreSQL
+
+All existing `[MessagePackObject]` types evolve append-only (new keys after the last existing
+key, non-null defaults). Message type numbers continue from 221. The SQL Server paths read none of
+the new keys, so an older client and a newer engine (or the reverse) keep working.
+
+## Capability and configuration
+
+| Item | Value |
+| --- | --- |
+| Capability string | `dialect.postgresql.v1` (added to `Capabilities.Current`; omitted when `postgreSql.enabled` is false) |
+| Config section | `"postgreSql": { "enabled": true }` in `config.json` (`PostgreSqlSettings`) |
+| Unsupported surfaces | The router answers a PostgreSQL session's request for a surface with no PostgreSQL implementation (refactorings, Find invalid objects, find references, find unused variables, CRUD generation, encrypted-object decryption, script-as, document outline) with the standard `Error` envelope (106): `ErrorInfo.Code = 4201` and `Message = "dialect.unsupported: Not available for PostgreSQL"`. `ErrorInfo.Code` is an int, so the string ids below travel in `ErrorCode` fields of the connection replies, and the numeric codes are 4201 `dialect.unsupported`, 4202 `dialect.password-required`, 4203 `dialect.credentials-required` (`DialectErrors`). |
+
+## Existing messages: appended keys
+
+| Message | New key | Type | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `ConnectionInfo` (ConnectionChanged) | 5 `Kind` | int | 0 | `DatabaseKind` |
+| `ConnectionInfo` | 6 `RememberPassword` | bool | false | save the supplied password after a successful open (FR-104) |
+| `TestSqlConnectionRequest` | 1 `Kind` | int | 0 | which provider to test with |
+| `TestSqlConnectionResponse` | 2 `ServerVersion` | string? | null | e.g. `PostgreSQL 18.1` / SQL Server product version (FR-002) |
+| `TestSqlConnectionResponse` | 3 `ErrorCode` | string? | null | `dialect.password-required` / `dialect.credentials-required` when the failure has a stable id |
+| `ListDatabasesRequest` | 2 `Kind` | int | 0 | used only when `SessionId` is absent |
+| `ListDatabasesResponse` | 3 `ErrorCode` | string? | null | as above |
+| `ExecuteMessageDto` | 10 `SqlState` | string? | null | PostgreSQL SQLSTATE (`42P01`) |
+| `ExecuteMessageDto` | 11 `Detail` | string? | null | `PostgresException.Detail` / notice detail |
+| `ExecuteMessageDto` | 12 `Hint` | string? | null | server hint, or the engine's own hint (`GO` is SQL Server-only) |
+| `ExecuteMessageDto` | 13 `Column` | int | 0 | 1-based column of the error position in the document (0 = unknown) |
+| `ExecuteQueryResult` | 13 `TransactionState` | int | 0 | `TransactionState` after the run (0 None, 1 Open, 2 Aborted) |
+| `ExecuteQueryResult` | 14 `SchemaChanged` | bool | false | the engine started reloading its catalog after this run (FR-043): a statement changed it outside a transaction, or the transaction it ran in ended in this run; the client refetches the schema when true |
+| `ChangeDatabaseResponse` | 4 `TransactionState` | int | 0 | always 0 after a PostgreSQL reconnect |
+| `CrudCellDto` | 6 `TypeName` | string? | null | `format_type` text used for the `::type` cast (PostgreSQL only) |
+| `AnalysisRuleInfoDto` | 9 `Kind` | int | 0 | `DatabaseKind` of the rule set the rule belongs to |
+| `AnalysisRuleInfoDto` | 10 `ReferenceUrl` | string | empty | the PostgreSQL manual page of a PostgreSQL rule (user story 8) |
+| `ListAnalysisRulesRequest` | 1 `IncludePostgreSql` | bool | false | also list the PostgreSQL rule set; false keeps the answer the SQL Server rules only |
+| `FormatRequest`, `FormatSelectionRequest`, `FormatActionRequest` | 6 `ProfileJson` | string? | null | the style as JSON, used instead of `ProfileName` (user story 7) |
+| `FormatPreviewRequest` | 3 `Dialect` | int | 0 | `DatabaseKind` of the sample |
+| `SafetyCheckRequest` | 3 `Kind` | int | 0 | `DatabaseKind`; no session on this request |
+| `SnippetListRequest` | 5 `Kind` | int | 0 | `DatabaseKind` of the snippets wanted; `.akmlsnippet` files gain `metadata.dialect` (default `sqlserver`) |
+| `HistoryRecordRequest` | 13 `Kind` | int | 0 | stored in `history.kind` |
+| `HistoryEntryDto` | 18 `Kind` | int | 0 | |
+| `HistorySearchRequest` | 15 `Kind` | int? | null | filter; null = both kinds |
+| `SchemaPhasePayload` | 5 `InaccessibleSchemas` | string[] | empty | schemas the user lacks USAGE on (FR-046) |
+| `SchemaPhasePayload` | 6 `HiddenSchemas` | string[] | empty | system schemas loaded for name resolution, hidden in the tree by default (FR-040) |
+| `SchemaPhasePayload` | 7 `SearchPath` | string[] | empty | the session's `current_schemas(false)` (FR-061) |
+| `StyleEditorSchemaResponse` | none | | | option entries inside `SchemaJson` gain `"noEffectForPostgreSql": true/false` and `SchemaVersion` is bumped (record the new number here when it lands) (FR-145) |
+| `HandshakeResponse` | none | | | the capability list carries the feature |
+
+`ExecuteMessageDto.Kind`, `Severity`, `Line` keep their meaning: notices are Info with
+`Severity = 10` and `Text` prefixed `NOTICE:` / `WARNING:` / `INFO:`; errors are Error with
+`Severity = 16` so `ExecuteOutcome`'s "error when severity ≥ 11" rule holds; `Number` is 0 for
+PostgreSQL (the SQLSTATE is the identifier).
+
+`ExecuteBatchDto` is reused as **one record per statement** for PostgreSQL (Index = statement
+ordinal, StartLine / StartOffset / EndOffset = the statement's span in the document, Status,
+ElapsedMs, ErrorCount). `ExecuteResultSet.BatchIndex` = statement ordinal.
+
+`ExecuteParse` (219 → 220) for a PostgreSQL session parses each statement with the product's
+parser and never contacts the server; errors arrive as `ExecuteMessageDto` with `Line`,
+`Column`, `SqlState = "42601"`, `Hint = "Object names and permissions were not checked."`.
+
+## Session-scoped requests: dispatch by kind, no new keys
+
+`Format`, `FormatAction`, `FormatPreview`, `FormatSelection`, `CodeAnalysis`, `Completion`,
+`QuickInfo`, `Signature`, `WildcardExpansion`, `StatementBoundary`, `GetObjectDefinition`,
+`ExecuteQuery`, `ExecuteParse`, `ApplyChanges`, `ChangeDatabase`, `ListDatabases` (with
+`SessionId`), `SnippetExpand`: the engine reads `SessionState.Kind` and routes to the PostgreSQL
+implementation. For `RefactorPreview`, `RefactorApply`, `FindInvalidObjects`, `FindReferences`,
+`FindUnusedVariables`, `CrudGeneration`, `EncryptedObjectDecryption`, `ScriptAs` and
+`DocumentOutline` on a PostgreSQL session the engine replies with the `dialect.unsupported`
+error.
+
+## Appended keys for editing (user story 6, FR-130 to FR-133)
+
+All append-only; SQL Server ignores them and an older engine ignores them on a request.
+
+```text
+ExecuteResultSet      [12] ReadOnlyReason   string?   why IsEditable is false (PostgreSQL, when provenance was asked for)
+ApplyChangesRequest   [5]  ReturnColumns    string[]? the result set's base columns in result order; the write reads these back
+CrudCellDto           [6]  TypeName         string?   the column's type as the server prints it ("numeric(10,2)", "text[]"); cast target
+CrudEditResult        [5]  Row              string?[]? the written row as stored (RETURNING), in ReturnColumns order; null for a delete
+```
+
+The type name is the only piece of client text that reaches a PostgreSQL statement outside a parameter, so the engine accepts it
+only if it reads as a type name (letters, digits, `_`, space, `.`, `,`, brackets and quoted identifiers; no semicolon, comment marker,
+backslash or dollar sign) and refuses the edit otherwise.
+
+## Appended keys for formatting (user story 7, FR-140 to FR-147)
+
+`FormatDocument`, `FormatSelection`, `FormatAction` and `FormatPreview` are answered for a PostgreSQL session by the PostgreSQL formatter
+(no refusal any more). The web edition keeps its styles in the browser, so the request carries the style:
+
+```text
+FormatRequest          [6] ProfileJson  string?  the style as .akmlstyle JSON; used instead of ProfileName when present
+FormatSelectionRequest [6] ProfileJson  string?  same
+FormatActionRequest    [6] ProfileJson  string?  same
+FormatPreviewRequest   [3] Dialect      int      DatabaseKind of the sample: 0 SQL Server (default), 1 PostgreSQL
+```
+
+Format Actions on a PostgreSQL session: `CasingOnly`, `InsertSemicolons` (the last statement's), `RemoveSemicolons` (only the last statement's:
+PostgreSQL needs the ones between), `ExpandWildcards` and `QualifyObjectNames` (PostgreSQL quoting) run; every other type answers
+`Success = false`, `ErrorMessage = "Not available for PostgreSQL"`. A selection is widened to whole statements, as for SQL Server.
+
+The style editor schema (`StyleEditorSchemaRequest`, SQL Prompt model) goes to version **2003**: each setting may carry
+`noEffectForPostgreSql: true` and `noEffectReason`, and each group a `samplePostgreSql` beside `sample`.
+
+## Appended keys for code analysis (user story 8, FR-150 to FR-155)
+
+`RequestAnalyze` (CodeAnalysisRequest) is answered for a PostgreSQL session by the PostgreSQL rules, in the same `CodeAnalysisResponse`
+shape; the session's schema cache lets the schema-aware rules run. A script that does not parse yields one issue, rule id `PGSYN001`.
+
+```text
+ListAnalysisRulesRequest [1] IncludePostgreSql  bool    also list the PostgreSQL rule set; false (the default) keeps the answer
+                                                       exactly the SQL Server rules, as an older client expects
+AnalysisRuleInfoDto      [10] ReferenceUrl      string  the PostgreSQL manual page of a PostgreSQL rule; empty for SQL Server rules
+```
+
+`AnalysisRuleInfoDto.Kind` (key 9, appended earlier) is 0 for SQL Server rules and 1 for PostgreSQL rules. `SessionSuppression` takes
+`PG` rule ids unchanged (the store is a set of ids).
+
+## New messages
+
+### 221 `CredentialRequest` → 222 `CredentialResponse`
+
+```text
+CredentialRequest
+  [0] Action   int     0 = Has, 1 = Forget
+  [1] Kind     int     DatabaseKind (only PostgreSql is served today)
+  [2] Server   string  host (lower-cased)
+  [3] Port     int     0 → 5432
+  [4] Login    string  user name
+CredentialResponse
+  [0] Ok       bool
+  [1] Has      bool    Action Has: a remembered password exists; Action Forget: it existed
+  [2] Error    string?
+```
+
+Never carries a password. Store key: `pg://{server}:{port}` + login in `SqlCredentialStore`.
+
+### 223 `RedactRequest` → 224 `RedactResponse`
+
+```text
+RedactRequest
+  [0] Dialect  string  "postgresql" (SQL Server redaction stays in-process in the client)
+  [1] Text     string
+RedactResponse
+  [0] Ok            bool    false when the text could not be scanned (the client must not send the original)
+  [1] Text          string  literals replaced by placeholders, structure kept
+  [2] Error         string?
+  [3] Placeholders  map<string,string>  placeholder as it appears in Text -> the literal it replaced (appended in US4:
+                    the client restores the literals in the provider's answer; sent only to the requester)
+```
+
+Placeholders: `'__STR_n__'` (strings, any prefix), `__NUM_n__` (numbers), `$tag$__STR_n__$tag$` (dollar-quoted strings). A dollar-quoted
+body after `AS` or `DO` that reads as PostgreSQL text is redacted inside; one that does not is a single literal. A number after
+`LIMIT`, `OFFSET` or `FETCH FIRST|NEXT` stays. Text above 10 MB, or ending inside a string, quoted name, dollar-quoted string or block
+comment, gets `Ok = false` and an `Error` that does not quote the text.
+
+## Connection strings (web → engine)
+
+PostgreSQL `ConnectionInfo.ConnectionString` is an Npgsql string built with
+`DbConnectionStringBuilder`:
+`Host=<host>;Port=<port>;Database=<db>;Username=<user>;Password=<pwd>;SSL Mode=<Disable|Prefer|Require|VerifyCA|VerifyFull>;Root Certificate=<path>;Application Name=AKML SQL;Timeout=15;Command Timeout=0`.
+`Password` is omitted when the user did not type one and `RememberPassword` was on for that saved
+connection; the engine then injects the remembered one (or fails the open with
+`dialect.password-required`, which the web turns into the prompt).
+
+## Engine-side guard for bridge clients
+
+`PgTargetGuard.Check(connectionString)` on `ConnectionChanged`, `TestSqlConnection` and
+`ListDatabases` from the WebSocket bridge: rejects `Integrated Security=true`, `Kerberos Service
+Name`, `GSS Encryption Mode=Require`, a missing `Username`, and a `Root Certificate` path that
+is not absolute and canonical (`Path.GetFullPath(value) == value`); the named-pipe path (SSMS)
+is exempt as today. Error code `dialect.credentials-required`.

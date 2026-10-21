@@ -22,6 +22,11 @@
          c. -SelfSigned: New-SelfSignedCertificate (testing only, browser warning)
       5. https:443 SNI binding
       6. Smoke test against localhost with the host header
+      7. Commit + push the generated site files: docs-metadata.json, releases.json and
+         update-manifest.json under src\AkmlSql.Site\wwwroot -- only those three paths
+         (anything else staged or modified is left alone), and only when they changed.
+         Non-fatal: the site is already live, so a git failure is logged as a warning.
+         -SkipGitPush disables this.
 
 .PARAMETER HostName
     Public host name. Default akml.khamis.work.
@@ -43,6 +48,10 @@
 .PARAMETER SkipCert
     Deploy HTTP only; do not touch certificates or the https binding.
 
+.PARAMETER SkipGitPush
+    Leave the regenerated docs-metadata.json / releases.json / update-manifest.json
+    uncommitted (default: commit them and push the current branch after a successful deploy).
+
 .EXAMPLE
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\deploy-site-iis.ps1 -RepoRoot C:\Repos\AKML\AKML-SQL
 #>
@@ -61,7 +70,8 @@ param(
     [switch] $SkipRelease,
     [switch] $SkipCdn,
     [switch] $SelfSigned,
-    [switch] $SkipCert
+    [switch] $SkipCert,
+    [switch] $SkipGitPush
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +100,8 @@ try {
     catch {
         Log "WARNING: docs metadata not regenerated ($_) -- using committed copy"
     }
+
+    $stagedVersion = $null   # set when step 0 adds a release; names the commit in step 7
 
     # --- 0. Release staging -------------------------------------------------
     # A new installer build becomes a site release automatically: versioned copy
@@ -197,6 +209,7 @@ try {
                 Log "Update manifest written for $version (downloadUrl $($updateManifest.downloadUrl))"
 
                 Log "Staged release $version -> $fileName (sha256 $($sha.Substring(0,12))..., $sizeMb MB)"
+                $stagedVersion = $version
             }
         }
     }
@@ -450,6 +463,55 @@ try {
     if ($httpsBound) {
         $scode = & curl.exe -sk -o NUL -w '%{http_code}' --resolve "${HostName}:443:127.0.0.1" "https://$HostName/"
         Log "smoke https://$HostName (local resolve) -> $scode"
+    }
+
+    # --- 7. Commit + push the generated site files -------------------------
+    # The deploy rewrites three tracked files; they are what the published site serves, so they are
+    # committed with it. `git commit -- <paths>` commits ONLY these paths even when other changes are
+    # staged, and hooks run as usual. Non-fatal: the site is already deployed.
+    if ($SkipGitPush) {
+        Log 'SkipGitPush set -- generated site files left uncommitted'
+    }
+    else {
+        $siteFiles = @(
+            'src/AkmlSql.Site/wwwroot/docs-metadata.json',
+            'src/AkmlSql.Site/wwwroot/releases.json',
+            'src/AkmlSql.Site/wwwroot/update-manifest.json'
+        )
+        # Native git writes progress and hints to stderr; with EAP=Stop that would terminate the
+        # script before $LASTEXITCODE is read (same pattern as the gh calls above).
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $changed = @(& git -C $RepoRoot status --porcelain -- $siteFiles 2>$null | Where-Object { $_ })
+            if ($LASTEXITCODE -ne 0) {
+                Log 'WARNING: git status failed -- generated site files not committed'
+            }
+            elseif ($changed.Count -eq 0) {
+                Log 'Generated site files unchanged -- nothing to commit'
+            }
+            else {
+                $branch = (& git -C $RepoRoot rev-parse --abbrev-ref HEAD 2>$null | Select-Object -First 1)
+                $message = if ($stagedVersion) { "chore(site): release $stagedVersion -- releases, update manifest and docs metadata" }
+                           else { 'chore(site): refresh docs metadata and release manifests' }
+                Log "Committing $($changed.Count) generated site file(s) on $branch"
+                & git -C $RepoRoot commit -m $message -- $siteFiles 2>&1 | ForEach-Object { Log "git: $_" }
+                if ($LASTEXITCODE -ne 0) {
+                    Log 'WARNING: git commit failed -- generated site files left uncommitted'
+                }
+                elseif ($branch -eq 'HEAD' -or [string]::IsNullOrWhiteSpace($branch)) {
+                    Log 'WARNING: detached HEAD -- committed but not pushed'
+                }
+                else {
+                    & git -C $RepoRoot push origin $branch 2>&1 | ForEach-Object { Log "git: $_" }
+                    if ($LASTEXITCODE -ne 0) { Log "WARNING: git push failed -- the commit is local; push $branch by hand" }
+                    else { Log "Pushed $branch" }
+                }
+            }
+        }
+        finally {
+            $ErrorActionPreference = $prevEap
+        }
     }
 
     Log "=== Deploy complete: http://$HostName $(if ($httpsBound) { "+ https://$HostName" }) ==="

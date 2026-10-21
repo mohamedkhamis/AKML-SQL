@@ -85,7 +85,7 @@ public sealed class PrivacyModeTests
                 PhaseB = MessagePackSerializer.Serialize(BuildPayload()),
             });
         }
-        return new AiSchemaContextProvider(cache, store);
+        return new AiSchemaContextProvider(cache, store, new FakeActiveConnection { Server = "srv", Database = "Sales" });
     }
 
     [Fact]

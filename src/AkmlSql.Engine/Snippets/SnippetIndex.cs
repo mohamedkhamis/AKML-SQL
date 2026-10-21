@@ -2,6 +2,18 @@ using AkmlSql.Engine.Snippets.Models;
 
 namespace AkmlSql.Engine.Snippets;
 
+/// <summary>Spec 042 (FR-066): the dialects a snippet can belong to.</summary>
+public static class SnippetDialects
+{
+    public const string SqlServer = "sqlserver";
+    public const string PostgreSql = "postgresql";
+
+    public static string For(AkmlSql.Core.DatabaseKind kind) => kind == AkmlSql.Core.DatabaseKind.PostgreSql ? PostgreSql : SqlServer;
+
+    public static bool Is(Snippet snippet, string dialect) =>
+        string.Equals(string.IsNullOrEmpty(snippet.Metadata.Dialect) ? SqlServer : snippet.Metadata.Dialect, dialect, StringComparison.OrdinalIgnoreCase);
+}
+
 public class SnippetIndex
 {
     private readonly Dictionary<string, (Snippet Snippet, SnippetSourceType Source)> _byId = new(StringComparer.OrdinalIgnoreCase);
@@ -55,10 +67,11 @@ public class SnippetIndex
             list.Sort((a, b) => ((int)a.Source).CompareTo((int)b.Source));
     }
 
-    public Snippet? GetByShortcode(string shortcode)
+    public Snippet? GetByShortcode(string shortcode, string dialect = SnippetDialects.SqlServer)
     {
-        if (_byShortcode.TryGetValue(shortcode.ToLowerInvariant(), out var list) && list.Count > 0)
-            return list[0].Snippet; // Highest priority
+        if (_byShortcode.TryGetValue(shortcode.ToLowerInvariant(), out var list))
+            foreach (var (snippet, _) in list)
+                if (SnippetDialects.Is(snippet, dialect)) return snippet; // highest priority first
         return null;
     }
 
@@ -67,10 +80,11 @@ public class SnippetIndex
         return _byId.TryGetValue(id, out var entry) ? entry : null;
     }
 
-    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetByContext(string? clauseType, bool hasSelection)
+    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetByContext(string? clauseType, bool hasSelection, string dialect = SnippetDialects.SqlServer)
     {
         foreach (var (snippet, source) in _byId.Values)
         {
+            if (!SnippetDialects.Is(snippet, dialect)) continue;
             // Surround-with snippets only when selection exists
             if (snippet.Metadata.SurroundsWith && !hasSelection)
                 continue;
@@ -100,18 +114,19 @@ public class SnippetIndex
         }
     }
 
-    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> Search(string query)
+    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> Search(string query, string dialect = SnippetDialects.SqlServer)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
             foreach (var entry in _byId.Values)
-                yield return entry;
+                if (SnippetDialects.Is(entry.Snippet, dialect)) yield return entry;
             yield break;
         }
 
         var lowerQuery = query.ToLowerInvariant();
         foreach (var (snippet, source) in _byId.Values)
         {
+            if (!SnippetDialects.Is(snippet, dialect)) continue;
             if (snippet.Metadata.Shortcode.Contains(lowerQuery, StringComparison.OrdinalIgnoreCase) ||
                 snippet.Metadata.Name.Contains(lowerQuery, StringComparison.OrdinalIgnoreCase) ||
                 snippet.Metadata.Description.Contains(lowerQuery, StringComparison.OrdinalIgnoreCase) ||
@@ -123,8 +138,8 @@ public class SnippetIndex
         }
     }
 
-    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetAll()
+    public IEnumerable<(Snippet Snippet, SnippetSourceType Source)> GetAll(string dialect = SnippetDialects.SqlServer)
     {
-        return _byId.Values;
+        return _byId.Values.Where(e => SnippetDialects.Is(e.Snippet, dialect));
     }
 }

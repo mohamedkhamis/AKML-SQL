@@ -1,0 +1,115 @@
+﻿extension: AKML SQL deployed, built 2026-10-13 16:23Z (1.6 days ago).
+engine (informational, differs by design): 1.26.1013.1822; AkmlSql.PostgreSql.dll absent
+## ready
+connected: yes
+windows of ssms [after start-up]: 1
+  | check042.sql - (local).Northwind (<account> (61)) - check042.sql - (local).Northwind (<account> (61)) - Microsoft SQL Server Management Studio [Window]
+modal dialogs [after start-up]: none
+## menus
+top-level menus: File | Edit | View | Query | Git | Tools | Extensions | AKML SQL | Window | Help | Search
+AKML SQL: Format Document | Format Selection | Active Style | Formatting | Refactor | Navigate | SQL History | Tabs | Tools | Options… | Help
+AKML SQL > Active Style: AlignedLeftBracket | Collapsed | Compact | Default | Indented | Khamis Style | Leading Commas | Minimalist | Edit Styles…
+AKML SQL > Formatting: Unformat Document | Edit Formatting Styles… | Bulk Format… | Disable Formatting for Selection
+AKML SQL > Refactor: Smart Rename | Script as ALTER | Inline EXEC | Inline Stored Procedure | Convert INSERT to UPDATE | Find Invalid Objects
+AKML SQL > Navigate: Go To Definition | Peek Definition | Find All References | Object Search | Next Statement | Previous Statement | Matching Pair | Document Outline | Toggle Bookmark | Next Bookmark | Previous Bookmark
+AKML SQL > Tabs: Restore Closed Tab | Close All Unmodified | Duplicate Tab | Pin Tab
+AKML SQL > Tools: Command Palette | Execute Current Statement | Execute to Cursor | Snippet Manager | Surround Selection With Snippet… | Manage Code Analysis Rules… | Toggle Code Analysis | Export Results Grid
+AKML SQL > Help: Send Feedback | View Logs | Refresh Schema Cache | Check for Updates | About AKML SQL
+## error list (before anything is run or changed)
+error list [start]: 15 distinct cells
+  | Header Row
+  | Severity (1 of 6), not sorted
+  | Code (2 of 6), not sorted
+  | Description (3 of 6), not sorted
+  | Project (4 of 6), not sorted
+  | File (5 of 6), not sorted
+  | Line (6 of 6), not sorted
+  | Invalid column name 'companyname'.. : Error. Project: Miscellaneous Files. File: check042.sql. Line: 2
+  | Invalid column name 'companyname'.
+  | Miscellaneous Files
+  | check042.sql
+  | 2
+  | Invalid object name 'dbo.Ord'.. : Error. Project: Miscellaneous Files. File: check042.sql. Line: 4
+  | Invalid object name 'dbo.Ord'.
+  | 4
+## execute the second line, then SQL History
+execute: finished
+status text: Query Options... | Query completed with errors.
+sql history: 40 distinct texts
+  | SQL History
+  | Window Position (Alt+-)
+  | Auto Hide
+  | Close (Shift+Esc)
+  | Clear search
+  | Search syntax
+  | ?
+  | Search
+  | Advanced search
+  | Refresh
+  | Show starred queries only
+  | ★
+  | Show open queries only
+  | Show closed queries only
+  | Filter by server or database
+  | More actions
+  | ⋯
+  | Recent queries
+  | Queries
+  | Today (1)
+  | query-01
+  | Star query
+  | ☆
+  | DEV
+  | (local) · Northwind
+  | just now
+  | History for query-01
+  | Versions
+  | No earlier versions.
+  | 10/15/2026 09:24
+  | Open
+  | v1 of 1
+  | ● (local)
+  | ·
+  | Northwind
+  | Preview
+  | 1 2 3 4
+  | M5,0L5,9 0,4.5z
+  | M0,0L0,9 5,4.5z
+  | 1 entries found
+sql history lists the executed query: False
+## completion at the end of the script
+completion popup: 0 items (none readable)
+last line after the first suggestion is committed: SELECT * FROM dbo.Orders
+## format document
+format document result:
+  | -- check042
+  | SELECT o.orderid, c.companyname
+  | FROM   dbo.orders o
+  | INNER JOIN   dbo.customers c ON c.customerid = o.customerid
+  | WHERE  o.orderid < 10300
+  | ORDER BY o.orderid;
+  | 
+  | GO
+  | SELECT *
+  | FROM   dbo.Orders
+  | 
+## error list (after formatting)
+error list [formatted]: 12 distinct cells
+  | Header Row
+  | Severity (1 of 6), not sorted
+  | Code (2 of 6), not sorted
+  | Description (3 of 6), not sorted
+  | Project (4 of 6), not sorted
+  | File (5 of 6), not sorted
+  | Line (6 of 6), not sorted
+  | Invalid column name 'companyname'.. : Error. Project: Miscellaneous Files. File: check042.sql. Line: 2
+  | Invalid column name 'companyname'.
+  | Miscellaneous Files
+  | check042.sql
+  | 2
+## windows at the end
+windows of ssms [end]: 1
+  | check042.sql - (local).Northwind (<account> (61))* - check042.sql - (local).Northwind (<account> (61))* - Microsoft SQL Server Management Studio [Window]
+modal dialogs [end]: none
+## logs
+logs: 815 lines, 0 distinct warning/error messages

@@ -150,7 +150,9 @@ public static class ParityCorpusLoader
                 "Regenerate baselines: AKML_REGEN_PARITY_BASELINE=1 dotnet test --filter \"Category=ParityBaseline\"");
         }
 
-        return raw[(firstNewline + 1)..];
+        // The generator writes LF bodies, but a CRLF checkout (core.autocrlf, no .gitattributes)
+        // rewrites them — normalise the expected side exactly as the actual side is normalised.
+        return NormaliseLineEndings(raw[(firstNewline + 1)..]);
     }
 
     /// <summary>

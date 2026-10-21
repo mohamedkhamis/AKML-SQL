@@ -111,9 +111,10 @@ public sealed class DownloadInstructionsTests : IDisposable
     [Fact]
     public void TheInstallSteps_DoNotTellPeopleToCloseTheirEditorFirst()
     {
-        // CloseApplications=yes with a filter for Ssms.exe means the installer offers to close
-        // SSMS itself. Telling people to close them first would be busywork the
-        // product does not require -- and the sort of instruction nobody ever revisits.
+        // The installer closes SSMS itself (PrepareToInstall asks, then closes it; Restart Manager,
+        // CloseApplications=yes, catches anything still holding a file). Telling people to close it
+        // first would be busywork the product does not require -- and the sort of instruction nobody
+        // ever revisits.
         var installer = InstallerSource();
         Assert.Contains("CloseApplications=yes", installer, StringComparison.Ordinal);
 

@@ -1,0 +1,531 @@
+[
+  {
+    "id": "PGWHR-001",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE |",
+    "expect": {
+      "mustContain": [
+        "country",
+        "city",
+        "NOT",
+        "EXISTS",
+        "NULL"
+      ],
+      "mustNotContain": [
+        "WHERE",
+        "FROM"
+      ],
+      "minCount": 11
+    },
+    "note": "Predicate start: columns and operand keywords"
+  },
+  {
+    "id": "PGWHR-002",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country = 'UK' AND |",
+    "expect": {
+      "mustContain": [
+        "city",
+        "company_name"
+      ]
+    },
+    "note": "After AND"
+  },
+  {
+    "id": "PGWHR-003",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country = 'UK' |",
+    "expect": {
+      "mustContain": [
+        "AND",
+        "OR",
+        "ORDER BY",
+        "GROUP BY",
+        "LIMIT",
+        "IS NULL",
+        "IN",
+        "LIKE",
+        "ILIKE",
+        "BETWEEN"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After a predicate"
+  },
+  {
+    "id": "PGWHR-004",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country IS |",
+    "expect": {
+      "mustContain": [
+        "NULL",
+        "NOT NULL",
+        "TRUE",
+        "FALSE",
+        "DISTINCT FROM"
+      ],
+      "mustNotContain": [
+        "country",
+        "city"
+      ]
+    },
+    "note": "IS takes a fixed set of words"
+  },
+  {
+    "id": "PGWHR-005",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country IS NOT |",
+    "expect": {
+      "mustContain": [
+        "NULL",
+        "DISTINCT FROM"
+      ],
+      "mustNotContain": [
+        "country"
+      ]
+    },
+    "note": "IS NOT"
+  },
+  {
+    "id": "PGWHR-006",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country LIKE 'U%' |",
+    "expect": {
+      "mustContain": [
+        "AND",
+        "OR",
+        "ORDER BY"
+      ]
+    },
+    "note": "After LIKE pattern"
+  },
+  {
+    "id": "PGWHR-007",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE NOT |",
+    "expect": {
+      "mustContain": [
+        "country",
+        "EXISTS"
+      ]
+    },
+    "note": "Prefix NOT starts an expression"
+  },
+  {
+    "id": "PGWHR-008",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country NOT |",
+    "expect": {
+      "mustContain": [
+        "IN",
+        "LIKE",
+        "ILIKE",
+        "BETWEEN"
+      ],
+      "mustNotContain": [
+        "country",
+        "city"
+      ]
+    },
+    "note": "Infix NOT takes an operator word"
+  },
+  {
+    "id": "PGWHR-009",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country IN (|",
+    "expect": {
+      "mustContain": [
+        "country",
+        "city"
+      ]
+    },
+    "note": "Inside an IN list"
+  },
+  {
+    "id": "PGWHR-010",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers c WHERE EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.|)",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Correlated subquery sees the outer alias"
+  },
+  {
+    "id": "PGWHR-011",
+    "family": "where-group-order",
+    "doc": "SELECT count(*) FROM orders GROUP BY |",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id",
+        "ship_country",
+        "ROLLUP",
+        "CUBE"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "GROUP BY"
+  },
+  {
+    "id": "PGWHR-012",
+    "family": "where-group-order",
+    "doc": "SELECT count(*) FROM orders GROUP BY customer_id |",
+    "expect": {
+      "mustContain": [
+        "HAVING",
+        "ORDER BY",
+        "LIMIT"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ]
+    },
+    "note": "After a grouping column"
+  },
+  {
+    "id": "PGWHR-013",
+    "family": "where-group-order",
+    "doc": "SELECT count(*) FROM orders GROUP BY customer_id HAVING |",
+    "expect": {
+      "mustContain": [
+        "count",
+        "sum",
+        "freight"
+      ]
+    },
+    "note": "HAVING takes expressions"
+  },
+  {
+    "id": "PGWHR-014",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders ORDER BY |",
+    "expect": {
+      "mustContain": [
+        "order_date",
+        "freight",
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "ORDER BY columns"
+  },
+  {
+    "id": "PGWHR-015",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders ORDER BY freight |",
+    "expect": {
+      "mustContain": [
+        "ASC",
+        "DESC",
+        "NULLS FIRST",
+        "NULLS LAST",
+        "LIMIT"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "After an ORDER BY item"
+  },
+  {
+    "id": "PGWHR-016",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders ORDER BY freight DESC, |",
+    "expect": {
+      "mustContain": [
+        "order_date",
+        "customer_id"
+      ]
+    },
+    "note": "Second ORDER BY item"
+  },
+  {
+    "id": "PGWHR-017",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders ORDER BY freight DESC NULLS |",
+    "expect": {
+      "mustContain": [
+        "FIRST",
+        "LAST"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "NULLS takes FIRST or LAST"
+  },
+  {
+    "id": "PGWHR-018",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders LIMIT |",
+    "expect": {
+      "mustContain": [
+        "ALL"
+      ],
+      "mustNotContain": [
+        "freight",
+        "customer_id"
+      ]
+    },
+    "note": "LIMIT ALL"
+  },
+  {
+    "id": "PGWHR-019",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders LIMIT 10 |",
+    "expect": {
+      "mustContain": [
+        "OFFSET"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "LIMIT then OFFSET"
+  },
+  {
+    "id": "PGWHR-020",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders FETCH |",
+    "expect": {
+      "mustContain": [
+        "FIRST",
+        "NEXT"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "FETCH FIRST / NEXT"
+  },
+  {
+    "id": "PGWHR-021",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders GROUP |",
+    "expect": {
+      "mustContain": [
+        "BY"
+      ],
+      "mustNotContain": [
+        "freight",
+        "order_id"
+      ]
+    },
+    "note": "GROUP takes BY"
+  },
+  {
+    "id": "PGWHR-022",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders ORDER |",
+    "expect": {
+      "mustContain": [
+        "BY"
+      ],
+      "mustNotContain": [
+        "freight",
+        "order_id"
+      ]
+    },
+    "note": "ORDER takes BY"
+  },
+  {
+    "id": "PGWHR-023",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders o WHERE o.|",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight",
+        "ship_city"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Alias dot in WHERE"
+  },
+  {
+    "id": "PGWHR-024",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE freight > |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_date",
+        "now",
+        "coalesce"
+      ]
+    },
+    "note": "Right of a comparison: columns and functions"
+  },
+  {
+    "id": "PGWHR-025",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE order_date > now() - interval '1 day' AND |",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "freight"
+      ]
+    },
+    "note": "After a call and an interval constant"
+  },
+  {
+    "id": "PGWHR-026",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE customer_id = ANY(|)",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "customer_id"
+      ]
+    },
+    "note": "Inside ANY ( )"
+  },
+  {
+    "id": "PGWHR-027",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders UNION |",
+    "expect": {
+      "mustContain": [
+        "SELECT",
+        "ALL",
+        "VALUES"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "UNION takes a query or ALL"
+  },
+  {
+    "id": "PGWHR-028",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders UNION ALL |",
+    "expect": {
+      "mustContain": [
+        "SELECT",
+        "VALUES"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "UNION ALL takes a query"
+  },
+  {
+    "id": "PGWHR-029",
+    "family": "where-group-order",
+    "doc": "SELECT customer_id, count(*) FROM orders GROUP BY customer_id HAVING count(*) > 5 AND |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "customer_id"
+      ]
+    },
+    "note": "After AND in HAVING"
+  },
+  {
+    "id": "PGWHR-030",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE |",
+    "expect": {
+      "mustNotContain": [
+        "TOP",
+        "NOLOCK",
+        "ISNULL",
+        "GETDATE"
+      ]
+    },
+    "note": "No T-SQL in WHERE"
+  },
+  {
+    "id": "PGWHR-031",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers c WHERE |",
+    "expect": {
+      "mustContain": [
+        "c",
+        "country",
+        "city"
+      ]
+    },
+    "note": "The alias and the columns"
+  },
+  {
+    "id": "PGWHR-032",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers c, orders o WHERE |",
+    "expect": {
+      "mustContain": [
+        "c.country",
+        "o.freight"
+      ]
+    },
+    "note": "Two tables: qualified columns"
+  },
+  {
+    "id": "PGWHR-033",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE order_id IN (SELECT | FROM order_details)",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "quantity",
+        "discount"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "The subquery reads order_details (and may refer to the outer orders)"
+  },
+  {
+    "id": "PGWHR-034",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM customers WHERE country ILIKE |",
+    "expect": {
+      "mustContain": [
+        "city",
+        "company_name"
+      ]
+    },
+    "note": "Right of ILIKE"
+  },
+  {
+    "id": "PGWHR-035",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE freight BETWEEN 1 AND |",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "now"
+      ]
+    },
+    "note": "Right of BETWEEN ... AND"
+  },
+  {
+    "id": "PGWHR-036",
+    "family": "where-group-order",
+    "doc": "SELECT * FROM orders WHERE shipped_date IS NULL OR |",
+    "expect": {
+      "mustContain": [
+        "order_date",
+        "freight"
+      ]
+    },
+    "note": "After OR"
+  }
+]

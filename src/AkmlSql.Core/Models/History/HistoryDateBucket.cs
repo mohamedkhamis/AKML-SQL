@@ -8,14 +8,15 @@ namespace AkmlSql.Core.Models.History
     /// Classifies a timestamp into one of four contiguous buckets that cover every date:
     /// <see cref="Today"/> (the same calendar day), <see cref="ThisWeek"/> (the preceding six days),
     /// <see cref="TwoMonths"/> (7 to 59 days back), and <see cref="Older"/> (60+ days, or an
-    /// unparseable value). The labels mirror the Red Gate SQL Prompt history reference; there is no
-    /// separate "This Month" bucket by design.
+    /// unparseable value). The buckets mirror the Red Gate SQL Prompt history reference; there is no
+    /// separate "This Month" bucket by design. The 7-59 day bucket reads "Last Two Months": "Two Months
+    /// Ago" put a query from ten days ago under a heading that said otherwise.
     /// </summary>
     public static class HistoryDateBucket
     {
         public const string Today = "Today";
         public const string ThisWeek = "This Week";
-        public const string TwoMonths = "Two Months Ago";
+        public const string TwoMonths = "Last Two Months";
         public const string Older = "Older";
 
         /// <summary>

@@ -1,0 +1,24 @@
+AI                               92 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\AI.passed.txt
+Analysis                          5 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\Analysis.passed.txt
+Core                           1448 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\Core.passed.txt
+Engine                         2298 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\Engine.passed.txt
+Formatting                     1635 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\Formatting.passed.txt
+IntelliSense                     25 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\IntelliSense.passed.txt
+Shell                           987 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\Shell.passed.txt
+Web                            1424 passed -> C:\Users\MohamedKhamis\AppData\Local\AKML SQL\spec042-tests\lists\Web.passed.txt
+
+
+Suite        BeforePassed AfterPassed Regressed Missing NowSkipped NowPassing Unexpected
+-----        ------------ ----------- --------- ------- ---------- ---------- ----------
+AI                     56          92         0       0          0          0          0
+Analysis                5           5         0       0          0          0          0
+Core                 1349        1448         0       0          0          0          0
+Engine               2133        2298         0       0          0          0          0
+Formatting           1635        1635         0       0          0          0          0
+IntelliSense           25          25         0       0          0          0          0
+Shell                 986         987         0       0          0          0          0
+Web                  1129        1424         0       0          0          0          0
+
+
+
+No test that passed before has stopped passing.

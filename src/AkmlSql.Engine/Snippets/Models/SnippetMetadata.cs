@@ -39,4 +39,8 @@ public class SnippetMetadata
 
     [JsonPropertyName("surroundsWith")]
     public bool SurroundsWith { get; set; }
+
+    /// <summary>Spec 042 (FR-066): <c>sqlserver</c> (the default, so existing files keep their meaning) or <c>postgresql</c>. A snippet never shows in the other dialect.</summary>
+    [JsonPropertyName("dialect")]
+    public string Dialect { get; set; } = SnippetDialects.SqlServer;
 }

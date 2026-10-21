@@ -84,19 +84,25 @@ internal sealed class RefactoringService : IRefactoringService
     private const string CapabilityHeavy = "refactoring.heavy";
     private readonly IEngineBridge _bridge;
     private readonly IFormatterService _formatter;
+    private readonly IDialectGate? _gate;
 
     // Reused across preview/apply (and across an all-ops menu preview) so the ScriptDom
     // parser is built once for the service lifetime rather than per call. RefactoringService
     // is a DI singleton and the WASM editor path is single-threaded, so sharing is safe.
     private readonly TsqlParserService _parser = new();
 
-    public RefactoringService(IEngineBridge bridge, IFormatterService formatter)
+    public RefactoringService(IEngineBridge bridge, IFormatterService formatter, IDialectGate? gate = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
+        _gate = gate;
     }
 
+    // Spec 042 (FR-092): refactorings have no PostgreSQL implementation in this release; they are unavailable, not wrong.
+    private bool Unavailable => _gate?.IsPostgres == true;
+
     public bool HeavyAvailable =>
+        !Unavailable &&
         _bridge.State == BridgeState.Open &&
         Array.IndexOf(_bridge.EngineCapabilities, CapabilityHeavy) >= 0;
 
@@ -122,16 +128,17 @@ internal sealed class RefactoringService : IRefactoringService
         catch (InvalidOperationException) { return null; }
     }
 
-    public Task<string> FormatSelectionAsync(string sql, AkmlSql.Formatting.Profiles.FormattingProfile? profile = null)
+    public async Task<string> FormatSelectionAsync(string sql, AkmlSql.Formatting.Profiles.FormattingProfile? profile = null)
     {
-        var result = _formatter.Format(sql ?? string.Empty, profile);
-        return Task.FromResult(result.FormattedText ?? sql ?? string.Empty);
+        var result = await _formatter.FormatAsync(sql ?? string.Empty, profile).ConfigureAwait(false);
+        return result.FormattedText ?? sql ?? string.Empty;
     }
 
     public Task<LightweightPreview> PreviewLightweightAsync(
         LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0)
     {
         var text = sql ?? string.Empty;
+        if (Unavailable) return Task.FromResult(new LightweightPreview(text, text, [DialectMessages.NotAvailable], false));
         var (modified, warnings) = RunLightweight(kind, text, selectionStart, selectionLength);
         var changed = !string.Equals(modified, text, StringComparison.Ordinal);
         return Task.FromResult(new LightweightPreview(text, modified, warnings, changed));
@@ -140,6 +147,7 @@ internal sealed class RefactoringService : IRefactoringService
     public Task<string> ApplyLightweightAsync(
         LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0)
     {
+        if (Unavailable) return Task.FromResult(sql ?? string.Empty);
         var (modified, _) = RunLightweight(kind, sql ?? string.Empty, selectionStart, selectionLength);
         return Task.FromResult(modified);
     }

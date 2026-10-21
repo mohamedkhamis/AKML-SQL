@@ -6,6 +6,7 @@
 *@
 @using System.Collections.Generic
 @using System.Threading
+@using AkmlSql.Engine.Ai
 @using AkmlSql.Web.Services
 @using Microsoft.JSInterop
 @implements IDisposable
@@ -16,6 +17,7 @@
 @inject IDiagnosticsRingBuffer Diagnostics
 @inject IJSRuntime JS
 @inject INotificationService Notifications
+@inject IServiceProvider Services
 
 <div class="akml-chat">
     <div class="akml-chat-header">
@@ -59,6 +61,10 @@
                             }
                         </div>
                         <pre class="akml-chat-turn-text">@turn.Content</pre>
+                        @if (turn.IncompleteReason != null)
+                        {
+                            <p class="akml-chat-incomplete" role="note" data-testid="ai-chat-incomplete">This answer is incomplete: @turn.IncompleteReason</p>
+                        }
                     </div>
                 }
             }
@@ -68,7 +74,11 @@
             }
             @if (!string.IsNullOrEmpty(_lastError))
             {
-                <p class="akml-chat-error">@_lastError</p>
+                <p class="akml-chat-error" role="alert" data-testid="ai-chat-error">@_lastError</p>
+                @if (_retryMessage != null && !_busy)
+                {
+                    <button type="button" class="akml-btn" data-testid="ai-chat-retry" @onclick="RetryAsync">Retry</button>
+                }
             }
         </div>
 
@@ -161,6 +171,7 @@
     }
     .akml-chat-thinking { color: var(--akml-text-secondary); font-style: italic; }
     .akml-chat-error { color: var(--akml-status-danger); }
+    .akml-chat-incomplete { margin: var(--akml-scalar-spacing-xs) 0 0; color: var(--akml-status-warning); font-style: italic; }
     .akml-chat-composer {
         display: flex;
         gap: var(--akml-scalar-spacing-s);
@@ -198,15 +209,20 @@
 </style>
 
 @code {
-    private const string SystemPrompt =
-        "You are a SQL Server expert assisting an experienced developer through " +
-        "AKML SQL. Be concise. When you give SQL, use canonical T-SQL formatting. " +
-        "When you're unsure of the schema, ask before guessing.";
+    /// <summary>Spec 042 (FR-080): written for the dialect of the connection at the moment of sending. SQL Server keeps the text
+    /// it always had. Optional lookup, so a host without the dialect context behaves as before PostgreSQL support.</summary>
+    private string SystemPrompt =>
+        Services.GetService(typeof(IAiDialectContext)) is IAiDialectContext dialect
+            ? AiChatSystemText.For(dialect.Dialect, dialect.ServerVersion)
+            : AiChatSystemText.SqlServer;
 
     private bool _hasProvider;
     private bool _busy;
     private string _pending = string.Empty;
     private string? _lastError;
+
+    // Review WEB-18: the message of a turn whose answer failed or broke off; Retry sends it again in place of that turn.
+    private string? _retryMessage;
     private ChatConversation _conversation = NewConversation();
     private CancellationTokenSource? _cts;
     private IJSObjectReference? _downloadModule;
@@ -271,6 +287,7 @@
 
         var userMessage = _pending.Trim();
         _lastError = null;
+        _retryMessage = null;
 
         // FR-004 / FR-012: chat honours the fully-local guard too -- refuse a cloud provider
         // under Fully local before anything is sent.
@@ -321,7 +338,8 @@
         }
         catch (OperationCanceledException)
         {
-            // Superseded by a newer message -- keep whatever partial text rendered.
+            // Superseded by a newer message -- keep whatever partial text rendered, marked as stopped.
+            assistant.IncompleteReason = StoppedReason;
         }
         catch (ProviderNotBrowserDirectException ex)
         {
@@ -333,10 +351,20 @@
             _lastError = ex.Message;
             Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", ex.Message);
         }
+        catch (AiStreamException ex)
+        {
+            // Review WEB-18: the provider accepted the request, then the answer broke off. What arrived stays, marked incomplete.
+            _lastError = ex.Message + (sb.Length > 0 ? " The answer above is incomplete." : string.Empty);
+            _retryMessage = userMessage;
+            assistant.IncompleteReason = ex.Message;   // re-review REV-07: stays with the turn, not only on screen
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Stream failed: {ex.Failure} {ex.Code}");
+        }
         catch (Exception ex)
         {
             _lastError = "Chat call failed: " + ex.Message;
-            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", _lastError);
+            _retryMessage = userMessage;
+            assistant.IncompleteReason = FailedReason;
+            Diagnostics.Log(DiagnosticLevel.Error, "ai-chat", $"Chat call failed: {ex.GetType().Name}");
         }
         finally
         {
@@ -358,9 +386,27 @@
         }
     }
 
+    internal const string StoppedReason = "it was stopped before it finished.";
+    internal const string FailedReason = "the call failed before the answer finished.";
+
+    /// <summary>Review WEB-18: send the failed turn's message again, in place of the failed (or partial) turn.</summary>
+    private async Task RetryAsync()
+    {
+        if (_busy || _retryMessage == null) return;
+        var message = _retryMessage;
+        _retryMessage = null;
+        // The failed pair is the last two turns (the user message and its partial answer), when the answer kept any text.
+        int n = _conversation.Turns.Count;
+        if (n >= 2 && _conversation.Turns[n - 1].Role == "assistant" && _conversation.Turns[n - 2].Content == message)
+            _conversation.Turns.RemoveRange(n - 2, 2);
+        _pending = message;
+        await SendAsync();
+    }
+
     /// <summary>Every existing NON-EMPTY turn (oldest-first) to send as conversation context.
     /// Skipping empty turns is defence-in-depth: a stray empty assistant turn must never reach
-    /// the provider wire (Anthropic 400s on empty content).</summary>
+    /// the provider wire (Anthropic 400s on empty content). Re-review REV-07: an incomplete answer is sent
+    /// with a note that it was cut off, so the model never builds on it as if it were finished.</summary>
     private AiChatMessage[] BuildHistorySnapshot()
     {
         var list = new List<AiChatMessage>(_conversation.Turns.Count);
@@ -368,7 +414,8 @@
         {
             if (!string.IsNullOrEmpty(t.Content))
             {
-                list.Add(new AiChatMessage { Role = t.Role, Content = t.Content });
+                var content = t.IncompleteReason == null ? t.Content : t.Content + "\n\n[This answer was cut off before it finished.]";
+                list.Add(new AiChatMessage { Role = t.Role, Content = content });
             }
         }
         return list.ToArray();

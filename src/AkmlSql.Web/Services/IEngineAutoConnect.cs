@@ -24,6 +24,13 @@ public interface IEngineAutoConnect
     /// status bar calls, and what a tab regaining focus triggers.
     /// </summary>
     Task RetryNowAsync();
+
+    /// <summary>
+    /// The status bar's "Use this computer's engine": pair with the engine on this computer at the default port, the one
+    /// click Settings › Connections › Add › Pair took. Only a localhost-mode engine (no PIN) is paired; false when none
+    /// answers or it asks for a PIN, and the caller then opens Settings.
+    /// </summary>
+    Task<bool> PairLocalEngineAsync() => Task.FromResult(false);
 }
 
 /// <summary>
@@ -293,6 +300,40 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
                 EngineConnectFailureKind.Unreachable,
                 "The engine is not responding — it may be starting up or stopped.",
                 null);
+        }
+    }
+
+    public async Task<bool> PairLocalEngineAsync()
+    {
+        var connection = new EngineConnection
+        {
+            Id = Guid.NewGuid().ToString(),
+            Name = "This computer",
+            Host = "localhost",
+            Port = EngineEndpoint.DefaultPort,
+            IsLocalhost = true,
+        };
+        try
+        {
+            var response = await _bridge.ConnectAsync(connection, bearerToken: null, pairingPin: null, CancellationToken.None).ConfigureAwait(false);
+            if (response.Status != HandshakeStatus.Ok)
+            {
+                _diagnostics.Log(DiagnosticLevel.Info, "connections", $"The local engine answered {response.Status}; pairing is left to Settings.");
+                return false;
+            }
+            connection.LastConnectedAt = DateTimeOffset.UtcNow;
+            connection.LastKnownEngineVersion = response.EngineVersion;
+            connection.LastKnownCapabilities = response.EngineCapabilities;
+            await _connections.AddAsync(connection).ConfigureAwait(false);
+            await _connections.SetActiveIdAsync(connection.Id).ConfigureAwait(false);
+            _diagnostics.Log(DiagnosticLevel.Info, "connections", "Paired with the engine on this computer.");
+            SetFailure(null);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Info, "connections", $"No local engine answered: {ex.Message}");
+            return false;
         }
     }
 

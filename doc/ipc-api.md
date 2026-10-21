@@ -131,6 +131,8 @@ class RpcMessage {
 | Engine→Shell | `ChangeDatabaseResult` | 218 |
 | Shell→Engine | `ExecuteParse` | 219 |
 | Engine→Shell | `ExecuteParseResult` | 220 |
+| Shell→Engine | `SessionDisconnect` | 225 |
+| Engine→Shell | `SessionDisconnectResult` | 226 |
 
 Note: codes 200–203 are part of the spec 021 web-edition bridge. They carry over named-pipe transports unchanged, but their primary purpose is the browser ↔ engine WebSocket bridge introduced in M3.
 
@@ -294,7 +296,11 @@ Formats an entire SQL document.
 ```
 Text         string    SQL text to format
 ProfileName  string?   Name of the .akmlstyle profile (null = default)
+ProfileJson  string?   Key 6 (spec 042): the style as JSON, used instead of ProfileName (the web edition's styles live in the browser)
 ```
+
+Served for a PostgreSQL session by the PostgreSQL formatter (spec 042): the same reply, with a script that does not parse, a layout that
+would not mean the same, or one that is not stable returned unchanged (`Success = false`) with the reason in `Diagnostics`.
 
 **Response** (`FormatResponse`):
 ```
@@ -322,6 +328,7 @@ Text            string    Full document text
 SelectionStart  int       Zero-based start character offset
 SelectionEnd    int       Zero-based end character offset
 ProfileName     string?
+ProfileJson     string?   Key 6 (spec 042): the style as JSON
 ```
 
 **Response** (`FormatSelectionResponse`):
@@ -346,6 +353,7 @@ Formats a sample SQL string against an unsaved profile (used in the Options dial
 ```
 SampleText   string   SQL to format
 ProfileJson  string   Full JSON of the profile to preview (not yet saved)
+Dialect      int      Key 3 (spec 042): DatabaseKind of the sample, 0 SQL Server (default) or 1 PostgreSQL
 ```
 
 **Response** (`FormatPreviewResponse`):
@@ -701,7 +709,11 @@ Context         string?   Clause context, e.g. "SELECT", "FROM" → filters by s
 HasSelection    bool      True when editor has selected text (shows surround-with snippets only)
 SourceFilter    int       0=All, 1=Personal, 2=Team, 3=BuiltIn
 CategoryFilter  string?   Filter by snippet category
+Kind            int       Spec 042 (key 5): DatabaseKind of the snippets wanted, 0=SQL Server (default), 1=PostgreSQL
 ```
+
+A snippet file carries `metadata.dialect` (`sqlserver`, the default when absent, or `postgresql`). The list is cut to the requested
+kind, and `SnippetExpand` uses the dialect of the session's kind, so a shortcode such as `sel` is never the other dialect's text.
 
 **Response** (`SnippetListResponse`):
 ```
@@ -779,6 +791,27 @@ Issues  CodeIssueInfo[]
         StartOffset int
         EndOffset   int
 ```
+
+**PostgreSQL (spec 042).** A request for a PostgreSQL session (`SessionId` names it) is answered by the PostgreSQL rule set in the same shape:
+rule ids start with `PG` (`PGPE001`), the session's schema cache lets the schema-aware rules run, and a script that does not parse produces one
+issue with rule id `PGSYN001` at the first error and no other issue. With `postgreSql.enabled` off, the answer is no issues. The T-SQL rules never
+see PostgreSQL text. See [analysis-rules.md](analysis-rules.md#postgresql-rules-pg).
+
+---
+
+### `ListAnalysisRules` (33) → `ListAnalysisRulesResult` (133)
+
+The catalog the Manage Rules window renders: one `AnalysisRuleInfoDto` per rule (`RuleId`, `Name`, `Category`, `DefaultSeverity`, `EffectiveSeverity`,
+`Enabled`, `RequiresSchema`, `AutoFixable`, `Description`) with the enabled state and severity resolved from `config.json` and the nearest `.casettings`.
+
+**Request** (`ListAnalysisRulesRequest`):
+```
+FileDirectory      string   Absolute directory of the active document; resolves .casettings (empty = global defaults)
+IncludePostgreSql  bool     Key 1 (spec 042): also list the PostgreSQL rule set. False (the default) keeps the answer exactly the SQL Server rules.
+```
+
+**Response** adds, per rule: `Kind` (key 9: 0 SQL Server, 1 PostgreSQL) and `ReferenceUrl` (key 10: the PostgreSQL manual page; empty for SQL Server rules).
+PostgreSQL rows are present only when the request asks and `postgreSql.enabled` is on.
 
 ---
 
@@ -989,6 +1022,7 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `ai.text-to-sql.v1` (reserved) | `Capabilities.AiTextToSqlV1` | AI Text-to-SQL via the bridge. AI invocation in the web edition normally goes direct-to-provider (FR-030); this capability covers any engine-hosted helpers a future M6 design adds. |
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
 | `session.database.v1` | `Capabilities.SessionDatabaseV1` | Spec 041 — the database selector: `ListDatabasesRequest.SessionId` (key 1), `ChangeDatabase` (217 → 218) and `ExecuteQueryResult.CurrentDatabase` (key 12). |
+| `session.disconnect.v1` | `Capabilities.SessionDisconnectV1` | `SessionDisconnect` (225 → 226): the web edition's Disconnect rolls back the session's open transaction and closes its connection before it reports success. |
 | `execute.v2` | `Capabilities.ExecuteV2` | Spec 041 — scripts split on GO and keep running after a failing batch; the execute reply carries structured messages, batches, the completion time and the omitted-message count (keys 8–11), sets carry their batch (key 11), and `ExecuteParse` (219 → 220) is understood. |
 
 ### SchemaIdentify (202 / 203) — `contracts/schema-cache-shape.md`
@@ -1050,6 +1084,13 @@ ExecuteQueryResult (type 213; also the payload of 220)
     10 CompletedAtUnixMs      long      execute.v2 — end of the script, UTC Unix ms; 0 from older engines.
     11 MessagesOmitted        int       execute.v2 — messages dropped beyond 10,000 (one System line says so).
     12 CurrentDatabase        string?   session.database.v1 — the connection's database after the script.
+    13 TransactionState       int       dialect.postgresql.v1 — after the script: 0 None, 1 Open, 2 Aborted; always 0 for SQL Server.
+    14 SchemaChanged          bool      dialect.postgresql.v1 — the engine started reloading its catalog after this run (a
+                                        statement changed it, and the change is visible: outside a transaction, or the
+                                        transaction has ended). A client that shows the schema refetches it when true.
+    15 ConnectionStamp        string?   The session's connection after the run (server, login, database, kind, engine
+                                        process) as an opaque HMAC under a per-process key; sent back with edits
+                                        (ApplyChangesRequest key 6). Null from older engines.
 
 ExecuteResultSet
     0  ColumnNames            string[]
@@ -1070,6 +1111,9 @@ ExecuteResultSet
                                         from when the name was two-part (a script's USE can move between sets),
                                         so Apply writes where the rows came from.
     11 BatchIndex             int       execute.v2 — the batch that produced the set.
+    12 ReadOnlyReason         string?   Spec 042 (PostgreSQL) — why IsEditable is false when provenance was asked for: not a
+                                        table, more than one table, a view, no primary key, a column twice, part of
+                                        the key missing. Null for SQL Server and for an editable set.
 
 ExecuteMessageDto (execute.v2)
     0 Kind (0 Info · 1 RowCount · 2 Error · 3 System) · 1 Text · 2 BatchIndex · 3 Number (0 for PRINT) ·
@@ -1119,8 +1163,46 @@ the session's connection; it does not interrupt a statement that is already runn
 Writes a result set's pending edits (parameterized UPDATE / INSERT / DELETE, each keyed by the fetched key
 values) in one transaction on the same persistent connection. Any failed edit rolls the whole batch back; the
 failed edit carries the error and every other edit the note "Rolled back — edit N failed.". `Status`,
-`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity }`) and
+`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity, Row }`) and
 `ConnectionWasReset`.
+
+Spec 042 adds, append-only, for a PostgreSQL session: `ApplyChangesRequest.ReturnColumns` (key 5, the set's
+base columns in result order) and `CrudCellDto.TypeName` (key 6, the column's type as the server prints it, which the write casts
+to), and `CrudEditResult.Row` (key 5, the written row as the server stored it, in `ReturnColumns` order, from `RETURNING`; null for
+a delete).
+
+`ApplyChangesRequest.ConnectionStamp` (key 6) is the `ExecuteQueryResult.ConnectionStamp` of the run the rows came from. When it is
+set and is not the stamp of the session's current connection — another server, login, database or kind, or another engine process —
+the engine refuses the whole batch (`Status` Error, nothing written), so rows read on one connection are never written through the
+next one with the same table and key names. An empty stamp (an older web bundle) is not checked.
+
+`ColumnProvenanceDto.HasDefault` (key 12) says the column has a default. The grid leaves an unset cell of a new row out of the INSERT
+(an explicit NULL is still sent), so the default applies; a new row with no cell set is written as `INSERT ... DEFAULT VALUES`.
+`ExecuteResultSet.DefaultsKnown` (key 13) says the engine read the table's columns, so `HasDefault` is reliable. When it is false (an
+older engine, a SQL Server schema whose columns have not loaded, a table created in the same script) the grid does not assume "no
+default": an unset NOT NULL cell is left to the server, which fills it in or refuses the row.
+
+On SQL Server an INSERT returns the stored row too when `ReturnColumns` is set (review round 3, REV-06 / REV-09). Once per Apply
+the engine reads the target table's enabled triggers and a read-back key — the primary key, else the narrowest unfiltered unique
+index, else the identity column — from the catalog views of the **table's own database** (`[catalog].sys.triggers`, `sys.indexes`,
+`sys.columns`), never the session's: a three-part name in another database has its own metadata. Each insert then writes its key
+`OUTPUT INSERTED.<key> INTO @akml_k` (allowed with triggers), takes `SCOPE_IDENTITY()` into an output parameter and selects
+`ReturnColumns` from the table by that key, after the triggers ran; the table variable declares each key column with its own type
+and collation (`InsertReadBack`). `CrudEditResult.Row` is the one row that select found — identity, defaults, server-generated keys,
+computed values and what a trigger changed — and `NewIdentity` is still set. A table without a usable key and without enabled
+triggers returns the row from a plain `OUTPUT INSERTED.<columns>`. `Row` is null when the stored row cannot be named: no key and a
+trigger, any enabled INSTEAD OF INSERT trigger, or a trigger that changed the key. An INSTEAD OF INSERT trigger may discard or
+reroute the write while its attempted key matches an existing row, so key-based read-back is deliberately disabled for it.
+The grid then shows the typed cells and the
+identity, marks the rest "not read back", and refuses edits and deletes of that row until the query runs again (it never re-runs a
+batch for it). Unconfirmed-row markers belong to the result object's lifetime and survive grid recreation; a new query result
+clears them. The UI recommends checking with a SELECT query, rather than repeating the original batch's side effects.
+Copy and export do not emit unconfirmed rows as if their missing values were SQL NULL; confirmed rows remain copyable.
+Everything stays in the Apply's one transaction with parameterized values.
+
+On PostgreSQL the batch runs in one transaction (`BEGIN` ... `COMMIT`), or under a savepoint inside the user's open
+transaction, which is joined and left open; an aborted transaction is refused with a message to roll back. Every edit must touch
+exactly one row.
 
 ### `ListDatabases` (94) → `ListDatabasesResult` (194) — `SessionId`
 
@@ -1148,3 +1230,61 @@ command, each batch once (results ignored, no row counts), then `SET PARSEONLY O
 connection is closed so the next execute reopens it and reports `ConnectionWasReset`. `Status` Ok means the
 server found no syntax error ("Commands completed successfully."); errors carry batch-relative lines like an
 execute's. Sent only when the engine advertises `execute.v2`: an engine that does not know 219 gives no reply.
+
+### `SessionDisconnect` (225) → `SessionDisconnectResult` (226) — session.disconnect.v1
+
+`SessionDisconnectRequest { 0 SessionId }` → `SessionDisconnectResponse { 0 Ok, 1 ErrorMessage, 2 RolledBack }`. The session forgets
+its connection first (requests answer "no connection" until the next `ConnectionChanged`; the document is kept), then the persistent
+connection is closed: queued executes are cancelled, a running command may finish within 15 s, an open transaction is rolled back —
+never committed — and the physical connection is disposed. `RolledBack` says a transaction was open. `Ok = false` means a command was
+still running after the wait; the connection closes, and its transaction rolls back, when that command ends. Every close of a
+session connection (credential change, idle eviction, disconnect) rolls back an open transaction explicitly: a pooled SqlConnection
+closed inside a script-begun transaction would otherwise keep it, and its locks, until the pool reuses the connection.
+
+## PostgreSQL Messages (221–224) — spec 042, `dialect.postgresql.v1`
+
+Registered only when `postgreSql.enabled` is true in `config.json` (the default). A PostgreSQL session is an ordinary session whose
+`ConnectionInfo.Kind` is 1; the handlers that take a `SessionId` branch on it (see `specs/042-postgresql-support/contracts/ipc.md`).
+
+### `CredentialRequest` (221) → `CredentialResponse` (222)
+
+`CredentialRequest { 0 Action, 1 Kind, 2 Server, 3 Port, 4 Login }` → `CredentialResponse { 0 Ok, 1 Has, 2 Error }`. `Action` 0 asks whether the
+engine holds a remembered password for this server and login, 1 forgets it. The reply says yes or no and never carries a password.
+Only PostgreSQL is served: any other `Kind`, or a missing login, finds nothing and touches nothing. The password lives in the engine's
+protected credential store under `pg://{server}:{port}` and the login, and is filled into a connection that arrives without one.
+
+### `RedactRequest` (223) → `RedactResponse` (224)
+
+`RedactRequest { 0 Dialect, 1 Text }` → `RedactResponse { 0 Ok, 1 Text, 2 Error, 3 Placeholders }`. The web edition sends PostgreSQL text here before it
+goes to a cloud AI provider. `Dialect` must be `postgresql` (or an alias such as `pg`); anything else is refused, never passed through. The
+engine replaces each string, numeric and dollar-quoted literal with a placeholder and keeps identifiers, keywords, operators, comments and
+layout. Placeholders are `'__STR_n__'` for strings, `__NUM_n__` for numbers, and the dollar tag around `__STR_n__` for a dollar-quoted
+string; a dollar-quoted body after `AS` or `DO` that reads as PostgreSQL text is redacted inside instead. A number after `LIMIT`, `OFFSET` or
+`FETCH FIRST|NEXT` is a row count and stays.
+
+`Placeholders` (key 3, appended after the first release) maps each placeholder, as it appears in `Text`, to the literal it replaced, so the
+client can restore the literals in the provider's answer; it goes back only to the client that sent the text. When the text ends inside a
+string, quoted name, dollar-quoted string or block comment, or exceeds 10 MB, `Ok` is false, `Text` is empty and `Error` says why without
+quoting the text: the client must not send the original without the user's say-so.
+
+### Capability, dispatch by kind and the `dialect.*` errors
+
+- **Capability.** `HandshakeResponse.EngineCapabilities` carries `dialect.postgresql.v1` when `postgreSql.enabled` is true. A client checks it before offering
+  PostgreSQL (the web connection dialog, formatting, analysis) and shows "requires an engine that supports PostgreSQL" otherwise. Messages 221 to 224 are
+  registered only then.
+- **Dispatch by kind.** `ConnectionInfo.Kind` (key 5, 0 SQL Server, 1 PostgreSQL) is stored on the session. A request that names a `SessionId` is routed by
+  `SessionManager.KindOf`: completion, quick info, signature help, wildcard expansion, statement boundaries, definitions, execute, parse, apply, change database,
+  list databases, snippets, format (document, selection, action, preview), analysis and History go to the PostgreSQL implementation for a PostgreSQL session and to
+  the T-SQL one otherwise. The T-SQL parser is never given PostgreSQL text.
+- **Surfaces with no PostgreSQL implementation** (refactorings, Find invalid objects, find references, find unused variables, CRUD generation, encrypted-object
+  decryption, script-as, document outline) are answered for a PostgreSQL session by the router with the standard `Error` envelope: `ErrorInfo.Code` 4201 and
+  `Message` `dialect.unsupported: Not available for PostgreSQL`.
+- **Error ids** that travel in `ErrorCode` fields of connection replies: `dialect.unsupported` (4201), `dialect.password-required` (4202: the engine holds no
+  password for this server and login, so the client should ask), `dialect.credentials-required` (4203: the connection is refused because it has no user name,
+  asks for integrated authentication, or names a certificate by a relative path).
+- **The feature switched off** (`postgreSql.enabled = false`, FR-093): the engine makes no PostgreSQL session at all. `ConnectionChanged` with `Kind` 1 is ignored
+  (logged), and `TestSqlConnection` / `ListDatabases` for a PostgreSQL target answer `Ok = false` with the message
+  `PostgreSQL support is switched off in this engine (postgreSql.enabled).` and no `ErrorCode`. The switch is read when the engine starts.
+- **Appended keys** (all append-only; an older peer ignores them): see `specs/042-postgresql-support/contracts/ipc.md` for the full list. In this file they appear
+  where the message is described: `Dialect` on `FormatPreviewRequest` (3), `ProfileJson` on the three format requests (6), `Kind` on `SnippetListRequest` (5),
+  `IncludePostgreSql` on `ListAnalysisRulesRequest` (1), `Kind` (9) and `ReferenceUrl` (10) on `AnalysisRuleInfoDto`.

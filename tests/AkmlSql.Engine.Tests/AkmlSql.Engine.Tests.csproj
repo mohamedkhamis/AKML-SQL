@@ -42,6 +42,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Spec 042: SQL fixtures for the live PostgreSQL tests (copied beside the test assembly). -->
+    <Content Include="PostgreSql\Fixtures\*.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Refactoring\Corpus\corpus01_simple_select.sql" />
     <EmbeddedResource Include="Refactoring\Corpus\corpus02_insert_update_delete.sql" />
     <EmbeddedResource Include="Refactoring\Corpus\corpus03_joins_and_aggregates.sql" />

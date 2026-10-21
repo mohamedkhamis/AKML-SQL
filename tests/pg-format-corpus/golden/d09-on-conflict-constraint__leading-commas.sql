@@ -1,0 +1,4 @@
+INSERT INTO t(a)
+VALUES(1)
+ON CONFLICT ON CONSTRAINT t_pkey
+DO UPDATE SET a = excluded.a;

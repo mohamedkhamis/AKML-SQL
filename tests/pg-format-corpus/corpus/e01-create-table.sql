@@ -1,0 +1,1 @@
+create table products (id serial primary key, name text not null, price numeric(10,2) default 0 check (price >= 0), category_id integer references categories (id) on delete set null, created timestamp with time zone default now());

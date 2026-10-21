@@ -26,5 +26,9 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(5)]
         public FormatSqlActionsDto? Actions { get; set; }
+
+        /// <summary>Spec 042 — the style as JSON; see <see cref="FormatRequest.ProfileJson"/>.</summary>
+        [Key(6)]
+        public string? ProfileJson { get; set; }
     }
 }

@@ -37,6 +37,17 @@
     font-size: var(--akml-type-chrome-size);
     flex: 0 0 auto;
 }
+/* Why a result cannot be edited (spec 042, FR-130): a quiet note in the place the legend takes when it can. */
+.akml-results-readonly {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px var(--akml-scalar-spacing-s);
+    border-bottom: 1px solid var(--akml-border-subtle);
+    color: var(--akml-text-secondary);
+    font-size: var(--akml-type-chrome-size);
+    flex: 0 0 auto;
+}
 .akml-legend-chip { color: var(--akml-text-secondary); }
 .akml-legend-chip.akml-row-edited { color: var(--akml-statustext-warning); box-shadow: none; }
 .akml-legend-chip.akml-row-new { color: var(--akml-statustext-success); box-shadow: none; }
@@ -193,6 +204,8 @@
 }
 
 .akml-cell-null { color: var(--akml-text-secondary); font-style: italic; }
+/* Review round 3: a committed insert's cell the server did not return — not a value, so not shown as one. */
+.akml-cell-unknown { color: var(--akml-text-secondary); font-style: italic; }
 .akml-cell-editable { cursor: cell; }
 .akml-cell-editable:hover { background-color: var(--akml-surface-selection); }
 
@@ -316,6 +329,9 @@
 .akml-messages-line--error { color: var(--akml-statustext-danger); }
 .akml-messages-line--system,
 .akml-messages-line--completion { color: var(--akml-text-secondary); }
+/* Spec 042: a PostgreSQL notice is information; a warning is the same line, heavier. The level is in the text. */
+.akml-messages-line--notice { color: var(--akml-text-secondary); }
+.akml-messages-line--warning { color: var(--akml-text-primary); font-weight: 600; }
 .akml-messages-line--completion { margin-top: var(--akml-scalar-spacing-s); }
 .akml-messages-error {
     display: inline;

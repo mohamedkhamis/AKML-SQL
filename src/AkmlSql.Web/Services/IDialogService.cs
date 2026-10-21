@@ -55,6 +55,10 @@ public sealed class DialogRequest
     /// <summary>The confirm action removes something. Its button takes the danger style and is never
     /// the Enter target — the user must click it (the WPF FR-005 safety convention).</summary>
     public bool Destructive { get; set; }
+
+    /// <summary>Spec 042: an id for the dialog (<c>db-switch-confirm</c>), rendered as <c>data-dialog-id</c> so a test can tell
+    /// one confirmation from another. Null for the dialogs that have none.</summary>
+    public string? DialogId { get; set; }
 }
 
 /// <summary>What a prompt dialog asks for.</summary>

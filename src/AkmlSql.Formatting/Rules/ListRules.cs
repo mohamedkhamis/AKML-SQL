@@ -203,15 +203,24 @@ public class ListRules : IRuleSet
         if (!list.AlignAliases)
             return;
 
-        // Find AS keywords in SELECT list context and align them
+        // Find AS keywords in SELECT list context and align them, one statement at a time: the aliases of one statement
+        // line up with each other, never with another statement's (or another batch's) far down the script.
         var asPositions = new List<(int asIndex, int lineStartIndex)>();
         var context = ClauseContext.None;
+        TSqlTokenType? previous = null;
 
         for (int i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
             if (node.IsInNoformatRegion)
                 continue;
+
+            if (StartsAnotherStatement(node, previous))
+            {
+                AlignGroup(nodes, asPositions);
+                asPositions.Clear();
+            }
+            previous = node.TokenType;
 
             context = UpdateClauseContext(node, context);
 
@@ -223,7 +232,25 @@ public class ListRules : IRuleSet
             }
         }
 
+        AlignGroup(nodes, asPositions);
+    }
+
+    // A statement ends at ; or GO; one written without a semicolon ends where a top-level SELECT starts a new line, unless
+    // that SELECT is the second branch of a UNION / EXCEPT / INTERSECT (whose lists align with the first).
+    private static bool StartsAnotherStatement(LayoutNode node, TSqlTokenType? previous) =>
+        previous is TSqlTokenType.Semicolon or TSqlTokenType.Go
+        || (node.TokenType == TSqlTokenType.Select && node.IndentLevel == 0 && node.PrecedingBreak != BreakType.None
+            && previous is not (TSqlTokenType.Union or TSqlTokenType.Except or TSqlTokenType.Intersect or TSqlTokenType.All
+                or TSqlTokenType.LeftParenthesis or null));
+
+    private static void AlignGroup(List<LayoutNode> nodes, List<(int asIndex, int lineStartIndex)> asPositions)
+    {
         if (asPositions.Count < 2)
+            return;
+
+        // Alignment is a column down the lines of a list: two aliases on one line ("a AS x, b AS y", or a statement folded
+        // onto one line) have no column to share, and padding one of them only opens a gap in the middle of the line.
+        if (asPositions.Select(p => p.lineStartIndex).Distinct().Count() != asPositions.Count)
             return;
 
         // Calculate max width before AS for alignment

@@ -128,7 +128,8 @@ public sealed class ResultsMessagesTests
         await Assertions.Expect(s.Page.Locator("[data-testid='results-running']")).ToContainTextAsync("A running statement can't be interrupted.");
         await Assertions.Expect(s.Page.Locator("[data-testid='status-outcome']")).ToContainTextAsync("Executing query…");
         await Assertions.Expect(s.Page.Locator("[data-testid='execute-button']")).ToBeDisabledAsync();
-        await Assertions.Expect(s.Page.Locator("[data-testid='execute-cancel']")).ToHaveTextAsync("Cancel if not started");
+        await Assertions.Expect(s.Page.Locator("[data-testid='execute-cancel']")).ToHaveTextAsync("Cancel");
+        await Assertions.Expect(s.Page.Locator("[data-testid='execute-cancel']")).ToHaveAttributeAsync("aria-label", "Cancel if not started");
 
         await s.WaitForExecuteAfterAsync(before);
         Assert.Equal("3", await s.Page.Locator("[data-testid='execute-complete']").GetAttributeAsync("data-status"));   // TimedOut

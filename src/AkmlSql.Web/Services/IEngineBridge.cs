@@ -111,6 +111,14 @@ public interface IEngineBridge : IAsyncDisposable
 
 public enum BridgeState { Disconnected, Connecting, Open, Reconnecting, Failed }
 
+/// <summary>Spec 042 (T121): the one way to ask whether the paired engine advertises a capability.</summary>
+public static class EngineBridgeCapabilities
+{
+    /// <summary>True when the last handshake listed <paramref name="capability"/>. False with no engine: the list is then empty.</summary>
+    public static bool Advertises(this IEngineBridge bridge, string capability) =>
+        Array.IndexOf(bridge.EngineCapabilities ?? Array.Empty<string>(), capability) >= 0;
+}
+
 /// <summary>
 /// Spec 025 follow-on. Carries the data a TLS-fingerprint-drift UI needs.
 /// </summary>
@@ -288,6 +296,11 @@ internal sealed class EngineBridge : IEngineBridge
                 $"Handshake declined: {response.Status} -- {response.ErrorMessage}");
             return response;   // caller inspects Status and surfaces the right UI affordance
         }
+
+        // Review WEB-05: a PIN pairing came in with no bearer and was issued one. The reconnect loop replays the token
+        // this connection now holds — the new one — not the null it started with, which the engine would answer with
+        // PinRequired (and the loop used to take that for a revoked pairing and delete the token the picker just stored).
+        if (!string.IsNullOrEmpty(response.NewBearerToken)) _lastBearerToken = response.NewBearerToken;
 
         EngineCapabilities = response.EngineCapabilities ?? Array.Empty<string>();
         EngineVersion = response.EngineVersion;
@@ -488,10 +501,13 @@ internal sealed class EngineBridge : IEngineBridge
 
                 RetryScheduled?.Invoke(null);   // "trying now…"
 
+                // A paired connection whose token is not in memory (the vault holds it) reconnects with the stored one.
+                var bearer = _lastBearerToken ?? await StoredBearerAsync(_lastConnection).ConfigureAwait(false);
+
                 HandshakeResponse? response = null;
                 try
                 {
-                    response = await ConnectAsync(_lastConnection, _lastBearerToken, pairingPin: null, ct)
+                    response = await ConnectAsync(_lastConnection, bearer, pairingPin: null, ct)
                         .ConfigureAwait(false);
                 }
                 catch (Exception ex)
@@ -502,6 +518,18 @@ internal sealed class EngineBridge : IEngineBridge
                     // status bar's countdown comes back rather than freezing on Failed.
                     State = BridgeState.Reconnecting;
                     continue;
+                }
+
+                if (response.Status == HandshakeStatus.PinRequired && bearer == null)
+                {
+                    // Nothing was offered, so nothing was rejected: there is no token here to reconnect with. Terminal, but
+                    // the stored pairing (if any) is left alone — only a token the engine refused is evidence of revocation.
+                    _diagnostics.Log(DiagnosticLevel.Warn, "bridge",
+                        $"'{_lastConnection.Name}' needs its pairing PIN, and this browser holds no token for it — pair again.");
+                    _userDisconnectRequested = true;
+                    await CloseSocketOnlyAsync().ConfigureAwait(false);
+                    State = BridgeState.Failed;
+                    return;
                 }
 
                 if (response.Status == HandshakeStatus.PinRequired)
@@ -550,6 +578,18 @@ internal sealed class EngineBridge : IEngineBridge
         finally
         {
             RetryScheduled?.Invoke(null);
+        }
+    }
+
+    /// <summary>The token stored for a paired connection; null when there is none or it cannot be read.</summary>
+    private async Task<string?> StoredBearerAsync(EngineConnection connection)
+    {
+        if (_tokenVault == null || connection.BearerTokenWrappedRef == null) return null;
+        try { return await _tokenVault.RetrieveAsync(connection.Id).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "bridge", $"Stored token for '{connection.Name}' could not be read: {ex.GetType().Name}");
+            return null;
         }
     }
 

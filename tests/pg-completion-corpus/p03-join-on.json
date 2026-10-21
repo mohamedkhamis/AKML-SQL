@@ -1,0 +1,373 @@
+[
+  {
+    "id": "PGJON-001",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "products"
+      ]
+    },
+    "note": "JOIN lists tables"
+  },
+  {
+    "id": "PGJON-002",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON |",
+    "expect": {
+      "mustContain": [
+        "c.customer_id = o.customer_id",
+        "c.company_name",
+        "o.freight"
+      ]
+    },
+    "note": "The foreign key predicate leads"
+  },
+  {
+    "id": "PGJON-003",
+    "family": "join-on",
+    "doc": "SELECT * FROM orders o JOIN customers c ON |",
+    "expect": {
+      "mustContain": [
+        "o.customer_id = c.customer_id"
+      ]
+    },
+    "note": "Foreign key, other direction"
+  },
+  {
+    "id": "PGJON-004",
+    "family": "join-on",
+    "doc": "SELECT * FROM orders o JOIN order_details d ON |",
+    "expect": {
+      "mustContain": [
+        "o.order_id = d.order_id"
+      ]
+    },
+    "note": "orders - order_details"
+  },
+  {
+    "id": "PGJON-005",
+    "family": "join-on",
+    "doc": "SELECT * FROM order_details d JOIN products p ON |",
+    "expect": {
+      "mustContain": [
+        "d.product_id = p.product_id"
+      ]
+    },
+    "note": "order_details - products"
+  },
+  {
+    "id": "PGJON-006",
+    "family": "join-on",
+    "doc": "SELECT * FROM products p JOIN categories c ON |",
+    "expect": {
+      "mustContain": [
+        "p.category_id = c.category_id"
+      ]
+    },
+    "note": "products - categories"
+  },
+  {
+    "id": "PGJON-007",
+    "family": "join-on",
+    "doc": "SELECT * FROM products p JOIN suppliers s ON |",
+    "expect": {
+      "mustContain": [
+        "p.supplier_id = s.supplier_id"
+      ]
+    },
+    "note": "products - suppliers"
+  },
+  {
+    "id": "PGJON-008",
+    "family": "join-on",
+    "doc": "SELECT * FROM orders o JOIN employees e ON |",
+    "expect": {
+      "mustContain": [
+        "o.employee_id = e.employee_id"
+      ]
+    },
+    "note": "orders - employees"
+  },
+  {
+    "id": "PGJON-009",
+    "family": "join-on",
+    "doc": "SELECT * FROM orders o JOIN shippers s ON |",
+    "expect": {
+      "mustContain": [
+        "o.ship_via = s.shipper_id"
+      ]
+    },
+    "note": "Different column names on each side"
+  },
+  {
+    "id": "PGJON-010",
+    "family": "join-on",
+    "doc": "SELECT * FROM employees e JOIN employees m ON |",
+    "expect": {
+      "mustContain": [
+        "e.reports_to = m.employee_id",
+        "e.employee_id = m.reports_to"
+      ]
+    },
+    "note": "Self join: both directions"
+  },
+  {
+    "id": "PGJON-011",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o USING (|",
+    "expect": {
+      "mustContain": [
+        "customer_id"
+      ],
+      "mustNotContain": [
+        "freight",
+        "company_name"
+      ],
+      "minCount": 1
+    },
+    "note": "USING lists the columns the two tables share"
+  },
+  {
+    "id": "PGJON-012",
+    "family": "join-on",
+    "doc": "SELECT * FROM orders o JOIN order_details d USING (|",
+    "expect": {
+      "mustContain": [
+        "order_id"
+      ],
+      "mustNotContain": [
+        "quantity",
+        "freight"
+      ]
+    },
+    "note": "USING shared column"
+  },
+  {
+    "id": "PGJON-013",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON c.customer_id = o.customer_id JOIN order_details d ON |",
+    "expect": {
+      "mustContain": [
+        "o.order_id = d.order_id"
+      ]
+    },
+    "note": "A later join relates to an earlier table"
+  },
+  {
+    "id": "PGJON-014",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON c.customer_id = |",
+    "expect": {
+      "mustContain": [
+        "o.customer_id",
+        "c.company_name"
+      ]
+    },
+    "note": "Right-hand side of a comparison"
+  },
+  {
+    "id": "PGJON-015",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON c.|",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Alias dot inside ON"
+  },
+  {
+    "id": "PGJON-016",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON o.|",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "order_date"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Other alias inside ON"
+  },
+  {
+    "id": "PGJON-017",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o |",
+    "expect": {
+      "mustContain": [
+        "ON",
+        "USING",
+        "AS",
+        "ON c.customer_id = o.customer_id"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After the joined table: ON with the foreign key condition"
+  },
+  {
+    "id": "PGJON-018",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c LEFT JOIN orders o ON |",
+    "expect": {
+      "mustContain": [
+        "c.customer_id = o.customer_id"
+      ]
+    },
+    "note": "LEFT JOIN"
+  },
+  {
+    "id": "PGJON-019",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c CROSS JOIN |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "suppliers"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ]
+    },
+    "note": "CROSS JOIN takes tables"
+  },
+  {
+    "id": "PGJON-020",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c NATURAL |",
+    "expect": {
+      "mustContain": [
+        "JOIN",
+        "LEFT JOIN"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "NATURAL takes a join word"
+  },
+  {
+    "id": "PGJON-021",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c INNER |",
+    "expect": {
+      "mustContain": [
+        "JOIN"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "INNER takes JOIN"
+  },
+  {
+    "id": "PGJON-022",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c, LATERAL (SELECT * FROM orders o WHERE o.customer_id = c.|) x",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "LATERAL sees the outer alias"
+  },
+  {
+    "id": "PGJON-023",
+    "family": "join-on",
+    "doc": "SELECT * FROM sales.orders so JOIN sales.invoices i ON |",
+    "expect": {
+      "mustContain": [
+        "so.order_id = i.order_id"
+      ]
+    },
+    "note": "Schema-qualified tables"
+  },
+  {
+    "id": "PGJON-024",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON c.customer_id = o.customer_id AND |",
+    "expect": {
+      "mustContain": [
+        "c.company_name",
+        "o.freight"
+      ]
+    },
+    "note": "After AND"
+  },
+  {
+    "id": "PGJON-025",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN orders o ON c.customer_id = o.customer_id |",
+    "expect": {
+      "mustContain": [
+        "AND",
+        "OR",
+        "JOIN",
+        "WHERE",
+        "ORDER BY"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "After a complete condition"
+  },
+  {
+    "id": "PGJON-026",
+    "family": "join-on",
+    "doc": "SELECT * FROM orders JOIN customers ON |",
+    "expect": {
+      "mustContain": [
+        "orders.customer_id = customers.customer_id"
+      ]
+    },
+    "note": "Unaliased tables qualify by name"
+  },
+  {
+    "id": "PGJON-027",
+    "family": "join-on",
+    "doc": "SELECT * FROM region r JOIN territories t ON |",
+    "expect": {
+      "mustContain": [
+        "r.region_id = t.region_id"
+      ]
+    },
+    "note": "region - territories"
+  },
+  {
+    "id": "PGJON-028",
+    "family": "join-on",
+    "doc": "SELECT * FROM employees e JOIN employee_territories et ON |",
+    "expect": {
+      "mustContain": [
+        "e.employee_id = et.employee_id"
+      ]
+    },
+    "note": "employees - employee_territories"
+  },
+  {
+    "id": "PGJON-029",
+    "family": "join-on",
+    "doc": "SELECT * FROM customers c JOIN suppliers s ON |",
+    "expect": {
+      "mustContain": [
+        "c.country = s.country",
+        "c.city = s.city"
+      ]
+    },
+    "note": "No foreign key: same-named columns"
+  }
+]

@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Data;
+using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using Microsoft.Data.SqlClient;
+using Npgsql;
 using Serilog;
 
 namespace AkmlSql.Engine.Execution
@@ -32,7 +35,7 @@ namespace AkmlSql.Engine.Execution
         private readonly ConcurrentDictionary<string, CancellationTokenSource> _activeQueries = new();
         private readonly string _sessionId;
 
-        private SqlConnection? _conn;
+        private DbConnection? _conn;
         private bool _everOpened;
         private volatile bool _disposeRequested;
 
@@ -43,6 +46,26 @@ namespace AkmlSql.Engine.Execution
 
         /// <summary>The connection string this session most recently opened/will open under.</summary>
         public string ConnectionString { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 042: which provider the persistent connection uses. The gate, the cancel registry and the idle
+        /// sweep are the same for both kinds; only the connection that is opened differs.
+        /// </summary>
+        public DatabaseKind Kind { get; internal set; } = DatabaseKind.SqlServer;
+
+        /// <summary>
+        /// Spec 042 (FR-016, research R9): the transaction state of a PostgreSQL session, tracked per statement by
+        /// <c>PgExecuteRunner</c> because the driver exposes none. Read and written only while the gate is held; reset when a
+        /// new connection is opened. Always None for SQL Server.
+        /// </summary>
+        public TransactionState TransactionState { get; set; } = TransactionState.None;
+
+        /// <summary>
+        /// Spec 042 (FR-043): whether a run changed the catalog inside a transaction that was still open when it ended, so that the
+        /// reload of the schema is owed once that transaction ends. Read and written by <c>PgExecuteRunner</c> while the gate is
+        /// held; a new or reopened connection owes nothing. Never set for SQL Server.
+        /// </summary>
+        public PostgreSql.PgExecuteRunner.PgSchemaChangeState SchemaChange { get; } = new();
 
         /// <summary>UTC timestamp of the last execute/apply — drives idle eviction.</summary>
         public DateTime LastUsedUtc { get; private set; } = DateTime.UtcNow;
@@ -56,9 +79,26 @@ namespace AkmlSql.Engine.Execution
         /// reopened — #temp/SET/USE state was lost) so the handler can surface it on the same call,
         /// race-free.
         /// </summary>
-        public async Task<(T Result, bool ConnectionWasReset)> RunExclusiveAsync<T>(
+        public Task<(T Result, bool ConnectionWasReset)> RunExclusiveAsync<T>(
             string connectionString,
             Func<SqlConnection, CancellationToken, Task<T>> work,
+            CancellationToken ct) =>
+            RunCoreAsync(DatabaseKind.SqlServer, connectionString, (conn, token) => work((SqlConnection)conn, token), ct);
+
+        /// <summary>
+        /// Spec 042: as <see cref="RunExclusiveAsync{T}"/>, for a PostgreSQL session. A different name, not an
+        /// overload, so the existing implicitly-typed SQL Server lambdas keep resolving unambiguously.
+        /// </summary>
+        public Task<(T Result, bool ConnectionWasReset)> RunExclusivePostgresAsync<T>(
+            string connectionString,
+            Func<NpgsqlConnection, CancellationToken, Task<T>> work,
+            CancellationToken ct) =>
+            RunCoreAsync(DatabaseKind.PostgreSql, connectionString, (conn, token) => work((NpgsqlConnection)conn, token), ct);
+
+        private async Task<(T Result, bool ConnectionWasReset)> RunCoreAsync<T>(
+            DatabaseKind kind,
+            string connectionString,
+            Func<DbConnection, CancellationToken, Task<T>> work,
             CancellationToken ct)
         {
             await _gate.WaitAsync(ct).ConfigureAwait(false);
@@ -69,7 +109,7 @@ namespace AkmlSql.Engine.Execution
                 if (_disposeRequested)
                     throw new ObjectDisposedException(nameof(SessionConnection));
 
-                bool wasReset = await EnsureOpenAsync(connectionString, ct).ConfigureAwait(false);
+                bool wasReset = await EnsureOpenAsync(kind, connectionString, ct).ConfigureAwait(false);
                 LastUsedUtc = DateTime.UtcNow;
                 var result = await work(_conn!, ct).ConfigureAwait(false);
                 LastUsedUtc = DateTime.UtcNow;
@@ -92,9 +132,19 @@ namespace AkmlSql.Engine.Execution
         /// Ensure the connection is open. Returns true when a PREVIOUSLY-opened connection was found
         /// broken and reopened (state loss — surfaced to the user); false for first-open or reuse.
         /// </summary>
-        private async Task<bool> EnsureOpenAsync(string connectionString, CancellationToken ct)
+        private async Task<bool> EnsureOpenAsync(DatabaseKind kind, string connectionString, CancellationToken ct)
         {
             ConnectionString = connectionString;
+
+            // A run of the other kind on the same session starts from a fresh connection of that kind. That is
+            // a switch the user made (a different server), not a broken connection, so it is not reported as a reset.
+            if (_conn != null && Kind != kind)
+            {
+                try { await _conn.DisposeAsync().ConfigureAwait(false); } catch { /* ignore */ }
+                _conn = null;
+                _everOpened = false;
+            }
+            Kind = kind;
 
             if (_conn != null && _conn.State == ConnectionState.Open)
             {
@@ -112,7 +162,9 @@ namespace AkmlSql.Engine.Execution
             // Open into a LOCAL first; publish to _conn ONLY after a successful open, so a failed open
             // (bad credential / cancel / network) never leaves a half-dead, never-opened connection in
             // the field for the next execute to trip over.
-            var fresh = new SqlConnection(connectionString);
+            DbConnection fresh = kind == DatabaseKind.PostgreSql
+                ? AkmlSql.Engine.PostgreSql.PgConnectionFactory.Create(connectionString)
+                : new SqlConnection(connectionString);
             try
             {
                 await fresh.OpenAsync(ct).ConfigureAwait(false);
@@ -124,6 +176,10 @@ namespace AkmlSql.Engine.Execution
             }
             _conn = fresh;
             _everOpened = true;
+            // A transaction belongs to its backend: a new connection starts outside one, and a change the old one held inside a
+            // transaction went with it.
+            TransactionState = TransactionState.None;
+            SchemaChange.Pending = false;
 
             if (wasBroken)
             {
@@ -213,7 +269,37 @@ namespace AkmlSql.Engine.Execution
             }
         }
 
-        private async Task DisposeCoreAsync()
+        /// <summary>
+        /// The web edition's Disconnect: stop what is queued, wait (up to <paramref name="wait"/>) for a running command to
+        /// finish, then roll back any open transaction and close the connection. Returns whether a transaction was rolled
+        /// back. Throws <see cref="TimeoutException"/> when a command still holds the connection after the wait — the
+        /// connection is then left as it is (closed later, when that command ends), and the caller says so.
+        /// </summary>
+        public async Task<bool> CloseAsync(TimeSpan wait, CancellationToken ct)
+        {
+            _disposeRequested = true;
+            foreach (var kv in _activeQueries)
+            {
+                try { kv.Value.Cancel(); } catch { /* ignore */ }
+            }
+            if (!await _gate.WaitAsync(wait, ct).ConfigureAwait(false))
+                throw new TimeoutException("A statement is still running on the connection.");
+            try
+            {
+                return await DisposeCoreAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        /// <summary>
+        /// Ends the connection; true when it rolled back an open transaction first. A pooled SqlConnection closed inside a
+        /// transaction that a script began goes back to the pool with that transaction — and its locks — still open on the
+        /// server until the pool reuses it, so a close always rolls back explicitly. It never commits.
+        /// </summary>
+        private async Task<bool> DisposeCoreAsync()
         {
             foreach (var kv in _activeQueries)
             {
@@ -222,10 +308,41 @@ namespace AkmlSql.Engine.Execution
             }
             _activeQueries.Clear();
 
+            bool rolledBack = false;
             if (_conn != null)
             {
+                rolledBack = await RollBackOpenTransactionAsync(_conn).ConfigureAwait(false);
                 try { await _conn.DisposeAsync().ConfigureAwait(false); } catch { }
                 _conn = null;
+            }
+            TransactionState = TransactionState.None;
+            return rolledBack;
+        }
+
+        private async Task<bool> RollBackOpenTransactionAsync(DbConnection conn)
+        {
+            if (conn.State != ConnectionState.Open) return false;
+            try
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandTimeout = 10;
+                if (conn is SqlConnection)
+                {
+                    cmd.CommandText = "IF @@TRANCOUNT > 0 BEGIN ROLLBACK TRANSACTION; SELECT 1; END ELSE SELECT 0;";
+                    return Convert.ToInt32(await cmd.ExecuteScalarAsync().ConfigureAwait(false)) == 1;
+                }
+                // PostgreSQL: the runner tracks the state the driver does not expose; a ROLLBACK outside a transaction only warns.
+                if (TransactionState == TransactionState.None) return false;
+                cmd.CommandText = "ROLLBACK";
+                await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // Closing the connection below still ends the server session for PostgreSQL; for a pooled SQL Server
+                // connection, sp_reset_connection rolls back on its next use.
+                Log.Warning("SessionConnection: rollback before close failed for session {Session}: {Type}", _sessionId, ex.GetType().Name);
+                return false;
             }
         }
     }

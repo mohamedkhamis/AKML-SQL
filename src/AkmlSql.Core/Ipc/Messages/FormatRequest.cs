@@ -27,5 +27,12 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(5)]
         public FormatSqlActionsDto? Actions { get; set; }
+
+        /// <summary>
+        /// Spec 042 — the style as <c>.akmlstyle</c> JSON, for a PostgreSQL session whose style lives in the web edition's browser store.
+        /// When present it is used instead of <see cref="ProfileName"/>. Older peers ignore it.
+        /// </summary>
+        [Key(6)]
+        public string? ProfileJson { get; set; }
     }
 }

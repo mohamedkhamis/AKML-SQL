@@ -1,0 +1,16 @@
+BEGIN;
+
+
+UPDATE a SET x = 1;
+
+
+SAVEPOINT s1;
+
+
+UPDATE a SET x = 2;
+
+
+ROLLBACK TO SAVEPOINT s1;
+
+
+COMMIT;

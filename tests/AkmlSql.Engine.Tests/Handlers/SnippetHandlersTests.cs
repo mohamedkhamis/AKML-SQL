@@ -92,4 +92,26 @@ public sealed class SnippetHandlersTests : IDisposable
         Assert.Equal("1", id.Default);
         Assert.Null(id.SchemaAware);
     }
+
+    [Fact]
+    public void Server_and_login_placeholders_come_from_the_PostgreSQL_connection_of_a_PostgreSQL_session()
+    {
+        var sessions = new SessionManager();
+        sessions.UpdateSession(new ConnectionInfo
+        {
+            SessionId = "pg", Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql, DatabaseName = "northwind",
+            ConnectionString = "Host=db1;Port=5433;Database=northwind;Username=app;Password=secret",
+        });
+        sessions.UpdateSession(new ConnectionInfo
+        {
+            SessionId = "ms", DatabaseName = "tempdb", ConnectionString = "Server=srv1;Database=tempdb;User ID=sa;Password=x",
+        });
+
+        Assert.Equal("db1:5433", SnippetExpandHandler.DeriveServerName(sessions.GetSession("pg")));
+        Assert.Equal("app", SnippetExpandHandler.DeriveLogin(sessions.GetSession("pg")));
+        Assert.Equal("srv1", SnippetExpandHandler.DeriveServerName(sessions.GetSession("ms")));
+        Assert.Equal("sa", SnippetExpandHandler.DeriveLogin(sessions.GetSession("ms")));
+        Assert.Equal(string.Empty, SnippetExpandHandler.DeriveServerName(null));
+        Assert.Equal(string.Empty, SnippetExpandHandler.DeriveLogin(null));
+    }
 }

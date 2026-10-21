@@ -12,6 +12,7 @@
 @inject IAiClientFactory Client
 @inject IDialogService Dialogs
 @inject INotificationService Notifications
+@inject IServiceProvider ServiceProvider
 
 <p class="akml-hint">
     AKML SQL never sees your API keys. They live encrypted in your browser via Web Crypto (AES-GCM 256). When you
@@ -87,6 +88,10 @@
             <label class="akml-field">Endpoint
                 <input class="akml-input" @bind="_form.Endpoint" disabled title="This provider uses its standard endpoint" placeholder="Not used by this provider" />
             </label>
+        }
+        @if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
+        {
+            <SecureContextNotice What="API keys" />
         }
         @if (RequiresApiKey(_form.ProviderId))
         {
@@ -214,6 +219,11 @@
         _ => string.Empty,
     };
 
+    /// <summary>The model an empty Model box stands for: its placeholder, except Azure's, which names no real model.</summary>
+    internal static string? DefaultModel(string id) => id == "azure" ? null : NullIfEmpty(ModelPlaceholder(id));
+
+    private static string? NullIfEmpty(string text) => string.IsNullOrEmpty(text) ? null : text;
+
     private static bool RequiresEndpoint(string id) => id is "azure" or "ollama" or "lmstudio";
 
     // Local providers (Ollama, LM Studio) authenticate by network reachability, not a key.
@@ -230,8 +240,14 @@
         _ => string.Empty,
     };
 
+    // Review WEB-03: whether an API key can be stored here (a secure context). Assumed until the browser says otherwise.
+    private bool _secureStorage = true;
+
     protected override async Task OnInitializedAsync()
     {
+        try { _secureStorage = ServiceProvider.GetService(typeof(IWebCryptoWrapper)) is not IWebCryptoWrapper crypto || await crypto.IsSecureStorageAvailableAsync(); }
+        catch (JSException) { _secureStorage = false; }
+        catch (JSDisconnectedException) { }
         await FeatureSettings.ReloadAsync();
         await ReloadAsync();
     }
@@ -294,9 +310,14 @@
     private async Task SubmitAsync()
     {
         _errors = new List<string>();
+        // The model shown in the empty box is the one used: "Model is required" under a box that reads gemini-flash-latest told
+        // the user to type what the form already showed. Azure has no default (it is the user's deployment name).
+        var model = string.IsNullOrWhiteSpace(_form.Model) ? DefaultModel(_form.ProviderId) : _form.Model.Trim();
         if (string.IsNullOrEmpty(_form.ProviderId)) _errors.Add("Provider is required.");
-        if (string.IsNullOrEmpty(_form.Model)) _errors.Add("Model is required.");
+        if (string.IsNullOrEmpty(model)) _errors.Add("Model is required.");
         if (RequiresApiKey(_form.ProviderId) && string.IsNullOrEmpty(_form.ApiKey)) _errors.Add("API key is required.");
+        if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
+            _errors.Add("This page was opened over plain HTTP from another computer, so the key cannot be stored. Open the site's HTTPS address.");
         if (RequiresEndpoint(_form.ProviderId) && string.IsNullOrEmpty(_form.Endpoint))
             _errors.Add($"Endpoint is required for {DefaultDisplayName(_form.ProviderId)}.");
         if (_errors.Count > 0) return;
@@ -305,12 +326,16 @@
         {
             ProviderId = _form.ProviderId,
             DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? DefaultDisplayName(_form.ProviderId) : _form.DisplayName,
-            Model = _form.Model,
+            Model = model!,
             Endpoint = string.IsNullOrEmpty(_form.Endpoint) || !RequiresEndpoint(_form.ProviderId) ? null : _form.Endpoint,
         }, _form.ApiKey);
         _form.ApiKey = string.Empty;   // tighten the residual exposure window
-        Notifications.Notify($"Saved {DefaultDisplayName(_form.ProviderId)}.", NotificationKind.Success);
+        var saved = _form.ProviderId;
+        Notifications.Notify($"Saved {DefaultDisplayName(saved)}.", NotificationKind.Success);
         await ReloadAsync();
+        // With no active provider the AI panel says none is configured, even right after one was saved: the one saved then
+        // becomes the active one (still refused for a cloud provider in Fully local mode).
+        if (string.IsNullOrEmpty(_activeId)) await SetActiveAsync(saved);
     }
 
     private void ClearForm()

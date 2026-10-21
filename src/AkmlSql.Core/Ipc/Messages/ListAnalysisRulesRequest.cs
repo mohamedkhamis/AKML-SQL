@@ -18,5 +18,12 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(0)]
         public string FileDirectory { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 042: also list the PostgreSQL rule set (each row's <c>Kind</c> says which set it belongs to). Off by default, so a client
+        /// that predates the feature - the SSMS rules window - keeps receiving exactly the SQL Server rules.
+        /// </summary>
+        [Key(1)]
+        public bool IncludePostgreSql { get; set; }
     }
 }

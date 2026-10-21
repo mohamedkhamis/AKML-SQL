@@ -9,6 +9,7 @@ using AkmlSql.Web.Services;
 using AkmlSql.Web.Shared;
 using Bunit;
 using MessagePack;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -244,9 +245,85 @@ public sealed class SchemaTreeComponentTests : BunitContext
         instance.ExpandForTest(Db + "/dbo/Tables");
         cut.Render();
 
-        var obj = cut.Find("[data-testid='schema-tree-object']");
-        obj.Click();
+        // A single click only selects: browsing the tree never changes the query.
+        cut.Find("[data-testid='schema-tree-object']").Click();
+        Assert.Null(captured);
+        Assert.Contains("selected", cut.Find("[data-testid='schema-tree-object']").ClassList);
+
+        cut.Find("[data-testid='schema-tree-object']").DoubleClick();
         Assert.Equal("[dbo].[Customer]", captured);
+    }
+
+    [Fact]
+    public async Task Right_click_opens_a_menu_whose_choices_reach_the_page_and_Escape_closes_it()
+    {
+        await SeedAsync(new SchemaSnapshot
+        {
+            ServerCanonicalIdentity = Server,
+            DatabaseName = Db,
+            PhaseA = PhasePayload(Db,
+                new SchemaPhaseSchema { Name = "dbo", Objects = new[] { Table("Customer", Col("Id", "int")) } }),
+            FetchedAt = DateTimeOffset.UtcNow,
+        });
+
+        SchemaObjectAction? chosen = null;
+        var cut = Render<SchemaTreeComponent>(p => p
+            .Add(c => c.ServerCanonicalIdentity, Server)
+            .Add(c => c.DatabaseName, Db)
+            .Add(c => c.OnObjectAction, a => { chosen = a; }));
+        cut.Instance.ExpandForTest(Db + "/dbo");
+        cut.Instance.ExpandForTest(Db + "/dbo/Tables");
+        cut.Render();
+
+        cut.Find("[data-testid='schema-tree-object']").ContextMenu();
+        Assert.Single(cut.FindAll("[data-testid='schema-context-menu']"));
+        Assert.Equal("Select Top 1000 Rows", cut.Find("[data-testid='schema-menu-SelectTop']").TextContent);
+
+        cut.Find("[data-testid='schema-menu-SelectTop']").Click();
+        Assert.Equal(SchemaObjectCommand.SelectTop, chosen?.Command);
+        Assert.Equal("Customer", chosen?.Object.ObjectName);
+        Assert.Empty(cut.FindAll("[data-testid='schema-context-menu']"));
+
+        cut.Find("[data-testid='schema-tree-object']").ContextMenu();
+        cut.Find("[data-testid='schema-context-menu']").KeyDown(new KeyboardEventArgs { Key = "Escape" });
+        Assert.Empty(cut.FindAll("[data-testid='schema-context-menu']"));
+    }
+
+    [Fact]
+    public async Task A_folder_opens_from_its_label_and_an_empty_one_has_no_chevron()
+    {
+        await SeedAsync(new SchemaSnapshot
+        {
+            ServerCanonicalIdentity = Server,
+            DatabaseName = Db,
+            PhaseA = PhasePayload(Db,
+                new SchemaPhaseSchema { Name = "dbo", Objects = new[] { Table("Customer") } }),
+            FetchedAt = DateTimeOffset.UtcNow,
+        });
+        var cut = Render<SchemaTreeComponent>(p => p
+            .Add(c => c.ServerCanonicalIdentity, Server)
+            .Add(c => c.DatabaseName, Db));
+
+        // The database node starts open; the schema opens from a click on its label.
+        cut.FindAll(".akml-schema-tree-schema .akml-schema-tree-label")[0].Click();
+        Assert.True(cut.Instance.IsExpanded(Db + "/dbo"));
+
+        var views = cut.FindAll(".akml-schema-tree-kind").Single(li => li.TextContent.Contains("Views (0)"));
+        Assert.Empty(views.QuerySelectorAll(".akml-schema-chevron"));
+        views.Click();
+        Assert.False(cut.Instance.IsExpanded(Db + "/dbo/Views"));
+    }
+
+    [Fact]
+    public void A_refresh_after_a_run_shows_the_refreshing_row()
+    {
+        var cut = Render<SchemaTreeComponent>(p => p
+            .Add(c => c.ServerCanonicalIdentity, Server)
+            .Add(c => c.DatabaseName, Db));
+
+        SyncFake.SetRefreshing(true);
+        cut.WaitForAssertion(() => Assert.Contains("Refreshing schema", cut.Find("[data-testid='schema-loading']").TextContent));
+        SyncFake.SetRefreshing(false);
     }
 
     [Fact]
@@ -300,7 +377,7 @@ public sealed class SchemaTreeComponentTests : BunitContext
 
         Assert.NotNull(cut.Find("[data-testid=schema-tree]"));
         var connect = cut.Find("[data-testid=schema-connect]");
-        Assert.Equal("Connect to SQL Server…", connect.TextContent.Trim());
+        Assert.Equal("Connect…", connect.TextContent.Trim());
 
         connect.Click();
         Assert.Equal(1, requested);

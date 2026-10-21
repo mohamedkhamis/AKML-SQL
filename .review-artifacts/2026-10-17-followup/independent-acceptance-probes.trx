@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="cecb8bcb-294a-4296-884f-606d7f399ce7" name="Administrator@1442-MOHAMEDKHA 2026-10-17 17:54:51" runUser="1442-MOHAMEDKHA\Administrator" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-17T17:54:51.7417591+03:00" queuing="2026-10-17T17:54:51.7417595+03:00" start="2026-10-17T17:54:49.6002443+03:00" finish="2026-10-17T17:54:53.3000707+03:00" />
+  <TestSettings name="default" id="d8ea28d7-f7a4-466a-baaf-c9eb1b9e5449">
+    <Deployment runDeploymentRoot="Administrator_1442-MOHAMEDKHA_2026-10-17_17_54_51" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="5630ca39-0bb2-47a8-a894-cbbb1b076101" testId="aae984ff-30bb-58d0-dc4a-213dfca24aab" testName="AkmlSql.Web.Tests.ReReviewAuditTests.Typing_while_snippet_save_waits_must_preserve_the_new_draft" computerName="1442-MOHAMEDKHA" duration="00:00:01.0843122" startTime="2026-10-17T17:54:52.1449541+03:00" endTime="2026-10-17T17:54:53.2317048+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5630ca39-0bb2-47a8-a894-cbbb1b076101">
+      <Output>
+        <ErrorInfo>
+          <Message>Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.
+
+If this test does not fail consistently, the reason may be that
+the wait timeout is too short, and the runtime did not have enough
+time to complete the necessary number of renders of the component under test.
+This can happen on highly utilized or slower hardware, for example.
+
+To determine if this is the cause, compare the check and render count(s) below
+and see if they match what is expected. If they do not,
+consider increasing the timeout, either at the individual
+method call level, e.g. WaitForElement("div", TimeSpan.FromSeconds(15)),
+or via the static TestContext.DefaultWaitTimeout property.
+
+Check count: 1.
+Component render count: 8.
+Total render count across all components: 0.&#xD;
+---- Assert.Equal() Failure: Strings differ&#xD;
+                  ↓ (pos 7)&#xD;
+Expected: "SELECT 2; -- typed while saving"&#xD;
+Actual:   "SELECT 1;"&#xD;
+                  ↑ (pos 7)</Message>
+          <StackTrace>   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 102&#xD;
+   at AkmlSql.Web.Tests.ReReviewAuditTests.Typing_while_snippet_save_waits_must_preserve_the_new_draft() in C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs:line 54&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+----- Inner Stack Trace -----&#xD;
+   at AkmlSql.Web.Tests.ReReviewAuditTests.&lt;&gt;c__DisplayClass1_0.&lt;Typing_while_snippet_save_waits_must_preserve_the_new_draft&gt;b__1() in C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs:line 54&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.&lt;&gt;c__DisplayClass6_0.&lt;.ctor&gt;b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.&lt;&gt;c__DisplayClass32_0.&lt;WrapSynchronousChecker&gt;b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="48a409fe-c11d-4189-a9fa-d4e6980c12d9" testId="121c45db-0853-55d3-0e64-c08d03769b75" testName="AkmlSql.Web.Tests.ReReviewAuditTests.Partial_AI_answer_must_stay_marked_incomplete_after_reopening" computerName="1442-MOHAMEDKHA" duration="00:00:00.8414777" startTime="2026-10-17T17:54:51.1694396+03:00" endTime="2026-10-17T17:54:51.9831128+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="48a409fe-c11d-4189-a9fa-d4e6980c12d9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Contains() Failure: Sub-string not found&#xD;
+String:    "&lt;div class="akml-chat"&gt;&lt;div class="akml-c"···&#xD;
+Not found: "incomplete"</Message>
+          <StackTrace>   at AkmlSql.Web.Tests.ReReviewAuditTests.Partial_AI_answer_must_stay_marked_incomplete_after_reopening() in C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs:line 104&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7e8bceb3-ef65-451e-a4d2-f45430e3de0d" testId="d9d635dc-6264-7a97-e9d3-72f28115dd57" testName="AkmlSql.Web.Tests.ReReviewAuditTests.Restored_diagnostics_must_not_export_legacy_credentials" computerName="1442-MOHAMEDKHA" duration="00:00:00.0317631" startTime="2026-10-17T17:54:51.0916330+03:00" endTime="2026-10-17T17:54:51.1410423+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7e8bceb3-ef65-451e-a4d2-f45430e3de0d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+                                ↓ (pos 114)&#xD;
+String: ···"ider echoed api_key=sk-review0123456789ab"···&#xD;
+Found:  "sk-review0123456789abcdef0123456789"</Message>
+          <StackTrace>   at AkmlSql.Web.Tests.ReReviewAuditTests.Restored_diagnostics_must_not_export_legacy_credentials() in C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs:line 68&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b3e2c786-fe01-455f-a42a-631baf24b146" testId="f0354367-701e-ea72-03fb-36b1d2b7e6f3" testName="AkmlSql.Web.Tests.ReReviewAuditTests.Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch" computerName="1442-MOHAMEDKHA" duration="00:00:00.0925632" startTime="2026-10-17T17:54:51.9856382+03:00" endTime="2026-10-17T17:54:52.0759123+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b3e2c786-fe01-455f-a42a-631baf24b146">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Strings differ&#xD;
+Expected: "4"&#xD;
+Actual:   null</Message>
+          <StackTrace>   at AkmlSql.Web.Tests.ReReviewAuditTests.Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch() in C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs:line 120&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="68b10db4-b123-4b76-bbaf-11d621b61bdc" testId="21f58f6f-8676-7662-3b83-034d7f10d4c0" testName="AkmlSql.Web.Tests.ReReviewAuditTests.Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt" computerName="1442-MOHAMEDKHA" duration="00:00:00.0679006" startTime="2026-10-17T17:54:52.0769058+03:00" endTime="2026-10-17T17:54:52.1440982+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="68b10db4-b123-4b76-bbaf-11d621b61bdc">
+      <Output>
+        <ErrorInfo>
+          <Message>Full SQL failed to load; the 500-character search excerpt must not be executable.</Message>
+          <StackTrace>   at AkmlSql.Web.Tests.ReReviewAuditTests.Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt() in C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs:line 174&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Web.Tests.ReReviewAuditTests.Typing_while_snippet_save_waits_must_preserve_the_new_draft" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="aae984ff-30bb-58d0-dc4a-213dfca24aab">
+      <Execution id="5630ca39-0bb2-47a8-a894-cbbb1b076101" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.ReReviewAuditTests" name="Typing_while_snippet_save_waits_must_preserve_the_new_draft" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.ReReviewAuditTests.Restored_diagnostics_must_not_export_legacy_credentials" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="d9d635dc-6264-7a97-e9d3-72f28115dd57">
+      <Execution id="7e8bceb3-ef65-451e-a4d2-f45430e3de0d" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.ReReviewAuditTests" name="Restored_diagnostics_must_not_export_legacy_credentials" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.ReReviewAuditTests.Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="21f58f6f-8676-7662-3b83-034d7f10d4c0">
+      <Execution id="68b10db4-b123-4b76-bbaf-11d621b61bdc" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.ReReviewAuditTests" name="Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.ReReviewAuditTests.Partial_AI_answer_must_stay_marked_incomplete_after_reopening" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="121c45db-0853-55d3-0e64-c08d03769b75">
+      <Execution id="48a409fe-c11d-4189-a9fa-d4e6980c12d9" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.ReReviewAuditTests" name="Partial_AI_answer_must_stay_marked_incomplete_after_reopening" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.ReReviewAuditTests.Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch" storage="c:\repos\akml\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="f0354367-701e-ea72-03fb-36b1d2b7e6f3">
+      <Execution id="b3e2c786-fe01-455f-a42a-631baf24b146" />
+      <TestMethod codeBase="C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.ReReviewAuditTests" name="Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="aae984ff-30bb-58d0-dc4a-213dfca24aab" executionId="5630ca39-0bb2-47a8-a894-cbbb1b076101" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="121c45db-0853-55d3-0e64-c08d03769b75" executionId="48a409fe-c11d-4189-a9fa-d4e6980c12d9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d9d635dc-6264-7a97-e9d3-72f28115dd57" executionId="7e8bceb3-ef65-451e-a4d2-f45430e3de0d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f0354367-701e-ea72-03fb-36b1d2b7e6f3" executionId="b3e2c786-fe01-455f-a42a-631baf24b146" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="21f58f6f-8676-7662-3b83-034d7f10d4c0" executionId="68b10db4-b123-4b76-bbaf-11d621b61bdc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="5" executed="5" passed="0" failed="5" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.12)&#xD;
+[xUnit.net 00:00:00.27]   Discovering: AkmlSql.Web.Tests&#xD;
+[xUnit.net 00:00:00.69]   Discovered:  AkmlSql.Web.Tests&#xD;
+[xUnit.net 00:00:00.73]   Starting:    AkmlSql.Web.Tests&#xD;
+[xUnit.net 00:00:00.82]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:00.82]                                       ↓ (pos 114)&#xD;
+[xUnit.net 00:00:00.82]       String: ···"ider echoed api_key=sk-review0123456789ab"···&#xD;
+[xUnit.net 00:00:00.83]       Found:  "sk-review0123456789abcdef0123456789"&#xD;
+[xUnit.net 00:00:00.83]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.83]         C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs(68,0): at AkmlSql.Web.Tests.ReReviewAuditTests.Restored_diagnostics_must_not_export_legacy_credentials()&#xD;
+[xUnit.net 00:00:00.83]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.66]       Assert.Contains() Failure: Sub-string not found&#xD;
+[xUnit.net 00:00:01.66]       String:    "&lt;div class="akml-chat"&gt;&lt;div class="akml-c"···&#xD;
+[xUnit.net 00:00:01.66]       Not found: "incomplete"&#xD;
+[xUnit.net 00:00:01.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.66]         C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs(104,0): at AkmlSql.Web.Tests.ReReviewAuditTests.Partial_AI_answer_must_stay_marked_incomplete_after_reopening()&#xD;
+[xUnit.net 00:00:01.66]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:01.66]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:01.75]       Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:01.75]       Expected: "4"&#xD;
+[xUnit.net 00:00:01.75]       Actual:   null&#xD;
+[xUnit.net 00:00:01.75]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.75]         C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs(120,0): at AkmlSql.Web.Tests.ReReviewAuditTests.Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch()&#xD;
+[xUnit.net 00:00:01.75]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:01.75]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:01.82]       Full SQL failed to load; the 500-character search excerpt must not be executable.&#xD;
+[xUnit.net 00:00:01.82]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.82]         C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs(174,0): at AkmlSql.Web.Tests.ReReviewAuditTests.Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt()&#xD;
+[xUnit.net 00:00:01.82]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:01.82]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:02.91]       Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.
+
+If this test does not fail consistently, the reason may be that
+the wait timeout is too short, and the runtime did not have enough
+time to complete the necessary number of renders of the component under test.
+This can happen on highly utilized or slower hardware, for example.
+
+To determine if this is the cause, compare the check and render count(s) below
+and see if they match what is expected. If they do not,
+consider increasing the timeout, either at the individual
+method call level, e.g. WaitForElement("div", TimeSpan.FromSeconds(15)),
+or via the static TestContext.DefaultWaitTimeout property.
+
+Check count: 1.
+Component render count: 8.
+Total render count across all components: 0.&#xD;
+[xUnit.net 00:00:02.91]       ---- Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:02.91]                         ↓ (pos 7)&#xD;
+[xUnit.net 00:00:02.91]       Expected: "SELECT 2; -- typed while saving"&#xD;
+[xUnit.net 00:00:02.91]       Actual:   "SELECT 1;"&#xD;
+[xUnit.net 00:00:02.91]                         ↑ (pos 7)&#xD;
+[xUnit.net 00:00:02.91]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.91]         /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs(102,0): at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout)&#xD;
+[xUnit.net 00:00:02.91]         C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs(54,0): at AkmlSql.Web.Tests.ReReviewAuditTests.Typing_while_snippet_save_waits_must_preserve_the_new_draft()&#xD;
+[xUnit.net 00:00:02.91]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:02.91]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:02.91]         ----- Inner Stack Trace -----&#xD;
+[xUnit.net 00:00:02.91]         C:\Repos\AKML\AKML-SQL\tests\AkmlSql.Web.Tests\ReReviewAuditTests.cs(54,0): at AkmlSql.Web.Tests.ReReviewAuditTests.&lt;&gt;c__DisplayClass1_0.&lt;Typing_while_snippet_save_waits_must_preserve_the_new_draft&gt;b__1()&#xD;
+[xUnit.net 00:00:02.91]         /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs(35,0): at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.&lt;&gt;c__DisplayClass6_0.&lt;.ctor&gt;b__0()&#xD;
+[xUnit.net 00:00:02.91]         /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs(297,0): at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.&lt;&gt;c__DisplayClass32_0.&lt;WrapSynchronousChecker&gt;b__0()&#xD;
+[xUnit.net 00:00:02.91]         /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs(226,0): at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync()&#xD;
+[xUnit.net 00:00:02.92]   Finished:    AkmlSql.Web.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="1442-MOHAMEDKHA" outcome="Error" timestamp="2026-10-17T17:54:51.1459731+03:00">
+        <Text>[xUnit.net 00:00:00.82]     AkmlSql.Web.Tests.ReReviewAuditTests.Restored_diagnostics_must_not_export_legacy_credentials [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="1442-MOHAMEDKHA" outcome="Error" timestamp="2026-10-17T17:54:51.9840387+03:00">
+        <Text>[xUnit.net 00:00:01.66]     AkmlSql.Web.Tests.ReReviewAuditTests.Partial_AI_answer_must_stay_marked_incomplete_after_reopening [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="1442-MOHAMEDKHA" outcome="Error" timestamp="2026-10-17T17:54:52.0763675+03:00">
+        <Text>[xUnit.net 00:00:01.75]     AkmlSql.Web.Tests.ReReviewAuditTests.Inserted_SQL_Server_row_must_merge_returned_identity_without_rerunning_batch [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="1442-MOHAMEDKHA" outcome="Error" timestamp="2026-10-17T17:54:52.1445973+03:00">
+        <Text>[xUnit.net 00:00:01.82]     AkmlSql.Web.Tests.ReReviewAuditTests.Missing_full_history_SQL_must_not_enable_reexecute_of_search_excerpt [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="1442-MOHAMEDKHA" outcome="Error" timestamp="2026-10-17T17:54:53.2323379+03:00">
+        <Text>[xUnit.net 00:00:02.91]     AkmlSql.Web.Tests.ReReviewAuditTests.Typing_while_snippet_save_waits_must_preserve_the_new_draft [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

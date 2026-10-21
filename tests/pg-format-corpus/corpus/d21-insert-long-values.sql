@@ -1,0 +1,1 @@
+insert into sales.audit_log (event_time, user_name, action, details) values (now(), current_user, 'Report', 'Customers by size and region for the regional sales team, sent weekly on Mondays'), (now(), current_user, 'Export', 'Orders for the last quarter, all regions, including cancelled orders and returns');

@@ -29,9 +29,13 @@ public class LayoutEngine
         bool isFirstSemanticToken = true;
         int statementIndex = 0;
         var statementStarts = BuildStatementStartSet(script);
+        var batchStarts = BuildBatchStartSet(script);
         var nestedStatementStarts = BuildNestedStatementStartSet(script);
         TSqlTokenType? prevSemanticTokenType = null;
         string? prevSemanticTokenText = null;
+        // Set by GO and kept over its repeat count (GO 3): the next token starts a new line. Token-based because ScriptDom
+        // does not parse "GO n" - it reports an error and leaves the batch after it out of the tree.
+        bool afterGo = false;
         int prevSemanticTokenEndOffset = -1;
         int baseIndent = 0;
 
@@ -90,9 +94,12 @@ public class LayoutEngine
 
             // --- Determine if this is a new statement ---
             bool isFirstInStatement = false;
-            if (statementStarts.Contains(t.Offset) && !isFirstSemanticToken)
+            // The first statement of a batch after GO is a new statement too: the clause state of the batch before must not
+            // leak into it. It is not "first in statement" for the decider, so it keeps the single line break after GO.
+            bool isBatchStart = batchStarts.Contains(t.Offset) && !isFirstSemanticToken;
+            if ((statementStarts.Contains(t.Offset) || isBatchStart) && !isFirstSemanticToken)
             {
-                isFirstInStatement = true;
+                isFirstInStatement = !isBatchStart;
                 statementIndex++;
                 tracker.Reset();
                 baseIndent = 0;
@@ -124,6 +131,15 @@ public class LayoutEngine
             {
                 decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
             }
+
+            // GO is a batch separator only alone on its line: a batch's first statement with no line rule of its own (PRINT,
+            // EXEC, DECLARE …) used to follow it on the GO line ("GO PRINT 'x';"), and the script no longer split there.
+            bool goCount = afterGo && prevSemanticTokenType == TSqlTokenType.Go && t.TokenType == TSqlTokenType.Integer;
+            if ((isBatchStart || (afterGo && !goCount)) && decision.Break == BreakType.None)
+            {
+                decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
+            }
+            afterGo = t.TokenType == TSqlTokenType.Go || goCount;
 
             // Compute final indent level
             int indentLevel;
@@ -227,6 +243,18 @@ public class LayoutEngine
     /// Builds a set of token offsets that correspond to the start of each statement in the script.
     /// Used to detect statement boundaries for empty-line insertion.
     /// </summary>
+    /// <summary>Start offsets of the first statement of every batch but the first (the statement after each GO).</summary>
+    private static HashSet<int> BuildBatchStartSet(TSqlScript script)
+    {
+        var starts = new HashSet<int>();
+        for (int b = 1; b < script.Batches.Count; b++)
+        {
+            if (script.Batches[b].Statements.Count > 0)
+                starts.Add(script.Batches[b].Statements[0].StartOffset);
+        }
+        return starts;
+    }
+
     private static HashSet<int> BuildStatementStartSet(TSqlScript script)
     {
         var starts = new HashSet<int>();

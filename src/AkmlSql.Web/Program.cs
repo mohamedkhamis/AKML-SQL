@@ -28,6 +28,8 @@ builder.Services.AddSingleton<IIndexedDbAdapter, JsIndexedDbAdapter>();
 builder.Services.AddSingleton<IThemeApplier, JsThemeApplier>();
 
 builder.Services.AddSingleton<IFormatterService, FormatterService>();
+// Spec 042: which dialect the active connection speaks, so the in-browser T-SQL services never see PostgreSQL text.
+builder.Services.AddSingleton<IDialectGate, DialectGate>();
 builder.Services.AddSingleton<IProfileStore>(sp => new ProfileStore(
     sp.GetRequiredService<IIndexedDbAdapter>(),
     sp.GetRequiredService<IEngineBridge>()));
@@ -36,8 +38,10 @@ builder.Services.AddSingleton<IAnalysisSettingsStore, AnalysisSettingsStore>();
 // from IAnalysisSettingsStore. Registered via an explicit factory so the store is
 // unambiguously injected (rather than relying on DI to fill the optional ctor param) —
 // "Suppress globally" depends on this same store instance being read on the next analyse.
+// Spec 042 (US8): the PostgreSQL rules run in the engine, so the analyser also gets the engine route for PostgreSQL scripts.
+builder.Services.AddSingleton<IPostgresAnalysisEngine, EnginePostgresAnalysis>();
 builder.Services.AddSingleton<IAnalyserService>(sp =>
-    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>()));
+    new AnalyserService(sp.GetRequiredService<IAnalysisSettingsStore>(), sp.GetRequiredService<IDialectGate>(), sp.GetRequiredService<IPostgresAnalysisEngine>()));
 builder.Services.AddSingleton<IThemeService, ThemeService>();
 builder.Services.AddSingleton<IEditorSessionStore, EditorSessionStore>();
 builder.Services.AddSingleton<IDiagnosticsRingBuffer, DiagnosticsRingBuffer>();
@@ -55,6 +59,7 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 //   IWorkspaceStatus      R41 -- execution phase / rows / time / caret / document, read by the status bar
 //                                and the results pane's running indicator.
 builder.Services.AddSingleton<IWorkspaceStatus, WorkspaceStatus>();
+builder.Services.AddSingleton<SchemaTreeExpansion>();
 // Spec 041 (R36) — the remembered editor workspace layout (one IndexedDB record per field).
 builder.Services.AddSingleton<IWorkspaceLayoutStore, WorkspaceLayoutStore>();
 
@@ -143,6 +148,11 @@ builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
 });
 builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
+// Spec 042 (FR-080, FR-081): the dialect of the active connection, and the engine call that removes the literals of
+// PostgreSQL text before it goes to a cloud provider. AiPromptService and AiGhostTextService take them as optional.
+builder.Services.AddSingleton<IAiDialectContext, AiDialectContext>();
+builder.Services.AddSingleton<IPostgresRedactor, EnginePostgresRedactor>();
+builder.Services.AddSingleton<IPostgresFormatEngine, EnginePostgresFormat>();
 builder.Services.AddSingleton<IAiPromptService, AiPromptService>();
 // Spec 028 (M6) T034 (US6): local-only persisted chat conversations.
 builder.Services.AddSingleton<IChatHistoryStore, ChatHistoryStore>();

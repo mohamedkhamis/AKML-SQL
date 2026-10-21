@@ -1,0 +1,522 @@
+[
+  {
+    "id": "PGFRM-001",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "products",
+        "vw_customer_orders",
+        "mv_product_sales",
+        "orders_order_id_seq"
+      ],
+      "mustNotContain": [
+        "archive_orders",
+        "customer_id"
+      ],
+      "minCount": 10
+    },
+    "note": "Tables, views, materialized views and sequences; no columns, no procedures"
+  },
+  {
+    "id": "PGFRM-002",
+    "family": "from-tables",
+    "doc": "select * from |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "suppliers",
+        "shippers"
+      ],
+      "mustNotContain": [
+        "Quantity"
+      ],
+      "minCount": 3
+    },
+    "note": "Lower-case keywords still trigger table completion"
+  },
+  {
+    "id": "PGFRM-003",
+    "family": "from-tables",
+    "doc": "SELECT * FROM cust|",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "vw_customer_orders"
+      ],
+      "mustNotContain": [
+        "products"
+      ]
+    },
+    "note": "Prefix cust"
+  },
+  {
+    "id": "PGFRM-004",
+    "family": "from-tables",
+    "doc": "SELECT * FROM ord|",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "order_details"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "Prefix ord"
+  },
+  {
+    "id": "PGFRM-005",
+    "family": "from-tables",
+    "doc": "SELECT * FROM sales.|",
+    "expect": {
+      "mustContain": [
+        "invoices",
+        "orders"
+      ],
+      "mustNotContain": [
+        "customers",
+        "sales"
+      ],
+      "minCount": 2
+    },
+    "note": "Schema dot lists that schema's objects only"
+  },
+  {
+    "id": "PGFRM-006",
+    "family": "from-tables",
+    "doc": "SELECT * FROM sales.inv|",
+    "expect": {
+      "mustContain": [
+        "invoices"
+      ],
+      "mustNotContain": [
+        "orders"
+      ]
+    },
+    "note": "Prefix after schema dot"
+  },
+  {
+    "id": "PGFRM-007",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "sales.orders",
+        "sales.invoices"
+      ],
+      "mustNotContain": [
+        "sales.customers"
+      ]
+    },
+    "note": "Other schemas' objects are qualified"
+  },
+  {
+    "id": "PGFRM-008",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "sales",
+        "public"
+      ]
+    },
+    "note": "Schema names are offered"
+  },
+  {
+    "id": "PGFRM-009",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustNotContain": [
+        "pg_class",
+        "pg_tables",
+        "pg_attribute",
+        "information_schema",
+        "pg_catalog"
+      ]
+    },
+    "note": "System catalogs stay out of the list"
+  },
+  {
+    "id": "PGFRM-010",
+    "family": "from-tables",
+    "doc": "SELECT * FROM aud|",
+    "expect": {
+      "mustContain": [
+        "Audit Log"
+      ]
+    },
+    "note": "Name that needs quotes is found by prefix"
+  },
+  {
+    "id": "PGFRM-011",
+    "family": "from-tables",
+    "doc": "SELECT * FROM \"Aud|",
+    "expect": {
+      "mustContain": [
+        "Audit Log"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "Quoted prefix"
+  },
+  {
+    "id": "PGFRM-012",
+    "family": "from-tables",
+    "doc": "SELECT * FROM public.|",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "Audit Log"
+      ],
+      "mustNotContain": [
+        "invoices"
+      ],
+      "minCount": 10
+    },
+    "note": "Explicit public schema"
+  },
+  {
+    "id": "PGFRM-013",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers, |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "products"
+      ]
+    },
+    "note": "After a comma another table"
+  },
+  {
+    "id": "PGFRM-014",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers c, |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "shippers"
+      ]
+    },
+    "note": "After an aliased table and a comma"
+  },
+  {
+    "id": "PGFRM-015",
+    "family": "from-tables",
+    "doc": "INSERT INTO |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "vw_customer_orders"
+      ],
+      "mustNotContain": [
+        "mv_product_sales",
+        "orders_order_id_seq",
+        "archive_orders"
+      ],
+      "minCount": 8
+    },
+    "note": "Write targets: tables and views"
+  },
+  {
+    "id": "PGFRM-016",
+    "family": "from-tables",
+    "doc": "UPDATE |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "products"
+      ],
+      "mustNotContain": [
+        "mv_product_sales",
+        "orders_order_id_seq"
+      ],
+      "minCount": 8
+    },
+    "note": "UPDATE targets"
+  },
+  {
+    "id": "PGFRM-017",
+    "family": "from-tables",
+    "doc": "DELETE FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "shippers"
+      ],
+      "mustNotContain": [
+        "mv_product_sales",
+        "orders_order_id_seq"
+      ],
+      "minCount": 8
+    },
+    "note": "DELETE targets"
+  },
+  {
+    "id": "PGFRM-018",
+    "family": "from-tables",
+    "doc": "TRUNCATE |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders",
+        "order_details"
+      ],
+      "mustNotContain": [
+        "archive_orders"
+      ],
+      "minCount": 8
+    },
+    "note": "TRUNCATE takes relations"
+  },
+  {
+    "id": "PGFRM-019",
+    "family": "from-tables",
+    "doc": "DROP TABLE |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "DROP TABLE takes relations"
+  },
+  {
+    "id": "PGFRM-020",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers c JOIN |",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "products",
+        "suppliers"
+      ],
+      "mustNotContain": [
+        "customer_id"
+      ],
+      "minCount": 8
+    },
+    "note": "JOIN takes relations"
+  },
+  {
+    "id": "PGFRM-021",
+    "family": "from-tables",
+    "doc": "SELECT * FROM vw|",
+    "expect": {
+      "mustContain": [
+        "vw_customer_orders"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "View by prefix"
+  },
+  {
+    "id": "PGFRM-022",
+    "family": "from-tables",
+    "doc": "SELECT * FROM mv|",
+    "expect": {
+      "mustContain": [
+        "mv_product_sales"
+      ],
+      "mustNotContain": [
+        "orders"
+      ]
+    },
+    "note": "Materialized view by prefix"
+  },
+  {
+    "id": "PGFRM-023",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "LATERAL",
+        "ONLY"
+      ]
+    },
+    "note": "FROM keywords"
+  },
+  {
+    "id": "PGFRM-024",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustNotContain": [
+        "dbo",
+        "sys",
+        "INFORMATION_SCHEMA",
+        "sp_",
+        "xp_"
+      ]
+    },
+    "note": "No SQL Server schemas"
+  },
+  {
+    "id": "PGFRM-025",
+    "family": "from-tables",
+    "doc": "SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "invoices",
+        "orders"
+      ],
+      "mustNotContain": [
+        "sales.invoices"
+      ]
+    },
+    "note": "sales first in the search path: its objects are bare",
+    "searchPath": [
+      "sales",
+      "public"
+    ]
+  },
+  {
+    "id": "PGFRM-026",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers c |",
+    "expect": {
+      "mustContain": [
+        "JOIN",
+        "LEFT JOIN",
+        "WHERE",
+        "GROUP BY",
+        "ORDER BY",
+        "LIMIT"
+      ],
+      "mustNotContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "After a table: clause keywords, not more tables"
+  },
+  {
+    "id": "PGFRM-027",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers |",
+    "expect": {
+      "mustContain": [
+        "AS",
+        "WHERE",
+        "JOIN"
+      ],
+      "mustNotContain": [
+        "orders"
+      ]
+    },
+    "note": "After an unaliased table"
+  },
+  {
+    "id": "PGFRM-028",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers c LEFT |",
+    "expect": {
+      "mustContain": [
+        "JOIN",
+        "OUTER JOIN"
+      ],
+      "mustNotContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "LEFT takes JOIN only"
+  },
+  {
+    "id": "PGFRM-029",
+    "family": "from-tables",
+    "doc": "SELECT * FROM (SELECT * FROM |)",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "Inside a subquery"
+  },
+  {
+    "id": "PGFRM-030",
+    "family": "from-tables",
+    "doc": "WITH x AS (SELECT 1) SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "x",
+        "customers"
+      ]
+    },
+    "note": "CTE names are offered with the tables"
+  },
+  {
+    "id": "PGFRM-031",
+    "family": "from-tables",
+    "doc": "SELECT * FROM generate_|",
+    "expect": {
+      "mustContain": [
+        "generate_series"
+      ],
+      "mustNotContain": [
+        "customers"
+      ]
+    },
+    "note": "A set-returning built-in is a table source"
+  },
+  {
+    "id": "PGFRM-032",
+    "family": "from-tables",
+    "doc": "SELECT * FROM unnest|",
+    "expect": {
+      "mustContain": [
+        "unnest"
+      ]
+    },
+    "note": "unnest as a table source"
+  },
+  {
+    "id": "PGFRM-033",
+    "family": "from-tables",
+    "doc": "SELECT * FROM orders_by|",
+    "expect": {
+      "mustContain": [
+        "orders_by_customer"
+      ],
+      "mustNotContain": [
+        "order_total"
+      ]
+    },
+    "note": "A user-defined table function, not a scalar one"
+  },
+  {
+    "id": "PGFRM-034",
+    "family": "from-tables",
+    "doc": "SELECT * FROM jsonb_array_el|",
+    "expect": {
+      "mustContain": [
+        "jsonb_array_elements"
+      ]
+    },
+    "note": "A built-in set-returning JSON function"
+  },
+  {
+    "id": "PGFRM-035",
+    "family": "from-tables",
+    "doc": "SELECT * FROM customers WHERE customer_id IN (SELECT customer_id FROM |)",
+    "expect": {
+      "mustContain": [
+        "orders",
+        "customers"
+      ]
+    },
+    "note": "Subquery in WHERE"
+  }
+]

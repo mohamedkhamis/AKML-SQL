@@ -16,8 +16,11 @@ public enum PermissionLevel
 [SuppressMessage("ReSharper", "NullableWarningSuppressionIsUsed")]
 [SuppressMessage("ReSharper", "InvalidXmlDocComment")]
 [SuppressMessage("ReSharper", "UnusedMember.Global")]
-public class SchemaMetadataService
+public class SchemaMetadataService : ISchemaMetadataProvider
 {
+    /// <summary>Spec 042: the SQL Server implementation of the per-kind catalog seam.</summary>
+    public AkmlSql.Core.DatabaseKind Kind => AkmlSql.Core.DatabaseKind.SqlServer;
+
     /// <summary>
     /// Lists all accessible online databases on the target server. Used by
     /// the USE-clause completion provider to offer database names for auto-complete.

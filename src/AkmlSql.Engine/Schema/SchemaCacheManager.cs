@@ -49,10 +49,17 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private static string BuildCacheKey(string serverName, string databaseName)
-    {
-        return $"{serverName}:{databaseName}";
-    }
+    /// <summary>
+    /// Spec 042 (FR-004, data-model §6): the kind of server a session is connected to. The first argument of every lookup here is
+    /// a session id, so the key can carry the kind without any caller changing: the two <c>northwind</c> databases of one session
+    /// that moved from SQL Server to PostgreSQL are two caches, in memory and on disk. Null means every session is SQL Server.
+    /// </summary>
+    public Func<string, AkmlSql.Core.DatabaseKind>? KindOf { get; set; }
+
+    private AkmlSql.Core.DatabaseKind KindFor(string serverName) => KindOf?.Invoke(serverName) ?? AkmlSql.Core.DatabaseKind.SqlServer;
+
+    private string BuildCacheKey(string serverName, string databaseName) =>
+        KindFor(serverName) == AkmlSql.Core.DatabaseKind.PostgreSql ? $"pg|{serverName}:{databaseName}" : $"{serverName}:{databaseName}";
 
     /// <summary>
     /// Returns the existing cache for <paramref name="serverName"/>/<paramref name="databaseName"/>,
@@ -62,7 +69,8 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     public DatabaseCache GetOrCreateCache(string serverName, string databaseName)
     {
         var key = BuildCacheKey(serverName, databaseName);
-        var cache = _caches.GetOrAdd(key, k => new DatabaseCache { CacheKey = k });
+        var kind = KindFor(serverName);
+        var cache = _caches.GetOrAdd(key, k => new DatabaseCache { CacheKey = k, Kind = kind });
         cache.LastUsedUtc = DateTime.UtcNow;
         return cache;
     }
@@ -98,6 +106,13 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
 
     /// <summary>Ends a population claimed with <see cref="TryClaimPopulation"/>.</summary>
     public void ReleasePopulation(string cacheKey) => _populating.TryRemove(cacheKey, out _);
+
+    /// <summary>True while a population of the cache <paramref name="cacheKey"/> is claimed: a load is running on it.</summary>
+    public bool IsPopulating(string cacheKey) => _populating.ContainsKey(cacheKey);
+
+    /// <summary>The cache for the server/database if it exists; nothing else (no reload is started, no use is recorded).</summary>
+    public DatabaseCache? FindCache(string serverName, string databaseName) =>
+        _caches.TryGetValue(BuildCacheKey(serverName, databaseName), out var cache) ? cache : null;
 
     /// <summary>
     /// Registers a connection string for a cache key, used by periodic refresh (T079).

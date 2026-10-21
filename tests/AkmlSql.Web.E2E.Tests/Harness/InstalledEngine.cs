@@ -35,4 +35,43 @@ internal static class InstalledEngine
                 : DefaultBridgePort;
         }
     }
+
+    /// <summary>True when the installed engine's config says it listens on the network (TLS + pairing), not loopback.</summary>
+    public static bool IsNetworkMode
+    {
+        get
+        {
+            var path = Path.Combine(StateDirectory, "config.json");
+            if (!File.Exists(path)) return false;
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            var bind = json.RootElement.TryGetProperty("bridge", out var bridge)
+                       && bridge.TryGetProperty("bindAddress", out var b) ? b.GetString() : null;
+            return bind is not null and not "127.0.0.1" and not "localhost" and not "::1";
+        }
+    }
+
+    /// <summary>The current pairing PIN (single use: the engine writes a new one after each pairing).</summary>
+    public static string? PairingPin
+    {
+        get
+        {
+            var path = Path.Combine(StateDirectory, "pairing-pin.txt");
+            var pin = File.Exists(path) ? File.ReadAllText(path).Trim() : string.Empty;
+            return pin.Length == 0 ? null : pin;
+        }
+    }
+
+    /// <summary>The installed site's address on this computer (the port of INSTALL-SUMMARY.txt's URL line), or null.</summary>
+    public static string? SiteUrl
+    {
+        get
+        {
+            var path = Path.Combine(StateDirectory, "INSTALL-SUMMARY.txt");
+            if (!File.Exists(path)) return null;
+            var line = File.ReadLines(path).FirstOrDefault(l => l.StartsWith("URL:", StringComparison.Ordinal));
+            return line is not null && Uri.TryCreate(line["URL:".Length..].Trim(), UriKind.Absolute, out var uri)
+                ? $"http://localhost:{uri.Port}/"
+                : null;
+        }
+    }
 }

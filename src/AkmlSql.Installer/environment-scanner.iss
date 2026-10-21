@@ -208,6 +208,11 @@ end;
 
 // --- Running IDE Detection ---
 
+// tasklist's filter ignores case, but it prints the image name as the process has it -- SSMS 22 is
+// "SSMS.exe" -- and Pascal's Pos is case-sensitive. A plain Pos(ExeName, Line) therefore missed a
+// running SSMS whenever the caller spelled it "Ssms.exe": setup showed the close prompt, then the
+// close loop believed SSMS was already gone, never killed it, and the live SSMS restarted the engine
+// that locks Engine\*.dll ("DeleteFile failed; code 5"). Compare the whole first column, ignoring case.
 function IsProcessRunning(ExeName: String): Boolean;
 var
   ResultCode: Integer;
@@ -224,7 +229,7 @@ begin
     begin
       for I := 0 to GetArrayLength(Lines) - 1 do
       begin
-        if Pos(ExeName, Lines[I]) > 0 then
+        if Pos(Lowercase(ExeName) + ' ', Lowercase(Trim(Lines[I])) + ' ') = 1 then
         begin
           Result := True;
           Break;
@@ -241,7 +246,7 @@ var
 begin
   for I := 0 to TargetCount - 1 do
   begin
-    Targets[I].IsRunning := IsProcessRunning('Ssms.exe') or IsProcessRunning('SSMS.exe');
+    Targets[I].IsRunning := IsProcessRunning('SSMS.exe');   // the match ignores case
   end;
 end;
 

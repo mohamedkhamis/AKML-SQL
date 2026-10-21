@@ -60,6 +60,10 @@ public sealed record WorkspaceLayout
     public bool NavVisible { get; init; } = true;
     public bool SchemaVisible { get; init; } = true;
     public int SchemaWidth { get; init; } = WorkspaceLayoutLimits.Default.SchemaDefaultWidth;
+
+    /// <summary>Unpinned: the Schema panel stays an edge strip and slides over the editor when opened, hiding again when the
+    /// editor is clicked or focused (Visual Studio's auto-hide). Pinned (the default) it takes its own column.</summary>
+    public bool SchemaAutoHide { get; init; }
     public bool AiVisible { get; init; }
     public int AiWidth { get; init; } = WorkspaceLayoutLimits.Default.AiDefaultWidth;
     public string AiTab { get; init; } = AiTabActions;
@@ -141,6 +145,7 @@ public static class WorkspaceLayoutFields
     public const string NavVisible = "navVisible";
     public const string SchemaVisible = "schemaVisible";
     public const string SchemaWidth = "schemaWidth";
+    public const string SchemaAutoHide = "schemaAutoHide";
     public const string AiVisible = "aiVisible";
     public const string AiWidth = "aiWidth";
     public const string AiTab = "aiTab";
@@ -238,6 +243,7 @@ internal sealed class WorkspaceLayoutStore : IWorkspaceLayoutStore
         WorkspaceLayoutFields.NavVisible => Read<bool?>(values, key) is { } b ? layout with { NavVisible = b } : layout,
         WorkspaceLayoutFields.SchemaVisible => Read<bool?>(values, key) is { } b ? layout with { SchemaVisible = b } : layout,
         WorkspaceLayoutFields.SchemaWidth => Read<int?>(values, key) is { } n ? layout with { SchemaWidth = n } : layout,
+        WorkspaceLayoutFields.SchemaAutoHide => Read<bool?>(values, key) is { } b ? layout with { SchemaAutoHide = b } : layout,
         WorkspaceLayoutFields.AiVisible => Read<bool?>(values, key) is { } b ? layout with { AiVisible = b } : layout,
         WorkspaceLayoutFields.AiWidth => Read<int?>(values, key) is { } n ? layout with { AiWidth = n } : layout,
         WorkspaceLayoutFields.AiTab => Read<string?>(values, key) is WorkspaceLayout.AiTabActions or WorkspaceLayout.AiTabChat

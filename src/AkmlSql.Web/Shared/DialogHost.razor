@@ -23,7 +23,7 @@
     <div class="akml-scrim" data-testid="dialog-scrim">
         <div @ref="_panel" class="akml-dialog" role="dialog" aria-modal="true" tabindex="-1"
              aria-labelledby="akml-dialog-title" aria-describedby="akml-dialog-message"
-             data-testid="dialog" @onkeydown="OnKeyDownAsync">
+             data-testid="dialog" data-dialog-id="@confirm?.DialogId" @onkeydown="OnKeyDownAsync">
             <div class="akml-dialog-header">
                 <h2 class="akml-dialog-title" id="akml-dialog-title" data-testid="dialog-title">@title</h2>
             </div>

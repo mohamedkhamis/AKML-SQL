@@ -18,6 +18,19 @@ public partial class ChangeDetector
     {
         try
         {
+            // Spec 042 (FR-043): a PostgreSQL cache is checked with its own catalog hashes.
+            if (cache.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+            {
+                var pgChecksum = await PostgreSql.PgChangeChecksum.ComputeAsync(connectionString, ct);
+                if (pgChecksum == cache.LastChangeChecksum) return false;
+
+                Log.Information("ChangeDetector: schema changes detected for {Key} (old={Old}, new={New})",
+                    cache.CacheKey, cache.LastChangeChecksum, pgChecksum);
+                cache.LastChangeChecksum = pgChecksum;
+                cache.IsStale = true;
+                return true;
+            }
+
             await using var conn = new SqlConnection(connectionString);
             await conn.OpenAsync(ct);
 

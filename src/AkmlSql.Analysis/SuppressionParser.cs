@@ -65,6 +65,23 @@ public static class SuppressionParser
 
     public static SuppressionMap Parse(IList<TSqlParserToken> tokens, out List<AnalysisDiagnostic> metaDiagnostics)
     {
+        var comments = new List<(string Text, int Line)>();
+        foreach (var token in tokens)
+        {
+            if (token.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
+                comments.Add((token.Text, token.Line));
+        }
+
+        return ParseComments(comments, out metaDiagnostics);
+    }
+
+    /// <summary>
+    /// Builds the map from comments alone, each given as its full text (including the <c>--</c> or <c>/*</c>) and the 1-based
+    /// line it starts on, in document order. This is the dialect-neutral core: the T-SQL overload above feeds it ScriptDom's
+    /// comment tokens, and the PostgreSQL analyser feeds it the comments its own scanner found (spec 042, FR-151).
+    /// </summary>
+    public static SuppressionMap ParseComments(IEnumerable<(string Text, int Line)> comments, out List<AnalysisDiagnostic> metaDiagnostics)
+    {
         var map = new SuppressionMap();
         metaDiagnostics = [];
 
@@ -75,13 +92,8 @@ public static class SuppressionParser
         int? openAll = null;
         var openByRule = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var token in tokens)
+        foreach (var (text, line) in comments)
         {
-            if (token.TokenType is not (TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment))
-                continue;
-
-            var text = token.Text;
-            var line = token.Line;
 
             // -- akml-disable / akml-enable / akml-disable-line -----------------------
             var akml = AkmlDirective.Match(text);

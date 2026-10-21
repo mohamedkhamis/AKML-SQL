@@ -156,4 +156,37 @@ public sealed class WorkspaceStatusTests
         _status.SetDocument("orders-audit", modified: true);
         Assert.Equal(1, _changes);
     }
+
+    [Fact]
+    public void The_last_result_is_kept_for_the_next_visit_to_the_editor()
+    {
+        Assert.Null(_status.LastResult);
+        var result = new ExecuteQueryResult { Status = ExecuteStatus.Ok, ResultSets = new[] { Set(2) } };
+
+        _status.KeepResult(new WorkspaceResult(result, ConnectionGeneration: 3, StartLine: 4, StartColumn: 1, Sql: "SELECT 1"));
+
+        Assert.Same(result, _status.LastResult!.Result);
+        Assert.Equal(3, _status.LastResult.ConnectionGeneration);
+        Assert.Equal("SELECT 1", _status.LastResult.Sql);
+    }
+
+    [Fact]
+    public void A_connection_change_clears_the_outcome_but_not_a_run_in_flight()
+    {
+        _status.Begin();
+        _status.Complete(new ExecuteQueryResult { Status = ExecuteStatus.Ok, ResultSets = new[] { Set(196) }, ElapsedMs = 28 });
+        _changes = 0;
+
+        _status.ClearOutcome();
+
+        Assert.Equal(ExecutionPhase.Idle, _status.Phase);
+        Assert.Null(_status.Outcome);
+        Assert.Equal(0, _status.RowCount);
+        Assert.Equal(0, _status.ElapsedMs);
+        Assert.Equal(1, _changes);
+
+        _status.Begin();
+        _status.ClearOutcome();
+        Assert.Equal(ExecutionPhase.Running, _status.Phase);
+    }
 }

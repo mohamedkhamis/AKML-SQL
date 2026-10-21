@@ -63,6 +63,50 @@ public sealed class ResultsPaneComponentTests : IDisposable
         Assert.NotNull(cut.Find("[data-testid=results-pane]"));
     }
 
+    /// <summary>Review WEB-08: the old grids are not just dimmed while a query runs — they take no edit, because the new
+    /// result would replace them (and their pending edits) without asking.</summary>
+    [Fact]
+    public void While_running_the_old_grids_take_no_edit_and_the_stamp_reaches_them()
+    {
+        var result = Sets(GridTestHost.EditableSet());
+        result.ConnectionStamp = "stamp-A";
+
+        var running = Render(result, running: true);
+        Assert.Contains(ResultsPaneComponent.RunningReason, running.Find("[data-testid=results-frozen-reason]").TextContent);
+        var grid = running.FindComponent<ResultSetGrid>();
+        Assert.Equal(ResultsPaneComponent.RunningReason, grid.Instance.FrozenReason);
+        Assert.Equal("stamp-A", grid.Instance.ConnectionStamp);
+
+        running.Render(p => p.Add(x => x.IsRunning, false));
+        Assert.Null(grid.Instance.FrozenReason);
+        Assert.Empty(running.FindAll("[data-testid=results-frozen-reason]"));
+
+        running.Render(p => p.Add(x => x.FrozenReason, "stale"));
+        Assert.Equal("stale", grid.Instance.FrozenReason);
+    }
+
+    /// <summary>Review WEB-09: the page learns when pending edits appear and go, so it can ask the browser to warn before a
+    /// reload or a closed tab — only while there is something to lose.</summary>
+    [Fact]
+    public void The_page_is_told_when_pending_edits_appear_and_go()
+    {
+        var reports = new List<bool>();
+        var cut = _ctx.Render<ResultsPaneComponent>(p => p
+            .Add(x => x.Result, Sets(GridTestHost.EditableSet()))
+            .Add(x => x.HasPendingEditsChanged, (bool v) => reports.Add(v)));
+        Assert.Empty(reports);
+
+        var grid = cut.FindComponent<ResultSetGrid>();
+        GridTestHost.Cell(grid, 0, 1).DoubleClick();
+        var input = grid.Find("[data-testid=results-cell-input]");
+        input.Input("changed");
+        input.KeyDown(new KeyboardEventArgs { Key = "Enter" });
+        Assert.Equal(new[] { true }, reports);
+
+        grid.Find("[data-testid=results-discard]").Click();
+        Assert.Equal(new[] { true, false }, reports);
+    }
+
     [Fact]
     public void Before_any_run_the_pane_says_how_to_get_results()
     {

@@ -1,0 +1,182 @@
+[
+  {
+    "id": "PGDLR-001",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT * FROM | $$;",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ],
+      "mustNotContain": [
+        "archive_orders"
+      ]
+    },
+    "note": "FROM inside a function body"
+  },
+  {
+    "id": "PGDLR-002",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int LANGUAGE sql AS $$ SELECT | FROM customers $$;",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ],
+      "mustNotContain": [
+        "freight"
+      ]
+    },
+    "note": "Columns inside a function body"
+  },
+  {
+    "id": "PGDLR-003",
+    "family": "dollar-quoted",
+    "doc": "CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN INSERT INTO orders (|) VALUES (1); END; $$;",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "INSERT inside a plpgsql block"
+  },
+  {
+    "id": "PGDLR-004",
+    "family": "dollar-quoted",
+    "doc": "DO $$ BEGIN PERFORM 1; DELETE FROM | ; END $$",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "Second statement of a DO block"
+  },
+  {
+    "id": "PGDLR-005",
+    "family": "dollar-quoted",
+    "doc": "DO $$ BEGIN UPDATE orders SET | ; END $$",
+    "expect": {
+      "mustContain": [
+        "freight",
+        "ship_city"
+      ]
+    },
+    "note": "UPDATE inside a DO block"
+  },
+  {
+    "id": "PGDLR-006",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f(a int) RETURNS TABLE (x int) AS $$ SELECT o.| FROM orders o $$ LANGUAGE sql;",
+    "expect": {
+      "mustContain": [
+        "order_id",
+        "freight"
+      ],
+      "mustNotContain": [
+        "company_name"
+      ]
+    },
+    "note": "Alias dot in a body before LANGUAGE"
+  },
+  {
+    "id": "PGDLR-007",
+    "family": "dollar-quoted",
+    "doc": "SELECT $$text|$$",
+    "expect": {
+      "mustNotContain": [
+        "customers",
+        "SELECT",
+        "orders"
+      ]
+    },
+    "note": "A dollar-quoted string constant offers nothing"
+  },
+  {
+    "id": "PGDLR-008",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int AS $fn$ SELECT * FROM cust| $fn$ LANGUAGE sql;",
+    "expect": {
+      "mustContain": [
+        "customers"
+      ],
+      "mustNotContain": [
+        "products"
+      ]
+    },
+    "note": "Tagged dollar quote"
+  },
+  {
+    "id": "PGDLR-009",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql; SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "After the function: back to normal"
+  },
+  {
+    "id": "PGDLR-010",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; SELECT * FROM | $$",
+    "expect": {
+      "mustContain": [
+        "customers"
+      ]
+    },
+    "note": "Second statement of a body"
+  },
+  {
+    "id": "PGDLR-011",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int AS $$ SELECT ';' AS s, | FROM customers $$",
+    "expect": {
+      "mustContain": [
+        "customer_id",
+        "company_name"
+      ]
+    },
+    "note": "A semicolon inside a string in the body"
+  },
+  {
+    "id": "PGDLR-012",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int AS $$ SELECT * FROM |",
+    "expect": {
+      "mustContain": [
+        "customers"
+      ]
+    },
+    "note": "Unterminated body"
+  },
+  {
+    "id": "PGDLR-013",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS void AS $$ BEGIN FOR r IN SELECT * FROM | LOOP NULL; END LOOP; END $$ LANGUAGE plpgsql;",
+    "expect": {
+      "mustContain": [
+        "customers",
+        "orders"
+      ]
+    },
+    "note": "FOR ... IN SELECT inside plpgsql"
+  },
+  {
+    "id": "PGDLR-014",
+    "family": "dollar-quoted",
+    "doc": "CREATE FUNCTION f() RETURNS int AS $$ /* ; */ SELECT * FROM | $$ LANGUAGE sql;",
+    "expect": {
+      "mustContain": [
+        "customers"
+      ]
+    },
+    "note": "A comment with a semicolon in the body"
+  }
+]

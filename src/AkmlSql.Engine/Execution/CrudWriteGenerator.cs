@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Text;
 using AkmlSql.Core.Ipc.Messages;
 using Microsoft.Data.SqlClient;
@@ -62,15 +63,22 @@ namespace AkmlSql.Engine.Execution
         /// <paramref name="connection"/> and (optionally) <paramref name="transaction"/>. The caller
         /// owns disposal of the returned command.
         /// </summary>
+        /// <param name="returnInserted">An INSERT returns the stored row's <see cref="ApplyChangesRequest.ReturnColumns"/> through
+        /// <c>OUTPUT INSERTED</c> (re-review REV-06); only for a table without enabled triggers.</param>
+        /// <param name="readBack">Review round 3: with a read-back key, an INSERT instead writes its key into a table variable and
+        /// selects the stored row by it after the triggers ran (<see cref="InsertReadBack.BuildKeyedInsert"/>); its identity comes
+        /// back in the <see cref="InsertReadBack.IdentityParameter"/> output parameter.</param>
         /// <exception cref="InvalidOperationException">
-        /// Thrown for a keyless UPDATE/DELETE, an empty INSERT, or an empty table name — the
+        /// Thrown for a keyless UPDATE/DELETE, or an empty table name — the
         /// handler converts this into a per-edit error rather than emitting unsafe SQL.
         /// </exception>
         public static SqlCommand BuildCommand(
             ApplyChangesRequest req,
             CrudEditDto edit,
             SqlConnection connection,
-            SqlTransaction? transaction)
+            SqlTransaction? transaction,
+            bool returnInserted = false,
+            InsertReadBack? readBack = null)
         {
             if (string.IsNullOrWhiteSpace(req.BaseTable))
                 throw new InvalidOperationException("Cannot build a CRUD command without a base table name.");
@@ -86,7 +94,10 @@ namespace AkmlSql.Engine.Execution
                     BuildUpdate(cmd, table, edit);
                     break;
                 case CrudOp.Insert:
-                    BuildInsert(cmd, table, edit);
+                    if (readBack is { Key.Count: > 0 } && req.ReturnColumns is { Length: > 0 })
+                        BuildKeyedInsert(cmd, table, edit, readBack, req.ReturnColumns);
+                    else
+                        BuildInsert(cmd, table, edit, returnInserted ? req.ReturnColumns : null);
                     break;
                 case CrudOp.Delete:
                     BuildDelete(cmd, table, edit);
@@ -125,10 +136,22 @@ namespace AkmlSql.Engine.Execution
             cmd.CommandText = sb.ToString();
         }
 
-        private static void BuildInsert(SqlCommand cmd, string table, CrudEditDto edit)
+        private static void BuildInsert(SqlCommand cmd, string table, CrudEditDto edit, string[]? returnColumns)
         {
+            // Re-review REV-06: OUTPUT INSERTED.<columns> returns the row as the server stored it — identity, defaults,
+            // computed values — so the grid shows it without running the query again. (The caller asks only when the table has
+            // no enabled trigger: SQL Server refuses OUTPUT without INTO on such a table.)
+            var output = returnColumns is { Length: > 0 }
+                ? " OUTPUT " + string.Join(", ", returnColumns.Select(c => "INSERTED." + QuoteName(c)))
+                : string.Empty;
+
+            // Review WEB-20: the grid sends only the cells the user set, so a row left entirely to the table's defaults (and
+            // identity) has none — every column takes its default.
             if (edit.SetCells.Length == 0)
-                throw new InvalidOperationException("INSERT has no column values.");
+            {
+                cmd.CommandText = "INSERT INTO " + table + output + " DEFAULT VALUES; SELECT SCOPE_IDENTITY();";
+                return;
+            }
 
             var cols = new StringBuilder();
             var vals = new StringBuilder();
@@ -142,7 +165,38 @@ namespace AkmlSql.Engine.Execution
             }
 
             // SELECT SCOPE_IDENTITY() lets the handler echo the new identity back to the grid.
-            cmd.CommandText = "INSERT INTO " + table + " (" + cols + ") VALUES (" + vals + "); SELECT SCOPE_IDENTITY();";
+            cmd.CommandText = "INSERT INTO " + table + " (" + cols + ")" + output + " VALUES (" + vals + "); SELECT SCOPE_IDENTITY();";
+        }
+
+        private static void BuildKeyedInsert(SqlCommand cmd, string table, CrudEditDto edit, InsertReadBack readBack, string[] returnColumns)
+        {
+            string rest;
+            string insert;
+            if (edit.SetCells.Length == 0)
+            {
+                insert = "INSERT INTO " + table;
+                rest = " DEFAULT VALUES";
+            }
+            else
+            {
+                var cols = new StringBuilder();
+                var vals = new StringBuilder();
+                for (int i = 0; i < edit.SetCells.Length; i++)
+                {
+                    if (i > 0) { cols.Append(", "); vals.Append(", "); }
+                    var pName = "@p" + i;
+                    cols.Append(QuoteName(edit.SetCells[i].BaseColumnName));
+                    vals.Append(pName);
+                    cmd.Parameters.Add(MakeParameter(pName, edit.SetCells[i]));
+                }
+                insert = "INSERT INTO " + table + " (" + cols + ")";
+                rest = " VALUES (" + vals + ")";
+            }
+            cmd.CommandText = readBack.BuildKeyedInsert(table, insert, rest, returnColumns);
+            cmd.Parameters.Add(new SqlParameter(InsertReadBack.IdentityParameter, SqlDbType.Decimal)
+            {
+                Precision = 38, Scale = 0, Direction = ParameterDirection.Output,
+            });
         }
 
         private static void BuildDelete(SqlCommand cmd, string table, CrudEditDto edit)

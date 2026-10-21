@@ -31,6 +31,15 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Empty in Phase A payloads.</summary>
         [Key(4)] public SchemaPhaseForeignKey[] ForeignKeys { get; set; } = System.Array.Empty<SchemaPhaseForeignKey>();
+
+        /// <summary>Spec 042 (FR-046): schemas the connected user has no USAGE on; listed by name, their objects are not loaded.</summary>
+        [Key(5)] public string[] InaccessibleSchemas { get; set; } = System.Array.Empty<string>();
+
+        /// <summary>Spec 042 (FR-040): system schemas loaded for name resolution but hidden in the tree by default.</summary>
+        [Key(6)] public string[] HiddenSchemas { get; set; } = System.Array.Empty<string>();
+
+        /// <summary>Spec 042 (FR-061): the session's search path (<c>current_schemas(false)</c>), used to order and qualify suggestions.</summary>
+        [Key(7)] public string[] SearchPath { get; set; } = System.Array.Empty<string>();
     }
 
     [MessagePackObject]

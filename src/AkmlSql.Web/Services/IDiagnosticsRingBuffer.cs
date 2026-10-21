@@ -59,7 +59,8 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
 
     public void Log(DiagnosticLevel level, string source, string message, object? data = null)
     {
-        _entries.Enqueue(new DiagnosticEntry(DateTimeOffset.UtcNow, level, source, message, data));
+        // Review WEB-21: the ring is persisted and exported — mask credential-shaped text and bound the length first.
+        _entries.Enqueue(new DiagnosticEntry(DateTimeOffset.UtcNow, level, source, DiagnosticRedaction.Clean(message), data));
         while (_entries.Count > CapacityBound && _entries.TryDequeue(out _)) { }
         ScheduleFlush();
     }
@@ -68,22 +69,38 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
 
     public void Clear()
     {
+        // Cleared means nothing is wanted from the record either: a later save must not restore it first.
+        Interlocked.Exchange(ref _restored, 1);
         while (_entries.TryDequeue(out _)) { }
         ScheduleFlush();
     }
 
-    public Task FlushAsync()
+    /// <summary>
+    /// Re-review REV-05: the stored ring is an envelope with a format version. Version 1 (a bare array, written before the
+    /// 2026-10-17 fixes) may hold whole AI provider responses — echoed prompts, schema, keys — that no pattern can reliably
+    /// mask, so it is migrated on restore and written back at once as version 2.
+    /// </summary>
+    private sealed record StoredRing(int Version, DiagnosticEntry[] Entries);
+
+    private const int StoredRingVersion = 2;
+
+    internal const string PurgedLegacyAiMessage =
+        "An AI diagnostic recorded by an earlier version was removed: it could hold a provider's response.";
+
+    public async Task FlushAsync()
     {
+        // A save before the first restore would overwrite the record with this page's entries alone, and the earlier visits'
+        // entries would be lost; restore (merge) first. RestoreAsync marks itself done before it can call back here.
+        if (Volatile.Read(ref _restored) == 0) await RestoreAsync().ConfigureAwait(false);
         var snapshot = Snapshot();
         try
         {
-            var json = JsonSerializer.Serialize(snapshot);
-            return _store.SetAsync(StoreNames.Diagnostics, PersistenceKey, json);
+            var json = JsonSerializer.Serialize(new StoredRing(StoredRingVersion, snapshot.ToArray()));
+            await _store.SetAsync(StoreNames.Diagnostics, PersistenceKey, json).ConfigureAwait(false);
         }
         catch
         {
             // Best-effort -- diagnostics persistence must never throw to the caller.
-            return Task.CompletedTask;
         }
     }
 
@@ -94,16 +111,40 @@ internal sealed class DiagnosticsRingBuffer : IDiagnosticsRingBuffer
         {
             var raw = await _store.GetAsync(StoreNames.Diagnostics, PersistenceKey).ConfigureAwait(false);
             if (string.IsNullOrEmpty(raw)) return;
-            var entries = JsonSerializer.Deserialize<DiagnosticEntry[]>(raw);
+            var legacy = raw.TrimStart().StartsWith("[", StringComparison.Ordinal);
+            var entries = legacy
+                ? JsonSerializer.Deserialize<DiagnosticEntry[]>(raw)
+                : JsonSerializer.Deserialize<StoredRing>(raw)?.Entries;
             if (entries == null) return;
-            foreach (var e in entries) _entries.Enqueue(e);
+            // The restore runs when the editor or the Diagnostics section first opens, so this page may already have logged - and
+            // saved - entries the record now holds. Merge instead of appending: each entry once, oldest first (appending showed
+            // every line of this page load twice, after the newer ones).
+            var current = _entries.ToArray();
+            var seen = new HashSet<(DateTimeOffset, string, string)>(current.Select(e => (e.Timestamp, e.Source, e.Message)));
+            var restored = entries
+                .Select(e => legacy ? Migrate(e) : e with { Message = DiagnosticRedaction.Clean(e.Message) })
+                .Where(e => seen.Add((e.Timestamp, e.Source, e.Message)))
+                .ToArray();
+            while (_entries.TryDequeue(out _)) { }
+            foreach (var e in restored.Concat(current).OrderBy(e => e.Timestamp)) _entries.Enqueue(e);
             while (_entries.Count > CapacityBound && _entries.TryDequeue(out _)) { }
+            // The legacy record is replaced now, not at the next log line: until then an export would carry the old text.
+            if (legacy) await FlushAsync().ConfigureAwait(false);
         }
         catch
         {
             // Corrupt record -- ignore.
         }
     }
+
+    /// <summary>
+    /// A version-1 entry: AI entries lose their message and data (they could carry a provider's response body); every other
+    /// entry is masked and bounded as a new one would be, and keeps its data (the earlier version logged type names there).
+    /// </summary>
+    private static DiagnosticEntry Migrate(DiagnosticEntry e) =>
+        e.Source.StartsWith("ai", StringComparison.OrdinalIgnoreCase)
+            ? e with { Message = PurgedLegacyAiMessage, Data = null }
+            : e with { Message = DiagnosticRedaction.Clean(e.Message) };
 
     private void ScheduleFlush()
     {

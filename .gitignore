@@ -100,3 +100,5 @@ src/AkmlSql.Site/wwwroot/docs-metadata.json
 src/AkmlSql.Site/wwwroot/releases.json
 src/AkmlSql.Site/wwwroot/update-manifest.json
 src/AkmlSql.Site/wwwroot/docs-metadata.json
+/.review-artifacts/*
+.review-artifacts/*

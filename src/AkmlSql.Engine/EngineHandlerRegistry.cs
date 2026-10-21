@@ -51,6 +51,8 @@ internal static class EngineHandlerRegistry
         var wildcardHandler = new WildcardExpansionHandler(parser);
         var signatureProvider = new SignatureProvider();
         var quickInfoProvider = new QuickInfoProvider();
+        // Spec 042 (T030, T106): the PostgreSQL language services, composed only when the dialect is enabled.
+        var pgServices = ctx.EnsureSettings().PostgreSql.Enabled ? new PostgreSql.PgServices() : null;
         // Spec 040 (STY-10): the team style folder, read per use so a changed setting applies
         // after AnalysisSettingsChanged invalidates the cached settings — no restart.
         var formatHandler = new FormatRequestHandler(ProfileManager.CreateDefault(
@@ -69,11 +71,17 @@ internal static class EngineHandlerRegistry
         // instance, so "this session" ends when the IDE closes.
         var sessionSuppressions = new SessionSuppressionStore();
         var analysisEngine = new AnalysisEngine(parser, ruleRegistry, caSettingsLoader, sessionSuppressions);
+        // Spec 042 (US8): the PostgreSQL rules and their analyser, only when the dialect is on. They share the settings loader and the
+        // session suppressions with the T-SQL analyser, so .casettings, "everywhere" overrides and "this session" apply to both.
+        var pgRuleRegistry = ctx.EnsureSettings().PostgreSql.Enabled ? new AkmlSql.PostgreSql.Analysis.PgRuleRegistry() : null;
+        var pgAnalysis = pgRuleRegistry != null
+            ? new AkmlSql.PostgreSql.Analysis.PgAnalysisEngine(pgRuleRegistry, caSettingsLoader, sessionSuppressions)
+            : null;
         var refactoringEngine = new RefactoringEngine(parser, schemaCache);
 
         var safetyHandler = new SafetyCheckHandler(parser);
-        var productivityHandler = new ProductivityRequestHandler(parser);
-        var navigationHandler = new NavigationRequestHandler(schemaCache);
+        var productivityHandler = new ProductivityRequestHandler(parser, sessionId => ctx.Sessions.KindOf(sessionId));
+        var navigationHandler = new NavigationRequestHandler(schemaCache, sessionId => ctx.Sessions.KindOf(sessionId));
         var crudHandler = new CrudGenerationHandler(schemaCache);
         var scriptAsHandler = new ScriptAsHandler(schemaCache);
         // Spec 036 (US2, FR-014): the timeout row of the failure taxonomy names the CONFIGURED
@@ -152,10 +160,10 @@ internal static class EngineHandlerRegistry
 
         // === Completion (4 typed) ===
         router.Register(new Handlers.Completion.CompletionHandler(
-            completionEngine, () => ctx.EnsureSettings()));
-        router.Register(new Handlers.Completion.WildcardExpansionHandler(wildcardHandler));
-        router.Register(new Handlers.Completion.SignatureHelpHandler(parser, signatureProvider));
-        router.Register(new Handlers.Completion.QuickInfoHandler(parser, quickInfoProvider));
+            completionEngine, () => ctx.EnsureSettings(), pgServices));
+        router.Register(new Handlers.Completion.WildcardExpansionHandler(wildcardHandler, pgServices));
+        router.Register(new Handlers.Completion.SignatureHelpHandler(parser, signatureProvider, pgServices));
+        router.Register(new Handlers.Completion.QuickInfoHandler(parser, quickInfoProvider, pgServices));
 
         // === Formatting (10 typed) ===
         router.Register(new Handlers.Formatting.FormatDocumentHandler(formatHandler));
@@ -179,11 +187,11 @@ internal static class EngineHandlerRegistry
 
         // === Analysis (4 typed) ===
         router.Register(new Handlers.Analysis.AnalysisHandler(
-            analysisEngine, () => ctx.EnsureSettings()));
+            analysisEngine, () => ctx.EnsureSettings(), pgAnalysis));
         // Spec 030 T052: Manage Rules dialog catalog. Shares ruleRegistry + caSettingsLoader with
         // AnalysisHandler so the reported enabled/severity match what analysis actually applies.
         router.Register(new Handlers.Analysis.ListAnalysisRulesHandler(
-            ruleRegistry, caSettingsLoader, () => ctx.EnsureSettings()));
+            ruleRegistry, caSettingsLoader, () => ctx.EnsureSettings(), pgRuleRegistry));
         router.Register(new Handlers.Analysis.SessionSuppressionHandler(sessionSuppressions));
         router.Register(new Handlers.Analysis.AnalysisSettingsChangedHandler(() =>
         {
@@ -210,7 +218,7 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Refactoring.RefactorApplyHandler(refactoringEngine));
 
         // === Schema (6 typed) ===
-        var schemaRefreshService = new SchemaRefreshService(sessions, schemaCache, schemaMeta);
+        var schemaRefreshService = new SchemaRefreshService(sessions, schemaCache, schemaMeta, kind => ctx.SchemaMetadataFor(kind));
         router.Register(new Handlers.Schema.SchemaRefreshHandler(schemaRefreshService.Refresh));
         router.Register(new Handlers.Schema.SchemaStatusHandler());
         router.Register(new Handlers.Schema.SchemaIdentifyHandler(
@@ -219,6 +227,9 @@ internal static class EngineHandlerRegistry
             {
                 var session = sessions.GetSession(sid);
                 if (session == null || !session.IsConnected) return null;
+                // Spec 042: a PostgreSQL server's identity is pg://host:port, so it can never equal a SQL Server's.
+                if (session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+                    return Handlers.Schema.SchemaIdentifyHandlerSupport.PostgresIdentity(session.ConnectionString);
                 return Handlers.Schema.SchemaIdentifyHandlerSupport
                     .ParseServerFromConnectionString(session.ConnectionString);
             }));
@@ -273,9 +284,17 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ConnectionChangedHandler());
         // Spec 029: validate SQL-auth credential before the shell stores it.
         router.Register(new Handlers.Control.TestSqlConnectionHandler());
+        // Spec 042 (FR-105, FR-106): whether a PostgreSQL password is remembered for a server and login, and forgetting it.
+        if (ctx.EnsureSettings().PostgreSql.Enabled)
+            router.Register(new PostgreSql.CredentialHandler(new PostgreSql.PgCredentialResolver()));
+        // Spec 042 (FR-081): literal redaction of PostgreSQL text for the web edition's cloud AI calls (223 -> 224).
+        if (ctx.EnsureSettings().PostgreSql.Enabled)
+            router.Register(new PostgreSql.RedactHandler());
         router.Register(new Handlers.Control.ListDatabasesHandler());
         // Spec 041 (R26): the toolbar's database selector (217 → 218), advertised as session.database.v1.
         router.Register(new Handlers.Control.ChangeDatabaseHandler());
+        // The web edition's Disconnect (225 → 226), advertised as session.disconnect.v1.
+        router.Register(new Handlers.Control.SessionDisconnectHandler());
 
         // === WebSocket bridge handshake (spec 025 US5 wire-up; spec 026 M4 closure auth) ===
         // The HandshakeHandler exists from spec 021 T060. The named-pipe transport doesn't need
@@ -343,8 +362,11 @@ internal static class EngineHandlerRegistry
         // Spec 041 (R16, R17): the handler splits scripts on GO with the same parser as everything else.
         // Spec 041 (R27): a script's USE re-keys the session the way the database selector does.
         var executeQueryHandler = new Execution.ExecuteQueryHandler(sessionConnections, schemaCache, parser,
-            (sessionId, database) => Handlers.Control.ChangeDatabaseHandler.MoveSession(ctx, sessionId, database));
-        var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections);
+            (sessionId, database) => Handlers.Control.ChangeDatabaseHandler.MoveSession(ctx, sessionId, database),
+            sessionId => ctx.Sessions.KindOf(sessionId),
+            // Spec 042 (FR-043): a PostgreSQL run that changed the catalog reloads that session's schema.
+            sessionId => schemaRefreshService.Refresh(new RefreshRequest { SessionId = sessionId }));
+        var applyChangesHandler = new Execution.ApplyChangesHandler(sessionConnections, sessionId => ctx.Sessions.KindOf(sessionId));
         var executeCancelHandler = new Execution.ExecuteCancelHandler(sessionConnections);
         router.RegisterRaw(MessageTypes.ExecuteQuery,
             (msg, ct) => executeQueryHandler.HandleAsync(msg, lookupSession, ct));

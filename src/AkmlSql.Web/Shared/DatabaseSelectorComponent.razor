@@ -4,10 +4,13 @@
     switch on the same connection (#temp tables and SET options survive). Disabled without the engine's
     session.database.v1, without a connection, or while a query runs; it follows a script's USE.
 *@
+@using AkmlSql.Core
 @using AkmlSql.Web.Services
+@using Microsoft.Extensions.DependencyInjection
 @implements IDisposable
 @inject ISqlConnectionService Sql
 @inject INotificationService Notifications
+@inject IServiceProvider Services
 
 <span class="akml-db-selector">
     <button type="button" class="akml-btn" data-testid="db-selector" disabled="@Disabled" title="@Title"
@@ -35,7 +38,8 @@
 
 <style>
     .akml-db-selector { display: inline-flex; align-items: center; gap: var(--akml-scalar-spacing-xs); }
-    .akml-db-selector-name { max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+    /* One width whatever the name, so the toolbar does not shift when the database changes; the full name is in the title. */
+    .akml-db-selector-name { display: inline-block; width: 10em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 </style>
 
 @code {
@@ -51,10 +55,13 @@
 
     private bool Disabled => !Sql.IsConnected || !Sql.CanChangeDatabase || IsRunning || _busy;
 
+    private bool IsPostgres => Sql.Kind == DatabaseKind.PostgreSql;
+
     private string Title =>
-        !Sql.IsConnected ? "Connect to SQL Server to choose a database"
+        !Sql.IsConnected ? "Connect to a database server to choose a database"
         : !Sql.CanChangeDatabase ? "Switching database needs a newer engine"
         : IsRunning ? "The database cannot change while a query runs"
+        : IsPostgres ? "Change the database (PostgreSQL reconnects: temporary tables and session settings are lost)"
         : "Change the database (the connection, its #temp tables and SET options are kept)";
 
     protected override void OnInitialized() => Sql.StateChanged += OnStateChanged;
@@ -94,13 +101,41 @@
     {
         _menu = null;
         if (string.Equals(database, Sql.Database, StringComparison.OrdinalIgnoreCase)) return;
+
+        // Spec 042 (FR-031, FR-009): a PostgreSQL connection is to one database, so the switch is a reconnect. Say what it costs
+        // before doing it, and when a transaction is open say it will be rolled back (never committed).
+        if (IsPostgres && !await ConfirmReconnectAsync(database)) return;
+
         _busy = true;
         StateHasChanged();
         var (ok, error, wasReset) = await Sql.ChangeDatabaseAsync(database, CancellationToken.None);
         _busy = false;
         if (!ok) _error = error ?? "Could not switch database.";
+        else if (wasReset && IsPostgres) Notifications.Notify($"Switched to {database}. The connection was reopened: temporary tables and session settings were lost.", NotificationKind.Warning);
         else if (wasReset) Notifications.Notify($"Switched to {database}. The connection was reopened: #temp tables and SET options were lost.", NotificationKind.Warning);
         StateHasChanged();
+    }
+
+    // Resolved when used: a page that never switches a PostgreSQL database needs no dialog service.
+    private async Task<bool> ConfirmReconnectAsync(string database)
+    {
+        var dialogs = Services.GetService<IDialogService>();
+        if (dialogs == null) return true;
+
+        var open = Sql.TransactionState != TransactionState.None;
+        var aborted = Sql.TransactionState == TransactionState.Aborted;
+        var request = new DialogRequest
+        {
+            DialogId = "db-switch-confirm",
+            Title = open ? (aborted ? "Aborted transaction" : "Open transaction") : $"Switch to {database}?",
+            Message = open
+                ? (aborted ? "The current session has a transaction that an error aborted. " : "The current session has an open transaction. ")
+                  + $"Switching to {database} reconnects and rolls it back. Nothing is committed."
+                : $"PostgreSQL connects to one database at a time, so switching to {database} reconnects. Temporary tables and session settings are lost.",
+            ConfirmLabel = open ? "Roll back and switch" : "Switch",
+            Destructive = open,
+        };
+        return await dialogs.ConfirmAsync(request);
     }
 
     public void Dispose() => Sql.StateChanged -= OnStateChanged;

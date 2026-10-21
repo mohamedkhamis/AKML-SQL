@@ -7,6 +7,7 @@ using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Core.Models.History;
 using Microsoft.Data.Sqlite;
 using Serilog;
+using DatabaseKindNames = AkmlSql.Core.DatabaseKindNames;
 
 namespace AkmlSql.Engine.History;
 
@@ -16,7 +17,7 @@ namespace AkmlSql.Engine.History;
 /// </summary>
 public sealed class HistoryDatabase : IDisposable
 {
-    private const int SchemaVersion = 3;   // v2: query_sessions + history.session_id; v3: open_pid, FTS update trigger, ISO timestamps (spec 040)
+    private const int SchemaVersion = 4;   // v2: query_sessions + history.session_id; v3: open_pid, FTS update trigger, ISO timestamps (spec 040); v4: kind (spec 042)
     private const int MaxSqlTextChars = 1_048_576; // 1 MB
 
     private readonly string _connectionString;
@@ -243,6 +244,19 @@ public sealed class HistoryDatabase : IDisposable
                 INSERT INTO history_fts(history_fts, rowid, sql_text) VALUES ('delete', old.id, old.sql_text);
                 INSERT INTO history_fts(rowid, sql_text) VALUES (new.id, new.sql_text);
             END;");
+
+        // -- Schema v4 (spec 042): the database kind of each entry and query session --
+        // Columns are only ADDED, with a constant default, so a database written by an older engine keeps
+        // working, rows written before the upgrade read as SQL Server, and an older engine that opens this
+        // file later inserts without the column (the default applies) and ignores it when reading (FR-072).
+        await AddColumnIfMissingAsync(conn, "ALTER TABLE history ADD COLUMN kind TEXT NOT NULL DEFAULT 'sqlserver';");
+        await AddColumnIfMissingAsync(conn, "ALTER TABLE query_sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'sqlserver';");
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_kind_server_db ON history (kind, server, database_name);");
+        // The grouped view's key now includes the kind (see GroupKey), so it gets its own index.
+        await ExecuteNonQueryAsync(conn,
+            "CREATE INDEX IF NOT EXISTS IX_history_group_kind ON history " +
+            "(COALESCE(CAST(session_id AS TEXT), 'hash:' || content_hash) || ':' || kind, executed_at DESC, id DESC);");
 
         Log.Information("History database initialized at {ConnectionString}", _connectionString);
 
@@ -766,8 +780,12 @@ public sealed class HistoryDatabase : IDisposable
         string? errorMessage,
         string? source,
         string? tabTitle,
-        string? sessionKey = null)
+        string? sessionKey = null,
+        int kind = 0)
     {
+        // Spec 042: the database kind this run belongs to ("sqlserver" / "postgresql"); anything unknown is SQL Server.
+        var kindName = DatabaseKindNames.ToName(DatabaseKindNames.FromInt(kind));
+
         // Truncate SQL text if over limit
         if (sqlText.Length > MaxSqlTextChars)
         {
@@ -788,7 +806,7 @@ public sealed class HistoryDatabase : IDisposable
             try
             {
                 sessionId = await new QuerySessionStore(_connectionString)
-                    .GetOrCreateAsync(sessionKey!, DateTime.UtcNow, tabTitle, server, database);
+                    .GetOrCreateAsync(sessionKey!, DateTime.UtcNow, tabTitle, server, database, kindName);
             }
             catch (Exception ex)
             {
@@ -811,14 +829,14 @@ public sealed class HistoryDatabase : IDisposable
                 INSERT INTO history (
                     sql_text, truncated, server, database_name, username,
                     executed_at, duration_ms, row_count, status, error_msg,
-                    source, tab_title, content_hash, is_favorite, session_id
+                    source, tab_title, content_hash, is_favorite, session_id, kind
                 ) VALUES (
                     @sqlText, @truncated, @server, @database, @username,
                     @executedAt, @durationMs, @rowCount, @status, @errorMsg,
                     @source, @tabTitle, @contentHash,
                     CASE WHEN @sessionId IS NULL THEN 0
                          ELSE COALESCE((SELECT MAX(is_favorite) FROM history WHERE session_id = @sessionId), 0) END,
-                    @sessionId
+                    @sessionId, @kind
                 );
                 SELECT last_insert_rowid();";
 
@@ -837,6 +855,7 @@ public sealed class HistoryDatabase : IDisposable
             cmd.Parameters.AddWithValue("@tabTitle", (object?)tabTitle ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@contentHash", contentHash);
             cmd.Parameters.AddWithValue("@sessionId", (object?)sessionId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@kind", kindName);
 
             var result = await cmd.ExecuteScalarAsync();
             var entryId = Convert.ToInt64(result);
@@ -1054,6 +1073,13 @@ public sealed class HistoryDatabase : IDisposable
             parameters.Add(new SqliteParameter("@status", filter.Status.Value));
         }
 
+        // Spec 042 (FR-070): only one database kind; null lists both.
+        if (filter.Kind.HasValue)
+        {
+            whereClauses.Add("h.kind = @kind");
+            parameters.Add(new SqliteParameter("@kind", DatabaseKindNames.ToName(DatabaseKindNames.FromInt(filter.Kind.Value))));
+        }
+
         // Spec 040 (HIS-07): compare instants, not strings — a bound carrying an offset
         // ("…+03:00") sorts differently from the stored "…Z" text.
         if (filter.DateFrom.HasValue)
@@ -1095,7 +1121,7 @@ public sealed class HistoryDatabase : IDisposable
 
         // COALESCE so a NULL session_id degrades to per-content grouping instead of
         // lumping every ungrouped row together.
-        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash)";
+        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash) || ':' || h.kind";
 
         var whereClause = whereClauses.Count > 0
             ? "WHERE " + string.Join(" AND ", whereClauses)
@@ -1224,6 +1250,7 @@ public sealed class HistoryDatabase : IDisposable
                         h.content_hash,
                         page.is_open,
                         qs.session_key,
+                        h.kind AS kind,
                         page.total_groups
                     FROM page
                     JOIN history h ON h.id = page.rep_id
@@ -1255,7 +1282,8 @@ public sealed class HistoryDatabase : IDisposable
                         CASE WHEN h.status <> 3 THEN 1 ELSE 0 END as exec_count,
                         h.content_hash,
                         h.is_open,
-                        qs.session_key
+                        qs.session_key,
+                        h.kind AS kind
                     FROM {fromClause}
                     {whereClause}
                     ORDER BY h.executed_at DESC
@@ -1291,6 +1319,7 @@ public sealed class HistoryDatabase : IDisposable
         var isOpenOrdinal = reader.GetOrdinal("is_open");
         var versionCountOrdinal = filter.Deduplicate ? reader.GetOrdinal("version_count") : -1;
         var sessionKeyOrdinal = reader.GetOrdinal("session_key");
+        var kindOrdinal = reader.GetOrdinal("kind");
         var totalOrdinal = countFromPage ? reader.GetOrdinal("total_groups") : -1;
         while (await reader.ReadAsync())
         {
@@ -1316,7 +1345,8 @@ public sealed class HistoryDatabase : IDisposable
                 VersionCount = versionCountOrdinal < 0
                     ? 1
                     : (reader.IsDBNull(versionCountOrdinal) ? 1 : Math.Max(1, reader.GetInt32(versionCountOrdinal))),
-                SessionKey = reader.IsDBNull(sessionKeyOrdinal) ? null : reader.GetString(sessionKeyOrdinal)
+                SessionKey = reader.IsDBNull(sessionKeyOrdinal) ? null : reader.GetString(sessionKeyOrdinal),
+                Kind = (int)DatabaseKindNames.Parse(reader.IsDBNull(kindOrdinal) ? null : reader.GetString(kindOrdinal))
             });
         }
 
@@ -1440,7 +1470,7 @@ public sealed class HistoryDatabase : IDisposable
         }
         cmd.CommandText = $@"
             SELECT h.id, h.sql_text, h.server, h.database_name, h.executed_at, h.status, h.source,
-                   COALESCE(qs.name, h.tab_title), h.is_favorite, h.is_open, qs.session_key
+                   COALESCE(qs.name, h.tab_title), h.is_favorite, h.is_open, qs.session_key, h.kind
               FROM history h LEFT JOIN query_sessions qs ON qs.id = h.session_id
              WHERE h.id IN ({string.Join(", ", names)});";
 
@@ -1462,6 +1492,7 @@ public sealed class HistoryDatabase : IDisposable
                     IsFavorite = reader.GetInt32(8) != 0,
                     IsOpen = reader.GetInt32(9) != 0,
                     SessionKey = reader.IsDBNull(10) ? null : reader.GetString(10),
+                    Kind = (int)DatabaseKindNames.Parse(reader.IsDBNull(11) ? null : reader.GetString(11)),
                 };
                 byId[entry.Id] = entry;
             }
@@ -1826,7 +1857,7 @@ public sealed class HistoryDatabase : IDisposable
         string DeadOwners(string alias) => string.Join(" OR ", dead.Select(o =>
             $"({alias}open_pid = {o.Pid.ToString(CultureInfo.InvariantCulture)} AND {alias}open_pid_started IS "
             + (o.Started?.ToString(CultureInfo.InvariantCulture) ?? "NULL") + ")"));
-        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash)";
+        const string GroupKey = "COALESCE(CAST(h.session_id AS TEXT), 'hash:' || h.content_hash) || ':' || h.kind";
 
         var restorable = new List<long>();
         await using (var cmd = new SqliteCommand($@"
@@ -2018,6 +2049,12 @@ public sealed class HistoryDatabase : IDisposable
         {
             whereClauses.Add("h.status = @status");
             parameters.Add(new SqliteParameter("@status", filter.Status.Value));
+        }
+
+        if (filter.Kind.HasValue)
+        {
+            whereClauses.Add("h.kind = @kind");
+            parameters.Add(new SqliteParameter("@kind", DatabaseKindNames.ToName(DatabaseKindNames.FromInt(filter.Kind.Value))));
         }
 
         if (filter.DateFrom.HasValue)

@@ -1,10 +1,13 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
+using AkmlSql.Core.Connections;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Pairing;
+using AkmlSql.Engine.PostgreSql;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Transports;
 using Serilog;
@@ -33,6 +36,22 @@ namespace AkmlSql.Engine.Handlers.Control
                 throw new InvalidOperationException("RpcContext.ParserService is required for ConnectionChanged dispatch.");
             if (ctx.SchemaMetadata == null)
                 throw new InvalidOperationException("RpcContext.SchemaMetadata is required for ConnectionChanged dispatch.");
+
+            // Spec 042 (T056): a PostgreSQL connection takes its own path. None of what follows is meaningful for it: the
+            // alias resolver and the T-SQL parser's server version are SQL Server's, and the parser setting is process-wide.
+            if (DatabaseKindNames.FromInt(request.Kind) == DatabaseKind.PostgreSql)
+            {
+                // FR-093: with the feature off no session may become a PostgreSQL session, or the handlers that have no
+                // PostgreSQL service would read its text with the T-SQL parser. The session keeps its previous connection.
+                // The sign is the catalog reader, made at start-up only when the feature was on: the services and handlers are
+                // fixed then too, so a switch flipped while the engine runs waits for a restart, as they do.
+                if (ctx.PostgresSchemaMetadata == null)
+                {
+                    Log.Warning("ConnectionChanged (PostgreSQL) ignored: {Reason} (session={Session})", DialectErrors.FeatureOffMessage, request.SessionId);
+                    return Task.FromResult(request);
+                }
+                return Task.FromResult(HandlePostgres(request, ctx));
+            }
 
             // A SQL Server client alias ("ServerDemo") becomes the server it points at before anything
             // else — the guard below must judge the real target, and SqlClient can't resolve aliases.
@@ -156,6 +175,105 @@ namespace AkmlSql.Engine.Handlers.Control
             });
 
             return Task.FromResult(request);    // placeholder; ResponseMessageType=0 means it is dropped
+        }
+
+        /// <summary>
+        /// Spec 042 (T056, FR-003, FR-102 to FR-104): the session now talks to a PostgreSQL server. The request is judged by
+        /// the same guard as a test (a bridge request the engine would not open is ignored; the web client shows the reason
+        /// first), a remembered password is put into the string when it has none, and the session's persistent connection is
+        /// replaced when the string changed. The server's version and search path are read in the background, a password the
+        /// user asked to remember is saved only once the server has accepted it, and the schema is loaded when a PostgreSQL
+        /// catalog provider is registered.
+        /// </summary>
+        private static ConnectionInfo HandlePostgres(ConnectionInfo request, RpcContext ctx)
+        {
+            var refusal = PgTargetGuard.Check(request.ConnectionString);
+            if (refusal is not null)
+            {
+                Log.Warning("ConnectionChanged (PostgreSQL) refused for a bridge request (session={Session}) — {ConnDesc}: {Code}",
+                    request.SessionId, PgConnectionString.Describe(request.ConnectionString), refusal.Code);
+                return request;
+            }
+
+            var resolver = new PgCredentialResolver();
+            request.ConnectionString = resolver.Resolve(request.ConnectionString).ConnectionString;
+
+            var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;
+            ctx.Sessions.UpdateSession(request);
+            var identityChanged = !string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal);
+
+            // The persistent connection carries the old identity, session settings and any transaction: the next execute
+            // reopens under the new string (the web client asked the user before this point, FR-009).
+            if (!string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal))
+                ctx.SessionConnections?.Dispose(request.SessionId);
+
+            ctx.Logger.Information("Connection changed (PostgreSQL): session={Session} db={Db} -- {ConnDesc}",
+                request.SessionId, request.DatabaseName, PgConnectionString.Describe(request.ConnectionString));
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var facts = await PgConnectionFactory.ReadFactsAsync(request.ConnectionString, CancellationToken.None).ConfigureAwait(false);
+
+                    var session = ctx.Sessions.GetSession(request.SessionId);
+                    if (session != null && string.Equals(session.ConnectionString, request.ConnectionString, StringComparison.Ordinal))
+                    {
+                        session.ServerVersionText = facts.ServerVersionText;
+                        session.SearchPath = facts.SearchPath;
+                    }
+
+                    // The server accepted the password: now it is safe to remember it, if the user asked.
+                    resolver.RememberIfRequested(request.ConnectionString, request.RememberPassword);
+
+                    await PopulateSchemaAsync(ctx, request, identityChanged).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning("ConnectionChanged (PostgreSQL) could not read the server facts ({Type}) — {ConnDesc}",
+                        ex.GetType().Name, PgConnectionString.Describe(request.ConnectionString));
+                }
+            });
+
+            return request;
+        }
+
+        // Phase A, then Phase B, through the catalog provider of the kind. Until a PostgreSQL provider is registered there is
+        // nothing to load and the cache stays empty without error.
+        private static async Task PopulateSchemaAsync(RpcContext ctx, ConnectionInfo request, bool identityChanged)
+        {
+            var provider = ctx.SchemaMetadataFor(DatabaseKind.PostgreSql);
+            if (provider == null) return;
+
+            var cache = ctx.SchemaCache.GetOrCreateCache(request.SessionId, request.DatabaseName);
+            if (!ctx.SchemaCache.TryClaimPopulation(cache.CacheKey)) return;
+            try
+            {
+                // What a role may see is part of what was read: a catalog loaded as one role is wrong for another, which may
+                // have more or fewer schemas it can use. A new connection string starts the cache over - including a cache
+                // whose load was refused (PermissionDenied, still NotLoaded), or the new credentials would never be tried.
+                if (identityChanged && (cache.Phase != PopulationPhase.NotLoaded || cache.PermissionDenied))
+                {
+                    cache.Schemas.Clear();
+                    cache.ForeignKeys.Clear();
+                    cache.InaccessibleSchemas = new List<string>();
+                    cache.HiddenSchemas = new List<string>();
+                    cache.SearchPath = new List<string>();
+                    cache.Phase = PopulationPhase.NotLoaded;
+                    cache.PermissionDenied = false;
+                    cache.IsStale = false;
+                }
+                if (cache.PermissionDenied || cache.Phase != PopulationPhase.NotLoaded) return;
+
+                await provider.PopulatePhaseAAsync(cache, request.ConnectionString, CancellationToken.None).ConfigureAwait(false);
+                ctx.SchemaCache.EvictLru();
+                if (cache.Phase == PopulationPhase.PhaseA && !cache.PermissionDenied)
+                    await provider.PopulatePhaseBAsync(cache, request.ConnectionString, CancellationToken.None).ConfigureAwait(false);
+            }
+            finally
+            {
+                ctx.SchemaCache.ReleasePopulation(cache.CacheKey);
+            }
         }
     }
 }

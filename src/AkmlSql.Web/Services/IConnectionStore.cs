@@ -40,6 +40,12 @@ public sealed class EngineConnection
     public string Name { get; set; } = "Local engine";
     public string Host { get; set; } = "127.0.0.1";
     public int Port { get; set; } = 47291;   // engine bridge default (BridgeOptions.Port); was 5081 (matched nothing)
+
+    /// <summary>
+    /// True when the engine takes this browser without pairing (an engine bound to loopback). False for
+    /// any connection that paired with a PIN and so carries a token -- a network-mode engine reached at
+    /// <c>localhost</c> included. Where the engine is comes from <see cref="Host"/>, not from this flag.
+    /// </summary>
     public bool IsLocalhost { get; set; } = true;
 
     /// <summary>Id of the wrapped record in <see cref="IPairingTokenVault"/>. Null for localhost.</summary>
