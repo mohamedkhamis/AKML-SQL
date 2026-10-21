@@ -45,8 +45,10 @@ Facts about the current web edition that the stories below build on (verified on
   commands, one per kind; the connection picker's help text speaks of SQL Server only.
 - "Trust the server certificate without validating it" already exists for SQL Server
   connections, is saved with the connection and restored when the saved connection is picked
-  (added 2026-10-17). The build installed on the user's machine (1.26.1010.2224, built
-  2026-10-11) predates that change, which is the likely reason it appears missing.
+  (added 2026-10-17). The web edition deployed on the user's machine (web and engine
+  1.26.1019.2313, built 2026-10-19) already carries it, at the bottom of a connection form
+  that scrolls inside the dialog; the likely reason it appears missing is that the Security
+  group sits below the fold (plan-time finding, 2026-10-21).
 - PostgreSQL connections save their TLS mode and CA certificate path the same way.
 - The editor uses a monospace font at 13 px by default (the size is a setting). No line
   spacing is set anywhere, so the browser's default applies. Syntax colours come from the
@@ -278,6 +280,9 @@ in the editor, while the AI chat composer (natural language) still receives them
 
 - **Closing a tab while its query runs**: the app asks; on confirm the tab closes, its
   result is discarded, and its connection is released when the run ends.
+- **Changing or disconnecting a tab's connection while its query runs**: not allowed; the
+  connection and database controls of that tab are disabled until the run ends (as SSMS greys
+  Change Connection during execution); other tabs are unaffected.
 - **Closing a tab with an open transaction**: the same warning the existing Disconnect shows
   (open or aborted transaction) is shown before the tab closes; the transaction is rolled back
   on close.
@@ -287,8 +292,9 @@ in the editor, while the AI chat composer (natural language) still receives them
 - **Reloading with many tabs**: text and bindings are restored at once; live connections are
   opened lazily, when a tab is activated or run, not all at page load.
 - **A saved connection that a tab uses is deleted**: the tab keeps its live connection and
-  its binding shows as "not saved"; after a reload that tab has no connection and asks on the
-  next run.
+  its binding shows as "not saved"; the binding itself (server, database, sign-in method,
+  security choices) is kept with the tab, so after a reload the tab reconnects as before and
+  only the link to the saved entry is gone.
 - **The open-tab limit**: the app allows up to 20 open tabs; a 21st New query is refused
   with a message that names the limit (assumption, see Assumptions).
 - **Two browser windows on the same app**: both show the same tab set; the last change to a
@@ -472,9 +478,11 @@ in the editor, while the AI chat composer (natural language) still receives them
   connection, and that memory survives a reload (FR-008). The user confirmed that no
   separate saved-query list is wanted (FR-015).
 - "Run it separated" is read as: each tab runs on its own connection, shows its own
-  results, and may run while another tab's query is still in flight (FR-014), as in SSMS. The
-  product's engine and its link to the browser already allow this, so it is a decision, not
-  a question.
+  results, and may run while another tab's query is still in flight (FR-014), as in SSMS.
+  Plan-time amendment (2026-10-21): the browser's link to the engine already carries several
+  requests at once, but the engine answers a browser's requests one at a time, so FR-014
+  needs an engine change (see plan.md); the requirement stands because without it a long
+  query in one tab would also stall completion and tab switching in every other tab.
 - "Space after line need to review" means line spacing (the vertical distance between lines
   of SQL), which today is the browser's default; the user confirmed this reading (FR-016).
 - "Connect to DB or fit name" is implemented as "Connect to database"; the dialog's kind
@@ -510,7 +518,11 @@ in the editor, while the AI chat composer (natural language) still receives them
 - Closes the "multiple query tabs" deferral recorded in spec 041's clarifications.
 - The engine already keeps one live connection per session and runs each session's queries
   behind its own gate; the web edition's own link to the engine already carries several
-  requests at once. No engine protocol change is expected, but a plan must confirm it.
+  requests at once. Plan-time amendment (2026-10-21): the engine's web transport handles a
+  browser's requests one after another, so overlapping runs (FR-014) need the engine to
+  answer requests concurrently; closing a tab also needs the engine to release that tab's
+  session. Both are additive engine changes with no new message types; an older engine
+  degrades to today's one-at-a-time behaviour.
 - Verification of the trust choice and the dark-theme walk need the web edition redeployed
   from this branch to the user's machine; the installed build predates both.
 - The user's dark-theme screenshots (Clarifications, Q3) name the screens FR-034 fixes
