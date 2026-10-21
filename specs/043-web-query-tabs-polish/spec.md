@@ -278,8 +278,9 @@ in the editor, while the AI chat composer (natural language) still receives them
 
 ### Edge Cases
 
-- **Closing a tab while its query runs**: the app asks; on confirm the tab closes, its
-  result is discarded, and its connection is released when the run ends.
+- **Closing a tab while its query runs**: the app asks; on confirm the tab disappears from
+  the strip, a cancel is sent, and the tab's connection is released only after the run has
+  ended (reply or deadline). Until then the tab still counts toward the limit of 20.
 - **Changing or disconnecting a tab's connection while its query runs**: not allowed; the
   connection and database controls of that tab are disabled until the run ends (as SSMS greys
   Change Connection during execution); other tabs are unaffected.
@@ -320,7 +321,9 @@ in the editor, while the AI chat composer (natural language) still receives them
   name, text, modified mark, connection binding, results pane content and running state.
 - **FR-002**: New query MUST open a new tab with the next unused default name
   (`SQLQuery{n}`), make it active, and bind it to the active tab's connection (or no
-  connection when none).
+  connection when none). The new tab opens its own live connection at once when the binding
+  needs no password (Windows authentication or a remembered password), otherwise on its first
+  run or an explicit Connect.
 - **FR-003**: Running, parsing, formatting, analysing, completion and hover help MUST act on
   the active tab and use that tab's connection and dialect.
 - **FR-004**: Each tab MUST hold its own live connection; two tabs on the same server MUST
@@ -333,8 +336,9 @@ in the editor, while the AI chat composer (natural language) still receives them
 - **FR-008**: The set of open tabs MUST survive a page reload: order, names, text, modified
   marks, active tab and connection bindings are restored. Passwords are never stored in the
   browser; a tab whose connection needs one asks on its first run after a reload.
-- **FR-009**: Restored tabs MUST open their live connections lazily (on activation or first
-  run), not all at page load.
+- **FR-009**: Restored tabs MUST open their live connections lazily (on activation when no
+  password is needed; otherwise on the first run or an explicit Connect, so a tab switch never
+  asks for a password), not all at page load.
 - **FR-010**: SQL History MUST record a run under its tab's name and keep each tab's runs in
   their own session grouping.
 - **FR-011**: Open file MUST open the file in a new tab unless the active tab is empty and
@@ -514,7 +518,9 @@ in the editor, while the AI chat composer (natural language) still receives them
 ## Dependencies
 
 - Builds on the `042-postgresql-support` branch (PR #256), which holds the two-kind
-  connection dialog and the saved trust choice; this branch stacks on it.
+  connection dialog and the saved trust choice; this branch stacks on it. Merge order: PR #256
+  first; then rebase this branch onto `master` before opening its PR. If 042 is squash-merged,
+  the rebase drops 042's commits from this branch's history.
 - Closes the "multiple query tabs" deferral recorded in spec 041's clarifications.
 - The engine already keeps one live connection per session and runs each session's queries
   behind its own gate; the web edition's own link to the engine already carries several

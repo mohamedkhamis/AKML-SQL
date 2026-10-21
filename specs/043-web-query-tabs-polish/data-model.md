@@ -66,11 +66,12 @@ State machine (one per tab):
 ```text
 Unbound ──Connect (dialog / inherit)──▶ Connected
 Unbound ◀──Disconnect / Forget─────── Connected
-Restored(NeedsReattach) ──activate or run──▶ Reattaching ──SessionDisconnect, ConnectionChanged──▶ Connected
+Restored(NeedsReattach) ──activate (no password needed) or run──▶ Reattaching ──SessionDisconnect, ConnectionChanged──▶ Connected
                                                    │ password needed and not remembered ──▶ PasswordPrompt ──▶ Reattaching
                                                    │ engine refuses ──▶ Unbound (binding kept; status shows the error)
 Connected ──bridge lost──▶ Disconnected(keeps binding) ──next run or activation──▶ Reattaching
 Any ──tab closed──▶ Released (SessionDisconnect{Release=true}; object dropped)
+Connected(run in flight) ──tab closed──▶ Closing(awaiting run) ──reply or deadline──▶ Released
 ```
 
 Rules: a restored tab never opens its connection at page load (FR-009); `Reattaching` always
@@ -78,8 +79,10 @@ sends `SessionDisconnect`, **awaits its reply**, and only then sends `Connection
 open transaction left by the previous page is rolled back before the new connection exists (R2;
 the engine no longer orders a notification after an earlier request, contracts/ipc.md §2); a
 tab's connection cannot be changed or disconnected while that tab's run is in flight (the
-controls are disabled, as SSMS greys Change Connection during execution); the facade's
-`StateChanged` fires whenever the active tab changes or the active tab's own state changes.
+controls are disabled, as SSMS greys Change Connection during execution); a tab closed during
+a run moves to `Closing`: its session stays alive out of view and no `SessionDisconnect` is
+sent until the run's reply or deadline; the facade's `StateChanged` fires whenever the active
+tab changes or the active tab's own state changes.
 
 ## 4. Connection binding (persisted with the tab)
 
@@ -131,7 +134,8 @@ Write rules: a tab record is written by the per-key debounce (500 ms, one pendin
 key**) on text change, name change, modified change, cursor change and binding change; the set
 record is written at once on create, close, reorder and activation. `FlushAsync` flushes every
 pending key on page dispose. `RestoreAsync` for a key returns its pending record when one is
-waiting (today's rule, per key).
+waiting (today's rule, per key). A tab save whose id is no longer in the set record is a no-op
+(a debounced write must not resurrect a tab closed in another window).
 
 Migration (first load after the upgrade, in C#): if `editorTabs/set` is absent and
 `editorSession/current` exists, create tab 1 from it (text, cursor, profile, session key, name,
