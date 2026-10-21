@@ -20,9 +20,10 @@ Replaces the `.akml-docbar` row above the editor. Built from the shared `TabStri
 | Active tab label | `doc-name` (kept) | the active tab's name (the E2E `DocumentFlowTests` read it) |
 | Modified mark | `doc-modified` (kept, active tab) and `data-modified="true"` on every modified tab | `*`, accessible name "modified" |
 | Close button | `doc-tab-close` inside each tab | `button tabindex="-1" aria-label="Close {name}"` |
-| New tab | `doc-new` (kept) | opens a new tab (FR-002); disabled with `title="You have 20 query tabs open; close one to open another"` at the cap (FR-013) |
+| New tab | `doc-new` (kept) | opens a new tab (FR-002); disabled with `title="You have 20 query tabs open; close one to open another"` at the cap (FR-013) — with more open (two windows), or tabs still closing, the title says how many to close |
 | Open / Save / Save as | `doc-open`, `doc-open-input`, `doc-save`, `doc-saveas` (kept) | act on the active tab; Open goes to a new tab unless the active one is empty and unmodified (FR-011) |
-| Close confirmation | `doc-close-dialog`, buttons `doc-close-save`, `doc-close-discard`, `doc-close-cancel` | "Save changes to {name}?" (FR-007); Cancel is the default and Escape; an open or aborted transaction shows the existing Disconnect warning first |
+| Close confirmation | `doc-close-dialog`, buttons `doc-close-save`, `doc-close-discard`, `doc-close-cancel` | "Save changes to {name}?" (FR-007); Cancel is the default and Escape; an open or aborted transaction shows the existing Disconnect warning first (`doc-close-transaction`; a SQL Server session is asked of the server then, as SSMS asks when a window closes; asked again when a run that was in flight ends while a question is open) |
+| Close a running query (review of US1) | `doc-close-running` | asked first; closing cancels the query — the engine stops the running statement and the batches after it — and anything not committed is rolled back when the tab's connection closes |
 
 Page title: the active tab's name, modified mark and connection (today's `TitleFor`).
 
@@ -61,6 +62,7 @@ Ctrl+Shift+W; the three new keys appear in the keyboard help and in `NativeKeyAc
 | Trust the certificate | `conn-trust-cert`, `conn-trust-cert-help` (kept) | saved, restored and applied on connect and on a restored tab's reattach (FR-026); the help says a server on the engine's machine is never validated (FR-028); disabled with that hint when the server is loopback |
 | Saved rows | `conn-row-kind` (kept) | kind and sign-in badges (FR-029) |
 | Connect | `conn-connect-btn` (kept) | binds the **active tab** (or the tab that opened the dialog when a run asked for a connection, US1 scenario 7) |
+| Opening on a tab (review of US1) | | the dialog opens on the tab it connects: that tab's connection, else SQL Server. A tab still on its saved connection (same server, sign-in and security) selects that row as saved — with the tab's database when a run reconnects the tab; a tab connected differently opens as a new connection with its own values, so Save adds a row and never changes another |
 | Themes | | same layout in light, dark, high contrast; keyboard order top to bottom (FR-030) |
 
 ## 5. Palette and wording (FR-023, FR-025)
@@ -90,7 +92,7 @@ to the constant title; `:484` (no "SQL Server" in PostgreSQL hints) must still p
 | Action | Contract |
 | --- | --- |
 | Open in editor | writes a new tab record (text, name = entry title or next default, kind) and makes it active, then navigates to `/`; reuses the active tab when it is empty and unmodified; no "Discard the changes" prompt |
-| Re-execute | as above with `AutorunPending=true`; the editor runs it once the tab is connected (the spec 041 wait, scoped to the tab); the `?autorun=1&kind=` query string is no longer used (`Editor.AutorunKind` and its test `HistoryPageKindTests.cs:313-314` go with it) |
+| Re-execute | as above with `AutorunPending=true`; the editor runs it once the tab is connected (the spec 041 wait, scoped to the tab) — only while the tab still holds that query (an edit cancels the run) and only in the page that asked (a reload drops it); the `?autorun=1&kind=` query string is no longer used (`Editor.AutorunKind` and its test `HistoryPageKindTests.cs:313-314` go with it) |
 | Grouping | one history session per tab (`SessionKey`); `TabTitle` = tab name unless default |
 
 ## 7. Editor surface attributes (FR-036 to FR-038)
@@ -98,9 +100,9 @@ to the constant title; `:484` (no "SQL Server" in PostgreSQL hints) must still p
 | Element | Attributes |
 | --- | --- |
 | `.cm-content` (via `EditorView.contentAttributes`) | `data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"` in addition to CodeMirror's `spellcheck="false" autocorrect="off" autocapitalize="off" writingsuggestions="false" translate="no"` |
-| Snippet body textarea, Format styles input textarea | the same four `data-*` attributes next to their `spellcheck="false"` |
+| Snippet body textarea, Format styles input textarea | the same four `data-*` attributes next to their `spellcheck="false"`, and `autocorrect="off" autocapitalize="off" writingsuggestions="false" translate="no"` as the editor has them (FR-036; added in the review of US1) |
 | Chat composer, search boxes, name fields | unchanged (assistance stays) |
-| Keyboard help | one line: "Writing assistants are asked to stay out of the SQL editor; an assistant that ignores that request is outside this product's control." |
+| Settings › Editor, row `setting-editor-writing-assistants` (searchable by the settings filter) | says which surfaces ask assistants to stay out and that the chat box keeps them; help line: "An assistant that ignores this request is outside AKML SQL's control; turn it off for this site in the assistant's own settings." (Implementation note: the keyboard help is a per-control tooltip of titles, so the note lives in Settings instead.) |
 
 ## 8. Dark theme
 

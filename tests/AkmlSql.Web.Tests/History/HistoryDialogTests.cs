@@ -85,7 +85,7 @@ public sealed class HistoryDialogTests : BunitContext
         Services.AddSingleton<IDialogService>(_dialogs);
         Services.AddSingleton<INotificationService>(_notes);
         Services.AddSingleton<IFileDownloader>(new NoDownloads());
-        Services.AddSingleton<EditorDocumentFlow>();
+        Services.AddSingleton<IQueryTabs, QueryTabs>();   // spec 043: History opens queries in tabs
     }
 
     private IRenderedComponent<HistoryPage> OpenFirstEntry()
@@ -258,29 +258,36 @@ public sealed class HistoryDialogTests : BunitContext
 
     // ── PR #255: Open and Re-execute never overwrite a modified document without asking ─────────────────
 
+    // Spec 043 (R11, T024): History opens a query in a new tab — the modified document stays untouched in its own tab, so
+    // nothing is asked (as SSMS opens a new window). Re-execute's run flag is the new tab's, never the address's.
     [Theory]
     [InlineData("history-open")]
     [InlineData("history-reexecute")]
-    public async Task Opening_over_a_modified_document_asks_first_and_Cancel_keeps_it(string button)
+    public async Task Opening_over_a_modified_document_opens_a_new_tab_and_asks_nothing(string button)
     {
         var store = Services.GetRequiredService<IEditorSessionStore>();
         await store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "edited", IsModified = true, NextDefaultNumber = 3, SessionKey = "k" });
         await store.FlushAsync();
         var page = OpenFirstEntry();
-        _dialogs.ConfirmAnswer = _ => false;
 
         page.Find($"[data-testid={button}]").Click();
 
-        page.WaitForAssertion(() => Assert.Contains("orders-audit", Assert.Single(_dialogs.Confirms).Message));
-        var kept = await store.RestoreAsync();
-        Assert.Equal("edited", kept!.DocumentText);
-        Assert.Equal("orders-audit", kept.DocumentName);
+        var tabs = Services.GetRequiredService<IQueryTabs>();
+        page.WaitForAssertion(() => Assert.Equal(2, tabs.Tabs.Count));
+        var kept = tabs.Tabs[0];
+        Assert.Equal("edited", kept.Text);
+        Assert.Equal("orders-audit", kept.Name);
+        Assert.True(kept.IsModified);
+        Assert.NotSame(kept, tabs.Active);
+        Assert.Equal("SELECT 1", tabs.Active!.Text);
+        Assert.Equal(button == "history-reexecute", tabs.Active.AutorunPending);
+        Assert.Empty(_dialogs.Confirms);
         Assert.DoesNotContain("autorun", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri);
         NoBrowserPopUp();
     }
 
     [Fact]
-    public async Task Opening_an_entry_starts_a_new_default_named_document()
+    public async Task Opening_an_entry_opens_it_in_a_new_tab_named_from_the_entry()
     {
         var store = Services.GetRequiredService<IEditorSessionStore>();
         await store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "SELECT 1;", IsModified = false, NextDefaultNumber = 3, SessionKey = "k" });
@@ -289,10 +296,33 @@ public sealed class HistoryDialogTests : BunitContext
 
         page.Find("[data-testid=history-open]").Click();
 
-        await page.InvokeAsync(() => { });
-        var opened = await store.RestoreAsync();
-        Assert.Equal("SQLQuery3", opened!.DocumentName);
-        Assert.False(opened.IsModified);
+        var tabs = Services.GetRequiredService<IQueryTabs>();
+        page.WaitForAssertion(() => Assert.Equal(2, tabs.Tabs.Count));
+        // R11: the tab takes the entry's title; the query is its unmodified baseline; Open never runs it.
+        Assert.Equal("orders-audit", tabs.Active!.Name);
+        Assert.Equal("SELECT 1", tabs.Active.Text);
+        Assert.False(tabs.Active.IsModified);
+        Assert.False(tabs.Active.AutorunPending);
+        Assert.Empty(_dialogs.Confirms);
+    }
+
+    // Spec 043 (R11, data-model §1): an entry from a default-named tab reads query-NN in History (the engine's name for the
+    // session); the tab it opens takes the next default name, never the engine's — kept, its runs would be recorded under
+    // "query-01" as if it were a file name, a second "query-01" session.
+    [Fact]
+    public async Task Opening_an_entry_the_engine_named_query_NN_takes_the_next_default_name()
+    {
+        _history.Entries[0].TabTitle = "query-01";
+        var store = Services.GetRequiredService<IEditorSessionStore>();
+        await store.SaveAsync(new EditorSessionRecord { DocumentName = "orders-audit", DocumentText = "SELECT 1;", IsModified = false, NextDefaultNumber = 3, SessionKey = "k" });
+        await store.FlushAsync();
+        var page = OpenFirstEntry();
+
+        page.Find("[data-testid=history-open]").Click();
+
+        var tabs = Services.GetRequiredService<IQueryTabs>();
+        page.WaitForAssertion(() => Assert.Equal(2, tabs.Tabs.Count));
+        Assert.Equal("SQLQuery3", tabs.Active!.Name);
         Assert.Empty(_dialogs.Confirms);
     }
 }

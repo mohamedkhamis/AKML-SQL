@@ -66,13 +66,25 @@ public sealed class QuickstartAcceptanceTests(ITestOutputHelper output)
         await page.Keyboard.TypeAsync("changed");
         await page.Keyboard.PressAsync("Enter");
         await Assertions.Expect(page.GetByTestId("results-applybar")).ToBeVisibleAsync();
-        if (action == "new") await page.GetByTestId("doc-new").ClickAsync();
-        else if (action == "history") await page.GetByTestId("nav-history").ClickAsync();
-        else await page.GetByTestId("doc-open-input").SetInputFilesAsync(new FilePayload { Name = "replacement.sql", MimeType = "text/plain", Buffer = System.Text.Encoding.UTF8.GetBytes("SELECT 99;") });
-        await Assertions.Expect(page.GetByTestId("dialog-title")).ToContainTextAsync("pending edit");
-        await page.GetByTestId("dialog-cancel").ClickAsync();
-        await Assertions.Expect(page.GetByTestId("results-applybar")).ToBeVisibleAsync();
-        await Assertions.Expect(page.GetByTestId("results-cell-0-1")).ToHaveTextAsync("changed");
+
+        if (action == "history")
+        {
+            // Leaving the page unmounts the grids: it asks first.
+            await page.GetByTestId("nav-history").ClickAsync();
+            await Assertions.Expect(page.GetByTestId("dialog-title")).ToContainTextAsync("pending edit");
+            await page.GetByTestId("dialog-cancel").ClickAsync();
+        }
+        else
+        {
+            // Spec 043 (FR-002, FR-011): New and Open go to another tab — the grid and its edits stay in theirs, nothing is asked.
+            if (action == "new") await page.GetByTestId("doc-new").ClickAsync();
+            else await page.GetByTestId("doc-open-input").SetInputFilesAsync(new FilePayload { Name = "replacement.sql", MimeType = "text/plain", Buffer = System.Text.Encoding.UTF8.GetBytes("SELECT 99;") });
+            await Assertions.Expect(page.GetByTestId("doc-tab")).ToHaveCountAsync(2);
+            await Assertions.Expect(page.GetByTestId("dialog")).ToHaveCountAsync(0);
+            await page.GetByTestId("doc-tab").First.ClickAsync();
+        }
+        await Assertions.Expect(page.Locator("[data-testid='results-pane'] [data-testid='results-applybar']")).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator("[data-testid='results-pane'] [data-testid='results-cell-0-1']")).ToHaveTextAsync("changed");
         await Assertions.Expect(page.GetByTestId("doc-name")).ToHaveTextAsync("SQLQuery1");
     }
 
@@ -139,9 +151,10 @@ public sealed class QuickstartAcceptanceTests(ITestOutputHelper output)
         {
             Name = "over-limit.sql", MimeType = "text/plain", Buffer = System.Text.Encoding.UTF8.GetBytes(new string('x', 10 * 1024 * 1024 + 1))
         });
-        await Assertions.Expect(s.Page.GetByTestId("dialog-confirm")).ToBeVisibleAsync();
-        await s.Page.GetByTestId("dialog-confirm").ClickAsync();
+        // Spec 043 (FR-011): a file opens into another tab, so nothing is asked first; one too large opens nothing at all.
         await Assertions.Expect(s.Page.GetByRole(AriaRole.Alert).Filter(new() { HasTextString = "10 MB" })).ToBeVisibleAsync();
+        await Assertions.Expect(s.Page.GetByTestId("dialog")).ToHaveCountAsync(0);
+        await Assertions.Expect(s.Page.GetByTestId("doc-tab")).ToHaveCountAsync(1);
         await Assertions.Expect(s.Page.Locator(".cm-content").First).ToHaveTextAsync("SELECT 'keep me';");
     }
 

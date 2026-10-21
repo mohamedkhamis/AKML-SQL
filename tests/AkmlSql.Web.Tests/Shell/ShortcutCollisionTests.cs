@@ -35,7 +35,9 @@ public sealed class ShortcutCollisionTests
         ("Space", true, false, false),     // completion
     };
 
-    // Keys the browser keeps whatever the page does; never attempted (FR-049(b)).
+    // Keys the browser keeps whatever the page does; never attempted (FR-049(b)). Spec 043 (R9) adds the
+    // browser's own tab keys, so the query tabs never claim them: Ctrl+F4 and Ctrl+Shift+W close a browser
+    // tab or window, Ctrl+PageDown / Ctrl+PageUp switch browser tabs in Chromium, Edge and Firefox.
     private static readonly (string Code, bool Ctrl, bool Shift, bool Alt)[] BrowserReserved =
     {
         ("KeyN", true, false, false),
@@ -43,6 +45,10 @@ public sealed class ShortcutCollisionTests
         ("KeyW", true, false, false),
         ("Tab", true, false, false),
         ("Tab", true, true, false),
+        ("F4", true, false, false),
+        ("PageDown", true, false, false),
+        ("PageUp", true, false, false),
+        ("KeyW", true, true, false),
     };
 
     // Owned by akml-command-palette.js, which registers its own capture listener on every route.
@@ -111,6 +117,11 @@ public sealed class ShortcutCollisionTests
         Assert.Equal("Ctrl+Alt+N", WorkspaceKeyMap.DisplayFor("editor:new"));
         Assert.Equal("Ctrl+Alt+O", WorkspaceKeyMap.DisplayFor("editor:open"));
         Assert.Null(WorkspaceKeyMap.DisplayFor("editor:refactor"));
+        // Spec 043 (R9, contracts/web-ui.md §2): the query tabs. The browser keeps Ctrl+Tab, Ctrl+PageDown, Ctrl+W and Ctrl+F4,
+        // so the keys gain Alt, as Visual Studio's next and previous document do.
+        Assert.Equal("Ctrl+Alt+PageDown", WorkspaceKeyMap.DisplayFor("editor:next-tab"));
+        Assert.Equal("Ctrl+Alt+PageUp", WorkspaceKeyMap.DisplayFor("editor:previous-tab"));
+        Assert.Equal("Ctrl+Alt+W", WorkspaceKeyMap.DisplayFor("editor:close-tab"));
     }
 
     [Fact]

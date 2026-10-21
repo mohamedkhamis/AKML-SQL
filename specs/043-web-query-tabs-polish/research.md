@@ -76,6 +76,10 @@ simply answers one request at a time, which is today's behaviour.
 missing piece for FR-014, FR-003 and FR-005 (a long query in one tab must not stall the other
 tabs' completion, execution or switching). Cancel of a running query may start to work as a
 side effect; the spec keeps mid-run cancel out of scope and this plan promises nothing about it.
+(Review of US1, 2026-10-21: it does work. An `ExecuteCancel` notification is read while that
+browser's `ExecuteQuery` runs, the engine cancels the token linked into the command, the server
+stops the statement and the batches after it are skipped — `RunningStatementCancelIntegrationTests`.
+The toolbar's Cancel, its running note and the close-a-running-tab question now say so.)
 
 **Alternatives considered**: per-session ordered lanes (needs the session id at dispatch time,
 but the envelope carries only type, request id and an opaque payload, so it would need an
@@ -94,6 +98,24 @@ the race at the source (a tab's connection cannot be changed or disconnected whi
 flight, spec edge case) and the engine must still fail safely if it happens. Prove with a test
 that two executes on two sessions overlap and that `DocumentChanged` followed by `Completion` on
 one socket completes against the new text.
+
+**S1 outcome (2026-10-21)**: safe to dispatch off the loop. `SessionManager` and
+`SessionConnectionRegistry` are `ConcurrentDictionary`-backed; `RpcContext.EnsureSettings` locks;
+`DatabaseProvider`'s cache locks; `TryClaimPopulation` is an atomic `TryAdd`; `HistoryDatabase`
+opens a `SqliteConnection` per call; `SchemaCacheManager` reads are lock-free by design. The one
+unshared resource is the socket's send path, now behind a per-connection `SemaphoreSlim`. The
+same-session race fails safely: a `ConnectionChanged` that changes the string disposes the
+connection under a running execute, which then ends (no corruption), and the browser never sends
+one while that tab runs. (Review of US1: such a run ends with a normal, cancelled reply rather
+than an error, and its script may have run a `USE`; the run now moves the session's database only
+when its connection is still the session's registered one — `StaleRunDatabaseMoveIntegrationTests`.
+The audit also missed `CompletionEngine`, whose per-request settings two concurrent completions
+overwrote; completions now take a lock around them.) Chosen branch: notifications and the handshake
+inline; requests on `Task.Run` with the transport's lifetime token (not a per-connection token, so
+a browser reload does not cancel a running statement, as before); replies under the send lock; a
+reply to a closed socket is dropped. Proven by `WebSocketTransportConcurrencyTests` (a slow request
+does not hold up a later one; a notification is applied before a request read after it; 40
+overlapping 50 KB replies arrive whole; a failing handler answers its own id with an error).
 
 ## R4. The engine keeps one schema cache per session; nothing is shared between tabs
 
@@ -127,6 +149,15 @@ engine ignores the key and behaves as today).
 **SPIKE S3**: confirm `SchemaCacheManager` has, or can be given, a `RemoveSession(sessionId)` that
 drops every `(sessionId, database)` entry and its disk file, and that `DatabaseProvider` exposes
 `InvalidateSession`.
+
+**S3 outcome (2026-10-21)**: `SchemaCacheManager.SaveCacheAsync` / `LoadCacheAsync` have no callers,
+so the engine's schema caches are memory-only and there is no disk file to delete. Added
+`RemoveSession(sessionId)`, which drops every `{session}:{database}` and `pg|{session}:{database}`
+entry and their refresh connection strings. `DatabaseProvider.InvalidateSession` exists and the
+disconnect handler already calls it. A consequence for R2: a restored tab's persisted session id
+finds its in-memory cache again only while the same engine process keeps running (a service
+restart starts cold), which is the case that matters for a page reload. Proven by
+`SessionDisconnectReleaseTests`.
 
 ## R6. One CodeMirror view; each tab's editor state is swapped in and out
 
@@ -237,7 +268,9 @@ component with an option keeps the roving tabindex, key trap and tests in one pl
 name from the entry's title, kind, and for Re-execute an autorun flag) into the tab store, mark
 it active in the set record, and navigate to the editor; the editor page restores the set and
 runs the flagged tab once it is connected (today's `?autorun=1` wait, scoped to that tab). If the
-active tab is empty and unmodified it is reused instead (FR-011's rule for Open file).
+active tab is empty and unmodified it is reused instead (FR-011's rule for Open file). (Review of
+US1: the run happens only while the tab still holds exactly that query — an edit cancels it — and
+only in the page that asked: a reload drops the flag, so no query runs that the user did not see start.)
 
 **Rationale**: it removes the "Discard the changes to {name}?" prompt History shows today, which
 SSMS never shows for an open-in-new-window, and it keeps the autorun race fix of spec 041.

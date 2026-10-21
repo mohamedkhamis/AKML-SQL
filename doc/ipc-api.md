@@ -25,6 +25,8 @@ Routing details inside the engine (post-M0):
 5. A typed handler returns a `TResponse` that the router serialises into the response `RpcMessage`; a delegating handler returns the `RpcMessage` directly. Notifications return `null`.
 6. The transport writes the response back over the same channel.
 
+**Order and concurrency (spec 043).** The named pipe answers frames one after another, except the AI message types (70–78), which it answers on the thread pool. The WebSocket transport (the web edition, one socket for all of a browser's query tabs) handles **notifications** (`RequestId == 0`: `ConnectionChanged`, `DocumentChanged`, `AnalysisSettingsChanged`) and the **handshake** on its read loop, in arrival order, and answers every other **request** on the thread pool, writing replies one at a time under a per-connection send lock. So a long `ExecuteQuery` in one tab does not hold up another tab's completion, execute or cancel; two executes on one session still queue on that session's connection gate; a request read after a notification sees it applied; replies can arrive out of request order and the browser matches them by `RequestId`. A notification is *not* ordered after an earlier request: where that matters the browser waits for the reply first (a restored tab sends `SessionDisconnect`, awaits it, then `ConnectionChanged`). Handlers keep the transport's lifetime token, so a browser that reloads mid-query does not cancel the statement; its reply to the closed socket is dropped.
+
 Every dispatch flows through the `RpcRouter`; the pre-M0 53-case `switch` is gone entirely.
 
 ---
@@ -1155,8 +1157,10 @@ How a script runs (execute.v2):
 
 ### `ExecuteCancel` (214) — notification
 
-`ExecuteCancelRequest { 0 SessionId, 1 QueryId }`. Cancels an execute that is still queued behind another on
-the session's connection; it does not interrupt a statement that is already running.
+`ExecuteCancelRequest { 0 SessionId, 1 QueryId }`. Stops the execute with that id wherever it is: queued behind
+another on the session's connection, waiting for the connection to open, or running — the server is asked to stop
+the running statement, and the batches after it do not run. Spec 043: the WebSocket transport reads a notification
+while that browser's requests run (R3), and the execute registers its cancel handle as soon as it is read.
 
 ### `ApplyChanges` (215) → `ApplyChangesResult` (216)
 
@@ -1233,13 +1237,15 @@ execute's. Sent only when the engine advertises `execute.v2`: an engine that doe
 
 ### `SessionDisconnect` (225) → `SessionDisconnectResult` (226) — session.disconnect.v1
 
-`SessionDisconnectRequest { 0 SessionId }` → `SessionDisconnectResponse { 0 Ok, 1 ErrorMessage, 2 RolledBack }`. The session forgets
+`SessionDisconnectRequest { 0 SessionId, 1 Release }` → `SessionDisconnectResponse { 0 Ok, 1 ErrorMessage, 2 RolledBack }`. The session forgets
 its connection first (requests answer "no connection" until the next `ConnectionChanged`; the document is kept), then the persistent
 connection is closed: queued executes are cancelled, a running command may finish within 15 s, an open transaction is rolled back —
 never committed — and the physical connection is disposed. `RolledBack` says a transaction was open. `Ok = false` means a command was
 still running after the wait; the connection closes, and its transaction rolls back, when that command ends. Every close of a
 session connection (credential change, idle eviction, disconnect) rolls back an open transaction explicitly: a pooled SqlConnection
 closed inside a script-begun transaction would otherwise keep it, and its locks, until the pool reuses the connection.
+
+`Release` (spec 043, append-only, default false): the web edition closed the query tab that owned the session. After the steps above the engine also removes the session entry and its document (`SessionManager.RemoveSession`) and drops every schema cache of the session (`SchemaCacheManager.RemoveSession`); this happens even when a running command kept the connection past the wait. The id may be used again by a later `ConnectionChanged`, which starts it afresh. An engine from before the key reads it as a plain disconnect.
 
 ## PostgreSQL Messages (221–224) — spec 042, `dialect.postgresql.v1`
 

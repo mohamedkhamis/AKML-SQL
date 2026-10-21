@@ -116,7 +116,7 @@ public sealed class ResultsPaneComponentTests : IDisposable
     }
 
     [Fact]
-    public void While_running_it_shows_the_elapsed_time_says_it_cannot_be_interrupted_and_marks_old_results_stale()
+    public void While_running_it_shows_the_elapsed_time_says_Cancel_stops_it_and_marks_old_results_stale()
     {
         _status.Begin();
         _now = _now.AddSeconds(3);
@@ -125,7 +125,7 @@ public sealed class ResultsPaneComponentTests : IDisposable
 
         var running = cut.Find("[data-testid=results-running]");
         Assert.Contains("00:00:03", running.TextContent);
-        Assert.Contains("A running statement can't be interrupted.", running.TextContent);
+        Assert.Contains("Cancel stops the running statement.", running.TextContent);   // spec 043: the engine reads it mid-run (R3)
         Assert.Contains("akml-results-stale", cut.Find("[data-testid=results-content]").ClassName);
         Assert.Equal("true", cut.Find("[data-testid=results-pane]").GetAttribute("aria-busy"));
     }
@@ -291,5 +291,76 @@ public sealed class ResultsPaneComponentTests : IDisposable
 
         cut.FindAll("[data-testid=problems-header] input")[0].Change(false);   // hide Info
         Assert.Equal(new[] { 2, 1 }, counts);
+    }
+
+    // ── Spec 043 (T017, contracts/web-ui.md §3): one pane per query tab ────────────────────────────────────────
+
+    [Fact]
+    public void IdPrefix_drives_the_pane_and_grid_element_ids()
+    {
+        var cut = _ctx.Render<ResultsPaneComponent>(p => p
+            .Add(x => x.Result, Sets(GridTestHost.ReadOnlySet()))
+            .Add(x => x.IdPrefix, "akml-results-q2"));
+
+        Assert.NotNull(cut.Find("#akml-results-q2-tab-results"));
+        Assert.NotNull(cut.Find("#akml-results-q2-panel-results"));
+        Assert.NotEmpty(cut.FindAll("[id^='akml-grid-q2-0-']"));
+        Assert.Empty(cut.FindAll("[id^='akml-grid-0-']"));
+    }
+
+    [Fact]
+    public void Without_an_IdPrefix_the_ids_are_the_ones_a_single_pane_always_had()
+    {
+        var cut = Render(Sets(GridTestHost.ReadOnlySet()));
+
+        Assert.NotNull(cut.Find("#akml-results-tab-results"));
+        Assert.NotNull(cut.Find("#akml-results-panel-results"));
+        Assert.NotEmpty(cut.FindAll("[id^='akml-grid-0-']"));
+    }
+
+    [Fact]
+    public void Only_the_active_pane_carries_the_shared_test_ids()
+    {
+        var cut = _ctx.Render<ResultsPaneComponent>(p => p
+            .Add(x => x.Result, Sets(GridTestHost.ReadOnlySet()))
+            .Add(x => x.IdPrefix, "akml-results-q3")
+            .Add(x => x.IsActive, false));
+
+        Assert.Empty(cut.FindAll("[data-testid=results-pane]"));
+        Assert.NotNull(cut.Find("[data-testid=results-pane-inactive]"));
+        Assert.Empty(cut.FindAll("[data-testid^=results-tab-]"));
+
+        cut.Render(p => p.Add(x => x.IsActive, true));
+
+        Assert.NotNull(cut.Find("[data-testid=results-pane]"));
+        Assert.NotNull(cut.Find("[data-testid=results-tab-messages]"));
+    }
+
+    [Fact]
+    public void The_running_clock_reads_the_tabs_own_start_not_the_app_wide_status()
+    {
+        // The app-wide status shows another tab's run (or none); this pane's run started 7 s ago.
+        var cut = _ctx.Render<ResultsPaneComponent>(p => p
+            .Add(x => x.Result, null)
+            .Add(x => x.IsRunning, true)
+            .Add(x => x.RunStartedAt, _now.AddSeconds(-7)));
+
+        Assert.Contains("00:00:07", cut.Find("[data-testid=results-running]").TextContent);
+    }
+
+    [Fact]
+    public void Apply_goes_through_the_session_of_the_tab_that_read_the_rows()
+    {
+        var session = new SqlSessionState("tab-q2-session");
+        var cut = _ctx.Render<ResultsPaneComponent>(p => p
+            .Add(x => x.Result, Sets(GridTestHost.EditableSet()))
+            .Add(x => x.Session, session));
+
+        cut.Find("[data-testid=results-cell-0-1]").DoubleClick();
+        cut.Find("[data-testid=results-cell-input]").Change("x");
+        cut.Find("[data-testid=results-apply]").Click();
+
+        Assert.Single(_exec.Applied);
+        Assert.Same(session, Assert.Single(_exec.AppliedSessions));
     }
 }

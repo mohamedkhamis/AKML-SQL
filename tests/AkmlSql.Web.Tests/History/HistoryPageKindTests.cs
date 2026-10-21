@@ -79,7 +79,7 @@ public sealed class HistoryPageKindTests : BunitContext
         Services.AddSingleton<IDialogService>(new FakeDialogService());
         Services.AddSingleton<INotificationService>(_notes);
         Services.AddSingleton<IFileDownloader>(new NoDownloads());
-        Services.AddSingleton<EditorDocumentFlow>();
+        Services.AddSingleton<IQueryTabs, QueryTabs>();   // spec 043: History opens queries in tabs
     }
 
     // ---- the kind on every entry ---------------------------------------------------------------------------------
@@ -294,7 +294,11 @@ public sealed class HistoryPageKindTests : BunitContext
 
         page.Find("[data-testid=history-reexecute]").Click();
 
-        page.WaitForAssertion(() => Assert.Contains("autorun=1", Services.GetRequiredService<NavigationManager>().Uri));
+        // Spec 043 (R11): the run flag is the new tab's; the editor runs it once that tab is connected.
+        var tabs = Services.GetRequiredService<IQueryTabs>();
+        page.WaitForAssertion(() => Assert.True(tabs.Active?.AutorunPending));
+        Assert.Equal((int)DatabaseKind.SqlServer, tabs.Active!.AutorunKind);
+        Assert.DoesNotContain("autorun", Services.GetRequiredService<NavigationManager>().Uri);
         Assert.Empty(_notes.Sent);
     }
 
@@ -309,8 +313,9 @@ public sealed class HistoryPageKindTests : BunitContext
 
         page.Find("[data-testid=history-reexecute]").Click();
 
-        page.WaitForAssertion(() => Assert.Contains("autorun=1&kind=1", Services.GetRequiredService<NavigationManager>().Uri));
-        Assert.Equal((int)DatabaseKind.PostgreSql, AkmlSql.Web.Pages.Editor.AutorunKind("?autorun=1&kind=1"));
-        Assert.Null(AkmlSql.Web.Pages.Editor.AutorunKind("?autorun=1"));
+        var tabs = Services.GetRequiredService<IQueryTabs>();
+        page.WaitForAssertion(() => Assert.True(tabs.Active?.AutorunPending));
+        Assert.Equal((int)DatabaseKind.PostgreSql, tabs.Active!.AutorunKind);
+        Assert.DoesNotContain("autorun", Services.GetRequiredService<NavigationManager>().Uri);   // contracts/web-ui.md §6
     }
 }

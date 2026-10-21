@@ -28,8 +28,9 @@ public sealed class DocumentFlowTests
         await page.Keyboard.InsertTextAsync(text);
     }
 
+    // Spec 043 (T024, FR-002): New query is a second tab — the modified first tab stays as it is, nothing is asked.
     [SkippableFact]
-    public async Task New_query_confirms_a_modified_document_and_starts_the_next_number()
+    public async Task New_query_opens_a_second_tab_with_the_next_number_and_leaves_the_modified_one_alone()
     {
         await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
         var page = s.Page;
@@ -38,11 +39,13 @@ public sealed class DocumentFlowTests
         await TypeAsync(page, "SELECT 1;");
         await Assertions.Expect(Id(page, "doc-modified")).ToBeVisibleAsync();
         await Id(page, "doc-new").ClickAsync();
-        await Assertions.Expect(Id(page, "dialog-message")).ToContainTextAsync("SQLQuery1");
-        await Id(page, "dialog-confirm").ClickAsync();
 
+        await Assertions.Expect(Id(page, "doc-tab")).ToHaveCountAsync(2);
+        await Assertions.Expect(page.Locator("[data-testid='doc-tab'][data-active='true']")).ToContainTextAsync("SQLQuery2");
         await Assertions.Expect(Id(page, "doc-name")).ToHaveTextAsync("SQLQuery2");
         await Assertions.Expect(Id(page, "doc-modified")).ToHaveCountAsync(0);
+        await Assertions.Expect(Id(page, "dialog")).ToHaveCountAsync(0);
+        await Assertions.Expect(Id(page, "doc-tab").First).ToHaveAttributeAsync("data-modified", "true");
         Assert.Equal(string.Empty, (await page.Locator("[data-testid='sql-editor'] .cm-content").InnerTextAsync()).Trim());
     }
 
@@ -60,18 +63,22 @@ public sealed class DocumentFlowTests
             var vscode = Path.Combine(dir, "vscode-query.sql");
             await File.WriteAllBytesAsync(vscode, Encoding.UTF8.GetBytes("SELECT N'Grüße' AS vscode;"));
 
+            // Spec 043 (FR-011): the empty, unmodified first tab takes the file.
             await page.Locator("[data-testid='doc-open-input']").SetInputFilesAsync(ssms);
             await Assertions.Expect(Id(page, "doc-name")).ToHaveTextAsync("Monthly Close");
+            await Assertions.Expect(Id(page, "doc-tab")).ToHaveCountAsync(1);
             await Assertions.Expect(page.Locator("[data-testid='sql-editor'] .cm-content")).ToContainTextAsync("SELECT N'Grüße' AS ssms;");
             await Assertions.Expect(Id(page, "doc-modified")).ToHaveCountAsync(0);
 
-            // A modified document asks first.
+            // A tab with text opens the next file in a new tab, and nothing is asked: the edited tab stays.
             await TypeAsync(page, " -- edited");
             await page.Locator("[data-testid='doc-open-input']").SetInputFilesAsync(vscode);
-            await Assertions.Expect(Id(page, "dialog-message")).ToContainTextAsync("Monthly Close");
-            await Id(page, "dialog-confirm").ClickAsync();
+            await Assertions.Expect(Id(page, "doc-tab")).ToHaveCountAsync(2);
+            await Assertions.Expect(Id(page, "dialog")).ToHaveCountAsync(0);
             await Assertions.Expect(Id(page, "doc-name")).ToHaveTextAsync("vscode-query");
             await Assertions.Expect(page.Locator("[data-testid='sql-editor'] .cm-content")).ToContainTextAsync("SELECT N'Grüße' AS vscode;");
+            await Assertions.Expect(Id(page, "doc-tab").First).ToContainTextAsync("Monthly Close");
+            await Assertions.Expect(Id(page, "doc-tab").First).ToHaveAttributeAsync("data-modified", "true");
         }
         finally
         {

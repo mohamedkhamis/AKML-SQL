@@ -98,7 +98,7 @@
         </span>
     }
     <button type="button" class="akml-status-conn" @onclick="@(() => ConnManager.Open())"
-            aria-label="Manage SQL connection" title="@ConnTooltip" data-testid="status-connection">
+            aria-label="Manage database connection" title="@ConnTooltip" data-testid="status-connection">
         <span class="akml-status-conn-icon"><Icon Name="plug" Size="12" /></span>
         <span>@ConnLabel</span>
     </button>
@@ -464,25 +464,50 @@
 
         try
         {
+            // Spec 043 (R19, FR-009): the restore binds the active query tab. A tab restored with its own connection reconnects to
+            // that — here, whatever page the reload landed on — when it needs no password, and never to the most recent saved
+            // connection; one that needs a password waits for its first run. Only a tab with no connection takes the saved one.
+            var tabs = Services.GetService<IQueryTabs>();
+            SqlSessionState? session = null;
+            if (tabs != null)
+            {
+                await tabs.LoadAsync();
+                session = tabs.Active?.Session;
+                if (session == null || session.IsConnected) return;
+                // Review of US1: a tab the user disconnected stays disconnected after a reload.
+                if (session.DisconnectedByUser) return;
+                if (session.Binding != null)
+                {
+                    if (session.NeedsReattach && session.Binding.NeedsNoPassword)
+                        await SqlConn.ReattachAsync(session, null, System.Threading.CancellationToken.None);
+                    return;
+                }
+            }
+
             var activeId = await SavedSqlConnections.GetActiveIdAsync();
             if (string.IsNullOrEmpty(activeId)) return;
             var saved = await SavedSqlConnections.GetAsync(activeId!);
             if (saved == null) return;
 
+            ConnectionTarget target;
             // A PostgreSQL connection whose password the engine remembers needs nothing from the user either: it comes back
             // too (the browser sends no password; the engine fills in the one it holds).
             if (saved.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
             {
                 if (!saved.RememberPassword || !SqlConn.EngineSupportsPostgres) return;
-                await SqlConn.ConnectAsync(new ConnectionTarget(AkmlSql.Core.DatabaseKind.PostgreSql, saved.Server, saved.Database,
+                target = new ConnectionTarget(AkmlSql.Core.DatabaseKind.PostgreSql, saved.Server, saved.Database,
                     WindowsAuth: false, User: saved.Login, Password: null, Port: saved.EffectivePort, SslMode: saved.SslMode,
-                    RootCertificatePath: saved.RootCertificatePath, RememberPassword: true), System.Threading.CancellationToken.None);
-                return;
+                    RootCertificatePath: saved.RootCertificatePath, RememberPassword: true, SavedConnectionId: saved.Id);
             }
-            if (!saved.WindowsAuth) return;
+            else
+            {
+                if (!saved.WindowsAuth) return;
+                target = new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, saved.Server, saved.Database, WindowsAuth: true,
+                    TrustServerCertificate: saved.TrustServerCertificate, SavedConnectionId: saved.Id);
+            }
 
-            await SqlConn.ConnectAsync(saved.Server, saved.Database, windowsAuth: true,
-                user: null, password: null, System.Threading.CancellationToken.None);
+            if (session != null) await SqlConn.ConnectAsync(target, session, System.Threading.CancellationToken.None);
+            else await SqlConn.ConnectAsync(target, System.Threading.CancellationToken.None);
         }
         catch
         {
@@ -536,7 +561,12 @@
         {
             var exec = Services.GetService<IQueryExecutionService>();
             if (exec == null) return;
-            var result = await exec.ExecuteAsync("ROLLBACK;", 1, 30, Guid.NewGuid().ToString("N"), System.Threading.CancellationToken.None);
+            // Spec 043 (T054): the active tab's transaction, captured before the await — a tab switch meanwhile changes nothing.
+            var session = SqlConn.ActiveSession;
+            var queryId = Guid.NewGuid().ToString("N");
+            var result = session != null
+                ? await exec.ExecuteAsync(session, "ROLLBACK;", 1, 30, queryId, System.Threading.CancellationToken.None)
+                : await exec.ExecuteAsync("ROLLBACK;", 1, 30, queryId, System.Threading.CancellationToken.None);
             if (result.Status != AkmlSql.Core.Ipc.Messages.ExecuteStatus.Ok)
             {
                 Services.GetService<INotificationService>()?.Notify(
@@ -552,7 +582,7 @@
 
     private string ConnTooltip => SqlConn.IsConnected
         ? $"Connected to {SqlConn.Server} / {SqlConn.Database} — click to manage connections"
-        : "Not connected to SQL Server — click to connect";
+        : "Not connected — click to connect to a database";
 
     private string PillLabel => _state switch
     {
@@ -571,7 +601,7 @@
     private string StatusText => _state switch
     {
         Availability.Live => "Live IntelliSense available.",
-        Availability.BridgeOnly => "Engine connected — connect to SQL Server for schema-aware IntelliSense.",
+        Availability.BridgeOnly => "Engine connected — connect to a database for schema-aware IntelliSense.",
         Availability.Cached => "Engine offline — IntelliSense served from the local schema cache.",
         Availability.Offline => "Offline — keyword-only IntelliSense; formatter / analyser run in-browser.",
         Availability.Connecting => "Handshaking with engine…",

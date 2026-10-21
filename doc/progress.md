@@ -2579,3 +2579,46 @@ A snippet test now waits for its asynchronous confirmation handler and save read
 Actual HTTPS install/repair/uninstall and second-machine
 pairing remain deferred until a disposable IIS environment is available. No deployment was performed.
 
+
+## Spec 043 — web query tabs, one Connect to database dialog, editor polish (2026-10)
+
+Branch `043-web-query-tabs-polish`; tasks `specs/043-web-query-tabs-polish/tasks.md`; evidence `specs/043-web-query-tabs-polish/baseline.md` and `baseline/`.
+Web edition and engine only; the SSMS shell is unchanged (the user asked to bring the typography to SSMS later).
+
+| Story | What it delivered | Gate |
+|-------|-------------------|------|
+| US5 (writing assistants) | the four opt-out attributes on the SQL editor and the SQL text boxes; the note in Settings › Editor | node, bUnit, browser |
+| US3 (Connect to database) | one dialog and one palette command for both kinds, four groups, fits 1280x720; the trust-certificate choice saved with the connection | bUnit, browser 6/6 |
+| US2 (typography and colours) | line height 1.25 token, measured syntax colours (4.5:1 in light and dark), bracket matching, a font choice in Settings › Editor | node, bUnit, browser |
+| US4 (dark theme) | `color-scheme` per theme; six badge/banner pairs below 4.5:1 fixed and held by `ThemeContrastScanTests`; 42-screen dark walk | browser, unit |
+| US1 (query tabs) | `IQueryTabs` and per-tab `SqlSessionState` behind the `ISqlConnectionService` facade; IndexedDB v5 `editorTabs` with a one-time migration; one CodeMirror view with swapped states; one results pane per tab; closable `TabStrip`; reattach order (SessionDisconnect awaited, then ConnectionChanged); `SessionDisconnect.Release`; concurrent WebSocket dispatch in the engine; History opens into tabs; Ctrl+Alt+PageDown / PageUp / W | web unit, engine unit, browser `QueryTabsTests` |
+
+**Behaviour changes worth knowing.** New query and Open no longer replace the document, so they no longer ask; a file that is
+too large opens nothing. History's Open and Re-execute never ask either (R11). Execute is enabled on a tab with no live
+connection: it reconnects the tab (or opens the Connect to database dialog, prefilled from the tab's connection when only the
+password is missing) and then runs. The status bar's one-time auto-restore binds the active tab only when it has no
+connection of its own (R19).
+
+**Review of US1 (2026-10-21).** A multi-agent review, each finding checked by an independent skeptic, confirmed 37 defects
+and 9 coverage gaps; all are fixed or now tested (the table is in `baseline.md` › Review of US1). Behaviour that changed: a
+second app window runs a tab on an engine session of its own (a Web Lock per session id, `ISessionLeases`) instead of taking
+over the first window's, and the tab set merges across windows; Disconnect forgets the tab's binding; closing a running tab
+asks first; the Connect to database dialog opens on the tab it connects (its connection, else SQL Server) and that tab's own
+connection wins over the saved row it came from; closable tabs act on the focused tab and keep focus in the strip after a
+close; F6 skips hidden panes; a tab's tooltip says "not saved" when its connection is not a saved one. `QueryTabsTests` grew
+to 16 browser tests (PostgreSQL beside SQL Server, an engine restart through `SandboxEngine.RestartAsync`, History per tab,
+30 runs across tabs).
+A second verification round (an independent skeptic per claim) found 23 more; all fixed: a window that cannot use a
+stored session keeps its own in sessionStorage across reloads and pages without Web Locks ask the other windows over a
+BroadcastChannel; the move to tabs writes the set with IndexedDB `add`; a SQL Server tab is asked about an open transaction
+when it closes (as SSMS asks; asking after every run would reset `@@ROWCOUNT`); **Cancel interrupts a running statement**
+(since the engine answers requests side by side, `RunningStatementCancelIntegrationTests`), and the toolbar, the running note
+and the close question say so; a user-disconnected tab stays disconnected after a reload. A third round (23, all fixed) made the engine
+register a cancel as soon as an execute is read (a queued or still-connecting run stops too), bounded the close-time check to 3 s,
+settled two windows asking for one session at once, and made the editor page claim its keys on its first render. Final browser
+gate: 172 passed, 0 failed (the five `EngineAutoConnectTests` need a LAN-mode installed engine).
+
+**Deferred or not done**: an idle-session sweep in the engine (a browser that vanishes leaves its sessions until the engine
+restarts); a saved-query list (declined by the user, FR-015); the manual
+checks M4 (SQL-auth password after a reload), M8 (remote self-signed server), M10 (side-by-side with SSMS 22), M12 (the
+user's dark screenshots) and M13 (Grammarly installed); the native keyboard run (opt-in, interactive desktop).

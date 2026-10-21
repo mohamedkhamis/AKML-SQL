@@ -268,13 +268,33 @@ export function unobserveWorkspace() {
     _observer = null;
 }
 
+const FOCUS_CANDIDATES = '[tabindex="0"], button:not([disabled]), input:not([disabled]), textarea, [contenteditable="true"]';
+
+/** On screen (not display:none, not in a hidden query tab's pane) and in the Tab order (tabindex -1 is not). */
+export function canTakeFocus(node) {
+    if (!node || typeof node.focus !== 'function') return false;
+    if (typeof node.getAttribute === 'function' && node.getAttribute('tabindex') === '-1') return false;
+    if (typeof node.getClientRects === 'function' && node.getClientRects().length === 0) return false;
+    return true;
+}
+
+function candidatesIn(el) {
+    if (typeof el.querySelectorAll === 'function') return [...el.querySelectorAll(FOCUS_CANDIDATES)];
+    const one = el.querySelector(FOCUS_CANDIDATES);
+    return one ? [one] : [];
+}
+
 /**
  * Move keyboard focus to the first focusable element inside `el` (F6 pane cycling); a pane with nothing
  * focusable in it (an empty Schema tree) takes focus itself when it has a tabindex.
+ * Spec 043 (review of US1): the editor before anything else in its pane (the query tab strip now comes first in the
+ * centre), and only an element on screen and in the Tab order: every query tab keeps a hidden results pane, and a tab's
+ * close button (tabindex -1, shown on hover) must never take focus.
  */
 export function focusRegion(el) {
     if (!el) return false;
-    const inner = el.querySelector('.cm-content, [tabindex="0"], button:not([disabled]), input:not([disabled]), textarea, [contenteditable="true"]');
+    const editor = typeof el.querySelector === 'function' ? el.querySelector('.cm-content') : null;
+    const inner = canTakeFocus(editor) ? editor : (candidatesIn(el).find(canTakeFocus) ?? null);
     const target = inner ?? (el.hasAttribute('tabindex') ? el : null);
     if (!target || typeof target.focus !== 'function') return false;
     target.focus({ preventScroll: false });

@@ -1,5 +1,6 @@
 @*
-    Phase 4 (web connection manager) — the app-global "Connect to SQL Server" modal. Hosted once
+    Phase 4 (web connection manager) — the app-global "Connect to database" modal (spec 043: one dialog for SQL Server
+    and PostgreSQL, the kind chosen inside). Hosted once
     in MainLayout; opened by IConnectionManagerController.Open() (command palette / Settings /
     StatusBar). Two panes: saved-connections list (left) + connect form (right). Actions:
     Test / Save / Delete / Connect.
@@ -31,12 +32,14 @@
 @if (_open)
 {
     <div class="akml-scrim akml-connmgr-scrim" @onclick="Close" data-testid="connection-manager-scrim">
-        <div class="akml-dialog akml-connmgr-panel" role="dialog" aria-modal="true" aria-label="Connection manager"
+        @* Review of US1 (finding 29): named by its visible title, so a screen reader announces "Connect to database". *@
+        <div class="akml-dialog akml-connmgr-panel" role="dialog" aria-modal="true" aria-labelledby="akml-connmgr-title"
              tabindex="-1" @ref="_panelRef" @onkeydown="OnPanelKeyDown"
              @onclick:stopPropagation="true" data-testid="connection-manager">
 
             <div class="akml-connmgr-header">
-                <span class="akml-connmgr-title" data-testid="conn-title">@(_kind == DatabaseKind.PostgreSql ? "Connect to PostgreSQL" : "Connect to SQL Server")</span>
+                @* Spec 043 (FR-024): one title for both kinds; the kind is the first choice in the form. *@
+                <h2 class="akml-connmgr-title" id="akml-connmgr-title" data-testid="conn-title">Connect to database</h2>
                 <button type="button" class="akml-connmgr-close" @onclick="Close"
                         aria-label="Close" data-testid="conn-close-btn"><Icon Name="x" /></button>
             </div>
@@ -62,20 +65,27 @@
                             {
                                 <li class="akml-connmgr-row @(c.Id == _selectedId ? "selected" : "")"
                                     @onclick="@(() => OnSavedRowClickAsync(c))" data-testid="conn-row" data-conn-id="@c.Id">
-                                    <span class="akml-connmgr-row-name">@c.Name</span>
-                                    <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
-                                    <span class="akml-connmgr-row-badge" data-testid="conn-row-kind"
-                                          title="@(c.Kind == DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server")">@(c.Kind == DatabaseKind.PostgreSql ? "PG" : c.WindowsAuth ? "Win" : "SQL")</span>
+                                    @* Review of US1 (finding 30, FR-030): a button, so the saved rows are in the Tab order and Enter or Space
+                                       picks one (its click reaches the row's handler). *@
+                                    <button type="button" class="akml-connmgr-rowbtn" data-testid="conn-row-pick"
+                                            aria-current="@(c.Id == _selectedId ? "true" : null)">
+                                        <span class="akml-connmgr-row-name">@c.Name</span>
+                                        <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
+                                        <span class="akml-connmgr-row-badge" data-testid="conn-row-kind"
+                                              title="@(c.Kind == DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server")">@(c.Kind == DatabaseKind.PostgreSql ? "PG" : c.WindowsAuth ? "Win" : "SQL")</span>
+                                    </button>
                                 </li>
                             }
                         </ul>
                     }
                 </div>
 
-                <!-- RIGHT: connect form -->
+                <!-- RIGHT: connect form. Spec 043 (FR-024, research R16): the kind first, then four groups in the order a
+                     connection is described - Server, Sign-in, Database, Security - with paired fields side by side, so the
+                     SQL Server form fits a 1280x720 window without scrolling and the trust choice is never below the fold. -->
                 <div class="akml-connmgr-form-pane">
                     @* Spec 042 (FR-001): every connection has a kind, chosen here. The choice is two buttons, not a colour. *@
-                    <div class="akml-field akml-connmgr-field">
+                    <div class="akml-field akml-connmgr-field akml-connmgr-kindrow">
                         <span class="akml-field-label" id="conn-kind-label">Database kind</span>
                         <div class="akml-connmgr-kind" role="group" aria-labelledby="conn-kind-label">
                             <button type="button" class="akml-btn akml-connmgr-kindbtn @(_kind == DatabaseKind.SqlServer ? "selected" : "")"
@@ -93,78 +103,45 @@
                                           EngineConnected="@(PairedEngine is null || PairedEngine.State == BridgeState.Open)"
                                           EngineVersion="@PairedEngine?.EngineVersion" />
                     </div>
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-field-label" for="conn-name">Display name</label>
-                        <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
-                               placeholder="e.g. Local master" data-testid="conn-name-input" />
-                    </div>
                     @if (_kind == DatabaseKind.PostgreSql)
                     {
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-host">Host</label>
-                            <input id="conn-pg-host" class="akml-input" @bind="_pgHost" @bind:event="oninput"
-                                   @onchange="OnPgIdentityChanged"
-                                   placeholder="db.example.com, 10.0.0.5 or [::1]" data-testid="conn-pg-host" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-port">Port</label>
-                            <input id="conn-pg-port" class="akml-input" type="number" min="1" max="65535"
-                                   @bind="_pgPort" @bind:event="oninput" @onchange="OnPgIdentityChanged" data-testid="conn-pg-port" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-database">Database</label>
-                            @* Typed, or picked from the server's list (the refresh button, or automatically once a password
-                               is remembered): the same choice SQL Server's form offers. *@
-                            <div class="akml-connmgr-db-row">
-                                <input id="conn-pg-database" class="akml-input akml-connmgr-select" @bind="_pgDatabase" @bind:event="oninput"
-                                       list="conn-pg-database-list" autocomplete="off" placeholder="postgres" data-testid="conn-pg-database" />
-                                <datalist id="conn-pg-database-list">
-                                    @foreach (var db in _databases)
-                                    {
-                                        <option value="@db"></option>
-                                    }
-                                </datalist>
-                                <button type="button" class="akml-btn akml-connmgr-db-refresh"
-                                        @onclick="LoadPgDatabasesAsync" disabled="@(_busy || _dbLoading)"
-                                        title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
-                                        data-testid="conn-pg-database-refresh"><Icon Name="refresh-cw" /></button>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-server">
+                            <legend>Server</legend>
+                            <div class="akml-connmgr-grid akml-connmgr-grid--hostport">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-name">Display name</label>
+                                    <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
+                                           placeholder="e.g. Local master" data-testid="conn-name-input" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-host">Host</label>
+                                    <input id="conn-pg-host" class="akml-input" @bind="_pgHost" @bind:event="oninput"
+                                           @onchange="OnPgIdentityChanged"
+                                           placeholder="db.example.com, 10.0.0.5 or [::1]" data-testid="conn-pg-host" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-port">Port</label>
+                                    <input id="conn-pg-port" class="akml-input" type="number" min="1" max="65535"
+                                           @bind="_pgPort" @bind:event="oninput" @onchange="OnPgIdentityChanged" data-testid="conn-pg-port" />
+                                </div>
                             </div>
-                            @if (!string.IsNullOrEmpty(_dbMessage))
-                            {
-                                <span class="akml-connmgr-hint" data-testid="conn-pg-database-hint">@_dbMessage</span>
-                            }
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-user">User name</label>
-                            <input id="conn-pg-user" class="akml-input" @bind="_pgUser" @bind:event="oninput"
-                                   @onchange="OnPgIdentityChanged" autocomplete="off" data-testid="conn-pg-user" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-password">Password</label>
-                            <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
-                                   @bind="_pgPassword" @bind:event="oninput"
-                                   placeholder="@(_pgHasRemembered ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-signin">
+                            <legend>Sign-in</legend>
+                            <div class="akml-connmgr-grid">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-user">User name</label>
+                                    <input id="conn-pg-user" class="akml-input" @bind="_pgUser" @bind:event="oninput"
+                                           @onchange="OnPgIdentityChanged" autocomplete="off" data-testid="conn-pg-user" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-password">Password</label>
+                                    <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
+                                           @bind="_pgPassword" @bind:event="oninput"
+                                           placeholder="@(_pgHasRemembered ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
+                                </div>
+                            </div>
                             <span class="akml-connmgr-hint">Not saved in the browser. @(_pgRemember ? "It will be kept on the engine machine." : "Re-entered each time you connect.")</span>
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-sslmode">TLS mode</label>
-                            <select id="conn-pg-sslmode" class="akml-select" @bind="_pgSslMode" data-testid="conn-pg-sslmode">
-                                @foreach (var mode in SavedSqlConnection.SslModes)
-                                {
-                                    <option value="@mode">@mode</option>
-                                }
-                            </select>
-                        </div>
-                        @if (_pgSslMode is "verify-ca" or "verify-full")
-                        {
-                            <div class="akml-field akml-connmgr-field">
-                                <label class="akml-field-label" for="conn-pg-rootcert">CA certificate path</label>
-                                <input id="conn-pg-rootcert" class="akml-input" @bind="_pgRootCert" @bind:event="oninput"
-                                       placeholder="C:\certs\root.crt" data-testid="conn-pg-rootcert" />
-                                <span class="akml-connmgr-hint">A path on the engine machine.</span>
-                            </div>
-                        }
-                        <div class="akml-field akml-connmgr-field">
                             <label class="akml-connmgr-radio" for="conn-pg-remember">
                                 <input id="conn-pg-remember" type="checkbox" @bind="_pgRemember" data-testid="conn-pg-remember" />
                                 Remember the password on the engine machine
@@ -175,103 +152,172 @@
                             </span>
                             @if (_pgHasRemembered)
                             {
-                                <button type="button" class="akml-btn" @onclick="ForgetPasswordAsync" disabled="@_busy"
+                                <button type="button" class="akml-btn akml-connmgr-forget" @onclick="ForgetPasswordAsync" disabled="@_busy"
                                         data-testid="conn-pg-forget">Forget the remembered password</button>
                             }
-                        </div>
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-database">
+                            <legend>Database</legend>
+                            <div class="akml-field akml-connmgr-field">
+                                <label class="akml-field-label" for="conn-pg-database">Database</label>
+                                @* Typed, or picked from the server's list (the refresh button, or automatically once a password
+                                   is remembered): the same choice SQL Server's form offers. *@
+                                <div class="akml-connmgr-db-row">
+                                    <input id="conn-pg-database" class="akml-input akml-connmgr-select" @bind="_pgDatabase" @bind:event="oninput"
+                                           list="conn-pg-database-list" autocomplete="off" placeholder="postgres" data-testid="conn-pg-database" />
+                                    <datalist id="conn-pg-database-list">
+                                        @foreach (var db in _databases)
+                                        {
+                                            <option value="@db"></option>
+                                        }
+                                    </datalist>
+                                    <button type="button" class="akml-btn akml-connmgr-db-refresh"
+                                            @onclick="LoadPgDatabasesAsync" disabled="@(_busy || _dbLoading)"
+                                            title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
+                                            data-testid="conn-pg-database-refresh"><Icon Name="refresh-cw" /></button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(_dbMessage))
+                                {
+                                    <span class="akml-connmgr-hint" data-testid="conn-pg-database-hint">@_dbMessage</span>
+                                }
+                            </div>
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-security">
+                            <legend>Security</legend>
+                            <div class="akml-connmgr-grid">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-sslmode">TLS mode</label>
+                                    <select id="conn-pg-sslmode" class="akml-select" @bind="_pgSslMode" data-testid="conn-pg-sslmode">
+                                        @foreach (var mode in SavedSqlConnection.SslModes)
+                                        {
+                                            <option value="@mode">@mode</option>
+                                        }
+                                    </select>
+                                </div>
+                                @if (_pgSslMode is "verify-ca" or "verify-full")
+                                {
+                                    <div class="akml-field akml-connmgr-field">
+                                        <label class="akml-field-label" for="conn-pg-rootcert">CA certificate path</label>
+                                        <input id="conn-pg-rootcert" class="akml-input" @bind="_pgRootCert" @bind:event="oninput"
+                                               placeholder="C:\certs\root.crt" data-testid="conn-pg-rootcert" />
+                                        <span class="akml-connmgr-hint">A path on the engine machine.</span>
+                                    </div>
+                                }
+                            </div>
+                        </fieldset>
                     }
                     else
                     {
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-field-label" for="conn-server">Server</label>
-                        <input id="conn-server" class="akml-input" @bind="_server" @bind:event="oninput"
-                               @onchange="OnServerChanged"
-                               placeholder="localhost, server\instance, or a remote host,port" data-testid="conn-server-input" />
-                    </div>
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-field-label" for="conn-database">Database</label>
-                        <div class="akml-connmgr-db-row">
-                            <select id="conn-database" class="akml-select akml-connmgr-select"
-                                    @bind="_database" disabled="@_dbLoading" title="@(_dbLoading ? "Loading databases…" : null)" data-testid="conn-database-select">
-                                @* Always keep the current value selectable — a saved/typed DB may not be
-                                   in the freshly-loaded list (or the list may not be loaded yet). *@
-                                @if (!string.IsNullOrEmpty(_database) &&
-                                     !_databases.Contains(_database, StringComparer.OrdinalIgnoreCase))
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-server">
+                            <legend>Server</legend>
+                            <div class="akml-connmgr-grid">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-name">Display name</label>
+                                    <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
+                                           placeholder="e.g. Local master" data-testid="conn-name-input" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-server">Server</label>
+                                    <input id="conn-server" class="akml-input" @bind="_server" @bind:event="oninput"
+                                           @onchange="OnServerChanged"
+                                           placeholder="localhost, server\instance or host,port" data-testid="conn-server-input" />
+                                </div>
+                            </div>
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-signin">
+                            <legend>Sign-in</legend>
+                            <div class="akml-connmgr-auth" role="radiogroup" aria-label="Authentication">
+                                <label class="akml-connmgr-radio">
+                                    <input type="radio" name="connauth" checked="@_windowsAuth"
+                                           @onchange="@(() => SetAuth(true))" data-testid="conn-auth-windows" />
+                                    Windows authentication
+                                </label>
+                                <label class="akml-connmgr-radio">
+                                    <input type="radio" name="connauth" checked="@(!_windowsAuth)"
+                                           @onchange="@(() => SetAuth(false))" data-testid="conn-auth-sql" />
+                                    SQL Server authentication
+                                </label>
+                            </div>
+                            @* The one rule that decides remote connections, stated where the choice is made. *@
+                            <span class="akml-connmgr-hint" data-testid="conn-auth-hint">
+                                Windows authentication works for a SQL Server on the engine's own computer.
+                                For a remote server, use SQL Server authentication.
+                            </span>
+                            @if (!_windowsAuth)
+                            {
+                                <div class="akml-connmgr-grid">
+                                    <div class="akml-field akml-connmgr-field">
+                                        <label class="akml-field-label" for="conn-login">Login</label>
+                                        <input id="conn-login" class="akml-input" @bind="_login" @bind:event="oninput"
+                                               data-testid="conn-login-input" />
+                                    </div>
+                                    <div class="akml-field akml-connmgr-field">
+                                        <label class="akml-field-label" for="conn-password">Password</label>
+                                        <input id="conn-password" class="akml-input" type="password"
+                                               @bind="_password" @bind:event="oninput" data-testid="conn-password-input" />
+                                    </div>
+                                </div>
+                                <span class="akml-connmgr-hint">The password is not saved; it is re-entered each time you connect.</span>
+                            }
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-database">
+                            <legend>Database</legend>
+                            <div class="akml-field akml-connmgr-field">
+                                <label class="akml-field-label" for="conn-database">Database</label>
+                                <div class="akml-connmgr-db-row">
+                                    <select id="conn-database" class="akml-select akml-connmgr-select"
+                                            @bind="_database" disabled="@_dbLoading" title="@(_dbLoading ? "Loading databases…" : null)" data-testid="conn-database-select">
+                                        @* Always keep the current value selectable — a saved/typed DB may not be
+                                           in the freshly-loaded list (or the list may not be loaded yet). *@
+                                        @if (!string.IsNullOrEmpty(_database) &&
+                                             !_databases.Contains(_database, StringComparer.OrdinalIgnoreCase))
+                                        {
+                                            <option value="@_database" selected>@_database</option>
+                                        }
+                                        @foreach (var db in _databases)
+                                        {
+                                            @* The list arrives after the value is bound: without `selected` the browser shows the first
+                                               option while the connection uses _database, so the dialog connected to another database
+                                               than the one it showed. *@
+                                            <option value="@db" selected="@string.Equals(db, _database, StringComparison.OrdinalIgnoreCase)">@db</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="akml-btn akml-connmgr-db-refresh"
+                                            @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
+                                            title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
+                                            data-testid="conn-database-refresh"><Icon Name="refresh-cw" /></button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(_dbMessage))
                                 {
-                                    <option value="@_database" selected>@_database</option>
+                                    <span class="akml-connmgr-hint" data-testid="conn-database-hint">@_dbMessage</span>
                                 }
-                                @foreach (var db in _databases)
-                                {
-                                    @* The list arrives after the value is bound: without `selected` the browser shows the first
-                                       option while the connection uses _database, so the dialog connected to another database
-                                       than the one it showed. *@
-                                    <option value="@db" selected="@string.Equals(db, _database, StringComparison.OrdinalIgnoreCase)">@db</option>
-                                }
-                            </select>
-                            <button type="button" class="akml-btn akml-connmgr-db-refresh"
-                                    @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
-                                    title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
-                                    data-testid="conn-database-refresh"><Icon Name="refresh-cw" /></button>
-                        </div>
-                        @if (!string.IsNullOrEmpty(_dbMessage))
-                        {
-                            <span class="akml-connmgr-hint" data-testid="conn-database-hint">@_dbMessage</span>
-                        }
-                        @* Spec 032 FR-033: the engine enumerates databases under ITS service
-                           account — databases it lacks grants for are silently absent, which
-                           surprised even the campaign (the sandbox needed a grant to appear). *@
-                        <span class="akml-connmgr-hint" data-testid="conn-database-scope-hint">
-                            @(_windowsAuth
-                                ? "With Windows authentication only the databases the engine's account can open are listed. For another database, grant that account access or use SQL Server authentication."
-                                : "Lists the databases this login can open.")
-                        </span>
-                    </div>
-                    <div class="akml-field akml-connmgr-field">
-                        <span class="akml-field-label">Authentication</span>
-                        <label class="akml-connmgr-radio">
-                            <input type="radio" name="connauth" checked="@_windowsAuth"
-                                   @onchange="@(() => SetAuth(true))" data-testid="conn-auth-windows" />
-                            Windows authentication
-                        </label>
-                        <label class="akml-connmgr-radio">
-                            <input type="radio" name="connauth" checked="@(!_windowsAuth)"
-                                   @onchange="@(() => SetAuth(false))" data-testid="conn-auth-sql" />
-                            SQL Server authentication
-                        </label>
-                        @* The one rule that decides remote connections, stated where the choice is made. *@
-                        <span class="akml-connmgr-hint" data-testid="conn-auth-hint">
-                            Windows authentication works for a SQL Server on the engine's own computer.
-                            For a remote server, use SQL Server authentication.
-                        </span>
-                    </div>
-                    @if (!_windowsAuth)
-                    {
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-login">Login</label>
-                            <input id="conn-login" class="akml-input" @bind="_login" @bind:event="oninput"
-                                   data-testid="conn-login-input" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-password">Password</label>
-                            <input id="conn-password" class="akml-input" type="password"
-                                   @bind="_password" @bind:event="oninput" data-testid="conn-password-input" />
-                            <span class="akml-connmgr-hint">Not saved — re-entered each time you connect.</span>
-                        </div>
+                                @* Spec 032 FR-033: the engine enumerates databases under ITS service
+                                   account — databases it lacks grants for are silently absent, which
+                                   surprised even the campaign (the sandbox needed a grant to appear). *@
+                                <span class="akml-connmgr-hint" data-testid="conn-database-scope-hint">
+                                    @(_windowsAuth
+                                        ? "With Windows authentication only the databases the engine's account can open are listed. For another database, grant that account access or use SQL Server authentication."
+                                        : "Lists the databases this login can open.")
+                                </span>
+                            </div>
+                        </fieldset>
+                        @* Review WEB-02: a remote server's certificate is validated unless the user says otherwise, for this
+                           connection only. Spec 043 (FR-026, FR-028): kept with the saved connection; a server on the engine's own
+                           computer is never validated, so there the choice is disabled and says why. *@
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-security">
+                            <legend>Security</legend>
+                            <label class="akml-connmgr-radio" for="conn-trust-cert">
+                                <input id="conn-trust-cert" type="checkbox" @bind="_trustServerCertificate" disabled="@TrustIsMoot"
+                                       data-testid="conn-trust-cert" />
+                                Trust the server certificate without validating it
+                            </label>
+                            <span class="akml-connmgr-hint" data-testid="conn-trust-cert-help">
+                                @(TrustIsMoot
+                                    ? "This server is on the engine's own computer, so its certificate is never validated and this choice makes no difference."
+                                    : "The connection is always encrypted. Tick this only for a remote server with a self-signed certificate you trust: without validation, anyone on the network path could pose as the server. A server on the engine's own computer is never validated.")
+                            </span>
+                        </fieldset>
                     }
-                    @* Review WEB-02: a remote server's certificate is validated unless the user says otherwise, for this connection only. *@
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-connmgr-radio" for="conn-trust-cert">
-                            <input id="conn-trust-cert" type="checkbox" @bind="_trustServerCertificate" data-testid="conn-trust-cert" />
-                            Trust the server certificate without validating it
-                        </label>
-                        <span class="akml-connmgr-hint" data-testid="conn-trust-cert-help">
-                            The connection is always encrypted. Tick this only for a remote server with a self-signed certificate you
-                            trust: without validation, anyone on the network path could pose as the server. A SQL Server on the
-                            engine's own computer is never validated.
-                        </span>
-                    </div>
-                    }
-
                 </div>
             </div>
 
@@ -305,10 +351,11 @@
        from here (Delete…) shows above it. */
     .akml-scrim.akml-connmgr-scrim { z-index: 1000; }
 
-    /* A shell dialog (.akml-dialog in shell.css) sized for the list and the form side by side. */
+    /* A shell dialog (.akml-dialog in shell.css) sized for the list and the form side by side. Spec 043 (R16): tall
+       enough for the whole SQL Server form in a 1280x720 window, never taller than the window. */
     .akml-connmgr-panel {
         width: 720px;
-        height: 500px;
+        height: min(600px, calc(100vh - 48px));
         overflow: hidden;
     }
 
@@ -321,7 +368,7 @@
         border-bottom: 1px solid var(--akml-border-default);
         background-color: var(--akml-surface-sidebar);
     }
-    .akml-connmgr-title { font-weight: 600; }
+    .akml-connmgr-title { font-weight: 600; font-size: inherit; margin: 0; }
     .akml-connmgr-close {
         background: none; border: none; color: var(--akml-text-secondary);
         font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: var(--akml-scalar-radius-xs);
@@ -371,14 +418,20 @@
         overflow-y: auto; min-height: 0; flex: 1 1 auto;
     }
     .akml-connmgr-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        grid-template-areas: "name badge" "sub badge";
-        column-gap: var(--akml-scalar-spacing-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
         cursor: pointer;
         border-bottom: 1px solid var(--akml-border-subtle);
     }
+    .akml-connmgr-rowbtn {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "name badge" "sub badge";
+        column-gap: var(--akml-scalar-spacing-xs);
+        width: 100%;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        background: none; border: 0; border-radius: 0;
+        color: inherit; font: inherit; text-align: left; cursor: pointer;
+    }
+    .akml-connmgr-rowbtn:focus-visible { outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
     .akml-connmgr-row:hover { background-color: var(--akml-surface-hover); }
     .akml-connmgr-row.selected {
         background-color: var(--akml-surface-selection);
@@ -393,19 +446,51 @@
     .akml-connmgr-row-badge {
         grid-area: badge; align-self: center;
         font-size: 10px; padding: 0 4px; border-radius: var(--akml-scalar-radius-xs);
-        background-color: var(--akml-surface-hover); color: var(--akml-text-secondary);
+        /* Spec 043 (FR-032): the neutral badge tokens (4.5:1 in every theme; this read 4.0:1 in dark). */
+        background-color: var(--akml-badge-neutral); color: var(--akml-badge-neutraltext);
     }
 
     .akml-connmgr-form-pane {
         display: flex;
         flex-direction: column;
-        gap: var(--akml-scalar-spacing-s);
-        padding: var(--akml-scalar-spacing-l);
+        gap: var(--akml-scalar-spacing-m);
+        padding: var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-l);
         overflow-y: auto;
         min-height: 0;
         background-color: var(--akml-surface-panel);
     }
     .akml-connmgr-field { margin-bottom: 0; }
+
+    /* Spec 043 (R16): the four groups. A fieldset with its legend styled like the list heading; fields inside a group
+       sit two to a row (three for PostgreSQL's name, host and port). */
+    .akml-connmgr-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--akml-scalar-spacing-xs);
+        margin: 0;
+        padding: 0;
+        border: none;
+        min-width: 0;
+    }
+    .akml-connmgr-group > legend {
+        padding: 0;
+        margin-bottom: var(--akml-scalar-spacing-xs);
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .akml-connmgr-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+    }
+    .akml-connmgr-grid--hostport { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 88px; }
+    .akml-connmgr-auth { display: flex; flex-wrap: wrap; column-gap: var(--akml-scalar-spacing-l); }
+    .akml-connmgr-auth .akml-connmgr-radio { margin-top: 0; }
+    .akml-connmgr-forget { align-self: flex-start; }
+    .akml-connmgr-radio input:disabled { cursor: not-allowed; }
     /* Database dropdown + its inline refresh button share one row. */
     .akml-connmgr-db-row { display: flex; gap: var(--akml-scalar-spacing-xs); align-items: stretch; }
     .akml-connmgr-select { flex: 1 1 auto; min-width: 0; cursor: pointer; }
@@ -452,6 +537,13 @@
 
 @code {
     private bool _open;
+
+    // Spec 043 (T056): the query tab session this opening connects (the tab whose run asked, else the active tab's), and
+    // whether it did — the run that opened the dialog goes on only after a successful connect.
+    private SqlSessionState? _target;
+    private bool _connected;
+
+    private SqlSessionState? TargetSession => _target ?? SqlConn.ActiveSession;
     private bool _busy;
     private bool _focusOnNextRender;
 
@@ -487,6 +579,10 @@
     private string _password = string.Empty;
     private bool _trustServerCertificate;
 
+    // Spec 043 (FR-028): a SQL Server on the engine's own computer is never validated (SqlConnectionService trusts loopback
+    // whatever the flag says), so for such a server the checkbox is disabled and its help says why. The saved value is kept.
+    private bool TrustIsMoot => SqlConnectionService.IsLoopbackServer(_server);
+
     // Database dropdown (spec 030). _databases is the list fetched from the server; the current
     // _database is always kept selectable even when absent from (or ahead of) the fetched list.
     private List<string> _databases = new();
@@ -507,17 +603,26 @@
     {
         // Re-entrant guard: opening while already open must not reset the form.
         if (_open) return;
+        _target = Controller.TargetSession;
+        _connected = false;
+        var prefill = Controller.Prefill;
         _message = null;
         await ReloadAsync();
         // Pre-fill from the active (most-recently-used) saved row, if any.
         var activeId = await Store.GetActiveIdAsync();
         var active = string.IsNullOrEmpty(activeId) ? null : _saved.FirstOrDefault(c => c.Id == activeId);
 
-        // Spec 042 (T064): "Connect to PostgreSQL…" asks for the PostgreSQL form; otherwise the active row decides.
+        // Spec 042 (T064) / spec 043 (contracts/web-ui.md §5; review of US1, findings 28 and 34): a kind asked for decides the
+        // form; otherwise the tab being connected does: its connection when it has one (filled in, the password still to type),
+        // else SQL Server. The most recently used saved row is shown when it is of that kind.
         var requested = Controller.RequestedKind;
-        if (requested.HasValue && (active == null || active.Kind != requested.Value)) NewConnection(requested.Value);
-        else if (active != null) SelectSaved(active);
-        else NewConnection();
+        // A restored tab whose connection needs a password (a run asked): the form reconnects it to exactly where it was.
+        bool exact = prefill != null;
+        if (prefill == null && requested == null && (_target ?? SqlConn.ActiveSession)?.Binding is { } current) prefill = current.Clone();
+        var kind = requested ?? DatabaseKind.SqlServer;
+        if (active != null && active.Kind == kind) SelectSaved(active);
+        else NewConnection(kind);
+        if (prefill != null) ApplyPrefill(prefill, exact);
         _open = true;
         _focusOnNextRender = true;
         StateHasChanged();
@@ -558,6 +663,7 @@
 
     private void ResetPostgresFields()
     {
+        _rememberedAsk++;   // a remembered-password answer still on its way is about the form before this reset
         _pgHost = "localhost";
         _pgPort = SavedSqlConnection.DefaultPostgresPort;
         _pgDatabase = "postgres";
@@ -575,6 +681,7 @@
     {
         if (_kind == kind) return;
         if (kind == DatabaseKind.PostgreSql && !SqlConn.EngineSupportsPostgres) return;
+        _rememberedAsk++;   // a remembered-password answer still on its way belongs to the other kind's form
         _kind = kind;
         _message = null;
         if (_selectedId != null) _name = string.Empty;
@@ -624,6 +731,57 @@
     {
         SelectSaved(c);
         if (c.Kind == DatabaseKind.SqlServer && c.WindowsAuth) await LoadDatabasesAsync();
+    }
+
+    /// <summary>
+    /// Spec 043: fill the form from a tab's connection. When it is still the saved connection it came from (the same server,
+    /// sign-in and security; review of US1, findings 25 and 33), that row is selected: shown as saved when the dialog was simply
+    /// opened, so Save never writes the tab's state into it; with the tab's database when a run needs the tab reconnected
+    /// (<paramref name="exact"/>). Otherwise the form holds the tab's own values as a new connection — its server, sign-in and
+    /// security choices may differ from the row's, and the form must reconnect the tab to the same place — and Save adds a row
+    /// instead of changing another.
+    /// </summary>
+    private void ApplyPrefill(ConnectionBinding b, bool exact)
+    {
+        var saved = string.IsNullOrEmpty(b.SavedConnectionId) ? null : _saved.FirstOrDefault(c => c.Id == b.SavedConnectionId && c.Kind == b.Kind);
+        // A run that reconnects the tab needs its database too: when that is not the row's, the row is not shown as the form's
+        // (Save would write the tab's database into it), and the form is the tab's own connection.
+        bool sameDatabase = saved != null && string.Equals(
+            saved.Database, b.Database, saved.Kind == DatabaseKind.PostgreSql ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+        if (saved != null && b.SameConnectionAs(saved) && (!exact || sameDatabase))
+        {
+            SelectSaved(saved);
+            if (!exact || _kind != b.Kind) return;
+            if (b.Kind == DatabaseKind.PostgreSql)
+            {
+                _pgDatabase = b.Database;
+                _pgRemember = b.RememberPassword;
+                return;
+            }
+            _database = b.Database;
+            if (!string.IsNullOrWhiteSpace(b.Database) && !_databases.Contains(b.Database)) _databases.Add(b.Database);
+            return;
+        }
+        NewConnection(b.Kind);
+        if (_kind != b.Kind) return;   // a PostgreSQL connection on an engine that no longer offers PostgreSQL: the empty form
+        if (b.Kind == DatabaseKind.PostgreSql)
+        {
+            _pgHost = b.Server;
+            _pgPort = b.Port ?? SavedSqlConnection.DefaultPostgresPort;
+            _pgUser = b.Login ?? string.Empty;
+            _pgSslMode = b.SslMode ?? "prefer";
+            _pgRootCert = b.RootCertificatePath ?? string.Empty;
+            _pgRemember = b.RememberPassword;
+            _pgDatabase = b.Database;
+            return;
+        }
+        if (_windowsAuth != b.WindowsAuth) ClearDatabaseList();   // the list belongs to the row's sign-in, not the tab's
+        _server = b.Server;
+        _windowsAuth = b.WindowsAuth;
+        _login = b.Login ?? string.Empty;
+        _trustServerCertificate = b.TrustServerCertificate;
+        _database = b.Database;
+        if (!string.IsNullOrWhiteSpace(b.Database) && !_databases.Contains(b.Database)) _databases.Add(b.Database);
     }
 
     private void SelectSaved(SavedSqlConnection c)
@@ -721,22 +879,39 @@
     }
 
     /// <summary>The SQL Server form as a target; the certificate choice travels with it (review WEB-02).</summary>
+    // Spec 043 (T056): the saved row the form came from goes with the target, so the tab's binding remembers it.
     private ConnectionTarget SqlServerTarget() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth,
-        User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate);
+        User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate,
+        SavedConnectionId: _selectedId);
 
     // ── PostgreSQL (spec 042) ────────────────────────────────────────────────────────────────────────────
 
     private ConnectionTarget PgTarget() => new(DatabaseKind.PostgreSql, _pgHost, _pgDatabase, WindowsAuth: false,
         User: _pgUser, Password: _pgPassword, Port: _pgPort, SslMode: _pgSslMode,
-        RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert, RememberPassword: _pgRemember);
+        RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert, RememberPassword: _pgRemember,
+        SavedConnectionId: _selectedId);
+
+    // Spec 043 (T056): the connect goes to the tab that opened the dialog.
+    private Task<ConnectResult> ConnectTargetAsync(ConnectionTarget target) =>
+        TargetSession is { } session
+            ? SqlConn.ConnectAsync(target, session, CancellationToken.None)
+            : SqlConn.ConnectAsync(target, CancellationToken.None);
 
     // Asks the engine whether it holds a password for this host, port and user. Never fetches the password itself.
+    // Each question about a remembered password gets a number: a reply to an older one (the host or user changed meanwhile, or
+    // a saved row was shown before the tab's own values replaced it) is not the form's answer any more.
+    private int _rememberedAsk;
+
     private async Task RefreshRememberedAsync()
     {
         if (_kind != DatabaseKind.PostgreSql) return;
+        int ask = ++_rememberedAsk;
         var (host, port, _) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
-        _pgHasRemembered = host != null && !string.IsNullOrWhiteSpace(_pgUser)
-            && await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+        var user = _pgUser;
+        bool remembered = host != null && !string.IsNullOrWhiteSpace(user)
+            && await SqlConn.HasRememberedPasswordAsync(host, port, user, CancellationToken.None);
+        if (ask != _rememberedAsk || _kind != DatabaseKind.PostgreSql) return;
+        _pgHasRemembered = remembered;
         // With a remembered password the list needs nothing more from the user, so it fills as SQL Server's does on open.
         if (_pgHasRemembered && _databases.Count == 0 && !_dbLoading) await LoadPgDatabasesAsync();
         await InvokeAsync(StateHasChanged);
@@ -852,8 +1027,12 @@
     // back; it never commits. Ask first, naming what is lost.
     private async Task<bool> ConfirmLeaveTransactionAsync()
     {
-        if (!SqlConn.IsConnected || SqlConn.TransactionState == TransactionState.None) return true;
-        var aborted = SqlConn.TransactionState == TransactionState.Aborted;
+        // Spec 043: the transaction of the tab being connected, not of whichever tab is active.
+        var session = TargetSession;
+        bool connected = session?.IsConnected ?? SqlConn.IsConnected;
+        var state = session?.TransactionState ?? SqlConn.TransactionState;
+        if (!connected || state == TransactionState.None) return true;
+        var aborted = state == TransactionState.Aborted;
         return await Dialogs.ConfirmAsync(new DialogRequest
         {
             Title = aborted ? "Aborted transaction" : "Open transaction",
@@ -866,17 +1045,27 @@
         });
     }
 
+    // Spec 043 (T049): a tab's connection does not change under its own run.
+    private bool RefuseWhileBusy()
+    {
+        if (TargetSession?.IsBusy != true) return false;
+        SetMessage("Wait for the current run to finish.", isError: true);
+        return true;
+    }
+
     private async Task ConnectPostgresAsync()
     {
+        if (RefuseWhileBusy()) return;
         if (!await ConfirmLeaveTransactionAsync()) return;
         _busy = true;
         _message = null;
         StateHasChanged();
         try
         {
-            var result = await SqlConn.ConnectAsync(PgTarget(), CancellationToken.None);
+            var result = await ConnectTargetAsync(PgTarget());
             if (result.Ok)
             {
+                _connected = true;
                 if (!string.IsNullOrEmpty(_selectedId))
                 {
                     try
@@ -1019,6 +1208,7 @@
             SetMessage("Enter the SQL password to connect (passwords are never stored).", isError: true);
             return;
         }
+        if (RefuseWhileBusy()) return;
         if (!await ConfirmLeaveTransactionAsync()) return;
         _busy = true;
         _message = null;
@@ -1027,9 +1217,10 @@
         {
             // Review WEB-19: the engine opens the connection before the session switches; a refusal keeps the dialog open
             // with what was typed, so it can be corrected.
-            var result = await SqlConn.ConnectAsync(SqlServerTarget(), CancellationToken.None);
+            var result = await ConnectTargetAsync(SqlServerTarget());
             if (result.Ok)
             {
+                _connected = true;
                 // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
                 if (!string.IsNullOrEmpty(_selectedId))
                 {
@@ -1073,6 +1264,10 @@
     {
         if (!_open) return;
         _open = false;
+        bool connected = _connected;
+        _target = null;
+        _connected = false;
+        Controller.NotifyClosed(connected);   // spec 043: a run waiting on this dialog goes on, or stops
         StateHasChanged();
         if (_module != null)
         {

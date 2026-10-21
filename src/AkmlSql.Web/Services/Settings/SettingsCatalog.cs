@@ -50,9 +50,13 @@ public static class SettingsCatalog
     {
         new SettingEntry("theme", General, "Theme", "Light, dark or high contrast; System follows Windows.", "dark light high contrast colour color appearance"),
 
+        new SettingEntry("editor-font-family", Editor, "Font", "The font of the editor and of every place that shows SQL: History, Format styles, AI answers.", "typeface consolas cascadia monospace"),
         new SettingEntry("editor-font-size", Editor, "Font size", "The editor's text size, 9 to 32 pixels.", "zoom text"),
         new SettingEntry("editor-word-wrap", Editor, "Word wrap", "Wrap long lines at the edge of the editor instead of scrolling sideways."),
         new SettingEntry("editor-tab-size", Editor, "Tab size", "Spaces a tab stands for, 1 to 8.", "indent"),
+        new SettingEntry("editor-writing-assistants", Editor, "Writing assistants",
+            "An assistant that ignores this request is outside AKML SQL's control; turn it off for this site in the assistant's own settings.",
+            "grammarly languagetool spell check spelling grammar autocorrect extension"),
         new SettingEntry("editor-reset-session", Editor, "Reset editor session", "Clears the document kept between visits; it cannot be undone.", "clear document"),
 
         new SettingEntry("format-style", Format, "Style", "The style Format SQL uses. Edit styles on the Format styles page.", "profile formatting"),

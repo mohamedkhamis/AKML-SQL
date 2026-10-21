@@ -45,7 +45,21 @@ export function caretPosition(doc, head) {
 
 // ── Spec 041 (research R53, FR-053) — editor options ─────────────────────────────────────────────────────
 
-/** The editor options within their limits (Settings › Editor): font size 9–32 px, tab size 1–8. */
+// Spec 043 (research R12, FR-017): the fonts Settings › Editor offers, by the names EditorSettings.FontName gives.
+// 'default' is no override: the theme's --akml-type-editor-family (Consolas first) applies.
+const EDITOR_FONT_STACKS = Object.freeze({
+    'default': null,
+    'cascadia-mono': "'Cascadia Mono', 'Cascadia Code', Consolas, monospace",
+    'consolas': "Consolas, 'Cascadia Mono', monospace",
+    'system-monospace': 'ui-monospace, monospace',
+});
+
+/** The CSS font stack of an offered font, or null for the default (and for anything not offered). */
+export function editorFontStack(name) {
+    return Object.prototype.hasOwnProperty.call(EDITOR_FONT_STACKS, name) ? EDITOR_FONT_STACKS[name] : null;
+}
+
+/** The editor options within their limits (Settings › Editor): font size 9–32 px, tab size 1–8, an offered font. */
 export function normaliseEditorOptions(opts) {
     const o = opts || {};
     const int = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : d);
@@ -53,7 +67,47 @@ export function normaliseEditorOptions(opts) {
         fontSize: Math.min(32, Math.max(9, int(o.fontSize, 13))),
         wordWrap: !!o.wordWrap,
         tabSize: Math.min(8, Math.max(1, int(o.tabSize, 4))),
+        fontFamily: typeof o.fontFamily === 'string' && Object.prototype.hasOwnProperty.call(EDITOR_FONT_STACKS, o.fontFamily)
+            ? o.fontFamily : 'default',
     };
+}
+
+/**
+ * Spec 041 (R53) / 043 (R12): the size and the font are CSS only — two variables every SQL surface reads
+ * (--akml-editor-font-size, --akml-editor-font-family). Set on the editor host by the editor, and on the document root
+ * (applyEditorAppearanceToRoot) so pages without an editor (History, Format styles) follow the same setting.
+ */
+export function applyEditorAppearance(el, opts) {
+    if (!el || !el.style) return;
+    const o = normaliseEditorOptions(opts);
+    el.style.setProperty('--akml-editor-font-size', `${o.fontSize}px`);
+    const stack = editorFontStack(o.fontFamily);
+    if (stack) el.style.setProperty('--akml-editor-font-family', stack);
+    else el.style.removeProperty('--akml-editor-font-family');
+}
+
+/** The appearance on the document root (called by MainLayout on start and when Settings › Editor changes). */
+export function applyEditorAppearanceToRoot(opts) {
+    applyEditorAppearance(typeof document !== 'undefined' ? document.documentElement : null, opts);
+}
+
+// ── Spec 043 (research R14, FR-036) — writing assistants stay out of the SQL ─────────────────────────────
+// CodeMirror already sets spellcheck="false" autocorrect="off" autocapitalize="off" on .cm-content. Browser
+// writing assistants read their own opt-outs: Grammarly has used data-gramm, data-gramm_editor and
+// data-enable-grammarly over the years, LanguageTool reads data-lt-active. An assistant that ignores all of them
+// is outside the page's control (Settings › Editor says so).
+
+/** The attributes that ask writing assistants to leave an element alone. */
+export const WRITING_ASSISTANT_OPT_OUT = Object.freeze({
+    'data-gramm': 'false',
+    'data-gramm_editor': 'false',
+    'data-enable-grammarly': 'false',
+    'data-lt-active': 'false',
+});
+
+/** The CodeMirror extension that puts WRITING_ASSISTANT_OPT_OUT on the editor content (pure; `cm` is the bundle). */
+export function writingAssistantOptOut(cm) {
+    return cm.view.EditorView.contentAttributes.of({ ...WRITING_ASSISTANT_OPT_OUT });
 }
 
 /** The CodeMirror extensions for the options, one per compartment (pure; `cm` is the bundle). */
@@ -156,10 +210,6 @@ export function typedTriggerCharacters(kind) {
     return isPostgresKind(kind) ? /[\s.,()=<>!+\-*/:]/ : /[\s.,()=<>!+\-*/]/;
 }
 
-/** The font size is CSS only: a variable on the host the editor's font-size reads. */
-function applyFontSize(host, opts) {
-    if (host && host.style) host.style.setProperty('--akml-editor-font-size', `${normaliseEditorOptions(opts).fontSize}px`);
-}
 
 /**
  * Create a CodeMirror editor inside the given host element.
@@ -246,8 +296,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         if (!update.docChanged || !dotNetRef) return;
 
         const text = update.state.doc.toString();
-        // Fire-and-forget; the C# side debounces.
-        dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text);
+        // Fire-and-forget; the C# side debounces. Spec 043: with the query tab shown now, so a report that arrives after a
+        // tab switch is still filed under the tab it was typed in.
+        dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text, _instances.get(hostElementId)?.currentTab ?? null);
 
         // PR #236 review: only consider user-typed transactions for the
         // post-keyword trigger. Programmatic dispatches (Format → setText,
@@ -286,6 +337,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             }
         } catch { /* never let trigger detection break the editor */ }
     });
+
+    // Spec 043 (review of US1): the query tab shown now. A reply to a request made in one tab is dropped when another tab is
+    // shown by the time it arrives (completion, ghost text, wildcard expansion, quick info, signature help).
+    const shownTab = () => _instances.get(hostElementId)?.currentTab ?? null;
 
     const completionSource = async (context) => {
         if (!dotNetRef) return null;
@@ -328,9 +383,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             // `SELECT ` must not reappear over `SELECT @`). PostgreSQL drops it; SQL Server keeps its behaviour.
             let stale = false;
             if (isPostgresKind(kind)) context.addEventListener('abort', () => { stale = true; }, { onDocChange: true });
+            const tabAtRequest = shownTab();
             const items = await dotNetRef.invokeMethodAsync(
                 'RequestCompletionsFromJs', context.pos, context.state.doc.toString());
-            if (stale || context.aborted) return null;
+            if (stale || context.aborted || shownTab() !== tabAtRequest) return null;
             if (!items || items.length === 0) return null;
             // Spec 042: while a quoted name is being typed CodeMirror matches the text from the opening quote, so the
             // label is the quoted form (a label without the quote can never match `"Aud`).
@@ -494,10 +550,11 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         const pos = view.state.selection.main.head;
         const docText = view.state.doc.toString();
         const reqId = ++ghost.reqId;
+        const tabAtRequest = shownTab();
         dotNetRef.invokeMethodAsync('RequestGhostTextFromJs', pos, docText).then(suggestion => {
             if (reqId !== ghost.reqId || !suggestion) return;      // superseded or empty
             const inst = _instances.get(hostElementId);
-            if (!inst) return;
+            if (!inst || inst.currentTab !== tabAtRequest) return;  // another query tab is shown now
             if (inst.view.state.selection.main.head !== pos) return; // staleness check
             inst.view.dispatch({ effects: setGhost.of({ text: suggestion, pos }) });
         }).catch(() => { /* ghost text never surfaces an error */ });
@@ -551,11 +608,12 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         // The engine computes spanStart/spanLength against THIS text; the guard below re-verifies the
         // span against the live document after the async round-trip.
         const docAtRequest = view.state.doc;
+        const tabAtRequest = shownTab();
         dotNetRef.invokeMethodAsync('ExpandWildcardFromJs', pos, docAtRequest.toString())
             .then(res => {
                 if (!res || !res.ok) return;
                 const inst = _instances.get(hostElementId);
-                if (!inst) return;
+                if (!inst || inst.currentTab !== tabAtRequest) return;   // another query tab is shown now
                 const end = res.spanStart + res.spanLength;
                 if (end > docAtRequest.length) return;                // engine span outside its own snapshot
                 const doc = inst.view.state.doc;
@@ -594,9 +652,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     const quickInfoHover = cm.view.hoverTooltip(async (view, pos) => {
         if (!dotNetRef) return null;
         let info;
+        const tabAtRequest = shownTab();
         try { info = await dotNetRef.invokeMethodAsync('RequestQuickInfoFromJs', pos, view.state.doc.toString()); }
         catch { return null; }
-        if (!info) return null;
+        if (!info || shownTab() !== tabAtRequest) return null;
         const wr = view.state.wordAt(pos);
         const from = wr ? wr.from : pos;
         const to = wr ? wr.to : pos;
@@ -668,12 +727,13 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         if (!dotNetRef) return;
         const seq = ++sigSeq;
         const pos = view.state.selection.main.head;
+        const tabAtRequest = shownTab();
         let sig;
         try { sig = await dotNetRef.invokeMethodAsync('RequestSignatureHelpFromJs', pos, view.state.doc.toString()); }
         catch { return; }
         if (seq !== sigSeq) return;   // superseded by a newer request or a dismissal
         const inst = _instances.get(hostElementId);
-        if (!inst) return;
+        if (!inst || inst.currentTab !== tabAtRequest) return;   // another query tab is shown now
         if (!sig) { inst.view.dispatch({ effects: setSig.of(null) }); return; }
         const tooltip = {
             pos: inst.view.state.selection.main.head,
@@ -766,8 +826,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     function gotoDefinition(view) {
         if (!dotNetRef) return true;
         const pos = view.state.selection.main.head;
+        const tabAtRequest = shownTab();
         dotNetRef.invokeMethodAsync('RequestGoToDefinitionFromJs', pos, view.state.doc.toString())
             .then(def => {
+                if (shownTab() !== tabAtRequest) return;   // another query tab is shown now: its definition is not this one
                 const host = document.getElementById(hostElementId);
                 if (host && def) showPeekPanel(host, def);
             })
@@ -801,51 +863,52 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     const tabCompartment = new cm.state.Compartment();
     const dialectCompartment = new cm.state.Compartment();   // Spec 042: SQL Server (default) or PostgreSQL language
     const optionExt = optionExtensions(cm, options);
-    applyFontSize(host, options);
+    applyEditorAppearance(host, options);
 
-    const state = cm.state.EditorState.create({
-        doc: initialText ?? '',
-        extensions: [
-            wrapCompartment.of(optionExt.wrap),
-            tabCompartment.of(optionExt.tab),
-            // The undo history. historyKeymap below binds Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, but without this extension
-            // there is no history for them to act on, and undo did nothing anywhere in the editor.
-            cm.commands.history(),
-            cm.view.lineNumbers(),
-            cm.view.highlightActiveLine(),
-            ghostKeymap,
-            completionAcceptKeymap,   // Spec 032 FR-003 — Tab accepts an open completion (falls through when closed)
-            wildcardKeymap,   // Tab-expand SELECT * (falls through when not a wildcard)
-            cm.view.keymap.of([
-                // Spec 032 FR-004 — must precede defaultKeymap's own Mod-Enter (insertBlankLine),
-                // which otherwise shadows it: this is the only working keyboard execute.
-                { key: 'Mod-Enter', run: runExecute },
-                ...cm.commands.defaultKeymap,
-                ...cm.commands.historyKeymap,
-                ...cm.search.searchKeymap,
-                cm.commands.indentWithTab,
-            ]),
-            dialectCompartment.of(dialectExtension(cm, options && options.dialect)),
-            // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
-            // map rendering via CM6's default so nothing goes uncoloured.
-            cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
-            cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
-            cm.autocomplete.autocompletion({
-                override: [completionSource],
-                activateOnTyping: true,
-                maxRenderedOptions: 50,
-            }),
-            cm.lint.lintGutter(),
-            ghostField,
-            ghostListener,
-            // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
-            quickInfoHover,
-            sigField,
-            signatureListener,
-            navKeymap,
-            updateListener,
-        ],
-    });
+    // Spec 043 (R6): kept on the instance, so every query tab's state is built with the same extensions (switchTab).
+    const extensions = [
+        writingAssistantOptOut(cm),   // Spec 043 (FR-036): Grammarly and LanguageTool stay out of the SQL
+        wrapCompartment.of(optionExt.wrap),
+        tabCompartment.of(optionExt.tab),
+        // The undo history. historyKeymap below binds Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, but without this extension
+        // there is no history for them to act on, and undo did nothing anywhere in the editor.
+        cm.commands.history(),
+        cm.view.lineNumbers(),
+        cm.view.highlightActiveLine(),
+        cm.language.bracketMatching(),   // Spec 043 (FR-019): the bracket matching the one at the caret is outlined
+        ghostKeymap,
+        completionAcceptKeymap,   // Spec 032 FR-003 — Tab accepts an open completion (falls through when closed)
+        wildcardKeymap,   // Tab-expand SELECT * (falls through when not a wildcard)
+        cm.view.keymap.of([
+            // Spec 032 FR-004 — must precede defaultKeymap's own Mod-Enter (insertBlankLine),
+            // which otherwise shadows it: this is the only working keyboard execute.
+            { key: 'Mod-Enter', run: runExecute },
+            ...cm.commands.defaultKeymap,
+            ...cm.commands.historyKeymap,
+            ...cm.search.searchKeymap,
+            cm.commands.indentWithTab,
+        ]),
+        dialectCompartment.of(dialectExtension(cm, options && options.dialect)),
+        // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
+        // map rendering via CM6's default so nothing goes uncoloured.
+        cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
+        cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
+        cm.autocomplete.autocompletion({
+            override: [completionSource],
+            activateOnTyping: true,
+            maxRenderedOptions: 50,
+        }),
+        cm.lint.lintGutter(),
+        ghostField,
+        ghostListener,
+        // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
+        quickInfoHover,
+        sigField,
+        signatureListener,
+        navKeymap,
+        updateListener,
+    ];
+    const state = cm.state.EditorState.create({ doc: initialText ?? '', extensions });
 
     const view = new cm.view.EditorView({
         state,
@@ -853,7 +916,11 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     });
 
     const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
-    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect });
+    _instances.set(hostElementId, {
+        view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect,
+        // Spec 043 (R6): the query tabs. The view shows `currentTab`; every other tab's state waits in `tabs`.
+        extensions, optionExt, tabs: new Map(), currentTab: (options && options.tabId) || null,
+    });
 }
 
 // CodeMirror's lint gutter opens its own tooltip on mouseover. Give its markers the same
@@ -898,6 +965,105 @@ function installLintKeyboard(view, hostElementId) {
     };
 }
 
+// ── Spec 043 (research R6, spike S2) — query tabs: one view, one EditorState per tab ─────────────────────────
+// The view shows one tab; every other tab's state (text, selection, undo history, findings, an open completion) waits in
+// inst.tabs. view.setState runs no update listener, so a swap never reports a text change and never marks a tab modified.
+
+/**
+ * Pure: put the shown tab's snapshot ({state, scrollTop, scrollLeft}) into `tabs` under `fromTabId` (nothing when there
+ * was none) and take `toTabId`'s out of it, or a new snapshot from `createState()` for a tab never shown. The shown tab
+ * is never in the map.
+ */
+export function stashAndPick(tabs, fromTabId, fromSnapshot, toTabId, createState) {
+    if (fromTabId && fromSnapshot) tabs.set(fromTabId, fromSnapshot);
+    const stored = tabs.get(toTabId);
+    if (stored) {
+        tabs.delete(toTabId);
+        return stored;
+    }
+    return { state: createState(), scrollTop: 0, scrollLeft: 0 };
+}
+
+/** Pure: `state` with its whole text replaced (one undoable change). */
+export function replaceDoc(state, text) {
+    return state.update({ changes: { from: 0, to: state.doc.length, insert: text ?? '' } }).state;
+}
+
+/** Pure: replaceDoc only when the text is still exactly `expected` (a Format reply); null when it moved on. */
+export function replaceDocIfUnchanged(state, expected, text) {
+    if (!state || state.doc.toString() !== (expected ?? '')) return null;
+    return replaceDoc(state, text);
+}
+
+/** Pure: `state` showing `diags` (see toLintDiagnostics) instead of what it showed. */
+export function withDiagnostics(cm, state, diags) {
+    if (!cm.lint || typeof cm.lint.setDiagnostics !== 'function') return state;
+    return state.update(cm.lint.setDiagnostics(state, toLintDiagnostics(state.doc, diags))).state;
+}
+
+/**
+ * The stored snapshot of a tab that is not shown; null when `tabId` is the shown one (or none is named); undefined when
+ * the tab has never been shown here and `create` is false. Only a whole new text (`setText`) makes a state for such a tab:
+ * an empty state made for anything else would be picked over the page's text when the tab is first shown.
+ */
+function storedTab(inst, tabId, create = false) {
+    if (!tabId || tabId === inst.currentTab) return null;
+    let stored = inst.tabs.get(tabId);
+    if (!stored) {
+        if (!create) return undefined;
+        stored = { state: inst.cm.state.EditorState.create({ doc: '', extensions: inst.extensions }), scrollTop: 0, scrollLeft: 0 };
+        inst.tabs.set(tabId, stored);
+    }
+    return stored;
+}
+
+/**
+ * Show query tab `tabId`: the shown tab's state is stored, `tabId`'s comes back (or is made from `seedText` the first
+ * time), with the current editor options and `kind`'s SQL language.
+ */
+export function switchTab(hostElementId, tabId, seedText, kind) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !tabId || inst.currentTab === tabId) return;
+    const view = inst.view;
+    const shown = inst.currentTab
+        ? { state: view.state, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft }
+        : null;
+    const next = stashAndPick(inst.tabs, inst.currentTab, shown, tabId,
+        () => inst.cm.state.EditorState.create({ doc: seedText ?? '', extensions: inst.extensions }));
+    inst.currentTab = tabId;
+    inst.kind = kind;
+    removePeek(hostElementId);   // a definition peeked in one tab is not shown over another
+    view.setState(next.state);
+    // A stored state keeps the compartments it was made with: bring them to today's options and this tab's kind.
+    view.dispatch({ effects: [
+        inst.dialectCompartment.reconfigure(dialectExtension(inst.cm, kind)),
+        inst.wrapCompartment.reconfigure(inst.optionExt.wrap),
+        inst.tabCompartment.reconfigure(inst.optionExt.tab),
+    ] });
+    view.scrollDOM.scrollTop = next.scrollTop;
+    view.scrollDOM.scrollLeft = next.scrollLeft;
+}
+
+/** Forget a closed tab's stored state. The page shows another tab first; closing the shown one leaves none current. */
+export function closeTab(hostElementId, tabId) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !tabId) return;
+    inst.tabs.delete(tabId);
+    if (inst.currentTab === tabId) {
+        inst.currentTab = null;
+        removePeek(hostElementId);
+    }
+}
+
+/** Spec 043 (review of US1): the Go to definition peek belongs to the tab it was opened in. */
+function removePeek(hostElementId) {
+    const host = typeof document === 'undefined' ? null : document.getElementById(hostElementId);
+    if (host && host._akmlPeek) {
+        host._akmlPeek.remove();
+        host._akmlPeek = null;
+    }
+}
+
 /**
  * Spec 042 (FR-060, FR-065) - switch an open editor's SQL language to a database kind ('postgresql' or
  * 'sqlserver'). Reconfigures one compartment: the text, caret, history and diagnostics are untouched, so switching
@@ -915,8 +1081,9 @@ export function setEditorOptions(hostElementId, options) {
     const inst = _instances.get(hostElementId);
     if (!inst) return;
     const ext = optionExtensions(inst.cm, options);
+    inst.optionExt = ext;   // spec 043: a tab shown later gets the same options (switchTab)
     inst.view.dispatch({ effects: [inst.wrapCompartment.reconfigure(ext.wrap), inst.tabCompartment.reconfigure(ext.tab)] });
-    applyFontSize(document.getElementById(hostElementId), options);
+    applyEditorAppearance(document.getElementById(hostElementId), options);
 }
 
 /**
@@ -930,11 +1097,13 @@ export function setGhostTextConfig(hostElementId, enabled, delayMs) {
     if (typeof delayMs === 'number' && delayMs > 0) inst.ghost.delayMs = delayMs;
 }
 
-/** Return the current document text. */
-export function getText(hostElementId) {
+/** Return the current document text (spec 043: of query tab `tabId` when it is not the shown one). */
+export function getText(hostElementId, tabId) {
     const inst = _instances.get(hostElementId);
     if (!inst) return '';
-    return inst.view.state.doc.toString();
+    const stored = storedTab(inst, tabId);
+    if (stored === undefined) return '';   // never shown here: the page has its text
+    return (stored ? stored.state : inst.view.state).doc.toString();
 }
 
 /**
@@ -975,10 +1144,15 @@ export function getSelectionInfo(hostElementId) {
     return { text: state.sliceDoc(sel.from, sel.to), startLine: selectionStartLine(state.doc, sel), startColumn };
 }
 
-/** Replace the entire document. */
-export function setText(hostElementId, newText) {
+/** Replace the entire document (spec 043: of query tab `tabId` when it is not the shown one, without a text report). */
+export function setText(hostElementId, newText, tabId) {
     const inst = _instances.get(hostElementId);
     if (!inst) return;
+    const stored = storedTab(inst, tabId, true);
+    if (stored) {
+        stored.state = replaceDoc(stored.state, newText);
+        return;
+    }
     inst.view.dispatch({
         changes: { from: 0, to: inst.view.state.doc.length, insert: newText ?? '' },
     });
@@ -995,9 +1169,19 @@ export function replaceIfUnchanged(view, expected, newText) {
     return true;
 }
 
-export function replaceTextIfUnchanged(hostElementId, expected, newText) {
+export function replaceTextIfUnchanged(hostElementId, expected, newText, tabId) {
     const inst = _instances.get(hostElementId);
-    return !!inst && replaceIfUnchanged(inst.view, expected, newText);
+    if (!inst) return false;
+    const stored = storedTab(inst, tabId);
+    if (stored === undefined) return false;   // never shown here: nothing of it was formatted
+    if (stored) {
+        // Spec 043: a Format reply for a tab the user left meanwhile goes into that tab's stored state.
+        const next = replaceDocIfUnchanged(stored.state, expected, newText);
+        if (!next) return false;
+        stored.state = next;
+        return true;
+    }
+    return replaceIfUnchanged(inst.view, expected, newText);
 }
 
 /**
@@ -1270,16 +1454,22 @@ export function toLintDiagnostics(doc, diags) {
 }
 
 /** Show `diags` (see toLintDiagnostics) as underlines + gutter markers, replacing any shown before. */
-export function setDiagnostics(hostElementId, diags) {
+export function setDiagnostics(hostElementId, diags, tabId) {
     const inst = _instances.get(hostElementId);
     if (!inst || !inst.cm.lint || typeof inst.cm.lint.setDiagnostics !== 'function') return;
+    const stored = storedTab(inst, tabId);
+    if (stored === undefined) return;   // never shown here: the page puts its findings back when it is first shown
+    if (stored) {
+        stored.state = withDiagnostics(inst.cm, stored.state, diags);   // spec 043: findings for a tab not shown
+        return;
+    }
     const mapped = toLintDiagnostics(inst.view.state.doc, diags);
     inst.view.dispatch(inst.cm.lint.setDiagnostics(inst.view.state, mapped));
 }
 
-/** Remove every finding shown in the editor. */
-export function clearDiagnostics(hostElementId) {
-    setDiagnostics(hostElementId, []);
+/** Remove every finding shown in the editor (spec 043: of query tab `tabId` when it is not the shown one). */
+export function clearDiagnostics(hostElementId, tabId) {
+    setDiagnostics(hostElementId, [], tabId);
 }
 
 /**

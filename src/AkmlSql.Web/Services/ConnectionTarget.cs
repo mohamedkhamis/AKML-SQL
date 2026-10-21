@@ -11,6 +11,8 @@ namespace AkmlSql.Web.Services;
 /// <see cref="TrustServerCertificate"/> (SQL Server, review WEB-02) skips certificate validation for this connection only —
 /// for a remote server with a self-signed certificate the user trusts; a server on the engine's own machine always skips it.
 /// The password lives in memory only for the time of the call; it is never part of a saved record.
+/// <see cref="SavedConnectionId"/> (spec 043) is the saved connection the dialog connected from, if any: the query tab's
+/// binding keeps it as a reference.
 /// </summary>
 public sealed record ConnectionTarget(
     DatabaseKind Kind,
@@ -23,7 +25,8 @@ public sealed record ConnectionTarget(
     string? SslMode = null,
     string? RootCertificatePath = null,
     bool RememberPassword = false,
-    bool TrustServerCertificate = false);
+    bool TrustServerCertificate = false,
+    string? SavedConnectionId = null);
 
 /// <summary>
 /// Review WEB-06: the outcome of a Disconnect. <see cref="Released"/> means the engine closed the session's connection;

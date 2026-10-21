@@ -45,17 +45,21 @@
     --akml-editor-spinnerstroke: #2563eb;
     --akml-editor-popupbackground: #ffffff;
     --akml-editor-popupborder: #94a3b8;
+    --akml-editor-selection: #bfdbfe;
+    --akml-editor-activeline: #f8fafc;
+    --akml-editor-matchingbracket: #2563eb;
+    --akml-editor-searchmatch: #fde68a;
     /* Chat */
     --akml-chat-userbubble: #dbeafe;
     --akml-chat-assistantbubble: #e2e8f0;
     --akml-chat-systembubble: #fef3c7;
     /* Syntax */
     --akml-syntax-keyword: #2563eb;
-    --akml-syntax-string: #16a34a;
-    --akml-syntax-number: #ea580c;
+    --akml-syntax-string: #15803d;
+    --akml-syntax-number: #c2410c;
     --akml-syntax-comment: #64748b;
     --akml-syntax-function: #9333ea;
-    --akml-syntax-tablecolumn: #0891c2;
+    --akml-syntax-tablecolumn: #0e7490;
     /* IconBadge */
     --akml-iconbadge-table: #e5c04b;
     --akml-iconbadge-view: #56b6c2;
@@ -114,6 +118,7 @@
     --akml-type-editor-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
     --akml-type-editor-size: 13px;
     --akml-type-editor-weight: 400;
+    --akml-type-editor-line-height: 1.25;
     --akml-type-editorgrid-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
     --akml-type-editorgrid-size: 12px;
     --akml-type-editorgrid-weight: 400;

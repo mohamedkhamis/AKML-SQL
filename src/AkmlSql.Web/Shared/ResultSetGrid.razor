@@ -246,6 +246,13 @@
     /// before a reload or a closed tab drops them.</summary>
     [Parameter] public EventCallback<bool> OnPendingEditsChanged { get; set; }
 
+    /// <summary>Spec 043: prefix of the grid's element ids; the results pane passes <c>akml-grid-{tabId}-{set}</c> so two
+    /// query tabs' grids never share an id. Null: <c>akml-grid-{SetIndex}</c>.</summary>
+    [Parameter] public string? IdPrefix { get; set; }
+
+    /// <summary>Spec 043: the query tab's connection the rows were read through; Apply is sent through it (null: the active tab's).</summary>
+    [Parameter] public SqlSessionState? Session { get; set; }
+
     private bool _reportedPending;
 
     /// <summary>Shift+Alt+Left/Right resize step (FR-003).</summary>
@@ -566,11 +573,11 @@
 
     // ── Rendering helpers ──────────────────────────────────────────────────────────────────────────
 
-    private string IdPrefix => $"akml-grid-{SetIndex}";
-    private string CellId(int d, int c) => $"{IdPrefix}-{d}-{c}";
-    private string RowNumberId(int d) => $"{IdPrefix}-{d}-rn";
-    private string HeaderId(int c) => $"{IdPrefix}-h-{c}";
-    private string TooltipId => $"{IdPrefix}-tip";
+    private string GridPrefix => IdPrefix ?? $"akml-grid-{SetIndex}";
+    private string CellId(int d, int c) => $"{GridPrefix}-{d}-{c}";
+    private string RowNumberId(int d) => $"{GridPrefix}-{d}-rn";
+    private string HeaderId(int c) => $"{GridPrefix}-h-{c}";
+    private string TooltipId => $"{GridPrefix}-tip";
 
     private string? ActiveDescendantId => _area switch
     {
@@ -1785,7 +1792,9 @@
         try
         {
             var req = BuildApplyRequest(set);
-            var result = await QueryExec.ApplyAsync(req, System.Threading.CancellationToken.None);
+            var result = Session != null
+                ? await QueryExec.ApplyAsync(Session, req, System.Threading.CancellationToken.None)
+                : await QueryExec.ApplyAsync(req, System.Threading.CancellationToken.None);
 
             // A new run replaced the result while the reply was on its way: the pending state now belongs to that result, so
             // nothing here may be baked in or cleared. (The page refuses to run while an Apply is waiting; this is the backstop.)

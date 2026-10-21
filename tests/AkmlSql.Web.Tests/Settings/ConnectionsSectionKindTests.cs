@@ -1,6 +1,7 @@
 using AkmlSql.Core;
 using AkmlSql.Web.Services;
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace AkmlSql.Web.Tests.Settings;
@@ -73,6 +74,75 @@ public sealed class ConnectionsSectionKindTests : IDisposable
 
         var row = cut.WaitForElement("[data-testid=saved-connection-p1]");
         Assert.Equal("PostgreSQL", row.QuerySelector("[data-testid=settings-conn-kind]")!.TextContent.Trim());
+    }
+
+    // ---- review of US1 (finding 36, data-model §3): a tab's connection does not change under its run -------------------
+
+    [Fact]
+    public async Task While_the_active_tab_runs_Connect_and_Disconnect_are_disabled_and_say_why()
+    {
+        await AddSqlAsync("s1");
+        _host.Bridge.SetState(BridgeState.Open);
+        _host.Sql.IsConnected = true;
+        _host.Sql.Server = "localhost";
+        _host.Sql.Database = "Sales";
+        _host.Sql.ActiveSession = new SqlSessionState { IsBusy = true };
+
+        var cut = _host.Open("settings/connections");
+
+        var connect = cut.WaitForElement("[data-testid=settings-conn-connect-s1]");
+        Assert.True(connect.HasAttribute("disabled"));
+        Assert.Equal("Wait for the current run to finish", connect.GetAttribute("title"));
+        var disconnect = cut.Find("[data-testid=settings-sql-disconnect]");
+        Assert.True(disconnect.HasAttribute("disabled"));
+        Assert.Equal("Wait for the current run to finish", disconnect.GetAttribute("title"));
+    }
+
+    /// <summary>The close-time question, held open by the test.</summary>
+    private sealed class SlowProbe : IQueryExecutionService
+    {
+        public TaskCompletionSource<TransactionState?> Answer { get; } = new();
+        public Task<TransactionState?> ProbeTransactionStateAsync(SqlSessionState session, CancellationToken ct) => Answer.Task;
+        public Task<AkmlSql.Core.Ipc.Messages.ExecuteQueryResult> ExecuteAsync(string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct) => throw new NotSupportedException();
+        public Task CancelAsync(string queryId, CancellationToken ct) => Task.CompletedTask;
+        public Task<AkmlSql.Core.Ipc.Messages.ApplyChangesResult> ApplyAsync(AkmlSql.Core.Ipc.Messages.ApplyChangesRequest request, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task Disconnect_acts_on_the_tab_it_was_asked_for_even_when_another_is_shown_by_the_time_it_goes_ahead()
+    {
+        var probe = new SlowProbe();
+        _host.Ctx.Services.AddSingleton<IQueryExecutionService>(probe);
+        _host.Bridge.SetState(BridgeState.Open);
+        _host.Sql.IsConnected = true;
+        _host.Sql.Server = "localhost";
+        _host.Sql.Database = "Sales";
+        var asked = new SqlSessionState("tab-a") { IsConnected = true, Server = "localhost", Database = "Sales" };
+        _host.Sql.ActiveSession = asked;
+        var cut = _host.Open("settings/connections");
+
+        cut.WaitForElement("[data-testid=settings-sql-disconnect]").Click();
+        cut.WaitForAssertion(() => Assert.True(cut.Find("[data-testid=settings-sql-disconnect]").HasAttribute("disabled")));   // checking
+        _host.Sql.ActiveSession = new SqlSessionState("tab-b") { IsConnected = true, Server = "other", Database = "Ops" };   // another tab shown
+        await cut.InvokeAsync(() => probe.Answer.SetResult(TransactionState.None));
+
+        cut.WaitForAssertion(() => Assert.Same(asked, Assert.Single(_host.Sql.DisconnectedSessions)));
+    }
+
+    [Fact]
+    public async Task With_no_run_in_flight_Connect_and_Disconnect_are_enabled()
+    {
+        await AddSqlAsync("s1");
+        _host.Bridge.SetState(BridgeState.Open);
+        _host.Sql.IsConnected = true;
+        _host.Sql.Server = "localhost";
+        _host.Sql.Database = "Sales";
+        _host.Sql.ActiveSession = new SqlSessionState();
+
+        var cut = _host.Open("settings/connections");
+
+        Assert.False(cut.WaitForElement("[data-testid=settings-conn-connect-s1]").HasAttribute("disabled"));
+        Assert.False(cut.Find("[data-testid=settings-sql-disconnect]").HasAttribute("disabled"));
     }
 
     [Fact]

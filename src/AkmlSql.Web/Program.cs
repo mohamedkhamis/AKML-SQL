@@ -93,9 +93,12 @@ builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();
 builder.Services.AddSingleton<IExecutionSettingsStore, ExecutionSettingsStore>();
 // Spec 041 (R53) — the editor options of Settings › Editor (key editorSettings in the analysisSettings store).
 builder.Services.AddSingleton<IEditorSettingsStore, EditorSettingsStore>();
-// Spec 041 (R64) — the editor's document (New / Open / Save / Save as) and the browser download it saves through.
+// Spec 041 (R64) — the browser download a document saves through. Spec 043: each query tab has its own document flow (IQueryTabs).
 builder.Services.AddSingleton<IFileDownloader, JsFileDownloader>();
-builder.Services.AddSingleton<EditorDocumentFlow>();
+// Spec 043 (R1, R8) — the editor's query tabs: their order, their documents, their engine sessions and their records.
+// Review of US1: a window's lease on each engine session id it uses (Web Locks), so two windows never share an engine session.
+builder.Services.AddSingleton<ISessionLeases, JsSessionLeases>();
+builder.Services.AddSingleton<IQueryTabs, QueryTabs>();
 builder.Services.AddSingleton<IQueryExecutionService, QueryExecutionService>();
 // Spec 030 — web SQL History: read/search/record/manage via the engine's history IPC (40/41/42)
 // over the bridge (shared per-user store; no new engine code). Editor.razor records user-initiated

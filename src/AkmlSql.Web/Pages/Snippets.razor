@@ -104,7 +104,10 @@
                 </div>
                 <div class="akml-field akml-field-grow">
                     <label class="akml-field-label" for="akml-snippet-body">Body</label>
+                    @* Spec 043 (FR-036): SQL text, so writing assistants are asked to stay out (as in the editor). *@
                     <textarea id="akml-snippet-body" class="akml-textarea akml-snippets-bodyedit" spellcheck="false"
+                              autocorrect="off" autocapitalize="off" writingsuggestions="false" translate="no"
+                              data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false" data-lt-active="false"
                               value="@_editBody" @oninput="@(e => _editBody = e.Value?.ToString() ?? "")"
                               disabled="@_selected.IsBuiltIn" title="@(_selected.IsBuiltIn ? "Built-in snippets are read-only; duplicate this snippet to edit it" : null)"></textarea>
                     <p class="akml-snippets-hint">
@@ -152,14 +155,17 @@
     }
     .akml-snippets-code { font-family: var(--akml-type-editor-family); color: var(--akml-text-secondary); min-width: 64px; }
     .akml-snippets-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Spec 043 (US4, FR-032, FR-033): the neutral badge tokens (4.5:1 in every theme; white on the secondary text colour
+       read 2.6:1 in dark), kept on one line beside a truncated title instead of wrapping to "built-/in". */
     .akml-snippets-badge {
-        font-size: 11px; color: var(--akml-text-onaccent);
-        background-color: var(--akml-text-secondary); border-radius: var(--akml-scalar-radius-xs);
+        font-size: 11px; color: var(--akml-badge-neutraltext);
+        background-color: var(--akml-badge-neutral); border-radius: var(--akml-scalar-radius-xs);
         padding: 0 var(--akml-scalar-spacing-xs);
+        white-space: nowrap; flex: 0 0 auto;
     }
     .akml-snippets-editor { display: flex; flex-direction: column; padding: var(--akml-scalar-spacing-m); gap: var(--akml-scalar-spacing-s); overflow: auto; }
     .akml-field-grow { flex: 1 1 auto; min-height: 0; }
-    .akml-snippets-bodyedit { flex: 1 1 auto; min-height: 160px; resize: vertical; font-family: var(--akml-type-editor-family); white-space: pre; }
+    .akml-snippets-bodyedit { flex: 1 1 auto; min-height: 160px; resize: vertical; font-family: var(--akml-editor-font-family, var(--akml-type-editor-family)); font-size: var(--akml-editor-font-size, var(--akml-type-editor-size)); line-height: var(--akml-type-editor-line-height); white-space: pre; }
     .akml-snippets-hint { color: var(--akml-text-secondary); font-size: 11px; margin: 2px 0 0; }
     .akml-snippets-hint code { font-family: var(--akml-type-editor-family); color: var(--akml-text-primary); }
     .akml-snippets-actions { display: flex; gap: var(--akml-scalar-spacing-s); align-items: center; }

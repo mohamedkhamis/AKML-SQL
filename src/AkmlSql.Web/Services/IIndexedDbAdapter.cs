@@ -38,4 +38,16 @@ public interface IIndexedDbAdapter
 
     /// <summary>Drop every record in the store.</summary>
     Task ClearAsync(string store);
+
+    /// <summary>
+    /// Spec 043 (review of US1): insert a record only when its key is free — false, and nothing written, when it exists. The
+    /// browser adapter does it in one IndexedDB request (<c>add</c>), so of two windows writing the same key exactly one wins;
+    /// this default reads, then writes, which is enough for a single caller.
+    /// </summary>
+    async Task<bool> AddAsync(string store, string key, string valueJson)
+    {
+        if (await GetAsync(store, key).ConfigureAwait(false) != null) return false;
+        await SetAsync(store, key, valueJson).ConfigureAwait(false);
+        return true;
+    }
 }

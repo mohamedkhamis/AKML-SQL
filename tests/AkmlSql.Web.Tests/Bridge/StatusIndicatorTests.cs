@@ -194,6 +194,91 @@ public sealed class StatusIndicatorTests : BunitContext
         cut.WaitForAssertion(() =>
             Assert.Equal("Cached", cut.Find("[data-testid='status-pill']").TextContent));
     }
+
+    // ── Spec 043 (R19, FR-009): the one-time restore after a reload, with query tabs ─────────────────────────────
+
+    private sealed class NoDownloads : IFileDownloader
+    {
+        public Task DownloadTextAsync(string fileName, string mimeType, string text, bool withBom) => Task.CompletedTask;
+    }
+
+    private async Task<SavedSqlConnection> SeedSavedNorthwindAsync()
+    {
+        var savedStore = Services.GetRequiredService<ISavedSqlConnectionStore>();
+        var saved = new SavedSqlConnection { Name = "dev", Server = "localhost", Database = "Northwind_AutoTest", WindowsAuth = true };
+        await savedStore.AddAsync(saved);
+        await savedStore.SetActiveIdAsync(saved.Id);
+        return saved;
+    }
+
+    [Fact]
+    public async Task Open_reconnects_a_restored_tab_to_its_own_connection_and_not_to_the_saved_one()
+    {
+        var tabStore = new EditorSessionStore(new InMemoryIndexedDbAdapter());
+        await tabStore.SaveTabAsync("t1", new EditorSessionRecord
+        {
+            TabId = "t1", DocumentName = "SQLQuery1", SessionKey = "k1", EngineSessionId = "tab-session-1",
+            Binding = ConnectionBinding.FromTarget(new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, "localhost", "TabDb", WindowsAuth: true), null),
+        });
+        await tabStore.SaveSetAsync(new EditorTabSetRecord { Order = new System.Collections.Generic.List<string> { "t1" }, ActiveId = "t1", NextDefaultNumber = 2 });
+        await tabStore.FlushAsync();
+        Services.AddSingleton<IEditorSessionStore>(tabStore);
+        Services.AddSingleton<IQueryTabs>(sp => new QueryTabs(tabStore, sp.GetRequiredService<ISqlConnectionService>(),
+            new FakeDialogService(), new FakeNotificationService(), new NoDownloads()));
+        await SeedActiveConnectionAsync();
+        await SeedSavedNorthwindAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        // Whatever page the reload landed on, the tab comes back on its own connection.
+        cut.WaitForAssertion(() => Assert.Contains("TabDb", cut.Find("[data-testid='status-connection']").TextContent));
+        Assert.Equal("tab-session-1", Services.GetRequiredService<ISqlConnectionService>().SessionId);
+    }
+
+    [Fact]
+    public async Task Open_leaves_a_tab_the_user_disconnected_without_a_connection()
+    {
+        var tabStore = new EditorSessionStore(new InMemoryIndexedDbAdapter());
+        await tabStore.SaveTabAsync("t1", new EditorSessionRecord
+        {
+            TabId = "t1", DocumentName = "SQLQuery1", SessionKey = "k1", EngineSessionId = "tab-session-1", DisconnectedByUser = true,
+        });
+        await tabStore.SaveSetAsync(new EditorTabSetRecord { Order = new System.Collections.Generic.List<string> { "t1" }, ActiveId = "t1", NextDefaultNumber = 2 });
+        await tabStore.FlushAsync();
+        Services.AddSingleton<IEditorSessionStore>(tabStore);
+        Services.AddSingleton<IQueryTabs>(sp => new QueryTabs(tabStore, sp.GetRequiredService<ISqlConnectionService>(),
+            new FakeDialogService(), new FakeNotificationService(), new NoDownloads()));
+        await SeedActiveConnectionAsync();
+        await SeedSavedNorthwindAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+        await Task.Delay(300);
+
+        var tab = Services.GetRequiredService<IQueryTabs>().Active!;
+        Assert.False(tab.Session.IsConnected);   // the reload does not undo the user's Disconnect
+        Assert.DoesNotContain("Northwind_AutoTest", cut.Find("[data-testid='status-connection']").TextContent);
+    }
+
+    [Fact]
+    public async Task Open_restores_the_saved_connection_into_the_active_tab_only_when_it_has_none()
+    {
+        var tabStore = new EditorSessionStore(new InMemoryIndexedDbAdapter());   // a fresh profile: one empty tab, no connection
+        Services.AddSingleton<IEditorSessionStore>(tabStore);
+        Services.AddSingleton<IQueryTabs>(sp => new QueryTabs(tabStore, sp.GetRequiredService<ISqlConnectionService>(),
+            new FakeDialogService(), new FakeNotificationService(), new NoDownloads()));
+        await SeedActiveConnectionAsync();
+        var saved = await SeedSavedNorthwindAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        cut.WaitForAssertion(() => Assert.Contains("Northwind_AutoTest", cut.Find("[data-testid='status-connection']").TextContent));
+        var tab = Services.GetRequiredService<IQueryTabs>().Active!;
+        Assert.Equal(saved.Id, tab.Session.Binding!.SavedConnectionId);   // the tab remembers which saved row it came from
+        Assert.True(tab.Session.IsConnected);
+    }
 }
 
 /// <summary>

@@ -17,7 +17,9 @@ public sealed class SettingsResetTests
         await host.SeedEverythingAsync();
 
         Assert.Contains("System", Assert.Single(await host.Section("general").DescribeResetAsync()));
-        Assert.Contains("13 px", Assert.Single(await host.Section("editor").DescribeResetAsync()));
+        var editor = Assert.Single(await host.Section("editor").DescribeResetAsync());
+        Assert.Contains("13 px", editor);
+        Assert.Contains("default font", editor);   // spec 043 (FR-017)
         Assert.Contains("Khamis", Assert.Single(await host.Section("format").DescribeResetAsync()));
         Assert.Contains(await host.Section("queries").DescribeResetAsync(), l => l.Contains("1,000 rows"));
         var analysis = await host.Section("code-analysis").DescribeResetAsync();

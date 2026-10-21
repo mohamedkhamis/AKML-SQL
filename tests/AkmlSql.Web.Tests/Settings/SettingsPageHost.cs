@@ -27,6 +27,16 @@ internal sealed class SettingsPageHost : IDisposable
         // Spec 042: a fake that sets none of these is a SQL Server connection on an engine without PostgreSQL support.
         public AkmlSql.Core.DatabaseKind Kind { get; set; }
         public bool EngineSupportsPostgres { get; set; }
+        public SqlSessionState? ActiveSession { get; set; }
+
+        /// <summary>Spec 043: the tab sessions a Disconnect or close was asked for, in order.</summary>
+        public List<SqlSessionState> DisconnectedSessions { get; } = new();
+
+        public Task<DisconnectResult> DisconnectSessionAsync(SqlSessionState session, bool release, CancellationToken ct)
+        {
+            DisconnectedSessions.Add(session);
+            return Task.FromResult(new DisconnectResult(true, false, null));
+        }
         public string? ServerVersionText { get; set; }
 
         /// <summary>Spec 042 (FR-106): every request to forget a remembered PostgreSQL password, in order.</summary>

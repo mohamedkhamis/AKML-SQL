@@ -80,6 +80,79 @@ public sealed class WorkspaceAccessibilityTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Spec 043 (T064, FR-018, FR-019, contracts/theme-and-settings.md §5): every syntax colour reads at 4.5:1 on the
+    /// editor and on the active line, body text reads at 4.5:1 on the selection and on a find match, and the matching
+    /// bracket's outline stands out from the editor at 3:1. Light and dark only: high contrast maps these tokens to
+    /// system colours, checked for visibility by the screenshot walk rather than by ratio.
+    /// </summary>
+    [SkippableFact]
+    public async Task Editor_colours_meet_their_contrast_targets_in_light_and_dark()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(output,
+            contextOptions: new() { ViewportSize = new() { Width = 1440, Height = 900 }, ReducedMotion = ReducedMotion.Reduce });
+        var page = s.Page;
+        foreach (var theme in new[] { "Light", "Dark" })
+        {
+            await ShellPolishTests.NavigateAsync(page, "settings/general");
+            await page.Locator("#setting-theme-control").SelectOptionAsync(theme);
+            await ShellPolishTests.NavigateAsync(page, "editor");
+
+            var json = await page.EvaluateAsync<string>("""
+                () => {
+                    const probe = document.createElement('span'); document.body.appendChild(probe);
+                    const rgb = token => { probe.style.color = `var(--akml-${token})`; return getComputedStyle(probe).color.match(/[\d.]+/g).slice(0,3).map(Number); };
+                    const luminance = values => values.map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; })
+                        .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+                    const ratio = (fg, bg) => { const a = luminance(rgb(fg)), b = luminance(rgb(bg)); return (Math.max(a,b)+.05)/(Math.min(a,b)+.05); };
+                    const syntax = ['keyword', 'string', 'number', 'comment', 'function', 'tablecolumn'];
+                    const out = {};
+                    for (const t of syntax) {
+                        out[`${t}-on-editor`] = [ratio(`syntax-${t}`, 'surface-editor'), 4.5];
+                        out[`${t}-on-active-line`] = [ratio(`syntax-${t}`, 'editor-activeline'), 4.5];
+                    }
+                    out['text-on-active-line'] = [ratio('text-primary', 'editor-activeline'), 4.5];
+                    out['text-on-selection'] = [ratio('text-primary', 'editor-selection'), 4.5];
+                    out['text-on-find-match'] = [ratio('text-primary', 'editor-searchmatch'), 4.5];
+                    out['bracket-outline-on-editor'] = [ratio('editor-matchingbracket', 'surface-editor'), 3.0];
+                    probe.remove(); return JSON.stringify(out);
+                }
+                """);
+            var pairs = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double[]>>(json)!;
+            Assert.Equal(16, pairs.Count);
+            foreach (var (name, values) in pairs)
+            {
+                output.WriteLine($"{theme} {name}: {values[0]:F2}:1 (target {values[1]})");
+                Assert.True(values[0] >= values[1], $"{theme} {name}: {values[0]:F2}:1, target {values[1]}:1");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spec 043 (T086, R17, FR-031): the page declares its colour scheme, so the browser draws its own controls
+    /// (checkboxes, a select's list, scrollbars) dark in the dark theme. Before, the connection dialog's checkbox was
+    /// white and its scrollbar light.
+    /// </summary>
+    [SkippableFact]
+    public async Task Native_controls_follow_the_theme()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(output);
+        var page = s.Page;
+        foreach (var (theme, scheme) in new[] { ("Dark", "dark"), ("Light", "light") })
+        {
+            await ShellPolishTests.NavigateAsync(page, "settings/general");
+            await page.Locator("#setting-theme-control").SelectOptionAsync(theme);
+            await ShellPolishTests.NavigateAsync(page, "editor");
+            Assert.Equal(scheme, await page.EvaluateAsync<string>("() => getComputedStyle(document.documentElement).colorScheme"));
+
+            await page.ClickAsync("[data-testid='status-connection']");
+            var box = page.GetByTestId("conn-trust-cert");
+            await Assertions.Expect(box).ToBeVisibleAsync();
+            Assert.Equal(scheme, await box.EvaluateAsync<string>("el => getComputedStyle(el).colorScheme"));
+            await page.Keyboard.PressAsync("Escape");
+        }
+    }
+
     [SkippableFact]
     public async Task Touch_resizes_splitters_and_columns_at_both_scales()
     {

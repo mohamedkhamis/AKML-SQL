@@ -67,3 +67,58 @@ test('a plain element with nothing focusable is passed over', () => {
     assert.equal(focusRegion(fakeEl()), false);
     assert.equal(focusRegion(null), false);
 });
+
+// Spec 043 (review of US1): every query tab keeps a results pane mounted (hidden while its tab is not shown), and the tab strip
+// comes before the editor in the centre pane; F6 must land on what is on screen, editor first.
+function node({ hidden = false, tabindex = null } = {}) {
+    const n = {
+        focused: false,
+        getAttribute: name => (name === 'tabindex' ? tabindex : null),
+        getClientRects: () => (hidden ? [] : [{}]),
+        focus() { n.focused = true; },
+    };
+    return n;
+}
+
+function pane({ editor = null, candidates = [], tabindex = false } = {}) {
+    const el = {
+        focused: false,
+        querySelector: sel => (sel === '.cm-content' ? editor : candidates[0] ?? null),
+        querySelectorAll: () => candidates,
+        hasAttribute: name => name === 'tabindex' && tabindex,
+        focus() { el.focused = true; },
+    };
+    return el;
+}
+
+test('the editor takes focus before the query tab strip ahead of it', () => {
+    const tab = node({ tabindex: '0' });
+    const editor = node();
+    assert.equal(focusRegion(pane({ editor, candidates: [tab, editor] })), true);
+    assert.equal(editor.focused, true);
+    assert.equal(tab.focused, false);
+});
+
+test('a control in a hidden query tab results pane is passed over for the shown one', () => {
+    const hiddenGridTab = node({ hidden: true, tabindex: '0' });
+    const shownGridTab = node({ tabindex: '0' });
+    assert.equal(focusRegion(pane({ candidates: [hiddenGridTab, shownGridTab], tabindex: true })), true);
+    assert.equal(shownGridTab.focused, true);
+    assert.equal(hiddenGridTab.focused, false);
+});
+
+test('a control out of the Tab order (a tab close button) is passed over', () => {
+    const close = node({ tabindex: '-1' });
+    const next = node();
+    assert.equal(focusRegion(pane({ candidates: [close, next] })), true);
+    assert.equal(next.focused, true);
+    assert.equal(close.focused, false);
+});
+
+test('nothing on screen in the pane: the pane takes focus itself', () => {
+    const hidden = node({ hidden: true });
+    const p = pane({ editor: node({ hidden: true }), candidates: [hidden], tabindex: true });
+    assert.equal(focusRegion(p), true);
+    assert.equal(p.focused, true);
+    assert.equal(hidden.focused, false);
+});

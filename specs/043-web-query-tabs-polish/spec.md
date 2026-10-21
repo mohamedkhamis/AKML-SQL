@@ -287,9 +287,12 @@ in the editor, while the AI chat composer (natural language) still receives them
 - **Closing a tab with an open transaction**: the same warning the existing Disconnect shows
   (open or aborted transaction) is shown before the tab closes; the transaction is rolled back
   on close.
-- **The engine is lost while tabs are connected**: every tab shows disconnected; each tab
+- **The engine is lost while tabs are connected**: while the link is down the status bar shows
+  Offline or Cached and nothing is rolled back (the engine may still hold the sessions); a tab
+  whose run then finds that the engine no longer has its connection shows disconnected and
   reconnects on its next run (asking for a password where one is not remembered); nothing is
-  lost from any tab's text.
+  lost from any tab's text. (Plan-time refinement, 2026-10-21: reacting to the link drop itself
+  would roll back an open transaction after a mere network blip.)
 - **Reloading with many tabs**: text and bindings are restored at once; live connections are
   opened lazily, when a tab is activated or run, not all at page load.
 - **A saved connection that a tab uses is deleted**: the tab keeps its live connection and
@@ -299,7 +302,10 @@ in the editor, while the AI chat composer (natural language) still receives them
 - **The open-tab limit**: the app allows up to 20 open tabs; a 21st New query is refused
   with a message that names the limit (assumption, see Assumptions).
 - **Two browser windows on the same app**: both show the same tab set; the last change to a
-  tab wins, as the single document behaved in spec 041. No cross-window conflict resolution.
+  tab's text wins, as the single document behaved in spec 041. (Review of US1: the set is merged,
+  so neither window drops the tabs the other opened or brings back the tabs it closed, and each
+  window runs a tab on an engine session of its own while another live window uses the stored
+  one, so neither window's connection or open transaction is closed by the other.)
 - **Opening a file already open in another tab**: a second tab opens with the same name; the
   modified mark and Save act per tab.
 - **A trust choice ticked for a server on the engine's machine**: ignored, as today; the
@@ -347,7 +353,8 @@ in the editor, while the AI chat composer (natural language) still receives them
   arrow keys as the product's other tab strips are, the command palette offers Next tab,
   Previous tab and Close tab, and the keyboard help lists them.
 - **FR-013**: The app MUST allow up to 20 open tabs and refuse a further New query with a
-  message that names the limit.
+  message that names the limit. (Review of US1: two app windows can together store more; every
+  stored tab comes back, and the message then says how many tabs to close.)
 - **FR-014**: Runs in different tabs MAY overlap: starting a run in one tab while another
   tab's run is in flight MUST be allowed, and each tab MUST show its own running state and
   its own outcome (as SSMS behaves).
@@ -499,8 +506,10 @@ in the editor, while the AI chat composer (natural language) still receives them
   cannot produce an unreadable editor.
 - Passwords stay out of browser storage, as in every earlier feature; a restored tab asks
   for one when it is needed.
-- Two browser windows on the same app share the tab set with last-writer-wins, as the single
-  document did; no multi-window conflict handling is added.
+- Two browser windows on the same app share the tab set; a tab's text is last-writer-wins, as
+  the single document was. The review of US1 added only what keeps one window from harming the
+  other: a merged set, and a lease per engine session (Web Locks, or the windows asking each
+  other over a BroadcastChannel where a page has no Web Locks).
 
 ## Out of Scope
 
@@ -509,7 +518,9 @@ in the editor, while the AI chat composer (natural language) still receives them
 - A saved-query list or library kept outside the tabs (the user chose remembered tabs
   only).
 - Docking, floating or side-by-side tab layouts; tab groups; dragging tabs between windows.
-- Cancelling a query mid-run (the existing timeout and caps remain the bound).
+- Cancelling a query mid-run as a promise of this feature. (Review of US1: it works as a side
+  effect of the engine answering a page's requests side by side — research R3 — and is now tested
+  and stated in the UI, but no requirement here was written for it.)
 - A connection-string text box; connections are still entered field by field.
 - Storing passwords in the browser.
 - New PostgreSQL or SQL Server capabilities beyond what tabs and the dialog need.

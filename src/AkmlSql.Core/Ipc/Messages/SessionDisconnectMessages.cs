@@ -13,6 +13,14 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>The canonical web session id.</summary>
         [Key(0)]
         public string SessionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Spec 043 (contracts/ipc.md §1): the query tab that owned the session was closed. After the disconnect the engine
+        /// also forgets the session entry, its document and its schema caches; the id may be used again later and starts
+        /// afresh. False (and an older browser, which never sends the key) is a plain disconnect.
+        /// </summary>
+        [Key(1)]
+        public bool Release { get; set; }
     }
 
     /// <summary>Engine → Web: the result of <see cref="SessionDisconnectRequest"/>.</summary>

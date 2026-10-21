@@ -30,7 +30,10 @@ contracts in [contracts/web-ui.md](./contracts/web-ui.md); tokens and settings i
 | RunStartedAt | DateTimeOffset? | the pane's running clock |
 | ResultReceivedAt | DateTimeOffset? | as today |
 | CursorOffset | int | persisted; restored into the editor state |
-| AutorunPending | bool | set by History's Re-execute; consumed once, after the tab is connected |
+| AutorunPending | bool | set by History's Re-execute; consumed once, after the tab is connected — only while the tab still holds exactly the query History sent (an edit cancels it) and only in the page that set it (a reload drops it: it never runs a query the user did not see start) |
+| AutorunSql | string? | runtime only: the query History sent |
+| AutorunKind | int? | the kind of server the entry ran on (a connection of another kind never runs it); written with the record like AutorunPending, and dropped with it on restore |
+| ImportedFromKey | string? | persisted: the history key of an older build's single document this tab was brought back from; a later copy of it updates this tab instead of adding another |
 
 Invariants: names given by the editor are never reused (the set record's `NextDefaultNumber` only
 grows); at most 20 tabs; a tab's text is at most 10 MB (chars and UTF-8 bytes, as today).
@@ -54,6 +57,7 @@ Persisted as the `set` record of the `editorTabs` store (§5).
 | --- | --- | --- |
 | EngineSessionId | string (guid "N") | persisted with the tab; reused across reloads |
 | Binding | `ConnectionBinding?` | §4; null = no connection |
+| DisconnectedByUser | bool | persisted: the user's Disconnect left the tab without a binding; a reload keeps it that way (the status bar's one-time restore of the most recent saved connection passes it by); cleared by the next connect |
 | IsConnected | bool | |
 | Server, Database, Login, WindowsAuth, Kind, ServerVersionText, TransactionState | as today | per tab |
 | SchemaIdentity | string? (derived) | as today, from the binding and the engine URL |
@@ -69,7 +73,8 @@ Unbound ◀──Disconnect / Forget─────── Connected
 Restored(NeedsReattach) ──activate (no password needed) or run──▶ Reattaching ──SessionDisconnect, ConnectionChanged──▶ Connected
                                                    │ password needed and not remembered ──▶ PasswordPrompt ──▶ Reattaching
                                                    │ engine refuses ──▶ Unbound (binding kept; status shows the error)
-Connected ──bridge lost──▶ Disconnected(keeps binding) ──next run or activation──▶ Reattaching
+Connected ──a run finds no connection (the engine forgot the session)──▶ Disconnected(keeps binding) ──next run or activation──▶ Reattaching
+Connected ──the link drops and comes back──▶ Connected (nothing rolled back; the status bar shows Offline / Cached meanwhile)
 Any ──tab closed──▶ Released (SessionDisconnect{Release=true}; object dropped)
 Connected(run in flight) ──tab closed──▶ Closing(awaiting run) ──reply or deadline──▶ Released
 ```
@@ -125,7 +130,11 @@ New object store `editorTabs` (added to the JS `STORES` list and `StoreNames`).
 | IsModified | bool | false | |
 | Kind | int | 0 | DatabaseKind |
 | Binding | ConnectionBinding? | null | §4 |
-| AutorunPending | bool | false | History Re-execute |
+| AutorunPending | bool | false | History Re-execute; written, but a restore always drops it (§1) |
+| AutorunKind | int? | null | §1 (dropped on restore) |
+| DisconnectedByUser | bool | false | §3 |
+| ImportedFromKey | string? | null | §1 |
+| ImportedTextHash | string? | null | a fingerprint of the text the tab was last brought back with: a copy edited since then is never overwritten |
 | SavedAt | DateTimeOffset | | |
 
 `set` → `EditorTabSetRecord` (§2).
@@ -135,13 +144,27 @@ key**) on text change, name change, modified change, cursor change and binding c
 record is written at once on create, close, reorder and activation. `FlushAsync` flushes every
 pending key on page dispose. `RestoreAsync` for a key returns its pending record when one is
 waiting (today's rule, per key). A tab save whose id is no longer in the set record is a no-op
-(a debounced write must not resurrect a tab closed in another window).
+(a debounced write must not resurrect a tab closed in another window). (Review of US1: the set is
+written read-modify-write, merging what other windows added or closed; the user's Disconnect is
+written at once, not after the debounce.)
 
 Migration (first load after the upgrade, in C#): if `editorTabs/set` is absent and
 `editorSession/current` exists, create tab 1 from it (text, cursor, profile, session key, name,
-modified flag, `NextDefaultNumber`), mint an engine session id, write the set, then clear
-`editorSession/current`. Settings › Editor's "reset session" clears every `editorTabs` record and
-the legacy record.
+modified flag, `NextDefaultNumber`) with a new engine session id; write the tab record first, then
+the set — only if no other window of the app made one meanwhile (IndexedDB `add`); otherwise that
+window's set stands and this copy of tab 1 is deleted — then clear `editorSession/current`. A load
+stopped at any point finds either no set (and moves the document again) or a set and its tab.
+Every later load also reads `editorSession/current`: a window of an older build may still write it,
+and its document comes back as a tab (one tab per older document, updated on later loads) before the
+record is deleted. Settings › Editor's "reset session" clears every `editorTabs` record and the
+legacy record.
+
+Engine sessions across windows (review of US1): a window holds a lease on every engine session id it
+uses for as long as its page lives (a Web Lock; where a page has none, the windows ask each other
+over a BroadcastChannel). A restored tab runs on its stored id when this window holds the lease;
+otherwise on the session this window — this browser tab, across its reloads — used for it before
+(kept in sessionStorage), else on a new one. The stored id is kept for its owner. A browser that can
+use neither shares no stored id at all.
 
 Unchanged stores: `savedSqlConnections` (already carries every binding field),
 `workspaceLayout` (`ResultsTab` and `ResultsHeight` stay layout-wide), `analysisSettings`

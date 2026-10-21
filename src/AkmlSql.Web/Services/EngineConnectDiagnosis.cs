@@ -50,7 +50,7 @@ public sealed record EngineConnectDiagnosis(
                 [
                     "Update AKML SQL Web on this computer to the latest version (the installer allows remote engines from any install).",
                     "Or, after updating, run \"Repair AKML SQL Web hosting\" from the Start menu, then reload this page.",
-                    "If you only need a SQL Server on that machine, you don't need a remote engine: use Connect to SQL Server with the server's address and SQL Server authentication.",
+                    "If you only need a SQL Server on that machine, you don't need a remote engine: use Connect to database with the server's address and SQL Server authentication.",
                 ],
                 TrustUrl: null,
                 raw);

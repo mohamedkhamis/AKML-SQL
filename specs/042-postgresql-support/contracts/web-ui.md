@@ -33,7 +33,7 @@ style error on a SQL Server port) is rephrased: "The server at host:port did not
 | `StatusBar` | kind segment before the server segment: icon + "PostgreSQL" / "SQL Server"; tooltip with server version | `status-kind` |
 | `StatusBar` | transaction segment when state ≠ None: "Transaction open" / "Transaction aborted" + Rollback button | `status-txn`, `status-txn-rollback` |
 | `StatusBar` | `status-login` title becomes "Login" (was "SQL Server login") only on PostgreSQL sessions | existing id |
-| `CommandPalette` | existing "Connect to SQL Server…" entry unchanged; new "Connect to PostgreSQL…" opens the dialog on the PostgreSQL kind | row selector `[data-action-id='sql:connect-postgresql']` |
+| `CommandPalette` | existing "Connect to SQL Server…" entry unchanged; new "Connect to PostgreSQL…" opens the dialog on the PostgreSQL kind | row selector `[data-action-id='sql:connect-postgresql']` (superseded by spec 043: one "Connect to database…" command, `sql:connect`; see `specs/043-web-query-tabs-polish/contracts/web-ui.md` §5) |
 | Settings → Connections | kind badge per saved connection; Forget password action | `settings-conn-kind`, `settings-conn-forget` |
 | Settings → Diagnostics | "PostgreSQL support: available / not advertised / disabled in config"; active kind + server version | `diag-postgresql` |
 

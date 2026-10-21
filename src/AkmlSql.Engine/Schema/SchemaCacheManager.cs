@@ -149,6 +149,28 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
 
     public int CacheCount => _caches.Count;
 
+    /// <summary>
+    /// Spec 043 (research R5): forget every cache of one session — every database it used, either kind — and their refresh
+    /// connection strings. Called when the web edition closes the query tab that owned the session
+    /// (<c>SessionDisconnect</c> with <c>Release</c>). Keys are <c>{session}:{database}</c> or <c>pg|{session}:{database}</c>
+    /// (<see cref="BuildCacheKey"/>); nothing is persisted to disk, so memory is all there is. Returns how many were removed.
+    /// </summary>
+    public int RemoveSession(string sessionId)
+    {
+        if (string.IsNullOrEmpty(sessionId)) return 0;
+        bool Owned(string key) =>
+            key.StartsWith(sessionId + ":", StringComparison.OrdinalIgnoreCase)
+            || key.StartsWith("pg|" + sessionId + ":", StringComparison.OrdinalIgnoreCase);
+
+        int removed = 0;
+        foreach (var key in _caches.Keys.Where(Owned).ToList())
+        {
+            if (_caches.TryRemove(key, out _)) removed++;
+        }
+        foreach (var key in _connectionStrings.Keys.Where(Owned).ToList()) _connectionStrings.TryRemove(key, out _);
+        return removed;
+    }
+
     // ========================================================================
     // T076: Disk cache persistence
     // ========================================================================

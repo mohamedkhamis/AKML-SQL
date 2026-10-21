@@ -76,7 +76,7 @@ criterion it proves. Automated gates first, then the manual walk-through.
 - `doc/ipc-api.md` (SessionDisconnect `Release`, transport behaviour), `doc/configuration.md`
   (editor font setting), `doc/WEB/` release notes for 043, `doc/deployment.md` and
   `doc/topics/getting-started.md` wording, `CLAUDE.md` (tabs, keys, DB version 5, line-height
-  token), `doc/progress.md` (phase tables, deferred items: idle-session sweep in the engine,
-  mid-run cancel) are updated in the same change.
+  token), `doc/progress.md` (phase tables, deferred items: idle-session sweep in the engine;
+  mid-run cancel works since R3 and is no longer deferred) are updated in the same change.
 - Deploy the web edition and the engine from this branch to the user's machine for M8, M10,
   M12 and M13 (a private engine update needs the user's approval, as for spec 042).

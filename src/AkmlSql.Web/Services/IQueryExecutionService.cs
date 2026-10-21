@@ -31,6 +31,31 @@ public interface IQueryExecutionService
     /// engine that advertises <c>execute.v2</c>; never null.</summary>
     Task<ExecuteQueryResult> ParseAsync(string sql, int timeoutSeconds, string queryId, CancellationToken ct) =>
         Task.FromResult(new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Error, ErrorMessage = QueryExecutionService.ParseUnavailable });
+
+    // ── Spec 043 (research R1): on a given query tab's session ───────────────────────────────────────────────
+    // A run can outlive a tab switch: the page captures the tab's session before its first await and passes it here, so the
+    // request, the cancel, the Apply and the database / transaction state the reply reports all belong to that tab. Default
+    // members: a fake that does not implement them runs on the active session, as before tabs.
+
+    Task<ExecuteQueryResult> ExecuteAsync(SqlSessionState session, string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        ExecuteAsync(sql, maxRows, timeoutSeconds, queryId, ct);
+
+    Task<ExecuteQueryResult> ParseAsync(SqlSessionState session, string sql, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        ParseAsync(sql, timeoutSeconds, queryId, ct);
+
+    Task CancelAsync(SqlSessionState session, string queryId, CancellationToken ct) => CancelAsync(queryId, ct);
+
+    Task<ApplyChangesResult> ApplyAsync(SqlSessionState session, ApplyChangesRequest request, CancellationToken ct) => ApplyAsync(request, ct);
+
+    /// <summary>
+    /// Spec 043 (review of US1, gap G1): whether a tab's session holds an open (or an error-aborted) transaction, asked when the tab
+    /// closes. A PostgreSQL session knows from every reply; a SQL Server one is asked of the server then, as SSMS asks when a query
+    /// window closes — asking after every run would reset <c>@@ROWCOUNT</c> and <c>@@ERROR</c> for the user's next batch. Null when it
+    /// cannot tell (no connection, the engine away, no answer).
+    /// </summary>
+    Task<AkmlSql.Core.TransactionState?> ProbeTransactionStateAsync(SqlSessionState session, CancellationToken ct) =>
+        Task.FromResult<AkmlSql.Core.TransactionState?>(
+            session.IsConnected && session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql ? session.TransactionState : null);
 }
 
 internal sealed class QueryExecutionService : IQueryExecutionService
@@ -65,12 +90,14 @@ internal sealed class QueryExecutionService : IQueryExecutionService
     /// How many commands the engine will run for <paramref name="sql"/> — its batches, each as many times as
     /// its <c>GO n</c> says — split by the same parser the engine uses. At least 1.
     /// </summary>
-    internal int CountBatchRuns(string sql)
+    internal int CountBatchRuns(string sql) => CountBatchRuns(sql, _sqlConn.Kind);
+
+    internal int CountBatchRuns(string sql, AkmlSql.Core.DatabaseKind kind)
     {
         // Spec 042: a PostgreSQL script has no GO. The engine runs each statement under its own timeout, and the browser
         // has no PostgreSQL splitter, so it counts semicolons: never fewer than the statements, which only lengthens the
         // wait (capped at the script ceiling), and a wait that is too short would report a run that is still going as lost.
-        if (_sqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+        if (kind == AkmlSql.Core.DatabaseKind.PostgreSql)
             return Math.Max(1, sql.Count(c => c == ';') + 1);
 
         var split = _parser.SplitBatches(sql);
@@ -86,25 +113,65 @@ internal sealed class QueryExecutionService : IQueryExecutionService
     /// answer (an older engine without the limit, or a lost reply), so it says the statement "may still be
     /// running" rather than that it failed.
     /// </summary>
-    internal TimeSpan ReplyDeadline(string sql, int timeoutSeconds) =>
-        ExecuteLimits.ScriptTimeLimit(timeoutSeconds, CountBatchRuns(sql)) + DeadlineSlack;
+    internal TimeSpan ReplyDeadline(string sql, int timeoutSeconds) => ReplyDeadline(sql, timeoutSeconds, _sqlConn.Kind);
+
+    internal TimeSpan ReplyDeadline(string sql, int timeoutSeconds, AkmlSql.Core.DatabaseKind kind) =>
+        ExecuteLimits.ScriptTimeLimit(timeoutSeconds, CountBatchRuns(sql, kind)) + DeadlineSlack;
 
     public Task<ExecuteQueryResult> ExecuteAsync(string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct) =>
-        SendScriptAsync(MessageTypes.ExecuteQuery, sql, maxRows, timeoutSeconds, queryId, ct);
+        SendScriptAsync(null, MessageTypes.ExecuteQuery, sql, maxRows, timeoutSeconds, queryId, ct);
 
-    public Task<ExecuteQueryResult> ParseAsync(string sql, int timeoutSeconds, string queryId, CancellationToken ct)
+    public Task<ExecuteQueryResult> ExecuteAsync(SqlSessionState session, string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        SendScriptAsync(session ?? throw new ArgumentNullException(nameof(session)), MessageTypes.ExecuteQuery, sql, maxRows, timeoutSeconds, queryId, ct);
+
+    public Task<ExecuteQueryResult> ParseAsync(string sql, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        ParseOnAsync(null, sql, timeoutSeconds, queryId, ct);
+
+    /// <summary>The probe a SQL Server session answers when its tab closes: XACT_STATE() is 1 for an open transaction, -1 for one
+    /// an error left uncommittable, 0 for none.</summary>
+    internal const string TransactionProbeSql = "SELECT XACT_STATE() AS xact_state;";
+
+    public async Task<AkmlSql.Core.TransactionState?> ProbeTransactionStateAsync(SqlSessionState session, CancellationToken ct)
+    {
+        if (session == null || !session.IsConnected) return null;
+        if (session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql) return session.TransactionState;
+        if (_bridge.State != BridgeState.Open) return null;
+        var result = await SendScriptAsync(session, MessageTypes.ExecuteQuery, TransactionProbeSql, 1, 5, Guid.NewGuid().ToString("N"), ct).ConfigureAwait(false);
+        if (result.Status != ExecuteStatus.Ok || result.ResultSets.Length == 0 || result.ResultSets[0].Rows.Length == 0) return null;
+        var row = result.ResultSets[0].Rows[0];
+        return (row.Length > 0 ? row[0]?.Trim() : null) switch
+        {
+            "1" => AkmlSql.Core.TransactionState.Open,
+            "-1" => AkmlSql.Core.TransactionState.Aborted,
+            "0" => AkmlSql.Core.TransactionState.None,
+            _ => null,
+        };
+    }
+
+    public Task<ExecuteQueryResult> ParseAsync(SqlSessionState session, string sql, int timeoutSeconds, string queryId, CancellationToken ct) =>
+        ParseOnAsync(session ?? throw new ArgumentNullException(nameof(session)), sql, timeoutSeconds, queryId, ct);
+
+    private Task<ExecuteQueryResult> ParseOnAsync(SqlSessionState? session, string sql, int timeoutSeconds, string queryId, CancellationToken ct)
     {
         if (Array.IndexOf(_bridge.EngineCapabilities ?? Array.Empty<string>(), CapabilityExecuteV2) < 0)
         {
             // An older engine has no Parse: an unknown request type gets no reply at all.
             return Task.FromResult(new ExecuteQueryResult { QueryId = queryId, Status = ExecuteStatus.Error, ErrorMessage = ParseUnavailable });
         }
-        return SendScriptAsync(MessageTypes.ExecuteParse, sql, 1, timeoutSeconds, queryId, ct);
+        return SendScriptAsync(session, MessageTypes.ExecuteParse, sql, 1, timeoutSeconds, queryId, ct);
     }
 
-    private async Task<ExecuteQueryResult> SendScriptAsync(int messageType, string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct)
+    /// <summary>
+    /// <paramref name="session"/> null: the active session, read through the connection service (a caller from before
+    /// tabs). Otherwise everything — the id sent, the kind that decides the deadline, the reports of the reply — is that
+    /// session's, read once here, before the first await.
+    /// </summary>
+    private async Task<ExecuteQueryResult> SendScriptAsync(SqlSessionState? session, int messageType, string sql, int maxRows, int timeoutSeconds, string queryId, CancellationToken ct)
     {
-        if (_bridge.State != BridgeState.Open || !_sqlConn.IsConnected)
+        bool connected = session?.IsConnected ?? _sqlConn.IsConnected;
+        string sessionId = session?.SessionId ?? _sqlConn.SessionId;
+        var kind = session?.Kind ?? _sqlConn.Kind;
+        if (_bridge.State != BridgeState.Open || !connected)
         {
             return new ExecuteQueryResult
             {
@@ -114,13 +181,13 @@ internal sealed class QueryExecutionService : IQueryExecutionService
             };
         }
 
-        using var deadline = new CancellationTokenSource(ReplyDeadline(sql ?? string.Empty, timeoutSeconds));
+        using var deadline = new CancellationTokenSource(ReplyDeadline(sql ?? string.Empty, timeoutSeconds, kind));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
         try
         {
             var req = new ExecuteQueryRequest
             {
-                SessionId = _sqlConn.SessionId,
+                SessionId = sessionId,
                 Sql = sql ?? string.Empty,
                 MaxRows = maxRows,
                 CommandTimeoutSeconds = timeoutSeconds,
@@ -131,13 +198,20 @@ internal sealed class QueryExecutionService : IQueryExecutionService
                 messageType, req, linked.Token).ConfigureAwait(false);
 
             // Spec 041 (R27): a script's USE moves the session; the toolbar's database selector follows.
-            if (result != null) _sqlConn.ReportCurrentDatabase(result.CurrentDatabase);
+            if (result != null)
+            {
+                if (session != null) _sqlConn.ReportCurrentDatabase(session, result.CurrentDatabase);
+                else _sqlConn.ReportCurrentDatabase(result.CurrentDatabase);
+            }
 
             // Spec 042 (FR-016): a PostgreSQL run ends in a transaction state the status bar shows. A reply from the engine is
             // the only thing that changes it; a dropped bridge says nothing about the server's transaction, so it is left alone.
             // SQL Server replies always say None, so only a PostgreSQL session reports.
-            if (result != null && _sqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
-                _sqlConn.ReportTransactionState((AkmlSql.Core.TransactionState)result.TransactionState);
+            if (result != null && kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+            {
+                if (session != null) _sqlConn.ReportTransactionState(session, (AkmlSql.Core.TransactionState)result.TransactionState);
+                else _sqlConn.ReportTransactionState((AkmlSql.Core.TransactionState)result.TransactionState);
+            }
 
             // The bridge returns default! for an empty payload; defend so callers always get a result.
             return result ?? new ExecuteQueryResult
@@ -172,14 +246,19 @@ internal sealed class QueryExecutionService : IQueryExecutionService
         }
     }
 
-    public async Task CancelAsync(string queryId, CancellationToken ct)
+    public Task CancelAsync(string queryId, CancellationToken ct) => CancelOnAsync(_sqlConn.SessionId, queryId, ct);
+
+    public Task CancelAsync(SqlSessionState session, string queryId, CancellationToken ct) =>
+        CancelOnAsync((session ?? throw new ArgumentNullException(nameof(session))).SessionId, queryId, ct);
+
+    private async Task CancelOnAsync(string sessionId, string queryId, CancellationToken ct)
     {
         if (_bridge.State != BridgeState.Open || string.IsNullOrEmpty(queryId)) return;
         try
         {
             await _bridge.SendNotificationAsync(
                 MessageTypes.ExecuteCancel,
-                new ExecuteCancelRequest { SessionId = _sqlConn.SessionId, QueryId = queryId },
+                new ExecuteCancelRequest { SessionId = sessionId, QueryId = queryId },
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -188,16 +267,23 @@ internal sealed class QueryExecutionService : IQueryExecutionService
         }
     }
 
-    public async Task<ApplyChangesResult> ApplyAsync(ApplyChangesRequest request, CancellationToken ct)
+    public Task<ApplyChangesResult> ApplyAsync(ApplyChangesRequest request, CancellationToken ct) =>
+        ApplyOnAsync(_sqlConn.IsConnected, _sqlConn.SessionId, request, ct);
+
+    /// <summary>Spec 043: grid edits are written on the connection of the tab whose results they are.</summary>
+    public Task<ApplyChangesResult> ApplyAsync(SqlSessionState session, ApplyChangesRequest request, CancellationToken ct) =>
+        ApplyOnAsync((session ?? throw new ArgumentNullException(nameof(session))).IsConnected, session.SessionId, request, ct);
+
+    private async Task<ApplyChangesResult> ApplyOnAsync(bool connected, string sessionId, ApplyChangesRequest request, CancellationToken ct)
     {
-        if (_bridge.State != BridgeState.Open || !_sqlConn.IsConnected)
+        if (_bridge.State != BridgeState.Open || !connected)
         {
             return new ApplyChangesResult { Status = ExecuteStatus.NoConnection, ErrorMessage = "Not connected." };
         }
 
         try
         {
-            request.SessionId = _sqlConn.SessionId; // always the canonical session.
+            request.SessionId = sessionId; // always the tab's own session.
             var result = await _bridge.SendAsync<ApplyChangesRequest, ApplyChangesResult>(
                 MessageTypes.ApplyChanges, request, ct).ConfigureAwait(false);
             return result ?? new ApplyChangesResult { Status = ExecuteStatus.Error, ErrorMessage = "Empty apply response." };

@@ -45,6 +45,10 @@
     --akml-editor-spinnerstroke: LinkText;
     --akml-editor-popupbackground: Canvas;
     --akml-editor-popupborder: ButtonText;
+    --akml-editor-selection: Highlight;
+    --akml-editor-activeline: Canvas;
+    --akml-editor-matchingbracket: Highlight;
+    --akml-editor-searchmatch: Mark;
     /* Chat */
     --akml-chat-userbubble: Canvas;
     --akml-chat-assistantbubble: ButtonFace;
@@ -114,6 +118,7 @@
     --akml-type-editor-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
     --akml-type-editor-size: 13px;
     --akml-type-editor-weight: 400;
+    --akml-type-editor-line-height: 1.25;
     --akml-type-editorgrid-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
     --akml-type-editorgrid-size: 12px;
     --akml-type-editorgrid-weight: 400;
