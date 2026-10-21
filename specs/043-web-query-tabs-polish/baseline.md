@@ -243,3 +243,53 @@ Measured in the third-round gate:
 | Click the SQL Server tab until its kind and Schema panel show (FR-005) | 164 ms |
 | SC-003 tab switch with three checks | 100 ms |
 | FR-014 run in tab 2 while tab 1 waits five seconds | 353 ms |
+
+## Final gates (T103, T091, T101, T007 — 2026-10-22, commit df40eed + task notes)
+
+Debug builds of `AkmlSql.Web` and `AkmlSql.Engine`; SQL Server on localhost:1433; the PostgreSQL cluster on port 58432
+(binaries `C:\Tools\pgsql\bin`, `PG_BIN`). Raw `.trx`: `%LOCALAPPDATA%\AKML SQL\spec043-tests\after\`. Pass-lists:
+[baseline/tests/after/](./baseline/tests/after/). The before `.trx` files were no longer on the machine, so the pass-lists were
+compared directly with [baseline/tests/before/](./baseline/tests/before/).
+
+**T103 — no-regression gates**
+
+| Gate | Result |
+| --- | --- |
+| Theme drift, web and site (`generate-theme-css.ps1 -CheckOnly -RepoRoot .`) | OK (dark.css, high-contrast.css both folders) |
+| `WebCssTokenTests` + `ShortcutCollisionTests` | 8 passed |
+| `CorpusGateTests` (engine) | passed |
+| Format goldens (`FormatParityTests` 264; the whole `AkmlSql.Formatting.Tests` 1,642) | all passed |
+
+**T101 — quickstart §1 automated rows**
+
+| Suite | Passed | Failed | Skipped | Before |
+| --- | --- | --- | --- | --- |
+| Web unit | 1,828 | 0 | 0 | 1,681 / 0 |
+| Engine | 2,621 | 2 | 10 | 2,487 / 1 / 132 |
+| Core | 1,458 | 1 | 3 | 1,458 / 1 / 1 |
+| Site | 910 | 1 | 0 | 910 / 1 |
+| Formatting | 1,642 | 0 | 0 | — |
+| JavaScript (`node --test`) | 167 | 0 | 0 | 137 |
+| Browser rows: `QueryTabsTests`, `ConnectDialogTests`, `EditorTypographyTests`, `WorkspaceAccessibilityTests` | 35 | 0 | 0 | — |
+
+- Failures: the three pre-existing ones from the before table (`PerformanceBaselineTests`, `ProfileGetMessageTests` key
+  count, `F1SlugTests` anchors) and `RefactoringPerformanceTests.SC001_RemoveSemicolons_Under100ms_On2000LineDocument`, which
+  timed out only while the browser classes ran on the same machine; run alone it passes (7/7 with `CorpusGateTests`).
+- Pass-list comparison: no test that passed before has stopped passing for a product reason. The names that drop out are
+  (a) theory cases differing only in case, where the ` [#2]` suffix moved to the other case (same count); (b) tests replaced by
+  this feature: `HistoryDialogTests` "Opening ... starts a new default named document" / "asks first and Cancel keeps it"
+  (History now opens into a new tab, FR-013) and `ResultsPaneComponentTests` "...says it cannot be interrupted..." (Cancel now
+  stops a running statement); (c) `Core.VisualReferenceCoverageTests` ×2, skipped because the gitignored `doc/SQL-PROMPT/`
+  reference pack is not on this machine.
+- The two PostgreSQL `QueryTabsTests` cases skipped in the first browser pass (the cluster had stopped when the call that started
+  it ended) and passed 2/2 on a rerun with it up; the 35 above counts them.
+- Not run here (need the user): the native-key row (T060) and the dark walk review (T088).
+
+**T091 — light and high contrast after the dark fixes (FR-035)**: `WorkspaceAccessibilityTests` 4/4 passed (token pairs, focus,
+help, reduced motion in all three themes; editor contrast; native controls; touch). `WorkspaceScreenshotTour`
+`Capture_workspace_in_three_themes_at_both_supported_sizes` passed; its light and high-contrast captures (60) are in
+[baseline/light-hc/](./baseline/light-hc/) (the tour writes into spec 041's folder; those files were restored). Reviewed: no dark
+colour leaks into either theme, the tab strip, grid, status bar and Schema panel read as before.
+
+**T007 — spike S4**: passed; see research.md R8 (a version-4 profile from the pre-043 build upgraded to version 5 with all 15
+records unchanged and the document moved into tab 1).

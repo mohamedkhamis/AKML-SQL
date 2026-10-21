@@ -229,6 +229,15 @@ writers).
 (`akml-indexeddb.versionchange.test.mjs:41-48`), and prove an existing browser profile upgrades
 without losing the saved connections, history settings or the single document.
 
+**S4 outcome (T007, 2026-10-22)**: passed. A persistent Chromium profile was created with the pre-043 Debug
+web build (commit 3270667, DB version 4) on `http://localhost:5077`: a document typed in the editor
+(`editorSession/current`), a saved connection, and a probe record in each of the other 14 stores (settings,
+profiles, snippets, chat, layout and the rest). The same profile was then opened with this branch's Debug build
+on the same origin. The database opened at version 5 with 16 stores; all 15 seeded records were byte-identical;
+`editorTabs` held the `set` record and one `tab:{id}` whose text was the legacy document (also shown in the
+editor); `editorSession/current` was cleared by the one-time migration; the only other change was the
+`diagnostics/ring` log gaining the new page's entries.
+
 ## R9. Keyboard: Ctrl+Alt+PageDown / Ctrl+Alt+PageUp switch tabs, Ctrl+Alt+W closes one
 
 **Decision**: new key map entries `editor:next-tab` (Ctrl+Alt+PageDown), `editor:previous-tab`

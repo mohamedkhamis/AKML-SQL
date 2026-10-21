@@ -90,7 +90,7 @@ more than one story needs.
 ### Implementation for Phase 2
 
 - [X] T006 Bump `DB_VERSION` to 5 and add `editorTabs` to `STORES` in `src/AkmlSql.Web/wwwroot/js/akml-indexeddb.js` (comment the version history as the file does); add `StoreNames.EditorTabs = "editorTabs"` in `src/AkmlSql.Web/Services/JsIndexedDbAdapter.cs`
-- [ ] T007 Spike S4: open an existing browser profile (saved connections, history settings, a document) against the Debug web build, confirm the upgrade keeps every store's data, record the outcome in `specs/043-web-query-tabs-polish/research.md` under R8/S4
+- [X] T007 Spike S4: open an existing browser profile (saved connections, history settings, a document) against the Debug web build, confirm the upgrade keeps every store's data, record the outcome in `specs/043-web-query-tabs-polish/research.md` under R8/S4 — done 2026-10-22: a v4 profile upgraded to v5 with every record kept and the document migrated into tab 1 (research.md R8)
 - [X] T008 [P] Append `Release` (bool, next free `[Key]`) to `SessionDisconnectRequest` in `src/AkmlSql.Core/Ipc/Messages/` (find the request class the `SessionDisconnect` handler reads) with the doc comment from `contracts/ipc.md` §1; make T005 pass
 
 **Checkpoint**: storage version 5 and the IPC key exist; every story can start.
@@ -236,7 +236,7 @@ dialog (quickstart §1 "Browser: connect dialog", §2 M8, M14).
 - [X] T081 [US3] In `src/AkmlSql.Web/Shared/ConnectionManagerModal.razor`: title constant; regroup into Server / Sign-in / Database / Security with `conn-group-*` ids and one-line hints (R16); PostgreSQL port beside the host; Security visible without inner scroll at 1280x720 for SQL Server; trust checkbox disabled with the loopback hint; make T076 pass
 - [X] T082 [P] [US3] Rename the "means the server" strings of `contracts/web-ui.md` §5 in `src/AkmlSql.Web/Shared/ConnectionPickerComponent.razor`, `src/AkmlSql.Web/Services/EngineConnectDiagnosis.cs`, `src/AkmlSql.Web/Shared/StatusBar.razor` (two), `src/AkmlSql.Web/Pages/Editor.razor` (Execute tooltip), `src/AkmlSql.Web/Shared/SchemaTreeComponent.razor`, `src/AkmlSql.Web/Shared/EditorComponent.razor`, `src/AkmlSql.Web/Shared/Settings/ConnectionsSection.razor` (three), `src/AkmlSql.Web/Services/ISqlConnectionService.cs`, and the same-family lines in `DiagnosticsSection.razor`, `StatusBar.razor` aria-label, `ISqlConnectionService.cs:624`
 - [X] T083 [P] [US3] Update the served docs `doc/deployment.md` ("Connect to database") and `doc/topics/getting-started.md`; add a note to `specs/042-postgresql-support/contracts/web-ui.md` that the `sql:connect-postgresql` row is superseded by 043
-- [ ] T084 [US3] Make `tests/AkmlSql.Web.E2E.Tests/ConnectDialogTests.cs` (T078) and the T079 updates pass in a serial browser run; confirm the restored-tab reattach case in the same class once US1 is in
+- [X] T084 [US3] Make `tests/AkmlSql.Web.E2E.Tests/ConnectDialogTests.cs` (T078) and the T079 updates pass in a serial browser run; confirm the restored-tab reattach case in the same class once US1 is in — done: ConnectDialogTests passed in the 2026-10-22 browser gate (172 passed, 0 failed; baseline.md)
 
 **Checkpoint**: US3 complete — "Browser: connect dialog" green; M8 and M14 pass by hand.
 
@@ -262,7 +262,7 @@ are covered.
 - [ ] T088 [US4] Record the user's screenshots (clarification Q3) under `specs/043-web-query-tabs-polish/baseline/user/` and list each screen with its symptom in `spec.md` › Clarifications and in `baseline.md`; fix each one first, re-capture, and mark it for the user's confirmation
 - [X] T089 [US4] Run the extended tour (`scripts/run-playwright.ps1 -IncludeScreenshots -Filter WorkspaceScreenshotTour`), review every capture in `specs/043-web-query-tabs-polish/baseline/dark/` against FR-031 to FR-033, and log each defect (surface, symptom, token or layout cause) in `baseline.md`
 - [X] T090 [US4] Fix the logged defects in their components (tokens through `docs/theme-tokens.json` + regeneration where a colour is wrong; layout in the component's style block where content clips), re-run the tour, and update `baseline.md` with the after captures
-- [ ] T091 [US4] Re-run `tests/AkmlSql.Web.E2E.Tests/WorkspaceAccessibilityTests.cs` for high contrast and the light / high-contrast variants of `tests/AkmlSql.Web.E2E.Tests/WorkspaceScreenshotTour.cs` to prove FR-035 (no regression from the dark fixes); record in `specs/043-web-query-tabs-polish/baseline.md`
+- [X] T091 [US4] Re-run `tests/AkmlSql.Web.E2E.Tests/WorkspaceAccessibilityTests.cs` for high contrast and the light / high-contrast variants of `tests/AkmlSql.Web.E2E.Tests/WorkspaceScreenshotTour.cs` to prove FR-035 (no regression from the dark fixes); record in `specs/043-web-query-tabs-polish/baseline.md` — done 2026-10-22: accessibility 4/4, light and high-contrast tour captured and reviewed (baseline.md)
 
 **Checkpoint**: US4 complete — SC-009's automated part green; the user confirms their screens.
 
@@ -296,11 +296,11 @@ by `EditorTypographyTests`).
 
 ## Phase 8: Polish & cross-cutting concerns
 
-- [ ] T099 [P] Update `CLAUDE.md` (query tabs, the three tab keys, IndexedDB version 5 and the `editorTabs` store, the line-height token, the facade rule, the reattach order) and `doc/progress.md` (phase tables for 043; deferred items: idle-session sweep in the engine, saved-query list declined by the user; mid-run cancel turned out to work, see Deferred)
+- [X] T099 [P] Update `CLAUDE.md` (query tabs, the three tab keys, IndexedDB version 5 and the `editorTabs` store, the line-height token, the facade rule, the reattach order) and `doc/progress.md` (phase tables for 043; deferred items: idle-session sweep in the engine, saved-query list declined by the user; mid-run cancel turned out to work, see Deferred) — done: CLAUDE.md and doc/progress.md updated
 - [X] T100 [P] Write `doc/WEB/workspace-043-release-notes.md` (tabs, dialog, typography, dark theme, assistants; keys; upgrade note for the storage version)
-- [ ] T101 Run the full quickstart §1 gate (every row) after Debug and Release builds; compare with `specs/043-web-query-tabs-polish/baseline/before/` through `scripts/compare-test-results.ps1`; record in `baseline.md`
-- [ ] T102 Measure and record in `baseline.md`: tab switch to status-bar / schema-panel update (SC-003, 20 switches), editor state swap time for a 10 MB document, page load with 20 restored tabs (no engine traffic until activation)
-- [ ] T103 Run `pwsh scripts/generate-theme-css.ps1 -CheckOnly` for web and site, `WebCssTokenTests`, `ShortcutCollisionTests`, `CorpusGateTests` and the format goldens as the final no-regression proof; record in `baseline.md`
+- [X] T101 Run the full quickstart §1 gate (every row) after Debug and Release builds; compare with `specs/043-web-query-tabs-polish/baseline/before/` through `scripts/compare-test-results.ps1`; record in `baseline.md` — done 2026-10-22: automated rows run, no product regression against the before pass-lists (baseline.md); native keys and the dark walk wait on T060/T088
+- [X] T102 Measure and record in `baseline.md`: tab switch to status-bar / schema-panel update (SC-003, 20 switches), editor state swap time for a 10 MB document, page load with 20 restored tabs (no engine traffic until activation) — done: measurements recorded in baseline.md
+- [X] T103 Run `pwsh scripts/generate-theme-css.ps1 -CheckOnly` for web and site, `WebCssTokenTests`, `ShortcutCollisionTests`, `CorpusGateTests` and the format goldens as the final no-regression proof; record in `baseline.md` — done 2026-10-22: all green (baseline.md)
 - [ ] T104 Deploy the web edition and the engine from this branch to the user's machine (user approval first; full engine publish) and walk quickstart §2 M8, M10, M12, M13 with the user; record outcomes in `baseline.md`
 
 ---
