@@ -607,19 +607,75 @@
         font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
         font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));
     }
-    .cm-tooltip-autocomplete > ul > li {
-        color: var(--akml-text-primary);
-        padding: 1px var(--akml-scalar-spacing-s);
+    /* Reported 2026-10-22 ("bad UI"): a list like SQL Prompt's — a coloured kind badge, the name, and the type and
+       table right-aligned in a quieter colour; rows tall enough to read, a list wide enough not to clip. The :root
+       prefix outranks CodeMirror's own theme rules (scoped .ͼN selectors). */
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul {
+        min-width: 320px;
+        max-width: min(640px, 90vw);
+        max-height: 18em;
+        padding: 2px 0;
     }
-    .cm-tooltip-autocomplete > ul > li[aria-selected] {
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        color: var(--akml-text-primary);
+        padding: 2px var(--akml-scalar-spacing-s);
+        line-height: 1.45;
+    }
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
         background-color: var(--akml-surface-selectionstrong);
         color: var(--akml-text-onaccent);
     }
-    .cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {
         color: var(--akml-text-onaccent);
     }
-    .cm-completionLabel { color: inherit; }
-    .cm-completionDetail { color: var(--akml-text-secondary); font-style: italic; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionLabel { color: inherit; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionDetail {
+        margin-left: auto;
+        padding-left: var(--akml-scalar-spacing-l);
+        color: var(--akml-text-secondary);
+        font-style: normal;
+        font-family: var(--akml-type-chrome-family);
+        font-size: 0.85em;
+        white-space: nowrap;
+    }
+    /* The kind badge: one letter on a tinted square, the colour of that kind in the editor's syntax colours. */
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon {
+        flex: 0 0 auto;
+        width: 1.35em;
+        height: 1.35em;
+        padding: 0;
+        margin: 0;
+        opacity: 1;
+        box-sizing: border-box;
+        border: 1px solid currentColor;
+        border-radius: 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--akml-type-chrome-family);
+        font-size: 0.75em;
+        font-weight: 700;
+        color: var(--akml-text-secondary);
+    }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon::after { content: "·"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-property { color: var(--akml-syntax-tablecolumn); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-property::after { content: "C"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-class { color: var(--akml-syntax-tablecolumn); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-class::after { content: "T"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-keyword { color: var(--akml-syntax-keyword); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-keyword::after { content: "K"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-function { color: var(--akml-syntax-function); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-function::after { content: "ƒ"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-namespace { color: var(--akml-syntax-string); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-namespace::after { content: "S"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-variable { color: var(--akml-syntax-number); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-variable::after { content: "@@"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-snippet { color: var(--akml-syntax-comment); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-snippet::after { content: "»"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionIcon { color: var(--akml-text-onaccent); }
     .cm-completionMatchedText {
         color: var(--akml-text-link);
         text-decoration: none;

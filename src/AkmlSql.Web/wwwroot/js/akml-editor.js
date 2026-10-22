@@ -513,6 +513,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     function acceptGhost(view) {
         const g = currentGhost(view);
         if (!g) return false;   // fall through to autocomplete-accept / snippet-tab / indentWithTab
+        // An open completion list owns Tab, as in SSMS: Tab commits the highlighted item, never the ghost behind it
+        // (reported 2026-10-22: Tab in the column list put in a space — the ghost text — instead of the column).
+        if (cm.autocomplete.completionStatus(view.state) === 'active') return false;
         view.dispatch({
             changes: { from: g.from, insert: g.text },
             selection: { anchor: g.from + g.text.length },
@@ -586,9 +589,12 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     function detectWildcardAtCaret(state) {
         const sel = state.selection.main;
         if (!sel.empty) return null;                                  // bare caret only, not a range
-        const pos = sel.head;
-        if (pos === 0) return null;
-        if (state.doc.sliceString(pos - 1, pos) !== '*') return null; // caret must be just after '*'
+        // The caret just after '*' — or, as SQL Prompt in SSMS also takes it, just before it (reported 2026-10-22: Tab
+        // there indented the line and opened the column list instead). The engine is always asked with the caret after it.
+        let pos = sel.head;
+        if (pos > 0 && state.doc.sliceString(pos - 1, pos) === '*') { /* after */ }
+        else if (pos < state.doc.length && state.doc.sliceString(pos, pos + 1) === '*') pos += 1;
+        else return null;
         // Cheap SELECT-context gate (the engine still validates the actual star node): a SELECT must
         // appear before the caret in the current statement (nothing after the last ';' rules it out).
         const head = state.doc.sliceString(0, pos);
@@ -601,9 +607,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         if (!dotNetRef) return false;
         // An open completion popup owns Tab (accept the highlighted item) — don't steal it.
         if (cm.autocomplete.completionStatus(view.state) === 'active') return false;
-        if (!detectWildcardAtCaret(view.state)) return false;         // not a wildcard → normal Tab
+        const wildcard = detectWildcardAtCaret(view.state);
+        if (!wildcard) return false;                                  // not a wildcard → normal Tab
 
-        const pos = view.state.selection.main.head;
+        const pos = wildcard.caretOffset;   // just after the '*', whichever side of it the caret was on
         // Snapshot the keypress-time document (CM6 Text is immutable, so this is a cheap reference).
         // The engine computes spanStart/spanLength against THIS text; the guard below re-verifies the
         // span against the live document after the async round-trip.

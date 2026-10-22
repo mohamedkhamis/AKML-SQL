@@ -343,3 +343,16 @@ database, a pre-existing timing race), so it is not caused by these changes and 
 Redeployed 1.26.1022.0701 (same silent LAN upgrade): installed walk 16/16; `EngineAutoConnectTests` 5/5 and the deep-link test 1/1
 against the installed engine. T060 native keys: Edge passed once; Chromium and Firefox skipped because Windows refused the browser
 foreground focus in this RDP session — still for the user at the desktop.
+
+### Tab on SELECT * and the completion list (reported 2026-10-22)
+
+| Report | Cause | Change |
+| --- | --- | --- |
+| With the caret before `*`, Tab showed a list of columns instead of expanding | Tab expanded only with the caret just after `*`; before it, Tab indented the line and the edit opened completion | `akml-editor.js` `detectWildcardAtCaret`: the caret just before `*` counts too (the engine is asked with the caret after it), as SQL Prompt in SSMS |
+| In the open list, Tab put in a space instead of the column | A ghost suggestion behind the list took Tab first | `acceptGhost` yields while a completion list is open: Tab commits the highlighted item, as in SSMS |
+| The column list looked poor | CodeMirror's default rendering: a generic square icon, an italic monospace detail packed against the name | `Editor.razor`: a coloured kind badge per kind (C column, T table, K keyword, ƒ function, S schema, @ variable, » snippet) from the syntax tokens, the type/table right-aligned upright in the chrome font, flex rows, 320 px minimum width; `:root` outranks CodeMirror's scoped theme rules |
+
+New browser class `WildcardExpansionTests` (3): Tab just after and just before `*` on the reported script expands to the eleven
+Customers columns without indenting the line or opening a list; the list shows the "C" badge, an upright right-aligned detail and flex
+rows, and Tab inserts the highlighted column. Related classes (EditorTypography, PostKeywordTrigger, PostgresEditing, UserStory2/4/5)
+15 passed, 9 known skips; JS 167 passed; `WebCssTokenTests` passed (no colour literals added).
