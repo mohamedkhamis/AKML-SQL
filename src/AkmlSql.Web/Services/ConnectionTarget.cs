@@ -40,7 +40,8 @@ public sealed record DisconnectResult(bool Released, bool RolledBack, string? Wa
 /// hold, so the dialog should ask for it (it is not a failure to be worded). <see cref="ServerVersion"/> is the
 /// product and version the server reported, for example <c>PostgreSQL 18.1</c>.
 /// </summary>
-public sealed record ConnectResult(bool Ok, string? Error = null, bool PasswordRequired = false, string? ServerVersion = null)
+public sealed record ConnectResult(bool Ok, string? Error = null, bool PasswordRequired = false, string? ServerVersion = null,
+    string? ErrorCode = null)
 {
     public static ConnectResult Failed(string error) => new(false, error);
 }

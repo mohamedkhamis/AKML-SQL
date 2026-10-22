@@ -265,10 +265,12 @@
                                 @if (SqlConn.EngineRemembersSqlServerPasswords)
                                 {
                                     @* One line each: the SQL Server form must still fit 1280x720 with SQL authentication (ConnectDialogTests). *@
-                                    <label class="akml-connmgr-radio" for="conn-sql-remember">
-                                        <input id="conn-sql-remember" type="checkbox" @bind="_sqlRemember" data-testid="conn-sql-remember"
-                                               aria-describedby="conn-sql-remember-help" />
-                                        Remember the password on the engine machine
+                                    <div class="akml-connmgr-remember">
+                                        <label class="akml-connmgr-radio" for="conn-sql-remember">
+                                            <input id="conn-sql-remember" type="checkbox" @bind="_sqlRemember" data-testid="conn-sql-remember"
+                                                   aria-describedby="conn-sql-remember-help" />
+                                            Remember the password on the engine machine
+                                        </label>
                                         <span class="akml-connmgr-hint" id="conn-sql-remember-help" data-testid="conn-sql-remember-help">
                                             (never in the browser; any client paired with this engine can use it)
                                         </span>
@@ -277,7 +279,7 @@
                                             <button type="button" class="akml-btn akml-connmgr-forget" @onclick="ForgetSqlPasswordAsync" disabled="@_busy"
                                                     data-testid="conn-sql-forget">Forget it</button>
                                         }
-                                    </label>
+                                    </div>
                                 }
                                 else
                                 {
@@ -515,6 +517,9 @@
     .akml-connmgr-auth { display: flex; flex-wrap: wrap; column-gap: var(--akml-scalar-spacing-l); }
     .akml-connmgr-auth .akml-connmgr-radio { margin-top: 0; }
     .akml-connmgr-forget { align-self: flex-start; }
+    /* The SQL Server remember option: checkbox, its note and Forget on one wrapping row (the form must fit 1280x720). */
+    .akml-connmgr-remember { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--akml-scalar-spacing-xs); }
+    .akml-connmgr-remember .akml-connmgr-radio { display: inline; margin-top: 0; }
     .akml-connmgr-radio input:disabled { cursor: not-allowed; }
     /* Database dropdown + its inline refresh button share one row. */
     .akml-connmgr-db-row { display: flex; gap: var(--akml-scalar-spacing-xs); align-items: stretch; }
@@ -604,7 +609,17 @@
     private string _password = string.Empty;
     private bool _trustServerCertificate;
     private bool _sqlRemember;                    // spec 043 follow-up: keep the SQL login's password on the engine machine
-    private bool _sqlHasRemembered;               // the engine holds a password for this server and login
+    private bool _sqlHasRememberedFlag;           // the engine holds a password for _sqlRememberedFor
+    private string? _sqlRememberedFor;            // the server and login that answer was about
+
+    private string SqlIdentityKey => (_server ?? string.Empty).Trim().ToLowerInvariant() + "|" + (_login ?? string.Empty).Trim().ToLowerInvariant();
+
+    // The engine's answer counts only for the server and login it was asked about: one edited since then has none yet.
+    private bool _sqlHasRemembered
+    {
+        get => _sqlHasRememberedFlag && _sqlRememberedFor == SqlIdentityKey;
+        set { _sqlHasRememberedFlag = value; _sqlRememberedFor = value ? SqlIdentityKey : null; }
+    }
 
     // SQL authentication can go without a typed password when the engine remembers one.
     private bool SqlPasswordMissing => !_windowsAuth && string.IsNullOrEmpty(_password) && !_sqlHasRemembered;
@@ -926,7 +941,7 @@
     // Spec 043 (T056): the saved row the form came from goes with the target, so the tab's binding remembers it.
     private ConnectionTarget SqlServerTarget() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth,
         User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate,
-        RememberPassword: !_windowsAuth && _sqlRemember, SavedConnectionId: _selectedId);
+        RememberPassword: !_windowsAuth && _sqlRemember && SqlConn.EngineRemembersSqlServerPasswords, SavedConnectionId: _selectedId);
 
     // ── PostgreSQL (spec 042) ────────────────────────────────────────────────────────────────────────────
 
@@ -970,10 +985,11 @@
         int ask = ++_rememberedAsk;
         var server = _server;
         var login = _login;
+        var key = SqlIdentityKey;
         bool remembered = !_windowsAuth && SqlConn.EngineRemembersSqlServerPasswords
             && !string.IsNullOrWhiteSpace(server) && !string.IsNullOrWhiteSpace(login)
             && await SqlConn.HasRememberedSqlServerPasswordAsync(server, login, CancellationToken.None);
-        if (ask != _rememberedAsk || _kind != DatabaseKind.SqlServer) return;
+        if (ask != _rememberedAsk || _kind != DatabaseKind.SqlServer || key != SqlIdentityKey) return;
         _sqlHasRemembered = remembered;
         if (_sqlHasRemembered && _databases.Count <= 1 && !_dbLoading) await LoadDatabasesAsync();
         await InvokeAsync(StateHasChanged);
@@ -989,7 +1005,17 @@
         {
             await SqlConn.ForgetRememberedSqlServerPasswordAsync(_server, _login, CancellationToken.None);
             _sqlHasRemembered = await SqlConn.HasRememberedSqlServerPasswordAsync(_server, _login, CancellationToken.None);
-            if (!_sqlHasRemembered) _sqlRemember = false;
+            if (!_sqlHasRemembered)
+            {
+                _sqlRemember = false;
+                // The saved row stops asking for it too, so it is not turned back on when the row is shown again.
+                if (_selectedId != null && await Store.GetAsync(_selectedId) is { RememberPassword: true } row)
+                {
+                    row.RememberPassword = false;
+                    await Store.UpdateAsync(row);
+                    await ReloadAsync();
+                }
+            }
             SetMessage(_sqlHasRemembered ? "The engine could not forget the password." : "The remembered password was forgotten.", isError: _sqlHasRemembered);
         }
         finally
@@ -999,11 +1025,14 @@
         }
     }
 
-    // A SQL Server connect that used the remembered password and was refused says how to replace it.
+    // What a failed SQL Server test or connect says, from the engine's error code (not the server's words, which are localised):
+    // a missing password is a prompt; a remembered password the server refused says how to replace it.
     private string SqlFailureText(ConnectResult result, string fallback)
     {
+        if (result.PasswordRequired)
+            return "Enter the password for this login" + (SqlConn.EngineRemembersSqlServerPasswords ? "; turn on Remember to keep it on the engine machine." : ".");
         bool usedRemembered = !_windowsAuth && string.IsNullOrEmpty(_password) && _sqlHasRemembered;
-        if (usedRemembered && result.Error != null && result.Error.Contains("Login failed", StringComparison.OrdinalIgnoreCase))
+        if (usedRemembered && result.ErrorCode == AkmlSql.Core.Ipc.Messages.DialectErrors.LoginFailed)
             return "The remembered password was not accepted by the server. Enter the current password and keep Remember password on to replace it.";
         return result.Error ?? fallback;
     }

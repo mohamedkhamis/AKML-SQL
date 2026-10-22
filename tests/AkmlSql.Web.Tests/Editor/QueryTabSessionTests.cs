@@ -401,10 +401,14 @@ public sealed class QueryTabSessionTests
     [Fact]
     public async Task A_SQL_login_remembered_on_the_engine_asks_it_to_remember_and_reconnects_without_a_password()
     {
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySqlServerCredentials };
         var remembered = Remote(trust: true) with { RememberPassword = true };
         var tab = _sql.CreateSession("remembered-login");
         Assert.True((await _sql.ConnectAsync(remembered, tab, CancellationToken.None)).Ok);
-        Assert.True(Assert.Single(ConnectionChanges).RememberPassword);
+        // The connect's test is the open that proves the password, so it carries the request to remember it.
+        var test = (TestSqlConnectionRequest)_bridge.Log.First(e => e.Type == MessageTypes.TestSqlConnection).Message;
+        Assert.True(test.RememberPassword);
+        Assert.Single(ConnectionChanges);
         Assert.True(tab.Binding!.NeedsNoPassword);
         Assert.True(tab.Binding.TrustServerCertificate);
 
@@ -413,7 +417,7 @@ public sealed class QueryTabSessionTests
         Assert.True((await _sql.ReattachAsync(restored, null, CancellationToken.None)).Ok);
         var reattach = ConnectionChanges.Last();
         Assert.Equal("restored-login", reattach.SessionId);
-        Assert.False(reattach.RememberPassword);   // nothing typed: nothing new to remember
+        Assert.False(((TestSqlConnectionRequest)_bridge.Log.Last(e => e.Type == MessageTypes.TestSqlConnection).Message).RememberPassword);   // nothing typed
         var sent = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = reattach.ConnectionString };
         Assert.Equal(string.Empty, sent.TryGetValue("Password", out var pw) ? pw?.ToString() ?? string.Empty : string.Empty);
         Assert.Equal("reporting", sent["User ID"]);
@@ -424,13 +428,60 @@ public sealed class QueryTabSessionTests
     {
         var tab = _sql.CreateSession("refused-remembered");
         tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
-        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'reporting'." };
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "The server needs the password for this login.", ErrorCode = DialectErrors.PasswordRequired };
 
         var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
 
         Assert.False(result.Ok);
         Assert.True(result.PasswordRequired);
         Assert.Empty(ConnectionChanges);
+        Assert.False(tab.CanReconnectAlone);   // no quiet retries: the next run asks
+    }
+
+    [Fact]
+    public async Task A_server_that_is_down_is_reported_as_it_is_not_as_a_password_prompt()
+    {
+        var tab = _sql.CreateSession("server-down");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "A network-related or instance-specific error occurred." };
+
+        var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.False(result.PasswordRequired);
+        Assert.Contains("network-related", result.Error);
+    }
+
+    [Fact]
+    public async Task An_engine_that_cannot_supply_a_password_is_not_sent_an_empty_one()
+    {
+        var tab = _sql.CreateSession("old-engine");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));   // capabilities: neither
+
+        var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.True(result.PasswordRequired);
+        Assert.DoesNotContain(_bridge.Log, e => e.Type == MessageTypes.TestSqlConnection);
+    }
+
+    [Fact]
+    public async Task New_query_names_the_tab_it_was_opened_from_and_the_engine_copies_its_password()
+    {
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySessionCopy };
+        var source = _sql.CreateSession("source-tab");
+        Assert.True((await _sql.ConnectAsync(Remote(trust: true), source, CancellationToken.None)).Ok);
+        var copy = _sql.CreateSession("new-tab");
+        copy.Restore(source.Binding!.Clone());
+        copy.CopyPasswordFrom = source.SessionId;
+        Assert.True(copy.CanReconnectAlone);
+
+        Assert.True((await _sql.ReattachAsync(copy, null, CancellationToken.None)).Ok);
+
+        var test = (TestSqlConnectionRequest)_bridge.Log.Last(e => e.Type == MessageTypes.TestSqlConnection).Message;
+        Assert.Equal("source-tab", test.CopyPasswordFromSessionId);
+        Assert.Equal("source-tab", ConnectionChanges.Last().CopyPasswordFromSessionId);
+        Assert.Null(copy.CopyPasswordFrom);   // connected: it has its own session now
     }
 
     [Fact]

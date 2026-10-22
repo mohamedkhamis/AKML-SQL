@@ -33,20 +33,14 @@ namespace AkmlSql.Engine.Handlers.Control
             if (string.IsNullOrEmpty(request.ConnectionString))
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = "No connection string supplied." };
 
-            // Spec 043 follow-up: a new tab's connect is tested with the password of the tab it was opened from (same server and
-            // login only). PostgreSQL's string is judged by its guard first in TestPostgresAsync; the copy changes only the password.
-            if (!string.IsNullOrEmpty(request.CopyPasswordFromSessionId) && ctx?.Sessions.GetSession(request.CopyPasswordFromSessionId!) is { } source)
-            {
-                var kind = DatabaseKindNames.FromInt(request.Kind);
-                var copyInto = kind == DatabaseKind.PostgreSql ? request.ConnectionString : SqlAliasResolution.Apply(request.ConnectionString);
-                request.ConnectionString = SessionPasswordCopy.Apply(copyInto, kind, source.ConnectionString, source.Kind);
-            }
-
             // Spec 042: a PostgreSQL string is tested with the PostgreSQL driver and worded its own way; not at all with the feature off (FR-093).
             if (DatabaseKindNames.FromInt(request.Kind) == DatabaseKind.PostgreSql)
             {
                 if (ctx != null && ctx.PostgresSchemaMetadata == null)          // the feature was off when the engine started
                     return new TestSqlConnectionResponse { Ok = false, ErrorMessage = DialectErrors.FeatureOffMessage };
+                // Spec 043 follow-up: a new tab's connect is tested with the password of the tab it was opened from (that tab's
+                // session, this bridge connection, the same server, user and TLS options); the guard in TestPostgresAsync still runs.
+                request.ConnectionString = ConnectionChangedHandler.CopyPassword(request.ConnectionString, request.Kind, request.CopyPasswordFromSessionId, ctx);
                 return await TestPostgresAsync(request, ct).ConfigureAwait(false);
             }
 
@@ -60,8 +54,17 @@ namespace AkmlSql.Engine.Handlers.Control
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = refused };
             }
 
-            // A web connection whose password the engine remembers is tested with it.
+            // Spec 043 follow-up: a web SQL login with no password typed takes it from the tab it was opened from, or from the
+            // engine's remembered logins; with neither the engine says so itself and never sends an empty password to the server.
+            var typedPassword = HasPassword(request.ConnectionString);
+            request.ConnectionString = ConnectionChangedHandler.CopyPassword(request.ConnectionString, request.Kind, request.CopyPasswordFromSessionId, ctx);
             request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
+            if (SessionPasswordCopy.IsSqlLoginWithoutPassword(request.ConnectionString))
+                return new TestSqlConnectionResponse
+                {
+                    Ok = false, ErrorCode = DialectErrors.PasswordRequired,
+                    ErrorMessage = "The server needs the password for this login.",
+                };
 
             try
             {
@@ -69,6 +72,8 @@ namespace AkmlSql.Engine.Handlers.Control
                 await conn.OpenAsync(ct);
                 Log.Information("TestSqlConnection ok — {ConnDesc}",
                     ConnectionDiagnostics.Describe(request.ConnectionString));
+                // The connect's own test is where a typed password is known to be accepted: remember it now if asked.
+                if (typedPassword) SqlServerCredentialResolver.RememberIfRequested(request.ConnectionString, request.RememberPassword);
                 return new TestSqlConnectionResponse { Ok = true, ServerVersion = "SQL Server " + conn.ServerVersion };
             }
             catch (SqlException sqlEx)
@@ -77,7 +82,11 @@ namespace AkmlSql.Engine.Handlers.Control
                     sqlEx.Number, sqlEx.State, ConnectionDiagnostics.Describe(request.ConnectionString));
                 // Spec 042 (FR-008): a network failure against PostgreSQL's usual port says to check the kind.
                 var wrongKind = PgConnectionFailure.WrongKindForSqlServer(sqlEx.Number, DataSourceOf(request.ConnectionString));
-                return new TestSqlConnectionResponse { Ok = false, ErrorMessage = wrongKind ?? sqlEx.Message };
+                return new TestSqlConnectionResponse
+                {
+                    Ok = false, ErrorMessage = wrongKind ?? sqlEx.Message,
+                    ErrorCode = sqlEx.Number == 18456 ? DialectErrors.LoginFailed : null,   // the server refused the login
+                };
             }
             catch (Exception ex)
             {
@@ -128,6 +137,12 @@ namespace AkmlSql.Engine.Handlers.Control
                     ex.GetType().Name, PgConnectionString.Describe(request.ConnectionString));
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = failure.Message, ErrorCode = failure.ErrorCode };
             }
+        }
+
+        private static bool HasPassword(string connectionString)
+        {
+            try { return !string.IsNullOrEmpty(new SqlConnectionStringBuilder(connectionString).Password); }
+            catch (ArgumentException) { return false; }
         }
 
         private static string? DataSourceOf(string connectionString)

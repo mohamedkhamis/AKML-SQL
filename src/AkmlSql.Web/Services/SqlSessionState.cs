@@ -50,9 +50,15 @@ public sealed class SqlSessionState
     /// </summary>
     public string? CopyPasswordFrom { get; internal set; }
 
+    /// <summary>
+    /// Review of the follow-up: the engine said it has no password for this tab (none to copy, none remembered). The tab stops
+    /// reconnecting on its own — each quiet try would be refused again — and asks on its next run. Cleared by a connect.
+    /// </summary>
+    public bool PasswordMissing { get; internal set; }
+
     /// <summary>The tab can connect again without asking: nothing to type (<see cref="ConnectionBinding.NeedsNoPassword"/>), or a
-    /// connected tab to take the password from.</summary>
-    public bool CanReconnectAlone => Binding is { } b && (b.NeedsNoPassword || CopyPasswordFrom != null);
+    /// connected tab to take the password from — unless the engine already said it has none.</summary>
+    public bool CanReconnectAlone => Binding is { } b && !PasswordMissing && (b.NeedsNoPassword || CopyPasswordFrom != null);
 
     /// <summary>A run is in flight on this tab: its connection and database cannot be changed until it ends.</summary>
     public bool IsBusy { get; set; }

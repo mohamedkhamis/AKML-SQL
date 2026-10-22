@@ -50,6 +50,50 @@ public class SessionPasswordCopyTests
     }
 
     [Fact]
+    public void Weaker_certificate_checking_or_encryption_gets_nothing()
+    {
+        var source = new SqlConnectionStringBuilder { DataSource = "db1", UserID = "sales", Password = "pw", Encrypt = SqlConnectionEncryptOption.Mandatory, TrustServerCertificate = false }.ConnectionString;
+        var trusting = new SqlConnectionStringBuilder { DataSource = "db1", UserID = "sales", Encrypt = SqlConnectionEncryptOption.Mandatory, TrustServerCertificate = true }.ConnectionString;
+        var plain = new SqlConnectionStringBuilder { DataSource = "db1", UserID = "sales", Encrypt = SqlConnectionEncryptOption.Optional, TrustServerCertificate = false }.ConnectionString;
+
+        Assert.Equal(trusting, SessionPasswordCopy.Apply(trusting, DatabaseKind.SqlServer, source, DatabaseKind.SqlServer));
+        Assert.Equal(plain, SessionPasswordCopy.Apply(plain, DatabaseKind.SqlServer, source, DatabaseKind.SqlServer));
+        Assert.Null(new NpgsqlConnectionStringBuilder(SessionPasswordCopy.Apply(
+            new NpgsqlConnectionStringBuilder { Host = "db1", Username = "app", SslMode = SslMode.Disable }.ConnectionString, DatabaseKind.PostgreSql,
+            new NpgsqlConnectionStringBuilder { Host = "db1", Username = "app", Password = "pw", SslMode = SslMode.VerifyFull }.ConnectionString, DatabaseKind.PostgreSql)).Password);
+    }
+
+    [Fact]
+    public void Only_the_bridge_connection_that_connected_a_session_may_copy_from_it()
+    {
+        var session = "copy-" + Guid.NewGuid().ToString("N");
+        using (BridgeConnection.Set("socket-a")) SessionPasswordCopy.NoteConnected(session);
+
+        using (BridgeConnection.Set("socket-a")) Assert.True(SessionPasswordCopy.MayCopyFrom(session));
+        using (BridgeConnection.Set("socket-b")) Assert.False(SessionPasswordCopy.MayCopyFrom(session));   // another browser
+        Assert.False(SessionPasswordCopy.MayCopyFrom(session));                                             // the named pipe
+
+        var ssms = "ssms-" + Guid.NewGuid().ToString("N");
+        SessionPasswordCopy.NoteConnected(ssms);                                                            // connected over the pipe
+        using (BridgeConnection.Set("socket-a")) Assert.False(SessionPasswordCopy.MayCopyFrom(ssms));
+
+        SessionPasswordCopy.Forget(session);
+        using (BridgeConnection.Set("socket-a")) Assert.False(SessionPasswordCopy.MayCopyFrom(session));
+    }
+
+    [Fact]
+    public void A_bridge_SQL_login_without_a_password_is_answered_by_the_engine()
+    {
+        using (BridgeSourceIp.Set(System.Net.IPAddress.Loopback))
+        {
+            Assert.True(SessionPasswordCopy.IsSqlLoginWithoutPassword(Sql("db1", "sales", null)));
+            Assert.False(SessionPasswordCopy.IsSqlLoginWithoutPassword(Sql("db1", "sales", "pw")));
+            Assert.False(SessionPasswordCopy.IsSqlLoginWithoutPassword(new SqlConnectionStringBuilder { DataSource = "db1", IntegratedSecurity = true }.ConnectionString));
+        }
+        Assert.False(SessionPasswordCopy.IsSqlLoginWithoutPassword(Sql("db1", "sales", null)));   // the SSMS pipe opens its own strings
+    }
+
+    [Fact]
     public void PostgreSQL_matches_host_port_and_user()
     {
         var source = Pg("db1", 5432, "app", "pw");

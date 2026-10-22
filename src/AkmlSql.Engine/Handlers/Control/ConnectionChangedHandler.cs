@@ -68,16 +68,24 @@ namespace AkmlSql.Engine.Handlers.Control
                 return Task.FromResult(request);
             }
 
-            // A web tab on SQL authentication whose password the engine remembers sends none: fill it in here, so the session
-            // (runs, schema, database list) uses it. The browser never holds it.
+            // A web tab on SQL authentication sends no password when the engine can supply it: from the tab it was opened from
+            // (New query) or remembered on this machine. The browser never holds it.
             request.ConnectionString = CopyPassword(request, ctx);
             request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
+            if (SessionPasswordCopy.IsSqlLoginWithoutPassword(request.ConnectionString))
+            {
+                // Nothing supplied it: never send an empty password to the server. The session keeps its previous connection
+                // (the web client tests first and asks for the password).
+                Log.Warning("ConnectionChanged ignored: a SQL login without a password (session={Session})", request.SessionId);
+                return Task.FromResult(request);
+            }
 
             // Spec 029: capture the previous connection string before UpdateSession overwrites it
             // so we can detect a credential change (different password / user) below.
             var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;
 
             ctx.Sessions.UpdateSession(request);
+            SessionPasswordCopy.NoteConnected(request.SessionId);
             ctx.ParserService.SetServerVersion(request.ServerVersion);
 
             // Spec 030 — Phase 5: dispose the persistent execute connection when the credential changes.
@@ -138,21 +146,6 @@ namespace AkmlSql.Engine.Handlers.Control
             {
                 try
                 {
-                    // The password is saved only once the server has accepted it (as for PostgreSQL).
-                    if (captured.request.RememberPassword)
-                    {
-                        try
-                        {
-                            await using var probe = new SqlConnection(captured.request.ConnectionString);
-                            await probe.OpenAsync(CancellationToken.None).ConfigureAwait(false);
-                            SqlServerCredentialResolver.RememberIfRequested(captured.request.ConnectionString, remember: true);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Warning("ConnectionChanged: the password was not remembered, the connection did not open ({Type})", ex.GetType().Name);
-                        }
-                    }
-
                     if (captured.schemaCache.PermissionDenied)
                     {
                         // Terminal state -- a previous Phase A confirmed the current identity
@@ -199,6 +192,21 @@ namespace AkmlSql.Engine.Handlers.Control
         }
 
         /// <summary>
+        /// Spec 043 follow-up: a new query tab opened on another tab's connection takes that session's password, as SSMS's New
+        /// Query reuses the open connection — only from a session this bridge connection connected, for the same server, login
+        /// and security options (<see cref="SessionPasswordCopy"/>).
+        /// </summary>
+        internal static string CopyPassword(ConnectionInfo request, RpcContext ctx) =>
+            CopyPassword(request.ConnectionString, request.Kind, request.CopyPasswordFromSessionId, ctx);
+
+        internal static string CopyPassword(string connectionString, int kind, string? sourceSessionId, RpcContext? ctx)
+        {
+            if (!SessionPasswordCopy.MayCopyFrom(sourceSessionId) || ctx?.Sessions.GetSession(sourceSessionId!) is not { } source)
+                return connectionString;
+            return SessionPasswordCopy.Apply(connectionString, DatabaseKindNames.FromInt(kind), source.ConnectionString, source.Kind);
+        }
+
+        /// <summary>
         /// Spec 042 (T056, FR-003, FR-102 to FR-104): the session now talks to a PostgreSQL server. The request is judged by
         /// the same guard as a test (a bridge request the engine would not open is ignored; the web client shows the reason
         /// first), a remembered password is put into the string when it has none, and the session's persistent connection is
@@ -206,17 +214,6 @@ namespace AkmlSql.Engine.Handlers.Control
         /// user asked to remember is saved only once the server has accepted it, and the schema is loaded when a PostgreSQL
         /// catalog provider is registered.
         /// </summary>
-        /// <summary>
-        /// Spec 043 follow-up: a new query tab opened on another tab's connection takes that session's password (same server and
-        /// login only, <see cref="SessionPasswordCopy"/>), as SSMS's New Query reuses the open connection.
-        /// </summary>
-        internal static string CopyPassword(ConnectionInfo request, RpcContext ctx)
-        {
-            if (string.IsNullOrEmpty(request.CopyPasswordFromSessionId)
-                || ctx.Sessions.GetSession(request.CopyPasswordFromSessionId!) is not { } source) return request.ConnectionString;
-            return SessionPasswordCopy.Apply(request.ConnectionString, DatabaseKindNames.FromInt(request.Kind), source.ConnectionString, source.Kind);
-        }
-
         private static ConnectionInfo HandlePostgres(ConnectionInfo request, RpcContext ctx)
         {
             var refusal = PgTargetGuard.Check(request.ConnectionString);
@@ -233,6 +230,7 @@ namespace AkmlSql.Engine.Handlers.Control
 
             var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;
             ctx.Sessions.UpdateSession(request);
+            SessionPasswordCopy.NoteConnected(request.SessionId);
             var identityChanged = !string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal);
 
             // The persistent connection carries the old identity, session settings and any transaction: the next execute

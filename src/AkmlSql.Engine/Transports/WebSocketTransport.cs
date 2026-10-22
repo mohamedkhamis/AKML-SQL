@@ -315,6 +315,7 @@ namespace AkmlSql.Engine.Transports
             // as PairingService's rate-limit bucket key. The scope restores the previous
             // value on connection end so values never leak across connections.
             using (BridgeSourceIp.Set(context.Request.RemoteEndPoint?.Address))
+            using (BridgeConnection.Set(Guid.NewGuid().ToString("N")))   // spec 043 follow-up: whose sessions a copy may read
             {
                 await ServeAsync(ws, ct).ConfigureAwait(false);
             }

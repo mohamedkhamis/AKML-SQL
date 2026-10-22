@@ -319,3 +319,27 @@ The upgrade issued a new bridge certificate (0F1C5805…): browsers paired befor
 Schema panel on Northwind and running as the login without a prompt; tab 2 `USE master` while tab 1 stays on Northwind; a PostgreSQL
 tab and a New query from it connected without a prompt; tab 1 still on SQL Server Northwind afterwards. The manual M8/M10/M12/M13 walk
 with the user is still open.
+
+### Code review of the follow-up (2026-10-22) and redeploy
+
+A high-effort review of `df40eed..38140436` found 10 issues; all were fixed:
+- Password copy: only from a session the same bridge WebSocket connection connected (`BridgeConnection`, `SessionPasswordCopy.MayCopyFrom`
+  — never an SSMS session or another browser's), and only when encryption and certificate checking match (PostgreSQL: SSL mode and root
+  certificate).
+- No empty-password logins: the engine answers a web SQL login with no password itself (`dialect.password-required`) in test, connect
+  and database list; the web marks the tab `PasswordMissing` (no quiet retries; the next run asks); a server that is down is reported
+  as it is, not as a password prompt; an engine that can supply no password is never sent one.
+- Remember: sent only to an engine advertising `credentials.sqlserver.v1`; saved by the connect's own test (`TestSqlConnectionRequest`
+  key 3) instead of a second login; Forget also clears the saved row's flag; the remembered state counts only for the server and login it
+  was asked about; a refused remembered password is recognised by `sqlserver.login-failed`, not by English text.
+- Markup: the Forget button and the note are outside the checkbox's label; the misplaced doc comment in `ConnectionChangedHandler` moved.
+
+Tests after the fixes: engine 96 passed (11 live-PostgreSQL skips) in the credential, copy, capability, connection, disconnect and
+transport classes; web unit 1,834 passed; browser QueryTabs, ConnectDialog, SqlServerAlias, PostgresWorkspace 54 passed, 2 skipped,
+1 failed — `PostgresWorkspaceTests.The_explorer_shows_the_kinds_columns_and_comments_follows_a_script_and_a_database_switch`, which was
+bisected in a worktree: it fails and passes alternately on the unchanged previous commit too (explorer refresh after a seed script in a new
+database, a pre-existing timing race), so it is not caused by these changes and is left as a known intermittent.
+
+Redeployed 1.26.1022.0701 (same silent LAN upgrade): installed walk 16/16; `EngineAutoConnectTests` 5/5 and the deep-link test 1/1
+against the installed engine. T060 native keys: Edge passed once; Chromium and Firefox skipped because Windows refused the browser
+foreground focus in this RDP session — still for the user at the desktop.

@@ -70,6 +70,8 @@ namespace AkmlSql.Engine.Handlers.Control
 
             // A web connection whose password the engine remembers lists with it.
             request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
+            if (SessionPasswordCopy.IsSqlLoginWithoutPassword(request.ConnectionString))   // never an empty password to the server
+                return new ListDatabasesResponse { Ok = false, ErrorMessage = "Enter the password for this login, then refresh the list.", ErrorCode = DialectErrors.PasswordRequired };
 
             try
             {
