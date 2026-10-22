@@ -43,6 +43,17 @@ public sealed class SqlSessionState
     /// <summary>A restored tab whose connection is not open in this page yet (data-model §3).</summary>
     public bool NeedsReattach { get; internal set; }
 
+    /// <summary>
+    /// Spec 043 follow-up: a new tab opened on a connected tab (New query, as in SSMS) names that tab's engine session, so its first
+    /// connect needs no password typed — the engine takes it from that session (<c>session.copy.v1</c>). Not persisted: after a
+    /// reload the tab asks, unless the engine remembers the password. Cleared once the tab has connected.
+    /// </summary>
+    public string? CopyPasswordFrom { get; internal set; }
+
+    /// <summary>The tab can connect again without asking: nothing to type (<see cref="ConnectionBinding.NeedsNoPassword"/>), or a
+    /// connected tab to take the password from.</summary>
+    public bool CanReconnectAlone => Binding is { } b && (b.NeedsNoPassword || CopyPasswordFrom != null);
+
     /// <summary>A run is in flight on this tab: its connection and database cannot be changed until it ends.</summary>
     public bool IsBusy { get; set; }
 

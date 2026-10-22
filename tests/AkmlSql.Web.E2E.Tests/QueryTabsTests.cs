@@ -468,6 +468,139 @@ public sealed class QueryTabsTests
         await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("postgres");
     }
 
+    // ── Spec 043 follow-up (reported 2026-10-22): New query on a SQL login or a PostgreSQL password, as SSMS's New Query ──────
+    // A SQL login on the local server: AKML_SQL_TEST_LOGIN / AKML_SQL_TEST_PASSWORD (Northwind readable).
+    private static (string Login, string Password)? SqlLogin()
+    {
+        var login = Environment.GetEnvironmentVariable("AKML_SQL_TEST_LOGIN");
+        var password = Environment.GetEnvironmentVariable("AKML_SQL_TEST_PASSWORD");
+        return string.IsNullOrEmpty(login) || string.IsNullOrEmpty(password) ? null : (login, password);
+    }
+
+    private static async Task ConnectSqlLoginAsync(IPage page, string login, string password, string database, bool remember = false)
+    {
+        await page.ClickAsync("[data-testid='status-connection']");
+        await page.WaitForSelectorAsync("[data-testid='connection-manager']");
+        await page.ClickAsync("[data-testid='conn-kind-sqlserver']");
+        await page.FillAsync("[data-testid='conn-server-input']", "localhost");
+        await page.Locator("[data-testid='conn-server-input']").DispatchEventAsync("change");
+        await page.CheckAsync("[data-testid='conn-auth-sql']");
+        await page.FillAsync("[data-testid='conn-login-input']", login);
+        await page.Locator("[data-testid='conn-login-input']").DispatchEventAsync("change");
+        await page.FillAsync("[data-testid='conn-password-input']", password);
+        if (remember) await page.CheckAsync("[data-testid='conn-sql-remember']");
+        await page.ClickAsync("[data-testid='conn-database-refresh']");
+        await Assertions.Expect(page.Locator($"[data-testid='conn-database-select'] option[value='{database}']")).ToHaveCountAsync(1, new() { Timeout = 30_000 });
+        await page.SelectOptionAsync("[data-testid='conn-database-select']", database);
+        await page.ClickAsync("[data-testid='conn-connect-btn']");
+        await Assertions.Expect(page.GetByTestId("status-connection")).ToContainTextAsync($"localhost/{database}", new() { Timeout = 30_000 });
+    }
+
+    [SkippableFact]
+    public async Task New_query_on_a_SQL_login_opens_connected_without_asking_and_each_tab_keeps_its_database()
+    {
+        Skip.If(SqlLogin() is null, "No SQL login (AKML_SQL_TEST_LOGIN / AKML_SQL_TEST_PASSWORD).");
+        var (login, password) = SqlLogin()!.Value;
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        var page = s.Page;
+        await ConnectSqlLoginAsync(page, login, password, "Northwind");
+        await s.ExecuteAsync("SELECT TOP (1) CompanyName FROM dbo.Customers ORDER BY CustomerID;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("Alfreds Futterkiste");
+
+        await page.GetByTestId("doc-new").ClickAsync();
+        await Assertions.Expect(Tabs(page)).ToHaveCountAsync(2);
+        // Connected on its own: the status bar, and the Schema panel loads the database (no "Not connected").
+        await Assertions.Expect(page.GetByTestId("status-connection")).ToContainTextAsync("localhost/Northwind", new() { Timeout = 30_000 });
+        await Assertions.Expect(page.GetByTestId("schema-header")).ToContainTextAsync("Northwind", new() { Timeout = 30_000 });
+        await s.ExecuteAsync("SELECT SUSER_SNAME() AS who, DB_NAME() AS db;");
+        await Assertions.Expect(page.GetByTestId("connection-manager")).ToHaveCountAsync(0);
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync(login);
+        await Assertions.Expect(Cell(page, 0, 1)).ToHaveTextAsync("Northwind");
+
+        // Another database in the second tab only (multi-database on one server).
+        await s.ExecuteAsync("USE master; SELECT DB_NAME() AS db;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("master");
+        await Tabs(page).First.ClickAsync();
+        await s.ExecuteAsync("SELECT DB_NAME() AS db;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("Northwind");
+        await Tabs(page).Nth(1).ClickAsync();
+        await s.ExecuteAsync("SELECT DB_NAME() AS db;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("master");
+    }
+
+    [SkippableFact]
+    public async Task A_SQL_login_remembered_on_the_engine_reconnects_after_a_reload_without_asking()
+    {
+        Skip.If(SqlLogin() is null, "No SQL login (AKML_SQL_TEST_LOGIN / AKML_SQL_TEST_PASSWORD).");
+        var (login, password) = SqlLogin()!.Value;
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        var page = s.Page;
+        await ConnectSqlLoginAsync(page, login, password, "Northwind", remember: true);
+        await s.ExecuteAsync("SELECT 'before reload' AS t;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("before reload");
+        await page.WaitForTimeoutAsync(1_500);   // the engine saves the password once the server accepted it; the tab record debounce
+
+        await page.ReloadAsync(new() { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 60_000 });
+        await page.WaitForSelectorAsync("[data-testid='sql-editor'] .cm-content", new() { Timeout = 30_000 });
+        await Assertions.Expect(page.GetByTestId("status-connection")).ToContainTextAsync("localhost/Northwind", new() { Timeout = 30_000 });
+        await s.ExecuteAsync("SELECT SUSER_SNAME() AS who;");
+        await Assertions.Expect(page.GetByTestId("connection-manager")).ToHaveCountAsync(0);
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync(login);
+
+        // The dialog shows the password as remembered, and Forget removes it.
+        await page.ClickAsync("[data-testid='status-connection']");
+        await Assertions.Expect(page.GetByTestId("conn-sql-forget")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await page.ClickAsync("[data-testid='conn-sql-forget']");
+        await Assertions.Expect(page.GetByTestId("conn-sql-forget")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+    }
+
+    [SkippableFact]
+    public async Task New_query_on_a_PostgreSQL_tab_opens_connected_without_asking()
+    {
+        await using var s = await PgWebSession.StartOrSkipAsync(_output);   // a typed password, not remembered
+        var page = s.Page;
+        await page.GetByTestId("doc-new").ClickAsync();
+        await Assertions.Expect(Tabs(page)).ToHaveCountAsync(2);
+        await Assertions.Expect(page.GetByTestId("status-kind")).ToContainTextAsync("PostgreSQL", new() { Timeout = 30_000 });
+        await Assertions.Expect(page.GetByTestId("schema-header")).ToContainTextAsync("postgres", new() { Timeout = 30_000 });
+        await s.ExecuteAsync("SELECT current_database() AS db;");
+        await Assertions.Expect(page.GetByTestId("connection-manager")).ToHaveCountAsync(0);
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("postgres");
+    }
+
+    /// <summary>
+    /// FR-006, reported 2026-10-22: tab 1 on a SQL Server database, a new tab (which starts on tab 1's connection) moved to
+    /// another server; back on tab 1 its query must still run on its own server and database, not on the second tab's.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_new_tab_moved_to_another_server_leaves_the_first_tab_on_its_own()
+    {
+        Skip.IfNot(await SandboxEngine.LocalSqlServerAnswersAsync(), "No local SQL Server answering on localhost:1433.");
+        await using var s = await PgWebSession.StartOrSkipAsync(_output, connect: false);
+        var page = s.Page;
+        var (host, port, user, password) = PgWebSession.Configured()!.Value;
+        await ConnectSqlServerAsync(page, "Northwind");
+        await s.ExecuteAsync("SELECT TOP (1) CompanyName FROM dbo.Customers ORDER BY CustomerID;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("Alfreds Futterkiste");
+
+        await page.GetByTestId("doc-new").ClickAsync();
+        await Assertions.Expect(Tabs(page)).ToHaveCountAsync(2);
+        await Assertions.Expect(page.GetByTestId("status-connection")).ToContainTextAsync("localhost/Northwind", new() { Timeout = 30_000 });
+        await PgWebSession.ConnectAsync(page, host, port, "postgres", user, password);
+        await s.ExecuteAsync("SELECT current_database() AS db;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("postgres");
+
+        await Tabs(page).First.ClickAsync();
+        await Assertions.Expect(page.GetByTestId("status-kind")).ToContainTextAsync("SQL Server", new() { Timeout = 5_000 });
+        await Assertions.Expect(page.GetByTestId("status-connection")).ToContainTextAsync("localhost/Northwind");
+        await s.ExecuteAsync("SELECT TOP (1) CompanyName FROM dbo.Customers ORDER BY CustomerID;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("Alfreds Futterkiste");
+
+        await Tabs(page).Nth(1).ClickAsync();
+        await s.ExecuteAsync("SELECT current_database() AS db;");
+        await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("postgres");
+    }
+
     /// <summary>US1 scenario 6, FR-008, FR-009 (gap G4): a restored tab whose password is not remembered connects only when it
     /// runs, through the Connect to database dialog filled in with its connection (only the password to type); then the run
     /// goes on, and neither the next run nor a switch away and back asks again.</summary>

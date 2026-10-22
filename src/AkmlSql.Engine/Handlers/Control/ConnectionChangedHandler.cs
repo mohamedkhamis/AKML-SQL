@@ -10,6 +10,7 @@ using AkmlSql.Engine.Pairing;
 using AkmlSql.Engine.PostgreSql;
 using AkmlSql.Engine.Schema;
 using AkmlSql.Engine.Transports;
+using Microsoft.Data.SqlClient;
 using Serilog;
 
 namespace AkmlSql.Engine.Handlers.Control
@@ -66,6 +67,11 @@ namespace AkmlSql.Engine.Handlers.Control
                     request.SessionId, ConnectionDiagnostics.Describe(request.ConnectionString));
                 return Task.FromResult(request);
             }
+
+            // A web tab on SQL authentication whose password the engine remembers sends none: fill it in here, so the session
+            // (runs, schema, database list) uses it. The browser never holds it.
+            request.ConnectionString = CopyPassword(request, ctx);
+            request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
 
             // Spec 029: capture the previous connection string before UpdateSession overwrites it
             // so we can detect a credential change (different password / user) below.
@@ -132,6 +138,21 @@ namespace AkmlSql.Engine.Handlers.Control
             {
                 try
                 {
+                    // The password is saved only once the server has accepted it (as for PostgreSQL).
+                    if (captured.request.RememberPassword)
+                    {
+                        try
+                        {
+                            await using var probe = new SqlConnection(captured.request.ConnectionString);
+                            await probe.OpenAsync(CancellationToken.None).ConfigureAwait(false);
+                            SqlServerCredentialResolver.RememberIfRequested(captured.request.ConnectionString, remember: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning("ConnectionChanged: the password was not remembered, the connection did not open ({Type})", ex.GetType().Name);
+                        }
+                    }
+
                     if (captured.schemaCache.PermissionDenied)
                     {
                         // Terminal state -- a previous Phase A confirmed the current identity
@@ -185,6 +206,17 @@ namespace AkmlSql.Engine.Handlers.Control
         /// user asked to remember is saved only once the server has accepted it, and the schema is loaded when a PostgreSQL
         /// catalog provider is registered.
         /// </summary>
+        /// <summary>
+        /// Spec 043 follow-up: a new query tab opened on another tab's connection takes that session's password (same server and
+        /// login only, <see cref="SessionPasswordCopy"/>), as SSMS's New Query reuses the open connection.
+        /// </summary>
+        internal static string CopyPassword(ConnectionInfo request, RpcContext ctx)
+        {
+            if (string.IsNullOrEmpty(request.CopyPasswordFromSessionId)
+                || ctx.Sessions.GetSession(request.CopyPasswordFromSessionId!) is not { } source) return request.ConnectionString;
+            return SessionPasswordCopy.Apply(request.ConnectionString, DatabaseKindNames.FromInt(request.Kind), source.ConnectionString, source.Kind);
+        }
+
         private static ConnectionInfo HandlePostgres(ConnectionInfo request, RpcContext ctx)
         {
             var refusal = PgTargetGuard.Check(request.ConnectionString);
@@ -196,6 +228,7 @@ namespace AkmlSql.Engine.Handlers.Control
             }
 
             var resolver = new PgCredentialResolver();
+            request.ConnectionString = CopyPassword(request, ctx);
             request.ConnectionString = resolver.Resolve(request.ConnectionString).ConnectionString;
 
             var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;

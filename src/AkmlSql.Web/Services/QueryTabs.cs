@@ -434,6 +434,9 @@ internal sealed class QueryTabs : IQueryTabs, IDefaultNameCounter
     {
         if (AtTabLimit) return null;
         var tab = await AddAsync(inheritFrom?.Session.Binding, text ?? string.Empty, name).ConfigureAwait(false);
+        // Spec 043 follow-up: as SSMS's New Query, the tab opens on the connection that is open — the engine takes the password
+        // from that tab's session, so a SQL login or a PostgreSQL password is not asked for again.
+        if (inheritFrom?.Session is { IsConnected: true } source) tab.Session.CopyPasswordFrom = source.SessionId;
         Activate(tab);
         await SaveSetAsync().ConfigureAwait(false);
         Changed?.Invoke();

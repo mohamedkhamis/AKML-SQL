@@ -395,4 +395,49 @@ public sealed class QueryTabSessionTests
         Assert.True((await _sql.ReattachAsync(tab, null, CancellationToken.None)).Ok);
         Assert.Equal(2, _bridge.Log.Count(e => e.Type == MessageTypes.SessionDisconnect));
     }
+
+    // Spec 043 follow-up (reported 2026-10-22): a SQL login whose password the engine remembers reconnects like Windows
+    // authentication — the connect asks the engine to remember a typed password, and a restored tab sends none.
+    [Fact]
+    public async Task A_SQL_login_remembered_on_the_engine_asks_it_to_remember_and_reconnects_without_a_password()
+    {
+        var remembered = Remote(trust: true) with { RememberPassword = true };
+        var tab = _sql.CreateSession("remembered-login");
+        Assert.True((await _sql.ConnectAsync(remembered, tab, CancellationToken.None)).Ok);
+        Assert.True(Assert.Single(ConnectionChanges).RememberPassword);
+        Assert.True(tab.Binding!.NeedsNoPassword);
+        Assert.True(tab.Binding.TrustServerCertificate);
+
+        var restored = _sql.CreateSession("restored-login");
+        restored.Restore(tab.Binding.Clone());
+        Assert.True((await _sql.ReattachAsync(restored, null, CancellationToken.None)).Ok);
+        var reattach = ConnectionChanges.Last();
+        Assert.Equal("restored-login", reattach.SessionId);
+        Assert.False(reattach.RememberPassword);   // nothing typed: nothing new to remember
+        var sent = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = reattach.ConnectionString };
+        Assert.Equal(string.Empty, sent.TryGetValue("Password", out var pw) ? pw?.ToString() ?? string.Empty : string.Empty);
+        Assert.Equal("reporting", sent["User ID"]);
+    }
+
+    [Fact]
+    public async Task A_SQL_login_with_no_typed_password_that_the_engine_refuses_asks_for_the_password()
+    {
+        var tab = _sql.CreateSession("refused-remembered");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'reporting'." };
+
+        var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.True(result.PasswordRequired);
+        Assert.Empty(ConnectionChanges);
+    }
+
+    [Fact]
+    public void A_SQL_login_is_free_of_a_typed_password_only_when_remembered()
+    {
+        Assert.False(ConnectionBinding.FromTarget(Remote(trust: false), null).NeedsNoPassword);
+        Assert.True(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, null).NeedsNoPassword);
+        Assert.True(ConnectionBinding.FromTarget(SqlServer(), null).NeedsNoPassword);
+    }
 }

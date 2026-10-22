@@ -293,3 +293,29 @@ colour leaks into either theme, the tab strip, grid, status bar and Schema panel
 
 **T007 — spike S4**: passed; see research.md R8 (a version-4 profile from the pre-043 build upgraded to version 5 with all 15
 records unchanged and the document moved into tab 1).
+
+## Follow-ups reported by the user and deployment (2026-10-22)
+
+| Report | Cause | Change |
+| --- | --- | --- |
+| High contrast: the current Settings section (`akml-settings-nav-link`) is a black bar; the item font differs | HC fills hover and selection with `CanvasText`, the same colour as the text; the link had no font of its own | `settings.css`: inverted text on hover/current in HC, chrome font family and size, no hover underline |
+| A new query tab has no connection and the Schema panel says "Not connected to a database" | A new tab copies only the connection's description; with SQL authentication (or a PostgreSQL password not remembered) the browser has no password, so the tab waited for its first run | Engine `session.copy.v1`: the new tab names the tab it was opened from (`ConnectionInfo` key 7, `TestSqlConnectionRequest` key 2) and the engine copies that session's password for the same server and login only (`SessionPasswordCopy`); the tab connects on its own as SSMS's New Query does |
+| SQL Server should use saved passwords and settings like PostgreSQL | Only PostgreSQL could remember a password | Engine `credentials.sqlserver.v1` (`SqlServerCredentialResolver`, store key `mssql-web://`, bridge requests only, never the SSMS extension's logins); dialog "Remember the password on the engine machine" + Forget for SQL authentication; a remembered login reconnects after a reload; Trust the server certificate travels with the saved row and the tab |
+| Tab 1 ran on tab 2's server | Not reproduced against this branch's engine (new test `A_new_tab_moved_to_another_server_leaves_the_first_tab_on_its_own`, and the installed walk below) | — |
+
+Tests: engine credential, copy, capability and connection classes 66 passed (11 live-PostgreSQL skips); web unit 1,831 passed; Core
+`ProfileGetMessageTests` key count is the known pre-existing failure. Browser (Debug, serial, SQL Server + PostgreSQL cluster, a temporary
+SQL login created for the run and dropped after): the four new cases passed; QueryTabs, ConnectDialog, SqlServerAlias, Quickstart,
+PostgresWorkspace, SecretStorage and WorkspaceAccessibility 70 passed, 2 skipped (no client alias on this machine; no PostgreSQL root
+certificate). `EngineAutoConnectTests` 5/5 against the installed LAN engine. `InstalledEngineCertificateTests`: the deep-link test failed
+because the harness turned the summary's HTTPS URL into plain HTTP on the HTTPS port; `InstalledEngine.SiteUrl` now uses the summary's
+local `http://localhost:{port}/` line, and it passes; the certificate cases skip until `bridge.cer` is trusted on this machine.
+
+**T104 deployment** (user-approved): installer 1.26.1022.0157 from this branch (`Deploy-Build-Release.ps1 -SkipTests`), silent upgrade
+`/WEB_HOST=IIS /WEB_EXPOSURE=LAN /WEB_PORT=59416 /BRIDGE_PORT=59417 /WEB_HTTPS_PORT=59418` (443 belongs to other sites on this server).
+IIS `AkmlSqlWeb` http :59416 + https :59418, service `AkmlSqlWebEngine` running, bridge wss :59417, engine and web both 1.26.1022.0157.
+The upgrade issued a new bridge certificate (0F1C5805…): browsers paired before must pair again. Walk against the installed site
+(Playwright, pairing with the PIN): 16/16 — pair Live; HC Settings readable; SQL login on Northwind; New query connected with the
+Schema panel on Northwind and running as the login without a prompt; tab 2 `USE master` while tab 1 stays on Northwind; a PostgreSQL
+tab and a New query from it connected without a prompt; tab 1 still on SQL Server Northwind afterwards. The manual M8/M10/M12/M13 walk
+with the user is still open.

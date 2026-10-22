@@ -1025,6 +1025,8 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
 | `session.database.v1` | `Capabilities.SessionDatabaseV1` | Spec 041 — the database selector: `ListDatabasesRequest.SessionId` (key 1), `ChangeDatabase` (217 → 218) and `ExecuteQueryResult.CurrentDatabase` (key 12). |
 | `session.disconnect.v1` | `Capabilities.SessionDisconnectV1` | `SessionDisconnect` (225 → 226): the web edition's Disconnect rolls back the session's open transaction and closes its connection before it reports success. |
+| `credentials.sqlserver.v1` | `Capabilities.CredentialsSqlServerV1` | Spec 043 follow-up: a SQL Server login's password may be remembered on the engine (`ConnectionInfo.RememberPassword`) and asked about or forgotten with `CredentialRequest` `Kind` 0. |
+| `session.copy.v1` | `Capabilities.SessionCopyV1` | Spec 043 follow-up: `ConnectionInfo` key 7 and `TestSqlConnectionRequest` key 2 `CopyPasswordFromSessionId` — a new query tab sends its connection without a password and names the tab it was opened from; the engine copies that session's password for the same server and login only (`SessionPasswordCopy`). |
 | `execute.v2` | `Capabilities.ExecuteV2` | Spec 041 — scripts split on GO and keep running after a failing batch; the execute reply carries structured messages, batches, the completion time and the omitted-message count (keys 8–11), sets carry their batch (key 11), and `ExecuteParse` (219 → 220) is understood. |
 
 ### SchemaIdentify (202 / 203) — `contracts/schema-cache-shape.md`
@@ -1256,8 +1258,11 @@ Registered only when `postgreSql.enabled` is true in `config.json` (the default)
 
 `CredentialRequest { 0 Action, 1 Kind, 2 Server, 3 Port, 4 Login }` → `CredentialResponse { 0 Ok, 1 Has, 2 Error }`. `Action` 0 asks whether the
 engine holds a remembered password for this server and login, 1 forgets it. The reply says yes or no and never carries a password.
-Only PostgreSQL is served: any other `Kind`, or a missing login, finds nothing and touches nothing. The password lives in the engine's
-protected credential store under `pg://{server}:{port}` and the login, and is filled into a connection that arrives without one.
+PostgreSQL (`Kind` 1): the password lives in the engine's protected credential store under `pg://{server}:{port}` and the login, and is
+filled into a connection that arrives without one. SQL Server (`Kind` 0, `credentials.sqlserver.v1`, spec 043 follow-up): the web
+edition's remembered logins, under `mssql-web://{data source}` (an alias resolved first) and the login — never the logins the SSMS
+extension saves — filled only into a bridge request on SQL authentication that has no password (`SqlServerCredentialResolver`), and
+saved when `ConnectionInfo.RememberPassword` is set, once the server accepted it. A missing server or login finds nothing.
 
 ### `RedactRequest` (223) → `RedactResponse` (224)
 

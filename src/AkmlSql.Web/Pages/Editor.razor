@@ -1784,7 +1784,7 @@
     {
         if (tab == null || _disposed || tab.IsClosing) return;
         var s = tab.Session;
-        if (s.IsConnected || !s.NeedsReattach || s.Binding is not { NeedsNoPassword: true } || Bridge.State != BridgeState.Open) return;
+        if (s.IsConnected || !s.NeedsReattach || !s.CanReconnectAlone || Bridge.State != BridgeState.Open) return;
         var result = await ReattachAsync(tab);
         if (!result.Ok) Diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"{tab.Name}: the connection was not restored: {result.Error}");
         if (!_disposed) StateHasChanged();
@@ -1817,7 +1817,7 @@
         if (s.IsConnected) return true;
         if (s.NeedsReattach && s.Binding is { } binding)
         {
-            if (binding.NeedsNoPassword && Bridge.State == BridgeState.Open)
+            if (s.CanReconnectAlone && Bridge.State == BridgeState.Open)
             {
                 var result = await ReattachAsync(tab);
                 if (s.IsConnected) return true;

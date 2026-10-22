@@ -77,6 +77,20 @@ namespace AkmlSql.Engine
         public const string SessionDisconnectV1 = "session.disconnect.v1";
 
         /// <summary>
+        /// Spec 043 follow-up: the web edition may ask the engine to remember a SQL Server login's password
+        /// (<c>ConnectionInfo.RememberPassword</c>), connect without sending it, and ask about or forget it through
+        /// <c>CredentialRequest</c> (221 → 222) with the SQL Server kind (<c>SqlServerCredentialResolver</c>).
+        /// </summary>
+        public const string CredentialsSqlServerV1 = "credentials.sqlserver.v1";
+
+        /// <summary>
+        /// Spec 043 follow-up: <c>ConnectionInfo.CopyPasswordFromSessionId</c> (key 7) and
+        /// <c>TestSqlConnectionRequest.CopyPasswordFromSessionId</c> (key 2) — a new query tab opened on a connected tab takes that
+        /// session's password for the same server and login (<c>SessionPasswordCopy</c>), as SSMS's New Query does.
+        /// </summary>
+        public const string SessionCopyV1 = "session.copy.v1";
+
+        /// <summary>
         /// Spec 042 (contracts/ipc.md): the engine can connect to, run scripts against, browse and
         /// provide language services for PostgreSQL servers. Advertised only when
         /// <c>config.json</c> <c>postgreSql.enabled</c> is true (the default), so an engine built
@@ -106,6 +120,8 @@ namespace AkmlSql.Engine
             ExecuteV2,
             SessionDatabaseV1,
             SessionDisconnectV1,
+            CredentialsSqlServerV1,
+            SessionCopyV1,
         };
 
         /// <summary>

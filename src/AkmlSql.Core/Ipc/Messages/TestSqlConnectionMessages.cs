@@ -16,6 +16,10 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042: the <see cref="DatabaseKind"/> to test with (0 SQL Server, 1 PostgreSQL).</summary>
         [Key(1)]
         public int Kind { get; set; }
+
+        /// <summary>Spec 043 follow-up: as <see cref="ConnectionInfo.CopyPasswordFromSessionId"/>, for the test a connect starts with.</summary>
+        [Key(2)]
+        public string? CopyPasswordFromSessionId { get; set; }
     }
 
     /// <summary>Engine → Shell (spec 029): result of <see cref="TestSqlConnectionRequest"/>.</summary>

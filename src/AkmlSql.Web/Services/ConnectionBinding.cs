@@ -30,11 +30,12 @@ public sealed class ConnectionBinding
     public bool RememberPassword { get; set; }
 
     /// <summary>
-    /// Connecting needs nothing the browser does not hold: Windows authentication, or a PostgreSQL password the engine
-    /// remembers. Such a tab reconnects when it is shown; any other asks for the password on its first run (FR-009).
+    /// Connecting needs nothing the browser does not hold: Windows authentication, or a password the engine remembers
+    /// (PostgreSQL, and SQL Server authentication since the spec 043 follow-up). Such a tab reconnects when it is shown; any
+    /// other asks for the password on its first run (FR-009).
     /// </summary>
     [JsonIgnore]
-    public bool NeedsNoPassword => Kind == DatabaseKind.SqlServer ? WindowsAuth : RememberPassword;
+    public bool NeedsNoPassword => Kind == DatabaseKind.SqlServer ? WindowsAuth || RememberPassword : RememberPassword;
 
     /// <summary>The binding a successful connect to <paramref name="target"/> leaves on the tab (the password is dropped).</summary>
     public static ConnectionBinding FromTarget(ConnectionTarget target, string? savedConnectionId) => new()

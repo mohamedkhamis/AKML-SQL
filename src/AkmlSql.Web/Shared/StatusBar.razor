@@ -478,7 +478,7 @@
                 if (session.DisconnectedByUser) return;
                 if (session.Binding != null)
                 {
-                    if (session.NeedsReattach && session.Binding.NeedsNoPassword)
+                    if (session.NeedsReattach && session.CanReconnectAlone)
                         await SqlConn.ReattachAsync(session, null, System.Threading.CancellationToken.None);
                     return;
                 }

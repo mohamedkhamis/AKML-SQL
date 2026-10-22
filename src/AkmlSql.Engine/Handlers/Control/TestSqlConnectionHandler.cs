@@ -33,6 +33,15 @@ namespace AkmlSql.Engine.Handlers.Control
             if (string.IsNullOrEmpty(request.ConnectionString))
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = "No connection string supplied." };
 
+            // Spec 043 follow-up: a new tab's connect is tested with the password of the tab it was opened from (same server and
+            // login only). PostgreSQL's string is judged by its guard first in TestPostgresAsync; the copy changes only the password.
+            if (!string.IsNullOrEmpty(request.CopyPasswordFromSessionId) && ctx?.Sessions.GetSession(request.CopyPasswordFromSessionId!) is { } source)
+            {
+                var kind = DatabaseKindNames.FromInt(request.Kind);
+                var copyInto = kind == DatabaseKind.PostgreSql ? request.ConnectionString : SqlAliasResolution.Apply(request.ConnectionString);
+                request.ConnectionString = SessionPasswordCopy.Apply(copyInto, kind, source.ConnectionString, source.Kind);
+            }
+
             // Spec 042: a PostgreSQL string is tested with the PostgreSQL driver and worded its own way; not at all with the feature off (FR-093).
             if (DatabaseKindNames.FromInt(request.Kind) == DatabaseKind.PostgreSql)
             {
@@ -50,6 +59,9 @@ namespace AkmlSql.Engine.Handlers.Control
                     ConnectionDiagnostics.Describe(request.ConnectionString));
                 return new TestSqlConnectionResponse { Ok = false, ErrorMessage = refused };
             }
+
+            // A web connection whose password the engine remembers is tested with it.
+            request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
 
             try
             {

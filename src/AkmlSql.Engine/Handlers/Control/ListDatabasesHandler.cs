@@ -68,6 +68,9 @@ namespace AkmlSql.Engine.Handlers.Control
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = refused };
             }
 
+            // A web connection whose password the engine remembers lists with it.
+            request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
+
             try
             {
                 await using var conn = new SqlConnection(request.ConnectionString);
