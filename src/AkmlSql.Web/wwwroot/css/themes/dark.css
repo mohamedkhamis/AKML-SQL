@@ -4,6 +4,15 @@
   Do not edit by hand. Run the script to regenerate after editing the JSON.
 */
 :root {
+    /* Marketing */
+    --akml-marketing-canvas: #101c2a;
+    --akml-marketing-panel: #1c2c3e;
+    --akml-marketing-soft: #172637;
+    --akml-marketing-primary: #edf2f7;
+    --akml-marketing-secondary: #b0bfcd;
+    --akml-marketing-border: #415368;
+    --akml-marketing-accent: #f2a17f;
+    --akml-marketing-onaccent: #15263a;
     /* Surface */
     --akml-surface-canvas: #0f172a;
     --akml-surface-panel: #1e293b;

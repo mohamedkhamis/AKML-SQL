@@ -805,3 +805,26 @@ Final checks for this follow-up: Engine targeted 112 passed; Web full 1,662 pass
 focused final clipboard regression. A snippet test assertion was made to await its async click handler/save
 readiness after a reproduced timing failure; production snippet behavior was unchanged. Evidence and scope
 are in `.review-artifacts/2026-10-18-fix-verification/` and the root verification report.
+
+## 2026-10-22 — Product Studio public website (spec 044)
+
+The owner selected concept A from `reports/marketing-homepage-2026-10-22`. The Site
+homepage now explains benefits, distinguishes SQL Server (SSMS 22/browser) from
+PostgreSQL (browser/enabled engine), and includes a five-item screenshot tour, optional
+AI guidance, setup choices and FAQ. Features/Download/footer copy is aligned; public
+browser setup is `doc/topics/browser-setup.md` (`/docs/topics/browser-setup`).
+
+Implementation: `Components/Pages/Home.razor`, `wwwroot/css/product-studio.css`,
+`wwwroot/js/product-tour.js`. The tour is progressive enhancement: all panels remain
+available without JS. `ProductScreenshot` has optional DarkPath/LightPath parameters
+for actual browser captures while keeping the existing Name convention. The existing
+screenshot viewer handles zoom/gallery/focus and accepts media h2 or h3 headings.
+New Marketing tokens in `docs/theme-tokens.json` are generated into both Site/Web CSS;
+existing editor/desktop values and theme preference behavior remain unchanged.
+
+Verification: full Release MSBuild restore/build and both theme drift checks passed;
+Site tests 909 passed with one existing duplicate Options-help-anchor failure; 15
+Chromium theme/viewport combinations and the tour/no-JS/navigation checks passed.
+See `specs/044-site-product-studio/baseline.md` for exact limits and screenshots.
+This is source work, not a deployment or PostgreSQL execution verification. Site E2E's
+default fixture targets deployed IIS; use an isolated published preview for source QA.

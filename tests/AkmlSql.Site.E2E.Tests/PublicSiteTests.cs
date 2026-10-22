@@ -417,22 +417,21 @@ public sealed class PublicSiteTests(SiteFixture site)
     }
 
     [SkippableFact]
-    public async Task HomeScreenshot_OpensWithoutGalleryControls_AndClosesOnOutsideClick()
+    public async Task HomeScreenshot_OpensTheProductGallery_AndClosesOnOutsideClick()
     {
         SkipIfUnavailable();
         await using var context = await site.NewContextAsync();
         var page = await context.NewPageAsync();
         await page.GotoAsync(SiteFixture.BaseUrl);
 
-        // The hero floats (animation), so Playwright never sees it as "stable" — force the click.
-        await page.Locator(".hero-screenshot .screenshot-variant:visible").ClickAsync(new LocatorClickOptions { Force = true });
+        await page.Locator(".hero .screenshot-variant:visible").ClickAsync();
 
         var viewer = page.Locator("dialog#screenshot-viewer");
         await Assertions.Expect(viewer).ToHaveAttributeAsync("open", "");
-        // One screenshot on the page: a plain viewer, no arrows, strip or count.
-        await Assertions.Expect(viewer.Locator(".viewer-prev")).ToBeHiddenAsync();
-        await Assertions.Expect(viewer.Locator(".viewer-strip")).ToBeHiddenAsync();
-        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("");
+        // Hero plus five tour examples; the viewer includes currently unselected panels.
+        await Assertions.Expect(viewer.Locator(".viewer-prev")).ToBeVisibleAsync();
+        await Assertions.Expect(viewer.Locator(".viewer-strip")).ToBeVisibleAsync();
+        await Assertions.Expect(viewer.Locator(".viewer-count")).ToHaveTextAsync("1 of 6");
 
         await page.Mouse.ClickAsync(10, 450);
         await Assertions.Expect(viewer).Not.ToHaveAttributeAsync("open", "");
@@ -486,8 +485,8 @@ public sealed class PublicSiteTests(SiteFixture site)
         Assert.True(scrollWidth <= clientWidth + 1,
             $"Page scrolls horizontally at 390px: scrollWidth {scrollWidth} vs viewport {clientWidth}.");
 
-        // UI-003: the hero visual is cropped on phones, not removed.
-        Assert.True(await page.Locator(".hero-visual").IsVisibleAsync(),
+        // Product Studio keeps the entire screenshot visible on phones, with a full-size viewer.
+        Assert.True(await page.Locator(".hero-media").IsVisibleAsync(),
             "The hero visual is hidden at phone width.");
 
         // A11Y-004: the menu reports open/closed state.

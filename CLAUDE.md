@@ -370,6 +370,21 @@ during execution. The baseline distinguishes these automated checks from pending
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.
 - Spec 037: Phase-9 polish items T103–T108 open (perf budgets, golden/corpus ratchets, key-leak grep, full quickstart, one-pass build); GUI-only quickstart scenarios 62/69a/70 stay manual.
 
+## Public site design (spec 044)
+
+The owner selected Product Studio (concept A) for the marketing site. `Home.razor`
+uses `wwwroot/css/product-studio.css` and progressively enhanced `product-tour.js`;
+all screenshot panels remain visible without JS. `ProductScreenshot` accepts optional
+`DarkPath`/`LightPath` while retaining its SSMS filename convention and existing viewer.
+The viewer reads h2/h3 media headings. Marketing palette colors are additive tokens in
+`docs/theme-tokens.json`, generated into both Site and Web themes to preserve the sync
+gate; editor/desktop token values are unchanged. Preserve the existing visitor theme rules.
+Browser setup is publicly documented at `/docs/topics/browser-setup`.
+
+Verify this site against an isolated published local preview with a separate analytics
+database/download directory. The existing Site E2E fixture targets deployed IIS; it is
+not a safe source-preview command. Spec 044 has `verify.cjs` and screenshot evidence.
+
 ## Git Rules (MANDATORY)
 
 - **NEVER commit, push, or create PRs automatically** — only when the user explicitly says "commit", "push", or "create PR"

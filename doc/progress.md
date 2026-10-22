@@ -2622,3 +2622,33 @@ gate: 172 passed, 0 failed (the five `EngineAutoConnectTests` need a LAN-mode in
 restarts); a saved-query list (declined by the user, FR-015); the manual
 checks M4 (SQL-auth password after a reload), M8 (remote self-signed server), M10 (side-by-side with SSMS 22), M12 (the
 user's dark screenshots) and M13 (Grammarly installed); the native keyboard run (opt-in, interactive desktop).
+
+---
+
+## Spec 044 — Product Studio public website (2026-10-22)
+
+Owner selected concept A after reviewing three local homepage samples. Implemented
+the selected split hero, practical benefits, SQL Server/PostgreSQL panels with database
+imagery, five-example real-product tour, optional AI guidance, setup choices and FAQ.
+Features/Download/footer wording now distinguishes the SSMS 22 extension from the
+browser workspace. `doc/topics/browser-setup.md` supplies a public setup destination.
+
+The tour enhances static SSR markup with a small delegated script; all panels and
+image links remain usable without JavaScript. `ProductScreenshot` accepts explicit
+theme paths and retains the established viewer. Marketing palette tokens were added
+to the shared token source and generated into Site/Web copies without changing the
+existing editor or desktop colors. Stored and OS theme preferences are preserved.
+
+Evidence: `specs/044-site-product-studio/baseline.md` and `baseline/`. Full Release
+solution MSBuild restore/build and both theme drift gates passed. Site tests: 909 passed,
+one existing `F1SlugTests.EveryOptionsPageHasItsOwnAnchor` failure (duplicate fragments
+in unchanged Options page declarations); it was not muted. Local Chromium passed 15
+theme/viewport combinations, five-item tour/zoom/gallery/Escape/focus checks, theme
+picker and enhanced navigation, FAQ, images/destinations and no-JS mobile fallback.
+
+No deployment, production E2E run, new database execution or Git mutation was performed
+by the implementation agent. Existing screenshots include Northwind results; fresh
+browser/editor and PostgreSQL connection screenshots use illustrative values. Full
+database compatibility, a reader study and a cross-browser accessibility campaign are
+not claimed. Planning artifacts and all 13 implementation/verification tasks live in
+`specs/044-site-product-studio/`.

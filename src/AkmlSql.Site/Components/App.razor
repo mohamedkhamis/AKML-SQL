@@ -23,6 +23,7 @@
          Fingerprinted via MapStaticAssets (T033) — only the theme link above needs a
          stable string-swappable URL. -->
     <link rel="stylesheet" href="@Assets["css/site.css"]" />
+    <link rel="stylesheet" href="@Assets["css/product-studio.css"]" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <!-- T028: no-flash theme boot (FR-009). External classic script, NOT deferred, so the
          strict CSP (script-src 'self', no inline scripts) holds while it still runs before
@@ -37,6 +38,7 @@
     <!-- Screenshots open in an in-page gallery instead of a new tab. Without JS the links still
          open the PNG; deferred and delegated, so it survives enhanced navigation. -->
     <script src="@Assets["js/screenshot-viewer.js"]" defer></script>
+    <script src="@Assets["js/product-tour.js"]" defer></script>
     <HeadOutlet />
 </head>
 
