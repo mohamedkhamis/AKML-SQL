@@ -43,9 +43,9 @@ public sealed class SchemaRefreshServiceTests
     private sealed record Rig(SchemaRefreshService Service, SessionManager Sessions, SchemaCacheManager Caches, DatabaseCache Cache, FakeProvider Provider)
     {
         /// <summary>Another load of the cache begins (the connection's own, say): it holds the population claim until it ends.</summary>
-        public void LoadBegins() => Assert.True(Caches.TryClaimPopulation(Cache.CacheKey));
+        public void LoadBegins() => Assert.True(Caches.TryClaimPopulation(Cache));
 
-        public void LoadEnds() => Caches.ReleasePopulation(Cache.CacheKey);
+        public void LoadEnds() => Caches.ReleasePopulation(Cache);
 
         public void Refresh() => Service.Refresh(new RefreshRequest { SessionId = "s" });
     }
@@ -90,7 +90,7 @@ public sealed class SchemaRefreshServiceTests
         rig.LoadEnds();
         await EventuallyAsync(() => rig.Provider.PhaseACalls == 1, "the deferred refresh did not run");
         await EventuallyAsync(() => rig.Provider.PhaseBCalls == 1 && rig.Cache.Phase == PopulationPhase.Complete, "the deferred refresh did not finish");
-        await EventuallyAsync(() => !rig.Caches.IsPopulating(rig.Cache.CacheKey), "the refresh did not release its claim");
+        await EventuallyAsync(() => !rig.Caches.IsPopulating(rig.Cache), "the refresh did not release its claim");
         Assert.False(rig.Cache.IsStale);
     }
 
@@ -162,5 +162,31 @@ public sealed class SchemaRefreshServiceTests
 
         Assert.Equal(0, rig.Provider.PhaseACalls);                 // the new database's own load is its own business
         Assert.True(rig.Cache.IsStale);
+    }
+
+    [Fact]
+    public async Task A_load_still_running_on_a_cache_removed_with_its_session_does_not_hold_up_the_new_caches_refresh()
+    {
+        // Spec 043 follow-up (review, round 4): claims and deferred refreshes were keyed by "{session}:{db}". After RemoveSession
+        // (the tab moved to another server) the old cache's load still held the key, so a refresh of the new cache under the same
+        // key was deferred behind a load that was not its own, and swallowed by the waiter still polling the old cache.
+        var rig = Build();
+        rig.LoadBegins();                                          // the old server's load
+        rig.Refresh();                                             // deferred behind it
+        Assert.True(rig.Cache.IsStale);
+
+        rig.Caches.RemoveSession("s");
+        var fresh = rig.Caches.GetOrCreateCache("s", "d");
+        Assert.NotSame(rig.Cache, fresh);
+
+        rig.Refresh();                                             // the new cache's: no load of it is running
+        await EventuallyAsync(() => rig.Provider.PhaseACalls == 1 && fresh.Phase == PopulationPhase.Complete, "the new cache was not refreshed");
+        await EventuallyAsync(() => !rig.Caches.IsPopulating(fresh), "the refresh did not release its claim");
+        Assert.True(rig.Caches.IsPopulating(rig.Cache));           // the old load's claim is still its own
+
+        rig.LoadEnds();                                            // the old load ends; its waiter finds the session on another cache
+        await Task.Delay(200);
+        Assert.Equal(1, rig.Provider.PhaseACalls);
+        Assert.False(rig.Caches.IsPopulating(fresh));
     }
 }

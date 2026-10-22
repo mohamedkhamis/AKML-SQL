@@ -70,6 +70,56 @@ public sealed class ConnectionBinding
     public ConnectionBinding Clone() => (ConnectionBinding)MemberwiseClone();
 
     /// <summary>
+    /// Spec 043 follow-up (review, round 2): whether <paramref name="target"/> signs in where this binding does — the same kind,
+    /// server (trimmed, any case) and login (any case), and for PostgreSQL the same port (host and port compared parsed, as
+    /// <see cref="SameConnectionAs"/> does). A password the engine holds for a tab (remembered, or copied from another tab), and
+    /// one the server refused, belong to that sign-in; the database and the security choices are not part of it.
+    /// </summary>
+    public bool SameSignInAs(ConnectionTarget target)
+    {
+        if (target == null || target.Kind != Kind) return false;
+        bool windows = Kind == DatabaseKind.SqlServer && WindowsAuth, targetWindows = Kind == DatabaseKind.SqlServer && target.WindowsAuth;
+        if (windows != targetWindows) return false;
+        var login = windows ? string.Empty : (Login ?? string.Empty).Trim();
+        var targetLogin = targetWindows ? string.Empty : (target.User ?? string.Empty).Trim();
+        if (!string.Equals(login, targetLogin, StringComparison.OrdinalIgnoreCase)) return false;
+        if (Kind == DatabaseKind.PostgreSql)
+        {
+            var mine = SqlConnectionService.ParseHostAndPort(Server, Port);
+            var theirs = SqlConnectionService.ParseHostAndPort(target.Server, target.Port);
+            return mine.Host != null && theirs.Host != null
+                && string.Equals(mine.Host, theirs.Host, StringComparison.OrdinalIgnoreCase) && mine.Port == theirs.Port;
+        }
+        return string.Equals((Server ?? string.Empty).Trim(), (target.Server ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 3): whether the engine would copy this connection's password into a request for
+    /// <paramref name="target"/> (<c>SessionPasswordCopy</c>): the same sign-in (<see cref="SameSignInAs"/>) and the same certificate
+    /// checking as the two connection strings put it on the wire. SQL Server: the effective "Trust server certificate" — a server
+    /// on the engine's own machine is always trusted (<see cref="SqlConnectionService.BuildConnectionString"/>), so only a remote
+    /// server's choice counts. PostgreSQL: the TLS mode (none is <c>prefer</c>), the root certificate path as typed (trimmed, any
+    /// case; sent whatever the mode, as <see cref="SqlConnectionService.ParsePostgresTarget"/> does) and the user name with its
+    /// case, which the engine compares exactly. A password is never offered where the engine would refuse to copy it.
+    /// </summary>
+    public bool CopiesPasswordTo(ConnectionTarget target)
+    {
+        if (!SameSignInAs(target)) return false;
+        if (Kind == DatabaseKind.SqlServer)   // Windows authentication has no password to copy
+            return !WindowsAuth && EffectiveTrust(Server, TrustServerCertificate) == EffectiveTrust(target.Server, target.TrustServerCertificate);
+        return string.Equals((Login ?? string.Empty).Trim(), (target.User ?? string.Empty).Trim(), StringComparison.Ordinal)
+            && string.Equals(TlsMode(SslMode), TlsMode(target.SslMode), StringComparison.Ordinal)
+            && string.Equals((RootCertificatePath ?? string.Empty).Trim(), (target.RootCertificatePath ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // What BuildConnectionString sends as TrustServerCertificate, and the TLS mode ParsePostgresTarget sends.
+    internal static bool EffectiveTrust(string? server, bool trustServerCertificate) =>
+        trustServerCertificate || SqlConnectionService.IsLoopbackServer(server ?? string.Empty);
+
+    private static string TlsMode(string? sslMode) =>
+        string.IsNullOrWhiteSpace(sslMode) ? "prefer" : sslMode!.Trim().ToLowerInvariant();
+
+    /// <summary>
     /// Review of US1: whether this is the connection <paramref name="saved"/> describes — the same kind, server, sign-in and
     /// security choices. The database is left out: a tab's database moves (a <c>USE</c>, the database selector) and the
     /// connection stays the saved one.

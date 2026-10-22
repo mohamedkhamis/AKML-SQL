@@ -14,8 +14,14 @@ namespace AkmlSql.Engine.Tests.Handlers;
 
 /// <summary>
 /// Spec 042 (task T125, FR-093, SC-010). PostgreSQL support is one switch: with <c>postgreSql.enabled</c> false the engine
-/// registers no PostgreSQL handler (the credential pair 221 and the redaction pair 223 exist only for PostgreSQL), so a client
-/// that sends one gets the answer an engine built before the feature would give. With it on, both are there.
+/// registers no PostgreSQL-only handler (the redaction pair 223 exists only for PostgreSQL), so a client that sends one gets
+/// the answer an engine built before the feature would give. With it on, it is there.
+///
+/// <para>
+/// Spec 043 follow-up (review): the credential pair 221 also answers the SQL Server kind, which <c>credentials.sqlserver.v1</c>
+/// always advertises, so it is registered whatever the switch says; with the switch off a PostgreSQL request gets the
+/// feature-off answer and nothing is read or written.
+/// </para>
 /// </summary>
 public sealed class PostgresFlagRegistrationTests
 {
@@ -50,12 +56,12 @@ public sealed class PostgresFlagRegistrationTests
     private const string PgString = "Host=127.0.0.1;Port=1;Database=postgres;Username=u;Password=p;Timeout=3";
 
     [Fact]
-    public void With_PostgreSQL_off_no_PostgreSQL_only_handler_is_registered()
+    public void With_PostgreSQL_off_no_PostgreSQL_only_handler_is_registered_but_the_credential_pair_is()
     {
         var registered = Registered(postgresEnabled: false);
 
-        Assert.DoesNotContain(MessageTypes.CredentialRequest, registered);
         Assert.DoesNotContain(MessageTypes.RedactRequest, registered);
+        Assert.Contains(MessageTypes.CredentialRequest, registered);   // the SQL Server kind is served with the switch off
     }
 
     [Fact]
@@ -75,8 +81,42 @@ public sealed class PostgresFlagRegistrationTests
 
         var removed = on.Except(off).OrderBy(x => x).ToArray();
 
-        Assert.Equal(new[] { MessageTypes.CredentialRequest, MessageTypes.RedactRequest }, removed);
+        Assert.Equal(new[] { MessageTypes.RedactRequest }, removed);
         Assert.Empty(off.Except(on));
+    }
+
+    [Fact]
+    public async Task With_PostgreSQL_off_a_SQL_Server_credential_request_is_answered_and_a_PostgreSQL_one_says_the_switch_is_off()
+    {
+        // Before the review the pair was registered only with the switch on: the router had no handler, the WebSocket transport
+        // dropped the null reply, and the browser waited forever for an answer about a SQL Server login.
+        var ctx = Context(postgresEnabled: false);
+        var router = new RpcRouter { DialectGuard = AkmlSql.Engine.PostgreSql.DialectGuard.Create() };
+        EngineHandlerRegistry.RegisterAllHandlers(router, ctx, null);
+
+        async Task<CredentialResponse> AskAsync(int kind)
+        {
+            var reply = await router.RouteAsync(new RpcMessage
+            {
+                MessageType = MessageTypes.CredentialRequest,
+                RequestId = 7,
+                Payload = MessagePack.MessagePackSerializer.Serialize(new CredentialRequest
+                {
+                    Action = CredentialAction.Has, Kind = kind, Server = "nobody-" + Guid.NewGuid().ToString("N")[..8] + ".test", Port = 5432, Login = "alice",
+                }),
+            }, ctx, default);
+            Assert.NotNull(reply);
+            Assert.Equal(MessageTypes.CredentialResponse, reply!.MessageType);
+            return MessagePack.MessagePackSerializer.Deserialize<CredentialResponse>(reply.Payload!);
+        }
+
+        var sqlServer = await AskAsync((int)DatabaseKind.SqlServer);
+        var postgres = await AskAsync((int)DatabaseKind.PostgreSql);
+
+        Assert.True(sqlServer.Ok);
+        Assert.False(sqlServer.Has);
+        Assert.False(postgres.Ok);
+        Assert.Equal(DialectErrors.FeatureOffMessage, postgres.Error);
     }
 
     // ---- the switch gates the connection, not only the registrations (FR-093) ----------------------------------

@@ -138,9 +138,14 @@
                                     <label class="akml-field-label" for="conn-pg-password">Password</label>
                                     <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
                                            @bind="_pgPassword" @bind:event="oninput"
-                                           placeholder="@(_pgHasRemembered ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
+                                           placeholder="@(UsesRememberedPgPassword ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
                                 </div>
                             </div>
+                            @if (PasswordMissingForForm)
+                            {
+                                @* Spec 043 follow-up (review, round 3): why this sign-in needs its password typed. *@
+                                <span class="akml-connmgr-hint" data-testid="@(MissingPasswordRefused ? "conn-pg-refused-hint" : "conn-pg-missing-hint")">@MissingPasswordHint</span>
+                            }
                             <span class="akml-connmgr-hint">Not saved in the browser. @(_pgRemember ? "It will be kept on the engine machine." : "Re-entered each time you connect.")</span>
                             <label class="akml-connmgr-radio" for="conn-pg-remember">
                                 <input id="conn-pg-remember" type="checkbox" @bind="_pgRemember" data-testid="conn-pg-remember" />
@@ -259,16 +264,22 @@
                                         <label class="akml-field-label" for="conn-password">Password</label>
                                         <input id="conn-password" class="akml-input" type="password" autocomplete="new-password"
                                                @bind="_password" @bind:event="oninput"
-                                               placeholder="@(_sqlHasRemembered ? "Remembered on the engine machine" : null)" data-testid="conn-password-input" />
+                                               placeholder="@SqlPasswordPlaceholder" data-testid="conn-password-input" />
                                     </div>
                                 </div>
+                                @if (PasswordMissingForForm)
+                                {
+                                    @* Spec 043 follow-up (review, round 3): why this sign-in needs its password typed. *@
+                                    <span class="akml-connmgr-hint" data-testid="@(MissingPasswordRefused ? "conn-sql-refused-hint" : "conn-sql-missing-hint")">@MissingPasswordHint</span>
+                                }
                                 @if (SqlConn.EngineRemembersSqlServerPasswords)
                                 {
                                     @* One line each: the SQL Server form must still fit 1280x720 with SQL authentication (ConnectDialogTests). *@
                                     <div class="akml-connmgr-remember">
                                         <label class="akml-connmgr-radio" for="conn-sql-remember">
-                                            <input id="conn-sql-remember" type="checkbox" @bind="_sqlRemember" data-testid="conn-sql-remember"
-                                                   aria-describedby="conn-sql-remember-help" />
+                                            @* Review, round 2: the user's own change is counted, so a late answer from the engine never undoes it. *@
+                                            <input id="conn-sql-remember" type="checkbox" checked="@_sqlRemember" @onchange="OnSqlRememberChanged"
+                                                   data-testid="conn-sql-remember" aria-describedby="conn-sql-remember-help" />
                                             Remember the password on the engine machine
                                         </label>
                                         <span class="akml-connmgr-hint" id="conn-sql-remember-help" data-testid="conn-sql-remember-help">
@@ -334,8 +345,10 @@
                         <fieldset class="akml-connmgr-group" data-testid="conn-group-security">
                             <legend>Security</legend>
                             <label class="akml-connmgr-radio" for="conn-trust-cert">
-                                <input id="conn-trust-cert" type="checkbox" @bind="_trustServerCertificate" disabled="@TrustIsMoot"
-                                       data-testid="conn-trust-cert" />
+                                @* Review, round 3: a change asks the engine again whether it holds a password for this connection (the
+                                   answer follows the certificate checking) and decides whether another tab's password can be copied. *@
+                                <input id="conn-trust-cert" type="checkbox" checked="@_trustServerCertificate" @onchange="OnTrustChanged"
+                                       disabled="@TrustIsMoot" data-testid="conn-trust-cert" />
                                 Trust the server certificate without validating it
                             </label>
                             <span class="akml-connmgr-hint" data-testid="conn-trust-cert-help">
@@ -612,17 +625,131 @@
     private bool _sqlHasRememberedFlag;           // the engine holds a password for _sqlRememberedFor
     private string? _sqlRememberedFor;            // the server and login that answer was about
 
-    private string SqlIdentityKey => (_server ?? string.Empty).Trim().ToLowerInvariant() + "|" + (_login ?? string.Empty).Trim().ToLowerInvariant();
+    // Review, round 3: the effective certificate choice is part of it — the engine answers for the password it would fill into a
+    // connection with that choice (a server on the engine's machine is always trusted, so the checkbox changes nothing there).
+    private string SqlIdentityKey => (_server ?? string.Empty).Trim().ToLowerInvariant() + "|" + (_login ?? string.Empty).Trim().ToLowerInvariant()
+        + "|" + (ConnectionBinding.EffectiveTrust(_server, _trustServerCertificate) ? "trust" : "validate");
 
-    // The engine's answer counts only for the server and login it was asked about: one edited since then has none yet.
+    // The engine's answer counts only for the server, login and certificate choice it was asked about: one edited since has none yet.
     private bool _sqlHasRemembered
     {
         get => _sqlHasRememberedFlag && _sqlRememberedFor == SqlIdentityKey;
         set { _sqlHasRememberedFlag = value; _sqlRememberedFor = value ? SqlIdentityKey : null; }
     }
 
-    // SQL authentication can go without a typed password when the engine remembers one.
-    private bool SqlPasswordMissing => !_windowsAuth && string.IsNullOrEmpty(_password) && !_sqlHasRemembered;
+    // Review, round 2: the user's change to the Remember checkbox stands against a later answer about a remembered password.
+    // Review, round 4: any change since the form was loaded (SelectSaved, NewConnection, the kind switch; the prefill goes through
+    // the first two), not only one made while the engine was being asked — an untick before the question (then the trust choice
+    // or the login changed, and back) is the user's choice too, so the box is never ticked for them again. A load resets it.
+    private bool _sqlRememberChosen;
+
+    // SQL authentication can go without a typed password when the engine remembers one and Remember is on (review: unticked,
+    // the password is typed — the engine's copy is not used, and a connect then forgets it), or when the tab was opened from a
+    // connected tab whose password the engine can copy.
+    private bool SqlPasswordMissing => !_windowsAuth && string.IsNullOrEmpty(_password) && !UsesRememberedSqlPassword && !CanCopySqlPassword;
+
+    // The engine holds a password for this server and login, and the form uses it — unless the tab being connected is missing its
+    // password for this sign-in (review, round 2; round 3: PasswordMissingForForm).
+    private bool UsesRememberedSqlPassword => _sqlHasRemembered && _sqlRemember && !PasswordMissingForForm;
+
+    // The connection the form names, without the password (compared with a tab's binding; never sent). Review, round 3: with its
+    // certificate choices, which decide whether another tab's password may be copied into it.
+    private ConnectionTarget SqlIdentity() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth, User: _login,
+        TrustServerCertificate: _trustServerCertificate);
+
+    private ConnectionTarget PgIdentity() => new(DatabaseKind.PostgreSql, _pgHost, _pgDatabase, User: _pgUser, Port: _pgPort,
+        SslMode: _pgSslMode, RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert);
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 3): the sign-in the tab being connected is missing its password for — the one its mark
+    /// names (<see cref="SqlSessionState.PasswordMissingFor"/>), else its binding. A tab with no binding yet has only the mark: the
+    /// Status bar's restore of a remembered login on a fresh page, refused by the server, leaves the tab with no connection.
+    /// </summary>
+    private ConnectionBinding? MissingPasswordSignIn =>
+        TargetSession is { PasswordMissing: true } session ? session.PasswordMissingFor ?? session.Binding : null;
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 2): the tab being connected is missing its password — the server refused the one the
+    /// engine supplied (remembered or copied), or the engine had none — and the form still names that sign-in (SQL Server:
+    /// server and login; PostgreSQL: host, port and user). The engine's remembered password is then not used: no list, test or
+    /// connect goes out without a typed password, so opening the dialog never costs one more refused login (each counts towards
+    /// a lockout). Remember stays as it is, so the password typed now replaces the stored one. Another server or login follows
+    /// the normal rules. Such a tab has no copy source (the mark drops it). Review, round 3: compared with the mark's own record of
+    /// the sign-in (<see cref="MissingPasswordSignIn"/>), so a tab with no binding is covered too.
+    /// </summary>
+    private bool PasswordMissingForForm =>
+        MissingPasswordSignIn is { } signIn
+        && signIn.SameSignInAs(_kind == DatabaseKind.PostgreSql ? PgIdentity() : SqlIdentity());
+
+    // Review, round 3: the server refused the password the engine supplied, rather than the engine having none (said differently).
+    private bool MissingPasswordRefused => TargetSession?.PasswordRefused == true;
+
+    // Remember is named only where the form offers it (PostgreSQL always; SQL Server with credentials.sqlserver.v1).
+    private string MissingPasswordHint
+    {
+        get
+        {
+            bool remember = _kind == DatabaseKind.PostgreSql || SqlConn.EngineRemembersSqlServerPasswords;
+            return MissingPasswordRefused
+                ? "The password the engine had for this login was not accepted. Type the current one" + (remember ? "; with Remember on, it replaces the old one." : ".")
+                : "The engine has no password it can use for this login. Type it" + (remember ? "; with Remember on, the engine keeps it." : ".");
+        }
+    }
+
+    /// <summary>
+    /// Spec 043 follow-up (review): a New query tab's dialog tests, lists and connects with the password of the tab it was opened
+    /// from (nothing typed). Review, round 2: only on an engine with <c>session.copy.v2</c> (<see cref="ISqlConnectionService.EngineCopiesSessionPasswords"/>),
+    /// only while the form names that tab's server and login (the engine would refuse the copy, and then use a password it
+    /// remembers instead), and not while the engine remembers a password for the form's login with Remember unticked — the user
+    /// has said not to use that one, and a refused copy would fall back to it. Otherwise the password is typed. Review, round 3:
+    /// and only with that tab's certificate checking (<see cref="ConnectionBinding.CopiesPasswordTo"/>: the effective "Trust server
+    /// certificate"), which the engine's copy requires too — and never for a sign-in whose password is missing.
+    /// </summary>
+    private bool CanCopySqlPassword =>
+        !_windowsAuth && SqlConn.EngineCopiesSessionPasswords && !PasswordMissingForForm
+        && CopySourceBinding is { } source && source.CopiesPasswordTo(SqlIdentity())
+        && !(_sqlHasRemembered && !_sqlRemember);
+
+    // PostgreSQL's form: the same source, for the same host, port and user (its case too), TLS mode and root certificate.
+    private bool CanCopyPgPassword =>
+        SqlConn.EngineCopiesSessionPasswords && !PasswordMissingForForm
+        && CopySourceBinding is { } source && source.CopiesPasswordTo(PgIdentity());
+
+    // The connection of the tab the one being connected was opened from (New query), while that tab is open. Review, round 4:
+    // and connected — the engine copies only from a session that holds a connection, and a tab whose connection was lost keeps
+    // its binding (MarkConnectionLost), so the binding alone would offer a password the engine then refuses to copy.
+    private ConnectionBinding? CopySourceBinding =>
+        TargetSession?.CopyPasswordFrom is { } sourceId && SqlConn.FindSession(sourceId) is { IsConnected: true } source ? source.Binding : null;
+
+    private string? SqlPasswordPlaceholder =>
+        UsesRememberedSqlPassword ? "Remembered on the engine machine"
+        : CanCopySqlPassword ? "The same as the query tab this one was opened from"
+        : null;
+
+    private void OnSqlRememberChanged(ChangeEventArgs e)
+    {
+        _sqlRemember = e.Value is bool on ? on : bool.TryParse(e.Value?.ToString(), out var parsed) && parsed;
+        _sqlRememberChosen = true;
+    }
+
+    // Review, round 3: the certificate choice changed. The engine is asked again about a SQL login (its answer follows the
+    // certificate checking), and whether another tab's password can be copied follows it (CanCopySqlPassword).
+    private async Task OnTrustChanged(ChangeEventArgs e)
+    {
+        _trustServerCertificate = e.Value is bool on ? on : bool.TryParse(e.Value?.ToString(), out var parsed) && parsed;
+        if (_kind == DatabaseKind.SqlServer && !_windowsAuth) await RefreshRememberedAsync();
+    }
+
+    // ── PostgreSQL's remembered password (spec 042, FR-105), with the same round 2 rule as SQL Server's ──
+    private bool UsesRememberedPgPassword => _pgHasRemembered && !PasswordMissingForForm;
+
+    // Nothing typed for the sign-in whose password is missing: the engine would send the refused one again, or none at all.
+    private bool PgPasswordNeeded => PasswordMissingForForm && string.IsNullOrEmpty(_pgPassword);
+
+    private const string PgPasswordNeededText = "Enter the current password for this user (it is not stored in the browser).";
+
+    // Notices that outlive the dialog (it closes on a successful connect). Optional: a host without the service shows none.
+    private INotificationService? Notifications => Services.GetService(typeof(INotificationService)) as INotificationService;
 
     // Spec 043 (FR-028): a SQL Server on the engine's own computer is never validated (SqlConnectionService trusts loopback
     // whatever the flag says), so for such a server the checkbox is disabled and its help says why. The saved value is kept.
@@ -664,6 +791,10 @@
         // A restored tab whose connection needs a password (a run asked): the form reconnects it to exactly where it was.
         bool exact = prefill != null;
         if (prefill == null && requested == null && (_target ?? SqlConn.ActiveSession)?.Binding is { } current) prefill = current.Clone();
+        // Spec 043 follow-up (review, round 3): a tab with no connection whose sign-in is missing its password (the Status bar's
+        // restore of a remembered login, refused) opens on that sign-in — of either kind — so the form names it and asks for it.
+        if (prefill == null && requested == null && TargetSession is { Binding: null, PasswordMissing: true, PasswordMissingFor: { } missing })
+            prefill = missing.Clone();
         var kind = requested ?? DatabaseKind.SqlServer;
         if (active != null && active.Kind == kind) SelectSaved(active);
         else NewConnection(kind);
@@ -702,6 +833,7 @@
         _password = string.Empty;
         _trustServerCertificate = false;
         _sqlRemember = false;
+        _sqlRememberChosen = false;
         _sqlHasRemembered = false;
         ResetPostgresFields();
         _message = null;
@@ -744,6 +876,7 @@
             _password = string.Empty;
             _trustServerCertificate = false;
             _sqlRemember = false;
+            _sqlRememberChosen = false;
             _sqlHasRemembered = false;
             await LoadDatabasesAsync();   // Windows authentication needs no password: the list fills as it did on open
         }
@@ -751,6 +884,12 @@
 
     private async Task LoadPgDatabasesAsync()
     {
+        // Review, round 2: the password the server refused for this tab is not sent again (see PasswordMissingForForm).
+        if (PgPasswordNeeded)
+        {
+            _dbMessage = "Enter the password, then refresh the database list.";
+            return;
+        }
         _dbLoading = true;
         _dbMessage = null;
         StateHasChanged();
@@ -864,6 +1003,7 @@
         _password = string.Empty;   // never stored in the browser — typed, or remembered on the engine machine
         _trustServerCertificate = c.TrustServerCertificate;
         _sqlRemember = c.RememberPassword && !c.WindowsAuth;
+        _sqlRememberChosen = false; // a new form: the user has not chosen for it yet
         _sqlHasRemembered = false;  // asked of the engine once the row is shown
         _message = null;
         ClearDatabaseList();
@@ -941,14 +1081,16 @@
     // Spec 043 (T056): the saved row the form came from goes with the target, so the tab's binding remembers it.
     private ConnectionTarget SqlServerTarget() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth,
         User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate,
-        RememberPassword: !_windowsAuth && _sqlRemember && SqlConn.EngineRemembersSqlServerPasswords, SavedConnectionId: _selectedId);
+        RememberPassword: !_windowsAuth && _sqlRemember && SqlConn.EngineRemembersSqlServerPasswords, SavedConnectionId: _selectedId,
+        CopyPasswordFrom: string.IsNullOrEmpty(_password) && CanCopySqlPassword ? TargetSession?.CopyPasswordFrom : null);
 
     // ── PostgreSQL (spec 042) ────────────────────────────────────────────────────────────────────────────
 
     private ConnectionTarget PgTarget() => new(DatabaseKind.PostgreSql, _pgHost, _pgDatabase, WindowsAuth: false,
         User: _pgUser, Password: _pgPassword, Port: _pgPort, SslMode: _pgSslMode,
         RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert, RememberPassword: _pgRemember,
-        SavedConnectionId: _selectedId);
+        SavedConnectionId: _selectedId,
+        CopyPasswordFrom: string.IsNullOrEmpty(_pgPassword) && CanCopyPgPassword ? TargetSession?.CopyPasswordFrom : null);
 
     // Spec 043 (T056): the connect goes to the tab that opened the dialog.
     private Task<ConnectResult> ConnectTargetAsync(ConnectionTarget target) =>
@@ -971,8 +1113,9 @@
             && await SqlConn.HasRememberedPasswordAsync(host, port, user, CancellationToken.None);
         if (ask != _rememberedAsk || _kind != DatabaseKind.PostgreSql) return;
         _pgHasRemembered = remembered;
-        // With a remembered password the list needs nothing more from the user, so it fills as SQL Server's does on open.
-        if (_pgHasRemembered && _databases.Count == 0 && !_dbLoading) await LoadPgDatabasesAsync();
+        // With a remembered password the list needs nothing more from the user, so it fills as SQL Server's does on open — not
+        // with one the server refused for this tab (review, round 2).
+        if (UsesRememberedPgPassword && _databases.Count == 0 && !_dbLoading) await LoadPgDatabasesAsync();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -985,17 +1128,29 @@
         int ask = ++_rememberedAsk;
         var server = _server;
         var login = _login;
+        var trust = _trustServerCertificate;   // review, round 3: the answer is for this certificate choice (part of the key)
         var key = SqlIdentityKey;
         bool remembered = !_windowsAuth && SqlConn.EngineRemembersSqlServerPasswords
             && !string.IsNullOrWhiteSpace(server) && !string.IsNullOrWhiteSpace(login)
-            && await SqlConn.HasRememberedSqlServerPasswordAsync(server, login, CancellationToken.None);
+            && await SqlConn.HasRememberedSqlServerPasswordAsync(server, login, trust, CancellationToken.None);
         if (ask != _rememberedAsk || _kind != DatabaseKind.SqlServer || key != SqlIdentityKey) return;
         _sqlHasRemembered = remembered;
-        if (_sqlHasRemembered && _databases.Count <= 1 && !_dbLoading) await LoadDatabasesAsync();
+        // Review: the checkbox shows the engine's state — with a password remembered it is on, so unticking it is a choice (the
+        // password is then typed, and a connect forgets the remembered one). Review, round 2: a choice made while the engine was
+        // being asked stands. Round 4: so does one made before it was asked, for as long as the form is the one it was made on.
+        if (remembered && !_sqlRememberChosen) _sqlRemember = true;
+        // Review, round 2: not with a password the server refused for this tab (UsesRememberedSqlPassword says no then; round 3:
+        // nor for a tab with no binding whose mark names this sign-in, nor when the engine had none).
+        if ((UsesRememberedSqlPassword || CanCopySqlPassword) && _databases.Count <= 1 && !_dbLoading) await LoadDatabasesAsync();
         await InvokeAsync(StateHasChanged);
     }
 
     private Task OnSqlLoginChanged() => RefreshRememberedAsync();
+
+    // Said when a Forget got no confirmed answer — no reply, none in time, or the engine said it could not (its store could not
+    // be written; review, round 2): nothing is known to have changed on the engine, so nothing changes here either.
+    private const string ForgetUnanswered =
+        "The engine did not confirm that it forgot the password; it may still be remembered on the engine machine.";
 
     private async Task ForgetSqlPasswordAsync()
     {
@@ -1003,20 +1158,20 @@
         StateHasChanged();
         try
         {
-            await SqlConn.ForgetRememberedSqlServerPasswordAsync(_server, _login, CancellationToken.None);
-            _sqlHasRemembered = await SqlConn.HasRememberedSqlServerPasswordAsync(_server, _login, CancellationToken.None);
-            if (!_sqlHasRemembered)
+            // Review: only the engine's answer counts. No answer (not paired, no reply in time) is not "forgotten".
+            var forgotten = SqlIdentity();   // review, round 4: the login asked about, as it was when asked
+            var answer = await SqlConn.ForgetRememberedSqlServerPasswordAsync(forgotten.Server, forgotten.User ?? string.Empty, CancellationToken.None);
+            if (answer == null)
             {
-                _sqlRemember = false;
-                // The saved row stops asking for it too, so it is not turned back on when the row is shown again.
-                if (_selectedId != null && await Store.GetAsync(_selectedId) is { RememberPassword: true } row)
-                {
-                    row.RememberPassword = false;
-                    await Store.UpdateAsync(row);
-                    await ReloadAsync();
-                }
+                SetMessage(ForgetUnanswered, isError: true);
+                return;
             }
-            SetMessage(_sqlHasRemembered ? "The engine could not forget the password." : "The remembered password was forgotten.", isError: _sqlHasRemembered);
+            _sqlHasRemembered = false;
+            _sqlRemember = false;
+            // The saved row stops asking for it too, so it is not turned back on when the row is shown again — when it is the
+            // row of the login just forgotten (review, round 4).
+            await ClearSavedRememberAsync(forgotten);
+            SetMessage("The remembered password was forgotten.", isError: false);
         }
         finally
         {
@@ -1025,17 +1180,52 @@
         }
     }
 
+    // The selected saved row no longer asks the engine to remember its password. Review, round 4: only when the row is for the
+    // login whose password was forgotten (RowNamesLogin) — the form may have been edited to another login since the row was shown.
+    private async Task ClearSavedRememberAsync(ConnectionTarget forgotten)
+    {
+        if (_selectedId != null && await Store.GetAsync(_selectedId) is { RememberPassword: true } row && RowNamesLogin(row, forgotten))
+        {
+            row.RememberPassword = false;
+            await Store.UpdateAsync(row);
+            await ReloadAsync();
+        }
+    }
+
+    // Review, round 3: the saved row is for the login the form connected (its server and login, as Settings › Connections forgets
+    // them), not one the form was edited away from.
+    private static bool RowNamesLogin(SavedSqlConnection row, ConnectionTarget target) =>
+        row.Kind == DatabaseKind.SqlServer && !row.WindowsAuth && !target.WindowsAuth
+        && string.Equals((row.Server ?? string.Empty).Trim(), (target.Server ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
+        && string.Equals((row.Login ?? string.Empty).Trim(), (target.User ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+
+    // Review, round 4: the engine keeps a password under the key for the connect's certificate checking, and a trusting connection
+    // to a remote server is given only a password kept on a trusting one (SqlServerCredentialResolver.FillKeys). So a row that
+    // trusts is not marked remembered for a password kept on a validating connect: its own connect would be asked for it.
+    private static bool RowIsGivenPasswordOf(SavedSqlConnection row, ConnectionTarget target) =>
+        EffectiveTrust(target.Server, target.TrustServerCertificate) || !EffectiveTrust(row.Server, row.TrustServerCertificate);
+
+    // A SQL Server on the engine's own computer is always trusted (SqlConnectionService.BuildConnectionString).
+    private static bool EffectiveTrust(string? server, bool trustServerCertificate) =>
+        trustServerCertificate || SqlConnectionService.IsLoopbackServer(server ?? string.Empty);
+
     // What a failed SQL Server test or connect says, from the engine's error code (not the server's words, which are localised):
     // a missing password is a prompt; a remembered password the server refused says how to replace it.
-    private string SqlFailureText(ConnectResult result, string fallback)
+    // Review, round 4: whether the remembered password was used is taken before the call (UsedRememberedSqlPassword) — a refused
+    // connect marks the tab (SqlSessionState.PasswordMissing) before this runs, and the mark turns UsesRememberedSqlPassword off.
+    private string SqlFailureText(ConnectResult result, string fallback, bool usedRemembered)
     {
         if (result.PasswordRequired)
             return "Enter the password for this login" + (SqlConn.EngineRemembersSqlServerPasswords ? "; turn on Remember to keep it on the engine machine." : ".");
-        bool usedRemembered = !_windowsAuth && string.IsNullOrEmpty(_password) && _sqlHasRemembered;
         if (usedRemembered && result.ErrorCode == AkmlSql.Core.Ipc.Messages.DialectErrors.LoginFailed)
             return "The remembered password was not accepted by the server. Enter the current password and keep Remember password on to replace it.";
         return result.Error ?? fallback;
     }
+
+    // The test or connect about to go out uses the engine's remembered password: nothing typed, and the form uses it.
+    private bool UsedRememberedSqlPassword => !_windowsAuth && string.IsNullOrEmpty(_password) && UsesRememberedSqlPassword;
+
+    private bool UsedRememberedPgPassword => UsesRememberedPgPassword && string.IsNullOrEmpty(_pgPassword);
 
     private async Task ForgetPasswordAsync()
     {
@@ -1045,10 +1235,16 @@
         StateHasChanged();
         try
         {
-            await SqlConn.ForgetRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
-            _pgHasRemembered = await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
-            if (!_pgHasRemembered) _pgRemember = false;
-            SetMessage(_pgHasRemembered ? "The engine could not forget the password." : "The remembered password was forgotten.", isError: _pgHasRemembered);
+            // Review: as for SQL Server, no answer from the engine leaves everything as it was.
+            var answer = await SqlConn.ForgetRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+            if (answer == null)
+            {
+                SetMessage(ForgetUnanswered, isError: true);
+                return;
+            }
+            _pgHasRemembered = false;
+            _pgRemember = false;
+            SetMessage("The remembered password was forgotten.", isError: false);
         }
         finally
         {
@@ -1060,15 +1256,16 @@
     // What a failed PostgreSQL test or connect says. A missing password is a prompt, not a failure, and it offers to remember the
     // one typed. A password the engine remembered that the server no longer accepts says so and how to replace it (FR-105): the
     // Remember option stays on, so connecting with the new password overwrites the old one.
-    private string PgFailureText(ConnectResult result, string fallback)
+    private string PgFailureText(ConnectResult result, string fallback, bool usedRemembered)
     {
         if (result.PasswordRequired)
             return "The server asked for a password. Enter the password and try again; turn on Remember password to keep it on the engine machine.";
 
-        var rejected = result.Error != null
-            && (result.Error.Contains("28P01", StringComparison.Ordinal)
-                || result.Error.Contains("password authentication failed", StringComparison.OrdinalIgnoreCase));
-        if (_pgHasRemembered && rejected)
+        // Review: the engine's code says the password was refused (SQLSTATE 28P01); the server's words are the fallback for an
+        // engine from before the code. Round 2: it was the remembered one only when none was typed. Round 4: taken before the
+        // call (UsedRememberedPgPassword), as for SQL Server — the refusal has marked the tab by now.
+        var rejected = SqlConnectionService.IsPgPasswordRefused(result);
+        if (usedRemembered && rejected)
             return "The remembered password was not accepted by the server. Enter the current password and keep Remember password on to replace it.";
 
         return result.Error ?? fallback;
@@ -1077,11 +1274,13 @@
     // "PostgreSQL 18.1 on db1:5432" (FR-002), or the engine's own words; a missing password is a prompt, not a failure.
     private async Task TestPostgresAsync()
     {
+        if (PgPasswordNeeded) { SetMessage(PgPasswordNeededText, isError: true); return; }
         _busy = true;
         _message = null;
         StateHasChanged();
         try
         {
+            bool usedRemembered = UsedRememberedPgPassword;   // review, round 4: before the call (see PgFailureText)
             var result = await SqlConn.TestAsync(PgTarget(), CancellationToken.None);
             if (result.Ok)
             {
@@ -1090,7 +1289,7 @@
             }
             else
             {
-                SetMessage(PgFailureText(result, "Connection test failed."), isError: true);
+                SetMessage(PgFailureText(result, "Connection test failed.", usedRemembered), isError: true);
             }
         }
         finally
@@ -1173,6 +1372,7 @@
 
     private async Task ConnectPostgresAsync()
     {
+        if (PgPasswordNeeded) { SetMessage(PgPasswordNeededText, isError: true); return; }
         if (RefuseWhileBusy()) return;
         if (!await ConfirmLeaveTransactionAsync()) return;
         _busy = true;
@@ -1180,6 +1380,7 @@
         StateHasChanged();
         try
         {
+            bool usedRemembered = UsedRememberedPgPassword;   // review, round 4: before the connect marks the tab (see PgFailureText)
             var result = await ConnectTargetAsync(PgTarget());
             if (result.Ok)
             {
@@ -1201,7 +1402,7 @@
                 Close();
                 return;
             }
-            SetMessage(PgFailureText(result, "Connect failed."), isError: true);
+            SetMessage(PgFailureText(result, "Connect failed.", usedRemembered), isError: true);
         }
         finally
         {
@@ -1226,8 +1427,9 @@
         StateHasChanged();
         try
         {
+            bool usedRemembered = UsedRememberedSqlPassword;   // review, round 4: before the call (see SqlFailureText)
             var result = await SqlConn.TestAsync(SqlServerTarget(), CancellationToken.None);
-            SetMessage(result.Ok ? "Connection test succeeded." : SqlFailureText(result, "Connection test failed."), isError: !result.Ok);
+            SetMessage(result.Ok ? "Connection test succeeded." : SqlFailureText(result, "Connection test failed.", usedRemembered), isError: !result.Ok);
         }
         finally
         {
@@ -1337,11 +1539,45 @@
         {
             // Review WEB-19: the engine opens the connection before the session switches; a refusal keeps the dialog open
             // with what was typed, so it can be corrected.
-            var result = await ConnectTargetAsync(SqlServerTarget());
+            var target = SqlServerTarget();
+            // Taken before the connect: what the form asked of the engine's password store.
+            bool askedToRemember = target.RememberPassword && !string.IsNullOrEmpty(target.Password);
+            bool hadRemembered = !_windowsAuth && _sqlHasRemembered;
+            bool forgetRemembered = hadRemembered && !_sqlRemember && SqlConn.EngineRemembersSqlServerPasswords;
+            bool usedRemembered = UsedRememberedSqlPassword;   // review, round 4: a refused connect marks the tab (see SqlFailureText)
+            var result = await ConnectTargetAsync(target);
             if (result.Ok)
             {
                 _connected = true;
+                // Review: the engine could not keep the password Remember asked it to keep. The connect stands; the user is
+                // told, and the saved row is not left saying the password is remembered. Review, round 2: when the engine held a
+                // password for this login before, that one is still there and may still be used (another tab, another client):
+                // said, with where to forget it, and the saved row keeps offering Forget in Settings › Connections.
+                bool notRemembered = askedToRemember && !result.Remembered;
+                bool olderStillKept = notRemembered && hadRemembered;
+                // Review: Remember unticked while the engine held a password for this login is the choice to forget it — after the
+                // connect, which used the password typed now.
+                bool forgotten = false;
+                if (forgetRemembered)
+                {
+                    var answer = await SqlConn.ForgetRememberedSqlServerPasswordAsync(target.Server, target.User ?? string.Empty, CancellationToken.None);
+                    forgotten = answer != null;
+                    if (answer == null)
+                    {
+                        Notifications?.Notify(
+                            $"Connected. The engine did not confirm that it forgot the password for {target.User} on {target.Server}; it may still be remembered on the engine machine. Use Forget it in Connect to database to try again.",
+                            NotificationKind.Warning);
+                    }
+                }
                 // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
+                // Review, round 3: Settings › Connections offers Forget password only on a row that says its password is
+                // remembered, so a row for this login that the warning below points to is made to say so.
+                // Review, round 4: a password the engine kept (v2's Remembered; a v1 engine kept what it was asked to keep, which
+                // ConnectResult.Remembered already says) makes the row say so too — the Status bar's restore of the row and its
+                // Forget password in Settings › Connections read it. Every change to the flag is for the row's own login only: a
+                // form edited to another login says nothing about the password of the row's.
+                bool kept = askedToRemember && result.Remembered;
+                bool rowOffersForget = false;
                 if (!string.IsNullOrEmpty(_selectedId))
                 {
                     try
@@ -1350,16 +1586,31 @@
                         if (existing != null)
                         {
                             existing.LastConnectedAt = DateTimeOffset.UtcNow;
+                            bool namesLogin = RowNamesLogin(existing, target);
+                            if (namesLogin && ((notRemembered && !hadRemembered) || forgotten)) existing.RememberPassword = false;
+                            bool pointTo = olderStillKept && namesLogin;
+                            if (pointTo || (namesLogin && kept && RowIsGivenPasswordOf(existing, target))) existing.RememberPassword = true;
                             await Store.UpdateAsync(existing);
+                            rowOffersForget = pointTo;
                             await Store.SetActiveIdAsync(existing.Id);
                         }
                     }
                     catch { /* best-effort metadata update — connect already succeeded */ }
                 }
+                if (notRemembered)
+                {
+                    // Review, round 3: Settings › Connections is named only when its row offers Forget password; otherwise only
+                    // Connect to database's Forget it (shown once the engine says it holds a password for the form's login).
+                    Notifications?.Notify(!olderStillKept
+                        ? $"Connected, but the engine could not keep the password for {target.User} on {target.Server}. It is asked for again next time."
+                        : $"Connected, but the engine could not keep the new password for {target.User} on {target.Server}. The password it remembered before may still be used; forget it with Forget it in Connect to database"
+                          + (rowOffersForget ? ", or Forget password in Settings › Connections." : "."),
+                        NotificationKind.Warning);
+                }
                 Close();   // MainLayout's StateChanged owner starts SchemaSync on SqlConn.SessionId.
                 return;
             }
-            SetMessage(SqlFailureText(result, "Connect failed."), isError: true);
+            SetMessage(SqlFailureText(result, "Connect failed.", usedRemembered), isError: true);
         }
         finally
         {

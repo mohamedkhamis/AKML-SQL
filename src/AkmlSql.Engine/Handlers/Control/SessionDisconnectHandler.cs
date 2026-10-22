@@ -62,8 +62,7 @@ namespace AkmlSql.Engine.Handlers.Control
 
         private static void Release(RpcContext ctx, string sessionId)
         {
-            ctx.Sessions.RemoveSession(sessionId);
-            AkmlSql.Engine.Pairing.SessionPasswordCopy.Forget(sessionId);
+            ctx.Sessions.RemoveSession(sessionId);   // with it the page that connected it, so no new tab can copy its password
             int caches = ctx.SchemaCache.RemoveSession(sessionId);
             Log.Information("SessionDisconnect: session {Session} released ({Caches} schema cache(s) dropped)", sessionId, caches);
         }

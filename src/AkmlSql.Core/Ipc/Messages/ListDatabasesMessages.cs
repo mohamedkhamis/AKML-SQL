@@ -26,6 +26,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042: the <see cref="DatabaseKind"/> when no <see cref="SessionId"/> is given (0 SQL Server, 1 PostgreSQL).</summary>
         [Key(2)]
         public int Kind { get; set; }
+
+        /// <summary>Spec 043 follow-up (review, <c>session.copy.v2</c>): as <see cref="ConnectionInfo.CopyPasswordFromSessionId"/>, for
+        /// the list a new tab's Connect to database dialog asks for before any password is typed. Engines that advertise only
+        /// <c>session.copy.v1</c> ignore it: they fill in only a password remembered under <c>mssql-web://</c>, and answer a web SQL
+        /// login without one <c>dialect.password-required</c> (they never open a connection with an empty password).</summary>
+        [Key(3)]
+        public string? CopyPasswordFromSessionId { get; set; }
     }
 
     /// <summary>Engine → Web/Shell (spec 030): result of <see cref="ListDatabasesRequest"/>.</summary>

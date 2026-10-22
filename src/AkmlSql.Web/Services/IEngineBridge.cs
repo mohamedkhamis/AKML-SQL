@@ -145,6 +145,11 @@ internal sealed class EngineBridge : IEngineBridge
     private EngineConnection? _lastConnection;
     private string? _lastBearerToken;
 
+    // Spec 043 follow-up (review): this page, to the engine — made once per bridge (one per page), sent on every handshake so a
+    // reconnect after a link drop is still the same page, and never stored. The engine copies a session's password (New query)
+    // only into a request from the page that connected that session.
+    private readonly string _clientInstanceId = Guid.NewGuid().ToString("N");
+
     /// <summary>Production-DI constructor. Token vault + connection store are required for the
     /// US3 revocation path; tests that don't exercise reconnect can use the test-only
     /// constructor below.</summary>
@@ -285,6 +290,7 @@ internal sealed class EngineBridge : IEngineBridge
             ProtocolVersionMin = 1,
             ProtocolVersionMax = 1,
             BrowserLabel = "Web edition",
+            ClientInstanceId = _clientInstanceId,
         };
         var response = await SendAsync<HandshakeRequest, HandshakeResponse>(
             MessageTypes.HandshakeRequest, handshakeRequest, ct).ConfigureAwait(false);

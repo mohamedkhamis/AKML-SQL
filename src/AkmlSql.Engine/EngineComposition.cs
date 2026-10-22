@@ -84,12 +84,24 @@ public sealed class EngineComposition
             return;
 
         var cache = ctx.SchemaCache.GetOrCreateCache(sessionId, database);
-        if (cache.Phase != PopulationPhase.NotLoaded || cache.PermissionDenied) return;
 
-        Log.Information("Reloading the evicted schema cache for {Session}:{Db}", sessionId, database);
-        await metadata.PopulatePhaseAAsync(cache, session.ConnectionString, CancellationToken.None);
-        ctx.SchemaCache.EvictLru();
-        if (cache.Phase == PopulationPhase.PhaseA && !cache.PermissionDenied)
-            await metadata.PopulatePhaseBAsync(cache, session.ConnectionString, CancellationToken.None);
+        // Spec 043 follow-up (review, round 4): the population claim is the cache object's, so the reload claims the cache it is
+        // about to load like every other load (a connect may have created it and be loading it already), and looks at the phase
+        // only once it holds the claim: a load that ended a moment ago has left it loaded.
+        if (!ctx.SchemaCache.TryClaimPopulation(cache)) return;
+        try
+        {
+            if (cache.Phase != PopulationPhase.NotLoaded || cache.PermissionDenied) return;
+
+            Log.Information("Reloading the evicted schema cache for {Session}:{Db}", sessionId, database);
+            await metadata.PopulatePhaseAAsync(cache, session.ConnectionString, CancellationToken.None);
+            ctx.SchemaCache.EvictLru();
+            if (cache.Phase == PopulationPhase.PhaseA && !cache.PermissionDenied)
+                await metadata.PopulatePhaseBAsync(cache, session.ConnectionString, CancellationToken.None);
+        }
+        finally
+        {
+            ctx.SchemaCache.ReleasePopulation(cache);
+        }
     }
 }

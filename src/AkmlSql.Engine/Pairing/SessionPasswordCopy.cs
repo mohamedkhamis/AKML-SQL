@@ -1,6 +1,6 @@
 using System;
-using System.Collections.Concurrent;
 using AkmlSql.Core;
+using AkmlSql.Engine.Server;
 using Microsoft.Data.SqlClient;
 using Npgsql;
 
@@ -11,37 +11,31 @@ namespace AkmlSql.Engine.Pairing
     /// The web edition's new tab sends the connection without its password (the browser never holds it) and names the tab it was
     /// opened from; the password is taken from that tab's engine session when, and only when:
     /// <list type="bullet">
-    ///   <item>the source session was connected over the bridge by the same WebSocket connection the request arrives on
-    ///   (<see cref="BridgeConnection"/>) — never an SSMS session, never another browser's;</item>
-    ///   <item>both name the same server and login, and the request asks for the same encryption and certificate checking (a
-    ///   password given to a validated server is never sent to one whose certificate is not checked);</item>
+    ///   <item>the source session is connected, and was connected over the bridge by the same web page the request comes from
+    ///   (<see cref="SessionState.BridgeOrigin"/>, <see cref="BridgeConnection"/>; the same page after a reconnect too) — never an
+    ///   SSMS session, never another page's or another browser's;</item>
+    ///   <item>for SQL Server: the request is a plain SQL login (<see cref="BridgeSqlSecurity.IsPlainSqlLogin"/>: encrypted, SQL
+    ///   authentication, no failover partner, certificate host name, certificate file or SPN of its own) and names the same
+    ///   server, login, encryption, certificate checking and authentication as the source (<see cref="BridgeSqlSecurity.SameSecurity"/>),
+    ///   so a password given to a validated server is never sent to one whose certificate is not checked, or anywhere else;</item>
+    ///   <item>for PostgreSQL: the same host, port, user, TLS mode and root certificate;</item>
     ///   <item>the request carries no password of its own.</item>
     /// </list>
     /// Nothing else is copied: the database is the request's. The password never leaves the engine.
     /// </summary>
     public static class SessionPasswordCopy
     {
-        // session id → the bridge connection that last connected it.
-        private static readonly ConcurrentDictionary<string, string> Origins = new(StringComparer.Ordinal);
-
-        /// <summary>Notes that <paramref name="sessionId"/> was connected by the current bridge connection (no-op for the named pipe).</summary>
-        public static void NoteConnected(string sessionId)
+        /// <summary>Notes that <paramref name="session"/> was connected by the current bridge page (null over the named pipe).</summary>
+        public static void NoteConnected(SessionState? session)
         {
-            if (string.IsNullOrEmpty(sessionId)) return;
-            if (BridgeConnection.Current is { } connection) Origins[sessionId] = connection;
-            else Origins.TryRemove(sessionId, out _);
+            if (session != null) session.BridgeOrigin = BridgeConnection.Current;
         }
 
-        /// <summary>The session is gone (its tab closed).</summary>
-        public static void Forget(string sessionId)
-        {
-            if (!string.IsNullOrEmpty(sessionId)) Origins.TryRemove(sessionId, out _);
-        }
-
-        /// <summary>Whether the current bridge connection connected <paramref name="sessionId"/>.</summary>
-        public static bool MayCopyFrom(string? sessionId) =>
-            !string.IsNullOrEmpty(sessionId) && BridgeConnection.Current is { } connection
-            && Origins.TryGetValue(sessionId!, out var owner) && string.Equals(owner, connection, StringComparison.Ordinal);
+        /// <summary>Whether a request from the current bridge page may take the password of <paramref name="source"/>.</summary>
+        public static bool MayCopyFrom(SessionState? source) =>
+            source is { IsConnected: true, BridgeOrigin: { } origin }
+            && BridgeConnection.Current is { } current
+            && string.Equals(origin, current, StringComparison.Ordinal);
 
         /// <summary>
         /// <paramref name="connectionString"/> with the password of <paramref name="sourceConnectionString"/> when both name the
@@ -54,9 +48,9 @@ namespace AkmlSql.Engine.Pairing
                 return connectionString;
             try
             {
-                return kind == DatabaseKind.PostgreSql
-                    ? ApplyPostgres(connectionString, sourceConnectionString!)
-                    : ApplySqlServer(connectionString, sourceConnectionString!);
+                if (kind == DatabaseKind.PostgreSql) return ApplyPostgres(connectionString, sourceConnectionString!);
+                var target = new SqlConnectionStringBuilder(connectionString);
+                return TryCopySqlServer(target, sourceConnectionString!) ? target.ConnectionString : connectionString;
             }
             catch (ArgumentException)
             {
@@ -64,19 +58,20 @@ namespace AkmlSql.Engine.Pairing
             }
         }
 
-        private static string ApplySqlServer(string connectionString, string source)
+        /// <summary>
+        /// Puts the password of <paramref name="source"/> into <paramref name="target"/> when the SQL Server rules above allow it;
+        /// true when it did. <paramref name="target"/> is left untouched otherwise.
+        /// </summary>
+        internal static bool TryCopySqlServer(SqlConnectionStringBuilder target, string source)
         {
-            var target = new SqlConnectionStringBuilder(connectionString);
-            var from = new SqlConnectionStringBuilder(source);
-            if (target.IntegratedSecurity || from.IntegratedSecurity || !string.IsNullOrEmpty(target.Password) || string.IsNullOrEmpty(from.Password))
-                return connectionString;
-            if (!string.Equals(target.DataSource?.Trim(), from.DataSource?.Trim(), StringComparison.OrdinalIgnoreCase)
-                || !string.Equals(target.UserID, from.UserID, StringComparison.OrdinalIgnoreCase)
-                || !Equals(target.Encrypt, from.Encrypt)
-                || target.TrustServerCertificate != from.TrustServerCertificate)
-                return connectionString;
+            if (!string.IsNullOrEmpty(target.Password) || !BridgeSqlSecurity.IsPlainSqlLogin(target)) return false;
+            SqlConnectionStringBuilder from;
+            try { from = new SqlConnectionStringBuilder(source); }
+            catch (ArgumentException) { return false; }
+            if (from.IntegratedSecurity || string.IsNullOrEmpty(from.Password) || !BridgeSqlSecurity.SameSecurity(target, from))
+                return false;
             target.Password = from.Password;
-            return target.ConnectionString;
+            return true;
         }
 
         private static string ApplyPostgres(string connectionString, string source)
@@ -91,25 +86,6 @@ namespace AkmlSql.Engine.Pairing
                 return connectionString;
             target.Password = from.Password;
             return target.ConnectionString;
-        }
-
-        /// <summary>
-        /// A bridge request for SQL authentication that still has no password after the copy and the remembered-password lookup:
-        /// the engine answers "password required" itself instead of sending an empty password to the server (a failed login counts
-        /// toward lockout and fills the server's audit).
-        /// </summary>
-        public static bool IsSqlLoginWithoutPassword(string connectionString)
-        {
-            if (BridgeSourceIp.Current is null || string.IsNullOrEmpty(connectionString)) return false;
-            try
-            {
-                var b = new SqlConnectionStringBuilder(connectionString);
-                return !b.IntegratedSecurity && !string.IsNullOrWhiteSpace(b.UserID) && string.IsNullOrEmpty(b.Password);
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
         }
     }
 }

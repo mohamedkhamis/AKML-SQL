@@ -47,5 +47,15 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042: a stable id from <see cref="DialectErrors"/> when the failure has one (a password is needed, credentials are required); otherwise null.</summary>
         [Key(3)]
         public string? ErrorCode { get; set; }
+
+        /// <summary>
+        /// Spec 043 follow-up (review, <c>credentials.sqlserver.v2</c>): the password the request asked to remember
+        /// (<see cref="TestSqlConnectionRequest.RememberPassword"/>) is now in the engine's store. False when it was not asked for,
+        /// or the store could not be written: the client must not say it is remembered. Engines that advertise only
+        /// <c>credentials.sqlserver.v1</c> (1.26.1022.0927, 1.26.1022.1042) never send it, so a client reads a false here as
+        /// "not kept" only from an engine with v2.
+        /// </summary>
+        [Key(4)]
+        public bool Remembered { get; set; }
     }
 }

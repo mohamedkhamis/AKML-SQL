@@ -279,6 +279,83 @@ public sealed class StatusIndicatorTests : BunitContext
         Assert.Equal(saved.Id, tab.Session.Binding!.SavedConnectionId);   // the tab remembers which saved row it came from
         Assert.True(tab.Session.IsConnected);
     }
+
+    // ── Spec 043 follow-up (review): a saved SQL login whose password the engine remembers comes back too ───────────────────
+
+    private async Task<SavedSqlConnection> SeedSavedSqlLoginAsync(bool remember)
+    {
+        var savedStore = Services.GetRequiredService<ISavedSqlConnectionStore>();
+        var saved = new SavedSqlConnection
+        {
+            Name = "app", Server = "localhost", Database = "Northwind_AutoTest", WindowsAuth = false, Login = "app_user", RememberPassword = remember,
+        };
+        await savedStore.AddAsync(saved);
+        await savedStore.SetActiveIdAsync(saved.Id);
+        return saved;
+    }
+
+    private System.Collections.Generic.IEnumerable<ConnectionInfo> ConnectionChanges =>
+        _bridge.Notifications.Where(n => n.Type == AkmlSql.Core.Ipc.MessageTypes.ConnectionChanged).Select(n => (ConnectionInfo)n.Payload);
+
+    [Fact]
+    public async Task Open_autorestores_a_saved_SQL_login_whose_password_the_engine_remembers_without_sending_one()
+    {
+        await SeedActiveConnectionAsync();
+        var saved = await SeedSavedSqlLoginAsync(remember: true);
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        cut.WaitForAssertion(() => Assert.Equal("Live", cut.Find("[data-testid='status-pill']").TextContent));
+        var sent = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = Assert.Single(ConnectionChanges).ConnectionString };
+        Assert.Equal("app_user", sent["User ID"]);
+        Assert.Equal(string.Empty, sent.TryGetValue("Password", out var pw) ? pw?.ToString() ?? string.Empty : string.Empty);
+        var session = Services.GetRequiredService<ISqlConnectionService>().ActiveSession!;
+        Assert.True(session.Binding!.RememberPassword);
+        Assert.Equal(saved.Id, session.Binding.SavedConnectionId);
+    }
+
+    [Theory]
+    [InlineData(false, true)]    // the row does not ask the engine to remember its password
+    [InlineData(true, false)]    // an engine that cannot remember SQL Server passwords
+    public async Task Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect(bool remember, bool engineRemembers)
+    {
+        await SeedActiveConnectionAsync();
+        await SeedSavedSqlLoginAsync(remember);
+        _bridge.EngineCapabilities = engineRemembers ? new[] { SqlConnectionService.CapabilitySqlServerCredentials } : Array.Empty<string>();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+        await Task.Delay(200);
+
+        Assert.Equal("Live · no SQL", cut.Find("[data-testid='status-pill']").TextContent);
+        Assert.Empty(ConnectionChanges);
+    }
+
+    [Fact]
+    public async Task Open_with_a_remembered_SQL_password_the_server_refuses_leaves_the_tab_asking_on_its_next_run()
+    {
+        await SeedActiveConnectionAsync();
+        await SeedSavedSqlLoginAsync(remember: true);
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.TestSqlReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'app_user'.", ErrorCode = DialectErrors.LoginFailed };
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        var session = Services.GetRequiredService<ISqlConnectionService>().ActiveSession!;
+        cut.WaitForAssertion(() => Assert.True(session.PasswordMissing));
+        Assert.Equal("Live · no SQL", cut.Find("[data-testid='status-pill']").TextContent);
+        Assert.Empty(ConnectionChanges);
+
+        // Review, round 3: the tab has no binding, so the mark names the sign-in itself and says the password was refused — what
+        // the Connect to database dialog needs to keep from listing or connecting with that password again.
+        Assert.Null(session.Binding);
+        Assert.True(session.PasswordRefused);
+        Assert.True(session.PasswordMissingFor!.SameSignInAs(new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, "localhost", "master",
+            WindowsAuth: false, User: "app_user")));
+    }
 }
 
 /// <summary>

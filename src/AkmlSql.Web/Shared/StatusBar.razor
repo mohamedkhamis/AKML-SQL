@@ -451,8 +451,9 @@
     /// <summary>
     /// Spec 032 FR-032 (auto-restore): once per page load, when the bridge is up but no SQL
     /// session exists, silently reconnect the most-recently-used SAVED connection — Windows
-    /// auth only (no password is at rest by design; SQL-auth rows keep the honest BridgeOnly
-    /// pill and a one-click connect). ConnectAsync re-runs the loopback/SSRF guard itself.
+    /// auth, or a login whose password the engine remembers (no password is ever at rest in the
+    /// browser; other SQL-auth rows keep the honest BridgeOnly pill and a one-click connect).
+    /// ConnectAsync re-runs the loopback/SSRF guard itself.
     /// Non-blocking and best-effort: any failure just leaves the honest BridgeOnly state.
     /// </summary>
     private bool _restoreAttempted;
@@ -499,11 +500,19 @@
                     WindowsAuth: false, User: saved.Login, Password: null, Port: saved.EffectivePort, SslMode: saved.SslMode,
                     RootCertificatePath: saved.RootCertificatePath, RememberPassword: true, SavedConnectionId: saved.Id);
             }
-            else
+            else if (saved.WindowsAuth)
             {
-                if (!saved.WindowsAuth) return;
                 target = new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, saved.Server, saved.Database, WindowsAuth: true,
                     TrustServerCertificate: saved.TrustServerCertificate, SavedConnectionId: saved.Id);
+            }
+            else
+            {
+                // Spec 043 follow-up (review): a SQL login whose password the engine remembers comes back as PostgreSQL's does. A
+                // refusal (the password is gone or out of date) leaves the tab asking for it on its next run; nothing else happens.
+                if (!saved.RememberPassword || !SqlConn.EngineRemembersSqlServerPasswords || string.IsNullOrWhiteSpace(saved.Login)) return;
+                target = new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, saved.Server, saved.Database, WindowsAuth: false,
+                    User: saved.Login, Password: null, RememberPassword: true, TrustServerCertificate: saved.TrustServerCertificate,
+                    SavedConnectionId: saved.Id);
             }
 
             if (session != null) await SqlConn.ConnectAsync(target, session, System.Threading.CancellationToken.None);

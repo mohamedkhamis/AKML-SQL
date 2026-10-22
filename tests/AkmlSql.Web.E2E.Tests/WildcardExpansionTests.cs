@@ -87,4 +87,34 @@ public sealed class WildcardExpansionTests(ITestOutputHelper output)
 
         await Assertions.Expect(Content(page)).ToContainTextAsync($"SELECT c.{highlighted} FROM dbo.Customers AS c;");
     }
+
+    /// <summary>
+    /// Spec 043 follow-up (review): a view and a procedure have their own badges ('V', 'P') instead of the table's 'T' and the
+    /// function's 'ƒ', and a variable's badge is one '@' (two would read as a system global and overflow the badge).
+    /// </summary>
+    [SkippableTheory]
+    [InlineData("SELECT * FROM dbo.Invoi", "Invoices", "V")]
+    [InlineData("SELECT * FROM dbo.Custom", "Customers", "T")]
+    [InlineData("EXEC dbo.CustOrderH", "CustOrderHist", "P")]
+    [InlineData("DECLARE @Total int;\nSELECT @Tot", "@Total", "@")]
+    public async Task Each_kind_has_its_own_badge(string typed, string name, string badge)
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(output, database: "Northwind");
+        var page = s.Page;
+        await s.SetEditorTextAsync(typed);
+        await page.WaitForTimeoutAsync(2_500);   // the schema of Northwind
+        await CaretFromEndAsync(page, 0);
+        await page.Keyboard.PressAsync("Control+Space");
+        var list = page.Locator(".cm-tooltip-autocomplete");
+        await Assertions.Expect(list).ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // The engine's reply can replace the first (local) list once: read the settled one.
+        await page.WaitForTimeoutAsync(1_000);
+        if (await list.CountAsync() == 0) await page.Keyboard.PressAsync("Control+Space");
+        var item = list.Locator("li").Filter(new() { HasTextString = name }).First;
+        await Assertions.Expect(item).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        var content = await item.Locator(".cm-completionIcon").EvaluateAsync<string>("i => getComputedStyle(i, '::after').content");
+        output.WriteLine($"{name}: {content}");
+        Assert.Equal($"\"{badge}\"", content);
+    }
 }

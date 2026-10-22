@@ -159,6 +159,90 @@ public class PgCredentialResolverTests : IDisposable
         Assert.Equal(MessageTypes.CredentialRequest, handler.RequestMessageType);
         Assert.Equal(MessageTypes.CredentialResponse, handler.ResponseMessageType);
     }
+
+    // ---- spec 043 follow-up (review): a store failure is an answer, never a throw, never a false "remembered"/"forgotten" ----
+
+    [Fact]
+    public void Save_and_remember_report_whether_the_password_is_now_kept()
+    {
+        Assert.True(_resolver.Save(_host, 5432, "alice", "stored-pw"));
+        Assert.True(_resolver.RememberIfRequested(Cs("typed-pw"), remember: true));
+        Assert.False(_resolver.RememberIfRequested(Cs("typed-pw"), remember: false));
+        Assert.False(_resolver.RememberIfRequested(Cs(null), remember: true));
+        Assert.False(_resolver.RememberIfRequested("Host=;=;", remember: true));   // a string that does not parse
+    }
+
+    [Fact]
+    public void A_store_that_cannot_encrypt_or_write_the_password_is_reported_false_and_never_thrown()
+    {
+        // ConnectionChanged remembers in its background work before it loads the schema: a DPAPI failure used to throw there
+        // and skip the schema load.
+        var unencrypted = new PgCredentialResolver((_, _, _) => throw new System.Security.Cryptography.CryptographicException("DPAPI is not available"), SqlCredentialStore.Remove);
+        var unwritten = new PgCredentialResolver((_, _, _) => false, SqlCredentialStore.Remove);
+
+        Assert.False(unencrypted.RememberIfRequested(Cs("typed-pw"), remember: true));
+        Assert.False(unencrypted.Save(_host, 5432, "alice", "typed-pw"));
+        Assert.False(unwritten.RememberIfRequested(Cs("typed-pw"), remember: true));
+        Assert.False(_resolver.Has(_host, 5432, "alice"));
+    }
+
+    [Fact]
+    public void A_forget_the_store_cannot_write_throws_and_the_password_is_still_remembered()
+    {
+        var resolver = new PgCredentialResolver(SqlCredentialStore.Save, (_, _) => false);
+        resolver.Save(_host, 5432, "alice", "stored-pw");
+
+        Assert.Throws<AkmlSql.Engine.Pairing.CredentialStoreWriteException>(() => resolver.Forget(_host, 5432, "alice"));
+        Assert.True(_resolver.Has(_host, 5432, "alice"));
+        Assert.False(_resolver.Forget(_host, 5433, "alice"));   // nothing there in a store that works: nothing to write, no failure
+    }
+
+    [Fact]
+    public void A_forget_with_nothing_remembered_still_runs_the_removal_and_answers_no()
+    {
+        // Review round 3: the removal runs even when Has says no, so a store that cannot be read is reported, not "nothing to forget".
+        var removed = new List<string>();
+        var resolver = new PgCredentialResolver(SqlCredentialStore.Save, (key, login) => { removed.Add(key); return SqlCredentialStore.Remove(key, login); });
+
+        Assert.False(resolver.Forget(_host, 5433, "alice"));
+        Assert.Equal(new[] { PgConnectionString.ServerKey(_host, 5433) }, removed);
+    }
+
+    [Fact]
+    public async Task A_forget_while_the_store_cannot_be_read_is_answered_not_ok_and_the_password_stays()
+    {
+        Assert.True(_resolver.Save(_host, 5432, "alice", "stored-pw"));
+        var handler = new CredentialHandler(_resolver);
+
+        CredentialResponse reply;
+        using (AkmlSql.Engine.Tests.Pairing.SqlServerCredentialResolverTests.LockStore())
+        {
+            Assert.False(_resolver.Has(_host, 5432, "alice"));   // unreadable: "not found" …
+            Assert.Throws<AkmlSql.Engine.Pairing.CredentialStoreWriteException>(() => _resolver.Forget(_host, 5432, "alice"));   // … never "forgotten"
+            reply = await handler.HandleAsync(
+                new CredentialRequest { Action = CredentialAction.Forget, Kind = 1, Server = _host, Port = 5432, Login = "alice" }, null!, default);
+        }
+
+        Assert.False(reply.Ok);
+        Assert.Equal("The credential store could not be written.", reply.Error);
+        Assert.True(_resolver.Has(_host, 5432, "alice"));
+    }
+
+    [Fact]
+    public async Task A_forget_the_store_cannot_write_is_answered_not_ok_and_never_forgotten()
+    {
+        var resolver = new PgCredentialResolver(SqlCredentialStore.Save, (_, _) => false);
+        resolver.Save(_host, 5432, "alice", "stored-pw");
+        var handler = new CredentialHandler(resolver);
+
+        var reply = await handler.HandleAsync(
+            new CredentialRequest { Action = CredentialAction.Forget, Kind = 1, Server = _host, Port = 5432, Login = "alice" }, null!, default);
+
+        Assert.False(reply.Ok);
+        Assert.False(reply.Has);
+        Assert.Equal("The credential store could not be written.", reply.Error);
+        Assert.True(_resolver.Has(_host, 5432, "alice"));
+    }
 }
 
 [CollectionDefinition("PostgreSqlCredentialStore", DisableParallelization = true)]
