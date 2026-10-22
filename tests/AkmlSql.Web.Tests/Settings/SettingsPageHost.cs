@@ -45,11 +45,27 @@ internal sealed class SettingsPageHost : IDisposable
         /// <summary>Runs inside the forget call, so a test can look at what else existed at that moment.</summary>
         public Func<Task>? OnForget { get; set; }
 
-        public async Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct)
+        /// <summary>The engine's answer to a forget: true (it had one), false (none), null (no answer — the password stays).</summary>
+        public bool? ForgetAnswer { get; set; } = true;
+
+        public async Task<bool?> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct)
         {
             Forgets.Add((host, port, user));
             if (OnForget != null) await OnForget();
-            return true;
+            return ForgetAnswer;
+        }
+
+        // ── Spec 043 follow-up (review, round 2): a SQL Server login's password the engine remembers ──
+        public bool EngineRemembersSqlServerPasswords { get; set; }
+
+        /// <summary>Every request to forget a remembered SQL Server login's password, in order (answered with <see cref="ForgetAnswer"/>).</summary>
+        public List<(string Server, string Login)> SqlForgets { get; } = new();
+
+        public async Task<bool?> ForgetRememberedSqlServerPasswordAsync(string server, string login, CancellationToken ct)
+        {
+            SqlForgets.Add((server, login));
+            if (OnForget != null) await OnForget();
+            return ForgetAnswer;
         }
 
         public Task<(bool Ok, string? Error)> ConnectAsync(string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)

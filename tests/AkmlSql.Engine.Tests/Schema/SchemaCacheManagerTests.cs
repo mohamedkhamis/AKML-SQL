@@ -126,15 +126,110 @@ public class SchemaCacheManagerTests
 
         Assert.Null(mgr.GetCache("tab1", "Northwind"));
         Assert.Null(mgr.GetCache("tab1", "Northwind"));   // while the first reload runs
-        Assert.False(mgr.TryClaimPopulation("tab1:Northwind"));
+        Assert.Null(mgr.GetCache("tab1", "Northwind"));
         release.SetResult();
 
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (mgr.GetCache("tab1", "Northwind") == null && DateTime.UtcNow < deadline) await Task.Delay(20);
 
-        Assert.NotNull(mgr.GetCache("tab1", "Northwind"));
+        var reloaded = mgr.GetCache("tab1", "Northwind");
+        Assert.NotNull(reloaded);
         Assert.Equal(1, reloads);
-        Assert.True(mgr.TryClaimPopulation("tab1:Northwind"));   // released when the reload ended
+        Assert.True(mgr.TryClaimPopulation(reloaded!));   // the reload marker is not a claim on the cache it created
+        mgr.ReleasePopulation(reloaded!);
+
+        // The marker goes when the reload ends (just after it created the cache): a cache that goes missing again is reloaded again.
+        mgr.RemoveSession("tab1");
+        deadline = DateTime.UtcNow.AddSeconds(5);
+        while (Volatile.Read(ref reloads) < 2 && DateTime.UtcNow < deadline)
+        {
+            mgr.GetCache("tab1", "Northwind");
+            await Task.Delay(20);
+        }
+        Assert.Equal(2, Volatile.Read(ref reloads));
+    }
+
+    [Fact]
+    public void A_load_of_a_cache_removed_with_its_session_neither_blocks_nor_frees_the_claim_on_its_successor()
+    {
+        // Spec 043 follow-up (review, round 4): the claim was keyed by "{session}:{db}". A load still running on the cache that
+        // RemoveSession discarded (a tab moved to another server) held the key, so the new connect's load of the new cache gave
+        // up and the tab had no schema; and the old load's release would have freed the new load's claim.
+        using var mgr = new SchemaCacheManager();
+        var old = mgr.GetOrCreateCache("tab1", "AppDb");
+        Assert.True(mgr.TryClaimPopulation(old));                  // the old server's load is running
+
+        Assert.Equal(1, mgr.RemoveSession("tab1"));
+        var fresh = mgr.GetOrCreateCache("tab1", "AppDb");
+        Assert.NotSame(old, fresh);
+
+        Assert.True(mgr.TryClaimPopulation(fresh));                // the new connect's load is not stopped
+        Assert.False(mgr.TryClaimPopulation(fresh));               // and holds its claim like any other
+
+        mgr.ReleasePopulation(old);                                // the old load ends into the discarded cache
+        Assert.True(mgr.IsPopulating(fresh));                      // the new load's claim is untouched
+        Assert.False(mgr.TryClaimPopulation(fresh));
+        Assert.False(mgr.IsPopulating(old));
+
+        mgr.ReleasePopulation(fresh);
+        Assert.False(mgr.IsPopulating(fresh));
+    }
+
+    [Fact]
+    public async Task A_reload_after_eviction_claims_the_cache_it_loads_and_waits_its_turn_behind_a_running_load()
+    {
+        // Spec 043 follow-up (review, round 4): the reload took the key's claim in GetCache; with claims on the cache object it
+        // claims the cache it is about to load itself, so it never loads a cache a connect is loading, and releases it after.
+        var sessions = new AkmlSql.Engine.Server.SessionManager();
+        sessions.UpdateSession(new AkmlSql.Core.Ipc.Messages.ConnectionInfo
+        {
+            SessionId = "tab1", ConnectionString = "Host=x;Database=d;Username=u;Password=p", DatabaseName = "d",
+            Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+        });
+        using var mgr = new SchemaCacheManager { KindOf = sessions.KindOf };
+        var provider = new CountingProvider();
+        var ctx = new AkmlSql.Engine.RpcContext
+        {
+            Sessions = sessions,
+            SchemaCache = mgr,
+            Logger = Serilog.Log.Logger,
+            SettingsLoader = () => new AkmlSql.Core.Config.AppSettings(),
+            PostgresSchemaMetadata = provider,
+        };
+        var cache = mgr.GetOrCreateCache("tab1", "d");
+        Assert.True(mgr.TryClaimPopulation(cache));                // a connect's load is running on it
+
+        await AkmlSql.Engine.EngineComposition.ReloadSessionCacheAsync(ctx, "tab1", "d");
+        Assert.Equal(0, provider.PhaseACalls);
+        Assert.True(mgr.IsPopulating(cache));                      // the reload did not take or free the connect's claim
+
+        mgr.ReleasePopulation(cache);
+        await AkmlSql.Engine.EngineComposition.ReloadSessionCacheAsync(ctx, "tab1", "d");
+        Assert.Equal(1, provider.PhaseACalls);
+        Assert.Equal(PopulationPhase.Complete, cache.Phase);
+        Assert.False(mgr.IsPopulating(cache));                     // released when it ended
+    }
+
+    private sealed class CountingProvider : ISchemaMetadataProvider
+    {
+        private int _phaseA;
+        public int PhaseACalls => Volatile.Read(ref _phaseA);
+        public AkmlSql.Core.DatabaseKind Kind => AkmlSql.Core.DatabaseKind.PostgreSql;
+
+        public Task PopulatePhaseAAsync(DatabaseCache cache, string connectionString, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _phaseA);
+            cache.Phase = PopulationPhase.PhaseA;
+            return Task.CompletedTask;
+        }
+
+        public Task PopulatePhaseBAsync(DatabaseCache cache, string connectionString, CancellationToken ct)
+        {
+            cache.Phase = PopulationPhase.Complete;
+            return Task.CompletedTask;
+        }
+
+        public Task<List<string>> ListDatabasesAsync(string connectionString, CancellationToken ct) => Task.FromResult(new List<string>());
     }
 
     [Theory]

@@ -596,7 +596,8 @@
     /// connected, not a wildcard, or the engine can't expand it — the JS side then leaves Tab alone.
     /// The column layout mirrors the desktop: first column on the <c>*</c>'s line, the rest wrapped
     /// and aligned to the <c>*</c>'s indent; columns are qualified only when more than one source
-    /// table is expanded (or the user wrote <c>alias.*</c>).</summary>
+    /// table is expanded (or the user wrote <c>alias.*</c>). Names are written as the dialect needs
+    /// (<see cref="WrittenName"/>).</summary>
     [JSInvokable]
     public async Task<WildcardExpandDto?> ExpandWildcardFromJs(int caretOffset, string? documentText)
     {
@@ -613,18 +614,19 @@
             if (starPos < 0) return null;
 
             // Qualified wildcard "identifier.*" — the replacement span also covers "identifier.".
+            // Spec 043 follow-up (review): a bracketed or double-quoted qualifier ('[o].*', '"o".*') is sent as the name it
+            // quotes and replaced from its opening bracket or quote (TryReadQualifier). The walk back used to stop inside it,
+            // so the engine was asked for 'o]' and nothing expanded — and a found one would have left the '[' behind. A '.'
+            // with no name before it is not a wildcard the engine can expand.
             string? qualifier = null;
+            string? writtenQualifier = null;
             int spanStart = starPos;
-            if (starPos >= 2 && doc[starPos - 1] == '.')
+            if (starPos >= 1 && doc[starPos - 1] == '.')
             {
-                int idEnd = starPos - 2;
-                int idStart = idEnd;
-                while (idStart > 0 && IsIdentifierChar(doc[idStart - 1])) idStart--;
-                if (idStart <= idEnd)
-                {
-                    qualifier = doc.Substring(idStart, idEnd - idStart + 1);
-                    spanStart = idStart;
-                }
+                if (!TryReadQualifier(doc, starPos - 1, out var name, out var nameStart)) return null;
+                qualifier = name;
+                writtenQualifier = doc.Substring(nameStart, starPos - 1 - nameStart);
+                spanStart = nameStart;
             }
             int spanLength = starPos - spanStart + 1;   // include the '*' itself
 
@@ -654,7 +656,14 @@
             int indentChars = lineStart < 0 ? spanStart : spanStart - (lineStart + 1);
             string indent = new string(' ', System.Math.Max(0, indentChars));
 
-            var parts = columns.Select(c => useQualifier ? c.Qualifier + "." + c.ColumnName : c.ColumnName).ToList();
+            // Spec 043 follow-up (review): the columns of a qualified wildcard carry the qualifier as the user wrote it
+            // ('[o].OrderID', '"o".OrderID'), so a name that needs its brackets or quotes ('[Order Lines].*') keeps them.
+            // The engine's names are written as the dialect needs (WrittenName): 'Order Details'.'Order Date' came out as
+            // 'Order Details.Order Date', which does not parse.
+            var kind = session.State?.Kind ?? SqlConn.Kind;
+            var parts = columns.Select(c => useQualifier
+                ? (writtenQualifier ?? WrittenName(c.Qualifier, kind)) + "." + WrittenName(c.ColumnName, kind)
+                : WrittenName(c.ColumnName, kind)).ToList();
             string text = parts.Count == 1 ? parts[0] : string.Join(",\n" + indent, parts);
 
             return new WildcardExpandDto { Ok = true, SpanStart = spanStart, SpanLength = spanLength, Text = text };
@@ -665,17 +674,74 @@
     private static bool IsIdentifierChar(char c)
         => char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '#' || c == '@';
 
+    /// <summary>Spec 043 follow-up (review) — a column or qualifier name from a wildcard expansion as it is written in the
+    /// query. SQL Server's engine sends the names as they are (<c>Order Details</c>, <c>Order Date</c>, <c>a]b</c>): they
+    /// are bracketed when they are not a regular identifier or are a reserved word (<c>[Order Details]</c>, <c>[Order]</c>,
+    /// <c>[a]]b]</c>) — the rule completions use (SqlIdentifier). PostgreSQL's expander (PgWildcardExpander) already sends
+    /// them written, double-quoted only where the name needs it (<c>"Order Date"</c>), so they are left as they are:
+    /// quoting them again would double every quote.</summary>
+    internal static string WrittenName(string? name, AkmlSql.Core.DatabaseKind kind) =>
+        kind == AkmlSql.Core.DatabaseKind.PostgreSql
+            ? name ?? string.Empty
+            : AkmlSql.Engine.Completion.SqlIdentifier.QuoteIfNeeded(name);
+
+    /// <summary>Spec 043 follow-up (review) — the qualifier written just before the '.' at <paramref name="dot"/> of a
+    /// 'qualifier.*': a plain name (<c>o</c>), a bracketed one (<c>[o]</c>, <c>]]</c> inside it for a <c>]</c>) or a
+    /// double-quoted one (<c>"o"</c>, <c>""</c> inside it for a <c>"</c>). Gives the name it stands for (unquoted and
+    /// unescaped: the engine matches it against the FROM aliases and tables, and PostgreSQL reads a quoted one's case from
+    /// the text) and the offset it is written from; false when no name is written there (<c>.*</c>, <c>[].*</c>, a
+    /// <c>]</c> no <c>[</c> opens). A bracketed name is taken from the nearest <c>[</c>, so <c>[a[b].*</c> reads as
+    /// <c>b</c>.</summary>
+    internal static bool TryReadQualifier(string doc, int dot, out string name, out int start)
+    {
+        name = string.Empty;
+        start = dot;
+        if (dot < 1 || dot > doc.Length) return false;
+        int close = dot - 1;
+        char quote = doc[close];
+        if (quote == ']' || quote == '"')
+        {
+            char open = quote == ']' ? '[' : '"';
+            for (int i = close - 1; i >= 0; i--)
+            {
+                char c = doc[i];
+                if (c == quote)
+                {
+                    if (i > 0 && doc[i - 1] == quote) { i--; continue; }   // ']]' / '""': the quote character inside the name
+                    if (quote != open) return false;                      // a lone ']': no '[' opens this name
+                }
+                if (c != open) continue;
+                if (i == close - 1) return false;                         // '[]' / '""': no name
+                start = i;
+                name = doc.Substring(i + 1, close - i - 1).Replace(new string(quote, 2), quote.ToString());
+                return true;
+            }
+            return false;
+        }
+
+        int s = dot;
+        while (s > 0 && IsIdentifierChar(doc[s - 1])) s--;
+        if (s == dot) return false;
+        start = s;
+        name = doc.Substring(s, dot - s);
+        return true;
+    }
+
+    // CodeMirror uses the type only for the badge's class (cm-completionIcon-{type}, styled in Pages/Editor.razor); the JS
+    // editor branches on "snippet" alone.
     private static string ToCmType(int objectType) => objectType switch
     {
         (int)CompletionObjectType.Table     => "class",
-        (int)CompletionObjectType.View      => "class",
+        // Spec 043 follow-up (review): views and procedures get their own badges ('V', 'P') instead of sharing the table's
+        // and the function's.
+        (int)CompletionObjectType.View      => "view",
         (int)CompletionObjectType.Column    => "property",
         (int)CompletionObjectType.Keyword   => "keyword",
         // Spec 027 T011: a distinct CM type so akml-editor.js routes snippet items to the
         // expanding `apply` (tab-stops) rather than inserting the body literally.
         (int)CompletionObjectType.Snippet   => "snippet",
         (int)CompletionObjectType.Function  => "function",
-        (int)CompletionObjectType.Procedure => "function",
+        (int)CompletionObjectType.Procedure => "procedure",
         (int)CompletionObjectType.Schema    => "namespace",
         (int)CompletionObjectType.Database  => "namespace",
         (int)CompletionObjectType.Variable  => "variable",

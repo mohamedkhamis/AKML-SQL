@@ -26,6 +26,16 @@ namespace AkmlSql.Engine.Handlers.Control
         public int RequestMessageType => MessageTypes.TestSqlConnection;
         public int ResponseMessageType => MessageTypes.TestSqlConnectionResult;
 
+        // Opens a SQL Server connection and returns the server's version; a seam so a test can play an accepted login.
+        private readonly Func<string, CancellationToken, Task<string>> _openSqlServer;
+
+        public TestSqlConnectionHandler() : this(OpenSqlServerAsync) { }
+
+        internal TestSqlConnectionHandler(Func<string, CancellationToken, Task<string>> openSqlServer)
+        {
+            _openSqlServer = openSqlServer ?? throw new ArgumentNullException(nameof(openSqlServer));
+        }
+
         public async Task<TestSqlConnectionResponse> HandleAsync(
             TestSqlConnectionRequest request, RpcContext ctx, CancellationToken ct)
         {
@@ -56,10 +66,9 @@ namespace AkmlSql.Engine.Handlers.Control
 
             // Spec 043 follow-up: a web SQL login with no password typed takes it from the tab it was opened from, or from the
             // engine's remembered logins; with neither the engine says so itself and never sends an empty password to the server.
-            var typedPassword = HasPassword(request.ConnectionString);
-            request.ConnectionString = ConnectionChangedHandler.CopyPassword(request.ConnectionString, request.Kind, request.CopyPasswordFromSessionId, ctx);
-            request.ConnectionString = SqlServerCredentialResolver.Resolve(request.ConnectionString);
-            if (SessionPasswordCopy.IsSqlLoginWithoutPassword(request.ConnectionString))
+            var supplied = BridgeSqlPassword.Supply(request.ConnectionString, request.CopyPasswordFromSessionId, ctx);
+            request.ConnectionString = supplied.ConnectionString;
+            if (supplied.Missing)
                 return new TestSqlConnectionResponse
                 {
                     Ok = false, ErrorCode = DialectErrors.PasswordRequired,
@@ -68,13 +77,14 @@ namespace AkmlSql.Engine.Handlers.Control
 
             try
             {
-                await using var conn = new SqlConnection(request.ConnectionString);
-                await conn.OpenAsync(ct);
+                var serverVersion = await _openSqlServer(request.ConnectionString, ct).ConfigureAwait(false);
                 Log.Information("TestSqlConnection ok — {ConnDesc}",
                     ConnectionDiagnostics.Describe(request.ConnectionString));
-                // The connect's own test is where a typed password is known to be accepted: remember it now if asked.
-                if (typedPassword) SqlServerCredentialResolver.RememberIfRequested(request.ConnectionString, request.RememberPassword);
-                return new TestSqlConnectionResponse { Ok = true, ServerVersion = "SQL Server " + conn.ServerVersion };
+                // The connect's own test is where a typed password is known to be accepted: remember it now if asked. The reply
+                // says whether it was kept (review): a store that cannot be written never turns an accepted login into a failure,
+                // and the client never says "remembered" for a password the engine does not hold.
+                var remembered = supplied.Typed && SqlServerCredentialResolver.RememberIfRequested(request.ConnectionString, request.RememberPassword);
+                return new TestSqlConnectionResponse { Ok = true, ServerVersion = "SQL Server " + serverVersion, Remembered = remembered };
             }
             catch (SqlException sqlEx)
             {
@@ -139,10 +149,11 @@ namespace AkmlSql.Engine.Handlers.Control
             }
         }
 
-        private static bool HasPassword(string connectionString)
+        private static async Task<string> OpenSqlServerAsync(string connectionString, CancellationToken ct)
         {
-            try { return !string.IsNullOrEmpty(new SqlConnectionStringBuilder(connectionString).Password); }
-            catch (ArgumentException) { return false; }
+            await using var conn = new SqlConnection(connectionString);
+            await conn.OpenAsync(ct).ConfigureAwait(false);
+            return conn.ServerVersion;
         }
 
         private static string? DataSourceOf(string connectionString)

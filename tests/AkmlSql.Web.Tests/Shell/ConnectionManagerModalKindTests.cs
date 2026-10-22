@@ -40,10 +40,43 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
             return Task.FromResult(TestReply);
         }
 
-        public Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
+        public Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct) => Task.FromResult(Connect(target, ActiveSession));
+
+        /// <summary>
+        /// Review, round 4: the tab the dialog connects is marked as <see cref="SqlConnectionService"/> marks it — a password the
+        /// engine had none of, or one it supplied that the server refused — BEFORE the dialog words its message, so the tests see
+        /// the two together as the page does. A successful connect clears the mark, as there.
+        /// </summary>
+        public Task<ConnectResult> ConnectAsync(ConnectionTarget target, SqlSessionState session, CancellationToken ct) =>
+            Task.FromResult(Connect(target, session));
+
+        private ConnectResult Connect(ConnectionTarget target, SqlSessionState? session)
         {
             Connected.Add(target);
-            return Task.FromResult(ConnectReply);
+            var reply = ConnectReply;
+            if (session != null) MarkAsTheServiceDoes(session, target, reply);
+            return reply;
+        }
+
+        private static void MarkAsTheServiceDoes(SqlSessionState session, ConnectionTarget target, ConnectResult reply)
+        {
+            if (reply.Ok)
+            {
+                session.PasswordMissing = false;
+                session.PasswordMissingFor = null;
+                session.PasswordRefused = false;
+                return;
+            }
+            bool nothingTyped = string.IsNullOrEmpty(target.Password);
+            bool refusedSupplied = nothingTyped && (target.Kind == DatabaseKind.PostgreSql
+                ? SqlConnectionService.IsPgPasswordRefused(reply)
+                : !target.WindowsAuth && reply.ErrorCode == AkmlSql.Core.Ipc.Messages.DialectErrors.LoginFailed);
+            if (!reply.PasswordRequired && !refusedSupplied) return;
+            if (session.Binding is { } own && !own.SameSignInAs(target)) return;   // another sign-in says nothing about the tab's
+            session.CopyPasswordFrom = null;
+            session.PasswordMissing = true;
+            session.PasswordMissingFor = ConnectionBinding.FromTarget(target, target.SavedConnectionId);
+            session.PasswordRefused = !reply.PasswordRequired;
         }
 
         /// <summary>Per host, when a test needs the answers to arrive in a given order; else <see cref="Remembered"/>.</summary>
@@ -52,12 +85,59 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         public Task<bool> HasRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
             RememberedFor?.Invoke(host) ?? Task.FromResult(Remembered);
 
-        public Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct)
+        /// <summary>Spec 043 follow-up (review): false = the engine did not answer the next forget (it keeps the password).</summary>
+        public bool ForgetAnswered { get; set; } = true;
+
+        public Task<bool?> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct)
         {
             Forgets++;
+            if (!ForgetAnswered) return Task.FromResult<bool?>(null);
             var had = Remembered;
             Remembered = false;
-            return Task.FromResult(had);
+            return Task.FromResult<bool?>(had);
+        }
+
+        // ── Spec 043 follow-up: a SQL Server login's password on the engine, and the copy from another tab ──
+        public bool EngineRemembersSqlServerPasswords { get; set; }
+        public bool EngineCopiesSessionPasswords { get; set; }
+        public bool SqlRemembered { get; set; }
+        public List<(string Server, string Login)> SqlForgets { get; } = new();
+        public List<ConnectionTarget> Listed { get; } = new();
+
+        /// <summary>Review, round 2: when set, the answer to the next question about a SQL login (held open by the test).</summary>
+        public Func<Task<bool>>? SqlRememberedAnswer { get; set; }
+
+        /// <summary>Review, round 3: every question about a SQL login, with the certificate choice it was asked for.</summary>
+        public List<(string Server, string Login, bool Trust)> SqlAsked { get; } = new();
+
+        /// <summary>Review, round 3: when set, the answer for a certificate choice (else <see cref="SqlRemembered"/>).</summary>
+        public Func<bool, bool>? SqlRememberedForTrust { get; set; }
+
+        public Task<bool> HasRememberedSqlServerPasswordAsync(string server, string login, bool trustServerCertificate, CancellationToken ct)
+        {
+            SqlAsked.Add((server, login, trustServerCertificate));
+            return SqlRememberedAnswer?.Invoke()
+                ?? Task.FromResult(SqlRememberedForTrust?.Invoke(trustServerCertificate) ?? SqlRemembered);
+        }
+
+        /// <summary>Review, round 2: the open tabs' sessions, found by id (the tab a new tab was opened from).</summary>
+        public List<SqlSessionState> Sessions { get; } = new();
+
+        public SqlSessionState? FindSession(string sessionId) => Sessions.FirstOrDefault(s => s.SessionId == sessionId);
+
+        public Task<bool?> ForgetRememberedSqlServerPasswordAsync(string server, string login, CancellationToken ct)
+        {
+            SqlForgets.Add((server, login));
+            if (!ForgetAnswered) return Task.FromResult<bool?>(null);
+            var had = SqlRemembered;
+            SqlRemembered = false;
+            return Task.FromResult<bool?>(had);
+        }
+
+        public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct)
+        {
+            Listed.Add(target);
+            return Task.FromResult<(bool, IReadOnlyList<string>, string?)>((true, new[] { "master", "Sales" }, null));
         }
 
         public Task<(bool Ok, string? Error)> ConnectAsync(string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct)
@@ -80,6 +160,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
 
     private readonly FakeSql _sql = new();
     private readonly FakeDialogService _dialogs = new();
+    private readonly FakeNotificationService _notifications = new();
     private readonly ConnectionManagerController _controller = new();
     private readonly SavedSqlConnectionStore _store = new(new InMemoryIndexedDbAdapter());
 
@@ -90,6 +171,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         Services.AddSingleton<ISavedSqlConnectionStore>(_store);
         Services.AddSingleton<IConnectionManagerController>(_controller);
         Services.AddSingleton<IDialogService>(_dialogs);
+        Services.AddSingleton<INotificationService>(_notifications);
     }
 
     private async Task<IRenderedComponent<ConnectionManagerModal>> OpenAsync(DatabaseKind? kind = null)
@@ -749,5 +831,1031 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
 
         Assert.NotEmpty(texts);
         Assert.All(texts, t => Assert.DoesNotContain("SQL Server", t, StringComparison.Ordinal));
+    }
+
+    // ── Spec 043 follow-up (review): a SQL login's password on the engine, Forget, and the copy from another tab ─────────────
+
+    private async Task<IRenderedComponent<ConnectionManagerModal>> OpenSqlLoginAsync(bool remembered)
+    {
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = remembered;
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-auth-sql]").Change(true);
+        Type(cut, "conn-server-input", "sql01");
+        cut.Find("[data-testid=conn-server-input]").Change("sql01");
+        // A browser fires input while typing and change when the field is left; the engine is asked on the change.
+        cut.Find("[data-testid=conn-login-input]").Input("app");
+        cut.Find("[data-testid=conn-login-input]").Change("app");
+        return cut;
+    }
+
+    private static bool RememberTicked(IRenderedComponent<ConnectionManagerModal> cut) =>
+        cut.Find("[data-testid=conn-sql-remember]").HasAttribute("checked");
+
+    [Fact]
+    public async Task Remember_is_ticked_when_the_engine_holds_the_logins_password()
+    {
+        var cut = await OpenSqlLoginAsync(remembered: true);
+
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
+        Assert.NotEmpty(cut.FindAll("[data-testid=conn-sql-forget]"));
+    }
+
+    [Fact]
+    public async Task With_Remember_unticked_the_password_must_be_typed_even_when_the_engine_holds_one()
+    {
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);
+
+        Assert.Null(cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
+        cut.Find("[data-testid=conn-test-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password", cut.Find("[data-testid=conn-message]").TextContent));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Tested);
+        Assert.Empty(_sql.Connected);
+        Assert.Empty(_sql.SqlForgets);   // nothing is forgotten until a connect succeeds
+    }
+
+    [Fact]
+    public async Task Connecting_with_Remember_unticked_forgets_the_engines_copy_after_the_connect()
+    {
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);
+        Type(cut, "conn-password-input", "typed-now");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var target = Assert.Single(_sql.Connected);
+        Assert.Equal("typed-now", target.Password);
+        Assert.False(target.RememberPassword);
+        Assert.Equal(("sql01", "app"), Assert.Single(_sql.SqlForgets));
+        Assert.False(_sql.SqlRemembered);
+        Assert.Empty(_notifications.Sent);
+    }
+
+    [Fact]
+    public async Task A_forget_on_connect_the_engine_does_not_answer_says_the_engine_still_holds_the_password()
+    {
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);
+        Type(cut, "conn-password-input", "typed-now");
+        _sql.ForgetAnswered = false;
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));   // the connect stands
+        var notice = Assert.Single(_notifications.Sent);
+        Assert.Equal(NotificationKind.Warning, notice.Kind);
+        Assert.Contains("did not confirm that it forgot the password", notice.Text);
+        Assert.Contains("may still be remembered on the engine machine", notice.Text);
+        Assert.True(_sql.SqlRemembered);
+    }
+
+    [Fact]
+    public async Task Forget_that_the_engine_does_not_answer_says_so_and_changes_nothing()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = true,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        _sql.ForgetAnswered = false;
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+
+        cut.Find("[data-testid=conn-sql-forget]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("The engine did not confirm that it forgot the password; it may still be remembered on the engine machine.", cut.Find("[data-testid=conn-message]").TextContent.Trim()));
+        Assert.Contains("error", cut.Find("[data-testid=conn-message]").ClassList);
+        Assert.Single(_sql.SqlForgets);
+        Assert.NotEmpty(cut.FindAll("[data-testid=conn-sql-forget]"));
+        Assert.True(RememberTicked(cut));
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task Forget_that_the_engine_answers_unticks_Remember_and_clears_the_saved_row()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = true,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+
+        cut.Find("[data-testid=conn-sql-forget]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("The remembered password was forgotten.", cut.Find("[data-testid=conn-message]").TextContent.Trim()));
+        Assert.Empty(cut.FindAll("[data-testid=conn-sql-forget]"));
+        Assert.False(RememberTicked(cut));
+        Assert.False((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task A_PostgreSQL_forget_the_engine_does_not_answer_keeps_the_remembered_password()
+    {
+        var cut = await OpenWithRememberedAsync();
+        _sql.ForgetAnswered = false;
+
+        cut.Find("[data-testid=conn-pg-forget]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("The engine did not confirm that it forgot the password; it may still be remembered on the engine machine.", cut.Find("[data-testid=conn-message]").TextContent.Trim()));
+        Assert.NotEmpty(cut.FindAll("[data-testid=conn-pg-forget]"));
+        Assert.True(cut.Find("[data-testid=conn-pg-remember]").HasAttribute("checked"));
+        Assert.True(_sql.Remembered);
+    }
+
+    [Fact]
+    public async Task A_password_the_engine_could_not_keep_is_told_and_the_saved_row_is_not_left_remembered()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = true,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.ConnectReply = new ConnectResult(true, Remembered: false);   // the engine could not write its store
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        Assert.True(RememberTicked(cut));
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.True(Assert.Single(_sql.Connected).RememberPassword);
+        var notice = Assert.Single(_notifications.Sent);
+        Assert.Equal(NotificationKind.Warning, notice.Kind);
+        Assert.Contains("could not keep the password", notice.Text);
+        Assert.False((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task A_password_the_engine_kept_needs_no_notice()
+    {
+        _sql.ConnectReply = new ConnectResult(true, Remembered: true);
+        var cut = await OpenSqlLoginAsync(remembered: false);
+        cut.Find("[data-testid=conn-sql-remember]").Change(true);
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.Empty(_notifications.Sent);
+        Assert.Empty(_sql.SqlForgets);
+    }
+
+    private static ConnectionBinding SqlLogin(string server = "sql01", string login = "app", bool remember = false) =>
+        new() { Kind = DatabaseKind.SqlServer, Server = server, Database = "Sales", WindowsAuth = false, Login = login, RememberPassword = remember };
+
+    // A new query tab opened on a connected SQL login tab (New query): its binding is a copy of that tab's.
+    private SqlSessionState NewQueryTab(string sourceServer = "sql01", string sourceLogin = "app")
+    {
+        var source = new SqlSessionState("source-tab") { IsConnected = true, Binding = SqlLogin(sourceServer, sourceLogin) };
+        _sql.Sessions.Add(source);
+        var tab = new SqlSessionState("new-tab") { Binding = SqlLogin(sourceServer, sourceLogin), NeedsReattach = true, CopyPasswordFrom = "source-tab" };
+        _sql.Sessions.Add(tab);
+        return tab;
+    }
+
+    [Fact]
+    public async Task A_new_query_tabs_dialog_lists_and_connects_with_the_password_of_the_tab_it_was_opened_from()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        _sql.ActiveSession = NewQueryTab();
+
+        var cut = await OpenAsync();
+
+        // Nothing typed: the list comes with the other tab's password, and Connect needs none either.
+        cut.WaitForAssertion(() => Assert.NotEmpty(_sql.Listed));
+        var listed = _sql.Listed.Last();
+        Assert.Equal("source-tab", listed.CopyPasswordFrom);
+        Assert.True(string.IsNullOrEmpty(listed.Password));
+        Assert.Equal("The same as the query tab this one was opened from", cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.Equal("source-tab", Assert.Single(_sql.Connected).CopyPasswordFrom);
+    }
+
+    [Fact]
+    public async Task A_typed_password_is_sent_instead_of_the_other_tabs_and_an_engine_that_cannot_copy_asks_for_one()
+    {
+        _sql.ActiveSession = NewQueryTab();
+        var cut = await OpenAsync();   // the engine does not offer session.copy.v2
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+
+        _sql.EngineCopiesSessionPasswords = true;
+        Type(cut, "conn-password-input", "typed");
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Single(_sql.Connected));
+        Assert.Null(_sql.Connected.Single().CopyPasswordFrom);
+        Assert.Equal("typed", _sql.Connected.Single().Password);
+    }
+
+    [Fact]
+    public async Task A_remembered_PostgreSQL_password_refused_by_its_error_code_says_so_whatever_the_servers_words()
+    {
+        // A server in another language: no "28P01" or English text, only the engine's code.
+        _sql.ConnectReply = new ConnectResult(false, "la authentification par mot de passe a échoué",
+            ErrorCode: AkmlSql.Core.Ipc.Messages.DialectErrors.PgLoginFailed);
+        var cut = await OpenWithRememberedAsync();
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("remembered password was not accepted", cut.Find("[data-testid=conn-message]").TextContent));
+    }
+
+    // ── Spec 043 follow-up (review, round 2) ─────────────────────────────────────────────────────────────────────────────────
+
+    private static string? Placeholder(IRenderedComponent<ConnectionManagerModal> cut, string testId = "conn-password-input") =>
+        cut.Find($"[data-testid={testId}]").GetAttribute("placeholder");
+
+    // [1] The released engines advertise session.copy.v1 only: they ignore a database list's copy source.
+    [Fact]
+    public async Task On_an_engine_without_session_copy_v2_a_new_tabs_dialog_neither_lists_nor_offers_the_other_tabs_password()
+    {
+        _sql.EngineCopiesSessionPasswords = false;
+        _sql.ActiveSession = NewQueryTab();
+
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-database-refresh]").Click();
+
+        Assert.Equal("sql01", cut.Find("[data-testid=conn-server-input]").GetAttribute("value"));
+        Assert.Null(Placeholder(cut));
+        Assert.Contains("Enter the SQL password", cut.Find("[data-testid=conn-database-hint]").TextContent);
+        Assert.Empty(_sql.Listed);
+    }
+
+    // [3] The dialog a run opened because the tab's remembered password was refused.
+    private static SqlSessionState RefusedTab(ConnectionBinding binding) =>
+        new("refused-tab") { Binding = binding, NeedsReattach = true, PasswordMissing = true, PasswordRefused = true };
+
+    private async Task<IRenderedComponent<ConnectionManagerModal>> OpenOnAsync(SqlSessionState tab)
+    {
+        var cut = Render<ConnectionManagerModal>();
+        await cut.InvokeAsync(() => _controller.Open(tab, tab.Binding));
+        cut.WaitForElement("[data-testid=connection-manager]");
+        return cut;
+    }
+
+    [Fact]
+    public async Task A_tab_whose_remembered_SQL_password_was_refused_asks_for_the_current_one_and_never_sends_the_old_one()
+    {
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;   // the engine still holds the password the server refused
+        _sql.ConnectReply = new ConnectResult(true, Remembered: true);
+
+        var cut = await OpenOnAsync(RefusedTab(SqlLogin(remember: true)));
+
+        cut.WaitForElement("[data-testid=conn-sql-refused-hint]");
+        Assert.Contains("not accepted", cut.Find("[data-testid=conn-sql-refused-hint]").TextContent);
+        Assert.Null(Placeholder(cut));
+        Assert.True(RememberTicked(cut));   // the password typed now replaces the stored one
+        Assert.Empty(_sql.Listed);          // no list with the refused password
+
+        cut.Find("[data-testid=conn-test-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password", cut.Find("[data-testid=conn-message]").TextContent));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Tested);
+        Assert.Empty(_sql.Connected);
+
+        Type(cut, "conn-password-input", "current");
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var target = Assert.Single(_sql.Connected);
+        Assert.Equal(("current", true), (target.Password, target.RememberPassword));
+    }
+
+    [Fact]
+    public async Task Another_login_in_the_dialog_of_a_refused_tab_follows_the_normal_rules()
+    {
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        var cut = await OpenOnAsync(RefusedTab(SqlLogin(remember: true)));
+        cut.WaitForElement("[data-testid=conn-sql-refused-hint]");
+
+        cut.Find("[data-testid=conn-login-input]").Input("reporting");
+        cut.Find("[data-testid=conn-login-input]").Change("reporting");
+
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        Assert.Empty(cut.FindAll("[data-testid=conn-sql-refused-hint]"));
+        cut.WaitForAssertion(() => Assert.NotEmpty(_sql.Listed));
+        Assert.Equal("reporting", _sql.Listed.Last().User);
+    }
+
+    [Fact]
+    public async Task A_PostgreSQL_tab_whose_remembered_password_was_refused_asks_for_the_current_one_and_never_sends_the_old_one()
+    {
+        _sql.Remembered = true;
+        var binding = new ConnectionBinding
+        {
+            Kind = DatabaseKind.PostgreSql, Server = "db1", Port = 5432, Database = "sales", Login = "app", RememberPassword = true,
+        };
+
+        var cut = await OpenOnAsync(RefusedTab(binding));
+
+        cut.WaitForElement("[data-testid=conn-pg-refused-hint]");
+        Assert.Null(Placeholder(cut, "conn-pg-password"));
+        Assert.True(cut.Find("[data-testid=conn-pg-remember]").HasAttribute("checked"));
+        cut.Find("[data-testid=conn-pg-database-refresh]").Click();
+        Assert.Contains("Enter the password", cut.Find("[data-testid=conn-pg-database-hint]").TextContent);
+        cut.Find("[data-testid=conn-test-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the current password", cut.Find("[data-testid=conn-message]").TextContent));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the current password", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Listed);
+        Assert.Empty(_sql.Tested);
+        Assert.Empty(_sql.Connected);
+
+        Type(cut, "conn-pg-password", "current");
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var target = Assert.Single(_sql.Connected);
+        Assert.Equal(("current", true), (target.Password, target.RememberPassword));
+    }
+
+    // [4] The other tab's password, only where it can be the right one.
+    [Fact]
+    public async Task A_new_tabs_dialog_offers_the_other_tabs_password_only_for_that_tabs_server_and_login()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        _sql.ActiveSession = NewQueryTab();
+        var cut = await OpenAsync();
+        cut.WaitForAssertion(() => Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut)));
+
+        Type(cut, "conn-server-input", "sql02");
+        cut.Find("[data-testid=conn-server-input]").Change("sql02");
+
+        Assert.Null(Placeholder(cut));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+
+        Type(cut, "conn-server-input", " SQL01 ");   // the other tab's server again, written another way
+        cut.Find("[data-testid=conn-server-input]").Change(" SQL01 ");
+        Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut));
+
+        cut.Find("[data-testid=conn-login-input]").Input("reporting");
+        Assert.Null(Placeholder(cut));
+    }
+
+    [Fact]
+    public async Task A_new_tabs_dialog_does_not_offer_the_password_of_a_tab_that_was_closed()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        var tab = NewQueryTab();
+        _sql.Sessions.RemoveAll(s => s.SessionId == "source-tab");
+        _sql.ActiveSession = tab;
+
+        var cut = await OpenAsync();
+
+        Assert.Null(Placeholder(cut));
+        Assert.Empty(_sql.Listed);
+    }
+
+    [Fact]
+    public async Task With_Remember_unticked_and_a_password_remembered_for_the_login_the_other_tabs_password_is_not_used_either()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        _sql.ActiveSession = NewQueryTab();
+        var cut = await OpenAsync();
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);
+
+        // A refused copy would fall back to the remembered password, which unticking Remember said not to use.
+        Assert.Null(Placeholder(cut));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+    }
+
+    [Fact]
+    public async Task An_answer_about_a_remembered_password_that_arrives_after_Remember_was_changed_does_not_tick_it_again()
+    {
+        await _store.AddAsync(new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = true,
+        });
+        _sql.EngineRemembersSqlServerPasswords = true;
+        var answer = new TaskCompletionSource<bool>();
+        _sql.SqlRememberedAnswer = () => answer.Task;
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();   // the engine is asked; no answer yet
+        Assert.True(RememberTicked(cut));                  // the saved row asks for it
+
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);   // the user's choice, while the engine is asked
+        await cut.InvokeAsync(() => answer.SetResult(true));
+
+        cut.WaitForElement("[data-testid=conn-sql-forget]");   // the answer arrived
+        Assert.False(RememberTicked(cut));
+        Assert.Null(Placeholder(cut));
+    }
+
+    // [5] The engine kept no new password, and held an older one.
+    [Fact]
+    public async Task A_new_password_the_engine_could_not_keep_says_the_one_it_remembered_before_may_still_be_used()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = true,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        _sql.ConnectReply = new ConnectResult(true, Remembered: false);
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        Type(cut, "conn-password-input", "new-password");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var notice = Assert.Single(_notifications.Sent);
+        Assert.Equal(NotificationKind.Warning, notice.Kind);
+        Assert.Contains("may still be used", notice.Text);
+        Assert.Contains("Forget", notice.Text);
+        Assert.DoesNotContain("asked for again next time", notice.Text);
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);   // Settings › Connections still offers Forget password
+    }
+
+    // ── Spec 043 follow-up (review, round 3) ─────────────────────────────────────────────────────────────────────────────────
+
+    // [1] The question about a SQL login's password is for the form's certificate choice, and is asked again when it changes.
+    [Fact]
+    public async Task Changing_the_trust_choice_asks_the_engine_again_for_that_choice()
+    {
+        _sql.SqlRememberedForTrust = trust => !trust;   // a password remembered for a validated connection only
+        var cut = await OpenSqlLoginAsync(remembered: false);
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        Assert.Equal(("sql01", "app", false), _sql.SqlAsked.Last());
+
+        cut.Find("[data-testid=conn-trust-cert]").Change(true);
+
+        cut.WaitForAssertion(() => Assert.Equal(("sql01", "app", true), _sql.SqlAsked.Last()));
+        cut.WaitForAssertion(() => Assert.Null(Placeholder(cut)));
+        Assert.Empty(cut.FindAll("[data-testid=conn-sql-forget]"));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+
+        cut.Find("[data-testid=conn-trust-cert]").Change(false);
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+    }
+
+    // [2] A tab with no binding that is missing its password: the Status bar's restore of a remembered login on a fresh page.
+    private async Task<SavedSqlConnection> ActiveSavedSqlLoginAsync()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = true,
+        };
+        await _store.AddAsync(row);
+        await _store.SetActiveIdAsync(row.Id);
+        return row;
+    }
+
+    private static SqlSessionState FreshTabMissingItsPassword(ConnectionBinding signIn, bool refused) =>
+        new("fresh-tab") { PasswordMissing = true, PasswordMissingFor = signIn, PasswordRefused = refused };
+
+    // The Status bar restores the saved row it names, so the mark's sign-in carries the row's id.
+    private static ConnectionBinding RestoredSignIn(SavedSqlConnection row)
+    {
+        var signIn = SqlLogin(remember: true);
+        signIn.SavedConnectionId = row.Id;
+        return signIn;
+    }
+
+    [Fact]
+    public async Task A_tab_with_no_binding_whose_restored_login_was_refused_neither_lists_nor_sends_the_refused_password()
+    {
+        var row = await ActiveSavedSqlLoginAsync();
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;   // the engine still holds the password the server refused
+        _sql.ConnectReply = new ConnectResult(true, Remembered: true);
+        _sql.ActiveSession = FreshTabMissingItsPassword(RestoredSignIn(row), refused: true);
+
+        var cut = await OpenAsync();   // the run of a tab with no binding: the dialog opens on the last saved row used
+
+        cut.WaitForElement("[data-testid=conn-sql-forget]");   // the engine was asked and holds one
+        Assert.Contains("selected", cut.Find("[data-testid=conn-row]").ClassList);
+        Assert.True(RememberTicked(cut));   // the password typed now replaces the stored one
+        Assert.Contains("not accepted", cut.Find("[data-testid=conn-sql-refused-hint]").TextContent);
+        Assert.Empty(cut.FindAll("[data-testid=conn-sql-missing-hint]"));
+        Assert.Null(Placeholder(cut));
+        Assert.Empty(_sql.Listed);   // no list with the refused password
+
+        cut.Find("[data-testid=conn-database-refresh]").Click();
+        Assert.Contains("Enter the SQL password", cut.Find("[data-testid=conn-database-hint]").TextContent);
+        cut.Find("[data-testid=conn-test-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password", cut.Find("[data-testid=conn-message]").TextContent));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Listed);
+        Assert.Empty(_sql.Tested);
+        Assert.Empty(_sql.Connected);
+
+        Type(cut, "conn-password-input", "current");
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var target = Assert.Single(_sql.Connected);
+        Assert.Equal(("current", true), (target.Password, target.RememberPassword));
+    }
+
+    [Fact]
+    public async Task A_tab_with_no_binding_whose_engine_had_no_password_says_that_instead()
+    {
+        var row = await ActiveSavedSqlLoginAsync();
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.ActiveSession = FreshTabMissingItsPassword(RestoredSignIn(row), refused: false);
+
+        var cut = await OpenAsync();
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(_sql.SqlAsked));
+        Assert.Contains("no password it can use for this login", cut.Find("[data-testid=conn-sql-missing-hint]").TextContent);
+        Assert.Empty(cut.FindAll("[data-testid=conn-sql-refused-hint]"));
+        Assert.Empty(_sql.Listed);
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+    }
+
+    [Fact]
+    public async Task Another_login_in_the_dialog_of_a_tab_with_no_binding_follows_the_normal_rules()
+    {
+        var row = await ActiveSavedSqlLoginAsync();
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        _sql.ActiveSession = FreshTabMissingItsPassword(RestoredSignIn(row), refused: true);
+        var cut = await OpenAsync();
+        cut.WaitForElement("[data-testid=conn-sql-refused-hint]");
+
+        cut.Find("[data-testid=conn-login-input]").Input("reporting");
+        cut.Find("[data-testid=conn-login-input]").Change("reporting");
+
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        Assert.Empty(cut.FindAll("[data-testid=conn-sql-refused-hint]"));
+        cut.WaitForAssertion(() => Assert.NotEmpty(_sql.Listed));
+        Assert.Equal("reporting", _sql.Listed.Last().User);
+    }
+
+    [Fact]
+    public async Task A_PostgreSQL_tab_with_no_binding_whose_remembered_password_was_refused_asks_for_the_current_one()
+    {
+        var row = new SavedSqlConnection { Name = "PG", Kind = DatabaseKind.PostgreSql, Server = "db1", Database = "sales", Login = "app", RememberPassword = true };
+        await _store.AddAsync(row);
+        await _store.SetActiveIdAsync(row.Id);
+        _sql.Remembered = true;
+        _sql.ActiveSession = FreshTabMissingItsPassword(new ConnectionBinding
+        {
+            Kind = DatabaseKind.PostgreSql, Server = "db1", Port = 5432, Database = "sales", Login = "app", RememberPassword = true,
+        }, refused: true);
+
+        var cut = await OpenAsync(DatabaseKind.PostgreSql);
+
+        cut.WaitForElement("[data-testid=conn-pg-forget]");   // the engine was asked and holds one
+        Assert.Contains("not accepted", cut.Find("[data-testid=conn-pg-refused-hint]").TextContent);
+        Assert.Null(Placeholder(cut, "conn-pg-password"));
+        Assert.Empty(_sql.Listed);
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the current password", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+    }
+
+    [Fact]
+    public async Task A_tab_with_no_binding_opens_on_the_sign_in_its_password_is_missing_for_of_either_kind()
+    {
+        _sql.Remembered = true;
+        _sql.ActiveSession = FreshTabMissingItsPassword(new ConnectionBinding
+        {
+            Kind = DatabaseKind.PostgreSql, Server = "db1", Port = 6000, Database = "sales", Login = "app", SslMode = "require", RememberPassword = true,
+        }, refused: false);
+
+        var cut = await OpenAsync();   // no kind asked for, no saved row: the tab's record decides
+
+        Assert.Equal("true", cut.Find("[data-testid=conn-kind-postgresql]").GetAttribute("aria-pressed"));
+        Assert.Equal(("db1", "6000", "app"), (cut.Find("[data-testid=conn-pg-host]").GetAttribute("value"),
+            cut.Find("[data-testid=conn-pg-port]").GetAttribute("value"), cut.Find("[data-testid=conn-pg-user]").GetAttribute("value")));
+        cut.WaitForElement("[data-testid=conn-pg-missing-hint]");
+        Assert.Empty(_sql.Listed);   // not even with the password the engine says it holds
+    }
+
+    // [3] Where to forget a password the engine still holds after it could not keep the new one.
+    [Fact]
+    public async Task A_new_password_the_engine_could_not_keep_makes_the_saved_row_offer_Forget_password_in_Settings()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = false,   // saved without it; the engine holds one for this login all the same
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;
+        _sql.ConnectReply = new ConnectResult(true, Remembered: false);
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        Assert.True(RememberTicked(cut));
+        Type(cut, "conn-password-input", "new-password");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var notice = Assert.Single(_notifications.Sent);
+        Assert.Contains("Forget it in Connect to database", notice.Text);
+        Assert.Contains("Forget password in Settings › Connections", notice.Text);
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);   // so Settings › Connections shows Forget password
+    }
+
+    [Fact]
+    public async Task A_new_password_the_engine_could_not_keep_without_a_saved_row_points_only_to_Connect_to_database()
+    {
+        _sql.ConnectReply = new ConnectResult(true, Remembered: false);
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        Type(cut, "conn-password-input", "new-password");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        var notice = Assert.Single(_notifications.Sent);
+        Assert.Contains("may still be used", notice.Text);
+        Assert.Contains("Forget it in Connect to database.", notice.Text);
+        Assert.DoesNotContain("Settings", notice.Text);
+    }
+
+    [Fact]
+    public async Task A_saved_row_for_another_login_than_the_one_connected_is_not_made_to_offer_Forget()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = false,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        _sql.SqlRemembered = true;   // for any login, in this fake
+        _sql.ConnectReply = new ConnectResult(true, Remembered: false);
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.Find("[data-testid=conn-login-input]").Input("reporting");   // the form edited away from the row's login
+        cut.Find("[data-testid=conn-login-input]").Change("reporting");
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        Type(cut, "conn-password-input", "new-password");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.DoesNotContain("Settings", Assert.Single(_notifications.Sent).Text);
+        Assert.False((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    // [4] Another tab's password is offered only where the engine would copy it: the same certificate checking too.
+    [Fact]
+    public async Task A_new_tabs_dialog_offers_the_other_tabs_password_only_with_its_trust_choice()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        _sql.ActiveSession = NewQueryTab();   // sql01, certificate validated
+        var cut = await OpenAsync();
+        cut.WaitForAssertion(() => Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut)));
+
+        cut.Find("[data-testid=conn-trust-cert]").Change(true);
+
+        Assert.Null(Placeholder(cut));
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+
+        cut.Find("[data-testid=conn-trust-cert]").Change(false);
+        Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut));
+    }
+
+    [Fact]
+    public async Task On_the_engine_machine_the_other_tabs_password_is_offered_whatever_either_trust_checkbox_says()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        _sql.Sessions.Add(new SqlSessionState("source-tab") { IsConnected = true, Binding = SqlLogin("localhost") });   // unticked
+        var binding = SqlLogin("localhost");
+        binding.TrustServerCertificate = true;
+        _sql.ActiveSession = new SqlSessionState("new-tab") { Binding = binding, NeedsReattach = true, CopyPasswordFrom = "source-tab" };
+
+        var cut = await OpenAsync();
+
+        Assert.True(cut.Find("[data-testid=conn-trust-cert]").HasAttribute("checked"));
+        cut.WaitForAssertion(() => Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut)));
+    }
+
+    [Fact]
+    public async Task A_new_PostgreSQL_tabs_dialog_copies_the_other_tabs_password_only_with_its_TLS_mode()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        var pg = new ConnectionBinding { Kind = DatabaseKind.PostgreSql, Server = "db1", Port = 5432, Database = "sales", Login = "app", SslMode = "require" };
+        _sql.Sessions.Add(new SqlSessionState("source-tab") { IsConnected = true, Binding = pg });
+        _sql.ActiveSession = new SqlSessionState("new-tab") { Binding = pg.Clone(), NeedsReattach = true, CopyPasswordFrom = "source-tab" };
+        var cut = await OpenAsync();
+
+        cut.Find("[data-testid=conn-test-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Single(_sql.Tested));
+        Assert.Equal("source-tab", _sql.Tested[0].CopyPasswordFrom);
+
+        cut.Find("[data-testid=conn-pg-sslmode]").Change("verify-full");
+        cut.Find("[data-testid=conn-test-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Equal(2, _sql.Tested.Count));
+        Assert.Null(_sql.Tested[1].CopyPasswordFrom);
+    }
+
+    // ── Spec 043 follow-up (review, round 4) ─────────────────────────────────────────────────────────────────────────────────
+
+    // [1] Once the user has changed Remember for the form, no answer from the engine ticks it again — until a form is loaded.
+    [Fact]
+    public async Task Remember_unticked_before_the_trust_choice_is_changed_and_back_is_not_ticked_by_the_new_answer()
+    {
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);   // the user's choice, before the next question
+        int asked = _sql.SqlAsked.Count;
+
+        cut.Find("[data-testid=conn-trust-cert]").Change(true);
+        cut.Find("[data-testid=conn-trust-cert]").Change(false);   // and back: asked again, and the engine holds one
+
+        cut.WaitForAssertion(() => Assert.Equal(asked + 2, _sql.SqlAsked.Count));
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        Assert.False(RememberTicked(cut));
+        Assert.Null(Placeholder(cut));   // the remembered password is not used: it is typed, and a connect forgets the old one
+    }
+
+    [Fact]
+    public async Task Remember_unticked_before_the_login_is_edited_and_back_is_not_ticked_by_the_new_answer()
+    {
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);
+
+        cut.Find("[data-testid=conn-login-input]").Input("reporting");
+        cut.Find("[data-testid=conn-login-input]").Change("reporting");
+        cut.Find("[data-testid=conn-login-input]").Input("app");
+        cut.Find("[data-testid=conn-login-input]").Change("app");
+
+        cut.WaitForAssertion(() => Assert.Equal(("sql01", "app", false), _sql.SqlAsked.Last()));
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        Assert.False(RememberTicked(cut));
+    }
+
+    [Fact]
+    public async Task A_saved_row_shown_after_Remember_was_unticked_is_a_new_form_that_the_engines_answer_ticks()
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = false,
+        };
+        await _store.AddAsync(row);
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);
+
+        cut.Find("[data-testid=conn-row-pick]").Click();   // a load: the choice was about the form before it
+
+        cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
+        Assert.Equal("Remembered on the engine machine", Placeholder(cut));
+    }
+
+    // [2] The saved row says the password is remembered when the engine kept it, and only the row's own login changes the flag.
+    private async Task<(IRenderedComponent<ConnectionManagerModal> Cut, SavedSqlConnection Row)> OpenOnSavedSqlLoginAsync(bool rememberPassword)
+    {
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            RememberPassword = rememberPassword,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.WaitForAssertion(() => Assert.NotEmpty(_sql.SqlAsked));
+        return (cut, row);
+    }
+
+    private static void EditLogin(IRenderedComponent<ConnectionManagerModal> cut, string login)
+    {
+        cut.Find("[data-testid=conn-login-input]").Input(login);
+        cut.Find("[data-testid=conn-login-input]").Change(login);
+    }
+
+    [Fact]
+    public async Task A_password_the_engine_kept_makes_the_saved_row_say_it_is_remembered()
+    {
+        _sql.ConnectReply = new ConnectResult(true, Remembered: true);   // a v2 engine's word, or a v1 engine asked to keep it
+        var (cut, row) = await OpenOnSavedSqlLoginAsync(rememberPassword: false);
+        Assert.False(RememberTicked(cut));
+        cut.Find("[data-testid=conn-sql-remember]").Change(true);
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.True(Assert.Single(_sql.Connected).RememberPassword);
+        Assert.Empty(_notifications.Sent);
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);   // the Status bar restores it; Settings offers Forget password
+    }
+
+    [Fact]
+    public async Task A_password_kept_on_a_validating_connect_is_not_claimed_for_a_row_that_trusts_a_remote_server()
+    {
+        // The engine keeps the password under the validating key; the row's own connect (trusting, remote) is given only a
+        // password kept on a trusting connect, so marking the row remembered would make its restore ask anyway.
+        _sql.ConnectReply = new ConnectResult(true, Remembered: true);
+        var row = new SavedSqlConnection
+        {
+            Name = "Remote", Kind = DatabaseKind.SqlServer, Server = "sql01", Database = "Sales", WindowsAuth = false, Login = "app",
+            TrustServerCertificate = true,
+        };
+        await _store.AddAsync(row);
+        _sql.EngineRemembersSqlServerPasswords = true;
+        var cut = await OpenAsync();
+        cut.Find("[data-testid=conn-row-pick]").Click();
+        cut.WaitForAssertion(() => Assert.NotEmpty(_sql.SqlAsked));
+        cut.Find("[data-testid=conn-trust-cert]").Change(false);
+        cut.Find("[data-testid=conn-sql-remember]").Change(true);
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.False(Assert.Single(_sql.Connected).TrustServerCertificate);
+        Assert.False((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task A_password_kept_for_another_login_than_the_saved_rows_leaves_the_row_as_it_was()
+    {
+        _sql.ConnectReply = new ConnectResult(true, Remembered: true);
+        var (cut, row) = await OpenOnSavedSqlLoginAsync(rememberPassword: false);
+        EditLogin(cut, "reporting");
+        cut.Find("[data-testid=conn-sql-remember]").Change(true);
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.Equal("reporting", Assert.Single(_sql.Connected).User);
+        Assert.False((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task A_password_not_kept_for_another_login_than_the_saved_rows_does_not_clear_the_rows_flag()
+    {
+        _sql.ConnectReply = new ConnectResult(true, Remembered: false);   // the engine could not keep the new login's password
+        var (cut, row) = await OpenOnSavedSqlLoginAsync(rememberPassword: true);
+        EditLogin(cut, "reporting");
+        cut.WaitForAssertion(() => Assert.Equal(("sql01", "reporting", false), _sql.SqlAsked.Last()));
+        Assert.True(RememberTicked(cut));   // from the row: the user asks to keep the new login's password
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.Contains("could not keep the password for reporting", Assert.Single(_notifications.Sent).Text);
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);   // the row's login (app) keeps its remembered password
+    }
+
+    [Fact]
+    public async Task Forgetting_another_logins_password_on_connect_does_not_clear_the_rows_flag()
+    {
+        _sql.SqlRemembered = true;   // for any login, in this fake
+        var (cut, row) = await OpenOnSavedSqlLoginAsync(rememberPassword: true);
+        EditLogin(cut, "reporting");
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+        cut.Find("[data-testid=conn-sql-remember]").Change(false);   // forget the one remembered for reporting
+        Type(cut, "conn-password-input", "s3cret");
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=connection-manager]")));
+        Assert.Equal(("sql01", "reporting"), Assert.Single(_sql.SqlForgets));
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task Forget_it_for_another_login_than_the_saved_rows_does_not_clear_the_rows_flag()
+    {
+        _sql.SqlRemembered = true;
+        var (cut, row) = await OpenOnSavedSqlLoginAsync(rememberPassword: true);
+        EditLogin(cut, "reporting");
+        cut.WaitForElement("[data-testid=conn-sql-forget]");
+
+        cut.Find("[data-testid=conn-sql-forget]").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("The remembered password was forgotten.", cut.Find("[data-testid=conn-message]").TextContent.Trim()));
+        Assert.Equal(("sql01", "reporting"), Assert.Single(_sql.SqlForgets));
+        Assert.True((await _store.GetAsync(row.Id))!.RememberPassword);
+    }
+
+    // [3] A refused remembered password marks the tab before the dialog words its message; the message still says what happened.
+    [Fact]
+    public async Task A_remembered_SQL_password_the_server_refuses_on_connect_says_so_although_the_refusal_marked_the_tab()
+    {
+        var tab = new SqlSessionState("fresh");
+        _sql.ActiveSession = tab;
+        _sql.ConnectReply = new ConnectResult(false, "Login failed for user 'app'.", ErrorCode: AkmlSql.Core.Ipc.Messages.DialectErrors.LoginFailed);
+        var cut = await OpenSqlLoginAsync(remembered: true);
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("remembered password was not accepted", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.True(string.IsNullOrEmpty(Assert.Single(_sql.Connected).Password));
+        Assert.Equal((true, true), (tab.PasswordMissing, tab.PasswordRefused));   // marked as the service marks it
+        cut.WaitForElement("[data-testid=conn-sql-refused-hint]");               // and the form now asks for the current one
+        Assert.Null(Placeholder(cut));
+    }
+
+    [Fact]
+    public async Task A_remembered_PostgreSQL_password_the_server_refuses_on_connect_says_so_although_the_refusal_marked_the_tab()
+    {
+        var tab = new SqlSessionState("fresh-pg");
+        _sql.ActiveSession = tab;
+        _sql.ConnectReply = new ConnectResult(false, "la authentification par mot de passe a échoué",
+            ErrorCode: AkmlSql.Core.Ipc.Messages.DialectErrors.PgLoginFailed);
+        var cut = await OpenWithRememberedAsync();
+
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("remembered password was not accepted", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Equal((true, true), (tab.PasswordMissing, tab.PasswordRefused));
+        cut.WaitForElement("[data-testid=conn-pg-refused-hint]");
+        Assert.Null(Placeholder(cut, "conn-pg-password"));
+    }
+
+    // [4] The tab a new tab was opened from must still be connected for its password to be offered: the engine copies only then.
+    [Fact]
+    public async Task A_new_tabs_dialog_does_not_offer_the_password_of_a_tab_whose_connection_was_lost()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        var tab = NewQueryTab();
+        _sql.Sessions.Single(s => s.SessionId == "source-tab").IsConnected = false;   // as MarkConnectionLost leaves it: binding kept
+        _sql.ActiveSession = tab;
+
+        var cut = await OpenAsync();
+
+        Assert.Equal("sql01", cut.Find("[data-testid=conn-server-input]").GetAttribute("value"));
+        Assert.Null(Placeholder(cut));
+        Assert.Empty(_sql.Listed);
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Contains("Enter the SQL password to connect", cut.Find("[data-testid=conn-message]").TextContent));
+        Assert.Empty(_sql.Connected);
+
+        Type(cut, "conn-password-input", "typed");
+        cut.Find("[data-testid=conn-connect-btn]").Click();
+        cut.WaitForAssertion(() => Assert.Single(_sql.Connected));
+        Assert.Null(_sql.Connected.Single().CopyPasswordFrom);
+    }
+
+    [Fact]
+    public async Task A_new_PostgreSQL_tabs_dialog_does_not_copy_from_a_tab_whose_connection_was_lost()
+    {
+        _sql.EngineCopiesSessionPasswords = true;
+        var pg = new ConnectionBinding { Kind = DatabaseKind.PostgreSql, Server = "db1", Port = 5432, Database = "sales", Login = "app" };
+        _sql.Sessions.Add(new SqlSessionState("source-tab") { IsConnected = false, Binding = pg });
+        _sql.ActiveSession = new SqlSessionState("new-tab") { Binding = pg.Clone(), NeedsReattach = true, CopyPasswordFrom = "source-tab" };
+        var cut = await OpenAsync();
+
+        cut.Find("[data-testid=conn-test-btn]").Click();
+
+        cut.WaitForAssertion(() => Assert.Single(_sql.Tested));
+        Assert.Null(_sql.Tested[0].CopyPasswordFrom);
     }
 }

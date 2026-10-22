@@ -356,3 +356,47 @@ New browser class `WildcardExpansionTests` (3): Tab just after and just before `
 Customers columns without indenting the line or opening a list; the list shows the "C" badge, an upright right-aligned detail and flex
 rows, and Tab inserts the highlighted column. Related classes (EditorTypography, PostKeywordTrigger, PostgresEditing, UserStory2/4/5)
 15 passed, 9 known skips; JS 167 passed; `WebCssTokenTests` passed (no colour literals added).
+
+### Code review of the fixes pushed to PR #257 (2026-10-22, 13 findings) and four verification rounds
+
+A code review of `38140436`, `0d3512c7` and `1cd04c05` found 13 issues; all were fixed, and three further rounds of adversarial
+review closed what each round's fixes left open. Nothing in the released 1.26.1022.0927 / 1042 engines changes meaning silently: the
+new behaviour is under new capability ids next to the v1 ones (`credentials.sqlserver.v2`, `session.copy.v2`).
+
+| Finding | Change |
+| --- | --- |
+| 1 A refused remembered or copied password was sent again on every tab switch, bridge reopen and run | `sqlserver.login-failed` (and the new `postgresql.login-failed` for 28P01, with the old text as a fallback) marks the tab `PasswordMissing` for its own sign-in only, recording which sign-in and why; a run opens the Connect dialog, which does not use the refused password (no auto-list, must type, a hint by reason); Disconnect clears the mark |
+| 2 SQL Server Has/Forget unanswered with PostgreSQL off | `CredentialHandler` always registered (PostgreSQL requests answer the feature-off message); the web's credential questions time out after 10 s |
+| 3 A remembered password went into any password-less bridge request | `BridgeSqlSecurity.IsPlainSqlLogin` (no Entra, failover partner, certificate overrides or SPNs; Encrypt mandatory/strict); stored under `mssql-web://` (validated) or `mssql-web-trust://` (trusted), one entry per login, written in one store write; a trusting remote request is filled only from the trusted key; a loopback one also reads the key the released builds wrote; `Has` reads the same keys as the fill (`CredentialRequest` key 5) |
+| 4 Copy origin was the socket, lost on a reconnect | `HandshakeRequest.ClientInstanceId` (key 6, one per page, memory only) adopted on an accepted handshake into a mutable per-connection `BridgeConnection`; the origin lives on the engine session (`SessionState.BridgeOrigin`), so the static dictionary is gone |
+| 5 A DPAPI or write failure failed an accepted login or claimed "remembered" | `RememberIfRequested` catches everything and returns whether it saved; `TestSqlConnectionResponse.Remembered` (key 4, trusted only from v2); `SqlCredentialStore.Save`/`Remove` return whether the write landed, never write after a read error (which used to drop every other credential, the SSMS extension's too), and Forget answers `Ok=false` when it could not remove |
+| 6 ConnectionChanged without a password kept the old server | The session is moved to the new target with no connection (kind, database, origin, caches follow), so a run answers "no connection" instead of running on the old server |
+| 7 Copy compared four keywords | Every security keyword is compared, and the target must be a plain SQL login |
+| 8 Forget reported success without an answer | Forget returns `bool?`; no confirmed answer is said as such (dialog and Settings), and Settings now forgets SQL Server rows too |
+| 9 Remember unticked still used the remembered password | Unticked means type it; the checkbox shows the engine's state but never re-ticks after the user changed it; Connect with it unticked forgets the stored one; the service gate uses the target's choice |
+| 10 Tab before `*` swallowed by products, comments, `COUNT(*)` | `wildcardAtCaret` accepts only a star that starts a select-list item (SELECT / DISTINCT / ALL / TOP / a list comma / RETURNING on PostgreSQL before it, a clause or the end after it), outside comments, strings and names, on a parsed tree; a quick decline (≤ 250 ms, nothing changed) indents as Tab would |
+| 11 A remembered SQL login was not restored by the status bar | Restored when the saved row says so and the engine remembers SQL Server passwords; the row's flag follows what the engine kept |
+| 12 Copy, resolve and refuse written out three times | `BridgeSqlPassword.Supply` in ConnectionChanged, TestSqlConnection and ListDatabases (`ListDatabasesRequest` key 3); the dialog of a New query tab tests and lists with the source tab's password while that tab is connected and the form asks for the same sign-in |
+| 13 Badges: views and procedures looked like tables and functions | `view` (V) and `procedure` (P) completion types. The `@@` half of the finding was wrong: `@@` in a `.razor` file is Razor's escape for one `@`, which is what renders |
+
+Also, from the review rounds: a SQL Server tab moved to another server (or to PostgreSQL and back) with a database of the same name
+drops the old server's schema caches (`SessionState.SchemaIdentity`); a schema-load claim is held on the cache object, so a load of a
+dropped cache neither blocks nor frees its successor's; `[o].*` and `"o".*` expand (unquoted qualifier sent, the written name kept),
+and expanded names that are not plain identifiers are bracketed.
+
+Tests: web unit 1,984 passed; JS 295 passed; Core 1,470 passed (the known `ProfileGetMessageTests` key count fails); engine whole
+suite 2,635 passed, 132 live skips, the known `PerformanceBaselineTests` drift failing (and `EngineHostTests` binding ports inside the
+Windows excluded ranges now and then); with the throwaway PostgreSQL cluster two filtered runs of the credential, connection and PostgreSQL engine
+classes passed 254 and 484; PostgreSql.Tests 2,252 passed. Browser (Debug, serial; a temporary SQL login created for the run and dropped after; the
+PostgreSQL cluster on 55432): WildcardExpansion, QueryTabs, ConnectDialog and PostgresWorkspace 57 passed, 6 failed only on this
+machine's Northwind, which is the W3Schools variant (`Customers.CustomerName`, no `Invoices` view or `CustOrderHist` procedure;
+created 2025-08-05, never restored since). That disagrees with the morning entry above ("eleven Customers columns"), so those runs used
+another server than this machine's `localhost:1433`; here `Tab_on_the_star_expands_it_to_the_columns` (already in HEAD) and the new
+V/P badge rows fail on every run until the classic Northwind is installed: run with the local columns in place of the classic ones (test files put back unchanged afterwards), New query on a SQL
+login, a new tab moved to another server and Tab on either side of the star passed 4/4; the V and P badge rows need the classic
+objects and are covered by `EditorComponentCompletionTypeTests`.
+
+Left as follow-ups (they predate these commits): a PostgreSQL remembered password is not bound to its SSL mode and its remember is
+not reported back (no `Remembered` for PostgreSQL); the SSMS extension and an SSMS-started engine share the store's fixed temp name
+across processes; the SSMS credential dialog ignores `Save`'s result; `PasswordMissing` is not stored, so a reload tries a refused
+password once more; Settings does not ask the engine per row; a multi-part qualifier (`dbo.t.*`) replaces only its last part.

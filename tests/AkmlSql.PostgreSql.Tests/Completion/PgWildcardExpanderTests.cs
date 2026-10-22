@@ -142,6 +142,36 @@ public class PgWildcardExpanderTests
         Assert.True(Expand("SELECT *| FROM customers").Success);
     }
 
+    // Spec 043 follow-up (review): the web editor sends a quoted qualifier unquoted ('"C".*' as C); the text before the star
+    // says it was quoted, so it keeps its case instead of folding to c.
+    [Fact]
+    public void A_quoted_qualifier_sent_unquoted_keeps_its_case()
+    {
+        var r = Expand("SELECT \"C\".*| FROM customers AS \"C\" JOIN orders o ON o.customer_id = \"C\".customer_id", qualifier: "C");
+
+        Assert.True(r.Success, r.ErrorMessage);
+        var group = Assert.Single(r.Tables);
+        Assert.Equal("\"C\"", group.Qualifier);
+        Assert.Contains("company_name", Names(group));
+        Assert.DoesNotContain("freight", Names(group));
+    }
+
+    [Fact]
+    public void An_unquoted_qualifier_still_folds_to_lower_case()
+    {
+        Assert.True(Expand("SELECT C.*| FROM customers c", qualifier: "C").Success);
+        Assert.False(Expand("SELECT C.*| FROM customers AS \"C\"", qualifier: "C").Success);
+    }
+
+    [Fact]
+    public void A_quoted_qualifier_with_a_doubled_quote_inside_is_read_whole()
+    {
+        var r = Expand("SELECT \"a\"\"b\".*| FROM customers AS \"a\"\"b\"");
+
+        Assert.True(r.Success, r.ErrorMessage);
+        Assert.Contains("company_name", Names(Assert.Single(r.Tables)));
+    }
+
     [Fact]
     public void Odd_text_never_throws()
     {

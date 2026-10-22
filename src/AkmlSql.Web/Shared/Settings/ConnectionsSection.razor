@@ -4,7 +4,8 @@
     ones with Connect and Delete — confirmed — and the connection manager). A saved connection the web app cannot
     use says why, in place, and stays listed. No password is ever asked for or kept here. No Restore defaults.
     Spec 042: PostgreSQL connections are listed beside them, each with its kind; one whose password the engine remembers can
-    have it forgotten, and is forgotten first when the connection is deleted.
+    have it forgotten, and is forgotten first when the connection is deleted. Spec 043 follow-up (review, round 2): a SQL Server
+    login whose password the engine remembers is handled the same way.
 *@
 @using AkmlSql.Web.Services
 @using Microsoft.Extensions.DependencyInjection
@@ -90,8 +91,15 @@
                             }
                             else
                             {
-                                @* SQL Server authentication: the password is asked for in the connection manager, never kept. *@
+                                @* SQL Server authentication: the password is asked for in the connection manager, never kept here. *@
                                 <button type="button" class="akml-btn" @onclick="@(() => ConnManager.Open())">Connect…</button>
+                            }
+                            @if (!isPg && HasRememberedPassword(c) && SqlConn.EngineRemembersSqlServerPasswords)
+                            {
+                                @* Spec 043 follow-up (review, round 2): a SQL login's password the engine remembers is forgotten as PostgreSQL's is. *@
+                                <button type="button" class="akml-btn" data-testid="@($"settings-conn-forget-{c.Id}")"
+                                        title="Make the engine forget the password it remembers for this connection"
+                                        @onclick="@(() => ForgetAsync(c))">Forget password</button>
                             }
                             <button type="button" class="akml-btn akml-btn--danger" data-testid="@($"saved-connection-delete-{c.Id}")"
                                     @onclick="@(() => DeleteAsync(c))">Delete…</button>
@@ -144,18 +152,36 @@
 
     private static string AuthText(SavedSqlConnection c) =>
         c.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
-            ? $"Login {c.Login}" + (c.RememberPassword ? " · password remembered on the engine" : string.Empty)
-            : c.WindowsAuth ? "Windows" : $"SQL Server login {c.Login}";
+            ? $"Login {c.Login}" + (c.RememberPassword ? RememberedNote : string.Empty)
+            : c.WindowsAuth ? "Windows" : $"SQL Server login {c.Login}" + (c.RememberPassword ? RememberedNote : string.Empty);
 
-    /// <summary>The engine can be asked to forget a password: it is paired and offers PostgreSQL.</summary>
-    private bool CanReachEngine => Bridge.State == BridgeState.Open && SqlConn.EngineSupportsPostgres;
+    private const string RememberedNote = " · password remembered on the engine";
+
+    /// <summary>
+    /// The engine can be asked to forget this connection's password: it is paired and remembers passwords of the connection's
+    /// kind (PostgreSQL; a SQL Server login since the spec 043 follow-up, <c>credentials.sqlserver.v1</c>).
+    /// </summary>
+    private bool CanReachEngine(SavedSqlConnection c) =>
+        Bridge.State == BridgeState.Open
+        && (c.Kind == AkmlSql.Core.DatabaseKind.PostgreSql ? SqlConn.EngineSupportsPostgres : SqlConn.EngineRemembersSqlServerPasswords);
 
     private static bool HasRememberedPassword(SavedSqlConnection c) =>
-        c.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && c.RememberPassword && !string.IsNullOrWhiteSpace(c.Login);
+        c.RememberPassword && !string.IsNullOrWhiteSpace(c.Login) && (c.Kind == AkmlSql.Core.DatabaseKind.PostgreSql || !c.WindowsAuth);
+
+    // True: the engine had one; false: it had none; null: no confirmed answer (see ISqlConnectionService).
+    private Task<bool?> ForgetOnEngineAsync(SavedSqlConnection c) =>
+        c.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
+            ? SqlConn.ForgetRememberedPasswordAsync(c.Server, c.Port, c.Login!, CancellationToken.None)
+            : SqlConn.ForgetRememberedSqlServerPasswordAsync(c.Server, c.Login!, CancellationToken.None);
+
+    // Spec 043 follow-up (review, round 2): null from a forget is no confirmed answer — no reply, none in time, or the engine said
+    // it could not (its store could not be written) — not "the engine could not be reached".
+    private static string ForgetUnconfirmedText(SavedSqlConnection c) =>
+        $"The engine did not confirm that it forgot the password for {c.Login} on {ServerText(c)}; it may still be remembered on the engine machine.";
 
     private async Task ForgetAsync(SavedSqlConnection c)
     {
-        if (!CanReachEngine)
+        if (!CanReachEngine(c))
         {
             Notifications.Notify(
                 "The engine is not connected, so the saved password was not forgotten. Pair the engine and try again.",
@@ -163,7 +189,13 @@
             return;
         }
 
-        await SqlConn.ForgetRememberedPasswordAsync(c.Server, c.Port, c.Login!, CancellationToken.None);
+        // Spec 043 follow-up (review): only the engine's answer counts; no answer leaves the password, and the row, as they were.
+        var answer = await ForgetOnEngineAsync(c);
+        if (answer == null)
+        {
+            Notifications.Notify(ForgetUnconfirmedText(c), NotificationKind.Error);
+            return;
+        }
         c.RememberPassword = false;
         await Saved.UpdateAsync(c);
         Notifications.Notify($"Forgot the saved password for {c.Login} on {ServerText(c)}. The next connection asks for it.", NotificationKind.Success);
@@ -265,9 +297,11 @@
             Message = $"Delete the saved connection “{c.Name}” ({ServerText(c)} / {c.Database})?",
             Details = !remembered ? null : new[]
             {
-                CanReachEngine
+                CanReachEngine(c)
                     ? $"The password the engine remembers for {c.Login} on {ServerText(c)} is forgotten too."
-                    : $"The engine is not connected, so the password it remembers for {c.Login} on {ServerText(c)} cannot be forgotten now.",
+                    : Bridge.State == BridgeState.Open
+                        ? $"The connected engine cannot forget passwords of this kind, so the password remembered for {c.Login} on {ServerText(c)} cannot be forgotten now."
+                        : $"The engine is not connected, so the password it remembers for {c.Login} on {ServerText(c)} cannot be forgotten now.",
             },
             ConfirmLabel = "Delete",
             Destructive = true,
@@ -275,10 +309,17 @@
         if (!ok) return;
 
         // Spec 042 (FR-106): the engine's copy of the password goes first, while the record that names it still exists.
-        if (remembered && CanReachEngine)
-            await SqlConn.ForgetRememberedPasswordAsync(c.Server, c.Port, c.Login!, CancellationToken.None);
+        // Review, round 2: the engine is asked about again here — it may have gone while the question was open — and a remembered
+        // password it cannot be asked to forget now is an unconfirmed forget, said as one, never a quiet success.
+        bool? forgot = !remembered ? false
+            : CanReachEngine(c) ? await ForgetOnEngineAsync(c)
+            : null;
         await Saved.RemoveAsync(c.Id);
-        Notifications.Notify($"Deleted the saved connection “{c.Name}”.", NotificationKind.Success);
+        // Spec 043 follow-up (review): the row goes as asked; a forget the engine did not confirm is said, not passed over.
+        if (forgot == null)
+            Notifications.Notify($"Deleted the saved connection “{c.Name}”. " + ForgetUnconfirmedText(c), NotificationKind.Warning);
+        else
+            Notifications.Notify($"Deleted the saved connection “{c.Name}”.", NotificationKind.Success);
         await LoadAsync();
     }
 

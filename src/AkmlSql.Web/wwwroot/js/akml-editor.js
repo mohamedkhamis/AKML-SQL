@@ -210,6 +210,327 @@ export function typedTriggerCharacters(kind) {
     return isPostgresKind(kind) ? /[\s.,()=<>!+\-*/:]/ : /[\s.,()=<>!+\-*/]/;
 }
 
+// ── Spec 030 — expand "SELECT *" on Tab (SQL Prompt parity) ──────────────────────────────────────────────
+
+// The syntax nodes a '*' inside of which is never a select-list wildcard. Brackets is T-SQL's [quoted name] (the editor's
+// SQL Server language parses it as brackets) and PostgreSQL's array subscript.
+const NOT_A_WILDCARD_NODES = new Set(['LineComment', 'BlockComment', 'String', 'QuotedIdentifier', 'Brackets']);
+
+// Spec 043 follow-up (review): how long a Tab may wait for the syntax tree to reach the star (right after a large paste or
+// a tab switch the editor has not parsed that far yet). Past it, the star is read from the text alone (selectListStar), from
+// the start of the document — at most WILDCARD_TEXT_LIMIT characters of it (about 30 ms); a star further in is left alone
+// until the tree gets there.
+const WILDCARD_TREE_WAIT_MS = 50;
+const WILDCARD_TEXT_LIMIT = 1_000_000;
+// With the tree, the text is read from the star's own SELECT, looked for among at most this many nodes before the star.
+const WILDCARD_SELECT_SEARCH = 20_000;
+// How far past the star the text is read for the word that follows it.
+const WILDCARD_LOOKAHEAD = 4096;
+
+// Spec 043 follow-up (review): the words that may follow a select-list star (besides the end, ',', ';', ')' and a GO line).
+// GO is not among them: only a GO line ends a batch (isBatchSeparator); anywhere else 'go' is a name ('SELECT go, *').
+const AFTER_SELECT_LIST_STAR = new Set(['FROM', 'INTO', 'UNION', 'EXCEPT', 'INTERSECT', 'ORDER', 'GROUP', 'WHERE', 'HAVING',
+    'OPTION', 'FOR', 'WINDOW', 'LIMIT', 'OFFSET', 'FETCH']);
+
+// Spec 043 follow-up (review): the words that close a SELECT's select list at its own parenthesis level — the clauses after
+// it and the statements that may follow it without a ';'. END, ELSE and WITH are not among them: CASE ... END and
+// TOP n WITH TIES sit inside a select list. RETURNING closes one on SQL Server only: on PostgreSQL it opens its own list
+// (INSERT / UPDATE / DELETE ... RETURNING *), which PgWildcardExpander expands to the target's columns.
+const SELECT_LIST_CLOSERS = new Set([...AFTER_SELECT_LIST_STAR, 'RETURNING', 'VALUES', 'SET', 'UPDATE', 'INSERT', 'DELETE',
+    'MERGE', 'DECLARE', 'EXEC', 'EXECUTE', 'IF', 'WHILE', 'BEGIN', 'RETURN', 'PRINT', 'USE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE']);
+
+// The longest word either set holds (INTERSECT, RETURNING): longer words are never upper-cased (selectListStar reads
+// whole documents when the syntax tree is not ready).
+const LONGEST_LIST_WORD = 9;
+
+// PostgreSQL's $tag$: an unquoted identifier without '$' (a letter or '_', then letters, digits and '_'), or nothing.
+const DOLLAR_QUOTE_TAG = /\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/uy;
+
+function isSqlSpace(c) {
+    return c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0x85 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a)
+        || c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff;
+}
+
+/** A letter, '_', '@' (SQL Server variables) or '#' (temporary tables); any other non-space character past ASCII. */
+function isSqlWordStart(c) {
+    return (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c === 64 || c === 35 || (c > 127 && !isSqlSpace(c));
+}
+
+function isSqlWordPart(c) {
+    return isSqlWordStart(c) || (c >= 48 && c <= 57) || c === 36;
+}
+
+/** The offset just past the quoted text opening at `i`: `close` doubled is an escape, and so is a backslash in E'...'. */
+function skipQuoted(text, i, close, backslash) {
+    const n = text.length;
+    for (i++; i < n; i++) {
+        const c = text.charCodeAt(i);
+        if (backslash && c === 92) { i++; continue; }
+        if (c !== close) continue;
+        if (i + 1 < n && text.charCodeAt(i + 1) === close) { i++; continue; }
+        return i + 1;
+    }
+    return n;
+}
+
+/**
+ * Spec 043 follow-up (review) — the significant tokens of `text` from offset `from` (a token boundary), read the way SQL
+ * Server and PostgreSQL both read them: whitespace, '--' comments and (nested) block comments are skipped; a string ('...',
+ * N'...', E'...', $tag$...$tag$) or a quoted name ([...], "...") is one token, so a '*' inside one is never a token of its own.
+ * Calls `visit(type, start, end)` for each — 'word', 'number', 'string', 'name' or 'punct' (one character) — until it
+ * returns false or the text ends.
+ */
+function scanSqlTokens(text, from, visit) {
+    const n = text.length;
+    let i = from;
+    while (i < n) {
+        const c = text.charCodeAt(i);
+        if (isSqlSpace(c)) { i++; continue; }
+        const d = i + 1 < n ? text.charCodeAt(i + 1) : 0;
+        if (c === 45 && d === 45) {                                    // -- to the end of the line
+            const eol = text.indexOf('\n', i + 2);
+            i = eol < 0 ? n : eol + 1;
+            continue;
+        }
+        if (c === 47 && d === 42) {                                    // /* ... */, nested as both servers nest them
+            let depth = 1;
+            for (i += 2; i < n && depth > 0;) {
+                const a = text.charCodeAt(i), b = i + 1 < n ? text.charCodeAt(i + 1) : 0;
+                if (a === 47 && b === 42) { depth++; i += 2; }
+                else if (a === 42 && b === 47) { depth--; i += 2; }
+                else i++;
+            }
+            continue;
+        }
+        const start = i;
+        let type = 'punct';
+        let tag = null;
+        if (c === 39) { i = skipQuoted(text, i, 39, false); type = 'string'; }
+        else if (c === 34) { i = skipQuoted(text, i, 34, false); type = 'name'; }
+        else if (c === 91) { i = skipQuoted(text, i, 93, false); type = 'name'; }   // [name], ']]' inside it
+        else if (c === 36 && (DOLLAR_QUOTE_TAG.lastIndex = i, tag = DOLLAR_QUOTE_TAG.exec(text))) {
+            const end = text.indexOf(tag[0], i + tag[0].length);
+            i = end < 0 ? n : end + tag[0].length;
+            type = 'string';
+        } else if (isSqlWordStart(c)) {
+            for (i++; i < n && isSqlWordPart(text.charCodeAt(i));) i++;
+            const prefix = i - start === 1 ? text.charCodeAt(start) | 32 : 0;   // N'...', E'...', B'...', X'...'
+            if (i < n && text.charCodeAt(i) === 39 && (prefix === 110 || prefix === 101 || prefix === 98 || prefix === 120)) {
+                i = skipQuoted(text, i, 39, prefix === 101);
+                type = 'string';
+            } else type = 'word';
+        } else if ((c >= 48 && c <= 57) || (c === 46 && d >= 48 && d <= 57)) {
+            for (i++; i < n; i++) {
+                const e = text.charCodeAt(i);
+                if (isSqlWordPart(e) || e === 46) continue;
+                if ((e === 43 || e === 45) && (text.charCodeAt(i - 1) | 32) === 101) continue;   // 1e-3
+                break;
+            }
+            type = 'number';
+        } else i++;
+        if (visit(type, start, i) === false) return;
+    }
+}
+
+/** Whether `text` breaks a line between offsets `from` and `to`. */
+function hasLineBreak(text, from, to) {
+    for (let i = from; i < to; i++) {
+        const c = text.charCodeAt(i);
+        if (c === 10 || c === 13) return true;
+    }
+    return false;
+}
+
+/**
+ * Spec 043 follow-up (review) — whether the word GO at [`from`, `to`) of `text` is the batch separator, as SSMS reads it: the
+ * first token on its line (`prevEnd`, the end of the token before it, is on an earlier line; -1 when there is none) and
+ * followed on its line by nothing but one repeat count and comments ('GO', 'GO 3 -- again'). Anywhere else it is a name:
+ * 'SELECT go, *', 'GO, *' or 'GO x' does not end the batch (TsqlParserService.SplitBatches refuses a script with the last).
+ */
+function isBatchSeparator(text, prevEnd, from, to) {
+    if (prevEnd >= 0 && !hasLineBreak(text, prevEnd, from)) return false;
+    let separator = true;
+    let last = to;
+    let count = false;
+    scanSqlTokens(text, to, (type, start, end) => {
+        if (hasLineBreak(text, last, start)) return false;           // the GO line ended (a '--' comment ends it too)
+        if (type === 'number' && !count && /^\d+$/.test(text.slice(start, end))) { count = true; last = end; return true; }
+        separator = false;
+        return false;
+    });
+    return separator;
+}
+
+/**
+ * Spec 043 follow-up (review) — pure: whether the '*' at offset `star` of `sql` starts a select-list item, reading `sql` from
+ * its start (which must be a token boundary: the start of the document or of the star's statement). SQL Server's engine
+ * takes the FROM tables' columns for whatever star it is asked about, so a product or COUNT's argument must never get here.
+ *
+ * - The star is a token: not in a comment, a string or a quoted name.
+ * - A SELECT's select list is open at the star's parenthesis level: a SELECT came before it at that level, in this
+ *   statement (';' and a GO line end one — isBatchSeparator; a 'go' anywhere else is a name), and no clause or statement
+ *   word closed it since ('COALESCE(a, *)' and 'COUNT(*)' are a level that holds no SELECT). When `postgres` is set, a
+ *   RETURNING list counts too ('DELETE FROM t RETURNING *'); on SQL Server RETURNING is just a word that closes the list.
+ * - What comes right before the item — the star, or 'name.' / '[name].' / '"name".' qualifiers written against it — is
+ *   SELECT, DISTINCT, ALL, ',', the end of TOP n / TOP (n) [PERCENT] [WITH TIES], or PostgreSQL's DISTINCT ON (...) and
+ *   RETURNING.
+ * - What comes after the star is the end, ',', ';', ')', a GO line or a clause word (FROM, INTO, UNION, ORDER, WHERE ...).
+ *   When `continues` says `sql` is cut short, a star with nothing after it in `sql` is not taken.
+ */
+export function selectListStar(sql, star, continues = false, postgres = false) {
+    const text = typeof sql === 'string' ? sql : '';
+    if (!(star >= 0 && star < text.length) || text.charCodeAt(star) !== 42) return false;
+    const frame = (before1, before2) => ({ listOpen: false, before1, before2 });
+    let frames = [frame(null, null)];
+    let recent = [];                 // the last significant tokens: { type, word, punct, variable, from, to, opener }
+    let starAt = -1;                 // the star's index in `recent`, once read
+    let listOpen = false;            // the select list is open at the star's level
+    let after = null;                // the token after the star
+    let swallowed = false;           // the star is inside a comment, a string or a quoted name
+    let prevEnd = -1;                // the end of the token before this one (-1: none yet)
+    scanSqlTokens(text, 0, (type, from, to) => {
+        const gap = prevEnd;
+        prevEnd = to;
+        if (starAt >= 0) { after = { type, from, to, gap }; return false; }
+        if (from > star || (from < star && to > star)) { swallowed = true; return false; }
+        const word = type === 'word' && to - from <= LONGEST_LIST_WORD ? text.slice(from, to).toUpperCase() : null;
+        const punct = type === 'punct' ? text[from] : null;
+        // Spec 043 follow-up (review): only a GO line ends the batch; 'SELECT go, *' is a column named go.
+        if (punct === ';' || (word === 'GO' && isBatchSeparator(text, gap, from, to))) {
+            frames = [frame(null, null)];
+            recent = [];
+            return true;
+        }
+        const token = { type, word, punct, variable: type === 'word' && text.charCodeAt(from) === 64, from, to, opener: null };
+        const level = frames[frames.length - 1];
+        if (punct === '(') {
+            const r = recent.length;
+            frames.push(frame(r > 0 ? recent[r - 1].word : null, r > 1 ? recent[r - 2].word : null));
+        } else if (punct === ')') {
+            if (frames.length > 1) token.opener = frames.pop();
+        } else if (word === 'SELECT' || (postgres && word === 'RETURNING')) level.listOpen = true;
+        else if (word !== null && SELECT_LIST_CLOSERS.has(word)) level.listOpen = false;
+        if (from === star) { starAt = recent.length; listOpen = level.listOpen; }
+        recent.push(token);
+        if (starAt < 0 && recent.length > 64) recent = recent.slice(-32);
+        return true;
+    });
+    if (swallowed || starAt < 0 || !listOpen) return false;
+
+    if (after) {
+        const a = text.slice(after.from, after.to);
+        const word = after.type === 'word' ? a.toUpperCase() : null;
+        if (after.type === 'punct' ? !(a === ',' || a === ';' || a === ')')
+            : !(word !== null && (AFTER_SELECT_LIST_STAR.has(word)
+                || (word === 'GO' && isBatchSeparator(text, after.gap, after.from, after.to))))) return false;
+    } else if (continues) return false;
+
+    // The item starts at the star or at the qualifiers written against it ('t.*', '[dbo].[t].*', '"t".*').
+    let p = starAt - 1;
+    while (p >= 1 && recent[p].punct === '.' && recent[p].to === recent[p + 1].from
+        && (recent[p - 1].type === 'word' || recent[p - 1].type === 'name') && recent[p - 1].to === recent[p].from) p -= 2;
+    const before = p >= 0 ? recent[p] : null;
+    if (!before) return false;
+    if (before.word === 'SELECT' || before.word === 'DISTINCT' || before.word === 'ALL' || before.punct === ',') return true;
+    if (postgres && before.word === 'RETURNING') return true;
+    if (before.punct === ')' && before.opener && before.opener.before1 === 'ON' && before.opener.before2 === 'DISTINCT') return true;
+    // TOP n / TOP @n / TOP (expression), then PERCENT, then WITH TIES.
+    let q = p;
+    if (recent[q].word === 'TIES' && q >= 1 && recent[q - 1].word === 'WITH') q -= 2;
+    if (q >= 0 && recent[q].word === 'PERCENT') q -= 1;
+    if (q < 0) return false;
+    const last = recent[q];
+    if (last.punct === ')') return !!last.opener && last.opener.before1 === 'TOP';
+    return (last.type === 'number' || last.variable) && q >= 1 && recent[q - 1].word === 'TOP';
+}
+
+/**
+ * Spec 030 / 043 — the wildcard Tab expands (pure; `cm` is the bundle): `{ caretOffset }`, the offset just after the '*', when
+ * the bare caret sits right after a '*' or — as SQL Prompt in SSMS also takes it — right before one, and that star starts a
+ * select-list item; else null, and Tab does what it always does.
+ *
+ * Spec 043 follow-up (review): Tab is consumed as soon as this says yes, and on SQL Server nothing downstream checks what the
+ * star is — the engine takes the FROM tables' columns for any star — so 'price * qty', 'COUNT(*)' or '2 * 3' would have been
+ * replaced by a column list. It now says yes only to a star that starts a select-list item (selectListStar), on either side
+ * of the caret. The syntax tree still rules out a star in a comment, a string or a quoted name; it is parsed up to the star
+ * first (for up to WILDCARD_TREE_WAIT_MS), since right after a large paste or a tab switch it may not reach it yet. With
+ * the tree, the text is read from the last SELECT before the star at its own level (none: not a select-list star); without
+ * it, from the start of the document, so the comment and string checks hold then too.
+ *
+ * Spec 043 follow-up (review): `kind` is the editor's database kind (currentKind). On PostgreSQL a RETURNING list is a
+ * select list as well ('INSERT ... RETURNING *', 'UPDATE ... RETURNING *', 'DELETE ... RETURNING *'), which the engine's
+ * PgWildcardExpander expands to the target's columns; the SELECT gate and selectListStar had shut it out.
+ */
+export function wildcardAtCaret(cm, state, kind) {
+    const postgres = isPostgresKind(kind);
+    const sel = state.selection.main;
+    if (!sel.empty) return null;                                  // bare caret only, not a range
+    const doc = state.doc;
+    const at = sel.head;
+    let star;
+    if (at > 0 && doc.sliceString(at - 1, at) === '*') star = at - 1;
+    else if (at < doc.length && doc.sliceString(at, at + 1) === '*') star = at;
+    else return null;
+    const pos = star + 1;   // the engine is always asked with the caret after the '*'
+
+    let from = 0;           // where the text is read from
+    let tree = null;
+    try {
+        const lang = cm.language;
+        tree = (typeof lang.ensureSyntaxTree === 'function' && lang.ensureSyntaxTree(state, pos, WILDCARD_TREE_WAIT_MS))
+            || lang.syntaxTree(state);
+    } catch { tree = null; /* no tree -> the text alone decides */ }
+    if (tree && tree.length >= pos) {
+        // Resolved just after the star, so the node is the one holding the star (at the star's start it is the statement).
+        const starNode = tree.resolveInner(pos, -1);
+        for (let node = starNode; node; node = node.parent) {
+            if (NOT_A_WILDCARD_NODES.has(node.name)) return null;
+        }
+        from = starNode.from === star ? selectBefore(doc, starNode, postgres) : 0;
+        if (from < 0) return null;
+    }
+    if (star - from > WILDCARD_TEXT_LIMIT) return null;
+
+    const to = Math.min(doc.length, pos + WILDCARD_LOOKAHEAD);
+    if (!selectListStar(doc.sliceString(from, to), star - from, to < doc.length, postgres)) return null;
+    return { caretOffset: pos };
+}
+
+// Spec 043 follow-up (review): how soon after the key a declined expansion may still do what Tab does.
+export const WILDCARD_TAB_FALLBACK_MS = 250;
+
+const nowMs = () => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+
+/**
+ * Spec 043 follow-up (review) — pure: whether Tab may still do what it would have done (indent) after the engine declined to
+ * expand the star — it is not connected, PostgreSQL refused, or the schema is not loaded yet; else Tab, consumed when it was
+ * pressed, did nothing. `atKey` and `now` are `{ time, tab, doc, selection }` at the keypress and at the decline: only a
+ * decline within WILDCARD_TAB_FALLBACK_MS, with the same query tab shown and the document and selection exactly as they
+ * were (the same Text, an equal selection). A later one does nothing: an indent then would surprise.
+ */
+export function declinedTabMayIndent(atKey, now) {
+    if (!atKey || !now) return false;
+    if (!(now.time - atKey.time <= WILDCARD_TAB_FALLBACK_MS)) return false;
+    if (now.tab !== atKey.tab || now.doc !== atKey.doc) return false;
+    return !!now.selection && !!atKey.selection && now.selection.eq(atKey.selection);
+}
+
+/**
+ * The start of the last SELECT before the star's node among its siblings — the star's own parenthesis level in the SQL
+ * language's tree (a statement or a '(...)' group); -1 when there is none within WILDCARD_SELECT_SEARCH nodes. With
+ * `postgres`, the last SELECT or RETURNING (spec 043 follow-up, review: 'INSERT INTO t VALUES (1) RETURNING *' has no SELECT).
+ */
+function selectBefore(doc, starNode, postgres = false) {
+    const cursor = starNode.cursor();
+    for (let seen = 0; seen < WILDCARD_SELECT_SEARCH && cursor.prevSibling(); seen++) {
+        const length = cursor.to - cursor.from;
+        if (length !== 6 && !(postgres && length === 9)) continue;
+        const word = doc.sliceString(cursor.from, cursor.to).toUpperCase();
+        if (word === 'SELECT' || (postgres && word === 'RETURNING')) return cursor.from;
+    }
+    return -1;
+}
+
 
 /**
  * Create a CodeMirror editor inside the given host element.
@@ -582,32 +903,16 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     ]));
 
     // ── Spec 030 — expand "SELECT *" on Tab (SQL Prompt parity) ──────────────────────────────────
-    // When the caret sits right after a wildcard ('*' or 'alias.*') inside a SELECT, Tab asks the
-    // engine (via .NET ExpandWildcardFromJs) for the FROM tables' columns and replaces the wildcard
-    // with the column list. Returns false (falls through to accept-completion / snippet / indent)
-    // whenever it isn't a wildcard, so ordinary Tab is unaffected.
-    function detectWildcardAtCaret(state) {
-        const sel = state.selection.main;
-        if (!sel.empty) return null;                                  // bare caret only, not a range
-        // The caret just after '*' — or, as SQL Prompt in SSMS also takes it, just before it (reported 2026-10-22: Tab
-        // there indented the line and opened the column list instead). The engine is always asked with the caret after it.
-        let pos = sel.head;
-        if (pos > 0 && state.doc.sliceString(pos - 1, pos) === '*') { /* after */ }
-        else if (pos < state.doc.length && state.doc.sliceString(pos, pos + 1) === '*') pos += 1;
-        else return null;
-        // Cheap SELECT-context gate (the engine still validates the actual star node): a SELECT must
-        // appear before the caret in the current statement (nothing after the last ';' rules it out).
-        const head = state.doc.sliceString(0, pos);
-        const stmt = head.slice(head.lastIndexOf(';') + 1);
-        if (!/\bSELECT\b/i.test(stmt)) return null;
-        return { caretOffset: pos };
-    }
-
+    // When the caret sits at a wildcard ('*' or 'alias.*') inside a SELECT, Tab asks the engine
+    // (via .NET ExpandWildcardFromJs) for the FROM tables' columns and replaces the wildcard with
+    // the column list. Returns false (falls through to accept-completion / snippet / indent)
+    // whenever it isn't a wildcard (wildcardAtCaret), so ordinary Tab is unaffected.
     function expandWildcard(view) {
         if (!dotNetRef) return false;
+        const keyTime = nowMs();
         // An open completion popup owns Tab (accept the highlighted item) — don't steal it.
         if (cm.autocomplete.completionStatus(view.state) === 'active') return false;
-        const wildcard = detectWildcardAtCaret(view.state);
+        const wildcard = wildcardAtCaret(cm, view.state, currentKind());
         if (!wildcard) return false;                                  // not a wildcard → normal Tab
 
         const pos = wildcard.caretOffset;   // just after the '*', whichever side of it the caret was on
@@ -616,9 +921,21 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         // span against the live document after the async round-trip.
         const docAtRequest = view.state.doc;
         const tabAtRequest = shownTab();
+        const atKey = { time: keyTime, tab: tabAtRequest, doc: docAtRequest, selection: view.state.selection };
+        // Spec 043 follow-up (review): a decline that comes back at once (not connected, a PostgreSQL refusal, the schema
+        // not loaded yet) does what Tab would have done — the next snippet field, else indent — while nothing has moved
+        // since the key (declinedTabMayIndent). A failed call is a decline too.
+        const declined = () => {
+            const inst = _instances.get(hostElementId);
+            if (!inst) return;
+            const live = inst.view.state;
+            if (!declinedTabMayIndent(atKey, { time: nowMs(), tab: inst.currentTab ?? null, doc: live.doc, selection: live.selection })) return;
+            const nextField = cm.autocomplete.nextSnippetField;
+            if (!(typeof nextField === 'function' && nextField(inst.view))) cm.commands.indentMore(inst.view);
+        };
         dotNetRef.invokeMethodAsync('ExpandWildcardFromJs', pos, docAtRequest.toString())
             .then(res => {
-                if (!res || !res.ok) return;
+                if (!res || !res.ok) { declined(); return; }
                 const inst = _instances.get(hostElementId);
                 if (!inst || inst.currentTab !== tabAtRequest) return;   // another query tab is shown now
                 const end = res.spanStart + res.spanLength;
@@ -635,7 +952,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                     userEvent: 'input.complete',
                 });
             })
-            .catch(() => { /* best-effort — a failed expansion just leaves the '*' in place */ });
+            .catch(() => { try { declined(); } catch { /* best-effort — a failed expansion just leaves the '*' in place */ } });
         return true;   // handled — swallow the Tab (the expansion is applied asynchronously)
     }
 

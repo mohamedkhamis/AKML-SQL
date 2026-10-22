@@ -51,10 +51,28 @@ public sealed class SqlSessionState
     public string? CopyPasswordFrom { get; internal set; }
 
     /// <summary>
-    /// Review of the follow-up: the engine said it has no password for this tab (none to copy, none remembered). The tab stops
-    /// reconnecting on its own — each quiet try would be refused again — and asks on its next run. Cleared by a connect.
+    /// Review of the follow-up: the engine said it has no password for this tab (none to copy, none remembered), or the server
+    /// refused the password the engine supplied (a remembered or copied one that is out of date). The tab stops reconnecting
+    /// on its own — each quiet try would be refused again, and each refused login counts towards a lockout — and asks on its
+    /// next run. Cleared by a connect.
     /// </summary>
     public bool PasswordMissing { get; internal set; }
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 3): the sign-in <see cref="PasswordMissing"/> is about — the target the engine could not
+    /// supply a password for, or whose supplied password the server refused (without the password, as a binding is). A tab with
+    /// no connection yet has no <see cref="Binding"/> to say it (the Status bar's restore of a remembered login on a fresh page),
+    /// so the Connect to database dialog compares its form with this, else with the binding. Cleared by a connect.
+    /// </summary>
+    public ConnectionBinding? PasswordMissingFor { get; internal set; }
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 3): why <see cref="PasswordMissing"/> was set. True: the server refused the password the
+    /// engine supplied (remembered or copied; <c>sqlserver.login-failed</c>, <c>postgresql.login-failed</c> or the 28P01 text of
+    /// an older engine). False: the engine had none it could supply (<c>password-required</c>, or none asked of it). The dialog
+    /// words its hint by it. Cleared by a connect.
+    /// </summary>
+    public bool PasswordRefused { get; internal set; }
 
     /// <summary>The tab can connect again without asking: nothing to type (<see cref="ConnectionBinding.NeedsNoPassword"/>), or a
     /// connected tab to take the password from — unless the engine already said it has none.</summary>

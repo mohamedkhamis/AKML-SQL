@@ -78,17 +78,41 @@ namespace AkmlSql.Engine
 
         /// <summary>
         /// Spec 043 follow-up: the web edition may ask the engine to remember a SQL Server login's password
-        /// (<c>ConnectionInfo.RememberPassword</c>), connect without sending it, and ask about or forget it through
-        /// <c>CredentialRequest</c> (221 → 222) with the SQL Server kind (<c>SqlServerCredentialResolver</c>).
+        /// (<c>TestSqlConnectionRequest.RememberPassword</c>), connect without sending it, and ask about or forget it through
+        /// <c>CredentialRequest</c> (221 → 222) with the SQL Server kind (<c>SqlServerCredentialResolver</c>). The credential pair is
+        /// registered whatever <c>postgreSql.enabled</c> says, since this is always advertised (review; the engines that advertise only this id
+        /// registered it only with the feature on, see <see cref="CredentialsSqlServerV2"/>). Still advertised next to
+        /// <see cref="CredentialsSqlServerV2"/>: older web clients look for this id.
         /// </summary>
         public const string CredentialsSqlServerV1 = "credentials.sqlserver.v1";
 
         /// <summary>
+        /// Spec 043 follow-up (review): what the released engines that advertise only <see cref="CredentialsSqlServerV1"/>
+        /// (1.26.1022.0927, 1.26.1022.1042) do not do. <c>TestSqlConnectionResponse.Remembered</c> (key 4) is sent — true only when
+        /// the password is now in the engine's store — and the remembered password is bound to a plain SQL login
+        /// (<c>BridgeSqlSecurity.IsPlainSqlLogin</c>) and to the certificate checking it was given with. A client must not read a
+        /// missing key 4 from an engine without this id as "not remembered". <c>CredentialRequest</c> is answered whatever
+        /// <c>postgreSql.enabled</c> says (the v1-only engines registered it only with the feature on, so a SQL Server request to
+        /// one with the feature off gets no reply), and a SQL Server Has honours key 5 <c>TrustServerCertificate</c> (review,
+        /// round 3: yes only for a password a connection with that choice would be given).
+        /// </summary>
+        public const string CredentialsSqlServerV2 = "credentials.sqlserver.v2";
+
+        /// <summary>
         /// Spec 043 follow-up: <c>ConnectionInfo.CopyPasswordFromSessionId</c> (key 7) and
         /// <c>TestSqlConnectionRequest.CopyPasswordFromSessionId</c> (key 2) — a new query tab opened on a connected tab takes that
-        /// session's password for the same server and login (<c>SessionPasswordCopy</c>), as SSMS's New Query does.
+        /// session's password for the same server, login and security options (<c>SessionPasswordCopy</c>), as SSMS's New Query does.
+        /// Still advertised next to <see cref="SessionCopyV2"/>: older web clients look for this id.
         /// </summary>
         public const string SessionCopyV1 = "session.copy.v1";
+
+        /// <summary>
+        /// Spec 043 follow-up (review): what the released engines that advertise only <see cref="SessionCopyV1"/> do not do. The copy
+        /// source is honoured on <c>ListDatabasesRequest.CopyPasswordFromSessionId</c> (key 3), and a copy's origin is the web page
+        /// (<c>HandshakeRequest.ClientInstanceId</c>, key 6) rather than the socket, so it survives the page's reconnect after a link
+        /// drop.
+        /// </summary>
+        public const string SessionCopyV2 = "session.copy.v2";
 
         /// <summary>
         /// Spec 042 (contracts/ipc.md): the engine can connect to, run scripts against, browse and
@@ -121,7 +145,9 @@ namespace AkmlSql.Engine
             SessionDatabaseV1,
             SessionDisconnectV1,
             CredentialsSqlServerV1,
+            CredentialsSqlServerV2,
             SessionCopyV1,
+            SessionCopyV2,
         };
 
         /// <summary>

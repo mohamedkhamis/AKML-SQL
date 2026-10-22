@@ -50,8 +50,10 @@ namespace AkmlSql.Engine.Schema
         internal TimeSpan SettlePollInterval { get; set; } = TimeSpan.FromMilliseconds(250);
         internal TimeSpan SettleTimeout { get; set; } = TimeSpan.FromMinutes(5);
 
-        // The caches a deferred refresh is already waiting on, so a burst of DDL statements queues one refresh, not one each.
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _waiting = new();
+        // The caches a deferred refresh is already waiting on, so a burst of DDL statements queues one refresh, not one each. Spec 043
+        // follow-up (review, round 4): the cache objects, as the population claims are, not their keys - a waiter still polling a
+        // cache that SchemaCacheManager.RemoveSession discarded must not swallow the refresh of the new cache under the same key.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<DatabaseCache, byte> _waiting = new(ReferenceEqualityComparer.Instance);
 
         public void Refresh(RefreshRequest req)
         {
@@ -79,7 +81,7 @@ namespace AkmlSql.Engine.Schema
             // Clearing under it would race its writes (GetOrAdd + List.Add), so a refresh takes the claim every load takes; when the
             // claim is held the cache is marked stale and the refresh follows once that load has ended. The phase alone cannot tell
             // a running load apart: a cache whose Phase B failed stays at PhaseA with nothing running, and must be refreshable.
-            if (!_schemaCacheManager.TryClaimPopulation(cache.CacheKey))
+            if (!_schemaCacheManager.TryClaimPopulation(cache))
             {
                 cache.IsStale = true;
                 Log.Information(
@@ -92,7 +94,7 @@ namespace AkmlSql.Engine.Schema
             var provider = ProviderFor(session.Kind);
             if (provider == null)
             {
-                _schemaCacheManager.ReleasePopulation(cache.CacheKey);
+                _schemaCacheManager.ReleasePopulation(cache);
                 Log.Warning("SchemaRefreshRequest: no catalog reader for kind {Kind} (session={Session})", session.Kind, req.SessionId);
                 return;
             }
@@ -127,7 +129,7 @@ namespace AkmlSql.Engine.Schema
                 }
                 finally
                 {
-                    _schemaCacheManager.ReleasePopulation(cache.CacheKey);
+                    _schemaCacheManager.ReleasePopulation(cache);
                 }
             });
         }
@@ -135,17 +137,17 @@ namespace AkmlSql.Engine.Schema
         // Runs the refresh again once the load that holds the claim has ended, if it is still wanted and still the session's cache.
         private void RefreshOnceSettled(RefreshRequest req, DatabaseCache cache)
         {
-            if (!_waiting.TryAdd(cache.CacheKey, 0)) return;
+            if (!_waiting.TryAdd(cache, 0)) return;
             _ = Task.Run(async () =>
             {
                 try
                 {
                     var deadline = DateTime.UtcNow + SettleTimeout;
-                    while (_schemaCacheManager.IsPopulating(cache.CacheKey) && DateTime.UtcNow < deadline)
+                    while (_schemaCacheManager.IsPopulating(cache) && DateTime.UtcNow < deadline)
                         await Task.Delay(SettlePollInterval).ConfigureAwait(false);
 
-                    _waiting.TryRemove(cache.CacheKey, out _);
-                    if (_schemaCacheManager.IsPopulating(cache.CacheKey))
+                    _waiting.TryRemove(cache, out _);
+                    if (_schemaCacheManager.IsPopulating(cache))
                     {
                         Log.Warning("SchemaRefreshRequest: the load of session={Session} did not end within {Timeout}; the deferred refresh is dropped",
                             req.SessionId, SettleTimeout);
@@ -165,7 +167,7 @@ namespace AkmlSql.Engine.Schema
                 }
                 catch (Exception ex)
                 {
-                    _waiting.TryRemove(cache.CacheKey, out _);
+                    _waiting.TryRemove(cache, out _);
                     Log.Error(ex, "Deferred schema refresh failed for session={Session}", req.SessionId);
                 }
             });

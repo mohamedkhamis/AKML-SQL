@@ -35,6 +35,11 @@ public sealed class QueryTabSessionTests
 
         public TestSqlConnectionResponse TestReply { get; set; } = new() { Ok = true, ServerVersion = "PostgreSQL 18.1" };
 
+        public CredentialResponse CredentialReply { get; set; } = new() { Ok = true, Has = true };
+
+        /// <summary>When true, a credential request waits until it is cancelled: an engine that never answers.</summary>
+        public bool HangCredentials { get; set; }
+
         public void Reopen(string url)
         {
             ConnectedUrl = url;
@@ -58,6 +63,10 @@ public sealed class QueryTabSessionTests
                 case MessageTypes.SessionDisconnect:
                     if (HoldDisconnect != null) await HoldDisconnect.Task;
                     return (TResponse)(object)new SessionDisconnectResponse { Ok = true };
+                case MessageTypes.ListDatabases: return (TResponse)(object)new ListDatabasesResponse { Ok = true, Databases = new List<string> { "master" } };
+                case MessageTypes.CredentialRequest:
+                    if (HangCredentials) await Task.Delay(Timeout.Infinite, ct);
+                    return (TResponse)(object)CredentialReply;
                 default: throw new InvalidOperationException($"Unexpected request {type}");
             }
         }
@@ -402,9 +411,12 @@ public sealed class QueryTabSessionTests
     public async Task A_SQL_login_remembered_on_the_engine_asks_it_to_remember_and_reconnects_without_a_password()
     {
         _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = true, ServerVersion = "SQL Server 16.0", Remembered = true };   // the engine kept it
         var remembered = Remote(trust: true) with { RememberPassword = true };
         var tab = _sql.CreateSession("remembered-login");
-        Assert.True((await _sql.ConnectAsync(remembered, tab, CancellationToken.None)).Ok);
+        var connected = await _sql.ConnectAsync(remembered, tab, CancellationToken.None);
+        Assert.True(connected.Ok);
+        Assert.True(connected.Remembered);
         // The connect's test is the open that proves the password, so it carries the request to remember it.
         var test = (TestSqlConnectionRequest)_bridge.Log.First(e => e.Type == MessageTypes.TestSqlConnection).Message;
         Assert.True(test.RememberPassword);
@@ -490,5 +502,641 @@ public sealed class QueryTabSessionTests
         Assert.False(ConnectionBinding.FromTarget(Remote(trust: false), null).NeedsNoPassword);
         Assert.True(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, null).NeedsNoPassword);
         Assert.True(ConnectionBinding.FromTarget(SqlServer(), null).NeedsNoPassword);
+    }
+
+    // ── Spec 043 follow-up (review) ──────────────────────────────────────────────────────────────────────────────────────────
+
+    private void EngineRemembersAndCopies() => _bridge.EngineCapabilities = new[]
+    {
+        SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySqlServerCredentials,
+        SqlConnectionService.CapabilityPostgreSql, SqlConnectionService.CapabilitySessionCopy,
+        SqlConnectionService.CapabilitySqlServerCredentialsV2, SqlConnectionService.CapabilitySessionCopyV2,
+    };
+
+    // Review, round 2: engines 1.26.1022.0927 and 1.26.1022.1042 — the v1 ids only. They never send Remembered (key 4), ignore a
+    // database list's copy source (key 3) and the page's id (key 6), and send no postgresql.login-failed.
+    private void ReleasedV1Engine() => _bridge.EngineCapabilities = new[]
+    {
+        SqlConnectionService.CapabilitySessionDisconnect, SqlConnectionService.CapabilitySqlServerCredentials,
+        SqlConnectionService.CapabilityPostgreSql, SqlConnectionService.CapabilitySessionCopy,
+    };
+
+    // [1] A remembered (or copied) password the server refuses: every quiet retry would be another failed login.
+    [Fact]
+    public async Task A_remembered_SQL_password_the_server_refuses_stops_the_tab_reconnecting_on_its_own()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("stale-password");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
+        Assert.True(tab.CanReconnectAlone);
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'reporting'.", ErrorCode = DialectErrors.LoginFailed };
+
+        var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.False(result.PasswordRequired);   // worded as the server's refusal, not a prompt
+        Assert.True(tab.PasswordMissing);
+        Assert.False(tab.CanReconnectAlone);     // the next run asks through the dialog
+        Assert.True(tab.NeedsReattach);
+        Assert.Empty(ConnectionChanges);
+    }
+
+    [Fact]
+    public async Task A_typed_SQL_password_the_server_refuses_does_not_mark_the_tab()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("typo");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'reporting'.", ErrorCode = DialectErrors.LoginFailed };
+
+        var result = await _sql.ConnectAsync(tab.Binding!.ToTarget("wrong-pw"), tab, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.False(tab.PasswordMissing);
+        Assert.True(tab.CanReconnectAlone);   // the engine's own password was never tried
+    }
+
+    [Fact]
+    public async Task A_copied_SQL_password_the_server_refuses_marks_the_tab_too()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("copy-refused");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false), "saved-1"));
+        tab.CopyPasswordFrom = "source-tab";
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed.", ErrorCode = DialectErrors.LoginFailed };
+
+        await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.True(tab.PasswordMissing);
+        Assert.Null(tab.CopyPasswordFrom);
+        Assert.False(tab.CanReconnectAlone);
+    }
+
+    [Fact]
+    public async Task A_remembered_PostgreSQL_password_the_server_refuses_by_its_code_stops_the_tab_reconnecting_on_its_own()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("pg-stale");
+        tab.Restore(ConnectionBinding.FromTarget(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", RememberPassword: true), null));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "authentification échouée", ErrorCode = DialectErrors.PgLoginFailed };
+
+        var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Equal(DialectErrors.PgLoginFailed, result.ErrorCode);   // the code reaches the dialog's wording too
+        Assert.True(tab.PasswordMissing);
+        Assert.False(tab.CanReconnectAlone);
+    }
+
+    [Fact]
+    public async Task A_typed_PostgreSQL_password_the_server_refuses_does_not_mark_the_tab()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("pg-typo");
+        tab.Restore(ConnectionBinding.FromTarget(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", RememberPassword: true), null));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "password authentication failed", ErrorCode = DialectErrors.PgLoginFailed };
+
+        await _sql.ConnectAsync(tab.Binding!.ToTarget("wrong-pw"), tab, CancellationToken.None);
+
+        Assert.False(tab.PasswordMissing);
+        Assert.True(tab.CanReconnectAlone);
+    }
+
+    // [9] Remember off: the engine's copy is not used, whatever it holds.
+    [Fact]
+    public async Task A_SQL_login_not_asked_to_be_remembered_with_nothing_typed_asks_without_a_round_trip()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("not-remembered");
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { Password = null }, tab, CancellationToken.None);
+
+        Assert.True(result.PasswordRequired);
+        Assert.True(tab.PasswordMissing);
+        Assert.Empty(_bridge.Log);
+    }
+
+    // [5] The tab is remembered only when the engine says it stored the password.
+    [Fact]
+    public async Task A_password_the_engine_could_not_keep_leaves_the_tab_asking_after_a_reload()
+    {
+        EngineRemembersAndCopies();
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = true, Remembered = false };   // the store could not be written
+        var tab = _sql.CreateSession("not-kept");
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.True(result.Ok);
+        Assert.False(result.Remembered);
+        Assert.True(((TestSqlConnectionRequest)_bridge.Log.First(e => e.Type == MessageTypes.TestSqlConnection).Message).RememberPassword);
+        Assert.False(tab.Binding!.RememberPassword);
+        Assert.False(tab.Binding.NeedsNoPassword);
+    }
+
+    [Fact]
+    public async Task A_password_the_engine_cannot_remember_at_all_is_not_claimed_remembered()
+    {
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = true, Remembered = true };   // an engine without credentials.sqlserver.v1
+        var tab = _sql.CreateSession("old-engine-typed");
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.True(result.Ok);
+        Assert.False(result.Remembered);
+        Assert.False(tab.Binding!.RememberPassword);
+    }
+
+    // [12] A new tab's dialog tests and lists with the other tab's password.
+    [Theory]
+    [InlineData(DatabaseKind.SqlServer)]
+    [InlineData(DatabaseKind.PostgreSql)]
+    public async Task Test_and_list_send_the_copy_source_only_when_nothing_is_typed_and_the_engine_can_copy(DatabaseKind kind)
+    {
+        var target = kind == DatabaseKind.PostgreSql
+            ? new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", CopyPasswordFrom: "source-tab")
+            : Remote(trust: false) with { Password = null, CopyPasswordFrom = "source-tab" };
+        IEnumerable<string?> Sources() => _bridge.Log.Select(e => e.Message switch
+        {
+            TestSqlConnectionRequest t => t.CopyPasswordFromSessionId,
+            ListDatabasesRequest l => l.CopyPasswordFromSessionId,
+            _ => "?",
+        });
+
+        // An engine without session.copy.v1 is never named a session to copy from.
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilityPostgreSql };
+        await _sql.TestAsync(target, CancellationToken.None);
+        await _sql.ListDatabasesAsync(target, CancellationToken.None);
+        Assert.Equal(new string?[] { null, null }, Sources());
+
+        // Review, round 2: nor is one with only v1 — it would list with no password at all (it ignores key 3).
+        _bridge.Log.Clear();
+        ReleasedV1Engine();
+        Assert.False(_sql.EngineCopiesSessionPasswords);
+        await _sql.TestAsync(target, CancellationToken.None);
+        await _sql.ListDatabasesAsync(target, CancellationToken.None);
+        Assert.Equal(new string?[] { null, null }, Sources());
+
+        _bridge.Log.Clear();
+        EngineRemembersAndCopies();
+        Assert.True(_sql.EngineCopiesSessionPasswords);
+        await _sql.TestAsync(target, CancellationToken.None);
+        await _sql.ListDatabasesAsync(target, CancellationToken.None);
+        Assert.Equal(new[] { "source-tab", "source-tab" }, Sources());
+
+        _bridge.Log.Clear();
+        await _sql.TestAsync(target with { Password = "typed" }, CancellationToken.None);
+        await _sql.ListDatabasesAsync(target with { Password = "typed" }, CancellationToken.None);
+        Assert.Equal(new string?[] { null, null }, Sources());
+    }
+
+    [Fact]
+    public async Task A_connect_takes_the_targets_copy_source_before_the_tabs()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("dialog-copy");
+
+        Assert.True((await _sql.ConnectAsync(Remote(trust: false) with { Password = null, CopyPasswordFrom = "from-dialog" }, tab, CancellationToken.None)).Ok);
+
+        Assert.Equal("from-dialog", ((TestSqlConnectionRequest)_bridge.Log.First(e => e.Type == MessageTypes.TestSqlConnection).Message).CopyPasswordFromSessionId);
+        Assert.Equal("from-dialog", ConnectionChanges.Single().CopyPasswordFromSessionId);
+    }
+
+    // [2], [8] A question about a remembered password that gets no answer.
+    [Fact]
+    public async Task A_forget_the_engine_never_answers_gives_up_and_says_there_was_no_answer()
+    {
+        EngineRemembersAndCopies();
+        _bridge.HangCredentials = true;
+        _sql.CredentialAnswerTimeout = TimeSpan.FromMilliseconds(50);
+
+        var forgot = await _sql.ForgetRememberedSqlServerPasswordAsync("sql01", "app", CancellationToken.None);
+        var forgotPg = await _sql.ForgetRememberedPasswordAsync("db1", 5432, "app", CancellationToken.None);
+        var has = await _sql.HasRememberedSqlServerPasswordAsync("sql01", "app", trustServerCertificate: false, CancellationToken.None);
+
+        Assert.Null(forgot);
+        Assert.Null(forgotPg);
+        Assert.False(has);
+    }
+
+    [Fact]
+    public async Task A_forget_is_answered_true_false_or_not_at_all()
+    {
+        EngineRemembersAndCopies();
+        _bridge.CredentialReply = new CredentialResponse { Ok = true, Has = true };
+        Assert.True(await _sql.ForgetRememberedSqlServerPasswordAsync("sql01", "app", CancellationToken.None));
+        _bridge.CredentialReply = new CredentialResponse { Ok = true, Has = false };
+        Assert.False(await _sql.ForgetRememberedSqlServerPasswordAsync("sql01", "app", CancellationToken.None));
+        _bridge.CredentialReply = new CredentialResponse { Ok = false };   // the engine refused the request
+        Assert.Null(await _sql.ForgetRememberedSqlServerPasswordAsync("sql01", "app", CancellationToken.None));
+
+        _bridge.State = BridgeState.Reconnecting;   // not paired right now
+        Assert.Null(await _sql.ForgetRememberedSqlServerPasswordAsync("sql01", "app", CancellationToken.None));
+        _bridge.State = BridgeState.Open;
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySessionDisconnect };   // too old to be asked
+        Assert.Null(await _sql.ForgetRememberedSqlServerPasswordAsync("sql01", "app", CancellationToken.None));
+    }
+
+    // ── Spec 043 follow-up (review, round 2) ─────────────────────────────────────────────────────────────────────────────────
+
+    // [1] Version gates: what an engine with only the v1 ids says is read as it meant it.
+    [Fact]
+    public async Task An_engine_with_only_credentials_v1_is_taken_at_its_word_that_it_kept_the_password()
+    {
+        ReleasedV1Engine();
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = true };   // key 4 never sent: false on the wire
+        var tab = _sql.CreateSession("v1-remember");
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.True(result.Ok);
+        Assert.True(((TestSqlConnectionRequest)_bridge.Log.First(e => e.Type == MessageTypes.TestSqlConnection).Message).RememberPassword);
+        Assert.True(result.Remembered);              // no "not kept" warning in the dialog, the saved row keeps its flag
+        Assert.True(tab.Binding!.RememberPassword);   // and the tab reconnects without asking, as before round 1
+        Assert.True(tab.Binding.NeedsNoPassword);
+    }
+
+    [Fact]
+    public async Task An_engine_with_credentials_v2_is_believed_when_it_says_it_did_not_keep_the_password()
+    {
+        ReleasedV1Engine();
+        _bridge.EngineCapabilities = _bridge.EngineCapabilities.Append(SqlConnectionService.CapabilitySqlServerCredentialsV2).ToArray();
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = true, Remembered = false };
+        var tab = _sql.CreateSession("v2-not-kept");
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.False(result.Remembered);
+        Assert.False(tab.Binding!.RememberPassword);
+    }
+
+    [Fact]
+    public async Task On_an_engine_with_only_session_copy_v1_a_dialogs_copy_source_is_not_sent_but_the_tabs_own_still_is()
+    {
+        ReleasedV1Engine();
+        var dialog = _sql.CreateSession("dialog-v1");
+
+        // The dialog's own source (it never sets one on such an engine) is not trusted to it: nothing typed and nothing remembered
+        // is a question, not a login with an empty password.
+        var asked = await _sql.ConnectAsync(Remote(trust: false) with { Password = null, CopyPasswordFrom = "from-dialog" }, dialog, CancellationToken.None);
+        Assert.True(asked.PasswordRequired);
+        Assert.DoesNotContain(_bridge.Log, e => e.Type == MessageTypes.TestSqlConnection);
+
+        // New query's own reconnect copies as it did (ConnectionInfo key 7, TestSqlConnectionRequest key 2: v1 honours both).
+        var tab = _sql.CreateSession("new-tab-v1");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false), "saved-1"));
+        tab.CopyPasswordFrom = "source-tab";
+        Assert.True((await _sql.ReattachAsync(tab, null, CancellationToken.None)).Ok);
+        Assert.Equal("source-tab", ((TestSqlConnectionRequest)_bridge.Log.Last(e => e.Type == MessageTypes.TestSqlConnection).Message).CopyPasswordFromSessionId);
+        Assert.Equal("source-tab", ConnectionChanges.Last().CopyPasswordFromSessionId);
+    }
+
+    [Fact]
+    public async Task A_PostgreSQL_password_refused_by_an_engine_without_the_code_stops_the_tab_reconnecting_on_its_own()
+    {
+        ReleasedV1Engine();
+        var tab = _sql.CreateSession("pg-old-engine");
+        tab.Restore(ConnectionBinding.FromTarget(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", RememberPassword: true), null));
+        _bridge.TestReply = new TestSqlConnectionResponse
+        {
+            Ok = false, ErrorMessage = "password authentication failed for user \"app\" (SQLSTATE 28P01).",   // no ErrorCode
+        };
+
+        var result = await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Null(result.ErrorCode);
+        Assert.True(tab.PasswordMissing);
+        Assert.False(tab.CanReconnectAlone);
+    }
+
+    [Fact]
+    public async Task Another_PostgreSQL_failure_without_a_code_does_not_mark_the_tab()
+    {
+        ReleasedV1Engine();
+        var tab = _sql.CreateSession("pg-down");
+        tab.Restore(ConnectionBinding.FromTarget(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", RememberPassword: true), null));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Could not reach db1:5432: connection refused." };
+
+        await _sql.ReattachAsync(tab, null, CancellationToken.None);
+
+        Assert.False(tab.PasswordMissing);
+        Assert.True(tab.CanReconnectAlone);
+    }
+
+    [Theory]
+    [InlineData(DialectErrors.PgLoginFailed, "anything", true)]
+    [InlineData(null, "password authentication failed for user \"app\"", true)]
+    [InlineData(null, "FATAL: 28P01", true)]
+    [InlineData(null, "connection refused", false)]
+    [InlineData(DialectErrors.PasswordRequired, "password authentication failed", false)]   // a code that says otherwise wins
+    public void A_refused_PostgreSQL_password_is_read_from_the_code_or_from_an_older_engines_words(string? code, string error, bool refused) =>
+        Assert.Equal(refused, SqlConnectionService.IsPgPasswordRefused(new ConnectResult(false, error, ErrorCode: code)));
+
+    // [2] The mark is for the tab's own sign-in only.
+    [Fact]
+    public async Task Another_server_tried_for_a_connected_tab_does_not_mark_the_tabs_password_missing()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("connected-elsewhere");
+        Assert.True((await _sql.ConnectAsync(Remote(trust: false) with { RememberPassword = true }, tab, CancellationToken.None)).Ok);
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'reporting'.", ErrorCode = DialectErrors.LoginFailed };
+
+        // The dialog tries another server with the login's remembered password, which that server refuses.
+        var other = Remote(trust: false) with { Server = "db2.example.com", Password = null, RememberPassword = true };
+        var refused = await _sql.ConnectAsync(other, tab, CancellationToken.None);
+
+        Assert.False(refused.Ok);
+        Assert.False(tab.PasswordMissing);
+        Assert.True(tab.IsConnected);                  // still on its own server
+        Assert.Equal("db1.example.com", tab.Binding!.Server);
+
+        // The same refusal for the tab's own server and login (any case, spaces around) marks it.
+        await _sql.ConnectAsync(Remote(trust: false) with { Server = " DB1.example.com ", User = "REPORTING", Password = null, RememberPassword = true },
+            tab, CancellationToken.None);
+        Assert.True(tab.PasswordMissing);
+    }
+
+    [Fact]
+    public async Task A_new_tab_whose_dialog_tries_another_server_keeps_the_tab_it_copies_from()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("new-tab");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false), "saved-1"));
+        tab.CopyPasswordFrom = "source-tab";
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Enter the password.", ErrorCode = DialectErrors.PasswordRequired };
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { Server = "db2.example.com", Password = null }, tab, CancellationToken.None);
+
+        Assert.True(result.PasswordRequired);
+        Assert.False(tab.PasswordMissing);
+        Assert.Equal("source-tab", tab.CopyPasswordFrom);
+        Assert.True(tab.CanReconnectAlone);
+    }
+
+    [Fact]
+    public async Task A_PostgreSQL_tab_is_marked_only_for_its_own_host_port_and_user()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("pg-own");
+        tab.Restore(ConnectionBinding.FromTarget(new ConnectionTarget(DatabaseKind.PostgreSql, "db1:6000", "sales", User: "app", RememberPassword: true), null));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "refused", ErrorCode = DialectErrors.PgLoginFailed };
+
+        await _sql.ConnectAsync(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", Port: 5432, RememberPassword: true), tab, CancellationToken.None);
+        Assert.False(tab.PasswordMissing);   // another port
+
+        await _sql.ConnectAsync(new ConnectionTarget(DatabaseKind.PostgreSql, "DB1", "postgres", User: "app", Port: 6000, RememberPassword: true), tab, CancellationToken.None);
+        Assert.True(tab.PasswordMissing);    // its own host and port, written another way; the database is not part of it
+    }
+
+    [Fact]
+    public async Task A_tab_with_no_connection_yet_is_marked_as_before()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("no-binding");
+
+        var result = await _sql.ConnectAsync(Remote(trust: false) with { Password = null }, tab, CancellationToken.None);
+
+        Assert.True(result.PasswordRequired);
+        Assert.True(tab.PasswordMissing);
+    }
+
+    // [4] The dialog looks up the tab a new tab was opened from.
+    [Fact]
+    public void A_session_is_found_by_its_id_while_its_tab_is_open()
+    {
+        var source = _sql.CreateSession("source-tab");
+
+        Assert.Same(source, _sql.FindSession("source-tab"));
+        Assert.Null(_sql.FindSession("nobody"));
+
+        _sql.ForgetSession(source);   // the tab was closed
+        Assert.Null(_sql.FindSession("source-tab"));
+    }
+
+    [Fact]
+    public void A_binding_names_the_same_sign_in_whatever_the_case_spaces_database_or_security_choices()
+    {
+        var sql = ConnectionBinding.FromTarget(Remote(trust: false), "saved-1");
+        Assert.True(sql.SameSignInAs(new ConnectionTarget(DatabaseKind.SqlServer, " DB1.EXAMPLE.COM ", "master", WindowsAuth: false, User: "Reporting",
+            TrustServerCertificate: true)));
+        Assert.False(sql.SameSignInAs(Remote(trust: false) with { User = "other" }));
+        Assert.False(sql.SameSignInAs(Remote(trust: false) with { Server = "db2.example.com" }));
+        Assert.False(sql.SameSignInAs(Remote(trust: false) with { WindowsAuth = true }));
+        Assert.False(sql.SameSignInAs(new ConnectionTarget(DatabaseKind.PostgreSql, "db1.example.com", "sales", User: "reporting")));
+
+        var windows = ConnectionBinding.FromTarget(SqlServer(), null);
+        Assert.True(windows.SameSignInAs(SqlServer("master", server: "LOCALHOST")));
+
+        var pg = ConnectionBinding.FromTarget(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", Port: 5433), null);
+        Assert.True(pg.SameSignInAs(new ConnectionTarget(DatabaseKind.PostgreSql, "db1:5433", "postgres", User: "APP")));
+        Assert.False(pg.SameSignInAs(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app")));   // 5432
+    }
+
+    // ── Spec 043 follow-up (review, round 3) ─────────────────────────────────────────────────────────────────────────────────
+
+    private CredentialRequest LastCredentialRequest => (CredentialRequest)_bridge.Log.Last(e => e.Type == MessageTypes.CredentialRequest).Message;
+
+    // [1] A question about a remembered SQL login carries the certificate checking the engine fills a password by.
+    [Fact]
+    public async Task A_question_about_a_SQL_logins_password_carries_the_effective_trust_choice_to_an_engine_that_reads_it()
+    {
+        EngineRemembersAndCopies();
+
+        await _sql.HasRememberedSqlServerPasswordAsync("db1.example.com", "app", trustServerCertificate: true, CancellationToken.None);
+        Assert.True(LastCredentialRequest.TrustServerCertificate);
+        await _sql.HasRememberedSqlServerPasswordAsync("db1.example.com", "app", trustServerCertificate: false, CancellationToken.None);
+        Assert.False(LastCredentialRequest.TrustServerCertificate);
+
+        // A server on the engine's own machine is always trusted, as the connection string says, whatever the checkbox.
+        await _sql.HasRememberedSqlServerPasswordAsync("localhost", "app", trustServerCertificate: false, CancellationToken.None);
+        Assert.True(LastCredentialRequest.TrustServerCertificate);
+        await _sql.HasRememberedSqlServerPasswordAsync(@".\SQLEXPRESS", "app", trustServerCertificate: false, CancellationToken.None);
+        Assert.True(LastCredentialRequest.TrustServerCertificate);
+
+        // A forget removes the login's password whatever it was saved with, and PostgreSQL has no such choice: no key 5.
+        await _sql.ForgetRememberedSqlServerPasswordAsync("db1.example.com", "app", CancellationToken.None);
+        Assert.Null(LastCredentialRequest.TrustServerCertificate);
+        await _sql.HasRememberedPasswordAsync("db1", 5432, "app", CancellationToken.None);
+        Assert.Null(LastCredentialRequest.TrustServerCertificate);
+    }
+
+    [Fact]
+    public async Task An_engine_with_only_credentials_v1_is_not_sent_the_trust_choice()
+    {
+        ReleasedV1Engine();
+
+        Assert.True(await _sql.HasRememberedSqlServerPasswordAsync("db1.example.com", "app", trustServerCertificate: true, CancellationToken.None));
+
+        Assert.Null(LastCredentialRequest.TrustServerCertificate);   // it answers for any remembered password, as before
+    }
+
+    // [2] The mark names the sign-in it is about and why, so a tab with no binding is covered too.
+    [Fact]
+    public async Task A_remembered_SQL_password_refused_for_a_tab_with_no_binding_records_the_sign_in_and_that_it_was_refused()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("fresh-page");   // the Status bar's restore of a remembered login, on a fresh page
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'reporting'.", ErrorCode = DialectErrors.LoginFailed };
+
+        await _sql.ConnectAsync(Remote(trust: true) with { Password = null, RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.Null(tab.Binding);
+        Assert.True(tab.PasswordMissing);
+        Assert.True(tab.PasswordRefused);
+        var signIn = tab.PasswordMissingFor!;
+        Assert.True(signIn.SameSignInAs(Remote(trust: false)));
+        Assert.Equal(("saved-1", true), (signIn.SavedConnectionId, signIn.TrustServerCertificate));
+    }
+
+    [Fact]
+    public async Task A_SQL_login_the_engine_has_no_password_for_records_the_sign_in_and_that_none_was_refused()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("none-held");
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Enter the password.", ErrorCode = DialectErrors.PasswordRequired };
+
+        await _sql.ConnectAsync(Remote(trust: false) with { Password = null, RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.True(tab.PasswordMissing);
+        Assert.False(tab.PasswordRefused);
+        Assert.True(tab.PasswordMissingFor!.SameSignInAs(Remote(trust: false)));
+
+        // Nothing asked of the engine at all (Remember off, nothing typed): the same, without a round trip.
+        var other = _sql.CreateSession("not-asked");
+        await _sql.ConnectAsync(Remote(trust: false) with { Password = null }, other, CancellationToken.None);
+        Assert.Equal((true, false), (other.PasswordMissing, other.PasswordRefused));
+        Assert.NotNull(other.PasswordMissingFor);
+    }
+
+    [Theory]
+    [InlineData(DialectErrors.PgLoginFailed, false, true)]
+    [InlineData(DialectErrors.PasswordRequired, true, false)]
+    public async Task A_PostgreSQL_tab_with_no_binding_records_the_sign_in_and_why(string code, bool passwordRequired, bool refused)
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("pg-fresh");
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "no", ErrorCode = code };
+
+        var result = await _sql.ConnectAsync(new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", Port: 6000, RememberPassword: true),
+            tab, CancellationToken.None);
+
+        Assert.Equal(passwordRequired, result.PasswordRequired);
+        Assert.Equal((true, refused), (tab.PasswordMissing, tab.PasswordRefused));
+        Assert.True(tab.PasswordMissingFor!.SameSignInAs(new ConnectionTarget(DatabaseKind.PostgreSql, "db1:6000", "postgres", User: "app")));
+    }
+
+    [Theory]
+    [InlineData(DatabaseKind.SqlServer)]
+    [InlineData(DatabaseKind.PostgreSql)]
+    public async Task A_successful_connect_clears_the_mark_its_sign_in_and_its_reason(DatabaseKind kind)
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("cleared");
+        var target = kind == DatabaseKind.PostgreSql
+            ? new ConnectionTarget(DatabaseKind.PostgreSql, "db1", "sales", User: "app", RememberPassword: true)
+            : Remote(trust: false) with { Password = null, RememberPassword = true };
+        _bridge.TestReply = new TestSqlConnectionResponse
+        {
+            Ok = false, ErrorMessage = "refused", ErrorCode = kind == DatabaseKind.PostgreSql ? DialectErrors.PgLoginFailed : DialectErrors.LoginFailed,
+        };
+        await _sql.ConnectAsync(target, tab, CancellationToken.None);
+        Assert.True(tab.PasswordRefused);
+
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = true, Remembered = true, ServerVersion = "PostgreSQL 18.1" };
+        Assert.True((await _sql.ConnectAsync(target with { Password = "current" }, tab, CancellationToken.None)).Ok);
+
+        Assert.Equal((false, false), (tab.PasswordMissing, tab.PasswordRefused));
+        Assert.Null(tab.PasswordMissingFor);
+    }
+
+    [Fact]
+    public async Task Another_sign_in_tried_for_a_tab_with_a_binding_leaves_its_mark_as_it_was()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("marked");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed.", ErrorCode = DialectErrors.LoginFailed };
+        await _sql.ReattachAsync(tab, null, CancellationToken.None);
+        Assert.True(tab.PasswordRefused);
+
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Enter the password.", ErrorCode = DialectErrors.PasswordRequired };
+        await _sql.ConnectAsync(Remote(trust: false) with { Server = "db2.example.com", Password = null, RememberPassword = true }, tab, CancellationToken.None);
+
+        Assert.True(tab.PasswordRefused);
+        Assert.Equal("db1.example.com", tab.PasswordMissingFor!.Server);
+    }
+
+    // [4] Another tab's password is offered only where the engine would copy it.
+    [Fact]
+    public void A_SQL_Server_password_is_copied_only_with_the_same_effective_certificate_checking()
+    {
+        var remote = ConnectionBinding.FromTarget(Remote(trust: false), "saved-1");
+        Assert.True(remote.CopiesPasswordTo(Remote(trust: false) with { Server = " DB1.example.com ", User = "REPORTING", Database = "master" }));
+        Assert.False(remote.CopiesPasswordTo(Remote(trust: true)));                       // a validated password to a trusting connection
+        Assert.False(ConnectionBinding.FromTarget(Remote(trust: true), null).CopiesPasswordTo(Remote(trust: false)));
+        Assert.False(remote.CopiesPasswordTo(Remote(trust: false) with { User = "other" }));
+
+        // On the engine's own machine both connection strings trust the certificate, whatever the checkbox said.
+        var local = ConnectionBinding.FromTarget(Remote(trust: false) with { Server = "localhost" }, null);
+        Assert.True(local.CopiesPasswordTo(Remote(trust: true) with { Server = "LOCALHOST" }));
+
+        // Windows authentication has no password to copy.
+        Assert.False(ConnectionBinding.FromTarget(SqlServer(), null).CopiesPasswordTo(SqlServer()));
+    }
+
+    [Fact]
+    public void A_PostgreSQL_password_is_copied_only_with_the_same_TLS_mode_root_certificate_and_user_name()
+    {
+        ConnectionTarget Pg(string? ssl = null, string? cert = null, string user = "app") =>
+            new(DatabaseKind.PostgreSql, "db1", "sales", User: user, Port: 5432, SslMode: ssl, RootCertificatePath: cert);
+        var source = ConnectionBinding.FromTarget(Pg("verify-full", @"C:\certs\root.crt"), null);
+
+        Assert.True(source.CopiesPasswordTo(Pg("Verify-Full ", @" c:\CERTS\root.crt ")));
+        Assert.False(source.CopiesPasswordTo(Pg("require", @"C:\certs\root.crt")));
+        Assert.False(source.CopiesPasswordTo(Pg("verify-full", @"C:\certs\other.crt")));
+        Assert.False(source.CopiesPasswordTo(Pg("verify-full", null)));
+        Assert.False(source.CopiesPasswordTo(Pg("verify-full", @"C:\certs\root.crt", user: "APP")));   // the engine compares it exactly
+
+        // No mode is prefer, as on the wire.
+        Assert.True(ConnectionBinding.FromTarget(Pg(), null).CopiesPasswordTo(Pg("prefer")));
+    }
+
+    // ── Spec 043 follow-up (review, round 4) ─────────────────────────────────────────────────────────────────────────────────
+
+    // [5] The user's Disconnect ends the tab's connection and the mark of the password it was missing, of either reason.
+    [Theory]
+    [InlineData(DialectErrors.LoginFailed, true)]
+    [InlineData(DialectErrors.PasswordRequired, false)]
+    public async Task The_users_disconnect_clears_the_mark_its_sign_in_and_its_reason(string code, bool refused)
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("disconnected");
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "no", ErrorCode = code };
+        await _sql.ConnectAsync(Remote(trust: false) with { Password = null, RememberPassword = true }, tab, CancellationToken.None);
+        Assert.Equal((true, refused), (tab.PasswordMissing, tab.PasswordRefused));
+        Assert.NotNull(tab.PasswordMissingFor);
+
+        await _sql.DisconnectSessionAsync(tab, release: false, CancellationToken.None);
+
+        Assert.Equal((false, false), (tab.PasswordMissing, tab.PasswordRefused));
+        Assert.Null(tab.PasswordMissingFor);
+        Assert.True(tab.DisconnectedByUser);
+    }
+
+    [Fact]
+    public async Task The_users_disconnect_of_a_restored_tab_whose_password_was_refused_clears_the_mark_with_the_binding()
+    {
+        EngineRemembersAndCopies();
+        var tab = _sql.CreateSession("bound");
+        tab.Restore(ConnectionBinding.FromTarget(Remote(trust: false) with { RememberPassword = true }, "saved-1"));
+        _bridge.TestReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed.", ErrorCode = DialectErrors.LoginFailed };
+        await _sql.ReattachAsync(tab, null, CancellationToken.None);
+        Assert.True(tab.PasswordMissing);
+
+        await _sql.DisconnectSessionAsync(tab, release: false, CancellationToken.None);
+
+        Assert.Null(tab.Binding);
+        Assert.Equal((false, false), (tab.PasswordMissing, tab.PasswordRefused));
+        Assert.Null(tab.PasswordMissingFor);
     }
 }
