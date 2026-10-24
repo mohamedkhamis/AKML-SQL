@@ -164,11 +164,12 @@ export function wordBefore(kind, textBeforeCaret) {
 
 /**
  * Spec 042 (FR-053, T107) - the link in a quick-info "Documentation" row. Only the official PostgreSQL manual is linked, and only
- * its https pages: the text comes from the engine, and a page is never handed an arbitrary address to open.
+ * its https pages: the text comes from the engine, and a page is never handed an arbitrary address to open. A nested section of
+ * the manual has no page of its own, so its link is the parent page plus the section's upper-case anchor (PgManual).
  */
 export function documentationLink(detail) {
     if (!detail || detail.label !== 'Documentation' || typeof detail.value !== 'string') return null;
-    return /^https:\/\/www\.postgresql\.org\/docs\/\d+\/[a-z0-9\-]+\.html$/.test(detail.value) ? detail.value : null;
+    return /^https:\/\/www\.postgresql\.org\/docs\/\d+\/[a-z0-9\-]+\.html(#[A-Z0-9\-]+)?$/.test(detail.value) ? detail.value : null;
 }
 
 /**

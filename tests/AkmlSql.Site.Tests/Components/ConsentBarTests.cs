@@ -132,6 +132,25 @@ public sealed class ConsentBarTests : IDisposable
     }
 
     [Fact]
+    public void OnAPageNotFound_ItReturnsTheVisitorToTheUrlTheyAskedFor()
+    {
+        // The 404 page is rendered by re-executing the request as /not-found; the visitor's URL is the original one.
+        using var ctx = NewCtx(ConsentState.Unknown);
+        var http = ctx.Services.GetRequiredService<HttpContext>();
+        http.Request.Path = "/not-found";
+        http.Features.Set<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>(new Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature
+        {
+            OriginalPathBase = "",
+            OriginalPath = "/old-page",
+            OriginalQueryString = "?x=1",
+        });
+
+        var cut = Render(ctx);
+
+        Assert.Equal("/old-page?x=1", cut.Find("input[name='returnUrl']").GetAttribute("value"));
+    }
+
+    [Fact]
     public void ItUsesGenericWording_AndLinksToTheFullNotice()
     {
         using var ctx = NewCtx(ConsentState.Unknown);

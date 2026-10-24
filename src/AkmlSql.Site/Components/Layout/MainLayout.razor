@@ -7,9 +7,9 @@
    multi-column footer. <main> no longer carries .container — pages opt into .page-body so
    the Home hero can run full-bleed. *@
 
-@* The skip link carries the current path: <base href="/"> resolves a bare "#main-content"
-   against the home page, and Blazor's enhanced navigation then loads Home. *@
-<a class="skip-link" href="@SkipLinkHref">Skip to content</a>
+@* The skip link carries the page's own address (PageAddress): <base href="/"> resolves a bare
+   "#main-content" against the home page, and Blazor's enhanced navigation then loads Home. *@
+<a class="skip-link" href="@PageAddress.Fragment(Navigation, HttpContext, "main-content")">Skip to content</a>
 
 <header class="site-header">
     <nav class="site-nav container" aria-label="Main navigation">
@@ -151,13 +151,6 @@
 </footer>
 
 @code {
-    private string SkipLinkHref
-    {
-        get
-        {
-            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-            var hash = relative.IndexOf('#');
-            return "/" + (hash < 0 ? relative : relative[..hash]) + "#main-content";
-        }
-    }
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
 }

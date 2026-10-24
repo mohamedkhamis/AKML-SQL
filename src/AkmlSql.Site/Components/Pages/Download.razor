@@ -6,6 +6,7 @@
 @inject ReleaseAvailability Availability
 @inject SiteSettingsStore Settings
 @inject IServiceProvider Services
+@inject NavigationManager Navigation
 
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
@@ -241,7 +242,7 @@
                     </li>
                     @if (_previousReleases.Count > 0)
                     {
-                        <li><a href="/download#previous-releases-heading">Previous versions</a></li>
+                        <li><a href="@PageAddress.Fragment(Navigation, HttpContext, "previous-releases-heading")">Previous versions</a></li>
                     }
                     <li>
                         <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source code</a>
@@ -324,6 +325,9 @@ else
 </div>
 
 @code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
     /// <summary>U23: display form of the minimum OS version — trims a trailing ".0"
     /// so "10.0" renders as the consumer-facing "Windows 10 or later".</summary>
     /// <summary>

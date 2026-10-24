@@ -202,20 +202,6 @@ public sealed class PgReference
     private static int MajorOf(string tag) => Regex.Match(tag, @"REL_?(\d+)") is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
     /// <summary>The invariants of <c>contracts/reference-schema.md</c>.</summary>
-    /// <summary>
-    /// docs/{version}/{section}.html for a section that is a page; docs/{version}/{page}.html#{SECTION} for a nested section, which
-    /// the manual publishes only as an upper-case anchor on its parent page.
-    /// </summary>
-    private static bool FollowsManualUrl(string url, string version, string sectionId)
-    {
-        var root = $"https://www.postgresql.org/docs/{version}/";
-        if (url == root + sectionId + ".html") return true;
-        var anchor = ".html#" + sectionId.ToUpperInvariant();
-        if (!url.StartsWith(root, StringComparison.Ordinal) || !url.EndsWith(anchor, StringComparison.Ordinal)) return false;
-        var page = url[root.Length..^anchor.Length];
-        return page.Length > 0 && page.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-');
-    }
-
     private static List<string> Check(string version, IReadOnlyList<int> majors, IReadOnlyList<PgReferenceEntry> entries)
     {
         var problems = new List<string>();
@@ -230,7 +216,7 @@ public sealed class PgReference
             if (!seen.Add(e.Kind + "\u0001" + e.Name.ToLowerInvariant())) problems.Add(label + ": the name is not unique for its kind");
             if (e.Summary.Trim().Length == 0) problems.Add(label + ": no summary");
             if (e.SectionId.Length == 0) problems.Add(label + ": no section");
-            if (!FollowsManualUrl(e.Url, version, e.SectionId)) problems.Add(label + ": the url does not follow docs/" + version + "/<section>.html or <page>.html#<SECTION>");
+            if (!PgManual.IsLinkFor(e.Url, version, e.SectionId)) problems.Add(label + ": the url does not follow docs/" + version + "/<section>.html or <page>.html#<SECTION>");
             if (majors.Count > 0 && (e.MinVersion < majors[0] || e.MinVersion > majors[^1])) problems.Add(label + ": minVersion " + e.MinVersion + " is not a supported release");
         }
         return problems;

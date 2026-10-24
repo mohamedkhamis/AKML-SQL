@@ -220,6 +220,32 @@ public static partial class FuncSectionIndex
     }
 }
 
+/// <summary>
+/// Maps every section of an SGML chapter (<c>syntax.sgml</c>) to the page it is published on. The manual makes one web page per
+/// <c>sect1</c>; a <c>sect2</c> or <c>sect3</c> is only an anchor on its <c>sect1</c>'s page, so a link built from a nested id
+/// alone (<c>sql-syntax-identifiers.html</c>) is a 404.
+/// </summary>
+public static partial class SectionPageIndex
+{
+    [GeneratedRegex(@"<sect([1-5])\s+id=""([^""]+)""")]
+    private static partial Regex Section();
+
+    /// <summary>Section id → the id of the enclosing <c>sect1</c> (a <c>sect1</c> maps to itself).</summary>
+    public static IReadOnlyDictionary<string, string> Read(string sgml)
+    {
+        var pages = new Dictionary<string, string>(StringComparer.Ordinal);
+        string? page = null;
+        foreach (Match m in Section().Matches(sgml))
+        {
+            var id = m.Groups[2].Value;
+            if (m.Groups[1].Value == "1") page = id;
+            if (page != null) pages.TryAdd(id, page);
+        }
+
+        return pages;
+    }
+}
+
 /// <summary>One row of the data types table of <c>datatype.sgml</c> (or of the pseudo-types table).</summary>
 /// <param name="Name">The type name with any length or precision part removed: <c>bit varying</c>, <c>timestamp with time zone</c>.</param>
 public sealed record DocType(string Name, IReadOnlyList<string> Aliases, string Description, string SectionId, bool IsPseudo);

@@ -17,4 +17,10 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The manual-link rule, shared with the library's rules and validator. Compiled in rather than referenced: the library
+         carries the native parser, which this tool has no use for. -->
+    <Compile Include="..\..\..\src\AkmlSql.PostgreSql\Reference\PgManual.cs" Link="PgManual.cs" />
+  </ItemGroup>
+
 </Project>

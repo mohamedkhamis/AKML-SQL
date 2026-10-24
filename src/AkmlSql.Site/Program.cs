@@ -246,8 +246,12 @@ if (!app.Environment.IsDevelopment())
 }
 // Ordinary GET status pages can render through Razor. POST/API failures keep their status
 // and never re-enter a form endpoint with the original request's invalid antiforgery feature.
+// A missing asset (an old fingerprinted stylesheet asked for by a cached page) keeps its empty
+// 404: a whole HTML page is no use to a <link> or <script>, and costs a full render per miss.
 app.UseWhen(context => HttpMethods.IsGet(context.Request.Method)
-    && !context.Request.Path.StartsWithSegments("/api"), branch =>
+    && !context.Request.Path.StartsWithSegments("/api")
+    && !staticAssetPrefixes.Any(prefix =>
+        context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase)), branch =>
     branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
 

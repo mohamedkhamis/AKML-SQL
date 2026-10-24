@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Markdig;
+using Markdig.Extensions.Tables;
 using Markdig.Renderers.Html;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
@@ -95,10 +96,10 @@ public sealed class MarkdownRenderer
         var headings = ExtractHeadings(document);
         var summary = ExtractSummary(document);
         SanitizeAndRewriteLinks(document, sourceRelativePath, documentRoute);
+        AlignmentToClasses(document);
 
         var html = Markdig.Markdown.ToHtml(document, _pipeline);
         html = AddHeadingPermalinks(html, documentRoute);
-        html = AlignmentStyleToClass(html);
         // Mobile tables: wrap in a scroll container — a display:block table with
         // border-collapse does not scroll reliably in Chromium at narrow widths, so the
         // wrapper owns the scrolling and the table stays a real table.
@@ -138,19 +139,52 @@ public sealed class MarkdownRenderer
                  + $"<a class=\"doc-anchor\" href=\"{documentRoute}#{id}\" title=\"Link to this section\" aria-hidden=\"true\" tabindex=\"-1\">#</a>";
         });
 
-    /// <summary>Matches the inline alignment Markdig writes on pipe-table cells.</summary>
-    private static readonly Regex CellAlignmentStyle = new(
-        @"<(?<tag>th|td) style=""text-align: (?<align>left|center|right);"">",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
     /// <summary>
-    /// Pipe-table column alignment (<c>|---:|</c>) is emitted as an inline <c>style</c>, which the
+    /// Pipe-table column alignment (<c>|---:|</c>) renders as an inline <c>style</c>, which the
     /// site's CSP (<c>style-src 'self'</c>) blocks — one console error per cell and the alignment
-    /// lost. A class carries the same alignment through site.css.
+    /// lost. Each cell gets a class for site.css instead, and the column alignment is cleared so
+    /// the renderer writes no style. Done on the AST, so it does not depend on Markdig's markup.
     /// </summary>
-    internal static string AlignmentStyleToClass(string html) =>
-        CellAlignmentStyle.Replace(html, match =>
-            $"<{match.Groups["tag"].Value} class=\"align-{match.Groups["align"].Value}\">");
+    private static void AlignmentToClasses(MarkdownDocument document)
+    {
+        foreach (var table in document.Descendants<Table>())
+        {
+            var columns = table.ColumnDefinitions;
+            if (columns.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var row in table.OfType<TableRow>())
+            {
+                for (var i = 0; i < row.Count; i++)
+                {
+                    if (row[i] is not TableCell cell)
+                    {
+                        continue;
+                    }
+
+                    // The same column the renderer reads the alignment from.
+                    var index = cell.ColumnIndex < 0 || cell.ColumnIndex >= columns.Count ? i : cell.ColumnIndex;
+                    var alignment = columns[Math.Min(index, columns.Count - 1)].Alignment;
+                    if (alignment is { } align)
+                    {
+                        cell.GetAttributes().AddClass(align switch
+                        {
+                            TableColumnAlign.Center => "align-center",
+                            TableColumnAlign.Right => "align-right",
+                            _ => "align-left",
+                        });
+                    }
+                }
+            }
+
+            foreach (var column in columns)
+            {
+                column.Alignment = null;
+            }
+        }
+    }
 
     /// <summary>
     /// U3: the doc page renders its own <c>&lt;h1&gt;@Title&lt;/h1&gt;</c>, so a leading source

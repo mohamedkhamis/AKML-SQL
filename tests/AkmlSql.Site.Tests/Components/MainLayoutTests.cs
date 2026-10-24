@@ -76,6 +76,27 @@ public sealed class MainLayoutTests : IDisposable
     }
 
     [Fact]
+    public void SkipLink_OnAPageNotFound_KeepsTheUrlTheVisitorAskedFor()
+    {
+        // The 404 page is rendered by re-executing the request as /not-found. A skip link to
+        // "/not-found#main-content" would navigate away from the URL in the address bar.
+        using var ctx = NewCtx();
+        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("/not-found");
+        var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        http.Request.Path = "/not-found";
+        http.Features.Set<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>(new Microsoft.AspNetCore.Diagnostics.StatusCodeReExecuteFeature
+        {
+            OriginalPathBase = "",
+            OriginalPath = "/no-such-page",
+            OriginalQueryString = "",
+        });
+
+        var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>").AddCascadingValue(http));
+
+        Assert.Equal("/no-such-page#main-content", cut.Find("a.skip-link").GetAttribute("href"));
+    }
+
+    [Fact]
     public void HeaderNav_HasAriaLabel_AndAllPrimaryLinks()
     {
         using var ctx = NewCtx();

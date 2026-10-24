@@ -2,8 +2,8 @@ namespace AkmlSql.PostgreSql.ReferenceGen;
 
 /// <summary>
 /// The lexical rules of the language (FR-050), written by hand because they are prose in <c>syntax.sgml</c>, not a table or a
-/// catalog. Each carries the section it summarises, so the link goes to the page that explains it (or, for a nested section, to
-/// its anchor on the parent page - see <see cref="ParentPage"/>).
+/// catalog. Each carries the section it summarises; the generator finds that section's page in syntax.sgml, so the link goes
+/// to the page that explains it, or to the section's anchor on that page.
 /// </summary>
 public static class LexicalEntries
 {
@@ -53,21 +53,4 @@ public static class LexicalEntries
         ("operator precedence", new[] { "precedence" },
             "The order in which operators bind, from the highest (. and ::) to the lowest (OR).", "sql-precedence"),
     };
-
-    /// <summary>
-    /// The manual page that holds a nested section: only a chapter-level section is a page of its own (sql-syntax-calling-funcs);
-    /// the rest are anchors on Lexical Structure or Value Expressions. Null when the section is its own page.
-    /// </summary>
-    public static string? ParentPage(string sectionId) =>
-        sectionId switch
-        {
-            "sql-syntax-identifiers" or "sql-syntax-strings" or "sql-syntax-strings-escape" or "sql-syntax-strings-uescape"
-                or "sql-syntax-dollar-quoting" or "sql-syntax-bit-strings" or "sql-syntax-constants-numeric"
-                or "sql-syntax-constants-generic" or "sql-syntax-operators" or "sql-syntax-special-chars" or "sql-syntax-comments"
-                or "sql-precedence" => "sql-syntax-lexical",
-            "sql-expressions-parameters-positional" or "sql-syntax-type-casts" or "sql-syntax-array-constructors"
-                or "sql-syntax-row-constructors" or "sql-expressions-subscripts" or "field-selection" or "sql-syntax-collate-exprs"
-                => "sql-expressions",
-            _ => null,
-        };
 }
