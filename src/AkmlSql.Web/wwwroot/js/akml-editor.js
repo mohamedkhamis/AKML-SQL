@@ -45,7 +45,21 @@ export function caretPosition(doc, head) {
 
 // ── Spec 041 (research R53, FR-053) — editor options ─────────────────────────────────────────────────────
 
-/** The editor options within their limits (Settings › Editor): font size 9–32 px, tab size 1–8. */
+// Spec 043 (research R12, FR-017): the fonts Settings › Editor offers, by the names EditorSettings.FontName gives.
+// 'default' is no override: the theme's --akml-type-editor-family (Consolas first) applies.
+const EDITOR_FONT_STACKS = Object.freeze({
+    'default': null,
+    'cascadia-mono': "'Cascadia Mono', 'Cascadia Code', Consolas, monospace",
+    'consolas': "Consolas, 'Cascadia Mono', monospace",
+    'system-monospace': 'ui-monospace, monospace',
+});
+
+/** The CSS font stack of an offered font, or null for the default (and for anything not offered). */
+export function editorFontStack(name) {
+    return Object.prototype.hasOwnProperty.call(EDITOR_FONT_STACKS, name) ? EDITOR_FONT_STACKS[name] : null;
+}
+
+/** The editor options within their limits (Settings › Editor): font size 9–32 px, tab size 1–8, an offered font. */
 export function normaliseEditorOptions(opts) {
     const o = opts || {};
     const int = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : d);
@@ -53,7 +67,47 @@ export function normaliseEditorOptions(opts) {
         fontSize: Math.min(32, Math.max(9, int(o.fontSize, 13))),
         wordWrap: !!o.wordWrap,
         tabSize: Math.min(8, Math.max(1, int(o.tabSize, 4))),
+        fontFamily: typeof o.fontFamily === 'string' && Object.prototype.hasOwnProperty.call(EDITOR_FONT_STACKS, o.fontFamily)
+            ? o.fontFamily : 'default',
     };
+}
+
+/**
+ * Spec 041 (R53) / 043 (R12): the size and the font are CSS only — two variables every SQL surface reads
+ * (--akml-editor-font-size, --akml-editor-font-family). Set on the editor host by the editor, and on the document root
+ * (applyEditorAppearanceToRoot) so pages without an editor (History, Format styles) follow the same setting.
+ */
+export function applyEditorAppearance(el, opts) {
+    if (!el || !el.style) return;
+    const o = normaliseEditorOptions(opts);
+    el.style.setProperty('--akml-editor-font-size', `${o.fontSize}px`);
+    const stack = editorFontStack(o.fontFamily);
+    if (stack) el.style.setProperty('--akml-editor-font-family', stack);
+    else el.style.removeProperty('--akml-editor-font-family');
+}
+
+/** The appearance on the document root (called by MainLayout on start and when Settings › Editor changes). */
+export function applyEditorAppearanceToRoot(opts) {
+    applyEditorAppearance(typeof document !== 'undefined' ? document.documentElement : null, opts);
+}
+
+// ── Spec 043 (research R14, FR-036) — writing assistants stay out of the SQL ─────────────────────────────
+// CodeMirror already sets spellcheck="false" autocorrect="off" autocapitalize="off" on .cm-content. Browser
+// writing assistants read their own opt-outs: Grammarly has used data-gramm, data-gramm_editor and
+// data-enable-grammarly over the years, LanguageTool reads data-lt-active. An assistant that ignores all of them
+// is outside the page's control (Settings › Editor says so).
+
+/** The attributes that ask writing assistants to leave an element alone. */
+export const WRITING_ASSISTANT_OPT_OUT = Object.freeze({
+    'data-gramm': 'false',
+    'data-gramm_editor': 'false',
+    'data-enable-grammarly': 'false',
+    'data-lt-active': 'false',
+});
+
+/** The CodeMirror extension that puts WRITING_ASSISTANT_OPT_OUT on the editor content (pure; `cm` is the bundle). */
+export function writingAssistantOptOut(cm) {
+    return cm.view.EditorView.contentAttributes.of({ ...WRITING_ASSISTANT_OPT_OUT });
 }
 
 /** The CodeMirror extensions for the options, one per compartment (pure; `cm` is the bundle). */
@@ -110,11 +164,12 @@ export function wordBefore(kind, textBeforeCaret) {
 
 /**
  * Spec 042 (FR-053, T107) - the link in a quick-info "Documentation" row. Only the official PostgreSQL manual is linked, and only
- * its https pages: the text comes from the engine, and a page is never handed an arbitrary address to open.
+ * its https pages: the text comes from the engine, and a page is never handed an arbitrary address to open. A nested section of
+ * the manual has no page of its own, so its link is the parent page plus the section's upper-case anchor (PgManual).
  */
 export function documentationLink(detail) {
     if (!detail || detail.label !== 'Documentation' || typeof detail.value !== 'string') return null;
-    return /^https:\/\/www\.postgresql\.org\/docs\/\d+\/[a-z0-9\-]+\.html$/.test(detail.value) ? detail.value : null;
+    return /^https:\/\/www\.postgresql\.org\/docs\/\d+\/[a-z0-9\-]+\.html(#[A-Z0-9\-]+)?$/.test(detail.value) ? detail.value : null;
 }
 
 /**
@@ -156,10 +211,327 @@ export function typedTriggerCharacters(kind) {
     return isPostgresKind(kind) ? /[\s.,()=<>!+\-*/:]/ : /[\s.,()=<>!+\-*/]/;
 }
 
-/** The font size is CSS only: a variable on the host the editor's font-size reads. */
-function applyFontSize(host, opts) {
-    if (host && host.style) host.style.setProperty('--akml-editor-font-size', `${normaliseEditorOptions(opts).fontSize}px`);
+// ── Spec 030 — expand "SELECT *" on Tab (SQL Prompt parity) ──────────────────────────────────────────────
+
+// The syntax nodes a '*' inside of which is never a select-list wildcard. Brackets is T-SQL's [quoted name] (the editor's
+// SQL Server language parses it as brackets) and PostgreSQL's array subscript.
+const NOT_A_WILDCARD_NODES = new Set(['LineComment', 'BlockComment', 'String', 'QuotedIdentifier', 'Brackets']);
+
+// Spec 043 follow-up (review): how long a Tab may wait for the syntax tree to reach the star (right after a large paste or
+// a tab switch the editor has not parsed that far yet). Past it, the star is read from the text alone (selectListStar), from
+// the start of the document — at most WILDCARD_TEXT_LIMIT characters of it (about 30 ms); a star further in is left alone
+// until the tree gets there.
+const WILDCARD_TREE_WAIT_MS = 50;
+const WILDCARD_TEXT_LIMIT = 1_000_000;
+// With the tree, the text is read from the star's own SELECT, looked for among at most this many nodes before the star.
+const WILDCARD_SELECT_SEARCH = 20_000;
+// How far past the star the text is read for the word that follows it.
+const WILDCARD_LOOKAHEAD = 4096;
+
+// Spec 043 follow-up (review): the words that may follow a select-list star (besides the end, ',', ';', ')' and a GO line).
+// GO is not among them: only a GO line ends a batch (isBatchSeparator); anywhere else 'go' is a name ('SELECT go, *').
+const AFTER_SELECT_LIST_STAR = new Set(['FROM', 'INTO', 'UNION', 'EXCEPT', 'INTERSECT', 'ORDER', 'GROUP', 'WHERE', 'HAVING',
+    'OPTION', 'FOR', 'WINDOW', 'LIMIT', 'OFFSET', 'FETCH']);
+
+// Spec 043 follow-up (review): the words that close a SELECT's select list at its own parenthesis level — the clauses after
+// it and the statements that may follow it without a ';'. END, ELSE and WITH are not among them: CASE ... END and
+// TOP n WITH TIES sit inside a select list. RETURNING closes one on SQL Server only: on PostgreSQL it opens its own list
+// (INSERT / UPDATE / DELETE ... RETURNING *), which PgWildcardExpander expands to the target's columns.
+const SELECT_LIST_CLOSERS = new Set([...AFTER_SELECT_LIST_STAR, 'RETURNING', 'VALUES', 'SET', 'UPDATE', 'INSERT', 'DELETE',
+    'MERGE', 'DECLARE', 'EXEC', 'EXECUTE', 'IF', 'WHILE', 'BEGIN', 'RETURN', 'PRINT', 'USE', 'CREATE', 'ALTER', 'DROP', 'TRUNCATE']);
+
+// The longest word either set holds (INTERSECT, RETURNING): longer words are never upper-cased (selectListStar reads
+// whole documents when the syntax tree is not ready).
+const LONGEST_LIST_WORD = 9;
+
+// PostgreSQL's $tag$: an unquoted identifier without '$' (a letter or '_', then letters, digits and '_'), or nothing.
+const DOLLAR_QUOTE_TAG = /\$(?:[\p{L}_][\p{L}\p{N}_]*)?\$/uy;
+
+function isSqlSpace(c) {
+    return c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0x85 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a)
+        || c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff;
 }
+
+/** A letter, '_', '@' (SQL Server variables) or '#' (temporary tables); any other non-space character past ASCII. */
+function isSqlWordStart(c) {
+    return (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95 || c === 64 || c === 35 || (c > 127 && !isSqlSpace(c));
+}
+
+function isSqlWordPart(c) {
+    return isSqlWordStart(c) || (c >= 48 && c <= 57) || c === 36;
+}
+
+/** The offset just past the quoted text opening at `i`: `close` doubled is an escape, and so is a backslash in E'...'. */
+function skipQuoted(text, i, close, backslash) {
+    const n = text.length;
+    for (i++; i < n; i++) {
+        const c = text.charCodeAt(i);
+        if (backslash && c === 92) { i++; continue; }
+        if (c !== close) continue;
+        if (i + 1 < n && text.charCodeAt(i + 1) === close) { i++; continue; }
+        return i + 1;
+    }
+    return n;
+}
+
+/**
+ * Spec 043 follow-up (review) — the significant tokens of `text` from offset `from` (a token boundary), read the way SQL
+ * Server and PostgreSQL both read them: whitespace, '--' comments and (nested) block comments are skipped; a string ('...',
+ * N'...', E'...', $tag$...$tag$) or a quoted name ([...], "...") is one token, so a '*' inside one is never a token of its own.
+ * Calls `visit(type, start, end)` for each — 'word', 'number', 'string', 'name' or 'punct' (one character) — until it
+ * returns false or the text ends.
+ */
+function scanSqlTokens(text, from, visit) {
+    const n = text.length;
+    let i = from;
+    while (i < n) {
+        const c = text.charCodeAt(i);
+        if (isSqlSpace(c)) { i++; continue; }
+        const d = i + 1 < n ? text.charCodeAt(i + 1) : 0;
+        if (c === 45 && d === 45) {                                    // -- to the end of the line
+            const eol = text.indexOf('\n', i + 2);
+            i = eol < 0 ? n : eol + 1;
+            continue;
+        }
+        if (c === 47 && d === 42) {                                    // /* ... */, nested as both servers nest them
+            let depth = 1;
+            for (i += 2; i < n && depth > 0;) {
+                const a = text.charCodeAt(i), b = i + 1 < n ? text.charCodeAt(i + 1) : 0;
+                if (a === 47 && b === 42) { depth++; i += 2; }
+                else if (a === 42 && b === 47) { depth--; i += 2; }
+                else i++;
+            }
+            continue;
+        }
+        const start = i;
+        let type = 'punct';
+        let tag = null;
+        if (c === 39) { i = skipQuoted(text, i, 39, false); type = 'string'; }
+        else if (c === 34) { i = skipQuoted(text, i, 34, false); type = 'name'; }
+        else if (c === 91) { i = skipQuoted(text, i, 93, false); type = 'name'; }   // [name], ']]' inside it
+        else if (c === 36 && (DOLLAR_QUOTE_TAG.lastIndex = i, tag = DOLLAR_QUOTE_TAG.exec(text))) {
+            const end = text.indexOf(tag[0], i + tag[0].length);
+            i = end < 0 ? n : end + tag[0].length;
+            type = 'string';
+        } else if (isSqlWordStart(c)) {
+            for (i++; i < n && isSqlWordPart(text.charCodeAt(i));) i++;
+            const prefix = i - start === 1 ? text.charCodeAt(start) | 32 : 0;   // N'...', E'...', B'...', X'...'
+            if (i < n && text.charCodeAt(i) === 39 && (prefix === 110 || prefix === 101 || prefix === 98 || prefix === 120)) {
+                i = skipQuoted(text, i, 39, prefix === 101);
+                type = 'string';
+            } else type = 'word';
+        } else if ((c >= 48 && c <= 57) || (c === 46 && d >= 48 && d <= 57)) {
+            for (i++; i < n; i++) {
+                const e = text.charCodeAt(i);
+                if (isSqlWordPart(e) || e === 46) continue;
+                if ((e === 43 || e === 45) && (text.charCodeAt(i - 1) | 32) === 101) continue;   // 1e-3
+                break;
+            }
+            type = 'number';
+        } else i++;
+        if (visit(type, start, i) === false) return;
+    }
+}
+
+/** Whether `text` breaks a line between offsets `from` and `to`. */
+function hasLineBreak(text, from, to) {
+    for (let i = from; i < to; i++) {
+        const c = text.charCodeAt(i);
+        if (c === 10 || c === 13) return true;
+    }
+    return false;
+}
+
+/**
+ * Spec 043 follow-up (review) — whether the word GO at [`from`, `to`) of `text` is the batch separator, as SSMS reads it: the
+ * first token on its line (`prevEnd`, the end of the token before it, is on an earlier line; -1 when there is none) and
+ * followed on its line by nothing but one repeat count and comments ('GO', 'GO 3 -- again'). Anywhere else it is a name:
+ * 'SELECT go, *', 'GO, *' or 'GO x' does not end the batch (TsqlParserService.SplitBatches refuses a script with the last).
+ */
+function isBatchSeparator(text, prevEnd, from, to) {
+    if (prevEnd >= 0 && !hasLineBreak(text, prevEnd, from)) return false;
+    let separator = true;
+    let last = to;
+    let count = false;
+    scanSqlTokens(text, to, (type, start, end) => {
+        if (hasLineBreak(text, last, start)) return false;           // the GO line ended (a '--' comment ends it too)
+        if (type === 'number' && !count && /^\d+$/.test(text.slice(start, end))) { count = true; last = end; return true; }
+        separator = false;
+        return false;
+    });
+    return separator;
+}
+
+/**
+ * Spec 043 follow-up (review) — pure: whether the '*' at offset `star` of `sql` starts a select-list item, reading `sql` from
+ * its start (which must be a token boundary: the start of the document or of the star's statement). SQL Server's engine
+ * takes the FROM tables' columns for whatever star it is asked about, so a product or COUNT's argument must never get here.
+ *
+ * - The star is a token: not in a comment, a string or a quoted name.
+ * - A SELECT's select list is open at the star's parenthesis level: a SELECT came before it at that level, in this
+ *   statement (';' and a GO line end one — isBatchSeparator; a 'go' anywhere else is a name), and no clause or statement
+ *   word closed it since ('COALESCE(a, *)' and 'COUNT(*)' are a level that holds no SELECT). When `postgres` is set, a
+ *   RETURNING list counts too ('DELETE FROM t RETURNING *'); on SQL Server RETURNING is just a word that closes the list.
+ * - What comes right before the item — the star, or 'name.' / '[name].' / '"name".' qualifiers written against it — is
+ *   SELECT, DISTINCT, ALL, ',', the end of TOP n / TOP (n) [PERCENT] [WITH TIES], or PostgreSQL's DISTINCT ON (...) and
+ *   RETURNING.
+ * - What comes after the star is the end, ',', ';', ')', a GO line or a clause word (FROM, INTO, UNION, ORDER, WHERE ...).
+ *   When `continues` says `sql` is cut short, a star with nothing after it in `sql` is not taken.
+ */
+export function selectListStar(sql, star, continues = false, postgres = false) {
+    const text = typeof sql === 'string' ? sql : '';
+    if (!(star >= 0 && star < text.length) || text.charCodeAt(star) !== 42) return false;
+    const frame = (before1, before2) => ({ listOpen: false, before1, before2 });
+    let frames = [frame(null, null)];
+    let recent = [];                 // the last significant tokens: { type, word, punct, variable, from, to, opener }
+    let starAt = -1;                 // the star's index in `recent`, once read
+    let listOpen = false;            // the select list is open at the star's level
+    let after = null;                // the token after the star
+    let swallowed = false;           // the star is inside a comment, a string or a quoted name
+    let prevEnd = -1;                // the end of the token before this one (-1: none yet)
+    scanSqlTokens(text, 0, (type, from, to) => {
+        const gap = prevEnd;
+        prevEnd = to;
+        if (starAt >= 0) { after = { type, from, to, gap }; return false; }
+        if (from > star || (from < star && to > star)) { swallowed = true; return false; }
+        const word = type === 'word' && to - from <= LONGEST_LIST_WORD ? text.slice(from, to).toUpperCase() : null;
+        const punct = type === 'punct' ? text[from] : null;
+        // Spec 043 follow-up (review): only a GO line ends the batch; 'SELECT go, *' is a column named go.
+        if (punct === ';' || (word === 'GO' && isBatchSeparator(text, gap, from, to))) {
+            frames = [frame(null, null)];
+            recent = [];
+            return true;
+        }
+        const token = { type, word, punct, variable: type === 'word' && text.charCodeAt(from) === 64, from, to, opener: null };
+        const level = frames[frames.length - 1];
+        if (punct === '(') {
+            const r = recent.length;
+            frames.push(frame(r > 0 ? recent[r - 1].word : null, r > 1 ? recent[r - 2].word : null));
+        } else if (punct === ')') {
+            if (frames.length > 1) token.opener = frames.pop();
+        } else if (word === 'SELECT' || (postgres && word === 'RETURNING')) level.listOpen = true;
+        else if (word !== null && SELECT_LIST_CLOSERS.has(word)) level.listOpen = false;
+        if (from === star) { starAt = recent.length; listOpen = level.listOpen; }
+        recent.push(token);
+        if (starAt < 0 && recent.length > 64) recent = recent.slice(-32);
+        return true;
+    });
+    if (swallowed || starAt < 0 || !listOpen) return false;
+
+    if (after) {
+        const a = text.slice(after.from, after.to);
+        const word = after.type === 'word' ? a.toUpperCase() : null;
+        if (after.type === 'punct' ? !(a === ',' || a === ';' || a === ')')
+            : !(word !== null && (AFTER_SELECT_LIST_STAR.has(word)
+                || (word === 'GO' && isBatchSeparator(text, after.gap, after.from, after.to))))) return false;
+    } else if (continues) return false;
+
+    // The item starts at the star or at the qualifiers written against it ('t.*', '[dbo].[t].*', '"t".*').
+    let p = starAt - 1;
+    while (p >= 1 && recent[p].punct === '.' && recent[p].to === recent[p + 1].from
+        && (recent[p - 1].type === 'word' || recent[p - 1].type === 'name') && recent[p - 1].to === recent[p].from) p -= 2;
+    const before = p >= 0 ? recent[p] : null;
+    if (!before) return false;
+    if (before.word === 'SELECT' || before.word === 'DISTINCT' || before.word === 'ALL' || before.punct === ',') return true;
+    if (postgres && before.word === 'RETURNING') return true;
+    if (before.punct === ')' && before.opener && before.opener.before1 === 'ON' && before.opener.before2 === 'DISTINCT') return true;
+    // TOP n / TOP @n / TOP (expression), then PERCENT, then WITH TIES.
+    let q = p;
+    if (recent[q].word === 'TIES' && q >= 1 && recent[q - 1].word === 'WITH') q -= 2;
+    if (q >= 0 && recent[q].word === 'PERCENT') q -= 1;
+    if (q < 0) return false;
+    const last = recent[q];
+    if (last.punct === ')') return !!last.opener && last.opener.before1 === 'TOP';
+    return (last.type === 'number' || last.variable) && q >= 1 && recent[q - 1].word === 'TOP';
+}
+
+/**
+ * Spec 030 / 043 — the wildcard Tab expands (pure; `cm` is the bundle): `{ caretOffset }`, the offset just after the '*', when
+ * the bare caret sits right after a '*' or — as SQL Prompt in SSMS also takes it — right before one, and that star starts a
+ * select-list item; else null, and Tab does what it always does.
+ *
+ * Spec 043 follow-up (review): Tab is consumed as soon as this says yes, and on SQL Server nothing downstream checks what the
+ * star is — the engine takes the FROM tables' columns for any star — so 'price * qty', 'COUNT(*)' or '2 * 3' would have been
+ * replaced by a column list. It now says yes only to a star that starts a select-list item (selectListStar), on either side
+ * of the caret. The syntax tree still rules out a star in a comment, a string or a quoted name; it is parsed up to the star
+ * first (for up to WILDCARD_TREE_WAIT_MS), since right after a large paste or a tab switch it may not reach it yet. With
+ * the tree, the text is read from the last SELECT before the star at its own level (none: not a select-list star); without
+ * it, from the start of the document, so the comment and string checks hold then too.
+ *
+ * Spec 043 follow-up (review): `kind` is the editor's database kind (currentKind). On PostgreSQL a RETURNING list is a
+ * select list as well ('INSERT ... RETURNING *', 'UPDATE ... RETURNING *', 'DELETE ... RETURNING *'), which the engine's
+ * PgWildcardExpander expands to the target's columns; the SELECT gate and selectListStar had shut it out.
+ */
+export function wildcardAtCaret(cm, state, kind) {
+    const postgres = isPostgresKind(kind);
+    const sel = state.selection.main;
+    if (!sel.empty) return null;                                  // bare caret only, not a range
+    const doc = state.doc;
+    const at = sel.head;
+    let star;
+    if (at > 0 && doc.sliceString(at - 1, at) === '*') star = at - 1;
+    else if (at < doc.length && doc.sliceString(at, at + 1) === '*') star = at;
+    else return null;
+    const pos = star + 1;   // the engine is always asked with the caret after the '*'
+
+    let from = 0;           // where the text is read from
+    let tree = null;
+    try {
+        const lang = cm.language;
+        tree = (typeof lang.ensureSyntaxTree === 'function' && lang.ensureSyntaxTree(state, pos, WILDCARD_TREE_WAIT_MS))
+            || lang.syntaxTree(state);
+    } catch { tree = null; /* no tree -> the text alone decides */ }
+    if (tree && tree.length >= pos) {
+        // Resolved just after the star, so the node is the one holding the star (at the star's start it is the statement).
+        const starNode = tree.resolveInner(pos, -1);
+        for (let node = starNode; node; node = node.parent) {
+            if (NOT_A_WILDCARD_NODES.has(node.name)) return null;
+        }
+        from = starNode.from === star ? selectBefore(doc, starNode, postgres) : 0;
+        if (from < 0) return null;
+    }
+    if (star - from > WILDCARD_TEXT_LIMIT) return null;
+
+    const to = Math.min(doc.length, pos + WILDCARD_LOOKAHEAD);
+    if (!selectListStar(doc.sliceString(from, to), star - from, to < doc.length, postgres)) return null;
+    return { caretOffset: pos };
+}
+
+// Spec 043 follow-up (review): how soon after the key a declined expansion may still do what Tab does.
+export const WILDCARD_TAB_FALLBACK_MS = 250;
+
+const nowMs = () => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+
+/**
+ * Spec 043 follow-up (review) — pure: whether Tab may still do what it would have done (indent) after the engine declined to
+ * expand the star — it is not connected, PostgreSQL refused, or the schema is not loaded yet; else Tab, consumed when it was
+ * pressed, did nothing. `atKey` and `now` are `{ time, tab, doc, selection }` at the keypress and at the decline: only a
+ * decline within WILDCARD_TAB_FALLBACK_MS, with the same query tab shown and the document and selection exactly as they
+ * were (the same Text, an equal selection). A later one does nothing: an indent then would surprise.
+ */
+export function declinedTabMayIndent(atKey, now) {
+    if (!atKey || !now) return false;
+    if (!(now.time - atKey.time <= WILDCARD_TAB_FALLBACK_MS)) return false;
+    if (now.tab !== atKey.tab || now.doc !== atKey.doc) return false;
+    return !!now.selection && !!atKey.selection && now.selection.eq(atKey.selection);
+}
+
+/**
+ * The start of the last SELECT before the star's node among its siblings — the star's own parenthesis level in the SQL
+ * language's tree (a statement or a '(...)' group); -1 when there is none within WILDCARD_SELECT_SEARCH nodes. With
+ * `postgres`, the last SELECT or RETURNING (spec 043 follow-up, review: 'INSERT INTO t VALUES (1) RETURNING *' has no SELECT).
+ */
+function selectBefore(doc, starNode, postgres = false) {
+    const cursor = starNode.cursor();
+    for (let seen = 0; seen < WILDCARD_SELECT_SEARCH && cursor.prevSibling(); seen++) {
+        const length = cursor.to - cursor.from;
+        if (length !== 6 && !(postgres && length === 9)) continue;
+        const word = doc.sliceString(cursor.from, cursor.to).toUpperCase();
+        if (word === 'SELECT' || (postgres && word === 'RETURNING')) return cursor.from;
+    }
+    return -1;
+}
+
 
 /**
  * Create a CodeMirror editor inside the given host element.
@@ -246,8 +618,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         if (!update.docChanged || !dotNetRef) return;
 
         const text = update.state.doc.toString();
-        // Fire-and-forget; the C# side debounces.
-        dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text);
+        // Fire-and-forget; the C# side debounces. Spec 043: with the query tab shown now, so a report that arrives after a
+        // tab switch is still filed under the tab it was typed in.
+        dotNetRef.invokeMethodAsync('OnTextChangedFromJs', text, _instances.get(hostElementId)?.currentTab ?? null);
 
         // PR #236 review: only consider user-typed transactions for the
         // post-keyword trigger. Programmatic dispatches (Format → setText,
@@ -286,6 +659,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             }
         } catch { /* never let trigger detection break the editor */ }
     });
+
+    // Spec 043 (review of US1): the query tab shown now. A reply to a request made in one tab is dropped when another tab is
+    // shown by the time it arrives (completion, ghost text, wildcard expansion, quick info, signature help).
+    const shownTab = () => _instances.get(hostElementId)?.currentTab ?? null;
 
     const completionSource = async (context) => {
         if (!dotNetRef) return null;
@@ -328,9 +705,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             // `SELECT ` must not reappear over `SELECT @`). PostgreSQL drops it; SQL Server keeps its behaviour.
             let stale = false;
             if (isPostgresKind(kind)) context.addEventListener('abort', () => { stale = true; }, { onDocChange: true });
+            const tabAtRequest = shownTab();
             const items = await dotNetRef.invokeMethodAsync(
                 'RequestCompletionsFromJs', context.pos, context.state.doc.toString());
-            if (stale || context.aborted) return null;
+            if (stale || context.aborted || shownTab() !== tabAtRequest) return null;
             if (!items || items.length === 0) return null;
             // Spec 042: while a quoted name is being typed CodeMirror matches the text from the opening quote, so the
             // label is the quoted form (a label without the quote can never match `"Aud`).
@@ -457,6 +835,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     function acceptGhost(view) {
         const g = currentGhost(view);
         if (!g) return false;   // fall through to autocomplete-accept / snippet-tab / indentWithTab
+        // An open completion list owns Tab, as in SSMS: Tab commits the highlighted item, never the ghost behind it
+        // (reported 2026-10-22: Tab in the column list put in a space — the ghost text — instead of the column).
+        if (cm.autocomplete.completionStatus(view.state) === 'active') return false;
         view.dispatch({
             changes: { from: g.from, insert: g.text },
             selection: { anchor: g.from + g.text.length },
@@ -494,10 +875,11 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         const pos = view.state.selection.main.head;
         const docText = view.state.doc.toString();
         const reqId = ++ghost.reqId;
+        const tabAtRequest = shownTab();
         dotNetRef.invokeMethodAsync('RequestGhostTextFromJs', pos, docText).then(suggestion => {
             if (reqId !== ghost.reqId || !suggestion) return;      // superseded or empty
             const inst = _instances.get(hostElementId);
-            if (!inst) return;
+            if (!inst || inst.currentTab !== tabAtRequest) return;  // another query tab is shown now
             if (inst.view.state.selection.main.head !== pos) return; // staleness check
             inst.view.dispatch({ effects: setGhost.of({ text: suggestion, pos }) });
         }).catch(() => { /* ghost text never surfaces an error */ });
@@ -522,40 +904,41 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     ]));
 
     // ── Spec 030 — expand "SELECT *" on Tab (SQL Prompt parity) ──────────────────────────────────
-    // When the caret sits right after a wildcard ('*' or 'alias.*') inside a SELECT, Tab asks the
-    // engine (via .NET ExpandWildcardFromJs) for the FROM tables' columns and replaces the wildcard
-    // with the column list. Returns false (falls through to accept-completion / snippet / indent)
-    // whenever it isn't a wildcard, so ordinary Tab is unaffected.
-    function detectWildcardAtCaret(state) {
-        const sel = state.selection.main;
-        if (!sel.empty) return null;                                  // bare caret only, not a range
-        const pos = sel.head;
-        if (pos === 0) return null;
-        if (state.doc.sliceString(pos - 1, pos) !== '*') return null; // caret must be just after '*'
-        // Cheap SELECT-context gate (the engine still validates the actual star node): a SELECT must
-        // appear before the caret in the current statement (nothing after the last ';' rules it out).
-        const head = state.doc.sliceString(0, pos);
-        const stmt = head.slice(head.lastIndexOf(';') + 1);
-        if (!/\bSELECT\b/i.test(stmt)) return null;
-        return { caretOffset: pos };
-    }
-
+    // When the caret sits at a wildcard ('*' or 'alias.*') inside a SELECT, Tab asks the engine
+    // (via .NET ExpandWildcardFromJs) for the FROM tables' columns and replaces the wildcard with
+    // the column list. Returns false (falls through to accept-completion / snippet / indent)
+    // whenever it isn't a wildcard (wildcardAtCaret), so ordinary Tab is unaffected.
     function expandWildcard(view) {
         if (!dotNetRef) return false;
+        const keyTime = nowMs();
         // An open completion popup owns Tab (accept the highlighted item) — don't steal it.
         if (cm.autocomplete.completionStatus(view.state) === 'active') return false;
-        if (!detectWildcardAtCaret(view.state)) return false;         // not a wildcard → normal Tab
+        const wildcard = wildcardAtCaret(cm, view.state, currentKind());
+        if (!wildcard) return false;                                  // not a wildcard → normal Tab
 
-        const pos = view.state.selection.main.head;
+        const pos = wildcard.caretOffset;   // just after the '*', whichever side of it the caret was on
         // Snapshot the keypress-time document (CM6 Text is immutable, so this is a cheap reference).
         // The engine computes spanStart/spanLength against THIS text; the guard below re-verifies the
         // span against the live document after the async round-trip.
         const docAtRequest = view.state.doc;
+        const tabAtRequest = shownTab();
+        const atKey = { time: keyTime, tab: tabAtRequest, doc: docAtRequest, selection: view.state.selection };
+        // Spec 043 follow-up (review): a decline that comes back at once (not connected, a PostgreSQL refusal, the schema
+        // not loaded yet) does what Tab would have done — the next snippet field, else indent — while nothing has moved
+        // since the key (declinedTabMayIndent). A failed call is a decline too.
+        const declined = () => {
+            const inst = _instances.get(hostElementId);
+            if (!inst) return;
+            const live = inst.view.state;
+            if (!declinedTabMayIndent(atKey, { time: nowMs(), tab: inst.currentTab ?? null, doc: live.doc, selection: live.selection })) return;
+            const nextField = cm.autocomplete.nextSnippetField;
+            if (!(typeof nextField === 'function' && nextField(inst.view))) cm.commands.indentMore(inst.view);
+        };
         dotNetRef.invokeMethodAsync('ExpandWildcardFromJs', pos, docAtRequest.toString())
             .then(res => {
-                if (!res || !res.ok) return;
+                if (!res || !res.ok) { declined(); return; }
                 const inst = _instances.get(hostElementId);
-                if (!inst) return;
+                if (!inst || inst.currentTab !== tabAtRequest) return;   // another query tab is shown now
                 const end = res.spanStart + res.spanLength;
                 if (end > docAtRequest.length) return;                // engine span outside its own snapshot
                 const doc = inst.view.state.doc;
@@ -570,7 +953,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                     userEvent: 'input.complete',
                 });
             })
-            .catch(() => { /* best-effort — a failed expansion just leaves the '*' in place */ });
+            .catch(() => { try { declined(); } catch { /* best-effort — a failed expansion just leaves the '*' in place */ } });
         return true;   // handled — swallow the Tab (the expansion is applied asynchronously)
     }
 
@@ -594,9 +977,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     const quickInfoHover = cm.view.hoverTooltip(async (view, pos) => {
         if (!dotNetRef) return null;
         let info;
+        const tabAtRequest = shownTab();
         try { info = await dotNetRef.invokeMethodAsync('RequestQuickInfoFromJs', pos, view.state.doc.toString()); }
         catch { return null; }
-        if (!info) return null;
+        if (!info || shownTab() !== tabAtRequest) return null;
         const wr = view.state.wordAt(pos);
         const from = wr ? wr.from : pos;
         const to = wr ? wr.to : pos;
@@ -668,12 +1052,13 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         if (!dotNetRef) return;
         const seq = ++sigSeq;
         const pos = view.state.selection.main.head;
+        const tabAtRequest = shownTab();
         let sig;
         try { sig = await dotNetRef.invokeMethodAsync('RequestSignatureHelpFromJs', pos, view.state.doc.toString()); }
         catch { return; }
         if (seq !== sigSeq) return;   // superseded by a newer request or a dismissal
         const inst = _instances.get(hostElementId);
-        if (!inst) return;
+        if (!inst || inst.currentTab !== tabAtRequest) return;   // another query tab is shown now
         if (!sig) { inst.view.dispatch({ effects: setSig.of(null) }); return; }
         const tooltip = {
             pos: inst.view.state.selection.main.head,
@@ -766,8 +1151,10 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     function gotoDefinition(view) {
         if (!dotNetRef) return true;
         const pos = view.state.selection.main.head;
+        const tabAtRequest = shownTab();
         dotNetRef.invokeMethodAsync('RequestGoToDefinitionFromJs', pos, view.state.doc.toString())
             .then(def => {
+                if (shownTab() !== tabAtRequest) return;   // another query tab is shown now: its definition is not this one
                 const host = document.getElementById(hostElementId);
                 if (host && def) showPeekPanel(host, def);
             })
@@ -801,51 +1188,52 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     const tabCompartment = new cm.state.Compartment();
     const dialectCompartment = new cm.state.Compartment();   // Spec 042: SQL Server (default) or PostgreSQL language
     const optionExt = optionExtensions(cm, options);
-    applyFontSize(host, options);
+    applyEditorAppearance(host, options);
 
-    const state = cm.state.EditorState.create({
-        doc: initialText ?? '',
-        extensions: [
-            wrapCompartment.of(optionExt.wrap),
-            tabCompartment.of(optionExt.tab),
-            // The undo history. historyKeymap below binds Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, but without this extension
-            // there is no history for them to act on, and undo did nothing anywhere in the editor.
-            cm.commands.history(),
-            cm.view.lineNumbers(),
-            cm.view.highlightActiveLine(),
-            ghostKeymap,
-            completionAcceptKeymap,   // Spec 032 FR-003 — Tab accepts an open completion (falls through when closed)
-            wildcardKeymap,   // Tab-expand SELECT * (falls through when not a wildcard)
-            cm.view.keymap.of([
-                // Spec 032 FR-004 — must precede defaultKeymap's own Mod-Enter (insertBlankLine),
-                // which otherwise shadows it: this is the only working keyboard execute.
-                { key: 'Mod-Enter', run: runExecute },
-                ...cm.commands.defaultKeymap,
-                ...cm.commands.historyKeymap,
-                ...cm.search.searchKeymap,
-                cm.commands.indentWithTab,
-            ]),
-            dialectCompartment.of(dialectExtension(cm, options && options.dialect)),
-            // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
-            // map rendering via CM6's default so nothing goes uncoloured.
-            cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
-            cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
-            cm.autocomplete.autocompletion({
-                override: [completionSource],
-                activateOnTyping: true,
-                maxRenderedOptions: 50,
-            }),
-            cm.lint.lintGutter(),
-            ghostField,
-            ghostListener,
-            // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
-            quickInfoHover,
-            sigField,
-            signatureListener,
-            navKeymap,
-            updateListener,
-        ],
-    });
+    // Spec 043 (R6): kept on the instance, so every query tab's state is built with the same extensions (switchTab).
+    const extensions = [
+        writingAssistantOptOut(cm),   // Spec 043 (FR-036): Grammarly and LanguageTool stay out of the SQL
+        wrapCompartment.of(optionExt.wrap),
+        tabCompartment.of(optionExt.tab),
+        // The undo history. historyKeymap below binds Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, but without this extension
+        // there is no history for them to act on, and undo did nothing anywhere in the editor.
+        cm.commands.history(),
+        cm.view.lineNumbers(),
+        cm.view.highlightActiveLine(),
+        cm.language.bracketMatching(),   // Spec 043 (FR-019): the bracket matching the one at the caret is outlined
+        ghostKeymap,
+        completionAcceptKeymap,   // Spec 032 FR-003 — Tab accepts an open completion (falls through when closed)
+        wildcardKeymap,   // Tab-expand SELECT * (falls through when not a wildcard)
+        cm.view.keymap.of([
+            // Spec 032 FR-004 — must precede defaultKeymap's own Mod-Enter (insertBlankLine),
+            // which otherwise shadows it: this is the only working keyboard execute.
+            { key: 'Mod-Enter', run: runExecute },
+            ...cm.commands.defaultKeymap,
+            ...cm.commands.historyKeymap,
+            ...cm.search.searchKeymap,
+            cm.commands.indentWithTab,
+        ]),
+        dialectCompartment.of(dialectExtension(cm, options && options.dialect)),
+        // Token-driven SQL syntax theme (--akml-syntax-*). fallback:true keeps any tag we didn't
+        // map rendering via CM6's default so nothing goes uncoloured.
+        cm.language.syntaxHighlighting(akmlHighlightStyle, { fallback: true }),
+        cm.language.syntaxHighlighting(cm.language.defaultHighlightStyle, { fallback: true }),
+        cm.autocomplete.autocompletion({
+            override: [completionSource],
+            activateOnTyping: true,
+            maxRenderedOptions: 50,
+        }),
+        cm.lint.lintGutter(),
+        ghostField,
+        ghostListener,
+        // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
+        quickInfoHover,
+        sigField,
+        signatureListener,
+        navKeymap,
+        updateListener,
+    ];
+    const state = cm.state.EditorState.create({ doc: initialText ?? '', extensions });
 
     const view = new cm.view.EditorView({
         state,
@@ -853,7 +1241,11 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     });
 
     const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
-    _instances.set(hostElementId, { view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect });
+    _instances.set(hostElementId, {
+        view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect,
+        // Spec 043 (R6): the query tabs. The view shows `currentTab`; every other tab's state waits in `tabs`.
+        extensions, optionExt, tabs: new Map(), currentTab: (options && options.tabId) || null,
+    });
 }
 
 // CodeMirror's lint gutter opens its own tooltip on mouseover. Give its markers the same
@@ -898,6 +1290,105 @@ function installLintKeyboard(view, hostElementId) {
     };
 }
 
+// ── Spec 043 (research R6, spike S2) — query tabs: one view, one EditorState per tab ─────────────────────────
+// The view shows one tab; every other tab's state (text, selection, undo history, findings, an open completion) waits in
+// inst.tabs. view.setState runs no update listener, so a swap never reports a text change and never marks a tab modified.
+
+/**
+ * Pure: put the shown tab's snapshot ({state, scrollTop, scrollLeft}) into `tabs` under `fromTabId` (nothing when there
+ * was none) and take `toTabId`'s out of it, or a new snapshot from `createState()` for a tab never shown. The shown tab
+ * is never in the map.
+ */
+export function stashAndPick(tabs, fromTabId, fromSnapshot, toTabId, createState) {
+    if (fromTabId && fromSnapshot) tabs.set(fromTabId, fromSnapshot);
+    const stored = tabs.get(toTabId);
+    if (stored) {
+        tabs.delete(toTabId);
+        return stored;
+    }
+    return { state: createState(), scrollTop: 0, scrollLeft: 0 };
+}
+
+/** Pure: `state` with its whole text replaced (one undoable change). */
+export function replaceDoc(state, text) {
+    return state.update({ changes: { from: 0, to: state.doc.length, insert: text ?? '' } }).state;
+}
+
+/** Pure: replaceDoc only when the text is still exactly `expected` (a Format reply); null when it moved on. */
+export function replaceDocIfUnchanged(state, expected, text) {
+    if (!state || state.doc.toString() !== (expected ?? '')) return null;
+    return replaceDoc(state, text);
+}
+
+/** Pure: `state` showing `diags` (see toLintDiagnostics) instead of what it showed. */
+export function withDiagnostics(cm, state, diags) {
+    if (!cm.lint || typeof cm.lint.setDiagnostics !== 'function') return state;
+    return state.update(cm.lint.setDiagnostics(state, toLintDiagnostics(state.doc, diags))).state;
+}
+
+/**
+ * The stored snapshot of a tab that is not shown; null when `tabId` is the shown one (or none is named); undefined when
+ * the tab has never been shown here and `create` is false. Only a whole new text (`setText`) makes a state for such a tab:
+ * an empty state made for anything else would be picked over the page's text when the tab is first shown.
+ */
+function storedTab(inst, tabId, create = false) {
+    if (!tabId || tabId === inst.currentTab) return null;
+    let stored = inst.tabs.get(tabId);
+    if (!stored) {
+        if (!create) return undefined;
+        stored = { state: inst.cm.state.EditorState.create({ doc: '', extensions: inst.extensions }), scrollTop: 0, scrollLeft: 0 };
+        inst.tabs.set(tabId, stored);
+    }
+    return stored;
+}
+
+/**
+ * Show query tab `tabId`: the shown tab's state is stored, `tabId`'s comes back (or is made from `seedText` the first
+ * time), with the current editor options and `kind`'s SQL language.
+ */
+export function switchTab(hostElementId, tabId, seedText, kind) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !tabId || inst.currentTab === tabId) return;
+    const view = inst.view;
+    const shown = inst.currentTab
+        ? { state: view.state, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft }
+        : null;
+    const next = stashAndPick(inst.tabs, inst.currentTab, shown, tabId,
+        () => inst.cm.state.EditorState.create({ doc: seedText ?? '', extensions: inst.extensions }));
+    inst.currentTab = tabId;
+    inst.kind = kind;
+    removePeek(hostElementId);   // a definition peeked in one tab is not shown over another
+    view.setState(next.state);
+    // A stored state keeps the compartments it was made with: bring them to today's options and this tab's kind.
+    view.dispatch({ effects: [
+        inst.dialectCompartment.reconfigure(dialectExtension(inst.cm, kind)),
+        inst.wrapCompartment.reconfigure(inst.optionExt.wrap),
+        inst.tabCompartment.reconfigure(inst.optionExt.tab),
+    ] });
+    view.scrollDOM.scrollTop = next.scrollTop;
+    view.scrollDOM.scrollLeft = next.scrollLeft;
+}
+
+/** Forget a closed tab's stored state. The page shows another tab first; closing the shown one leaves none current. */
+export function closeTab(hostElementId, tabId) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !tabId) return;
+    inst.tabs.delete(tabId);
+    if (inst.currentTab === tabId) {
+        inst.currentTab = null;
+        removePeek(hostElementId);
+    }
+}
+
+/** Spec 043 (review of US1): the Go to definition peek belongs to the tab it was opened in. */
+function removePeek(hostElementId) {
+    const host = typeof document === 'undefined' ? null : document.getElementById(hostElementId);
+    if (host && host._akmlPeek) {
+        host._akmlPeek.remove();
+        host._akmlPeek = null;
+    }
+}
+
 /**
  * Spec 042 (FR-060, FR-065) - switch an open editor's SQL language to a database kind ('postgresql' or
  * 'sqlserver'). Reconfigures one compartment: the text, caret, history and diagnostics are untouched, so switching
@@ -915,8 +1406,9 @@ export function setEditorOptions(hostElementId, options) {
     const inst = _instances.get(hostElementId);
     if (!inst) return;
     const ext = optionExtensions(inst.cm, options);
+    inst.optionExt = ext;   // spec 043: a tab shown later gets the same options (switchTab)
     inst.view.dispatch({ effects: [inst.wrapCompartment.reconfigure(ext.wrap), inst.tabCompartment.reconfigure(ext.tab)] });
-    applyFontSize(document.getElementById(hostElementId), options);
+    applyEditorAppearance(document.getElementById(hostElementId), options);
 }
 
 /**
@@ -930,11 +1422,13 @@ export function setGhostTextConfig(hostElementId, enabled, delayMs) {
     if (typeof delayMs === 'number' && delayMs > 0) inst.ghost.delayMs = delayMs;
 }
 
-/** Return the current document text. */
-export function getText(hostElementId) {
+/** Return the current document text (spec 043: of query tab `tabId` when it is not the shown one). */
+export function getText(hostElementId, tabId) {
     const inst = _instances.get(hostElementId);
     if (!inst) return '';
-    return inst.view.state.doc.toString();
+    const stored = storedTab(inst, tabId);
+    if (stored === undefined) return '';   // never shown here: the page has its text
+    return (stored ? stored.state : inst.view.state).doc.toString();
 }
 
 /**
@@ -975,10 +1469,15 @@ export function getSelectionInfo(hostElementId) {
     return { text: state.sliceDoc(sel.from, sel.to), startLine: selectionStartLine(state.doc, sel), startColumn };
 }
 
-/** Replace the entire document. */
-export function setText(hostElementId, newText) {
+/** Replace the entire document (spec 043: of query tab `tabId` when it is not the shown one, without a text report). */
+export function setText(hostElementId, newText, tabId) {
     const inst = _instances.get(hostElementId);
     if (!inst) return;
+    const stored = storedTab(inst, tabId, true);
+    if (stored) {
+        stored.state = replaceDoc(stored.state, newText);
+        return;
+    }
     inst.view.dispatch({
         changes: { from: 0, to: inst.view.state.doc.length, insert: newText ?? '' },
     });
@@ -995,9 +1494,19 @@ export function replaceIfUnchanged(view, expected, newText) {
     return true;
 }
 
-export function replaceTextIfUnchanged(hostElementId, expected, newText) {
+export function replaceTextIfUnchanged(hostElementId, expected, newText, tabId) {
     const inst = _instances.get(hostElementId);
-    return !!inst && replaceIfUnchanged(inst.view, expected, newText);
+    if (!inst) return false;
+    const stored = storedTab(inst, tabId);
+    if (stored === undefined) return false;   // never shown here: nothing of it was formatted
+    if (stored) {
+        // Spec 043: a Format reply for a tab the user left meanwhile goes into that tab's stored state.
+        const next = replaceDocIfUnchanged(stored.state, expected, newText);
+        if (!next) return false;
+        stored.state = next;
+        return true;
+    }
+    return replaceIfUnchanged(inst.view, expected, newText);
 }
 
 /**
@@ -1270,16 +1779,22 @@ export function toLintDiagnostics(doc, diags) {
 }
 
 /** Show `diags` (see toLintDiagnostics) as underlines + gutter markers, replacing any shown before. */
-export function setDiagnostics(hostElementId, diags) {
+export function setDiagnostics(hostElementId, diags, tabId) {
     const inst = _instances.get(hostElementId);
     if (!inst || !inst.cm.lint || typeof inst.cm.lint.setDiagnostics !== 'function') return;
+    const stored = storedTab(inst, tabId);
+    if (stored === undefined) return;   // never shown here: the page puts its findings back when it is first shown
+    if (stored) {
+        stored.state = withDiagnostics(inst.cm, stored.state, diags);   // spec 043: findings for a tab not shown
+        return;
+    }
     const mapped = toLintDiagnostics(inst.view.state.doc, diags);
     inst.view.dispatch(inst.cm.lint.setDiagnostics(inst.view.state, mapped));
 }
 
-/** Remove every finding shown in the editor. */
-export function clearDiagnostics(hostElementId) {
-    setDiagnostics(hostElementId, []);
+/** Remove every finding shown in the editor (spec 043: of query tab `tabId` when it is not the shown one). */
+export function clearDiagnostics(hostElementId, tabId) {
+    setDiagnostics(hostElementId, [], tabId);
 }
 
 /**

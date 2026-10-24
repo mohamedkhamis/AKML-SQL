@@ -313,7 +313,7 @@ For pairing a browser on another machine:
 
 #### Do I need a remote engine?
 
-Usually not. **To query a SQL Server on another machine, use the engine on your own computer** and add the server in **Connect to SQL Server** with its address (`host`, `host\instance` or `host,port`) and **SQL Server authentication**. The SQL Server machine needs nothing from AKML.
+Usually not. **To query a SQL Server on another machine, use the engine on your own computer** and add the server in **Connect to database** (kind SQL Server) with its address (`host`, `host\instance` or `host,port`) and **SQL Server authentication**. The SQL Server machine needs nothing from AKML.
 
 Windows authentication is limited to a SQL Server on the engine's own machine, as is any named-pipe/UNC address. The engine runs as a service (LocalSystem), so either would sign in as the service's account rather than as you — and would let a hostile page make the engine authenticate somewhere of its choosing. The web client explains the refusal; the engine enforces it again (`BridgeSqlTargetGuard`) for every request that arrives over the WebSocket bridge. Requests from the SSMS / Visual Studio extension (named pipe, running as the signed-in user) are not restricted.
 

@@ -1,0 +1,110 @@
+{
+  "date": "2026-10-22",
+  "browser": "Chromium 156.0.8078.4",
+  "checks": [
+    {
+      "design": "a",
+      "width": 1440,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "a",
+      "width": 768,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "a",
+      "width": 390,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "a",
+      "width": 320,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "b",
+      "width": 1440,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "b",
+      "width": 768,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "b",
+      "width": 390,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "b",
+      "width": 320,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "c",
+      "width": 1440,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "c",
+      "width": 768,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "c",
+      "width": 390,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "c",
+      "width": 320,
+      "overflow": false,
+      "brokenImages": [],
+      "missingAnchors": []
+    },
+    {
+      "design": "gallery",
+      "width": 1440,
+      "overflow": false,
+      "brokenImages": []
+    },
+    {
+      "design": "gallery",
+      "width": 390,
+      "overflow": false,
+      "brokenImages": []
+    },
+    {
+      "design": "gallery",
+      "width": 320,
+      "overflow": false,
+      "brokenImages": []
+    }
+  ],
+  "pageErrors": [],
+  "interactions": "Each concept: five tour selections, lightbox open/Escape, FAQ expansion, design selection feedback. Passed."
+}

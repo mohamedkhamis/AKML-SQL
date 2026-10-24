@@ -16,6 +16,17 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042: the <see cref="DatabaseKind"/> to test with (0 SQL Server, 1 PostgreSQL).</summary>
         [Key(1)]
         public int Kind { get; set; }
+
+        /// <summary>Spec 043 follow-up: as <see cref="ConnectionInfo.CopyPasswordFromSessionId"/>, for the test a connect starts with.</summary>
+        [Key(2)]
+        public string? CopyPasswordFromSessionId { get; set; }
+
+        /// <summary>
+        /// Spec 043 follow-up (<c>credentials.sqlserver.v1</c>): a web connect's test saves the typed SQL Server password on the
+        /// engine once the server accepted it (the test is the open that proves it, so no second login is made for it).
+        /// </summary>
+        [Key(3)]
+        public bool RememberPassword { get; set; }
     }
 
     /// <summary>Engine → Shell (spec 029): result of <see cref="TestSqlConnectionRequest"/>.</summary>
@@ -36,5 +47,15 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>Spec 042: a stable id from <see cref="DialectErrors"/> when the failure has one (a password is needed, credentials are required); otherwise null.</summary>
         [Key(3)]
         public string? ErrorCode { get; set; }
+
+        /// <summary>
+        /// Spec 043 follow-up (review, <c>credentials.sqlserver.v2</c>): the password the request asked to remember
+        /// (<see cref="TestSqlConnectionRequest.RememberPassword"/>) is now in the engine's store. False when it was not asked for,
+        /// or the store could not be written: the client must not say it is remembered. Engines that advertise only
+        /// <c>credentials.sqlserver.v1</c> (1.26.1022.0927, 1.26.1022.1042) never send it, so a client reads a false here as
+        /// "not kept" only from an engine with v2.
+        /// </summary>
+        [Key(4)]
+        public bool Remembered { get; set; }
     }
 }

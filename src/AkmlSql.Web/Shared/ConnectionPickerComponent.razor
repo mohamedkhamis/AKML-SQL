@@ -35,7 +35,7 @@
     <p class="akml-connections-intro" data-testid="engine-connections-intro">
         The engine is the AKML SQL service that does the work for this page. You normally use the one on this
         computer. <b>To query a SQL Server on another machine you don't need an engine there</b> — use
-        <i>Connect to SQL Server</i> with that server's address and SQL Server authentication. Add a remote engine
+        <i>Connect to database</i> with that server's address and SQL Server authentication. Add a remote engine
         only when AKML SQL Web is installed in network mode on the other computer.
     </p>
 
@@ -181,7 +181,8 @@
     .akml-connections-badge {
         font-size: 11px;
         padding: 0 var(--akml-scalar-spacing-xs);
-        background-color: var(--akml-status-info);
+        /* Spec 043 (FR-032): a badge token behind white text; the status colour read under 3:1 in the dark theme. */
+        background-color: var(--akml-accent-primary);
         color: var(--akml-text-onaccent);
         border-radius: var(--akml-scalar-radius-xs);
         text-align: center;

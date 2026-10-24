@@ -399,6 +399,21 @@ Built-in profiles (read-only) are embedded in the extension. The profile format 
 
 ---
 
+## Web edition: editor settings (Settings › Editor)
+
+The web edition keeps its editor options in the browser (IndexedDB database `AkmlSqlWeb`, store `analysisSettings`, key `editorSettings`), not in `config.json`. Settings › Export carries them in the `editor` section.
+
+| Field | Default | Values |
+|-------|---------|--------|
+| `FontFamily` (export: `fontFamily`) | `Default` | `Default` (the theme's Consolas stack), `CascadiaMono`, `Consolas`, `SystemMonospace`; an unknown value reads as `Default` (spec 043) |
+| `FontSize` | 13 | 9 to 32 pixels |
+| `WordWrap` | off | |
+| `TabSize` | 4 | 1 to 8 |
+
+The font and the size apply to every surface that shows SQL: the editor, its completion list and hover help, SQL History's preview, the Format styles preview, snippet bodies and AI answers. Line spacing is the theme token `--akml-type-editor-line-height` (1.25, from `docs/theme-tokens.json`), not a setting.
+
+---
+
 ## Log Configuration
 
 Logs are written to:

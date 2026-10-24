@@ -8,6 +8,15 @@
     the parent re-renders. Consumers render the panels as role="tabpanel" with id TabStrip.PanelId(...).
     Trailing content (a close button, result stats) renders BESIDE the tablist — ARIA allows only tabs
     inside it. Styles: .akml-tabs / .akml-tab / .akml-tab-badge in components/shell.css.
+
+    Spec 043 (research R10): Closable — the query tabs. A button cannot hold a button, so a closable tab is a
+    div role="tab" (Enter / Space activate it) holding its label, a "*" while modified and a close button that is not a
+    tab stop; Delete closes the focused tab, a middle click the one under the pointer. Strips that are not closable
+    render exactly as before.
+
+    Review of US1: closable tabs are keyed, so closing one never hands its element (and the focus on it) to the next tab;
+    the keys act on the tab that has focus, a held Delete closes one tab, and when the closed tab had focus the strip's new
+    active tab takes it (WAI-ARIA tabs pattern).
 *@
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
@@ -20,6 +29,33 @@
             var index = i;
             var tab = Tabs[index];
             var active = tab.Id == _current;
+            if (Closable)
+            {
+                <div role="tab" class="akml-tab akml-tab--closable" @key="tab.Id"
+                     id="@TabId(IdPrefix, tab.Id)"
+                     aria-selected="@(active ? "true" : "false")"
+                     aria-controls="@PanelId(IdPrefix, tab.Id)"
+                     tabindex="@(active ? 0 : -1)"
+                     title="@tab.Title"
+                     data-testid="@(tab.TestId ?? "tab-" + tab.Id)"
+                     data-tab-id="@tab.Id"
+                     data-active="@(active ? "true" : "false")"
+                     data-modified="@(tab.IsModified ? "true" : null)"
+                     @ref="_tabRefs[index]"
+                     @onclick="@(() => ActivateAsync(tab.Id, focus: false))"
+                     @onkeydown="@(e => OnTabKeyDownAsync(e, tab.Id))"
+                     @onmouseup="@(e => OnMouseUpAsync(e, tab.Id))">
+                    <span class="akml-tab-label" data-testid="@tab.LabelTestId">@tab.Label</span>
+                    @if (tab.IsModified)
+                    {
+                        <span class="akml-tab-modified" aria-label="modified" data-testid="@tab.ModifiedTestId">*</span>
+                    }
+                    <button type="button" class="akml-tab-close" tabindex="-1" aria-label="@($"Close {tab.Label}")"
+                            title="@($"Close {tab.Label}")" data-testid="doc-tab-close"
+                            @onclick="@(() => OnClose.InvokeAsync(tab.Id))" @onclick:stopPropagation="true"><Icon Name="x" Size="12" /></button>
+                </div>
+                continue;
+            }
             <button type="button" role="tab" class="akml-tab"
                     id="@TabId(IdPrefix, tab.Id)"
                     aria-selected="@(active ? "true" : "false")"
@@ -66,6 +102,16 @@
 
     [Parameter] public string? Class { get; set; }
 
+    /// <summary>Spec 043: each tab has a close button (the query tabs); <see cref="OnClose"/> gets its id.</summary>
+    [Parameter] public bool Closable { get; set; }
+
+    /// <summary>Spec 043: a tab's close button, Delete on the focused tab, or a middle click on a tab.</summary>
+    [Parameter] public EventCallback<string> OnClose { get; set; }
+
+    // Blazor has no auxclick event: a middle button release closes (akml-ui.js cancels its mousedown, so no autoscroll).
+    private Task OnMouseUpAsync(MouseEventArgs e, string id) =>
+        e.Button == 1 ? OnClose.InvokeAsync(id) : Task.CompletedTask;
+
     /// <summary>The id of a tab's element.</summary>
     public static string TabId(string prefix, string tabId) => $"{prefix}-tab-{tabId}";
 
@@ -76,6 +122,8 @@
     private ElementReference[] _tabRefs = Array.Empty<ElementReference>();
     private string? _current;
     private string? _focusPending;
+    private string? _revealed;
+    private HashSet<string> _renderedIds = new(StringComparer.Ordinal);
     private IJSObjectReference? _ui;
 
     protected override void OnParametersSet()
@@ -86,9 +134,31 @@
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {
-        if (Tabs.Count == 0) return;
-        int at = IndexOf(_current);
-        int next = e.Key switch
+        if (Tabs.Count == 0 || Closable) return;   // a closable strip's tabs take their own keys (OnTabKeyDownAsync)
+        await MoveAsync(e.Key, IndexOf(_current));
+    }
+
+    // Spec 043: the keys of a closable tab act on that tab, which has focus but need not be the active one. The div tabs have
+    // no native activation, so Enter / Space activate here; a held Delete (key repeat) closes one tab, not its neighbours too.
+    private async Task OnTabKeyDownAsync(KeyboardEventArgs e, string id)
+    {
+        if (e.Key == "Delete")
+        {
+            if (!e.Repeat) await OnClose.InvokeAsync(id);
+            return;
+        }
+        if (e.Key == "Enter" || e.Key == " ")
+        {
+            _current = id;
+            await ActiveIdChanged.InvokeAsync(id);
+            return;
+        }
+        await MoveAsync(e.Key, IndexOf(id));
+    }
+
+    private async Task MoveAsync(string key, int at)
+    {
+        int next = key switch
         {
             "ArrowRight" => (at + 1) % Tabs.Count,
             "ArrowLeft" => (at - 1 + Tabs.Count) % Tabs.Count,
@@ -114,6 +184,20 @@
         return 0;
     }
 
+    // True when a tab shown by the last render is gone from this one (a query tab was closed). Not decided while the active id
+    // names no tab of this render (the only tab was closed and its replacement is not active yet): the next render, with the new
+    // tab active, still sees the closed one gone and hands it the focus.
+    private bool TabsRemovedSinceLastRender()
+    {
+        if (_current == null || !Tabs.Any(t => t.Id == _current)) return false;
+        bool removed = false;
+        var now = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var t in Tabs) now.Add(t.Id);
+        foreach (var id in _renderedIds) if (!now.Contains(id)) { removed = true; break; }
+        _renderedIds = now;
+        return removed;
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         try
@@ -121,13 +205,27 @@
             if (firstRender)
             {
                 _ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
-                if (_ui != null) await _ui.InvokeVoidAsync("trapTabStripKeys", _list);
+                if (_ui != null) await _ui.InvokeVoidAsync("trapTabStripKeys", _list, Closable);
+            }
+            if (Closable && _ui != null && _current != null && _current != _revealed)
+            {
+                _revealed = _current;
+                await _ui.InvokeVoidAsync("revealTab", _list, TabId(IdPrefix, _current));   // the active query tab is in view
+            }
+            if (Closable && _ui != null && _current != null && TabsRemovedSinceLastRender())
+            {
+                // The closed tab's element is gone; if it had focus (Delete, its close button, Ctrl+Alt+W from the strip), the
+                // focus fell to the page body and goes to the tab now active. Focus anywhere else is left where it is.
+                await _ui.InvokeAsync<bool>("refocusTabStrip", _list, TabId(IdPrefix, _current));
             }
             if (_focusPending != null)
             {
                 int i = IndexOf(_focusPending);
+                string pending = _focusPending;
                 _focusPending = null;
-                if (i < _tabRefs.Length) await _tabRefs[i].FocusAsync();
+                // Closable tabs are keyed (their refs follow the element, not the index): focus them by id.
+                if (Closable && _ui != null) await _ui.InvokeVoidAsync("focusById", TabId(IdPrefix, pending));
+                else if (i < _tabRefs.Length) await _tabRefs[i].FocusAsync();
             }
         }
         catch (JSDisconnectedException) { /* tab closing */ }

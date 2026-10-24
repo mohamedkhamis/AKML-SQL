@@ -116,12 +116,17 @@ test('only a page of the official PostgreSQL manual is linked from a hover', () 
     const ok = { label: 'Documentation', value: 'https://www.postgresql.org/docs/18/functions-aggregate.html' };
     assert.equal(documentationLink(ok), ok.value);
     assert.equal(documentationLink({ label: 'Documentation', value: 'https://www.postgresql.org/docs/18/sql-createtable.html' }) !== null, true);
+    // A nested section is an anchor on its page (the hover on :: or a $$ string).
+    const anchored = { label: 'Documentation', value: 'https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS' };
+    assert.equal(documentationLink(anchored), anchored.value);
     for (const bad of [
         { label: 'Documentation', value: 'http://www.postgresql.org/docs/18/x.html' },
         { label: 'Documentation', value: 'https://evil.example/docs/18/x.html' },
         { label: 'Documentation', value: 'https://www.postgresql.org.evil.example/docs/18/x.html' },
         { label: 'Documentation', value: 'javascript:alert(1)' },
         { label: 'Documentation', value: 'https://www.postgresql.org/docs/18/../x.html' },
+        { label: 'Documentation', value: 'https://www.postgresql.org/docs/18/x.html#a"onmouseover' },
+        { label: 'Documentation', value: 'https://www.postgresql.org/docs/18/x.html#' },
         { label: 'Other', value: 'https://www.postgresql.org/docs/18/x.html' },
         { label: 'Documentation', value: undefined },
         null,

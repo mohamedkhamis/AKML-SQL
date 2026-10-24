@@ -19,7 +19,6 @@
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @implements IWorkspaceViewHost
-@implements IEditorText
 @inject IFormatterService Formatter
 @inject IAnalyserService Analyser
 @inject IProfileStore ProfileStore
@@ -42,16 +41,19 @@
 @inject IEngineBridge Bridge
 @inject IWorkspaceLayoutStore Layout
 @inject IConnectionManagerController ConnManager
-@inject EditorDocumentFlow Document
+@inject IQueryTabs QueryTabs
 @inject ISchemaSync SchemaSync
 @inject IDialectGate DialectGate
+@inject IServiceProvider Services
 
 @* Spec 041 (R64, FR-089): the title SSMS's window reads like — orders-audit* - SERVER.db - AKML SQL. *@
-<PageTitle>@EditorDocument.TitleFor(Document.Name, Document.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null)</PageTitle>
+@* Spec 043: the active query tab's. *@
+<PageTitle>@(Tab == null ? "AKML SQL" : EditorDocument.TitleFor(Tab.Name, Tab.IsModified, SqlConn.IsConnected ? SqlConn.Server : null, SqlConn.IsConnected ? SqlConn.Database : null))</PageTitle>
 
 @* Spec 041 (FR-015) — leaving the page asks before dropping the results grid's pending edits. Review WEB-09: so does a
-   reload, a closed tab or a link to another site (the browser's own prompt), but only while there are edits to lose. *@
-<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="@_gridHasPendingEdits" />
+   reload, a closed tab or a link to another site (the browser's own prompt), but only while there are edits to lose.
+   Spec 043: in any query tab's grids. *@
+<NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="@AnyPendingEdits" />
 
 <div class="akml-editor-page">
     @* Spec 041 (FR-081): SSMS's grouping — database | Execute, Parse | Format, Analyse | Refactor, AI | documents |
@@ -59,24 +61,28 @@
        load-bearing: tests and assistive technology find "Format" by that exact name. *@
     <div class="akml-editor-toolbar" role="toolbar" aria-label="Editor">
         @* Spec 041 (R28, FR-082): the database, first — as SSMS's "Available Databases" box. *@
-        <DatabaseSelectorComponent IsRunning="_executing" />
+        <DatabaseSelectorComponent IsRunning="Running" />
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
         @* Spec 030 — Phase 5: Execute + advisory resource caps. F5 (spec 041) and Mod-Enter (CM6 keymap)
            also run it; while a query runs Execute is not offered (FR-027). *@
+        @* Spec 043 (US1 scenario 7): a tab with no live connection runs too — it connects first (its own connection again, or
+           the Connect to database dialog), then runs. *@
         <button type="button" class="akml-btn akml-tool-button-run" data-testid="execute-button"
-                aria-label="@(_executing ? "Running" : "Execute")"
-                @onclick="ExecuteAsync" disabled="@(_executing || !SqlConn.IsConnected)"
-                title="@(_executing ? "A query is running" : SqlConn.IsConnected ? WorkspaceKeyMap.TitleFor("Execute", "editor:execute") + " — runs the selection or the whole document" : "Execute needs a SQL Server connection")">
-            <Icon Name="@(_executing ? "loader-circle" : "play")" Class="@(_executing ? "akml-spin akml-run-icon" : "akml-run-icon")" />
-            <span>@(_executing ? "Running…" : "Execute")</span>
+                aria-label="@(Running ? "Running" : "Execute")"
+                @onclick="ExecuteAsync" disabled="@(Running || Tab == null)"
+                title="@ExecuteTitle">
+            <Icon Name="@(Running ? "loader-circle" : "play")" Class="@(Running ? "akml-spin akml-run-icon" : "akml-run-icon")" />
+            <span>@(Running ? "Running…" : "Execute")</span>
         </button>
         @* While a query runs, Cancel takes Parse's place (Parse cannot run then anyway), so the toolbar does not reflow
            and push the last buttons onto a second row. *@
-        @if (_executing)
+        @if (Running)
         {
-            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync" aria-label="Cancel if not started"
-                    title="Cancel if not started: stops the query only if the engine has not started it. A running statement cannot be interrupted.">
+            @* Spec 043 (review of US1): since the engine answers a page's requests side by side (R3), Cancel reaches a statement that
+               is running, not only one still queued. *@
+            <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync" aria-label="Cancel"
+                    title="Cancel: the engine stops the statement that is running, and the batches after it do not run.">
                 <Icon Name="x" /><span>Cancel</span>
             </button>
         }
@@ -116,8 +122,9 @@
         @* Spec 041 (R64, FR-072): documents as SSMS has them. Ctrl+N / Ctrl+O are the browser's: the keys gain Alt. *@
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
+        @* Spec 043 (FR-013): at 20 tabs New query is off and says why. *@
         <button type="button" class="akml-btn" data-testid="doc-new" aria-label="New" @onclick="NewDocumentAsync"
-                title="@WorkspaceKeyMap.TitleFor("New query", "editor:new")">
+                disabled="@AtTabLimit" title="@(AtTabLimit ? QueryTabs.LimitText : WorkspaceKeyMap.TitleFor("New query", "editor:new"))">
             <Icon Name="file-plus" /><span>New</span>
         </button>
         @* The Snippets idiom: the label opens the file picker; the Open command clicks the input (akml-ui.js). *@
@@ -194,19 +201,20 @@
                     @onclick="OnSchemaStripClickAsync">Schema</button>
         }
 
-        <div class="akml-ws-centre" id="akml-ws-centre" @onfocusin="CloseSchemaPeek" @onpointerdown="CloseSchemaPeek">
-            @* Spec 041 (FR-073): the document bar — its name, and * while it has unsaved changes. *@
-            <div class="akml-docbar" data-testid="doc-bar">
-                <Icon Name="file-code" Size="14" />
-                <span class="akml-docbar-name" data-testid="doc-name">@Document.Name</span>
-                @if (Document.IsModified)
-                {
-                    <span class="akml-docbar-modified" data-testid="doc-modified" title="Unsaved changes">*</span>
-                }
-            </div>
-            <div class="akml-ws-editor">
-                <EditorComponent @ref="_editor" InitialText="@_initialText" OnTextChanged="OnTextChangedAsync" OnExecute="ExecuteAsync"
-                                 Kind="@(SqlConn.IsConnected ? SqlConn.Kind : AkmlSql.Core.DatabaseKind.SqlServer)" />
+        <div class="akml-ws-centre" id="akml-ws-centre" @onfocusin="CloseSchemaPeekQuietly" @onpointerdown="CloseSchemaPeekQuietly">
+            @* Spec 043 (contracts/web-ui.md §1, R10): the query tabs, as SSMS has them — each its name, * while it has unsaved
+               changes, and a close button. The active tab keeps the doc-name / doc-modified ids of spec 041's document bar. *@
+            <TabStrip Tabs="DocTabs" ActiveId="@Tab?.Id" ActiveIdChanged="ActivateTabByIdAsync" AriaLabel="Query tabs"
+                      IdPrefix="doc" Name="doc" Closable="true" OnClose="CloseTabByIdAsync" Class="akml-doctabs" />
+            @* One editor shows the active tab (R6); the other tabs' panels are empty placeholders their tabs point at. *@
+            @foreach (var other in QueryTabs.Tabs)
+            {
+                if (ReferenceEquals(other, Tab)) continue;
+                <div role="tabpanel" id="@TabStrip.PanelId("doc", other.Id)" aria-labelledby="@TabStrip.TabId("doc", other.Id)" hidden></div>
+            }
+            <div class="akml-ws-editor" role="tabpanel" id="@(Tab == null ? null : TabStrip.PanelId("doc", Tab.Id))"
+                 aria-labelledby="@(Tab == null ? null : TabStrip.TabId("doc", Tab.Id))">
+                <EditorComponent @ref="_editor" OnTabTextChanged="OnTabTextChangedAsync" OnExecute="ExecuteAsync" Kind="@KindOf(Tab)" />
             </div>
         </div>
 
@@ -221,23 +229,33 @@
                                    OnCollapseToggled="@(() => CollapseFromSplitterAsync(WorkspacePanel.None))" />
             </div>
         }
-        <div class="akml-ws-results" id="akml-ws-results" @onpointerdown="CloseSchemaPeek">
+        <div class="akml-ws-results" id="akml-ws-results" @onpointerdown="CloseSchemaPeekQuietly">
             @if (!Fitted.ResultsVisible)
             {
                 <button type="button" class="akml-ws-edge akml-ws-edge--bottom" data-testid="workspace-edge-bottom"
                         title="Show results (Ctrl+R)" @onclick="@(() => RestoreFromStripAsync(WorkspacePanel.None))">Results</button>
             }
-            @* Spec 030 — Phase 5 / spec 041 (R34): Results, Messages and Problems tabs. Always mounted. *@
+            @* Spec 030 — Phase 5 / spec 041 (R34): Results, Messages and Problems tabs. Always mounted.
+               Spec 043 (R7, contracts/web-ui.md §3): one pane per query tab, each mounted while its tab lives (hidden when the
+               tab is not active), so a tab's pending grid edits, sort and selection survive a switch. *@
             <div class="akml-ws-results-host @(Fitted.ResultsVisible ? null : "akml-ws-hidden")" data-testid="workspace-results"
                  role="region" aria-label="Results" tabindex="-1">
-                <ResultsPaneComponent @ref="_resultsPane" Result="_result" IsRunning="_executing" FrozenReason="@ResultsFrozenReason" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
-                                      Findings="_findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
-                                      OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
-                                      SelectionStartLine="_selectionStartLine" SelectionStartColumn="_selectionStartColumn" ReceivedAt="_resultReceivedAt"
-                                      OnNavigateToLine="OnNavigateToLineAsync" OnNavigateToPosition="OnNavigateToPositionAsync"
-                                      OnApplied="OnAppliedReExecuteAsync" DocumentName="@Document.Name"
-                                      ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy"
-                                      HasPendingEditsChanged="OnGridPendingEditsChanged" />
+                @foreach (var paneTab in QueryTabs.Tabs)
+                {
+                    var t = paneTab;
+                    bool shown = ReferenceEquals(t, Tab);
+                    <div class="akml-ws-results-tabpane" @key="t.Id" hidden="@(!shown)" data-tab-id="@t.Id">
+                        <ResultsPaneComponent @ref="_panes[t.Id]" IdPrefix="@($"akml-results-{t.Id}")" IsActive="shown" RunStartedAt="t.RunStartedAt" Session="t.Session"
+                                              Result="t.Result" IsRunning="t.IsExecuting" FrozenReason="@FrozenReasonOf(t)" ActiveTab="@_resultsTab" ActiveTabChanged="OnResultsTabChangedAsync"
+                                              Findings="t.Findings" AnalysisEnabled="_analysisEnabled" OnEnableAnalysis="EnableAnalysisAsync" ProblemsDefaultFilter="_problemsFilter"
+                                              OnJumpToIssue="OnJumpToIssueAsync" OnSuppressLine="OnSuppressLineAsync" OnSuppressGlobal="OnSuppressGlobalAsync"
+                                              SelectionStartLine="t.SelectionStartLine" SelectionStartColumn="t.SelectionStartColumn" ReceivedAt="t.ResultReceivedAt"
+                                              OnNavigateToLine="OnNavigateToLineAsync" OnNavigateToPosition="OnNavigateToPositionAsync"
+                                              OnApplied="@(() => OnAppliedReExecuteAsync(t))" DocumentName="@t.Name"
+                                              ShowColumnTypes="_showColumnTypes" RetainLineBreaksOnCopy="_retainLineBreaksOnCopy"
+                                              HasPendingEditsChanged="@(pending => OnGridPendingEditsChanged(t, pending))" />
+                    </div>
+                }
             </div>
         </div>
 
@@ -298,8 +316,9 @@
 
     @* Spec 041 — execute markers for Playwright: execute-complete's data-version grows per finished run
        (data-status = its ExecuteStatus); execute-running exists while one runs. *@
-    @if (_executeVersion > 0) { <span data-testid="execute-complete" data-version="@_executeVersion" data-status="@_lastExecuteStatus" hidden></span> }
-    @if (_executing) { <span data-testid="execute-running" hidden></span> }
+    @* Spec 043: the active query tab's. *@
+    @if (Tab is { ExecuteVersion: > 0 } marked) { <span data-testid="execute-complete" data-version="@marked.ExecuteVersion" data-status="@marked.LastExecuteStatus" hidden></span> }
+    @if (Running) { <span data-testid="execute-running" hidden></span> }
 
     @* Spec 024 T004: completion markers for Playwright. `_hasFormatted` / `_hasAnalysed`
        latch to true on the first successful Format / Analyse; `_formatVersion` /
@@ -493,19 +512,10 @@
     .akml-ws-sl { grid-area: sl; }
     .akml-ws-centre { grid-area: centre; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
     .akml-ws-editor { flex: 1 1 auto; min-height: 0; }
-    .akml-docbar {
-        display: flex;
-        align-items: center;
-        gap: var(--akml-scalar-spacing-xs);
-        height: 26px;
-        padding: 0 var(--akml-scalar-spacing-s);
-        flex: 0 0 auto;
-        font-size: var(--akml-type-chrome-size);
-        color: var(--akml-text-primary);
-        background-color: var(--akml-surface-panel);
-        border-bottom: 1px solid var(--akml-border-default);
-    }
-    .akml-docbar-modified { font-weight: 600; }
+    /* Spec 043 (R10): the query tab strip replaces spec 041's document bar; its look is the shared TabStrip's (shell.css). */
+    .akml-doctabs { flex: 0 0 auto; border-bottom-color: var(--akml-border-default); }
+    .akml-ws-results-tabpane { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .akml-ws-results-tabpane[hidden] { display: none; }
     .akml-ws-hsplit { grid-area: hsplit; }
     .akml-ws-results { grid-area: results; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
     .akml-ws-results-host { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -578,10 +588,11 @@
     }
     .akml-picker-disabled { cursor: default; opacity: 0.55; }
     .akml-picker-disabled:hover { background-color: transparent; }
+    /* Spec 043 (FR-032): the neutral badge tokens; white on the secondary text colour read 2.6:1 in the dark theme. */
     .akml-picker-gate {
-        font-size: 11px; color: var(--akml-text-onaccent);
-        background-color: var(--akml-text-secondary); border-radius: var(--akml-scalar-radius-xs);
-        padding: 0 var(--akml-scalar-spacing-xs);
+        font-size: 11px; color: var(--akml-badge-neutraltext);
+        background-color: var(--akml-badge-neutral); border-radius: var(--akml-scalar-radius-xs);
+        padding: 0 var(--akml-scalar-spacing-xs); white-space: nowrap;
     }
 
     /* AKML-Blue chrome for the CodeMirror autocomplete (IntelliSense) popup. CodeMirror
@@ -592,22 +603,86 @@
         border: 1px solid var(--akml-border-default);
         border-radius: var(--akml-scalar-radius-xs);
         color: var(--akml-text-primary);
-        font-family: var(--akml-type-editor-family);
-        font-size: var(--akml-type-editor-size);
+        /* Spec 043 (FR-021): the editor's font and size from Settings › Editor, not the fixed theme size. */
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));
     }
-    .cm-tooltip-autocomplete > ul > li {
+    /* Reported 2026-10-22 ("bad UI"): a list like SQL Prompt's — a coloured kind badge, the name, and the type and
+       table right-aligned in a quieter colour; rows tall enough to read, a list wide enough not to clip. The :root
+       prefix outranks CodeMirror's own theme rules (scoped .ͼN selectors). */
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul {
+        min-width: 320px;
+        max-width: min(640px, 90vw);
+        max-height: 18em;
+        padding: 2px 0;
+    }
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li {
+        display: flex;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
         color: var(--akml-text-primary);
-        padding: 1px var(--akml-scalar-spacing-s);
+        padding: 2px var(--akml-scalar-spacing-s);
+        line-height: 1.45;
     }
-    .cm-tooltip-autocomplete > ul > li[aria-selected] {
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
         background-color: var(--akml-surface-selectionstrong);
         color: var(--akml-text-onaccent);
     }
-    .cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionDetail {
         color: var(--akml-text-onaccent);
     }
-    .cm-completionLabel { color: inherit; }
-    .cm-completionDetail { color: var(--akml-text-secondary); font-style: italic; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionLabel { color: inherit; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionDetail {
+        margin-left: auto;
+        padding-left: var(--akml-scalar-spacing-l);
+        color: var(--akml-text-secondary);
+        font-style: normal;
+        font-family: var(--akml-type-chrome-family);
+        font-size: 0.85em;
+        white-space: nowrap;
+    }
+    /* The kind badge: one letter on a tinted square, the colour of that kind in the editor's syntax colours. */
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon {
+        flex: 0 0 auto;
+        width: 1.35em;
+        height: 1.35em;
+        padding: 0;
+        margin: 0;
+        opacity: 1;
+        box-sizing: border-box;
+        border: 1px solid currentColor;
+        border-radius: 3px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--akml-type-chrome-family);
+        font-size: 0.75em;
+        font-weight: 700;
+        color: var(--akml-text-secondary);
+    }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon::after { content: "·"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-property { color: var(--akml-syntax-tablecolumn); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-property::after { content: "C"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-class { color: var(--akml-syntax-tablecolumn); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-class::after { content: "T"; }
+    /* Spec 043 follow-up (review): a view and a procedure have their own letters, not the table's and the function's. */
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-view { color: var(--akml-syntax-tablecolumn); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-view::after { content: "V"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-keyword { color: var(--akml-syntax-keyword); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-keyword::after { content: "K"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-function { color: var(--akml-syntax-function); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-function::after { content: "ƒ"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-procedure { color: var(--akml-syntax-function); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-procedure::after { content: "P"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-namespace { color: var(--akml-syntax-string); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-namespace::after { content: "S"; }
+    /* A variable or parameter: a single at sign. In a .razor file a literal at sign is written doubled, so the content
+       below reaches the page as one character, not two. */
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-variable { color: var(--akml-syntax-number); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-variable::after { content: "@@"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-snippet { color: var(--akml-syntax-comment); }
+    :root .cm-tooltip.cm-tooltip-autocomplete .cm-completionIcon-snippet::after { content: "»"; }
+    :root .cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] .cm-completionIcon { color: var(--akml-text-onaccent); }
     .cm-completionMatchedText {
         color: var(--akml-text-link);
         text-decoration: none;
@@ -620,24 +695,39 @@
 
 @code {
     private EditorComponent? _editor;
-    private string _initialText = string.Empty;
-    private string _currentText = string.Empty;
-    // Query-session grouping key (T9) -- minted/persisted once per page load by EditorSessionKeys,
-    // then threaded through every debounced session save and every history record so a reload keeps
-    // landing in the SAME history session.
-    private string _sessionKey = string.Empty;
 
-    /// <summary>The history session key: the document's, which New and Open renew (spec 041 R64).</summary>
-    private string SessionKey => Document.SessionKey ?? _sessionKey;
+    // Spec 043 (R1): the query tabs — a singleton, so History can open a query in a tab while this page is away. The page shows
+    // the active tab; everything that belongs to one query (text, results, findings, a run in flight, its connection) lives on
+    // its QueryTab, and work that awaits captures the tab first so a tab switch never redirects it.
+    private QueryTab? Tab => QueryTabs.Active;
 
-    // Text changes before the document is loaded (the editor's first, empty change) are not the user's.
-    private bool _documentLoaded;
+    /// <summary>The history session key of the active tab's document (New and Open renew it, spec 041 R64).</summary>
+    private string SessionKey => Tab?.Document.SessionKey ?? string.Empty;
+
+    private bool Running => Tab?.IsExecuting == true;
+
+    // A closed tab whose run has not answered yet still holds its engine session: it counts toward the limit (spec edge case).
+    private bool AtTabLimit => QueryTabs.AtTabLimit;
+
+    // The tabs whose document flow this page instance gave its editor to (New, Open and Save read and write a tab's text here).
+    private readonly HashSet<string> _attached = new();
+
+    // The tabs shown in the editor at least once by this page instance (their findings are put back on the first show).
+    private readonly HashSet<string> _shownTabs = new();
+
+    // One results pane per tab (contracts/web-ui.md §3), by tab id.
+    private readonly Dictionary<string, ResultsPaneComponent> _panes = new();
+
+    // Restored tabs reconnecting now (FR-009): one attempt at a time per tab, which a run waits on rather than starting another.
+    private readonly Dictionary<string, Task<ConnectResult>> _reattachTasks = new();
+
+    // Spec 043: one Analyse at a time per tab (a newer one supersedes it), and Format tickets per tab (review WEB-10).
+    private readonly Dictionary<string, CancellationTokenSource> _analyseCts = new();
+    private readonly Dictionary<string, FormatRequestGate> _formatGates = new();
+
     private IJSObjectReference? _uiModule;
-    private CodeAnalysisResponse? _findings;
-    private EditorDiagnostic? _errorDiagnostic;   // spec 041 (FR-023): the error line the user last went to
     private FormattingProfile? _activeProfile;
     private string? _status;
-    private CancellationTokenSource? _analyseCts;
     private bool _autoAnalyseOnFormat = true;
     // Spec 024 T004: completion markers for the Playwright suite. The `_has*` flags
     // attach the data-testid span; the `_*Version` counters increment per success so
@@ -689,9 +779,33 @@
 
     private bool SchemaPeeking => Layout.Current.SchemaAutoHide && _schemaPeek;
 
+    // A press in the editor or the results (and focus in the editor) closes a peeking Schema panel, so these handlers run on every
+    // press. As the page's own handlers, ComponentBase would re-render the page after each, and that render reaches every results
+    // grid as a normal render: ResultSetGrid then redraws all its visible rows (GridRowBoundary skips unchanged rows only on the
+    // grid's own pointer renders), 100+ ms per press on a 50-column result, over spec 041 T210's budget (it came in with 31dde2d).
+    // The handler's receiver is therefore not the page, and the page renders only when a peek actually closes.
+    private Action? _closeSchemaPeekQuietly;
+
+    private Action CloseSchemaPeekQuietly => _closeSchemaPeekQuietly ??= new NonRenderingHandler(CloseSchemaPeek).Invoke;
+
     private void CloseSchemaPeek()
     {
-        if (_schemaPeek) _schemaPeek = false;
+        if (!_schemaPeek) return;
+        _schemaPeek = false;
+        StateHasChanged();
+    }
+
+    /// <summary>An element event handler whose receiver is not the page, so Blazor skips the page's after-event render (the
+    /// "avoid rerendering after handling events without state changes" pattern); the action renders when it changes something.</summary>
+    private sealed class NonRenderingHandler : IHandleEvent
+    {
+        private readonly Action _action;
+
+        public NonRenderingHandler(Action action) => _action = action;
+
+        public void Invoke() => _action();
+
+        public Task HandleEventAsync(EventCallbackWorkItem item, object? arg) => item.InvokeAsync(arg);
     }
 
     private void OnSchemaPanelKeyDown(KeyboardEventArgs e)
@@ -811,53 +925,36 @@
     private IJSObjectReference? _workspaceModule;
     private DotNetObjectReference<Editor>? _selfRef;
 
-    // Spec 030 — Phase 5: query execution + results pane state.
-    private ResultsPaneComponent? _resultsPane;
-    private ExecuteQueryResult? _result;
+    // Spec 030 — Phase 5 / spec 043: the execution options and the results tab are the layout's; each tab's run, result and
+    // findings are on its QueryTab.
 
-    // Review WEB-09: the results grid holds edits not yet applied; the browser asks before a reload or a closed tab drops them.
-    private bool _gridHasPendingEdits;
+    // Review WEB-09: a tab's grids hold edits not yet applied; the browser asks before a reload or a closed tab drops them.
+    private bool AnyPendingEdits => QueryTabs.Tabs.Any(t => t.GridHasPendingEdits);
 
-    private void OnGridPendingEditsChanged(bool pending) => _gridHasPendingEdits = pending;
-
-    // Review finding WEB-01: the connection generation the shown result was read under. Once the session moves to another
-    // server, database, login, kind or engine, its rows are frozen: an edit could only be written to the new target.
-    private int _resultGeneration;
+    private void OnGridPendingEditsChanged(QueryTab tab, bool pending) => tab.GridHasPendingEdits = pending;
 
     internal const string StaleResultsReason =
         "These results came from an earlier connection. Run the query again to edit rows on the current one.";
 
-    private string? ResultsFrozenReason =>
-        _result != null && _resultGeneration != SqlConn.ConnectionGeneration ? StaleResultsReason : null;
-    private string _resultsTab = ResultsPaneComponent.ResultsTab;
-    private DateTimeOffset _resultReceivedAt = DateTimeOffset.Now;
-    private int _selectionStartLine = 1;
+    // Review finding WEB-01: once the tab's session moves to another server, database, login, kind or engine, the rows it shows
+    // are frozen: an edit could only be written to the new target.
+    private static string? FrozenReasonOf(QueryTab tab) =>
+        tab.Result != null && tab.ResultGeneration != tab.Session.ConnectionGeneration ? StaleResultsReason : null;
 
-    // Spec 042: where the executed text began on its first line; a PostgreSQL error on that line maps from it.
-    private int _selectionStartColumn = 1;
-    private int _pendingStartColumn = 1;
-    private int _executeVersion;
-    private int _lastExecuteStatus;
+    private string _resultsTab = ResultsPaneComponent.ResultsTab;
     private bool _analysisEnabled = true;
     private ProblemsFilter? _problemsFilter;
-    private bool _executing;
     private int _maxRows = 1000;
     private int _timeoutSeconds = 30;
     private bool _showColumnTypes;
     private bool _retainLineBreaksOnCopy;
-    private string? _activeQueryId;
-    private string _lastExecutedSql = string.Empty;
-    // web History "Re-execute": set from the ?autorun=1 query flag; consumed once the restored
-    // document is populated (which happens AFTER firstRender via the async session restore).
-    private bool _autorunPending;
-    // Spec 042 (FR-070): the kind of server the re-executed entry ran on (?kind=); a connection of the other kind never runs it.
-    private int? _autorunKind;
 
     protected override async Task OnInitializedAsync()
     {
-        // web History "Re-execute" intent — read before any await so it is known by the first render.
-        _autorunPending = new Uri(Nav.Uri).Query.Contains("autorun=1");
-        _autorunKind = AutorunKind(new Uri(Nav.Uri).Query);
+        // The page's commands, built before the first await: the first render claims their keys (OnAfterRenderAsync), so a key
+        // pressed while the stores below still load — F5 above all, which would reload the page — never reaches the browser.
+        // Their closures read the page when they run; the ⌘P palette gets them at the end, once the page is ready.
+        _contextActions = BuildContextActions().Concat(WorkspaceViewActions.Build(this)).ToList();
 
         // T034: apply the persisted theme as soon as we have services. The shim is wired
         // for "system" already (index.html runs apply('system') inline), so this is an
@@ -871,41 +968,22 @@
         if (_disposed) return;
         _resultsTab = Layout.Current.ResultsTab;
 
-        // The page is created again on every visit: the result shown before leaving it comes back (as from an earlier connection
-        // when the connection has changed since), instead of an empty results pane.
-        if (Workspace.LastResult is { } kept)
+        // Spec 043 (R1, R8): the query tabs — restored from the browser (the single document of before tabs becomes tab 1), or kept
+        // from the last visit to this page with their results. No engine traffic here: the active tab reconnects at the end.
+        await QueryTabs.LoadAsync();
+        if (_disposed) return;
+        foreach (var tab in QueryTabs.Tabs) Attach(tab);
+        QueryTabs.Changed += OnTabsChanged;
+
+        // Spec 043 (contracts/web-ui.md §6): Re-execute's run flag is the new tab's own. A ?autorun=1 link of before query tabs
+        // runs nothing (it would run whatever the active tab holds); the address just loses it.
+        StripAutorunFromUrl();
+        if (Tab is { } shown)
         {
-            _result = kept.Result;
-            _resultGeneration = kept.ConnectionGeneration;
-            _selectionStartLine = kept.StartLine;
-            _selectionStartColumn = kept.StartColumn;
-            _lastExecutedSql = kept.Sql;
+            Workspace.SetDocument(shown.Name, shown.IsModified);
+            Workspace.Show(shown.Run);
+            _seenGenerations[shown.Id] = shown.Session.ConnectionGeneration;
         }
-        _seenConnectionGeneration = SqlConn.ConnectionGeneration;
-
-        // T051: restore the last editor session.
-        var restored = await SessionStore.RestoreAsync();
-        if (_disposed) return;
-        if (restored != null)
-        {
-            _initialText = restored.DocumentText;
-            _currentText = restored.DocumentText;
-        }
-
-        // T9: get-or-create the persisted query-session grouping key, reusing the SAME record
-        // just restored above (avoids a second IndexedDB round-trip) -- mints/persists a fresh
-        // key on first use or after a reset.
-        _sessionKey = await EditorSessionKeys.GetOrCreateAsync(SessionStore, restored);
-        if (_disposed) return;
-
-        // Spec 041 (R64): the document — its name, modified state and default-name counter.
-        await Document.LoadAsync(restored);
-        if (_disposed) return;
-        Document.AdoptSessionKey(_sessionKey);
-        Document.Attach(this, ConfirmDiscardPendingEditsAsync);
-        Document.Changed += OnDocumentChanged;
-        _documentLoaded = true;
-        Workspace.SetDocument(Document.Name, Document.IsModified);
 
         // T038: load the active profile.
         var activeId = await ProfileStore.GetActiveIdAsync();
@@ -938,14 +1016,11 @@
 
         // Spec 025 US4 / spec 030 loop fix: point the schema tree at the ACTIVE SQL connection's
         // (server, database) — the SAME key MainLayout passes to SchemaSync.StartAsync, so the tree
-        // finds the snapshot the sync populated. The previous code keyed the tree off the engine
-        // pairing record (host:port) with a hard-coded "master" database, which never matched the
-        // cache — the tree stayed "not yet loaded" and mislabelled the database even when connected
-        // to e.g. Northwind. Re-evaluated on every SQL connection state change (OnSqlConnStateChanged).
+        // finds the snapshot the sync populated. Re-evaluated on every SQL connection state change
+        // (OnSqlConnStateChanged) and every tab switch.
         RefreshSchemaTarget();
 
-        // Spec 030 — Phase 5: seed the execute caps from the store, and re-render the Execute button's
-        // enabled state when the SQL connection comes/goes.
+        // Spec 030 — Phase 5: seed the execute caps from the store.
         // Spec 041 (R52): the toolbar shows the effective caps — this session's quick-control override, else the
         // defaults saved in Settings › Queries. The grid options come from the saved defaults only.
         var execSettings = await ExecSettings.GetEffectiveAsync();
@@ -955,11 +1030,18 @@
         _showColumnTypes = execSettings.ShowColumnTypes;
         _retainLineBreaksOnCopy = execSettings.RetainLineBreaksOnCopy;
         SqlConn.StateChanged += OnSqlConnStateChanged;
+        Bridge.StateChanged += OnBridgeStateChanged;
+        ConnManager.Closed += OnConnectDialogClosed;
+        // The saved connections (the tabs' "not saved" mark) are read without holding up the page: the commands — and with them
+        // the keys the page claims — are registered at once, as before, and the tooltips follow when the read ends.
+        _ = ReloadSavedConnectionsAsync();
 
         // Spec 030 — register this page's context actions with the ⌘P palette. These close over the
         // live editor + page handlers; the registration token is disposed in DisposeAsync.
-        _contextActions = BuildContextActions().Concat(WorkspaceViewActions.Build(this)).ToList();
         _commandRegistration = Commands.Register(_contextActions);
+
+        // Spec 043 (FR-009): the tab shown now connects again when that needs no password.
+        _ = InvokeAsync(() => ReattachIfQuietAsync(Tab));
     }
 
     // Spec 042 (FR-092): what this connection kind may use. Stateless, so it follows a switch of connection by itself.
@@ -969,26 +1051,32 @@
     private void OnSqlConnStateChanged()
     {
         RefreshSchemaTarget();
-        // Another server, database, login or kind: the last run's outcome in the status bar describes the old one, and the problems
-        // were found for the old dialect - clear the one, and read the document again for the other.
-        if (SqlConn.ConnectionGeneration != _seenConnectionGeneration)
+        // Another server, database, login or kind for the active tab: its last run's outcome in the status bar describes the old
+        // one, and its problems were found for the old dialect - clear the one, and read the document again for the other.
+        if (Tab is { } tab)
         {
-            _seenConnectionGeneration = SqlConn.ConnectionGeneration;
-            Workspace.ClearOutcome();
-            ScheduleFindingsRefresh();
+            int generation = tab.Session.ConnectionGeneration;
+            if (_seenGenerations.TryGetValue(tab.Id, out var seen) && seen != generation)
+            {
+                if (!tab.IsExecuting) tab.Run = RunSnapshot.Idle;
+                Workspace.ClearOutcome();
+                ScheduleFindingsRefresh(tab);
+            }
+            _seenGenerations[tab.Id] = generation;
         }
         InvokeAsync(StateHasChanged);
     }
 
-    private int _seenConnectionGeneration;
+    // The connection generation each tab was last seen under (a change clears its outcome and re-reads its problems).
+    private readonly Dictionary<string, int> _seenGenerations = new();
 
     // The Problems list is a snapshot of the last Analyse. When the connection changes kind or server it is read again for the
     // new connection, quietly: no tab switch, no notification, and not counted as an Analyse.
     private CancellationTokenSource? _refreshFindingsCts;
 
-    private void ScheduleFindingsRefresh()
+    private void ScheduleFindingsRefresh(QueryTab tab)
     {
-        if (_findings == null || !_analysisEnabled) return;
+        if (tab.Findings == null || !_analysisEnabled) return;
         _refreshFindingsCts?.Cancel();
         var cts = _refreshFindingsCts = new CancellationTokenSource();
         _ = InvokeAsync(async () =>
@@ -996,10 +1084,16 @@
             try
             {
                 await Task.Delay(800, cts.Token);
-                var findings = await Analyser.AnalyseAsync(_currentText, null, cts.Token);
-                if (cts.IsCancellationRequested || _disposed || _findings == null) return;
-                _findings = findings;
-                await ShowDiagnosticsAsync();
+                // T034: only the tab on screen is analysed (the analyser follows the active tab's dialect and session).
+                if (!ReferenceEquals(tab, Tab))
+                {
+                    tab.AnalysisPending = true;
+                    return;
+                }
+                var findings = await Analyser.AnalyseAsync(tab.Text, null, cts.Token);
+                if (cts.IsCancellationRequested || _disposed || tab.Findings == null) return;
+                tab.Findings = findings;
+                await ShowDiagnosticsAsync(tab);
                 StateHasChanged();
             }
             catch (OperationCanceledException) { }
@@ -1032,84 +1126,109 @@
 
     // ── Spec 030 — Phase 5: execute + caps + apply-refresh ───────────────────────────────────────
 
+    private Task ExecuteAsync() => Tab is { } tab ? ExecuteTabAsync(tab) : Task.CompletedTask;
+
     /// <summary>
-    /// Run the query. Reads the LIVE editor text (selection-or-whole-doc, NOT the 500ms-debounced
-    /// _currentText) exactly like GetAiInputSqlAsync, builds an ExecuteQueryRequest with the canonical
-    /// SessionId + advisory caps, and hands the status-bearing result to the results pane. Triggered by
-    /// the toolbar button AND the CM6 Mod-Enter keymap (via EditorComponent.OnExecute).
+    /// Run the tab's query. Reads the LIVE editor text (selection-or-whole-doc) and runs it on the tab's own session.
+    /// Spec 043: the tab is captured before the first await (plan › Design notes › Execute), so switching tabs while it runs
+    /// changes nothing about where the reply goes; a tab with no live connection connects first (FR-009, US1 scenario 7).
+    /// Triggered by the toolbar button, F5 and the CM6 Mod-Enter keymap (via EditorComponent.OnExecute).
     /// </summary>
-    private async Task ExecuteAsync()
+    private async Task ExecuteTabAsync(QueryTab tab)
     {
-        if (_executing || _editor == null) return;
-        // Claim the slot BEFORE any await so a second trigger (toolbar + Mod-Enter) can't reenter
-        // through the two JS-interop awaits below. The finally always releases it.
-        _executing = true;
+        if (tab.IsExecuting || _editor == null || tab.IsClosing) return;
+        // Claim the tab's slot BEFORE any await so a second trigger (toolbar + Mod-Enter) can't reenter
+        // through the JS-interop awaits below. The finally always releases it.
+        tab.IsExecuting = true;
+        tab.CancelRequested = false;
         try
         {
-            if (!SqlConn.IsConnected)
-            {
-                _status = "Connect to a database first (Connect button / palette).";
-                return;
-            }
-
             // LIVE text — selection if any, else the whole document — and where it starts, so an error's
             // line maps back to the document (spec 041 R24).
             // The completion list is not left open over the editor while the query runs.
             await _editor.CloseCompletionAsync();
-            var (sql, startLine) = await ReadExecuteTextAsync();
+            var (sql, startLine, startColumn) = await ReadExecuteTextAsync(tab);
             if (string.IsNullOrWhiteSpace(sql)) return;
 
             // Review WEB-08: an Apply waiting for its reply owns the grid's edits; a new result would orphan them.
-            if (RefuseWhileApplying()) return;
+            if (RefuseWhileApplying(tab)) return;
 
             // Spec 041 (FR-015): a new result replaces the grid, so its pending edits go — ask first.
-            if (!await ConfirmDiscardPendingEditsAsync()) return;
+            if (!await ConfirmDiscardPendingEditsAsync(tab)) return;
 
-            await RunSqlAsync(sql, startLine);
+            // A connected tab while the link to the engine is down: nothing can be sent, and the engine may well still hold the
+            // session (spec 043 edge case: a link drop changes nothing), so the tab stays as it is.
+            if (tab.Session.IsConnected && Bridge.State != BridgeState.Open)
+            {
+                Notifications.Notify(EngineAwayText, NotificationKind.Warning);
+                return;
+            }
+
+            if (!await EnsureConnectedAsync(tab)) return;
+
+            // Cancel, or a close of the tab, while it was connecting: the query is not sent.
+            if (tab.IsClosing || tab.CancelRequested)
+            {
+                if (!tab.IsClosing) Notifications.Notify("Cancelled before it ran.", NotificationKind.Info);
+                return;
+            }
+
+            await RunSqlAsync(tab, sql, startLine, startColumn);
         }
         finally
         {
-            _executing = false;
-            _activeQueryId = null;
-            StateHasChanged();
+            await EndRunAsync(tab);
         }
     }
 
-    /// <summary>The selection, or the whole document when it is empty or only whitespace, and the document
-    /// line it starts on.</summary>
-    private async Task<(string Sql, int StartLine)> ReadExecuteTextAsync()
+    /// <summary>A run of <paramref name="tab"/> ended: its slot is free; a tab closed while it ran releases its session now.</summary>
+    private async Task EndRunAsync(QueryTab tab)
     {
-        if (_editor == null) return (string.Empty, 1);
+        tab.IsExecuting = false;
+        tab.CancelRequested = false;
+        tab.ActiveQueryId = null;
+        tab.RunStartedAt = null;
+        tab.Session.IsBusy = false;
+        if (tab.IsClosing) await ReleaseAsync(tab);
+        if (!_disposed) StateHasChanged();
+        // The page that started the run may be gone (History and back): the page on screen now shows the finished run.
+        QueryTabs.NotifyChanged();
+    }
+
+    internal const string EngineAwayText =
+        "The engine cannot be reached right now, so the query was not sent. The query tab keeps its connection; run it again once the status bar shows Live.";
+
+    private async Task<(string Sql, int StartLine, int StartColumn)> ReadExecuteTextAsync(QueryTab tab)
+    {
+        if (_editor == null || !IsShown(tab)) return (tab.Text, 1, 1);
         var selection = await _editor.GetSelectionInfoAsync();
         if (!string.IsNullOrWhiteSpace(selection.Text))
-        {
-            _pendingStartColumn = Math.Max(1, selection.StartColumn);
-            return (selection.Text, Math.Max(1, selection.StartLine));
-        }
-        _pendingStartColumn = 1;
-        return (await _editor.GetTextAsync(), 1);
+            return (selection.Text, Math.Max(1, selection.StartLine), Math.Max(1, selection.StartColumn));
+        return (await _editor.GetTextAsync(), 1, 1);
     }
 
-    /// <summary>Runs <paramref name="sql"/> through the engine, shows the result, and records it in
-    /// SQL History (best-effort). Shared by the toolbar/F5/Mod-Enter execute and the web History
-    /// "Re-execute" autorun. The caller owns the <c>_executing</c> guard.</summary>
-    private async Task RunSqlAsync(string sql, int startLine)
+    private async Task RunSqlAsync(QueryTab tab, string sql, int startLine, int startColumn)
     {
-        await ClearErrorMarkAsync();
-        _lastExecutedSql = sql;
-        _activeQueryId = Guid.NewGuid().ToString("N");
-        Workspace.Begin();
-        if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+        await ClearErrorMarkAsync(tab);
+        var session = tab.Session;
+        tab.LastExecutedSql = sql;
+        tab.ActiveQueryId = Guid.NewGuid().ToString("N");
+        BeginRun(tab);
+        if (ReferenceEquals(tab, Tab) && !Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
         StateHasChanged();
 
-        var result = await QueryExec.ExecuteAsync(sql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-        ShowResult(result, startLine, chooseTab: true);
+        // Only a request the engine received can say the engine lost the session (a reply made in the browser cannot).
+        bool sent = Bridge.State == BridgeState.Open && session.IsConnected;
+        var result = await QueryExec.ExecuteAsync(session, sql, _maxRows, _timeoutSeconds, tab.ActiveQueryId, CancellationToken.None);
+        ShowResult(tab, result, startLine, startColumn, chooseTab: true, engineAnswered: sent);
 
-        // Record into SQL History (fire-and-forget) — NoConnection isn't recorded (nothing ran).
+        // Record into SQL History (fire-and-forget) — NoConnection isn't recorded (nothing ran). Spec 043 (FR-010): under the tab's
+        // name and its own history session key.
         if (WebHistoryLogic.ShouldRecord(result.Status))
         {
             // Spec 041 (R27): the database the script ended in (a USE moves it).
-            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, SqlConn.Server, result.CurrentDatabase ?? SqlConn.Database, SessionKey, Document.Name, SqlConn.Kind);
+            var rec = WebHistoryLogic.BuildRecordRequest(sql, result, session.Server, result.CurrentDatabase ?? session.Database,
+                tab.Document.SessionKey ?? string.Empty, tab.Name, session.Kind);
             _ = History.RecordAsync(rec, CancellationToken.None);
         }
 
@@ -1119,33 +1238,47 @@
         }
     }
 
-    /// <summary>
-    /// Spec 041 (FR-020) — hand a reply to the results pane and the status bar. With
-    /// <paramref name="chooseTab"/> the pane shows Results when there is at least one set and no error,
-    /// otherwise Messages.
-    /// </summary>
-    private void ShowResult(ExecuteQueryResult result, int startLine, bool chooseTab)
+    /// <summary>Spec 043 (T036): the tab's run starts — its own clock and status; the status bar shows it while the tab is active.</summary>
+    private void BeginRun(QueryTab tab)
     {
-        _result = result;
-        _resultGeneration = SqlConn.ConnectionGeneration;
-        _resultReceivedAt = DateTimeOffset.Now;
-        _selectionStartLine = startLine;
-        _selectionStartColumn = _pendingStartColumn;
-        if (chooseTab)
+        var now = Workspace.Now;
+        tab.RunStartedAt = now;
+        tab.Session.IsBusy = true;
+        tab.Run = RunSnapshot.Running(now);
+        if (ReferenceEquals(tab, Tab)) Workspace.Show(tab.Run);
+    }
+
+    private void ShowResult(QueryTab tab, ExecuteQueryResult result, int startLine, int startColumn, bool chooseTab, bool engineAnswered = true)
+    {
+        tab.Result = result;
+        tab.ResultGeneration = tab.Session.ConnectionGeneration;
+        tab.ResultReceivedAt = DateTimeOffset.Now;
+        tab.SelectionStartLine = startLine;
+        tab.SelectionStartColumn = startColumn;
+        bool active = ReferenceEquals(tab, Tab);
+        // The results tab is the layout's: only the tab on screen moves it.
+        if (chooseTab && active)
         {
             _resultsTab = result.ResultSets.Length > 0 && result.Status == ExecuteStatus.Ok
                 ? ResultsPaneComponent.ResultsTab
                 : ResultsPaneComponent.MessagesTab;
         }
-        Workspace.Complete(result);
-        Workspace.KeepResult(new WorkspaceResult(result, _resultGeneration, startLine, _selectionStartColumn, _lastExecutedSql));
-        _executeVersion++;
-        _lastExecuteStatus = result.Status;
+        tab.Run = RunSnapshot.Of(result, tab.RunStartedAt);
+        if (active) Workspace.Show(tab.Run);
+        tab.ExecuteVersion++;
+        tab.LastExecuteStatus = result.Status;
+
+        // Spec 043 (edge case "the engine is lost"): no connection on the engine's side — the tab shows disconnected and keeps its
+        // binding; its next run, or showing it when no password is needed, reconnects.
+        if (result.Status == ExecuteStatus.NoConnection && engineAnswered) SqlConn.MarkConnectionLost(tab.Session);
+        // The run's own USE (or a lost connection) moved the tab's connection generation: that is not a change the outcome
+        // describes another target for, so switching back keeps it (FR-005).
+        _seenGenerations[tab.Id] = tab.Session.ConnectionGeneration;
 
         // Spec 042 (FR-043): a PostgreSQL run that created, altered or dropped something shows in the explorer without a manual
         // refresh. The engine says when it has started reloading its catalog (SchemaChangeSignal); this waits for it to settle and
-        // fetches the result.
-        if (SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && SchemaChangeSignal.RefetchAfter(result))
+        // fetches the result. The explorer is the active tab's.
+        if (active && tab.Session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql && SchemaChangeSignal.RefetchAfter(result))
             _ = RefreshSchemaAfterRunAsync();
     }
 
@@ -1158,111 +1291,87 @@
     /// <summary>The engine understands Parse (it advertises execute.v2).</summary>
     private bool SupportsParse => Array.IndexOf(Bridge.EngineCapabilities ?? Array.Empty<string>(), "execute.v2") >= 0;
 
-    private bool CanParse => !_executing && SqlConn.IsConnected && SupportsParse;
+    private bool CanParse => !Running && SqlConn.IsConnected && SupportsParse;
 
-    /// <summary>Spec 041 (R21, FR-035) — the server checks the script's syntax; nothing runs, nothing is
-    /// recorded in History. The Messages tab says how it went.</summary>
     private async Task ParseAsync()
     {
-        if (_executing || _editor == null || !CanParse) return;
-        _executing = true;
+        if (Tab is not { } tab || tab.IsExecuting || _editor == null || !CanParse) return;
+        tab.IsExecuting = true;
         try
         {
-            var (sql, startLine) = await ReadExecuteTextAsync();
+            var (sql, startLine, startColumn) = await ReadExecuteTextAsync(tab);
             if (string.IsNullOrWhiteSpace(sql)) return;
-            if (RefuseWhileApplying()) return;
-            if (!await ConfirmDiscardPendingEditsAsync()) return;
+            if (RefuseWhileApplying(tab)) return;
+            if (!await ConfirmDiscardPendingEditsAsync(tab)) return;
 
-            await ClearErrorMarkAsync();
-            _activeQueryId = Guid.NewGuid().ToString("N");
-            Workspace.Begin();
+            await ClearErrorMarkAsync(tab);
+            tab.ActiveQueryId = Guid.NewGuid().ToString("N");
+            BeginRun(tab);
             StateHasChanged();
-            var result = await QueryExec.ParseAsync(sql, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-            ShowResult(result, startLine, chooseTab: false);
-            _resultsTab = ResultsPaneComponent.MessagesTab;
+            bool sent = Bridge.State == BridgeState.Open && tab.Session.IsConnected;
+            var result = await QueryExec.ParseAsync(tab.Session, sql, _timeoutSeconds, tab.ActiveQueryId, CancellationToken.None);
+            ShowResult(tab, result, startLine, startColumn, chooseTab: false, engineAnswered: sent);
+            if (ReferenceEquals(tab, Tab)) _resultsTab = ResultsPaneComponent.MessagesTab;
         }
         finally
         {
-            _executing = false;
-            _activeQueryId = null;
-            StateHasChanged();
+            await EndRunAsync(tab);
         }
     }
 
-    /// <summary>Spec 041 (FR-023) — an error message was clicked: go to its line and mark it.</summary>
     private async Task OnNavigateToLineAsync(int line)
     {
-        if (_editor == null) return;
+        if (_editor == null || Tab is not { } tab) return;
         await _editor.GotoLineAsync(line);
-        var message = _result?.MessageDetails?
-            .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == line);
+        var result = tab.Result;
+        var message = result?.MessageDetails?
+            .FirstOrDefault(m => ExecuteLineMapper.DocumentLine(tab.SelectionStartLine, result, m) == line);
         var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
-        _errorDiagnostic = new EditorDiagnostic(line, 3, text, Source: "execute");
-        await ShowDiagnosticsAsync();
+        tab.ErrorMark = new EditorDiagnostic(line, 3, text, Source: "execute");
+        await ShowDiagnosticsAsync(tab);
     }
 
-    /// <summary>
-    /// Spec 042 (FR-014): a PostgreSQL error was clicked, in Messages or Problems: put the caret at its line and column and mark
-    /// the line, so the failing token is where the caret is.
-    /// </summary>
     private async Task OnNavigateToPositionAsync(DocumentPosition position)
     {
-        if (_editor == null) return;
+        if (_editor == null || Tab is not { } tab) return;
         await _editor.GotoPositionAsync(position.Line, position.Column);
-        var message = _result?.MessageDetails?.FirstOrDefault(m =>
-            ExecuteLineMapper.DocumentLine(_selectionStartLine, _result, m) == position.Line
-            && ExecuteLineMapper.DocumentColumn(_selectionStartColumn, m) == position.Column);
+        var result = tab.Result;
+        var message = result?.MessageDetails?.FirstOrDefault(m =>
+            ExecuteLineMapper.DocumentLine(tab.SelectionStartLine, result, m) == position.Line
+            && ExecuteLineMapper.DocumentColumn(tab.SelectionStartColumn, m) == position.Column);
         var text = message != null ? AkmlSql.Core.Text.SqlMessageText.Format(message) : "Error from the last run.";
-        _errorDiagnostic = new EditorDiagnostic(position.Line, 3, text, StartColumn: position.Column, Source: "execute");
-        await ShowDiagnosticsAsync();
+        tab.ErrorMark = new EditorDiagnostic(position.Line, 3, text, StartColumn: position.Column, Source: "execute");
+        await ShowDiagnosticsAsync(tab);
     }
 
-    /// <summary>
-    /// The error mark belongs to the last run and to the text as it was: a new run or parse, or an edit (which can
-    /// move the line it points at), removes it.
-    /// </summary>
-    private async Task ClearErrorMarkAsync()
+    private async Task ClearErrorMarkAsync(QueryTab tab)
     {
-        if (_errorDiagnostic == null) return;
-        _errorDiagnostic = null;
-        await ShowDiagnosticsAsync();
+        if (tab.ErrorMark == null) return;
+        tab.ErrorMark = null;
+        await ShowDiagnosticsAsync(tab);
     }
 
-    /// <summary>
-    /// Spec 041 (T200, R39, FR-087) — the editor shows every analyser finding (the Problems tab's filters are a view
-    /// of the list) and the error line the user last went to, as underlines with gutter markers.
-    /// </summary>
-    private async Task ShowDiagnosticsAsync()
+    private async Task ShowDiagnosticsAsync(QueryTab tab)
     {
-        if (_editor == null) return;
-        var shown = new List<EditorDiagnostic>(EditorDiagnostics.FromIssues(_findings?.Issues));
-        if (_errorDiagnostic != null) shown.Add(_errorDiagnostic);
-        await _editor.SetDiagnosticsAsync(shown);
+        if (_editor == null || _disposed) return;
+        var shown = new List<EditorDiagnostic>(EditorDiagnostics.FromIssues(tab.Findings?.Issues));
+        if (tab.ErrorMark != null) shown.Add(tab.ErrorMark);
+        // Spec 043: a reply for a tab the user left meanwhile goes into that tab's kept editor state.
+        await _editor.SetDiagnosticsAsync(shown, tab.Id);
     }
 
-    /// <summary>Spec 041 (R39) — the palette's Next problem / Previous problem (lintKeymap's F8 is the Schema panel's).</summary>
     private async Task GoToProblemAsync(bool forward)
     {
         if (_editor == null) return;
         if (!await _editor.GoToProblemAsync(forward))
-            Notifications.Notify(_findings?.Issues is { Length: > 0 } ? "No more problems." : "No problems to go to. Run Analyse (Ctrl+K, Ctrl+L).", NotificationKind.Info);
+            Notifications.Notify(Tab?.Findings?.Issues is { Length: > 0 } ? "No more problems." : "No problems to go to. Run Analyse (Ctrl+K, Ctrl+L).", NotificationKind.Info);
     }
 
-    /// <summary>web History "Re-execute": when navigated to with <c>?autorun=1</c>, run the restored
-    /// document once. The restored text lands AFTER firstRender (the session restore is async), so we
-    /// wait — across renders — until <see cref="_initialText"/> is populated rather than firing on
-    /// firstRender (where it is still empty). The flag stays PENDING until the connection is up — on a
-    /// hard-reload/connection race the restored text can land before
-    /// <see cref="ISqlConnectionService.IsConnected"/> flips true, so a later render (when the connection
-    /// comes up) retries. It is CONSUMED exactly once we are connected, regardless of whether the run
-    /// proceeds. If a manual execute is already in flight at that moment the autorun is SUPPRESSED (not
-    /// duplicated): the flag was already cleared, so the post-manual-run re-render cannot re-fire it.
-    /// After a run proceeds the URL flag is stripped so a manual refresh doesn't re-run.</summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (_disposed) return;
-        // The page's commands are registered at the end of OnInitializedAsync, which can finish after the
-        // first render: claim the keys on the first render that has them, so F5 never reaches the browser.
+        // The page's commands are built before the first await of OnInitializedAsync: the first render claims their keys,
+        // so F5 never reaches the browser, even while the page still loads.
         if (!_keysInitialized && _contextActions.Count > 0)
         {
             _keysInitialized = true;
@@ -1277,55 +1386,72 @@
             catch (JSDisconnectedException) { }
         }
 
-        // Wait for the async restore to populate the document; don't consume the flag until it has.
-        if (!_autorunPending || string.IsNullOrWhiteSpace(_initialText)) return;
-        if (!SqlConn.IsConnected) return;   // stay pending until the connection is up
-        _autorunPending = false;            // connected -> consume exactly once
-        if (_executing) return;             // a manual run is already in flight -> don't double-run
+        // Spec 043: the editor shows the active tab (its first show seeds it with the tab's text). A tab being closed is never
+        // shown again: the close shows the next one.
+        if (_editor != null && Tab is { IsClosing: false } tab && _editor.CurrentTabId != tab.Id) await ShowTabAsync(tab);
 
-        // History re-executed it while nothing was connected; the connection that came up is of the other kind. A script written
-        // for one kind of server is never run on the other: it stays open, unrun, and the user is told why.
-        if (_autorunKind is { } kind && kind != (int)SqlConn.Kind)
+        await RunAutorunAsync();
+    }
+
+    /// <summary>
+    /// web History "Re-execute" (spec 043 R11: in its own tab): run the tab's query once. The flag stays PENDING until the tab's
+    /// connection is up — a restored tab reconnects on its own when that needs no password — and is CONSUMED exactly once it is,
+    /// whether the run proceeds or not. A run already in flight in that tab SUPPRESSES it rather than doubling it.
+    /// </summary>
+    private async Task RunAutorunAsync()
+    {
+        if (Tab is not { AutorunPending: true } tab || string.IsNullOrWhiteSpace(tab.Text)) return;
+        if (!tab.Session.IsConnected) return;   // stay pending until the tab's connection is up
+        tab.AutorunPending = false;             // connected -> consume exactly once
+        var kindRequired = tab.AutorunKind;
+        var autorunSql = tab.AutorunSql;
+        tab.AutorunKind = null;
+        tab.AutorunSql = null;
+        await QueryTabs.PersistAsync(tab);
+        if (tab.IsExecuting) return;            // a manual run is already in flight -> don't double-run
+        // Review of US1: only the query History asked for runs. A tab edited since is someone's draft: it is never run unasked.
+        if (autorunSql == null || !string.Equals(tab.Text, autorunSql, StringComparison.Ordinal)) return;
+
+        // History re-executed it on a kind of server the tab is not connected to: a script written for one kind of server is never
+        // run on the other. It stays open, unrun, and the user is told why.
+        if (kindRequired is { } kind && kind != (int)tab.Session.Kind)
         {
-            Notifications.Notify($"This query ran on {WebHistoryLogic.KindLabel(kind)}. The connection is {WebHistoryLogic.KindLabel((int)SqlConn.Kind)}, so it was opened but not run.",
+            Notifications.Notify($"This query ran on {WebHistoryLogic.KindLabel(kind)}. The connection is {WebHistoryLogic.KindLabel((int)tab.Session.Kind)}, so it was opened but not run.",
                 NotificationKind.Info);
-            Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
             return;
         }
 
-        _executing = true;
-        try { await RunSqlAsync(_initialText, 1); }
-        finally { _executing = false; _activeQueryId = null; }
-
-        Nav.NavigateTo(new Uri(Nav.Uri).GetLeftPart(UriPartial.Path), replace: true);
-        await InvokeAsync(StateHasChanged);
+        tab.IsExecuting = true;
+        try { await RunSqlAsync(tab, tab.Text, 1, 1); }
+        finally { await EndRunAsync(tab); }
     }
 
-    /// <summary>The <c>kind=</c> of a Re-execute link (a <see cref="AkmlSql.Core.DatabaseKind"/> number), or null without one.</summary>
-    internal static int? AutorunKind(string query)
+    private void StripAutorunFromUrl()
     {
-        var match = System.Text.RegularExpressions.Regex.Match(query ?? string.Empty, @"[?&]kind=(\d+)(?:&|$)");
-        return match.Success && int.TryParse(match.Groups[1].Value, out var kind) ? kind : null;
+        var uri = new Uri(Nav.Uri);
+        if (uri.Query.Contains("autorun=", StringComparison.Ordinal)) Nav.NavigateTo(uri.GetLeftPart(UriPartial.Path), replace: true);
     }
 
     private async Task CancelExecuteAsync()
     {
-        var qid = _activeQueryId;
-        if (!string.IsNullOrEmpty(qid))
+        if (Tab is not { } tab) return;
+        var qid = tab.ActiveQueryId;
+        if (string.IsNullOrEmpty(qid))
         {
-            await QueryExec.CancelAsync(qid, CancellationToken.None);
+            // Still connecting (a restored tab reconnecting): the query is not sent once the connect ends.
+            if (tab.IsExecuting) tab.CancelRequested = true;
+            return;
         }
+        await QueryExec.CancelAsync(tab.Session, qid, CancellationToken.None);
     }
 
-    /// <summary>After a successful inline-CRUD Apply, re-run the last query so the grid refreshes
-    /// (and the tints clear). Run-immediately — no confirm.</summary>
-    private async Task OnAppliedReExecuteAsync()
+    private async Task OnAppliedReExecuteAsync(QueryTab tab)
     {
-        if (string.IsNullOrWhiteSpace(_lastExecutedSql) || !SqlConn.IsConnected) return;
+        if (string.IsNullOrWhiteSpace(tab.LastExecutedSql) || !tab.Session.IsConnected || tab.IsClosing) return;
 
         // PostgreSQL (spec 042, FR-133): the write returned the rows as the server stored them and the grid already shows
         // them, so the script is not run again - not even a single SELECT - and only the written rows were ever read back.
-        if (DialectGate.IsPostgres) return;
+        if (tab.Session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql) return;
 
         // Refresh by re-running the query ONLY when it is a single read-only SELECT. Re-running a
         // multi-statement batch or any mutating statement would REPEAT its side effects on the
@@ -1334,24 +1460,23 @@
         // and the grid already shows the committed values with tints cleared (ResetEditState ran before
         // this callback), so skipping the auto-refresh is safe — the user can re-Execute manually to
         // pick up server-side recomputes (triggers / computed columns).
-        if (!QueryRefreshSafety.IsSingleReadOnlySelect(_lastExecutedSql)) return;
+        if (!QueryRefreshSafety.IsSingleReadOnlySelect(tab.LastExecutedSql)) return;
 
-        // Share the same reentry guard as ExecuteAsync so a manual Execute can't race the
-        // auto-refresh on the serial connection (and vice-versa).
-        if (_executing) return;
-        _executing = true;
+        // Share the tab's reentry guard with Execute so a manual Execute can't race the
+        // auto-refresh on the tab's serial connection (and vice-versa).
+        if (tab.IsExecuting) return;
+        tab.IsExecuting = true;
         try
         {
-            _activeQueryId = Guid.NewGuid().ToString("N");
-            Workspace.Begin();
-            var result = await QueryExec.ExecuteAsync(_lastExecutedSql, _maxRows, _timeoutSeconds, _activeQueryId, CancellationToken.None);
-            ShowResult(result, _selectionStartLine, chooseTab: false); // keep the user on the tab they are on.
+            tab.ActiveQueryId = Guid.NewGuid().ToString("N");
+            BeginRun(tab);
+            bool sent = Bridge.State == BridgeState.Open && tab.Session.IsConnected;
+            var result = await QueryExec.ExecuteAsync(tab.Session, tab.LastExecutedSql, _maxRows, _timeoutSeconds, tab.ActiveQueryId, CancellationToken.None);
+            ShowResult(tab, result, tab.SelectionStartLine, tab.SelectionStartColumn, chooseTab: false, engineAnswered: sent); // keep the user on the tab they are on.
         }
         finally
         {
-            _executing = false;
-            _activeQueryId = null;
-            StateHasChanged();
+            await EndRunAsync(tab);
         }
     }
 
@@ -1383,20 +1508,21 @@
         }
     }
 
-    /// <summary>
-    /// Spec 041 (FR-015) — ask before an action that would drop the results grid's pending edits (Execute,
-    /// leaving the page; New and Open in US5). True when there are none, or the user chose to discard them.
-    /// </summary>
-    private bool RefuseWhileApplying()
+    private bool RefuseWhileApplying(QueryTab tab)
     {
-        if (_resultsPane?.IsApplying != true) return false;
+        if (!_panes.TryGetValue(tab.Id, out var pane) || !pane.IsApplying) return false;
         Notifications.Notify("Wait for the grid's changes to finish applying.", NotificationKind.Info);
         return true;
     }
 
-    private async Task<bool> ConfirmDiscardPendingEditsAsync()
+    private async Task<bool> ConfirmDiscardPendingEditsAsync(QueryTab tab)
     {
-        int n = _resultsPane?.PendingEditCount ?? 0;
+        if (_disposed || !_panes.TryGetValue(tab.Id, out var pane)) return true;
+        return await ConfirmDiscardAsync(pane.PendingEditCount);
+    }
+
+    private async Task<bool> ConfirmDiscardAsync(int n)
+    {
         if (n == 0) return true;
         return await Dialogs.ConfirmAsync(new DialogRequest
         {
@@ -1410,18 +1536,20 @@
 
     private async Task OnBeforeInternalNavigationAsync(LocationChangingContext context)
     {
-        if (!await ConfirmDiscardPendingEditsAsync()) context.PreventNavigation();
+        // Spec 043: leaving the page unmounts every tab's grids, so their pending edits are counted together.
+        int pending = QueryTabs.Tabs.Sum(t => _panes.TryGetValue(t.Id, out var p) ? p.PendingEditCount : 0);
+        if (!await ConfirmDiscardAsync(pending)) context.PreventNavigation();
     }
 
-    /// <summary>Spec 030 — the editor's context-action contributions to the ⌘P palette.</summary>
     private IEnumerable<CommandAction> BuildContextActions()
     {
         // Spec 041 (R37, FR-028): F5 and Ctrl+F5. While a query runs neither is offered (the key does nothing).
+        // Spec 043 (US1 scenario 7): a tab with no live connection runs too; it connects first.
         yield return new CommandAction
         {
             Id = "editor:execute", Title = "Execute", Group = CommandGroup.Action,
             Icon = "play", Shortcut = "F5", Run = ExecuteAsync,
-            IsEnabled = () => !_executing && SqlConn.IsConnected,
+            IsEnabled = () => Tab is { IsExecuting: false },
         };
         yield return new CommandAction
         {
@@ -1462,6 +1590,9 @@
         {
             Id = "editor:new", Title = "New query", Group = CommandGroup.File,
             Icon = "file-plus", Shortcut = WorkspaceKeyMap.DisplayFor("editor:new"), Run = NewDocumentAsync,
+            // Spec 043 (FR-013): at the limit the palette says why.
+            IsEnabled = () => !AtTabLimit,
+            DisabledReason = () => AtTabLimit ? QueryTabs.LimitText : null,
         };
         yield return new CommandAction
         {
@@ -1478,6 +1609,25 @@
             Id = "editor:saveas", Title = "Save as…", Group = CommandGroup.File,
             Icon = "save-all", Shortcut = WorkspaceKeyMap.DisplayFor("editor:saveas"), Run = SaveAsAsync,
         };
+        // Spec 043 (FR-012, contracts/web-ui.md §2): the query tabs from the keyboard and the palette.
+        yield return new CommandAction
+        {
+            Id = "editor:close-tab", Title = "Close query tab", Group = CommandGroup.File,
+            Icon = "x", Shortcut = WorkspaceKeyMap.DisplayFor("editor:close-tab"), Run = CloseActiveTabAsync,
+            IsEnabled = () => Tab != null,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:next-tab", Title = "Next query tab", Group = CommandGroup.View,
+            Icon = "arrow-right", Shortcut = WorkspaceKeyMap.DisplayFor("editor:next-tab"), Run = () => StepTabAsync(+1),
+            IsEnabled = () => QueryTabs.Tabs.Count > 1,
+        };
+        yield return new CommandAction
+        {
+            Id = "editor:previous-tab", Title = "Previous query tab", Group = CommandGroup.View,
+            Icon = "arrow-left", Shortcut = WorkspaceKeyMap.DisplayFor("editor:previous-tab"), Run = () => StepTabAsync(-1),
+            IsEnabled = () => QueryTabs.Tabs.Count > 1,
+        };
         yield return new CommandAction
         {
             Id = "editor:surround", Title = "Surround selection with…", Group = CommandGroup.Action,
@@ -1485,43 +1635,527 @@
         };
     }
 
-    private async Task OnTextChangedAsync(string newText)
+    /// <summary>
+    /// Spec 043 (R6): the editor reports a change with the tab it was typed in, which may no longer be the active one by the time
+    /// the report is handled. The tab's text, modified state and record follow it.
+    /// </summary>
+    private async Task OnTabTextChangedAsync(EditorTabText change)
     {
-        _currentText = newText;
-        SchemaSync.ReportEditorActive();   // spec 041 (R40, N27): keeps the 30 s schema poll from idling out
-        await ClearErrorMarkAsync();
-        if (!_documentLoaded) return;
-        Document.OnTextChanged(newText);
-        // T051 debounced save (the store applies its own 500 ms debounce). Routed through
-        // EditorSessionKeys.BuildTextChangeRecord so the session key — and (spec 041) the document's name,
-        // modified state and counter — are carried forward: SaveAsync overwrites the whole persisted record.
-        await SessionStore.SaveAsync(EditorSessionKeys.BuildTextChangeRecord(
-            SessionKey, newText, await ProfileStore.GetActiveIdAsync(),
-            Document.Name, Document.IsModified, Document.NextDefaultNumber));
+        if (change.TabId == null) return;   // before the editor shows a tab (its first, empty change): not the user's
+        var tab = QueryTabs.Tabs.FirstOrDefault(t => t.Id == change.TabId);
+        if (tab == null) return;            // closed meanwhile
+        tab.Text = change.Text;
+        // An edit before History's Re-execute ran: the run is off (the text is no longer that query).
+        if (tab.AutorunPending && !string.Equals(change.Text, tab.AutorunSql, StringComparison.Ordinal))
+        {
+            tab.AutorunPending = false;
+            tab.AutorunKind = null;
+            tab.AutorunSql = null;
+        }
+        if (ReferenceEquals(tab, Tab)) SchemaSync.ReportEditorActive();   // spec 041 (R40, N27): keeps the 30 s schema poll from idling out
+        await ClearErrorMarkAsync(tab);
+        tab.Document.OnTextChanged(change.Text);
+        // T051 debounced save (the store applies its own 500 ms debounce): the whole tab record — text, name, modified state,
+        // history session key, engine session id and connection binding.
+        await QueryTabs.PersistAsync(tab);
     }
 
     // ── Spec 041 (R64, FR-072) — documents: New, Open, Save, Save as ────────────────────────────────────
 
-    async Task<string> IEditorText.GetTextAsync() => _editor != null ? await _editor.GetTextAsync() : _currentText;
+    // ── Spec 043 (R1, R6, R10) — the query tabs ───────────────────────────────────────────────────────────
 
-    async Task IEditorText.SetTextAsync(string text)
+    /// <summary>A tab was added, closed, renamed or activated (here, from History, or by a reset in Settings).</summary>
+    private void OnTabsChanged() => _ = InvokeAsync(async () =>
     {
-        // Keep the page's copy in step, or the editor's InitialText guard would skip an equal value later.
-        _initialText = text;
-        _currentText = text;
-        if (_editor != null) await _editor.SetTextAsync(text);
+        if (_disposed) return;
+        foreach (var tab in QueryTabs.Tabs) Attach(tab);
+        if (Tab is { } active)
+        {
+            Workspace.SetDocument(active.Name, active.IsModified);
+            if (_editor != null && _editor.CurrentTabId != active.Id)
+            {
+                await ShowTabAsync(active);
+                RefreshSchemaTarget();
+            }
+        }
+        StateHasChanged();
+    });
+
+    /// <summary>The tab's document flow reads and writes its text through this page's editor (New, Open, Save, Save as).</summary>
+    private void Attach(QueryTab tab)
+    {
+        if (!_attached.Add(tab.Id)) return;
+        tab.Document.Attach(new TabText(this, tab), () => ConfirmDiscardPendingEditsAsync(tab));
     }
 
-    private void OnDocumentChanged()
+    /// <summary>One tab's text: the editor's live text while the tab is shown, its kept text otherwise.</summary>
+    private sealed class TabText : IEditorText
     {
-        Workspace.SetDocument(Document.Name, Document.IsModified);
-        _ = InvokeAsync(StateHasChanged);
+        private readonly Editor _page;
+        private readonly QueryTab _tab;
+
+        public TabText(Editor page, QueryTab tab)
+        {
+            _page = page;
+            _tab = tab;
+        }
+
+        public async Task<string> GetTextAsync() => _page.IsShown(_tab) ? await _page._editor!.GetTextAsync() : _tab.Text;
+
+        public async Task SetTextAsync(string text)
+        {
+            _tab.Text = text ?? string.Empty;
+            if (_page._disposed || _page._editor == null) return;
+            // The shown tab reports the change like a keystroke; another tab's kept state changes quietly.
+            if (_page.IsShown(_tab)) await _page._editor.SetTextAsync(_tab.Text);
+            else await _page._editor.SetTextAsync(_tab.Text, _tab.Id);
+        }
     }
 
+    private bool IsShown(QueryTab tab) => !_disposed && _editor != null && _editor.CurrentTabId == tab.Id;
+
+    private static AkmlSql.Core.DatabaseKind KindOf(QueryTab? tab) =>
+        tab == null ? AkmlSql.Core.DatabaseKind.SqlServer
+        : tab.Session.IsConnected ? tab.Session.Kind
+        : tab.Session.Binding?.Kind ?? AkmlSql.Core.DatabaseKind.SqlServer;
+
+    // Spec 043 (contracts/web-ui.md §1): the strip — the active tab keeps the doc-name / doc-modified ids of spec 041.
+    private IReadOnlyList<TabItem> DocTabs => QueryTabs.Tabs.Select(t =>
+    {
+        bool active = ReferenceEquals(t, Tab);
+        return new TabItem(t.Id, t.Name, TestId: "doc-tab",
+            Title: t.CheckingBeforeClose ? $"{t.Name} — checking for an open transaction before it closes…" : TabTitle(t.Name, t.Session, _savedConnections),
+            IsModified: t.IsModified,
+            LabelTestId: active ? "doc-name" : null, ModifiedTestId: active ? "doc-modified" : null);
+    }).ToList();
+
+    /// <summary>
+    /// A query tab's tooltip: its name, where it connects, and the tab keys. Spec 043 (edge case "a saved connection that a tab
+    /// uses is deleted"; review of US1, gap G3): a connection that is none of the saved ones — its entry was deleted or changed,
+    /// or it was never saved — says "not saved"; one saved after it was connected does not. Nothing is said while the saved list
+    /// is unknown (<paramref name="saved"/> null).
+    /// </summary>
+    internal static string TabTitle(string name, SqlSessionState s, IReadOnlyList<SavedSqlConnection>? saved)
+    {
+        string? where = s.IsConnected ? $"{s.Server}.{s.Database}"
+            : s.Binding is { } b ? $"{b.Server}.{b.Database} (not connected)"
+            : null;
+        if (where != null && saved != null && s.Binding is { } bound && !IsSaved(bound, saved))
+            where += " (not saved)";
+        return (where == null ? name : $"{name} — {where}") + TabKeysHelp;
+    }
+
+    // A connection is saved when the row it was connected from still describes it (a USE may have moved its database), or — for
+    // a connection made from typed values, or saved after it connected — when some row describes it. A tab whose row was deleted
+    // counts as saved only through another row for the same database too: a row for another database is not "its" connection.
+    internal static bool IsSaved(ConnectionBinding bound, IReadOnlyList<SavedSqlConnection> saved)
+    {
+        if (bound.SavedConnectionId is { Length: > 0 } id)
+        {
+            if (saved.FirstOrDefault(c => c.Id == id) is { } own) return bound.SameConnectionAs(own);
+            return saved.Any(c => bound.SameConnectionAs(c) && string.Equals(c.Database, bound.Database, StringComparison.OrdinalIgnoreCase));
+        }
+        return saved.Any(bound.SameConnectionAs);
+    }
+
+    // The saved connections, for the tabs' "not saved" mark. Read when the page opens and each time the Connect to database
+    // dialog closes (it can save, change or delete one); the store is optional, as a test host may not have it.
+    private IReadOnlyList<SavedSqlConnection>? _savedConnections;
+
+    private async Task LoadSavedConnectionIdsAsync()
+    {
+        if (Services.GetService(typeof(ISavedSqlConnectionStore)) is not ISavedSqlConnectionStore store) return;
+        try
+        {
+            _savedConnections = await store.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "editor", $"The saved connections could not be read: {ex.Message}");
+        }
+    }
+
+    private void OnConnectDialogClosed(bool connected) => _ = InvokeAsync(ReloadSavedConnectionsAsync);
+
+    private async Task ReloadSavedConnectionsAsync()
+    {
+        await LoadSavedConnectionIdsAsync();
+        if (!_disposed) StateHasChanged();
+    }
+
+    // Spec 043 (FR-012): the keyboard help of a query tab (its tooltip, and the focus help of akml-ui.js) lists the tab keys.
+    internal static readonly string TabKeysHelp =
+        $" · Next / previous tab: {WorkspaceKeyMap.DisplayFor("editor:next-tab")} / {WorkspaceKeyMap.DisplayFor("editor:previous-tab")}"
+        + $" · Close: {WorkspaceKeyMap.DisplayFor("editor:close-tab")} or Delete";
+
+    private string ExecuteTitle =>
+        Running ? "A query is running"
+        : SqlConn.IsConnected ? WorkspaceKeyMap.TitleFor("Execute", "editor:execute") + " — runs the selection or the whole document"
+        : Tab?.Session.Binding != null ? WorkspaceKeyMap.TitleFor("Execute", "editor:execute") + " — connects this query tab again, then runs"
+        : WorkspaceKeyMap.TitleFor("Execute", "editor:execute") + " — asks for a connection, then runs";
+
+    /// <summary>Spec 043 (plan › Tab switch): the editor shows the tab's kept state, or its text the first time, in its dialect.</summary>
+    private async Task ShowTabAsync(QueryTab tab)
+    {
+        if (_editor == null || _disposed) return;
+        await _editor.SwitchTabAsync(tab.Id, tab.Text, KindOf(tab));
+        // A tab this page has not shown yet (a reload, or back from History) gets its findings and error mark back.
+        if (_shownTabs.Add(tab.Id) && (tab.Findings != null || tab.ErrorMark != null)) await ShowDiagnosticsAsync(tab);
+        // A tab formatted or refreshed while another was shown is analysed now that it is shown, for its own dialect and session
+        // (T034) — whichever way it came on screen: a click, a key, the close of the tab after it, a page coming back.
+        if (ReferenceEquals(tab, Tab) && tab.AnalysisPending)
+        {
+            tab.AnalysisPending = false;
+            await AnalyseTabAsync(tab, quiet: true);
+        }
+    }
+
+    private Task ActivateTabByIdAsync(string id) =>
+        QueryTabs.Tabs.FirstOrDefault(t => t.Id == id) is { } tab ? ActivateTabAsync(tab) : Task.CompletedTask;
+
+    /// <summary>
+    /// Spec 043 (FR-005, plan › Tab switch): the tab becomes active — the connection service, the status bar and the saved set
+    /// follow (IQueryTabs), the editor shows its state, the Schema panel its connection — and it reconnects when that needs no
+    /// password (FR-009). Nothing here waits on the server, so a switch is immediate.
+    /// </summary>
+    private async Task ActivateTabAsync(QueryTab tab)
+    {
+        if (_disposed || ReferenceEquals(tab, Tab) || tab.IsClosing) return;
+        await QueryTabs.ActivateAsync(tab);
+        await ShowTabAsync(tab);
+        if (!_seenGenerations.ContainsKey(tab.Id)) _seenGenerations[tab.Id] = tab.Session.ConnectionGeneration;
+        RefreshSchemaTarget();
+        StateHasChanged();
+        await ReattachIfQuietAsync(tab);
+    }
+
+    /// <summary>Next / previous query tab (Ctrl+Alt+PageDown / PageUp), wrapping as the strip's arrows do.</summary>
+    private Task StepTabAsync(int step)
+    {
+        var tabs = QueryTabs.Tabs;
+        if (tabs.Count < 2 || Tab == null) return Task.CompletedTask;
+        int at = Math.Max(0, tabs.ToList().IndexOf(Tab));
+        return ActivateTabAsync(tabs[(at + step + tabs.Count) % tabs.Count]);
+    }
+
+    /// <summary>
+    /// Spec 043 (FR-009, R2): a restored tab connects again when it is shown, if that needs no password (Windows authentication
+    /// or a password the engine remembers). Otherwise it waits for its first run or an explicit Connect, so showing a tab never
+    /// asks for a password.
+    /// </summary>
+    private async Task ReattachIfQuietAsync(QueryTab? tab)
+    {
+        if (tab == null || _disposed || tab.IsClosing) return;
+        var s = tab.Session;
+        if (s.IsConnected || !s.NeedsReattach || !s.CanReconnectAlone || Bridge.State != BridgeState.Open) return;
+        var result = await ReattachAsync(tab);
+        if (!result.Ok) Diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"{tab.Name}: the connection was not restored: {result.Error}");
+        if (!_disposed) StateHasChanged();
+    }
+
+    // One reattach per tab at a time: a run that needs the connection waits for the one already on its way.
+    private async Task<ConnectResult> ReattachAsync(QueryTab tab)
+    {
+        if (_reattachTasks.TryGetValue(tab.Id, out var pending)) return await pending;
+        var task = SqlConn.ReattachAsync(tab.Session, null, CancellationToken.None);
+        _reattachTasks[tab.Id] = task;
+        try { return await task; }
+        finally { _reattachTasks.Remove(tab.Id); }
+    }
+
+    // The engine came back (or the page opened before it did): the tab on screen reconnects when it needs no password.
+    private void OnBridgeStateChanged(BridgeState state)
+    {
+        if (state == BridgeState.Open) _ = InvokeAsync(() => ReattachIfQuietAsync(Tab));
+    }
+
+    /// <summary>
+    /// Spec 043 (FR-009, US1 scenarios 6 and 7): a run needs its tab's connection. A restored tab connects again — through the
+    /// Connect to database dialog, filled in and asking only for the password, when the engine holds none; a tab with no
+    /// connection opens the dialog. The run goes on only once the tab is connected.
+    /// </summary>
+    private async Task<bool> EnsureConnectedAsync(QueryTab tab)
+    {
+        var s = tab.Session;
+        if (s.IsConnected) return true;
+        if (s.NeedsReattach && s.Binding is { } binding)
+        {
+            if (s.CanReconnectAlone && Bridge.State == BridgeState.Open)
+            {
+                var result = await ReattachAsync(tab);
+                if (s.IsConnected) return true;
+                // Closed or cancelled while it connected again: nothing to report and nothing to ask.
+                if (tab.IsClosing || tab.CancelRequested) return false;
+                // Review: the server refused the password the engine supplied (remembered or copied): the tab is marked as
+                // missing its password, so the dialog asks for the current one instead of a toast on every run.
+                if (!result.PasswordRequired && !s.PasswordMissing)
+                {
+                    Notifications.Notify($"{tab.Name} could not connect to {binding.Server}: {result.Error}", NotificationKind.Error);
+                    return false;
+                }
+            }
+            return await ConnectThroughDialogAsync(tab, binding);
+        }
+        return await ConnectThroughDialogAsync(tab, null);
+    }
+
+    private async Task<bool> ConnectThroughDialogAsync(QueryTab tab, ConnectionBinding? prefill)
+    {
+        if (tab.IsClosing || tab.CancelRequested) return false;
+        var closed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnClosed(bool connected) => closed.TrySetResult(connected);
+        ConnManager.Closed += OnClosed;
+        try
+        {
+            ConnManager.Open(tab.Session, prefill);
+            bool connected = await closed.Task;
+            return connected && tab.Session.IsConnected && !tab.IsClosing;
+        }
+        finally
+        {
+            ConnManager.Closed -= OnClosed;
+        }
+    }
+
+    private Task CloseTabByIdAsync(string id) =>
+        QueryTabs.Tabs.FirstOrDefault(t => t.Id == id) is { } tab ? CloseTabAsync(tab) : Task.CompletedTask;
+
+    private Task CloseActiveTabAsync() => Tab is { } tab ? CloseTabAsync(tab) : Task.CompletedTask;
+
+    /// <summary>
+    /// Spec 043 (FR-007, T050): close a query tab. A run still in flight asks first; then pending grid edits; then an open or
+    /// aborted transaction warns as Disconnect does (contracts/web-ui.md §1: before the save question, so a cancelled rollback never
+    /// saves); then unsaved text asks Save / Don't save / Cancel. The engine releases the tab's session; a run in flight is asked to
+    /// cancel, and its session is released when its reply (or deadline) ends it. The tab before it becomes active, as in SSMS.
+    /// </summary>
+    private async Task CloseTabAsync(QueryTab tab)
+    {
+        // One close at a time per tab (review of US1): a second ×, Delete or Ctrl+Alt+W while this one still asks or checks starts
+        // nothing — two would each ask to save, and the second would ask about a tab already gone.
+        if (_disposed || tab.IsClosing || !_closesAsking.Add(tab.Id)) return;
+        try
+        {
+            await CloseTabCoreAsync(tab);
+        }
+        finally
+        {
+            _closesAsking.Remove(tab.Id);
+        }
+    }
+
+    private readonly HashSet<string> _closesAsking = new(StringComparer.Ordinal);
+
+    private async Task CloseTabCoreAsync(QueryTab tab)
+    {
+        if (RefuseWhileApplying(tab)) return;
+        bool askedRunning = false;
+        if (tab.IsExecuting)
+        {
+            if (!await ConfirmCloseRunningAsync(tab)) return;
+            askedRunning = true;
+        }
+        if (!await ConfirmDiscardPendingEditsAsync(tab)) return;
+        bool runningAtCheck = tab.IsExecuting;
+        var transaction = await ConfirmCloseTransactionAsync(tab);
+        if (transaction == CloseTransactionAnswer.Kept) return;
+        if (tab.IsModified)
+        {
+            var choice = await Dialogs.ChooseAsync(new DialogRequest
+            {
+                Title = "Close query tab",
+                Message = $"Save changes to {tab.Name}?",
+                ConfirmLabel = "Save",
+                AlternateLabel = "Don't save",
+                CancelLabel = "Cancel",
+                DialogId = "doc-close-dialog",
+                ConfirmTestId = "doc-close-save",
+                AlternateTestId = "doc-close-discard",
+                CancelTestId = "doc-close-cancel",
+            });
+            if (choice == DialogChoice.Cancel) return;
+            if (choice == DialogChoice.Confirm && !await SaveTabAsync(tab)) return;
+        }
+        if (tab.IsClosing || !QueryTabs.Tabs.Contains(tab)) return;   // closed while a question was open
+        // A run that ended while a question was open may have left a transaction open (FR-007: the warning comes before the close)
+        // — asked only when no transaction question was answered already.
+        if (runningAtCheck && !tab.IsExecuting && transaction == CloseTransactionAnswer.NothingToAsk)
+        {
+            if (await ConfirmCloseTransactionAsync(tab) == CloseTransactionAnswer.Kept) return;
+            if (tab.IsClosing || !QueryTabs.Tabs.Contains(tab)) return;
+        }
+        // A run started while a question was open is asked about as any running query is.
+        if (tab.IsExecuting && !askedRunning)
+        {
+            if (!await ConfirmCloseRunningAsync(tab)) return;
+            if (tab.IsClosing || !QueryTabs.Tabs.Contains(tab)) return;
+        }
+
+        bool wasActive = ReferenceEquals(tab, Tab);
+        tab.IsClosing = true;
+        tab.CancelRequested = true;   // a run still connecting is not sent
+        _panes.Remove(tab.Id);
+        _attached.Remove(tab.Id);
+        _shownTabs.Remove(tab.Id);
+        _seenGenerations.Remove(tab.Id);
+        _formatGates.Remove(tab.Id);
+        if (_analyseCts.Remove(tab.Id, out var analysing)) analysing.Cancel();
+        // The tabs first (the tab before it becomes active), then the editor forgets the closed tab's state: a render between
+        // the two never shows the closing tab again.
+        await QueryTabs.CloseAsync(tab);
+        if (_editor != null) await _editor.CloseTabAsync(tab.Id);
+        if (Tab is { } next)
+        {
+            await ShowTabAsync(next);
+            if (wasActive) RefreshSchemaTarget();
+        }
+        StateHasChanged();
+
+        if (tab.IsExecuting)
+        {
+            if (tab.ActiveQueryId is { } qid) _ = QueryExec.CancelAsync(tab.Session, qid, CancellationToken.None);   // best effort
+        }
+        else
+        {
+            await ReleaseAsync(tab);
+        }
+        if (wasActive) await ReattachIfQuietAsync(Tab);
+    }
+
+    // Spec 043 edge case "closing a tab whose query is running": the app asks; the tab counts toward the limit until released.
+    private Task<bool> ConfirmCloseRunningAsync(QueryTab tab) => Dialogs.ConfirmAsync(new DialogRequest
+    {
+        Title = "Close a running query",
+        Message = $"{tab.Name} is still running a query. Close the tab?",
+        Details = new[]
+        {
+            "Closing the tab cancels the query: the engine stops the statement that is running, and the batches after it do not run.",
+            "Its results are not shown. Anything it has not committed is rolled back when the tab's connection closes.",
+        },
+        ConfirmLabel = "Close tab",
+        Destructive = true,
+        DialogId = "doc-close-running",
+    });
+
+    private async Task<bool> SaveTabAsync(QueryTab tab)
+    {
+        try { return await tab.Document.SaveAsync(); }
+        catch (JSException ex)
+        {
+            Notifications.Notify($"The file could not be saved: {ex.Message}", NotificationKind.Error);
+            Diagnostics.Log(DiagnosticLevel.Error, "editor", $"Save failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private enum CloseTransactionAnswer { NothingToAsk, RollBack, Kept }
+
+    /// <summary>How long a close waits for a SQL Server session to say whether it holds a transaction before it goes on without
+    /// asking (the engine away, a server that does not answer, a statement still holding the session).</summary>
+    private static readonly TimeSpan CloseProbeLimit = TimeSpan.FromSeconds(3);
+
+    // FR-007: closing drops the tab's session, and with it any open transaction. The engine rolls it back; it never commits.
+    // A PostgreSQL session knows its state from every reply. A SQL Server one is asked now (gap G1), as SSMS asks when a query
+    // window closes: asking after every run would reset @@ROWCOUNT and @@ERROR for the user's next batch. The question waits at
+    // most CloseProbeLimit; the tab says it is checking meanwhile. A tab whose run is still in flight is not asked (the question
+    // would wait for the run); the close-running question already said what closing does.
+    private async Task<CloseTransactionAnswer> ConfirmCloseTransactionAsync(QueryTab tab)
+    {
+        var s = tab.Session;
+        if (!s.IsConnected) return CloseTransactionAnswer.NothingToAsk;
+        var state = s.TransactionState;
+        if (state == AkmlSql.Core.TransactionState.None && !tab.IsExecuting && s.Kind != AkmlSql.Core.DatabaseKind.PostgreSql)
+        {
+            tab.CheckingBeforeClose = true;
+            StateHasChanged();
+            try
+            {
+                using var limit = new CancellationTokenSource(CloseProbeLimit);
+                state = await QueryExec.ProbeTransactionStateAsync(s, limit.Token) ?? state;
+            }
+            finally
+            {
+                tab.CheckingBeforeClose = false;
+                if (!_disposed) StateHasChanged();
+            }
+        }
+        if (state == AkmlSql.Core.TransactionState.None) return CloseTransactionAnswer.NothingToAsk;
+        var aborted = state == AkmlSql.Core.TransactionState.Aborted;
+        return await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = aborted ? "Aborted transaction" : "Open transaction",
+            Message = (aborted ? $"{tab.Name} has a transaction that an error aborted. " : $"{tab.Name} has an open transaction. ")
+                + "Closing the tab rolls it back. Nothing is committed.",
+            ConfirmLabel = "Roll back and close",
+            Destructive = true,
+            DialogId = "doc-close-transaction",
+        }) ? CloseTransactionAnswer.RollBack : CloseTransactionAnswer.Kept;
+    }
+
+    // The engine closes the tab's connection and forgets its session and schema cache (R5).
+    // The engine closes the tab's connection and forgets its session and schema cache (R5); the window gives up its lease. The
+    // user is told what the close did to an open transaction (FR-007: as Disconnect tells a SQL Server session afterwards), and
+    // when the engine could not be told (the release is sent when the engine is back).
+    private async Task ReleaseAsync(QueryTab tab)
+    {
+        // Only a tab whose session the engine may hold (connected in this page, or a stored session from an earlier page) has anything
+        // to warn about; a new tab that never reached the engine has none, whatever connection it inherited.
+        var s = tab.Session;
+        bool couldHoldConnection = s.IsConnected || s.MayBeOnEngine;
+        DisconnectResult? result = null;
+        try { result = await SqlConn.DisconnectSessionAsync(s, release: true, CancellationToken.None); }
+        catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "editor", $"{tab.Name}: its session was not released: {ex.Message}"); }
+        await QueryTabs.ReleaseLeaseAsync(tab);
+        // Told even when the page is gone (the tab closed while its run was in flight, and the user moved on): notices outlive pages.
+        if (result == null) return;
+        if (result.RolledBack)
+            Notifications.Notify($"{tab.Name} is closed. Its open transaction was rolled back; nothing was committed.", NotificationKind.Warning);
+        else if (result.Warning == SqlConnectionService.DisconnectUnconfirmed && couldHoldConnection)
+            Notifications.Notify($"{tab.Name} is closed in this browser, but the engine could not be reached. Keep this page open until the engine is back: its connection, with any open transaction, is closed then.", NotificationKind.Warning);
+    }
+
+    /// <summary>
+    /// Spec 043 (FR-011): a query or a file goes to a new tab, unless the active tab is empty and unmodified (then it takes it).
+    /// A new tab starts on the active tab's connection (FR-002). Null at the tab limit (the user is told).
+    /// </summary>
+    private async Task<QueryTab?> OpenInTabAsync(string text, string? name)
+    {
+        if (Tab is { IsEmpty: true, IsExecuting: false, GridHasPendingEdits: false } reuse)
+        {
+            await reuse.Document.ReplaceUnmodifiedAsync(text, name);
+            reuse.Text = text;
+            await AfterDocumentReplacedAsync(reuse);
+            return reuse;
+        }
+        var tab = await QueryTabs.NewAsync(Tab, text, name);
+        if (tab == null)
+        {
+            Notifications.Notify(QueryTabs.LimitText + ".", NotificationKind.Info);
+            return null;
+        }
+        await AfterTabOpenedAsync(tab);
+        return tab;
+    }
+
+    private async Task AfterTabOpenedAsync(QueryTab tab)
+    {
+        Attach(tab);
+        await ShowTabAsync(tab);
+        _seenGenerations[tab.Id] = tab.Session.ConnectionGeneration;
+        RefreshSchemaTarget();
+        StateHasChanged();
+        _ = InvokeAsync(() => ReattachIfQuietAsync(tab));   // FR-002: at once when no password is needed
+    }
+
+    /// <summary>Spec 043 (FR-002): New query is a new tab on the active tab's connection.</summary>
     private async Task NewDocumentAsync()
     {
-        if (!await Document.NewAsync()) return;
-        await AfterDocumentReplacedAsync();
+        var tab = await QueryTabs.NewAsync(Tab);
+        if (tab == null)
+        {
+            Notifications.Notify(QueryTabs.LimitText + ".", NotificationKind.Info);
+            return;
+        }
+        await AfterTabOpenedAsync(tab);
     }
 
     /// <summary>The Open command (Ctrl+Alt+O, the palette): the same file picker as the toolbar's Open.</summary>
@@ -1541,7 +2175,7 @@
         var file = e.File;
         if (file.Size > EditorDocumentFlow.MaxFileBytes)
         {
-            Document.RefuseTooLarge(file.Name);
+            Tab?.Document.RefuseTooLarge(file.Name);
             return;
         }
         byte[] bytes;
@@ -1557,16 +2191,36 @@
             Notifications.Notify($"{file.Name} could not be read: {ex.Message}", NotificationKind.Error);
             return;
         }
-        if (!await Document.OpenAsync(bytes, file.Name)) return;
-        await AfterDocumentReplacedAsync();
+        // A file that cannot be read as text opens nothing — not even an empty tab.
+        var decoded = EditorDocument.DecodeFile(bytes);
+        if (decoded.Error != null)
+        {
+            Notifications.Notify($"{file.Name} was not opened. {decoded.Error}", NotificationKind.Error);
+            return;
+        }
+
+        // Spec 043 (FR-011): into the active tab when it is empty and unmodified, else into a new tab.
+        var target = Tab is { IsEmpty: true, IsExecuting: false, GridHasPendingEdits: false } reuse ? reuse : null;
+        if (target == null)
+        {
+            target = await QueryTabs.NewAsync(Tab);
+            if (target == null)
+            {
+                Notifications.Notify(QueryTabs.LimitText + ".", NotificationKind.Info);
+                return;
+            }
+            await AfterTabOpenedAsync(target);
+        }
+        if (!await target.Document.OpenAsync(bytes, file.Name)) return;
+        await AfterDocumentReplacedAsync(target);
     }
 
-    /// <summary>A new document: the old one's findings and results do not belong to it.</summary>
-    private async Task AfterDocumentReplacedAsync()
+    /// <summary>A new document in the tab: the old one's findings and error mark do not belong to it.</summary>
+    private async Task AfterDocumentReplacedAsync(QueryTab tab)
     {
-        if (_editor != null) await _editor.ClearDiagnosticsAsync();
-        _findings = null;
-        _errorDiagnostic = null;
+        tab.Findings = null;
+        tab.ErrorMark = null;
+        if (_editor != null) await _editor.ClearDiagnosticsAsync(tab.Id);
         StateHasChanged();
     }
 
@@ -1579,23 +2233,24 @@
     }
 
     // Review WEB-10: each Format takes a ticket; only the latest one's reply, for the same document and dialect, may change it.
-    private readonly FormatRequestGate _formatGate = new();
-
     internal const string FormatSupersededStatus =
         "The document changed while it was being formatted, so the result was not applied. Format again.";
 
     private async Task FormatAsync()
     {
-        if (_editor == null) return;
+        if (_editor == null || Tab is not { } tab) return;
+        if (!_formatGates.TryGetValue(tab.Id, out var gate)) _formatGates[tab.Id] = gate = new FormatRequestGate();
         try
         {
-            // The live text (not the debounced copy), the document and the dialect it is formatted for: a PostgreSQL format
-            // crosses the bridge, and the reply can arrive after the user typed, opened another document or switched kind.
-            var ticket = _formatGate.Begin(await _editor.GetTextAsync(), SessionKey, SqlConn.Kind);
+            // The live text (not the debounced copy), the tab's document and the dialect it is formatted for: a PostgreSQL format
+            // crosses the bridge, and the reply can arrive after the user typed, opened another document, switched kind or
+            // switched tabs. Spec 043: the reply goes to the tab it was asked for, shown or not.
+            var kind = tab.Session.Kind;
+            var ticket = gate.Begin(await _editor.GetTextAsync(), tab.Document.SessionKey ?? string.Empty, kind);
             var result = await Formatter.FormatAsync(ticket.Text, _activeProfile);
-            if (!_formatGate.IsLatest(ticket) || _editor == null) return;   // a newer Format owns the document now
-            if (result.Success && (!_formatGate.Applies(ticket, SessionKey, SqlConn.Kind)
-                                   || !await _editor.ReplaceTextIfUnchangedAsync(ticket.Text, result.FormattedText)))
+            if (!gate.IsLatest(ticket) || _editor == null || tab.IsClosing) return;   // a newer Format owns the document now
+            if (result.Success && (!gate.Applies(ticket, tab.Document.SessionKey ?? string.Empty, tab.Session.Kind)
+                                   || !await _editor.ReplaceTextIfUnchangedAsync(ticket.Text, result.FormattedText, tab.Id)))
             {
                 _status = FormatSupersededStatus;
                 Notifications.Notify(_status, NotificationKind.Info);
@@ -1605,14 +2260,21 @@
             }
             if (result.Success)
             {
-                _currentText = result.FormattedText;
+                bool shown = IsShown(tab);
+                tab.Text = result.FormattedText;
+                if (!shown)
+                {
+                    // A tab's kept state changes without a text report: its modified state and record follow here.
+                    tab.Document.OnTextChanged(tab.Text);
+                    await QueryTabs.PersistAsync(tab);
+                }
                 _status = result.WasModified ? "Formatted." : "Already canonical.";
                 _hasFormatted = true;
                 _formatVersion++;
                 Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
                 if (_autoAnalyseOnFormat && _analysisEnabled)   // a format never announces that analysis is off
                 {
-                    await AnalyseAsync();
+                    await AnalyseTabAsync(tab);
                 }
             }
             else
@@ -1634,42 +2296,74 @@
         StateHasChanged();
     }
 
-    private async Task AnalyseAsync()
+    private Task AnalyseAsync() => Tab is { } tab ? AnalyseTabAsync(tab) : Task.CompletedTask;
+
+    private async Task AnalyseTabAsync(QueryTab tab, bool quiet = false)
     {
+        bool active = ReferenceEquals(tab, Tab);
+        // T034: the analyser reads the dialect (and a PostgreSQL analysis the engine session) of the ACTIVE tab, so a tab that is
+        // not shown is analysed when it is shown again, never through another tab's dialect.
+        if (!active)
+        {
+            tab.AnalysisPending = true;
+            return;
+        }
         // Spec 041 (FR-034, FR-055): with code analysis off, Analyse says so (the Problems tab offers to turn
         // it on) — never "No problems found", which would be a claim about a document nobody analysed.
         var analysis = await AnalysisSettings.GetAsync();
         _analysisEnabled = analysis.Enabled;
         if (!_analysisEnabled)
         {
-            _findings = null;
-            await ShowDiagnosticsAsync();
+            tab.Findings = null;
+            await ShowDiagnosticsAsync(tab);
+            // A quiet re-analysis (a tab shown, a connection changed) only drops the stale findings; it never switches the results
+            // tab, opens the panel or announces anything.
+            if (quiet)
+            {
+                StateHasChanged();
+                return;
+            }
             _hasAnalysed = true;
             _analyseVersion++;
-            _resultsTab = ResultsPaneComponent.ProblemsTab;
-            if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+            if (active)
+            {
+                _resultsTab = ResultsPaneComponent.ProblemsTab;
+                if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+            }
             Notifications.Notify("Code analysis is off.", NotificationKind.Info);
             StateHasChanged();
             return;
         }
 
-        _analyseCts?.Cancel();
-        _analyseCts = new CancellationTokenSource();
+        if (_analyseCts.TryGetValue(tab.Id, out var previous)) previous.Cancel();
+        var cts = _analyseCts[tab.Id] = new CancellationTokenSource();
         try
         {
-            _findings = await Analyser.AnalyseAsync(_currentText, null, _analyseCts.Token);
+            // The live text of the tab on screen (the kept text of another).
+            var text = IsShown(tab) ? await _editor!.GetTextAsync() : tab.Text;
+            // The analyser reads the dialect (and a PostgreSQL analysis the session) of the active tab: a switch during the read
+            // above leaves this tab to be analysed when it is shown again (T034).
+            if (!ReferenceEquals(tab, Tab))
+            {
+                tab.AnalysisPending = true;
+                return;
+            }
+            tab.Findings = await Analyser.AnalyseAsync(text, null, cts.Token);
             _hasAnalysed = true;
             _analyseVersion++;
-            await ShowDiagnosticsAsync();
-            var issueCount = _findings.Issues?.Length ?? 0;
+            await ShowDiagnosticsAsync(tab);
+            var issueCount = tab.Findings.Issues?.Length ?? 0;
             // Spec 041 (FR-034): findings open the Problems tab (its badge counts them); none says so in a
             // notification, so the user knows the analyser ran.
             if (issueCount > 0)
             {
-                _resultsTab = ResultsPaneComponent.ProblemsTab;
-                if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+                if (ReferenceEquals(tab, Tab) && !quiet)
+                {
+                    _resultsTab = ResultsPaneComponent.ProblemsTab;
+                    if (!Layout.Current.ResultsVisible) await Layout.SetAsync(WorkspaceLayoutFields.ResultsVisible, true);
+                }
             }
-            else Notifications.Notify("No problems found.", NotificationKind.Success);
+            else if (!quiet) Notifications.Notify("No problems found.", NotificationKind.Success);
             Diagnostics.Log(DiagnosticLevel.Info, "analyser",
                 issueCount == 0 ? "No problems." : $"{issueCount} problem(s) found.");
         }
@@ -1687,12 +2381,17 @@
             _status = $"Analyse crashed: {ex.Message}";
             Diagnostics.Log(DiagnosticLevel.Error, "analyser", _status, new { Exception = ex.GetType().Name });
         }
+        finally
+        {
+            if (_analyseCts.TryGetValue(tab.Id, out var current) && ReferenceEquals(current, cts)) _analyseCts.Remove(tab.Id);
+            cts.Dispose();
+        }
         StateHasChanged();
     }
 
-    private Task SaveAsync() => SaveWithAsync(Document.SaveAsync);
+    private Task SaveAsync() => Tab is { } tab ? SaveWithAsync(tab.Document.SaveAsync) : Task.CompletedTask;
 
-    private Task SaveAsAsync() => SaveWithAsync(Document.SaveAsAsync);
+    private Task SaveAsAsync() => Tab is { } tab ? SaveWithAsync(tab.Document.SaveAsAsync) : Task.CompletedTask;
 
     private async Task SaveWithAsync(Func<Task<bool>> save)
     {
@@ -1711,14 +2410,12 @@
     }
 
     // ── Spec 027 T025/T026 (US4) — inline suppression ────────────────────────────────────
-    /// <summary>Suppress this finding on its line: insert ` -- akml-disable-line RuleId` at the line end
-    /// (the shared directive the engine + WPF surface honour) and re-analyse.</summary>
     private async Task OnSuppressLineAsync(ProblemsListComponent.IssueLocation loc)
     {
-        if (_editor == null) return;
-        _currentText = await _editor.InsertAtLineEndAsync(loc.Line, $" -- akml-disable-line {loc.RuleId}");
+        if (_editor == null || Tab is not { } tab) return;
+        tab.Text = await _editor.InsertAtLineEndAsync(loc.Line, $" -- akml-disable-line {loc.RuleId}");
         Diagnostics.Log(DiagnosticLevel.Info, "suppress", $"Suppressed {loc.RuleId} on line {loc.Line}.");
-        await AnalyseAsync();
+        await AnalyseTabAsync(tab);
     }
 
     /// <summary>Spec 041 (FR-034): "Turn on" in the Problems tab — switch analysis on and analyse.</summary>
@@ -1750,8 +2447,6 @@
         if (_editor != null) await _editor.InsertNameAsync(qualifiedName);
     }
 
-    /// <summary>The schema tree's double-click and context menu: insert or copy the name, or open a script as a new query
-    /// (Select Top 1000 Rows also runs it).</summary>
     private async Task OnSchemaObjectActionAsync(SchemaObjectAction action)
     {
         var name = SchemaObjectScripts.Name(action.Kind, action.SchemaName, action.Object.ObjectName);
@@ -1774,10 +2469,11 @@
 
         var script = SchemaObjectScripts.Script(action.Command, action.Kind, action.SchemaName, action.Object);
         if (script == null) return;
-        var label = SchemaObjectScripts.Label(action.Command, action.Kind, action.Object.ObjectType);
-        if (!await Document.NewWithTextAsync(script, $"{label}: {name}")) return;
-        await AfterDocumentReplacedAsync();
-        if (action.Command == SchemaObjectCommand.SelectTop) await ExecuteAsync();
+        // Spec 043 (FR-011): as SSMS, a script opens as a new query tab (or in the active tab when it is empty), on the explorer's
+        // connection; Select Top 1000 Rows also runs it there.
+        var tab = await OpenInTabAsync(script, null);
+        if (tab == null) return;
+        if (action.Command == SchemaObjectCommand.SelectTop) await ExecuteTabAsync(tab);
     }
 
     // ── Spec 027 T012 (US1) — surround-with picker ───────────────────────────────────────
@@ -1951,27 +2647,22 @@
         _viewMenu = (e.ClientX, e.ClientY + 8, items);
     }
 
-    /// <summary>Resolve the SQL the AI actions operate on: the live editor selection, falling
-    /// back to the whole document when nothing is selected (so a user can run Explain on the
-    /// full script without selecting first). Evaluated lazily at action time via
-    /// <see cref="AiPanel.SelectedSqlProvider"/> so it is always current.</summary>
-    /// <summary>
-    /// Spec 042 (FR-082): the first error of the last run, for AI Fix. A PostgreSQL error carries its SQLSTATE, the server's
-    /// message, detail and hint. Only for a PostgreSQL connection: on SQL Server Fix sends what it always sent.
-    /// </summary>
     private AiErrorInfo? GetLastExecuteError()
     {
         if (SqlConn.Kind != AkmlSql.Core.DatabaseKind.PostgreSql) return null;
-        var error = _result?.MessageDetails?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
+        var error = Tab?.Result?.MessageDetails?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
         return error == null ? null : new AiErrorInfo(error.Text, 0, error.SqlState, error.Detail, error.Hint);
     }
 
     private async Task<string> GetAiInputSqlAsync()
     {
-        if (_editor == null) return _currentText;
+        if (_editor == null) return Tab?.Text ?? string.Empty;
         var selection = await _editor.GetSelectedTextAsync();
         return string.IsNullOrWhiteSpace(selection) ? await _editor.GetTextAsync() : selection;
     }
+
+    /// <summary>The active tab's live text (its kept text before the editor exists).</summary>
+    private async Task<string> LiveTextAsync() => _editor != null ? await _editor.GetTextAsync() : Tab?.Text ?? string.Empty;
 
     /// <summary>Accept an AI result: insert it at the caret as a single undoable edit (CodeMirror
     /// Ctrl+Z restores the prior text), matching how schema-tree click-to-insert already mutates
@@ -2000,7 +2691,7 @@
         try
         {
             // Whole-document scope (selStart/selLen = 0); the op's Apply mirrors the engine.
-            _refactorPreview = await Refactoring.PreviewLightweightAsync(kind, _currentText);
+            _refactorPreview = await Refactoring.PreviewLightweightAsync(kind, await LiveTextAsync());
         }
         catch (Exception ex)
         {
@@ -2020,9 +2711,9 @@
             _refactorPreview = null;
             return;
         }
-        var after = await Refactoring.ApplyLightweightAsync(_pendingRefactorKind, _currentText);
+        var after = await Refactoring.ApplyLightweightAsync(_pendingRefactorKind, await LiveTextAsync());
         await _editor.SetTextAsync(after);
-        _currentText = after;
+        if (Tab is { } tab) tab.Text = after;
         _refactorPreview = null;
         _status = $"Applied: {_refactorTitle}.";
         Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
@@ -2053,12 +2744,12 @@
             // Pin the exact text the preview offsets are computed against, so the later apply
             // reconstructs from THIS text — not whatever the editor holds after the user may have
             // typed while the confirm dialog was open (stale offsets would corrupt the document).
-            _heavyPreviewDocText = _currentText;
+            _heavyPreviewDocText = await LiveTextAsync();
             var request = new RefactorPreviewRequest
             {
                 SessionId = string.Empty,
                 OperationType = op.OperationType,
-                DocumentText = _currentText,
+                DocumentText = _heavyPreviewDocText,
                 OriginalIdentifier = inputs.OriginalIdentifier,
                 NewName = inputs.NewName,
                 ExtractedUnitName = inputs.ExtractedUnitName,
@@ -2111,7 +2802,7 @@
             if (response is { Success: true } && !string.IsNullOrEmpty(response.UpdatedDocumentText))
             {
                 await _editor.SetTextAsync(response.UpdatedDocumentText);
-                _currentText = response.UpdatedDocumentText;
+                if (Tab is { } tab) tab.Text = response.UpdatedDocumentText;
                 _status = $"Applied: {_refactorTitle} ({response.AppliedCount} change(s)).";
             }
             else
@@ -2161,10 +2852,15 @@
         var action = _contextActions.FirstOrDefault(a => a.Id == commandId)
                      ?? Commands.Snapshot().FirstOrDefault(a => a.Id == commandId);
         if (action == null) return;
+        // Until the page has loaded its tabs and settings (its commands reach the palette then), only the view commands run;
+        // the others wait for a tab to act on. The key is claimed all the same: the browser does nothing with it.
+        if (_commandRegistration == null && action.Group != CommandGroup.View) return;
         if (!action.IsAvailable)
         {
             // Spec 042 (FR-092): a shortcut for a surface this connection kind does not have is answered, not ignored.
             if (Surfaces.ExplainRefusal(commandId)) StateHasChanged();
+            // Spec 043 (FR-013): so is any other command that says why it is off (New query at the tab limit).
+            else if (action.WhyUnavailable is { Length: > 0 } why) Notifications.Notify(why + ".", NotificationKind.Info);
             return;
         }
         await action.Run();
@@ -2195,11 +2891,17 @@
         // Spec 030 — Phase 5: drop the connection-state subscription so the disposed page isn't
         // re-rendered on a later connect/disconnect.
         SqlConn.StateChanged -= OnSqlConnStateChanged;
+        if (Bridge is { } bridge) bridge.StateChanged -= OnBridgeStateChanged;   // subscribed only once initialization got that far
+        if (ConnManager is { } connManager) connManager.Closed -= OnConnectDialogClosed;
         Layout.Changed -= OnLayoutChanged;
-        Document.Changed -= OnDocumentChanged;
-        _analyseCts?.Cancel();
+        QueryTabs.Changed -= OnTabsChanged;
+        foreach (var cts in _analyseCts.Values) cts.Cancel();
+        _analyseCts.Clear();
+        // The grids are gone with the page (leaving it asked first): no tab has pending grid edits any more, so the browser
+        // stops asking before a reload.
+        foreach (var t in QueryTabs.Tabs) t.GridHasPendingEdits = false;
         _refreshFindingsCts?.Cancel();
-        _analyseCts?.Dispose();
+        // Spec 043: the tabs outlive this page (History opens queries in them); their records are written now.
         await SessionStore.FlushAsync();
         await Diagnostics.FlushAsync();
         if (_uiModule != null)

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using AkmlSql.PostgreSql.Reference;
 
 namespace AkmlSql.PostgreSql.ReferenceGen;
 
@@ -55,6 +56,9 @@ public sealed class TagSnapshot
     public IReadOnlyList<DocType> DocTypes { get; init; } = Array.Empty<DocType>();
     public IReadOnlyList<SqlStateRecord> SqlStates { get; init; } = Array.Empty<SqlStateRecord>();
 
+    /// <summary>Every section id in <c>syntax.sgml</c>, mapped to the <c>sect1</c> (the manual page) that holds it.</summary>
+    public IReadOnlyDictionary<string, string> SyntaxSectionPages { get; init; } = new Dictionary<string, string>();
+
     public static TagSnapshot Read(ISourceTree tree)
     {
         var commands = new List<(RefPage, string)>();
@@ -79,6 +83,7 @@ public sealed class TagSnapshot
             DocFunctions = FuncSectionIndex.Read(funcSgml),
             DocTypes = DatatypeSectionIndex.Read(tree.ReadText("doc/src/sgml/datatype.sgml") ?? string.Empty),
             SqlStates = ErrcodesReader.Read(tree.ReadText("src/backend/utils/errcodes.txt") ?? string.Empty),
+            SyntaxSectionPages = SectionPageIndex.Read(tree.ReadText("doc/src/sgml/syntax.sgml") ?? string.Empty),
         };
     }
 
@@ -181,7 +186,9 @@ public static partial class Generator
     /// <summary>14 for <c>REL_14_STABLE</c>; 0 when the tag has no number.</summary>
     public static int MajorOf(string tag) => TagMajor().Match(tag) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
-    public static string Url(int docMajor, string sectionId) => $"https://www.postgresql.org/docs/{docMajor}/{sectionId}.html";
+    /// <summary>The manual link for a page, or for a section nested on it (see <see cref="PgManual"/>).</summary>
+    public static string Url(int docMajor, string page, string? section = null) =>
+        PgManual.Url(docMajor.ToString(System.Globalization.CultureInfo.InvariantCulture), page, section);
 
     /// <summary>
     /// The catalogs name types by their internal names (<c>int4</c>, <c>float8</c>, <c>timestamptz</c>, <c>_text</c> for an array);
@@ -221,7 +228,7 @@ public static partial class Generator
         BuildFunctions(doc, docMajor, keysByMajor, entries, omissions, coverage);
         BuildOperators(doc, docMajor, keysByMajor, entries, omissions, coverage);
         BuildSqlStates(doc, docMajor, keysByMajor, entries, coverage);
-        BuildLexical(docMajor, snapshots.Keys.Min(), entries);
+        BuildLexical(doc, docMajor, snapshots.Keys.Min(), entries);
 
         var order = EntryKinds.Order.ToList();
         var sorted = entries
@@ -589,10 +596,15 @@ public static partial class Generator
 
     // ── Lexical rules ───────────────────────────────────────────────────────────────────────────
 
-    private static void BuildLexical(int docMajor, int oldestMajor, List<ReferenceEntry> entries)
+    private static void BuildLexical(TagSnapshot doc, int docMajor, int oldestMajor, List<ReferenceEntry> entries)
     {
         foreach (var (name, aliases, summary, sectionId) in LexicalEntries.All)
         {
+            // The page comes from syntax.sgml, not from a list kept by hand: a nested section has no page of its own, and a
+            // link built from its id alone is a 404. A section the manual does not have stops the run.
+            if (!doc.SyntaxSectionPages.TryGetValue(sectionId, out var page))
+                throw new InvalidDataException("Lexical entry '" + name + "': section '" + sectionId + "' is not in doc/src/sgml/syntax.sgml.");
+
             entries.Add(new ReferenceEntry
             {
                 Kind = EntryKinds.Lexical,
@@ -602,7 +614,7 @@ public static partial class Generator
                 Summary = summary,
                 MinVersion = oldestMajor,
                 Source = new ReferenceSource { File = "doc/src/sgml/syntax.sgml", SectionId = sectionId },
-                Url = Url(docMajor, sectionId),
+                Url = Url(docMajor, page, sectionId),
             });
         }
     }

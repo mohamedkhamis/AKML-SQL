@@ -1,3 +1,4 @@
+using AkmlSql.Site.Components;
 using AkmlSql.Site.Components.Pages;
 using AkmlSql.Site.Releases;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,189 +7,144 @@ using Xunit;
 
 namespace AkmlSql.Site.Tests.Components;
 
-/// <summary>
-/// Site redesign: bUnit tests for the Home landing page — hero with dual CTA, the framed
-/// product screenshot (explicit dimensions, no CLS), and icon-bearing feature cards.
-/// </summary>
+/// <summary>Spec 044: approved Product Studio content, honest support and progressive image tour.</summary>
 public sealed class HomePageTests
 {
-    /// <summary>
-    /// The hero and the closing CTA name the current version, so the page needs the manifest.
-    /// A real manifest rather than a stub: the page must render correctly for BOTH a populated feed
-    /// and the unavailable fallback, and the individual tests below choose which.
-    /// </summary>
     private static BunitContext NewCtx(bool withRelease = true)
     {
         var ctx = new BunitContext();
         ctx.Services.AddSingleton(withRelease
-            ? ReleasesManifest.Create(
-                [
-                    new Release
-                    {
-                        Version = "1.26.0912.2043",
-                        ReleasedAt = new DateOnly(2026, 9, 13),
-                        SupportedHosts = ["SSMS 22"],
-                        DownloadUrl = "downloads/AKMLSQLSetup-1.26.0912.2043.exe",
-                        Sha256Hash = new string('a', 64),
-                    },
-                ],
-                product: "AKML SQL")
+            ? ReleasesManifest.Create([
+                new Release
+                {
+                    Version = "1.26.0912.2043",
+                    ReleasedAt = new DateOnly(2026, 9, 13),
+                    SupportedHosts = ["SSMS 22"],
+                    DownloadUrl = "downloads/AKMLSQLSetup-1.26.0912.2043.exe",
+                    Sha256Hash = new string('a', 64),
+                }], product: "AKML SQL")
             : ReleasesManifest.Unavailable);
-
         return ctx;
     }
 
     [Fact]
-    public void Page_AnnouncesSsms22Only_AndNoLongerOffersVisualStudio()
+    public void Hero_ExplainsValue_AndOffersDownloadAndProductTour()
     {
-        // Visual Studio 2026 support was removed; the home page says so, and nothing else on it
-        // still presents Visual Studio as a supported host.
         using var ctx = NewCtx();
-
         var cut = ctx.Render<Home>();
+        Assert.Contains("Good SQL.", cut.Find("h1").TextContent);
+        Assert.Contains("Less friction.", cut.Find("h1").TextContent);
+        Assert.NotNull(cut.Find(".hero a.btn-primary[href='/download']"));
+        Assert.NotNull(cut.Find(".hero a[href='#product-tour']"));
+        var tagline = cut.Find(".hero-tagline").TextContent;
+        Assert.DoesNotContain("Redgate", tagline, StringComparison.OrdinalIgnoreCase);
+        Assert.True(tagline.Split((string[]?)null, StringSplitOptions.RemoveEmptyEntries).Length <= 30);
+        Assert.Contains("MIT license", cut.Find(".hero-tagline-sub").TextContent);
+    }
 
-        var notice = cut.Find(".host-notice");
-        Assert.Contains("SQL Server Management Studio 22 only", notice.TextContent);
-        Assert.Contains("Visual Studio 2026 is no", notice.TextContent);
-
-        notice.Remove();
-        Assert.DoesNotContain("Visual Studio", cut.Find(".hero").TextContent);
-        Assert.DoesNotContain("Visual Studio", cut.Find(".page-body").TextContent);
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Hero_UsesManifestVersion_AndSurvivesUnavailableManifest(bool withRelease)
+    {
+        using var ctx = NewCtx(withRelease);
+        var cut = ctx.Render<Home>();
+        var cta = cut.Find(".hero a.btn-primary[href='/download']");
+        Assert.Equal(withRelease, cta.TextContent.Contains("1.26.0912.2043", StringComparison.Ordinal));
+        Assert.Equal(withRelease ? 1 : 0, cut.FindAll(".hero .btn-sub").Count);
+        Assert.Contains("MIT license", cut.Markup);
     }
 
     [Fact]
-    public void Hero_RendersPrimaryAndSecondaryCtas()
+    public void Hero_ImageReservesSpace_AndPrioritizesOnlyTheHero()
     {
         using var ctx = NewCtx();
-
         var cut = ctx.Render<Home>();
-
-        var primary = cut.Find(".hero a.btn-primary[href='/download']");
-        Assert.False(string.IsNullOrWhiteSpace(primary.TextContent));
-        var secondary = cut.Find(".hero a.btn-secondary[href='/docs']");
-        Assert.False(string.IsNullOrWhiteSpace(secondary.TextContent));
-    }
-
-    [Fact]
-    public void Hero_RendersScreenshot_WithExplicitDimensions()
-    {
-        // width/height attributes let the browser reserve the aspect ratio before the
-        // image loads — no layout shift (contracts/site-routes.md CLS clause).
-        using var ctx = NewCtx();
-
-        var cut = ctx.Render<Home>();
-
-        var images = cut.FindAll(".hero-visual .screenshot-frame img");
-        Assert.Equal(2, images.Count);
         foreach (var theme in new[] { "dark", "light" })
         {
-            var link = cut.Find($".hero-visual .screenshot-{theme}");
-            var img = link.QuerySelector("img")!;
-            Assert.Equal("1046", img.GetAttribute("width"));
-            Assert.Equal("673", img.GetAttribute("height"));
-            Assert.Equal($"img/screenshots/{theme}/02-format-styles-crop.png", img.GetAttribute("src"));
-            Assert.Equal(img.GetAttribute("src"), link.GetAttribute("href"));
-            Assert.Equal("high", img.GetAttribute("fetchpriority"));
-            Assert.Contains("SSMS 22", img.GetAttribute("alt"));
+            var link = cut.Find($".hero .screenshot-{theme}");
+            var image = link.QuerySelector("img")!;
+            Assert.Equal("1920", image.GetAttribute("width"));
+            Assert.Equal("889", image.GetAttribute("height"));
+            Assert.Equal("high", image.GetAttribute("fetchpriority"));
+            Assert.Equal(image.GetAttribute("src"), link.GetAttribute("href"));
+            Assert.Contains("Northwind", image.GetAttribute("alt"));
         }
+        Assert.All(cut.FindAll(".studio-tour img"), image => Assert.Equal("lazy", image.GetAttribute("loading")));
     }
 
     [Fact]
-    public void FeatureCards_RenderStrokeIcons()
+    public void DatabaseSupport_DistinguishesPostgresBrowserFromSsms()
     {
         using var ctx = NewCtx();
-
         var cut = ctx.Render<Home>();
-
-        var icons = cut.FindAll(".feature-card .feature-card-icon svg");
-        Assert.Equal(7, icons.Count);
-        // Every icon is decorative (the card heading names the feature).
-        Assert.All(icons, svg => Assert.Equal("true", svg.GetAttribute("aria-hidden")));
+        var sql = cut.FindAll(".database").Single(el => el.QuerySelector("h3")!.TextContent == "Microsoft SQL Server");
+        var pg = cut.FindAll(".database").Single(el => el.QuerySelector("h3")!.TextContent == "PostgreSQL");
+        Assert.Contains("SSMS 22 + BROWSER", sql.TextContent);
+        Assert.Contains("BROWSER + AKML ENGINE", pg.TextContent);
+        Assert.Contains("PostgreSQL requires an AKML engine with PostgreSQL enabled", cut.Find("#support").TextContent);
+        Assert.Contains("SSMS extension targets SQL Server", cut.Find("#support").TextContent);
+        Assert.DoesNotContain("Visual Studio", cut.Find(".hero").TextContent);
     }
 
     [Fact]
-    public void Hero_LeadsWithValue_NotACompetitorComparison()
+    public void SetupPaths_ResolveToDownloadAndDedicatedBrowserGuide()
     {
         using var ctx = NewCtx();
-
         var cut = ctx.Render<Home>();
-        var tagline = cut.Find(".hero-tagline").TextContent;
-
-        // The old tagline listed seven features in one sentence and ended on "replicating and
-        // extending the Redgate SQL Prompt feature set" -- defining the product by someone else's,
-        // in the last thing anyone reads. The comparison now has its own section.
-        Assert.DoesNotContain("Redgate", tagline, StringComparison.OrdinalIgnoreCase);
-
-        var words = tagline.Split((string[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        Assert.True(words <= 30, $"Hero tagline is {words} words: \"{tagline.Trim()}\"");
+        Assert.NotNull(cut.Find("#start a[href='/download']"));
+        Assert.NotNull(cut.Find("#start a[href='/docs/topics/browser-setup']"));
+        Assert.Contains("connected AKML engine", cut.Find("#start").TextContent);
     }
 
     [Fact]
-    public void Hero_StatesTheFreeOpenSourceFact()
+    public void Tour_HasNativeImageLinks_AndAllExamplesVisibleBeforeJavascript()
     {
         using var ctx = NewCtx();
-
         var cut = ctx.Render<Home>();
-
-        // The strongest thing this project can say against a paid alternative, so it belongs in the
-        // hero rather than only in the footer.
-        Assert.Contains("MIT license", cut.Find(".hero-tagline-sub").TextContent, StringComparison.OrdinalIgnoreCase);
+        Assert.True(cut.Find(".tour-controls").HasAttribute("hidden"));
+        var buttons = cut.FindAll(".studio-tour-button");
+        Assert.Equal(5, buttons.Count);
+        foreach (var button in buttons)
+        {
+            var panel = cut.Find("#" + button.GetAttribute("aria-controls"));
+            Assert.False(panel.HasAttribute("hidden"));
+            Assert.Equal("button", button.GetAttribute("type"));
+            foreach (var link in panel.QuerySelectorAll(".screenshot-variant"))
+            {
+                var image = link.QuerySelector("img")!;
+                Assert.Equal(image.GetAttribute("src"), link.GetAttribute("href"));
+                Assert.Equal("false", link.GetAttribute("data-enhance-nav"));
+                Assert.False(string.IsNullOrWhiteSpace(image.GetAttribute("alt")));
+            }
+        }
+        Assert.Contains("demo values", cut.Find("#tour-postgres").TextContent);
+        Assert.Contains("not executed", cut.Find("#tour-editor").TextContent);
     }
 
     [Fact]
-    public void Hero_PrimaryCta_NamesTheCurrentVersion()
+    public void BenefitsAndFaq_ExplainPracticalUse_WithoutBlanketAiClaims()
     {
         using var ctx = NewCtx();
-
         var cut = ctx.Render<Home>();
-
-        Assert.Contains("1.26.0912.2043", cut.Find(".hero a.btn-primary").TextContent, StringComparison.Ordinal);
+        var benefits = cut.Find("#why").TextContent;
+        Assert.Contains("completion", benefits);
+        Assert.Contains("analysis", benefits);
+        Assert.Contains("history", benefits);
+        Assert.Equal(4, cut.FindAll(".faq details summary").Count);
+        Assert.Contains("Provider setup and charges may apply", cut.Find(".ai-band").TextContent);
+        Assert.DoesNotContain("everything it stores stays", cut.Markup);
+        Assert.DoesNotContain("replicates the SQL Prompt feature set", cut.Markup);
     }
 
     [Fact]
-    public void WithNoRelease_TheHeroStillRenders_WithoutAVersion()
-    {
-        using var ctx = NewCtx(withRelease: false);
-
-        var cut = ctx.Render<Home>();
-
-        // contracts/releases-json.md: a missing or broken manifest must never produce an error page.
-        // The home page now reads the manifest too, so it inherits that obligation.
-        Assert.NotNull(cut.Find(".hero a.btn-primary[href='/download']"));
-        Assert.Empty(cut.FindAll(".hero .btn-sub"));
-        Assert.Contains("MIT license", cut.Markup, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void ProofStrip_CarriesVerifiableNumbers_ThatLinkToTheDocs()
+    public void Screenshot_ExplicitPaths_DoNotChangeLegacyNameConvention()
     {
         using var ctx = NewCtx();
-
-        var cut = ctx.Render<Home>();
-
-        // "Comprehensive" and "powerful" are what every tool's home page says. These are checkable,
-        // which is the point of linking them.
-        var strip = cut.Find(".proof-strip").TextContent;
-        Assert.Contains("130+", strip, StringComparison.Ordinal);
-        Assert.Contains("7-stage", strip, StringComparison.Ordinal);
-        Assert.Contains("MIT", strip, StringComparison.Ordinal);
-
-        Assert.NotNull(cut.Find(".proof-strip a[href='/docs/analysis-rules']"));
-        Assert.NotNull(cut.Find(".proof-strip a[href='/docs/formatting']"));
-    }
-
-    [Fact]
-    public void TheComparisonIsMadeProperly_InItsOwnSection()
-    {
-        using var ctx = NewCtx();
-
-        var cut = ctx.Render<Home>();
-        var comparison = cut.Find(".comparison").TextContent;
-
-        // Moved out of the hero's trailing clause: here it can say what is the same, what is
-        // different, and why that matters.
-        Assert.Contains("SQL Prompt", comparison, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("MIT", comparison, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("out-of-process", comparison, StringComparison.OrdinalIgnoreCase);
+        var cut = ctx.Render<ProductScreenshot>(p => p.Add(x => x.Name, "02-format-styles")
+            .Add(x => x.Width, 1046).Add(x => x.Height, 673).Add(x => x.Alt, "Styles")
+            .Add(x => x.Caption, "Preview").Add(x => x.LightPath, "img/custom.png"));
+        Assert.Equal("img/custom.png", cut.Find(".screenshot-light").GetAttribute("href"));
+        Assert.Equal("img/screenshots/dark/02-format-styles-crop.png", cut.Find(".screenshot-dark").GetAttribute("href"));
     }
 }

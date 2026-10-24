@@ -46,6 +46,8 @@ public sealed class InMemoryIndexedDbAdapter : IIndexedDbAdapter
         return Task.CompletedTask;
     }
 
+    public Task<bool> AddAsync(string store, string key, string valueJson) => Task.FromResult(Bucket(store).TryAdd(key, valueJson));
+
     /// <summary>Test helper: pre-load a record without going through SetAsync.</summary>
     public void Seed(string store, string key, string valueJson) =>
         Bucket(store)[key] = valueJson;

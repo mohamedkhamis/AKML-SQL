@@ -1607,6 +1607,10 @@ html.js .docs-search {
     /* Wide tables scroll inside their own container instead of clipping (mobile). */
     max-width: 100%;
     overflow-x: auto;
+    /* The containing block for absolutely positioned content such as a .visually-hidden column
+       label: without it the label is placed against the page, outside this scroller's clip, and
+       a release table wider than a 320px screen scrolled the whole page sideways. */
+    position: relative;
     margin-block: var(--akml-scalar-spacing-m);
 }
 
@@ -1625,6 +1629,12 @@ html.js .docs-search {
 .doc-body th {
     background-color: var(--akml-surface-panel);
 }
+
+/* Pipe-table column alignment: MarkdownRenderer turns Markdig's inline style (blocked by the
+   CSP) into these classes. */
+.doc-body .align-left { text-align: start; }
+.doc-body .align-center { text-align: center; }
+.doc-body .align-right { text-align: end; }
 
 /* ColorCode server-side highlighting (HtmlFormatterType.Css classes) on syntax tokens.
 

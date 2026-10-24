@@ -71,7 +71,7 @@ public sealed class HistoryFullSqlTests : BunitContext
         Services.AddSingleton<IDialogService>(new FakeDialogService());
         Services.AddSingleton<INotificationService>(new FakeNotificationService());
         Services.AddSingleton<IFileDownloader>(new NoDownload());
-        Services.AddSingleton<EditorDocumentFlow>();
+        Services.AddSingleton<IQueryTabs, QueryTabs>();   // spec 043: History opens queries in tabs
     }
 
     private IRenderedComponent<HistoryPage> OpenEntry()

@@ -315,6 +315,9 @@ namespace AkmlSql.Engine.Transports
             // as PairingService's rate-limit bucket key. The scope restores the previous
             // value on connection end so values never leak across connections.
             using (BridgeSourceIp.Set(context.Request.RemoteEndPoint?.Address))
+            // Spec 043 follow-up: whose sessions a copy may read — this socket, then the page an accepted handshake names
+            // (BridgeConnection.Adopt), so the page's tabs keep their passwords across a reconnect.
+            using (BridgeConnection.Set(Guid.NewGuid().ToString("N")))
             {
                 await ServeAsync(ws, ct).ConfigureAwait(false);
             }
@@ -331,6 +334,14 @@ namespace AkmlSql.Engine.Transports
             // not an advisory message an attacker can skip. Loopback / named-pipe deployments leave
             // RequirePairingToken false, so the gate opens immediately and their behaviour is unchanged.
             var authenticated = !_options.RequirePairingToken;
+
+            // Spec 043 (research R3, contracts/ipc.md §2): one browser keeps one socket for every query tab, so a request is
+            // answered off this read loop and a long query in one tab no longer holds up the others' completion, execute or
+            // cancel. Every write goes through this lock (a WebSocket allows one send at a time); replies may leave out of
+            // order, and the browser matches them by request id. Notifications (request id 0: DocumentChanged,
+            // ConnectionChanged) and the handshake stay on the loop, in arrival order, so anything read after a notification
+            // sees it applied. Two runs on one session still queue on that session's connection gate.
+            var sendLock = new SemaphoreSlim(1, 1);
 
             while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
@@ -359,8 +370,9 @@ namespace AkmlSql.Engine.Transports
                         request.MessageType);
                     try
                     {
-                        await WriteMessageAsync(
+                        await SendLockedAsync(
                             socket,
+                            sendLock,
                             RpcResponseFactory.CreateErrorResponse(
                                 "Authentication required: complete the pairing handshake before sending requests.",
                                 request.RequestId),
@@ -370,8 +382,19 @@ namespace AkmlSql.Engine.Transports
                     continue;
                 }
 
-                RpcMessage? response = null;
                 var handler = RequestReceived;
+
+                // A request on an authenticated connection: answered on the thread pool (R3). The loop reads the next frame
+                // at once; the handler keeps the transport's lifetime token, as it did on the loop, so a browser that reloads
+                // mid-query does not cancel the statement (its late reply to the closed socket is dropped).
+                if (authenticated && request.RequestId != 0 && request.MessageType != MessageTypes.HandshakeRequest)
+                {
+                    var queued = request;
+                    _ = Task.Run(() => AnswerAsync(socket, sendLock, handler, queued, ct));
+                    continue;
+                }
+
+                RpcMessage? response = null;
                 if (handler != null)
                 {
                     try
@@ -402,7 +425,7 @@ namespace AkmlSql.Engine.Transports
                 {
                     try
                     {
-                        await WriteMessageAsync(socket, response, ct).ConfigureAwait(false);
+                        await SendLockedAsync(socket, sendLock, response, ct).ConfigureAwait(false);
                     }
                     catch (WebSocketException) { break; }
                 }
@@ -416,6 +439,60 @@ namespace AkmlSql.Engine.Transports
                         .ConfigureAwait(false);
                 }
                 catch { /* best effort */ }
+            }
+        }
+
+        /// <summary>
+        /// Spec 043 (R3): one request answered off the read loop. A failing handler still answers its own request id with an
+        /// error envelope; a socket that closed while the handler ran just drops the reply.
+        /// </summary>
+        private static async Task AnswerAsync(
+            WebSocket socket,
+            SemaphoreSlim sendLock,
+            Func<RpcMessage, CancellationToken, Task<RpcMessage?>>? handler,
+            RpcMessage request,
+            CancellationToken ct)
+        {
+            if (handler == null) return;
+            RpcMessage? response;
+            try
+            {
+                response = await handler(request, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "WebSocketTransport: handler failed for MessageType={Type}", request.MessageType);
+                response = RpcResponseFactory.CreateErrorResponse(ex.Message, request.RequestId);
+            }
+            if (response == null) return;
+
+            try
+            {
+                await SendLockedAsync(socket, sendLock, response, ct).ConfigureAwait(false);
+            }
+            catch (WebSocketException) { /* the browser went away while this request ran */ }
+            catch (ObjectDisposedException) { /* the socket was torn down */ }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { /* the transport is stopping */ }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "WebSocketTransport: could not write the reply to MessageType={Type} RequestId={Id}", request.MessageType, request.RequestId);
+            }
+        }
+
+        /// <summary>Spec 043 (R3): a WebSocket allows one send at a time; every write of a connection goes through its lock.</summary>
+        private static async Task SendLockedAsync(WebSocket socket, SemaphoreSlim sendLock, RpcMessage message, CancellationToken ct)
+        {
+            await sendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (socket.State != WebSocketState.Open && socket.State != WebSocketState.CloseReceived)
+                    throw new WebSocketException(WebSocketError.InvalidState, "The socket is no longer open.");
+                await WriteMessageAsync(socket, message, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                sendLock.Release();
             }
         }
 

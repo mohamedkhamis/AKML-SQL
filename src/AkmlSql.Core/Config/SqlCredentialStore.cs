@@ -26,6 +26,15 @@ namespace AkmlSql.Core.Config
     /// <c>%AppData%\AKML SQL\sql-credentials.json</c> via an atomic temp+rename write
     /// (mirrors <see cref="ConfigManager"/>). All public methods are guarded by a process-wide
     /// lock to make read-modify-write atomic.
+    ///
+    /// <para>
+    /// Spec 043 follow-up (review, round 3): a store that cannot be read (the file is locked, access
+    /// is denied, the disk fails) is never written. The entries are still in the file, only unreadable
+    /// for now: writing a list built from nothing dropped every other credential (the SSMS extension's
+    /// too). Lookups answer "not found", and <see cref="Save(string, string, string, string[])"/> and
+    /// <see cref="Remove"/> write nothing and return false. A file that is not valid JSON still reads as
+    /// empty, and the next save replaces it.
+    /// </para>
     /// </summary>
     public static class SqlCredentialStore
     {
@@ -64,9 +73,9 @@ namespace AkmlSql.Core.Config
             }
         }
 
-        /// <summary>Decrypts the password for (server, login), or returns false if none is stored.
-        /// A single entry whose blob fails to decrypt (e.g. roamed profile) is removed and treated as
-        /// absent — it never blocks the other entries.</summary>
+        /// <summary>Decrypts the password for (server, login), or returns false if none is stored
+        /// (or the store cannot be read). A single entry whose blob fails to decrypt (e.g. roamed
+        /// profile) is removed and treated as absent — it never blocks the other entries.</summary>
         public static bool TryGet(string server, string login, out string password)
         {
             password = string.Empty;
@@ -74,7 +83,7 @@ namespace AkmlSql.Core.Config
 
             lock (_gate)
             {
-                var list = LoadList();
+                if (!TryLoadList(out var list)) return false;
                 var entry = list.FirstOrDefault(e =>
                     string.Equals(e.Server, server, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(e.Login, login, StringComparison.OrdinalIgnoreCase));
@@ -96,85 +105,137 @@ namespace AkmlSql.Core.Config
             }
         }
 
-        /// <summary>True if a credential is stored for (server, login) (without decrypting).</summary>
+        /// <summary>True if a credential is stored for (server, login) (without decrypting). False when
+        /// the store cannot be read.</summary>
         public static bool Has(string server, string login)
         {
             if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(login)) return false;
             lock (_gate)
             {
-                return LoadList().Any(e =>
+                return TryLoadList(out var list) && list.Any(e =>
                     string.Equals(e.Server, server, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(e.Login, login, StringComparison.OrdinalIgnoreCase));
             }
         }
 
-        /// <summary>Returns the (server, login) pairs that have a stored credential, for a management UI.
-        /// Passwords are NEVER returned — only the keys.</summary>
+        /// <summary>Returns the (server, login) pairs that have a stored credential, for a management UI
+        /// (none when the store cannot be read). Passwords are NEVER returned — only the keys.</summary>
         public static List<(string Server, string Login)> List()
         {
             lock (_gate)
             {
                 var result = new List<(string, string)>();
-                foreach (var e in LoadList())
+                TryLoadList(out var list);
+                foreach (var e in list)
                     result.Add((e.Server, e.Login));
                 return result;
             }
         }
 
-        /// <summary>Encrypts and stores the password for (server, login), replacing any existing entry.</summary>
-        public static void Save(string server, string login, string password)
+        /// <summary>Encrypts and stores the password for (server, login), replacing any existing entry. True when the store
+        /// file was written; false when it could not be read or written (logged) — the caller must not report the password as
+        /// kept, and an unreadable store is left as it is. Encryption failures (DPAPI) are thrown, as before.</summary>
+        public static bool Save(string server, string login, string password) =>
+            Save(server, login, password, Array.Empty<string>());
+
+        /// <summary>
+        /// Spec 043 follow-up (review): as <see cref="Save(string, string, string)"/>, and removes the entries of the same login
+        /// under <paramref name="alsoRemoveServers"/> in the same write, under one lock — so two saves for the same login under
+        /// different keys, each replacing the other, cannot both run their removal after the other's save and leave nothing.
+        /// True when the store file was written (the new entry is kept and the others are gone); false when it could not be
+        /// read or written (logged): the store is then as it was.
+        /// </summary>
+        public static bool Save(string server, string login, string password, params string[] alsoRemoveServers)
         {
-            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(login)) return;
+            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(login)) return false;
+            var replaced = alsoRemoveServers ?? Array.Empty<string>();
             lock (_gate)
             {
-                var list = LoadList();
+                // Spec 043 follow-up (review, round 3): a list that could not be read is not the store's content; writing it
+                // with only this entry would drop every other credential.
+                if (!TryLoadList(out var list)) return false;
                 list.RemoveAll(e =>
-                    string.Equals(e.Server, server, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(e.Login, login, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(e.Login, login, StringComparison.OrdinalIgnoreCase) &&
+                    (string.Equals(e.Server, server, StringComparison.OrdinalIgnoreCase) ||
+                     replaced.Any(r => !string.IsNullOrEmpty(r) && string.Equals(e.Server, r, StringComparison.OrdinalIgnoreCase))));
                 list.Add(new SqlCredentialEntry
                 {
                     Server = server,
                     Login = login,
                     EncryptedPassword = Encrypt(password)
                 });
-                SaveList(list);
+                return SaveList(list);
             }
         }
 
-        /// <summary>Removes the stored credential for (server, login), if any.</summary>
-        public static void Remove(string server, string login)
+        /// <summary>Removes the stored credential for (server, login), if any. True when there was nothing to remove or the
+        /// removal was written; false when the store file could not be read or written (logged) — the entry may then still be
+        /// there, and the caller must not report it as forgotten. (Spec 043 follow-up, review; the SSMS callers ignore the
+        /// result.)</summary>
+        public static bool Remove(string server, string login)
         {
-            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(login)) return;
+            if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(login)) return true;
             lock (_gate)
             {
-                var list = LoadList();
+                // Spec 043 follow-up (review, round 3): an unreadable store is not "nothing to remove".
+                if (!TryLoadList(out var list)) return false;
                 int removed = list.RemoveAll(e =>
                     string.Equals(e.Server, server, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(e.Login, login, StringComparison.OrdinalIgnoreCase));
-                if (removed > 0) SaveList(list);
+                return removed == 0 || SaveList(list);
             }
         }
 
         // --- internals (callers hold _gate) ---
 
-        private static List<SqlCredentialEntry> LoadList()
+        /// <summary>
+        /// Spec 043 follow-up (review, round 3): reads the store into <paramref name="list"/>. A missing file is an empty store.
+        /// A file that is not valid JSON reads as empty too (logged): nothing in it can be read again, and the next write
+        /// replaces it, which heals it. Any other failure to read it (a sharing violation, a denied access, a disk error) returns
+        /// false with an empty list: the entries are still in the file, so the caller answers "not found" and never writes.
+        /// </summary>
+        private static bool TryLoadList(out List<SqlCredentialEntry> list)
         {
+            list = new List<SqlCredentialEntry>();
+            string json;
             try
             {
                 var path = FilePath;
-                if (!File.Exists(path)) return new List<SqlCredentialEntry>();
-                var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<List<SqlCredentialEntry>>(json, SerializerOptions)
-                       ?? new List<SqlCredentialEntry>();
+                if (!File.Exists(path)) return true;
+                json = File.ReadAllText(path);
+            }
+            catch (Exception ex) when (ex is FileNotFoundException || ex is DirectoryNotFoundException)
+            {
+                return true;   // removed between the check and the read: an empty store
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "SqlCredentialStore: failed to read store; treating as empty");
-                return new List<SqlCredentialEntry>();
+                Log.Warning(ex, "SqlCredentialStore: could not read the store; nothing is written until it can be read");
+                return false;
+            }
+
+            try
+            {
+                list = JsonSerializer.Deserialize<List<SqlCredentialEntry>>(json, SerializerOptions)
+                       ?? new List<SqlCredentialEntry>();
+                list.RemoveAll(e => e == null);   // "[null]" is valid JSON, not an entry
+                return true;
+            }
+            catch (JsonException ex)
+            {
+                Log.Warning(ex, "SqlCredentialStore: the store is not valid JSON; treating it as empty (the next save replaces it)");
+                list = new List<SqlCredentialEntry>();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "SqlCredentialStore: could not read the store; nothing is written until it can be read");
+                list = new List<SqlCredentialEntry>();
+                return false;
             }
         }
 
-        private static void SaveList(List<SqlCredentialEntry> list)
+        private static bool SaveList(List<SqlCredentialEntry> list)
         {
             try
             {
@@ -191,10 +252,12 @@ namespace AkmlSql.Core.Config
 #else
                 File.Move(tempPath, path, overwrite: true);
 #endif
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "SqlCredentialStore: failed to save store");
+                return false;
             }
         }
 

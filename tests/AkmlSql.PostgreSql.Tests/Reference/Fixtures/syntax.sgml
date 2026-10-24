@@ -1,0 +1,69 @@
+<!-- doc/src/sgml/syntax.sgml (PostgreSQL 18), reduced to its section structure: which sect2/sect3 sits on which sect1 page. -->
+<chapter id="sql-syntax">
+<sect1 id="sql-syntax-lexical">
+  <sect2 id="sql-syntax-identifiers">
+  </sect2>
+  <sect2 id="sql-syntax-constants">
+    <sect3 id="sql-syntax-strings">
+    </sect3>
+    <sect3 id="sql-syntax-strings-escape">
+    </sect3>
+    <sect3 id="sql-syntax-strings-uescape">
+    </sect3>
+    <sect3 id="sql-syntax-dollar-quoting">
+    </sect3>
+    <sect3 id="sql-syntax-bit-strings">
+    </sect3>
+    <sect3 id="sql-syntax-constants-numeric">
+    </sect3>
+    <sect3 id="sql-syntax-constants-generic">
+    </sect3>
+  </sect2>
+  <sect2 id="sql-syntax-operators">
+  </sect2>
+  <sect2 id="sql-syntax-special-chars">
+  </sect2>
+  <sect2 id="sql-syntax-comments">
+  </sect2>
+  <sect2 id="sql-precedence">
+  </sect2>
+</sect1>
+<sect1 id="sql-expressions">
+  <sect2 id="sql-expressions-column-refs">
+  </sect2>
+  <sect2 id="sql-expressions-parameters-positional">
+  </sect2>
+  <sect2 id="sql-expressions-subscripts">
+  </sect2>
+  <sect2 id="field-selection">
+  </sect2>
+  <sect2 id="sql-expressions-operator-calls">
+  </sect2>
+  <sect2 id="sql-expressions-function-calls">
+  </sect2>
+  <sect2 id="syntax-aggregates">
+  </sect2>
+  <sect2 id="syntax-window-functions">
+  </sect2>
+  <sect2 id="sql-syntax-type-casts">
+  </sect2>
+  <sect2 id="sql-syntax-collate-exprs">
+  </sect2>
+  <sect2 id="sql-syntax-scalar-subqueries">
+  </sect2>
+  <sect2 id="sql-syntax-array-constructors">
+  </sect2>
+  <sect2 id="sql-syntax-row-constructors">
+  </sect2>
+  <sect2 id="syntax-express-eval">
+  </sect2>
+</sect1>
+<sect1 id="sql-syntax-calling-funcs">
+  <sect2 id="sql-syntax-calling-funcs-positional">
+  </sect2>
+  <sect2 id="sql-syntax-calling-funcs-named">
+  </sect2>
+  <sect2 id="sql-syntax-calling-funcs-mixed">
+  </sect2>
+</sect1>
+</chapter>

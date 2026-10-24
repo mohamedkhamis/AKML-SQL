@@ -2,7 +2,8 @@ namespace AkmlSql.PostgreSql.ReferenceGen;
 
 /// <summary>
 /// The lexical rules of the language (FR-050), written by hand because they are prose in <c>syntax.sgml</c>, not a table or a
-/// catalog. Each carries the section it summarises, so the link goes to the page that explains it.
+/// catalog. Each carries the section it summarises; the generator finds that section's page in syntax.sgml, so the link goes
+/// to the page that explains it, or to the section's anchor on that page.
 /// </summary>
 public static class LexicalEntries
 {

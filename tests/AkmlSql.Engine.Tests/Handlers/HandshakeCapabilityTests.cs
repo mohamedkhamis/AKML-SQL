@@ -68,6 +68,28 @@ public sealed class HandshakeCapabilityTests
     }
 
     [Fact]
+    public async Task The_v2_credential_and_copy_ids_are_advertised_next_to_the_v1_ids()
+    {
+        // Spec 043 follow-up (review round 2): the released 1.26.1022.0927 and 1.26.1022.1042 engines advertise the v1 ids but
+        // send no TestSqlConnectionResponse.Remembered, ignore ListDatabasesRequest key 3 and HandshakeRequest.ClientInstanceId.
+        // The web client gates those on the v2 ids, and older web clients still look for v1 — so both are advertised, with or
+        // without PostgreSQL.
+        var settings = new AppSettings();
+        settings.PostgreSql.Enabled = false;
+        foreach (var context in new[] { Context(new AppSettings()), Context(settings) })
+        {
+            var response = await new HandshakeHandler().HandleAsync(Request(), context, CancellationToken.None);
+
+            Assert.Contains("credentials.sqlserver.v1", response.EngineCapabilities);
+            Assert.Contains("credentials.sqlserver.v2", response.EngineCapabilities);
+            Assert.Contains("session.copy.v1", response.EngineCapabilities);
+            Assert.Contains("session.copy.v2", response.EngineCapabilities);
+        }
+        Assert.Equal("credentials.sqlserver.v2", Capabilities.CredentialsSqlServerV2);
+        Assert.Equal("session.copy.v2", Capabilities.SessionCopyV2);
+    }
+
+    [Fact]
     public void Capabilities_For_null_settings_means_the_defaults()
     {
         Assert.Contains(Capabilities.DialectPostgreSqlV1, Capabilities.For(null));

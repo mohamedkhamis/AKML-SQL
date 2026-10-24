@@ -143,7 +143,7 @@ function Format-VariantCss {
         }
     }
 
-    # Typography (composite; split into family/size/weight sub-variables)
+    # Typography (composite; split into family/size/weight sub-variables, plus line-height where declared)
     $null = $sb.AppendLine("    /* Typography (theme-invariant; split into family/size/weight) */")
     foreach ($typeKey in $json.typography.PSObject.Properties.Name) {
         $spec   = $json.typography.$typeKey
@@ -166,6 +166,12 @@ function Format-VariantCss {
             default    { '400' }
         }
         $null = $sb.AppendLine("    ${base}-weight: ${weightCss};")
+        # Spec 043 (R12, FR-016): an explicit line height, unitless (a multiple of the font size). Only entries that
+        # declare one get the variable; WPF ignores the field.
+        if ($spec.PSObject.Properties.Name -contains 'lineHeight' -and $null -ne $spec.lineHeight) {
+            $lineHeight = ([double]$spec.lineHeight).ToString([System.Globalization.CultureInfo]::InvariantCulture)
+            $null = $sb.AppendLine("    ${base}-line-height: ${lineHeight};")
+        }
     }
 
     $null = $sb.AppendLine("}")

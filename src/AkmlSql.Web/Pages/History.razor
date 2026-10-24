@@ -22,7 +22,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject IDialogService Dialogs
-@inject EditorDocumentFlow Document
+@inject IQueryTabs QueryTabs
 @inject INotificationService Notifications
 @inject IServiceProvider Services
 
@@ -349,12 +349,13 @@
     .akml-hist-pname { font-weight: var(--akml-type-chrome-weight); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-hist-ptime { color: var(--akml-text-secondary); font-size: 11px; }
     .akml-hist-preview { flex: 1 1 auto; margin: 0; overflow: auto; white-space: pre-wrap;
-        padding: var(--akml-scalar-spacing-m); font-family: var(--akml-type-editor-family);
-        font-size: var(--akml-type-editor-size); color: var(--akml-text-primary);
+        padding: var(--akml-scalar-spacing-m); font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        font-size: var(--akml-editor-font-size, var(--akml-type-editor-size)); line-height: var(--akml-type-editor-line-height); color: var(--akml-text-primary);
         background-color: var(--akml-editor-popupbackground); }
-    .akml-hist-preview .tok-keyword { color: var(--akml-accent-primary); }
-    .akml-hist-preview .tok-string { color: var(--akml-status-success); }
-    .akml-hist-preview .tok-comment { color: var(--akml-text-secondary); font-style: italic; }
+    /* Spec 043 (FR-020): the editor's syntax colours, so a query reads the same in History as in the editor. */
+    .akml-hist-preview .tok-keyword { color: var(--akml-syntax-keyword); }
+    .akml-hist-preview .tok-string { color: var(--akml-syntax-string); }
+    .akml-hist-preview .tok-comment { color: var(--akml-syntax-comment); font-style: italic; }
     .akml-hist-preview .hit { background-color: var(--akml-history-matchhighlight); }
     .akml-hist-meta-bar { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
         padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
@@ -805,12 +806,13 @@
     private async Task OpenInEditorAsync()
     {
         if (_selected == null || !HasCompleteSql) return;
-        // Spec 041 (R64): a past query opens as a new document, as Open does, and never overwrites a modified
-        // document without asking.
+        // Spec 043 (R11): a past query opens in a new query tab — or in the active one when it is empty and unmodified — on the
+        // active tab's connection. Nothing is replaced, so nothing is asked (as SSMS opens a new window).
         var entry = _selected;
-        if (!await Document.OpenQueryAsync(_previewSql, "Open in editor")) return;
-        await SessionStore.FlushAsync();
+        if (AtTabLimit()) return;
+        // Read against the active tab's connection, which the new tab starts on (it is not connected yet once opened).
         await SuggestConnectionAsync(entry);
+        if (await QueryTabs.OpenInNewTabAsync(_previewSql, TabNameOf(entry), autorun: false) == null) return;
         Nav.NavigateTo("/");
     }
 
@@ -818,22 +820,37 @@
     {
         if (_selected == null || !HasCompleteSql) return;
         var entry = _selected;
-        if (!await Document.OpenQueryAsync(_previewSql, "Re-execute")) return;
-        await SessionStore.FlushAsync();
 
         // Spec 042 (FR-070): a script written for one kind of server is never run on the other. It is opened, and the user is told
         // which connection it belongs to; running it is theirs to choose after connecting.
-        if (RanOnOtherKind(entry))
-        {
-            await SuggestConnectionAsync(entry, notRun: true);
-            Nav.NavigateTo("/");
-            return;
-        }
+        bool otherKind = RanOnOtherKind(entry);
+        if (AtTabLimit()) return;
+        if (otherKind) await SuggestConnectionAsync(entry, notRun: true);
 
-        // Not connected: the editor runs it once a connection comes up - the entry's kind goes with it, so a connection of the
-        // other kind opens it without running it.
-        Nav.NavigateTo($"/?autorun=1&kind={entry.Kind}");
+        // Spec 043 (R11): the editor runs the new tab once it is connected (the entry's kind goes with it, so a connection of the
+        // other kind opens it without running it). No ?autorun in the address: the flag is the tab's.
+        if (await QueryTabs.OpenInNewTabAsync(_previewSql, TabNameOf(entry), autorun: !otherKind, autorunKind: entry.Kind) == null) return;
+        Nav.NavigateTo("/");
     }
+
+    // Spec 043 (FR-013): at 20 tabs a new one is refused with the limit named — unless the active tab is empty and takes it.
+    private bool AtTabLimit()
+    {
+        if (!QueryTabs.AtTabLimit || QueryTabs.Active is { IsEmpty: true, IsExecuting: false, GridHasPendingEdits: false }) return false;
+        Notifications.Notify(QueryTabs.LimitText + ".", NotificationKind.Info);
+        return true;
+    }
+
+    /// <summary>
+    /// Spec 043 (R11, data-model §1): the tab is named from the entry's title when it is a name the user gave. A default
+    /// SQLQuery{n} is never sent to History — the engine names that session query-NN (<see cref="AutoSessionName"/>) — so neither
+    /// form names the tab: it takes the next default name. Kept as "query-01", the tab's runs would be recorded under that name as
+    /// if it were a file's: a second "query-01" session in History.
+    /// </summary>
+    internal static string? TabNameOf(HistoryEntryDto entry) =>
+        entry.TabTitle?.Trim() is { Length: > 0 } title && !EditorDocument.IsDefaultName(title) && !AutoSessionName.IsMatch(title)
+            ? title
+            : null;
 
     /// <summary>The entry ran on the other kind of server than the connection that is active now.</summary>
     private bool RanOnOtherKind(HistoryEntryDto entry) =>

@@ -9,7 +9,9 @@ using AkmlSql.Engine.Completion.Providers;
 using AkmlSql.Engine.Pairing;
 using AkmlSql.Engine.PostgreSql;
 using AkmlSql.Engine.Schema;
+using AkmlSql.Engine.Server;
 using AkmlSql.Engine.Transports;
+using Microsoft.Data.SqlClient;
 using Serilog;
 
 namespace AkmlSql.Engine.Handlers.Control
@@ -67,11 +69,52 @@ namespace AkmlSql.Engine.Handlers.Control
                 return Task.FromResult(request);
             }
 
+            // A web tab on SQL authentication sends no password when the engine can supply it: from the tab it was opened from
+            // (New query) or remembered on this machine. The browser never holds it.
+            var supplied = BridgeSqlPassword.Supply(request.ConnectionString, request.CopyPasswordFromSessionId, ctx);
+            request.ConnectionString = supplied.ConnectionString;
+            if (supplied.Missing)
+            {
+                // Spec 043 follow-up (review): nothing supplied it, and an empty password is never sent to the server. The web
+                // client already shows the tab on the new target (its test succeeded a moment ago, but the source tab was
+                // closed, the password forgotten or the page changed since), so keeping the previous connection would run the
+                // next query on the old server. The session holds no connection instead: the next run answers "no connection"
+                // and the tab asks to connect again.
+                //
+                // Spec 043 follow-up (review, second round): the session is first moved to the request's target (kind, database, server — the string
+                // has no password, and UpdateSession logs the data source only), so completion, quick info and wildcard expansion
+                // stop serving the previous server's objects, a PostgreSQL session stops being served as PostgreSQL, and the page
+                // that connected the old target can no longer copy anything from it (UpdateSession clears the origin). Then the
+                // connection goes, and with it the schema caches of the old target, which no load replaces until a connect with
+                // a password.
+                ctx.Sessions.UpdateSession(request);
+                ctx.Sessions.Disconnect(request.SessionId);
+                ctx.SessionConnections?.Dispose(request.SessionId);
+                DatabaseProvider.InvalidateSession(request.SessionId);
+                ctx.SchemaCache.RemoveSession(request.SessionId);
+                if (ctx.Sessions.GetSession(request.SessionId) is { } moved) moved.SchemaIdentity = ServerIdentity(request.ConnectionString);
+                Log.Warning("ConnectionChanged: a SQL login without a password; the session is disconnected (session={Session}) -- {ConnDesc}",
+                    request.SessionId, ConnectionDiagnostics.Describe(request.ConnectionString));
+                return Task.FromResult(request);
+            }
+
             // Spec 029: capture the previous connection string before UpdateSession overwrites it
             // so we can detect a credential change (different password / user) below.
-            var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;
+            var previous = ctx.Sessions.GetSession(request.SessionId);
+            var previousConnStr = previous?.ConnectionString;
+
+            // Spec 043 follow-up (review, round 3): the schema caches are keyed by session and database, not by server. A session
+            // that moves to another server, login or authentication method kept the previous server's cache of a database with
+            // the same name (dev and prod "AppDb", or master) and never loaded the new one's. Compared with the identity the caches
+            // were loaded for, which a Disconnect keeps (SessionState.SchemaIdentity): a tab reattached to its own server keeps its
+            // caches, one disconnected and then connected elsewhere does not. A database change or a new password on the same
+            // server keeps them, as before.
+            var identity = ServerIdentity(request.ConnectionString);
+            var serverChanged = previous != null && !string.Equals(previous.SchemaIdentity, identity, StringComparison.Ordinal);
 
             ctx.Sessions.UpdateSession(request);
+            if (ctx.Sessions.GetSession(request.SessionId) is { } updated) updated.SchemaIdentity = identity;
+            SessionPasswordCopy.NoteConnected(ctx.Sessions.GetSession(request.SessionId));
             ctx.ParserService.SetServerVersion(request.ServerVersion);
 
             // Spec 030 — Phase 5: dispose the persistent execute connection when the credential changes.
@@ -88,6 +131,14 @@ namespace AkmlSql.Engine.Handlers.Control
             // to a different server and we must not leak the previous server's databases into
             // USE-completion.
             DatabaseProvider.InvalidateSession(request.SessionId);
+
+            if (serverChanged)
+            {
+                var dropped = ctx.SchemaCache.RemoveSession(request.SessionId);
+                if (dropped > 0)
+                    Log.Information("ConnectionChanged: session={Session} moved to another server or login; {Count} schema cache(s) dropped",
+                        request.SessionId, dropped);
+            }
 
             // Look up (or create) the schema cache for this session+database so we can consult
             // PermissionDenied BEFORE scheduling any SQL round-trip. If a prior Phase A already
@@ -142,7 +193,7 @@ namespace AkmlSql.Engine.Handlers.Control
 
                     // A reload of the same cache (SchemaCacheManager.ReloadMissing) may be running.
                     if (captured.schemaCache.Phase == PopulationPhase.NotLoaded
-                        && captured.SchemaCache.TryClaimPopulation(captured.schemaCache.CacheKey))
+                        && captured.SchemaCache.TryClaimPopulation(captured.schemaCache))
                     {
                         try
                         {
@@ -164,7 +215,7 @@ namespace AkmlSql.Engine.Handlers.Control
                         }
                         finally
                         {
-                            captured.SchemaCache.ReleasePopulation(captured.schemaCache.CacheKey);
+                            captured.SchemaCache.ReleasePopulation(captured.schemaCache);
                         }
                     }
                 }
@@ -175,6 +226,65 @@ namespace AkmlSql.Engine.Handlers.Control
             });
 
             return Task.FromResult(request);    // placeholder; ResponseMessageType=0 means it is dropped
+        }
+
+        /// <summary>
+        /// Spec 043 follow-up (review, round 3): who a SQL Server session's schema is read as — the server (the data source,
+        /// trimmed, case-insensitive), the login, Windows authentication, and the authentication method — never the password or
+        /// the database (<see cref="SessionState.SchemaIdentity"/>). Null for a string that does not parse.
+        /// </summary>
+        internal static string? ServerIdentity(string? connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString)) return null;
+            try
+            {
+                var b = new SqlConnectionStringBuilder(connectionString);
+                return string.Join("\n",
+                    (b.DataSource ?? string.Empty).Trim().ToLowerInvariant(),
+                    b.IntegratedSecurity ? "windows" : "login:" + b.UserID,
+                    b.Authentication.ToString());
+            }
+            catch (Exception ex) when (ex is ArgumentException or FormatException or InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Spec 043 follow-up (review, round 4): who a PostgreSQL session's schema is read as — the server (<c>pg://host:port</c>,
+        /// <see cref="PgConnectionString.ServerKey"/>) and the role — never the password or the database. It is noted on the session
+        /// as <see cref="ServerIdentity"/> is for SQL Server, and can never equal a SQL Server identity, so a move between the kinds
+        /// always counts as a move to another server. Null for a string that does not parse.
+        /// </summary>
+        internal static string? PostgresIdentity(string? connectionString)
+        {
+            if (string.IsNullOrEmpty(connectionString)) return null;
+            try
+            {
+                var b = new Npgsql.NpgsqlConnectionStringBuilder(connectionString);
+                return string.Join("\n", PgConnectionString.ServerKey(b.Host ?? string.Empty, b.Port), "role:" + b.Username);
+            }
+            catch (Exception ex) when (ex is ArgumentException or FormatException or InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Spec 043 follow-up: a new query tab opened on another tab's connection takes that session's password, as SSMS's New
+        /// Query reuses the open connection — only from a connected session this web page connected, for the same server, login
+        /// and security options (<see cref="SessionPasswordCopy"/>). The PostgreSQL paths use it; SQL Server's go through
+        /// <see cref="BridgeSqlPassword.Supply"/>, which also fills in a remembered password.
+        /// </summary>
+        internal static string CopyPassword(ConnectionInfo request, RpcContext ctx) =>
+            CopyPassword(request.ConnectionString, request.Kind, request.CopyPasswordFromSessionId, ctx);
+
+        internal static string CopyPassword(string connectionString, int kind, string? sourceSessionId, RpcContext? ctx)
+        {
+            if (string.IsNullOrEmpty(sourceSessionId) || ctx?.Sessions.GetSession(sourceSessionId!) is not { } source
+                || !SessionPasswordCopy.MayCopyFrom(source))
+                return connectionString;
+            return SessionPasswordCopy.Apply(connectionString, DatabaseKindNames.FromInt(kind), source.ConnectionString, source.Kind);
         }
 
         /// <summary>
@@ -196,16 +306,37 @@ namespace AkmlSql.Engine.Handlers.Control
             }
 
             var resolver = new PgCredentialResolver();
+            request.ConnectionString = CopyPassword(request, ctx);
             request.ConnectionString = resolver.Resolve(request.ConnectionString).ConnectionString;
 
-            var previousConnStr = ctx.Sessions.GetSession(request.SessionId)?.ConnectionString;
+            var previous = ctx.Sessions.GetSession(request.SessionId);
+            var previousConnStr = previous?.ConnectionString;
+
+            // Spec 043 follow-up (review, round 4): the session's schema identity is noted here too, as on the SQL Server path. Left
+            // at the SQL Server one, a SQL Server -> PostgreSQL -> same SQL Server round trip did not count as a move, and the tab
+            // kept the caches of before the trip. A move to another kind, host, port or role drops every cache of the session — the
+            // other kind's, and this kind's other databases, which the reset in PopulateSchemaAsync (the connected database only)
+            // never reached. A new password, a database change or a tab reattached to its own server keeps them.
+            var schemaIdentity = PostgresIdentity(request.ConnectionString);
+            var serverChanged = previous != null && !string.Equals(previous.SchemaIdentity, schemaIdentity, StringComparison.Ordinal);
+
             ctx.Sessions.UpdateSession(request);
+            if (ctx.Sessions.GetSession(request.SessionId) is { } updated) updated.SchemaIdentity = schemaIdentity;
+            SessionPasswordCopy.NoteConnected(ctx.Sessions.GetSession(request.SessionId));
             var identityChanged = !string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal);
 
             // The persistent connection carries the old identity, session settings and any transaction: the next execute
             // reopens under the new string (the web client asked the user before this point, FR-009).
             if (!string.Equals(previousConnStr, request.ConnectionString, StringComparison.Ordinal))
                 ctx.SessionConnections?.Dispose(request.SessionId);
+
+            if (serverChanged)
+            {
+                var dropped = ctx.SchemaCache.RemoveSession(request.SessionId);
+                if (dropped > 0)
+                    Log.Information("ConnectionChanged (PostgreSQL): session={Session} moved to another server, role or kind; {Count} schema cache(s) dropped",
+                        request.SessionId, dropped);
+            }
 
             ctx.Logger.Information("Connection changed (PostgreSQL): session={Session} db={Db} -- {ConnDesc}",
                 request.SessionId, request.DatabaseName, PgConnectionString.Describe(request.ConnectionString));
@@ -223,7 +354,8 @@ namespace AkmlSql.Engine.Handlers.Control
                         session.SearchPath = facts.SearchPath;
                     }
 
-                    // The server accepted the password: now it is safe to remember it, if the user asked.
+                    // The server accepted the password: now it is safe to remember it, if the user asked. It never throws (spec 043
+                    // follow-up, review): a store that cannot keep it is logged, and the schema below still loads.
                     resolver.RememberIfRequested(request.ConnectionString, request.RememberPassword);
 
                     await PopulateSchemaAsync(ctx, request, identityChanged).ConfigureAwait(false);
@@ -240,13 +372,23 @@ namespace AkmlSql.Engine.Handlers.Control
 
         // Phase A, then Phase B, through the catalog provider of the kind. Until a PostgreSQL provider is registered there is
         // nothing to load and the cache stays empty without error.
-        private static async Task PopulateSchemaAsync(RpcContext ctx, ConnectionInfo request, bool identityChanged)
+        internal static async Task PopulateSchemaAsync(RpcContext ctx, ConnectionInfo request, bool identityChanged)
         {
             var provider = ctx.SchemaMetadataFor(DatabaseKind.PostgreSql);
             if (provider == null) return;
 
+            // Spec 043 follow-up (review, round 4): this runs after the server's facts were read, and the cache is looked up by the
+            // session as it is now. A session that has since connected elsewhere (another role, server or database, or back to SQL
+            // Server) is not loaded with this connection's catalog: its own connect loads it, and this load would take the claim
+            // first and leave it with the wrong role's or kind's objects — as the facts above are kept only for the same string.
+            // And a pg| cache is always PostgreSQL, so a SQL Server cache found in a race with that check is never cleared and
+            // filled with the PostgreSQL catalog.
+            if (ctx.Sessions.GetSession(request.SessionId) is not { Kind: DatabaseKind.PostgreSql } current
+                || !string.Equals(current.ConnectionString, request.ConnectionString, StringComparison.Ordinal))
+                return;
             var cache = ctx.SchemaCache.GetOrCreateCache(request.SessionId, request.DatabaseName);
-            if (!ctx.SchemaCache.TryClaimPopulation(cache.CacheKey)) return;
+            if (cache.Kind != DatabaseKind.PostgreSql) return;
+            if (!ctx.SchemaCache.TryClaimPopulation(cache)) return;
             try
             {
                 // What a role may see is part of what was read: a catalog loaded as one role is wrong for another, which may
@@ -272,7 +414,7 @@ namespace AkmlSql.Engine.Handlers.Control
             }
             finally
             {
-                ctx.SchemaCache.ReleasePopulation(cache.CacheKey);
+                ctx.SchemaCache.ReleasePopulation(cache);
             }
         }
     }

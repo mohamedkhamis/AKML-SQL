@@ -65,7 +65,8 @@ else
         align-items: center;
         justify-content: center;
         width: 16px; height: 16px;
-        background-color: var(--akml-status-info);
+        /* Spec 043 (FR-032): a badge token behind white text; the status colour read under 3:1 in the dark theme. */
+        background-color: var(--akml-accent-primary);
         color: var(--akml-text-onaccent);
         border-radius: var(--akml-scalar-radius-pill);
         font-size: 11px;

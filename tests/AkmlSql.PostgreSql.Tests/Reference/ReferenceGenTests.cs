@@ -377,6 +377,7 @@ public class ReferenceGenTests
             ["doc/src/sgml/ref/select.sgml"] = E(Fixture("select.sgml")),
             ["doc/src/sgml/func.sgml"] = E(Fixture("func.sgml")),
             ["doc/src/sgml/datatype.sgml"] = E(Fixture("datatype.sgml")),
+            ["doc/src/sgml/syntax.sgml"] = E(Fixture("syntax.sgml")),
         });
     }
 
@@ -433,6 +434,42 @@ public class ReferenceGenTests
         Assert.Equal("sql-select", select.Source.SectionId);
         Assert.Equal("https://www.postgresql.org/docs/18/sql-select.html", select.Url);
         Assert.Equal("doc/src/sgml/ref/select.sgml", select.Source.File);
+    }
+
+    [Fact]
+    public void A_lexical_entry_links_to_its_section_anchor_when_the_section_is_not_a_page()
+    {
+        var result = Build();
+
+        // Nested sections are upper-case anchors on their parent page; a chapter-level one keeps its own page.
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS", Entry(result, EntryKinds.Lexical, "identifier").Url);
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-expressions.html#FIELD-SELECTION",
+            result.File.Entries.Single(e => e.Kind == EntryKinds.Lexical && e.Source.SectionId == "field-selection").Url);
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-syntax-calling-funcs.html",
+            result.File.Entries.Single(e => e.Kind == EntryKinds.Lexical && e.Source.SectionId == "sql-syntax-calling-funcs").Url);
+    }
+
+    [Fact]
+    public void Each_section_of_syntax_sgml_maps_to_the_sect1_page_that_holds_it()
+    {
+        var pages = SectionPageIndex.Read(Fixture("syntax.sgml"));
+
+        Assert.Equal("sql-syntax-lexical", pages["sql-syntax-lexical"]);
+        Assert.Equal("sql-syntax-lexical", pages["sql-syntax-identifiers"]);
+        Assert.Equal("sql-syntax-lexical", pages["sql-syntax-strings-uescape"]);   // a sect3
+        Assert.Equal("sql-expressions", pages["field-selection"]);
+        Assert.Equal("sql-syntax-calling-funcs", pages["sql-syntax-calling-funcs"]);
+    }
+
+    [Fact]
+    public void A_lexical_entry_whose_section_is_not_in_syntax_sgml_stops_the_run()
+    {
+        // Without a page from the manual's own structure the link would be guessed from the id - the 404s this replaced.
+        var tree = Tree(text => text.Replace("<sect2 id=\"field-selection\">", "<sect2 id=\"renamed\">"));
+        var snapshots = new Dictionary<int, TagSnapshot> { [18] = TagSnapshot.Read(tree) };
+
+        var error = Assert.Throws<InvalidDataException>(() => Generator.Build(snapshots, 18, new[] { "REL_18_STABLE" }));
+        Assert.Contains("field-selection", error.Message);
     }
 
     [Fact]
@@ -574,7 +611,7 @@ public class ReferenceGenTests
         {
             Assert.False(string.IsNullOrWhiteSpace(e.Summary), e.Kind + " " + e.Name);
             Assert.False(string.IsNullOrWhiteSpace(e.Source.SectionId), e.Kind + " " + e.Name);
-            Assert.Matches(new Regex(@"^https://www\.postgresql\.org/docs/18/[a-z0-9\-]+\.html$"), e.Url);
+            Assert.Matches(new Regex(@"^https://www\.postgresql\.org/docs/18/[a-z0-9\-]+\.html(#[A-Z0-9\-]+)?$"), e.Url);
             Assert.InRange(e.MinVersion, 14, 18);
         });
     }

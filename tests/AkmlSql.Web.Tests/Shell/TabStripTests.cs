@@ -162,6 +162,216 @@ public sealed class TabStripTests : BunitContext
         Assert.NotNull(close.Closest(".akml-tabs"));
     }
 
+    // ── Spec 043 (T016, research R10): a closable strip, for the query tabs ───────────────────────────────────
+
+    private static readonly TabItem[] Queries =
+    {
+        new("q1", "SQLQuery1", TestId: "doc-tab", Title: "SQLQuery1"),
+        new("q2", "orders-audit", TestId: "doc-tab", Title: "orders-audit", IsModified: true),
+        new("q3", "SQLQuery3", TestId: "doc-tab", Title: "SQLQuery3"),
+    };
+
+    private static ComponentParameterCollectionBuilder<TabStrip> ClosableParameters(
+        ComponentParameterCollectionBuilder<TabStrip> p, IReadOnlyList<TabItem> tabs, string active) => p
+            .Add(t => t.Tabs, tabs)
+            .Add(t => t.ActiveId, active)
+            .Add(t => t.AriaLabel, "Query tabs")
+            .Add(t => t.IdPrefix, "doc")
+            .Add(t => t.Name, "doc")
+            .Add(t => t.Closable, true);
+
+    private IRenderedComponent<TabStrip> RenderClosable(string active, Action<string>? onChanged = null, Action<string>? onClose = null)
+        => Render<TabStrip>(p => p
+            .Add(t => t.Tabs, Queries)
+            .Add(t => t.ActiveId, active)
+            .Add(t => t.AriaLabel, "Query tabs")
+            .Add(t => t.IdPrefix, "doc")
+            .Add(t => t.Name, "doc")
+            .Add(t => t.Closable, true)
+            .Add(t => t.ActiveIdChanged, EventCallback.Factory.Create<string>(this, id => onChanged?.Invoke(id)))
+            .Add(t => t.OnClose, EventCallback.Factory.Create<string>(this, id => onClose?.Invoke(id))));
+
+    [Fact]
+    public void A_closable_tab_is_not_a_button_and_holds_a_close_button_that_is_not_a_tab_stop()
+    {
+        var cut = RenderClosable("q1");
+
+        var tabs = cut.FindAll("[role=tab]");
+        Assert.Equal(3, tabs.Count);
+        Assert.All(tabs, t => Assert.Equal("DIV", t.TagName));   // a button cannot hold a button
+        var close = tabs[1].QuerySelector("[data-testid=doc-tab-close]");
+        Assert.NotNull(close);
+        Assert.Equal("BUTTON", close!.TagName);
+        Assert.Equal("-1", close.GetAttribute("tabindex"));
+        Assert.Equal("Close orders-audit", close.GetAttribute("aria-label"));
+        Assert.Equal(new[] { "q1", "q2", "q3" }, tabs.Select(t => t.GetAttribute("data-tab-id")));
+        Assert.Equal(new[] { "true", "false", "false" }, tabs.Select(t => t.GetAttribute("data-active")));
+    }
+
+    [Fact]
+    public void A_modified_tab_shows_its_mark_with_an_accessible_name()
+    {
+        var cut = RenderClosable("q1");
+
+        var tabs = cut.FindAll("[role=tab]");
+        Assert.Null(tabs[0].QuerySelector(".akml-tab-modified"));
+        var mark = tabs[1].QuerySelector(".akml-tab-modified");
+        Assert.NotNull(mark);
+        Assert.Equal("*", mark!.TextContent.Trim());
+        Assert.Equal("modified", mark.GetAttribute("aria-label"));
+        Assert.Equal("true", tabs[1].GetAttribute("data-modified"));
+    }
+
+    [Fact]
+    public void The_close_button_closes_without_activating()
+    {
+        string? changed = null, closed = null;
+        var cut = RenderClosable("q1", id => changed = id, id => closed = id);
+
+        cut.FindAll("[data-testid=doc-tab-close]")[2].Click();
+
+        Assert.Equal("q3", closed);
+        Assert.Null(changed);
+    }
+
+    [Fact]
+    public void Delete_closes_the_focused_tab_and_a_middle_click_closes_the_one_under_the_pointer()
+    {
+        string? closed = null;
+        var cut = RenderClosable("q2", onClose: id => closed = id);
+
+        cut.FindAll("[role=tab]")[1].KeyDown(new KeyboardEventArgs { Key = "Delete" });
+        Assert.Equal("q2", closed);
+
+        cut.FindAll("[role=tab]")[0].TriggerEvent("onmouseup", new MouseEventArgs { Button = 0 });
+        Assert.Equal("q2", closed);   // a left release is a click, not a close
+        cut.FindAll("[role=tab]")[0].TriggerEvent("onmouseup", new MouseEventArgs { Button = 1 });
+        Assert.Equal("q1", closed);
+    }
+
+    [Fact]
+    public void Enter_and_Space_activate_a_closable_tab_and_the_arrows_still_move()
+    {
+        string? changed = null;
+        var cut = RenderClosable("q1", id => changed = id);
+
+        cut.FindAll("[role=tab]")[0].KeyDown(new KeyboardEventArgs { Key = "ArrowRight" });
+        Assert.Equal("q2", changed);
+
+        cut.FindAll("[role=tab]")[2].Click();
+        Assert.Equal("q3", changed);
+    }
+
+    // Review of US1 (finding 25): the keys act on the tab that has focus, which need not be the active one.
+
+    [Fact]
+    public void Delete_closes_the_tab_that_has_focus_even_when_another_is_active()
+    {
+        string? closed = null;
+        var cut = RenderClosable("q1", onClose: id => closed = id);
+
+        cut.FindAll("[role=tab]")[2].KeyDown(new KeyboardEventArgs { Key = "Delete" });
+
+        Assert.Equal("q3", closed);
+    }
+
+    [Fact]
+    public void A_held_Delete_closes_one_tab_not_its_neighbours()
+    {
+        var closed = new List<string>();
+        var cut = RenderClosable("q2", onClose: id => closed.Add(id));
+
+        cut.FindAll("[role=tab]")[1].KeyDown(new KeyboardEventArgs { Key = "Delete" });
+        cut.FindAll("[role=tab]")[1].KeyDown(new KeyboardEventArgs { Key = "Delete", Repeat = true });
+        cut.FindAll("[role=tab]")[1].KeyDown(new KeyboardEventArgs { Key = "Delete", Repeat = true });
+
+        Assert.Equal(new[] { "q2" }, closed);
+    }
+
+    [Theory]
+    [InlineData("Enter")]
+    [InlineData(" ")]
+    public void Enter_and_Space_activate_the_tab_that_has_focus(string key)
+    {
+        string? changed = null;
+        var cut = RenderClosable("q1", id => changed = id);
+
+        cut.FindAll("[role=tab]")[2].KeyDown(new KeyboardEventArgs { Key = key });
+
+        Assert.Equal("q3", changed);
+    }
+
+    [Fact]
+    public void The_arrows_move_from_the_tab_that_has_focus()
+    {
+        string? changed = null;
+        var cut = RenderClosable("q1", id => changed = id);
+
+        cut.FindAll("[role=tab]")[2].KeyDown(new KeyboardEventArgs { Key = "ArrowLeft" });
+
+        Assert.Equal("q2", changed);
+    }
+
+    [Fact]
+    public void Closing_a_tab_hands_focus_to_the_active_tab_when_the_closed_one_had_it()
+    {
+        var module = JSInterop.SetupModule("./js/akml-ui.js");
+        module.SetupVoid("trapTabStripKeys", _ => true).SetVoidResult();
+        module.SetupVoid("revealTab", _ => true).SetVoidResult();
+        module.Setup<bool>("refocusTabStrip", _ => true).SetResult(true);
+        var cut = RenderClosable("q2");
+        Assert.Empty(module.Invocations.Where(i => i.Identifier == "refocusTabStrip"));
+
+        // The page closed q2 and made the tab before it active.
+        cut.Render(p => ClosableParameters(p, new[] { Queries[0], Queries[2] }, "q1"));
+
+        var call = Assert.Single(module.Invocations.Where(i => i.Identifier == "refocusTabStrip"));
+        Assert.Equal(TabStrip.TabId("doc", "q1"), call.Arguments[1]);
+    }
+
+    [Fact]
+    public void Closing_the_only_tab_hands_focus_to_the_tab_that_replaces_it()
+    {
+        var module = JSInterop.SetupModule("./js/akml-ui.js");
+        module.SetupVoid("trapTabStripKeys", _ => true).SetVoidResult();
+        module.SetupVoid("revealTab", _ => true).SetVoidResult();
+        module.Setup<bool>("refocusTabStrip", _ => true).SetResult(true);
+        var only = new[] { Queries[0] };
+        var cut = Render<TabStrip>(p => ClosableParameters(p, only, "q1"));
+
+        // The page renders once while the replacement is being made: no tabs, and the closed tab still named active.
+        cut.Render(p => ClosableParameters(p, Array.Empty<TabItem>(), "q1"));
+        Assert.Empty(module.Invocations.Where(i => i.Identifier == "refocusTabStrip"));
+        var replacement = new TabItem("q9", "SQLQuery9", TestId: "doc-tab");
+        cut.Render(p => ClosableParameters(p, new[] { replacement }, "q9"));
+
+        var call = Assert.Single(module.Invocations.Where(i => i.Identifier == "refocusTabStrip"));
+        Assert.Equal(TabStrip.TabId("doc", "q9"), call.Arguments[1]);
+    }
+
+    [Fact]
+    public void A_re_render_that_closes_nothing_moves_no_focus()
+    {
+        var module = JSInterop.SetupModule("./js/akml-ui.js");
+        module.SetupVoid("trapTabStripKeys", _ => true).SetVoidResult();
+        module.SetupVoid("revealTab", _ => true).SetVoidResult();
+        module.Setup<bool>("refocusTabStrip", _ => true).SetResult(true);
+        var cut = RenderClosable("q1");
+
+        cut.Render(p => ClosableParameters(p, Queries, "q3"));
+
+        Assert.Empty(module.Invocations.Where(i => i.Identifier == "refocusTabStrip"));
+    }
+
+    [Fact]
+    public void A_strip_that_is_not_closable_keeps_its_button_tabs()
+    {
+        var cut = RenderStrip("results");
+
+        Assert.All(cut.FindAll("[role=tab]"), t => Assert.Equal("BUTTON", t.TagName));
+        Assert.Empty(cut.FindAll("[data-testid=doc-tab-close]"));
+    }
+
     [Fact]
     public void The_key_trap_is_installed_on_first_render()
     {

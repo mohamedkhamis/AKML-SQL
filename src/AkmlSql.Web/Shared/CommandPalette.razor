@@ -551,26 +551,18 @@
             };
         }
 
-        // Connect to SQL — opens the Phase 4 connection-manager modal directly (it gathers
-        // server/db/auth and lists saved connections), rather than routing to Settings.
+        // Connect to a database — opens the Phase 4 connection-manager modal directly (it gathers
+        // server/db/auth and lists saved connections), rather than routing to Settings. Spec 043 (FR-023): one command for
+        // SQL Server and PostgreSQL; the dialog opens on the active connection's kind and the kind is chosen inside it
+        // (spec 042's separate "Connect to PostgreSQL…" entry is gone).
         yield return new CommandAction
         {
             Id = "sql:connect",
-            Title = "Connect to SQL Server…",
+            Title = "Connect to database…",
             Group = CommandGroup.Action,
             Icon = "plug",
+            Meta = "SQL Server or PostgreSQL",
             Run = () => { ConnManager.Open(); return Task.CompletedTask; },
-        };
-
-        // Spec 042 (FR-001): the same dialog, opened on the PostgreSQL kind. On an engine without PostgreSQL support it
-        // opens on SQL Server with the reason shown beside the disabled choice.
-        yield return new CommandAction
-        {
-            Id = "sql:connect-postgresql",
-            Title = "Connect to PostgreSQL…",
-            Group = CommandGroup.Action,
-            Icon = "database",
-            Run = () => { ConnManager.Open(AkmlSql.Core.DatabaseKind.PostgreSql); return Task.CompletedTask; },
         };
 
         // Clear schema cache.

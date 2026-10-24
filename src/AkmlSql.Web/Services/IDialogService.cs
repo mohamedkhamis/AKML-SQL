@@ -24,6 +24,13 @@ public interface IDialogService
     /// <summary>Ask for a line of text. The typed value, or null when the user cancelled.</summary>
     Task<string?> PromptAsync(PromptRequest request);
 
+    /// <summary>
+    /// Spec 043 (FR-007): a confirmation with a third button (<see cref="DialogRequest.AlternateLabel"/>) — "Save changes to
+    /// SQLQuery3?" with Save, Don't save and Cancel. Cancel and Escape give <see cref="DialogChoice.Cancel"/>.
+    /// </summary>
+    async Task<DialogChoice> ChooseAsync(DialogRequest request) =>
+        await ConfirmAsync(request).ConfigureAwait(false) ? DialogChoice.Confirm : DialogChoice.Cancel;
+
     /// <summary>Tell the user something that needs acknowledging. Completes when they close it.</summary>
     Task AlertAsync(string title, string message);
 
@@ -59,6 +66,25 @@ public sealed class DialogRequest
     /// <summary>Spec 042: an id for the dialog (<c>db-switch-confirm</c>), rendered as <c>data-dialog-id</c> so a test can tell
     /// one confirmation from another. Null for the dialogs that have none.</summary>
     public string? DialogId { get; set; }
+
+    /// <summary>Spec 043: a third button between Cancel and the confirm button (<see cref="IDialogService.ChooseAsync"/>).</summary>
+    public string? AlternateLabel { get; set; }
+
+    /// <summary>Spec 043: the buttons' <c>data-testid</c>s when a dialog needs its own (<c>doc-close-save</c>); null keeps
+    /// <c>dialog-confirm</c>, <c>dialog-cancel</c> and <c>dialog-alternate</c>.</summary>
+    public string? ConfirmTestId { get; set; }
+
+    public string? CancelTestId { get; set; }
+
+    public string? AlternateTestId { get; set; }
+}
+
+/// <summary>Spec 043: the button a <see cref="IDialogService.ChooseAsync"/> dialog was closed with.</summary>
+public enum DialogChoice
+{
+    Cancel,
+    Confirm,
+    Alternate,
 }
 
 /// <summary>What a prompt dialog asks for.</summary>
@@ -137,6 +163,18 @@ public sealed class DialogService : IDialogService
         if (request == null) throw new ArgumentNullException(nameof(request));
         var result = await Enqueue(new DialogEntry(DialogKind.Prompt, null, request)).ConfigureAwait(false);
         return result as string;
+    }
+
+    public async Task<DialogChoice> ChooseAsync(DialogRequest request)
+    {
+        if (request == null) throw new ArgumentNullException(nameof(request));
+        var result = await Enqueue(new DialogEntry(DialogKind.Confirm, request, null)).ConfigureAwait(false);
+        return result switch
+        {
+            true => DialogChoice.Confirm,
+            DialogChoice choice => choice,
+            _ => DialogChoice.Cancel,
+        };
     }
 
     public Task AlertAsync(string title, string message) =>

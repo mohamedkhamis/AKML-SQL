@@ -11,6 +11,9 @@ namespace AkmlSql.Web.Shared;
 /// existing tests select (<c>ai-tab-chat</c>, <c>preview-mysql</c>).</param>
 /// <param name="Title">Optional tooltip.</param>
 /// <param name="BadgeTestId">Optional <c>data-testid</c> for the badge (e.g. <c>results-problems-badge</c>).</param>
+/// <param name="IsModified">Spec 043: a query tab with unsaved changes shows <c>*</c> after its label.</param>
+/// <param name="LabelTestId">Spec 043: the label's <c>data-testid</c> (the active query tab keeps <c>doc-name</c>).</param>
+/// <param name="ModifiedTestId">Spec 043: the modified mark's <c>data-testid</c> (the active query tab keeps <c>doc-modified</c>).</param>
 public sealed record TabItem(
     string Id,
     string Label,
@@ -18,4 +21,7 @@ public sealed record TabItem(
     string? BadgeKind = null,
     string? TestId = null,
     string? Title = null,
-    string? BadgeTestId = null);
+    string? BadgeTestId = null,
+    bool IsModified = false,
+    string? LabelTestId = null,
+    string? ModifiedTestId = null);

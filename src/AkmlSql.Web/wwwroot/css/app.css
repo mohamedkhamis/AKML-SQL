@@ -26,6 +26,13 @@ html, body {
     text-rendering: optimizeLegibility;
 }
 
+/* Spec 043 (R17, FR-031): tell the browser which scheme the page is in, so its own controls follow the theme —
+   checkboxes, radio buttons, a select's open list, date pickers and scrollbars. Without it they stayed light in the
+   dark theme (a white checkbox and a light scrollbar in the dark connection dialog). High contrast is left to the
+   system's forced colours. */
+:root[data-akml-theme="light"] { color-scheme: light; }
+:root[data-akml-theme="dark"] { color-scheme: dark; }
+
 *, *::before, *::after { box-sizing: border-box; }
 
 a { color: var(--akml-text-link); }
@@ -116,7 +123,8 @@ a:hover { color: var(--akml-accent-primaryhover); }
     z-index: 2000;
     padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-l);
     color: var(--akml-text-ondanger);
-    background-color: var(--akml-status-danger);
+    /* Spec 043 (FR-032): the error badge colour; white on the dark theme's light red status colour read 2.8:1. */
+    background-color: var(--akml-badge-error);
     font-family: var(--akml-type-chrome-family);
     font-size: var(--akml-type-chrome-size);
 }

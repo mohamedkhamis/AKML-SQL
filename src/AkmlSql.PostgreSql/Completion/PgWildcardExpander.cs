@@ -28,7 +28,10 @@ public sealed class PgWildcardExpander
             if (context.Clause is not (PgClause.SelectList or PgClause.Returning)) return Fail("The * is not in a select list.");
             if (context.AfterOperand) return Fail("The * multiplies; it is not a column wildcard.");
 
-            var wanted = Fold(qualifier) ?? QualifierBefore(text, star);
+            // Spec 043 follow-up (review): the qualifier written before the star wins over the one the caller sends. The web
+            // editor sends a quoted qualifier unquoted ('"Ord".*' as Ord, which SQL Server matches without regard to case),
+            // and folding that would look for ord; the text still says it was quoted.
+            var wanted = QualifierBefore(text, star) ?? Fold(qualifier);
             var view = new PgCatalogView(cache, new PgCompletionOptions());
 
             var refs = new List<PgTableRef>(context.VisibleTables);
@@ -85,8 +88,15 @@ public sealed class PgWildcardExpander
         var end = star - 1;
         if (text[end - 1] == '"')
         {
-            var open = text.LastIndexOf('"', end - 2);
-            return open < 0 ? null : text.Substring(open + 1, end - open - 2).Replace("\"\"", "\"");
+            // Spec 043 follow-up (review): the opening quote is the first one back that is not half of a "" (a quote inside the
+            // name); the nearest quote back was that half for '"a""b".*'.
+            for (var open = end - 2; open >= 0; open--)
+            {
+                if (text[open] != '"') continue;
+                if (open > 0 && text[open - 1] == '"') { open--; continue; }
+                return open == end - 2 ? null : text.Substring(open + 1, end - open - 2).Replace("\"\"", "\"");
+            }
+            return null;
         }
         var start = end;
         while (start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_' || text[start - 1] == '$')) start--;

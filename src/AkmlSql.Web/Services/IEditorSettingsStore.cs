@@ -27,7 +27,19 @@ public interface IEditorSettingsStore
     event Action? Changed;
 }
 
-/// <summary>The editor options. Font size 9–32 px, tab size 1–8.</summary>
+/// <summary>
+/// Spec 043 (research R12, FR-017) — the fonts Settings › Editor offers. A short fixed list, not a free-text name, so the
+/// choice can never leave the editor unreadable. <see cref="Default"/> is the theme's editor font (Consolas first).
+/// </summary>
+public enum EditorFontFamily
+{
+    Default = 0,
+    CascadiaMono = 1,
+    Consolas = 2,
+    SystemMonospace = 3,
+}
+
+/// <summary>The editor options. Font size 9–32 px, tab size 1–8, a font from <see cref="EditorFontFamily"/>.</summary>
 public sealed class EditorSettings
 {
     public const int MinFontSize = 9;
@@ -39,12 +51,34 @@ public sealed class EditorSettings
     public bool WordWrap { get; set; }
     public int TabSize { get; set; } = 4;
 
-    /// <summary>A copy within the limits.</summary>
+    /// <summary>Spec 043: the editor font; a record saved before the setting existed reads <see cref="EditorFontFamily.Default"/>.</summary>
+    public EditorFontFamily FontFamily { get; set; }
+
+    /// <summary>A copy within the limits (an unknown font number reads as the default font).</summary>
     public EditorSettings Clamped() => new()
     {
         FontSize = Math.Clamp(FontSize, MinFontSize, MaxFontSize),
         WordWrap = WordWrap,
         TabSize = Math.Clamp(TabSize, MinTabSize, MaxTabSize),
+        FontFamily = Enum.IsDefined(FontFamily) ? FontFamily : EditorFontFamily.Default,
+    };
+
+    /// <summary>The name akml-editor.js knows the font by (<c>editorFontStack</c>).</summary>
+    public static string FontName(EditorFontFamily font) => font switch
+    {
+        EditorFontFamily.CascadiaMono => "cascadia-mono",
+        EditorFontFamily.Consolas => "consolas",
+        EditorFontFamily.SystemMonospace => "system-monospace",
+        _ => "default",
+    };
+
+    /// <summary>What Settings › Editor shows for each font.</summary>
+    public static string FontLabel(EditorFontFamily font) => font switch
+    {
+        EditorFontFamily.CascadiaMono => "Cascadia Mono",
+        EditorFontFamily.Consolas => "Consolas",
+        EditorFontFamily.SystemMonospace => "System monospace",
+        _ => "Default (Consolas, then Cascadia Mono)",
     };
 }
 

@@ -58,10 +58,16 @@
             <div class="akml-dialog-footer">
                 @if (_entry.Kind != DialogKind.Alert)
                 {
-                    <button @ref="_cancel" type="button" class="akml-btn" data-testid="dialog-cancel"
+                    <button @ref="_cancel" type="button" class="akml-btn" data-testid="@(confirm?.CancelTestId ?? "dialog-cancel")"
                             @onclick="CancelAsync">@(prompt?.CancelLabel ?? confirm?.CancelLabel ?? "Cancel")</button>
                 }
-                <button @ref="_ok" type="button" data-testid="dialog-confirm"
+                @if (confirm?.AlternateLabel is { } alternate && _entry.Kind == DialogKind.Confirm)
+                {
+                    @* Spec 043: the third choice ("Don't save"). *@
+                    <button type="button" class="akml-btn" data-testid="@(confirm.AlternateTestId ?? "dialog-alternate")"
+                            @onclick="AlternateAsync">@alternate</button>
+                }
+                <button @ref="_ok" type="button" data-testid="@(confirm?.ConfirmTestId ?? "dialog-confirm")"
                         class="akml-btn @(confirm is { Destructive: true } ? "akml-btn--danger" : "akml-btn--primary")"
                         disabled="@invalid" title="@(invalid ? _error : null)" @onclick="ConfirmAsync">@(_entry.Kind == DialogKind.Alert ? "OK" : prompt?.ConfirmLabel ?? confirm?.ConfirmLabel ?? "OK")</button>
             </div>
@@ -148,6 +154,12 @@
                 Dialogs.Complete(entry, null);
                 break;
         }
+        return Task.CompletedTask;
+    }
+
+    private Task AlternateAsync()
+    {
+        if (_entry is { } entry) Dialogs.Complete(entry, DialogChoice.Alternate);
         return Task.CompletedTask;
     }
 

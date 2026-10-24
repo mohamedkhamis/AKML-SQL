@@ -227,4 +227,66 @@ public sealed class HandshakeHandlerTests
         Assert.Equal("session.database.v1", Capabilities.SessionDatabaseV1);
         Assert.Contains(Capabilities.SessionDatabaseV1, Capabilities.Current);
     }
+
+    // ── Spec 043 follow-up (review) — an accepted handshake names the page; a refused one names nothing ──
+
+    private const string PageId = "0123456789abcdef0123456789abcdef";
+
+    /// <summary>What the connection's origin is after <paramref name="handshake"/>, inside a connection the transport opened.</summary>
+    private static async Task<(string Status, string? Origin)> OriginAfterAsync(HandshakeHandler handler, HandshakeRequest handshake)
+    {
+        handshake.ClientInstanceId = PageId;
+        using (AkmlSql.Engine.Pairing.BridgeConnection.Set("socket-1"))
+        {
+            // Answered in a child async context, as the router does: the page must still reach the connection.
+            var response = await Task.Run(() => handler.HandleAsync(handshake, CreateContext(), CancellationToken.None));
+            return (response.Status, AkmlSql.Engine.Pairing.BridgeConnection.Current);
+        }
+    }
+
+    [Fact]
+    public async Task Every_accepted_handshake_adopts_the_page_id()
+    {
+        var localhost = await OriginAfterAsync(new HandshakeHandler(), MakeRequest());
+        var pin = await OriginAfterAsync(new HandshakeHandler(() => true, p => p == "123456", _ => false, _ => "minted", () => null), MakeRequest(pin: "123456"));
+        var bearer = await OriginAfterAsync(new HandshakeHandler(() => true, _ => false, t => t == "good", _ => null, () => null), MakeRequest(bearer: "good"));
+
+        foreach (var (status, origin) in new[] { localhost, pin, bearer })
+        {
+            Assert.Equal(HandshakeStatus.Ok, status);
+            Assert.Equal("page:" + PageId, origin);
+        }
+    }
+
+    [Fact]
+    public async Task A_refused_handshake_adopts_nothing()
+    {
+        var lan = new HandshakeHandler(() => true, p => p == "123456", t => t == "good", _ => "minted", () => null);
+
+        var refused = new[]
+        {
+            await OriginAfterAsync(new HandshakeHandler(), MakeRequest(min: 999, max: 999)),   // protocol mismatch
+            await OriginAfterAsync(lan, MakeRequest(pin: "wrong")),                             // PIN invalid
+            await OriginAfterAsync(lan, MakeRequest(bearer: "revoked")),                        // bearer unknown
+            await OriginAfterAsync(lan, MakeRequest()),                                         // no credentials
+        };
+
+        foreach (var (status, origin) in refused)
+        {
+            Assert.NotEqual(HandshakeStatus.Ok, status);
+            Assert.Equal("socket:socket-1", origin);
+        }
+    }
+
+    [Fact]
+    public async Task A_handshake_without_a_page_id_leaves_the_connection_its_socket()
+    {
+        using (AkmlSql.Engine.Pairing.BridgeConnection.Set("socket-1"))
+        {
+            var response = await new HandshakeHandler().HandleAsync(MakeRequest(), CreateContext(), CancellationToken.None);
+
+            Assert.Equal(HandshakeStatus.Ok, response.Status);
+            Assert.Equal("socket:socket-1", AkmlSql.Engine.Pairing.BridgeConnection.Current);
+        }
+    }
 }

@@ -163,6 +163,10 @@ builder.Services.AddAuthentication(AdminAuth.Scheme)
         options.Cookie.SameSite = SameSiteMode.Lax;
     });
 
+// The site is HTTPS-only (HTTP answers with a redirect), so browsers may remember that for a year
+// rather than the template's 30 days. Subdomains are deliberately not included.
+builder.Services.AddHsts(options => options.MaxAge = TimeSpan.FromDays(365));
+
 var app = builder.Build();
 
 // C5: both singletons are "startup-built" (the manifest parses wwwroot/releases.json; the
@@ -238,15 +242,23 @@ if (!app.Environment.IsDevelopment())
         context.Response.ContentType = "text/plain; charset=utf-8";
         await context.Response.WriteAsync("An unexpected error occurred. Please try again later.");
     }));
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 // Ordinary GET status pages can render through Razor. POST/API failures keep their status
 // and never re-enter a form endpoint with the original request's invalid antiforgery feature.
+// A missing asset (an old fingerprinted stylesheet asked for by a cached page) keeps its empty
+// 404: a whole HTML page is no use to a <link> or <script>, and costs a full render per miss.
 app.UseWhen(context => HttpMethods.IsGet(context.Request.Method)
-    && !context.Request.Path.StartsWithSegments("/api"), branch =>
+    && !context.Request.Path.StartsWithSegments("/api")
+    && !staticAssetPrefixes.Any(prefix =>
+        context.Request.Path.StartsWithSegments(prefix, StringComparison.OrdinalIgnoreCase)), branch =>
     branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
+
+// Routing must run AFTER the re-execute middleware above. Left implicit, WebApplication adds
+// UseRouting at the very start of the pipeline, so the re-executed "/not-found" request was
+// never routed and every unmatched URL outside /docs came back as an empty 404 (a blank page).
+app.UseRouting();
 
 // ADM-006: resolve the real client IP before anything reads it (visit tracking, the login
 // throttle). No-op until Analytics:KnownProxies names a trusted proxy.
@@ -336,6 +348,14 @@ app.MapGet("/robots.txt", (HttpContext http, IOptions<SiteOptions> site) =>
 {
     http.Response.Headers.CacheControl = "public, max-age=3600";
     return Results.Text(RobotsTxt.Build(site.Value.BaseUrl), "text/plain");
+});
+
+// The site's icon is favicon.svg (linked from App.razor), but browsers, feed readers and crawlers
+// still ask for /favicon.ico by convention; send them to the SVG instead of a 404.
+app.MapGet("/favicon.ico", (HttpContext http) =>
+{
+    http.Response.Headers.CacheControl = "public, max-age=86400";
+    return Results.Redirect("/favicon.svg", permanent: true);
 });
 
 app.MapStaticAssets();

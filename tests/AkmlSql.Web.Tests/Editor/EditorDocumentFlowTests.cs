@@ -308,4 +308,79 @@ public sealed class EditorDocumentFlowTests
 
         Assert.Equal("SELECT 42;", (await _store.RestoreAsync())!.DocumentText);
     }
+
+    // ── Spec 043 (T018, T031): one flow per query tab — its names come from the tabs' counter, and it is written with its tab ──
+
+    private sealed class Counter : IDefaultNameCounter
+    {
+        public int Next { get; private set; } = 5;
+        public int Take() => Next++;
+    }
+
+    private (EditorDocumentFlow Flow, Counter Names, List<int> Persists) TabFlow()
+    {
+        var names = new Counter();
+        var persists = new List<int>();
+        var flow = new EditorDocumentFlow(_store, _dialogs, _notes, _downloads,
+            new DocumentScope(names, () => { persists.Add(1); return Task.CompletedTask; }));
+        flow.Attach(_text, () => Task.FromResult(true));
+        return (flow, names, persists);
+    }
+
+    [Fact]
+    public async Task A_tab_document_takes_its_default_name_from_the_tabs_counter_and_its_own_history_key()
+    {
+        var (flow, names, _) = TabFlow();
+
+        await flow.LoadAsync(null);
+
+        Assert.Equal("SQLQuery5", flow.Name);
+        Assert.Equal(6, names.Next);
+        Assert.False(string.IsNullOrEmpty(flow.SessionKey));
+    }
+
+    [Fact]
+    public async Task Opening_into_an_empty_tab_mints_a_new_history_key_and_writes_the_tab_not_the_single_record()
+    {
+        var (flow, _, persists) = TabFlow();
+        await flow.LoadAsync(new EditorSessionRecord { DocumentName = "SQLQuery2", SessionKey = "k", DocumentText = string.Empty });
+
+        await flow.ReplaceUnmodifiedAsync("SELECT 2;", "orders");
+
+        Assert.Equal("orders", flow.Name);
+        Assert.NotEqual("k", flow.SessionKey);
+        Assert.False(flow.IsModified);
+        Assert.Equal("SELECT 2;", _text.Text);
+        Assert.NotEmpty(persists);
+        Assert.Null(await _store.RestoreAsync());   // the single document record of before tabs is never written
+    }
+
+    [Fact]
+    public async Task Saving_a_tab_document_writes_its_tab_record_not_the_single_record()
+    {
+        var (flow, _, persists) = TabFlow();
+        await flow.LoadAsync(new EditorSessionRecord { DocumentName = "orders", SessionKey = "k", DocumentText = "SELECT 1;" });
+        _text.Text = "SELECT 1;";
+
+        Assert.True(await flow.SaveAsync());   // a name of its own: no question
+
+        Assert.Equal("orders.sql", Assert.Single(_downloads.Files).Name);
+        Assert.NotEmpty(persists);
+        Assert.Null(await _store.RestoreAsync());
+    }
+
+    [Fact]
+    public async Task A_query_opened_into_a_tab_document_is_a_new_document_of_that_tab()
+    {
+        var (flow, _, persists) = TabFlow();
+        await flow.LoadAsync(new EditorSessionRecord { DocumentName = "SQLQuery2", SessionKey = "k", DocumentText = string.Empty });
+
+        Assert.True(await flow.OpenQueryAsync("SELECT 3;", "Open in editor"));
+
+        Assert.Equal("SQLQuery5", flow.Name);
+        Assert.NotEqual("k", flow.SessionKey);
+        Assert.Equal("SELECT 3;", _text.Text);
+        Assert.NotEmpty(persists);
+        Assert.Null(await _store.RestoreAsync());
+    }
 }

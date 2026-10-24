@@ -12,7 +12,7 @@ public sealed class Pgse001DynamicSqlConcatenation : PgRuleBase
     public Pgse001DynamicSqlConcatenation() : base("PGSE001", "Security", "Dynamic SQL built by concatenation", DiagnosticSeverity.Warning,
         "EXECUTE runs a string as SQL. Building that string with || puts values and names into the command text, which is how SQL injection happens. "
         + "format() with %I (identifier) and %L (literal), and EXECUTE ... USING for values, quote every part correctly. Only function and DO bodies are examined.",
-        "plpgsql-statements-executing-dyn") { }
+        "plpgsql-statements#plpgsql-statements-executing-dyn") { }
 
     protected override void Run(PgAnalysisContext ctx, PgReporter report)
     {

@@ -128,7 +128,7 @@
 
     private string ActiveConnectionText =>
         !SqlConn.IsConnected
-            ? "No SQL connection."
+            ? "No database connection."
             : SqlConn.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
                 ? $"Active connection: PostgreSQL{(string.IsNullOrWhiteSpace(SqlConn.ServerVersionText) ? "" : " " + SqlConn.ServerVersionText)} at {SqlConn.Server} / {SqlConn.Database}."
                 : $"Active connection: SQL Server at {SqlConn.Server} / {SqlConn.Database}.";

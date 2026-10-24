@@ -6,6 +6,7 @@
 @inject ReleaseAvailability Availability
 @inject SiteSettingsStore Settings
 @inject IServiceProvider Services
+@inject NavigationManager Navigation
 
 @* Spec 034 T016 (US1): FR-003 download page driven by wwwroot/releases.json via the
    singleton ReleasesManifest (T012). Failure behavior per contracts/releases-json.md:
@@ -30,12 +31,17 @@
 
 <PageTitle>Download — AKML SQL</PageTitle>
 <HeadContent>
-    <meta name="description" content="Download AKML SQL for SQL Server Management Studio 22. Free, open source, with SHA-256 verification and previous releases." />
+    <meta name="description" content="Download AKML SQL for SSMS 22 and the browser workspace. SQL Server and PostgreSQL setup guidance, SHA-256 verification and previous releases." />
     <meta property="og:title" content="Download" />
-    <meta property="og:description" content="Download AKML SQL for SQL Server Management Studio 22. Free, open source, with SHA-256 verification and previous releases." />
+    <meta property="og:description" content="Get AKML SQL and choose your desktop or browser setup. Free and open source, with verified release downloads." />
 </HeadContent>
 
 <div class="page-body container">
+    <p class="page-intro">
+        Using SQL Server or PostgreSQL in the browser?
+        <a href="/docs/topics/browser-setup">Follow the browser and engine setup guide</a>.
+        The desktop extension targets SQL Server Management Studio 22.
+    </p>
 
 @* DL-001: an entry in releases.json is not proof the installer exists. If the advertised file is
    missing from the downloads folder, fall through to the same friendly fallback used when there is
@@ -168,7 +174,9 @@
                     <li>
                         <strong>Run the installer.</strong>
                         It finds SQL Server Management Studio 22 on the machine and adds AKML SQL
-                        to it.
+                        to it. If Windows SmartScreen says it protected your PC, the installer is
+                        simply new to it: check the file against the SHA-256 on this page, then
+                        choose <em>More info</em> and <em>Run anyway</em>.
                     </li>
                     <li>
                         <strong>Let it close SSMS if it is open.</strong>
@@ -234,7 +242,7 @@
                     </li>
                     @if (_previousReleases.Count > 0)
                     {
-                        <li><a href="#previous-releases-heading">Previous versions</a></li>
+                        <li><a href="@PageAddress.Fragment(Navigation, HttpContext, "previous-releases-heading")">Previous versions</a></li>
                     }
                     <li>
                         <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source code</a>
@@ -317,6 +325,9 @@ else
 </div>
 
 @code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
     /// <summary>U23: display form of the minimum OS version — trims a trailing ".0"
     /// so "10.0" renders as the consumer-facing "Windows 10 or later".</summary>
     /// <summary>

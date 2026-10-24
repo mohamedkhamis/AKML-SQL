@@ -30,6 +30,15 @@ internal sealed class RecordingQueryExecution : IQueryExecutionService
         if (ApplyGate != null) await ApplyGate.Task;
         return ApplyReply;
     }
+
+    /// <summary>Spec 043: the tab sessions Apply was sent through (the session overload only).</summary>
+    public List<SqlSessionState> AppliedSessions { get; } = new();
+
+    public Task<ApplyChangesResult> ApplyAsync(SqlSessionState session, ApplyChangesRequest request, CancellationToken ct)
+    {
+        AppliedSessions.Add(session);
+        return ApplyAsync(request, ct);
+    }
 }
 
 /// <summary>

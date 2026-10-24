@@ -27,5 +27,13 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Optional human-readable identifier of the browser (for the engine pairing UI).</summary>
         [Key(5)] public string? BrowserLabel { get; set; }
+
+        /// <summary>
+        /// Spec 043 follow-up (review, <c>session.copy.v2</c>): a random id the web page makes once and sends on every handshake, so
+        /// a reconnect after a link drop is still the same page. A session's password is copied (New query) only into a request
+        /// from the page that connected that session. Held in the page's memory only, never stored; null from older clients (the
+        /// socket is the page then). Engines that advertise only <c>session.copy.v1</c> ignore it.
+        /// </summary>
+        [Key(6)] public string? ClientInstanceId { get; set; }
     }
 }

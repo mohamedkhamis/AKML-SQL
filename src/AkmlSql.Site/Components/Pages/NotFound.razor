@@ -19,3 +19,18 @@
         <a class="btn btn-secondary" href="/docs">Browse documentation</a>
     </p>
 </div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    // Re-executed requests already carry 404; a direct request for /not-found must too, or the
+    // page is a soft 404 that search engines index.
+    protected override void OnInitialized()
+    {
+        if (HttpContext is { Response.HasStarted: false })
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
+        }
+    }
+}

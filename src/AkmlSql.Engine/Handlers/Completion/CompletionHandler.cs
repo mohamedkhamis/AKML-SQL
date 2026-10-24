@@ -63,10 +63,17 @@ namespace AkmlSql.Engine.Handlers.Completion
 
             // Mirror NamedPipeTransport behaviour: push IntelliSense settings onto the engine before
             // each request so toggles in the Settings dialog take effect immediately.
-            // NOTE: the engine has mutable per-instance settings — concurrent requests on a
-            // shared engine instance can race on these writes. The named-pipe transport
-            // serialises requests so this is benign today; the WebSocket transport (M3) must
-            // either serialise per connection or move toward per-call settings.
+            // NOTE: the engine has mutable per-instance settings. Spec 043 answers a browser's requests side by side, so two
+            // completions (two query tabs, or the pipe and a socket) could interleave these writes with each other's
+            // GetCompletions: the settings writes and the completion run under one lock (per-call settings would lift it).
+            lock (_engine)
+            {
+                return Task.FromResult(CompleteWithSettings(session, documentText, dbCache, request));
+            }
+        }
+
+        private CompletionResponse CompleteWithSettings(AkmlSql.Engine.Server.SessionState? session, string documentText, AkmlSql.Engine.Schema.DatabaseCache? dbCache, CompletionRequest request)
+        {
             var settings = _settingsProvider();
             _engine.TableAliasEnabled        = settings.IntelliSense.AutoAlias;
             _engine.JoinAssistEnabled        = settings.IntelliSense.JoinAssist;
@@ -95,8 +102,7 @@ namespace AkmlSql.Engine.Handlers.Completion
             _engine.DatabaseInScope      = scope.IncludesDatabase(session?.DatabaseName);
             _engine.IncludeLinkedServers = scope.IncludeLinkedServers;
 
-            var response = _engine.GetCompletions(documentText, request.CursorOffset, dbCache, request.SessionId);
-            return Task.FromResult(response);
+            return _engine.GetCompletions(documentText, request.CursorOffset, dbCache, request.SessionId);
         }
     }
 }

@@ -140,6 +140,42 @@ public sealed class HandshakeClientTests
         Assert.Equal(1, observed.ProtocolVersionMax);
     }
 
+    // Spec 043 follow-up (review): the engine knows the page by one random id, the same on every handshake of that page (a
+    // reconnect after a link drop is still the page that connected its sessions) and different for another page.
+    [Fact]
+    public async Task Every_handshake_of_a_page_carries_the_same_client_instance_id_and_another_page_has_its_own()
+    {
+        var seen = new System.Collections.Generic.List<string?>();
+        Func<HandshakeRequest, HandshakeResponse> answer = req =>
+        {
+            seen.Add(req.ClientInstanceId);
+            return new HandshakeResponse { Status = HandshakeStatus.Ok, EngineVersion = "1.0.0" };
+        };
+        var diagnostics = new DiagnosticsRingBuffer(new InMemoryIndexedDbAdapter());
+        // A fresh socket per connect, as the browser opens a new WebSocket on every reconnect.
+        Func<IBridgeWebSocket> sockets = () => new FakeBridgeWebSocket(frame =>
+        {
+            var envelope = MessagePackSerializer.Deserialize<RpcMessage>(frame);
+            var resp = answer(MessagePackSerializer.Deserialize<HandshakeRequest>(envelope.Payload!));
+            return MessagePackSerializer.Serialize(new RpcMessage
+            {
+                MessageType = MessageTypes.HandshakeResponse, RequestId = envelope.RequestId, Payload = MessagePackSerializer.Serialize(resp),
+            });
+        });
+        var page = new EngineBridge(sockets, diagnostics);
+        var otherPage = new EngineBridge(sockets, diagnostics);
+
+        await page.ConnectAsync(Localhost(), null, null, CancellationToken.None);
+        await page.ConnectAsync(Localhost(), "bearer", null, CancellationToken.None);   // the reconnect path calls ConnectAsync again
+        await otherPage.ConnectAsync(Localhost(), null, null, CancellationToken.None);
+
+        Assert.Equal(3, seen.Count);
+        Assert.Matches("^[0-9a-f]{32}$", seen[0]);
+        Assert.Equal(seen[0], seen[1]);
+        Assert.NotEqual(seen[0], seen[2]);
+        Assert.Matches("^[0-9a-f]{32}$", seen[2]);
+    }
+
     [Fact]
     public async Task State_transitions_through_Connecting_to_Open_on_happy_path()
     {

@@ -32,7 +32,10 @@ public sealed class NativeKeyAcceptanceTests(ITestOutputHelper output)
         await page.EvaluateAsync("clearInterval(window.__nativeTitleTimer)");
         input.SetLayout("00000409");
         var failures = new List<string>();
-        foreach (var key in new[] { "F5", "Control+F5", "Control+r", "F8", "F6", "Shift+F6", "Control+s", "Control+Shift+s", "Control+Alt+n", "Control+Alt+o" })
+        // Spec 043 (T025, R9): after Ctrl+Alt+N opens a second query tab, Ctrl+Alt+PageUp / PageDown move between the tabs and
+        // Ctrl+Alt+W closes the (unmodified) new one again.
+        foreach (var key in new[] { "F5", "Control+F5", "Control+r", "F8", "F6", "Shift+F6", "Control+s", "Control+Shift+s", "Control+Alt+n",
+                     "Control+Alt+PageUp", "Control+Alt+PageDown", "Control+Alt+w", "Control+Alt+o" })
         {
             await page.Locator(".cm-content").First.ClickAsync();
             var before = await s.ExecuteVersionAsync();
@@ -44,8 +47,11 @@ public sealed class NativeKeyAcceptanceTests(ITestOutputHelper output)
             if (key is "F5" or "Control+F5" && await page.GetByTestId("execute-complete").CountAsync() > 0)
                 await s.WaitForExecuteAfterAsync(before);
             if (await page.GetByTestId("dialog-cancel").CountAsync() > 0) await page.GetByTestId("dialog-cancel").ClickAsync();
+            if (key == "Control+Alt+PageUp") await Assertions.Expect(page.GetByTestId("doc-name")).ToHaveTextAsync("SQLQuery1");
+            if (key == "Control+Alt+PageDown") await Assertions.Expect(page.GetByTestId("doc-name")).ToHaveTextAsync("SQLQuery2");
             input.Press("Escape");
         }
+        await Assertions.Expect(page.GetByTestId("doc-tab")).ToHaveCountAsync(1);   // Ctrl+Alt+W closed the second tab
         foreach (var key in new[] { "Control+f", "Control+l", "Control+s", "Control+a" })
         {
             await page.Locator(".cm-content").First.ClickAsync();
@@ -147,6 +153,7 @@ public sealed class NativeKeyAcceptanceTests(ITestOutputHelper output)
                 "Control" => (ushort)0x11, "Shift" => (ushort)0x10, "Alt" => (ushort)0x12,
                 "AltGraph" => (ushort)0xA5, "F5" => (ushort)0x74, "F6" => (ushort)0x75, "F8" => (ushort)0x77,
                 "Escape" => (ushort)0x1B, "Delete" => (ushort)0x2E, "ArrowLeft" => (ushort)0x25, "ArrowRight" => (ushort)0x27,
+                "PageUp" => (ushort)0x21, "PageDown" => (ushort)0x22,
                 _ when part.Length == 1 => (ushort)char.ToUpperInvariant(part[0]),
                 _ => throw new ArgumentException("Unknown key: " + part)
             }).ToArray();
@@ -154,7 +161,7 @@ public sealed class NativeKeyAcceptanceTests(ITestOutputHelper output)
             if (SendInput((uint)events.Length, events, Marshal.SizeOf<Input>()) != events.Length)
                 throw new InvalidOperationException("SendInput failed: " + Marshal.GetLastWin32Error());
         }
-        private static Input Event(ushort key, bool up) => new() { Type = 1, Keyboard = new() { Scan = (ushort)MapVirtualKey(key, 0), Flags = 8u | (up ? 2u : 0u) | (key is 0xA5 or 0x25 or 0x27 or 0x2E ? 1u : 0u) } };
+        private static Input Event(ushort key, bool up) => new() { Type = 1, Keyboard = new() { Scan = (ushort)MapVirtualKey(key, 0), Flags = 8u | (up ? 2u : 0u) | (key is 0xA5 or 0x25 or 0x27 or 0x2E or 0x21 or 0x22 ? 1u : 0u) } };
         public void Dispose()
         {
             SendMessage(window, 0x50, IntPtr.Zero, originalLayout);

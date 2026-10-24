@@ -25,6 +25,8 @@ Routing details inside the engine (post-M0):
 5. A typed handler returns a `TResponse` that the router serialises into the response `RpcMessage`; a delegating handler returns the `RpcMessage` directly. Notifications return `null`.
 6. The transport writes the response back over the same channel.
 
+**Order and concurrency (spec 043).** The named pipe answers frames one after another, except the AI message types (70–78), which it answers on the thread pool. The WebSocket transport (the web edition, one socket for all of a browser's query tabs) handles **notifications** (`RequestId == 0`: `ConnectionChanged`, `DocumentChanged`, `AnalysisSettingsChanged`) and the **handshake** on its read loop, in arrival order, and answers every other **request** on the thread pool, writing replies one at a time under a per-connection send lock. So a long `ExecuteQuery` in one tab does not hold up another tab's completion, execute or cancel; two executes on one session still queue on that session's connection gate; a request read after a notification sees it applied; replies can arrive out of request order and the browser matches them by `RequestId`. A notification is *not* ordered after an earlier request: where that matters the browser waits for the reply first (a restored tab sends `SessionDisconnect`, awaits it, then `ConnectionChanged`). Handlers keep the transport's lifetime token, so a browser that reloads mid-query does not cancel the statement; its reply to the closed socket is dropped.
+
 Every dispatch flows through the `RpcRouter`; the pre-M0 53-case `switch` is gone entirely.
 
 ---
@@ -265,6 +267,48 @@ ObjectType    string?   "Table", "View", "Procedure", etc.
 SchemaName    string?
 ObjectName    string?
 ```
+
+---
+
+### `WildcardExpansion` (27) → `WildcardExpansionResult` (127)
+
+Expands the `*` at the caret (`SELECT *`, `alias.*`; on PostgreSQL also `INSERT` / `UPDATE` / `DELETE ... RETURNING *`) into
+the columns of the tables it stands for. Routed by the session's kind (`SessionManager.KindOf`): SQL Server's
+`WildcardExpansionHandler`, PostgreSQL's `PgWildcardExpander`.
+
+**Request** (`WildcardExpansionRequest`):
+```
+SessionId     string   (0)   Session whose schema cache resolves the tables
+CursorOffset  int      (1)   At or just after the '*'
+DocumentText  string   (2)   The whole document (sent with the request, not read from the session)
+Qualifier     string?  (3)   The name written before '.*', unescaped: null for a bare '*'; "o" for o.*, [o].* and "o".*;
+                             "o]x" for [o]]x].*, a"b for "a""b".*
+```
+
+**Response** (`WildcardExpansionResponse`):
+```
+Success       bool                  (0)
+Tables        WildcardTableGroup[]  (1)
+    TableName     string            (0)   Header text (schema.name)
+    Qualifier     string            (1)   The alias the query gives the table, else its name
+    Columns       WildcardColumn[]  (2)
+        ColumnName   string  (0)
+        TypeDisplay  string  (1)   e.g. "int, NOT NULL, PK"
+ErrorMessage  string?               (2)   Why nothing was expanded
+```
+
+Spec 043 follow-up (review):
+
+- **`Qualifier` carries the unescaped name**, not the brackets or quotes it was written with (`[o]` → `o`, `[o]]x]` → `o]x`,
+  `"a""b"` → `a"b`). SQL Server's handler matches it against the FROM aliases and tables without regard to case.
+- **PostgreSQL takes the quoting from `DocumentText`.** The qualifier written before the star wins over `Qualifier`, because
+  only the text says whether it was quoted: `"Ord".*` looks for `Ord`, `Ord.*` folds to `ord`. `Qualifier` is used (folded
+  unless it is itself double-quoted) only when the text has no qualifier before the star.
+- **The names in the reply.** SQL Server's are the names as they are (`Order Details`, `Order Date`); the client writes them —
+  the web editor brackets the ones that are not regular identifiers or are reserved words (`SqlIdentifier.QuoteIfNeeded`:
+  `[Order Details].[Order Date]`, `[Order]`, `[a]]b]`). PostgreSQL's come back already written, double-quoted only where the
+  name needs it (`PgIdentifierQuoting.Quote`: `"Order Lines"."Order Date"`, `order_id`), and are pasted as they are. A
+  qualifier the user wrote (`[o].*`, `"o".*`) is kept as written in front of every column.
 
 ---
 
@@ -990,6 +1034,15 @@ HandshakeRequest (Shell→Engine, type 200)
     ProtocolVersionMax   int        Highest protocol version the client supports.
     ProtocolVersionMin   int        Lowest protocol version the client supports.
     BrowserLabel         string?    Human-readable identifier of the browser (shown in the engine's Pairing UI).
+    ClientInstanceId     string?    (key 6, spec 043 follow-up, review; session.copy.v2) a random id the web page makes once (16-64
+                                    characters of letters, digits, '-' and '_') and sends on every handshake, held in the page's
+                                    memory only. When the handshake is accepted (and only then) the engine records it on the
+                                    connection: requests on it come from that page, also over the new socket a page opens after a
+                                    link drop. A session's password is copied only into a request from the page that connected the
+                                    session. A socket keeps the first id it adopted; one that sends none (an older client) or an id
+                                    of another shape is its own page, as before. An engine that advertises session.copy.v1 but not
+                                    session.copy.v2 (1.26.1022.0927, 1.26.1022.1042) ignores the key: there the copy origin is the
+                                    socket, so a copy does not survive a reconnect.
 
 HandshakeResponse (Engine→Shell, type 201)
     Status                     string    One of: "ok" | "pin_invalid" | "pin_required" | "protocol_mismatch" | "server_busy".
@@ -1023,6 +1076,10 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
 | `session.database.v1` | `Capabilities.SessionDatabaseV1` | Spec 041 — the database selector: `ListDatabasesRequest.SessionId` (key 1), `ChangeDatabase` (217 → 218) and `ExecuteQueryResult.CurrentDatabase` (key 12). |
 | `session.disconnect.v1` | `Capabilities.SessionDisconnectV1` | `SessionDisconnect` (225 → 226): the web edition's Disconnect rolls back the session's open transaction and closes its connection before it reports success. |
+| `credentials.sqlserver.v1` | `Capabilities.CredentialsSqlServerV1` | Spec 043 follow-up: a SQL Server login's password may be remembered on the engine (`TestSqlConnectionRequest` key 3 `RememberPassword`, saved once the server accepted it) and asked about or forgotten with `CredentialRequest` `Kind` 0. Still advertised next to v2 (older web clients look for it). The engines that advertise only v1 (1.26.1022.0927, 1.26.1022.1042) registered the `CredentialRequest` handler only when `postgreSql.enabled` was true: with PostgreSQL switched off, a SQL Server `Has` or forget sent to one gets **no reply**, so a client must wait with a timeout and treat the answer as unknown (it is answered whatever the switch says only from `credentials.sqlserver.v2`). Those engines also send no `TestSqlConnectionResponse.Remembered`, ignore `CredentialRequest` key 5, and saved every web password under `mssql-web://{data source}` whatever `TrustServerCertificate` said (see `CredentialRequest` below). |
+| `credentials.sqlserver.v2` | `Capabilities.CredentialsSqlServerV2` | Spec 043 follow-up (review): `TestSqlConnectionResponse` key 4 `Remembered` is sent — true only when the password was asked to be remembered and is now in the engine's store (false when the store could not write or encrypt it; an accepted login is never reported as failed because of the store). A client must not read a missing key 4 from an engine without v2 as "not remembered". The remembered password is bound to a plain SQL login on an encrypted connection and to the certificate checking it was given with (`mssql-web://` / `mssql-web-trust://`, see `CredentialRequest` below), and a forget the store could not read or write is answered `Ok = false`. `CredentialRequest` (221) is registered whatever `postgreSql.enabled` says, and a SQL Server `Has` honours key 5 `TrustServerCertificate` (review, round 3): yes only for a password a connection with that choice would be given. |
+| `session.copy.v1` | `Capabilities.SessionCopyV1` | Spec 043 follow-up: `ConnectionInfo` key 7 and `TestSqlConnectionRequest` key 2 `CopyPasswordFromSessionId` — a new query tab sends its connection without a password and names the tab it was opened from; the engine copies that session's password for the same server, login, encryption and certificate checking (`SessionPasswordCopy`), never from an SSMS session or another browser's. Still advertised next to v2 (older web clients look for it). The engines that advertise only v1 take the copy origin from the WebSocket connection (so a copy does not survive a reconnect), ignore `ListDatabasesRequest` key 3 and `HandshakeRequest` key 6, and do not send `postgresql.login-failed`. A web SQL login that still has no password is answered `dialect.password-required` by the engine without contacting the server; a refused SQL Server login carries `sqlserver.login-failed` (18456). |
+| `session.copy.v2` | `Capabilities.SessionCopyV2` | Spec 043 follow-up (review): the copy source is honoured on `ListDatabasesRequest` key 3 too, and the copy origin is the web page (`HandshakeRequest` key 6 `ClientInstanceId`; the socket for a client that sends none), so a copy survives the page's reconnect after a link drop. The source session must be connected and connected by the same page, and for SQL Server the request must be a plain SQL login (encrypted, SQL authentication, no failover partner, certificate host name, certificate file or SPN of its own) with the same server, login, encryption, certificate checking and authentication as the source (`SessionPasswordCopy`, `BridgeSqlSecurity`). The typed password, else the copy, else the remembered password is used, decided in one place for `ConnectionChanged`, `TestSqlConnection` and `ListDatabases` (`BridgeSqlPassword`). A `ConnectionChanged` that cannot be given a password moves the session to the request's target with no connection (the next run answers "no connection"; its kind, database and schema are the new target's, and nothing can be copied from it), never leaves it on its previous server. A refused PostgreSQL password carries `postgresql.login-failed` (28P01). |
 | `execute.v2` | `Capabilities.ExecuteV2` | Spec 041 — scripts split on GO and keep running after a failing batch; the execute reply carries structured messages, batches, the completion time and the omitted-message count (keys 8–11), sets carry their batch (key 11), and `ExecuteParse` (219 → 220) is understood. |
 
 ### SchemaIdentify (202 / 203) — `contracts/schema-cache-shape.md`
@@ -1155,8 +1212,10 @@ How a script runs (execute.v2):
 
 ### `ExecuteCancel` (214) — notification
 
-`ExecuteCancelRequest { 0 SessionId, 1 QueryId }`. Cancels an execute that is still queued behind another on
-the session's connection; it does not interrupt a statement that is already running.
+`ExecuteCancelRequest { 0 SessionId, 1 QueryId }`. Stops the execute with that id wherever it is: queued behind
+another on the session's connection, waiting for the connection to open, or running — the server is asked to stop
+the running statement, and the batches after it do not run. Spec 043: the WebSocket transport reads a notification
+while that browser's requests run (R3), and the execute registers its cancel handle as soon as it is read.
 
 ### `ApplyChanges` (215) → `ApplyChangesResult` (216)
 
@@ -1206,10 +1265,18 @@ exactly one row.
 
 ### `ListDatabases` (94) → `ListDatabasesResult` (194) — `SessionId`
 
-`ListDatabasesRequest { 0 ConnectionString, 1 SessionId }`. Spec 041 (session.database.v1): with `SessionId` set
+`ListDatabasesRequest { 0 ConnectionString, 1 SessionId, 2 Kind, 3 CopyPasswordFromSessionId }`. Spec 041 (session.database.v1): with `SessionId` set
 and `ConnectionString` empty, the engine lists the databases of the session's server with the connection string
 it already holds (the browser never resends a password); alias resolution and the bridge target guard run as
 for any other request; an unknown or disconnected session gets `Ok = false` with an error.
+
+Key 3 (spec 043 follow-up, review, session.copy.v2): the list a new tab's Connect to database dialog asks for before any password is
+typed takes the password of the tab it was opened from, under the same rules as `ConnectionInfo.CopyPasswordFromSessionId`, then the
+remembered one; with neither, a web SQL login is answered `Ok = false`, `ErrorCode` `dialect.password-required`, without contacting the
+server. PostgreSQL takes the copy too, after its target guard and before its remembered-password lookup. An engine that advertises
+session.copy.v1 but not session.copy.v2 (1.26.1022.0927, 1.26.1022.1042) ignores key 3: it fills in only a password remembered under
+`mssql-web://{data source}`, and a web SQL login without one is answered `dialect.password-required` there too (it never opens a
+connection with an empty password). So a client relies on key 3 only with session.copy.v2, and on an older engine asks for the password.
 
 ### `ChangeDatabase` (217) → `ChangeDatabaseResult` (218) — session.database.v1
 
@@ -1233,7 +1300,7 @@ execute's. Sent only when the engine advertises `execute.v2`: an engine that doe
 
 ### `SessionDisconnect` (225) → `SessionDisconnectResult` (226) — session.disconnect.v1
 
-`SessionDisconnectRequest { 0 SessionId }` → `SessionDisconnectResponse { 0 Ok, 1 ErrorMessage, 2 RolledBack }`. The session forgets
+`SessionDisconnectRequest { 0 SessionId, 1 Release }` → `SessionDisconnectResponse { 0 Ok, 1 ErrorMessage, 2 RolledBack }`. The session forgets
 its connection first (requests answer "no connection" until the next `ConnectionChanged`; the document is kept), then the persistent
 connection is closed: queued executes are cancelled, a running command may finish within 15 s, an open transaction is rolled back —
 never committed — and the physical connection is disposed. `RolledBack` says a transaction was open. `Ok = false` means a command was
@@ -1241,17 +1308,57 @@ still running after the wait; the connection closes, and its transaction rolls b
 session connection (credential change, idle eviction, disconnect) rolls back an open transaction explicitly: a pooled SqlConnection
 closed inside a script-begun transaction would otherwise keep it, and its locks, until the pool reuses the connection.
 
+`Release` (spec 043, append-only, default false): the web edition closed the query tab that owned the session. After the steps above the engine also removes the session entry and its document (`SessionManager.RemoveSession`) and drops every schema cache of the session (`SchemaCacheManager.RemoveSession`); this happens even when a running command kept the connection past the wait. The id may be used again by a later `ConnectionChanged`, which starts it afresh. An engine from before the key reads it as a plain disconnect.
+
 ## PostgreSQL Messages (221–224) — spec 042, `dialect.postgresql.v1`
 
-Registered only when `postgreSql.enabled` is true in `config.json` (the default). A PostgreSQL session is an ordinary session whose
+`RedactRequest` (223) is registered only when `postgreSql.enabled` is true in `config.json` (the default). `CredentialRequest` (221) is
+registered whatever the switch says from `credentials.sqlserver.v2` (spec 043 follow-up, review): it also serves the SQL Server kind, which
+`credentials.sqlserver.v1` always advertises, and a request no handler answers would leave the browser waiting. The released engines
+that advertise only `credentials.sqlserver.v1` (1.26.1022.0927, 1.26.1022.1042) still registered it only with the switch on: with
+PostgreSQL off, a SQL Server request sent to one gets no reply, so a client waits with a timeout and treats the answer as unknown. A PostgreSQL session is an ordinary session whose
 `ConnectionInfo.Kind` is 1; the handlers that take a `SessionId` branch on it (see `specs/042-postgresql-support/contracts/ipc.md`).
 
 ### `CredentialRequest` (221) → `CredentialResponse` (222)
 
-`CredentialRequest { 0 Action, 1 Kind, 2 Server, 3 Port, 4 Login }` → `CredentialResponse { 0 Ok, 1 Has, 2 Error }`. `Action` 0 asks whether the
+`CredentialRequest { 0 Action, 1 Kind, 2 Server, 3 Port, 4 Login, 5 TrustServerCertificate }` → `CredentialResponse { 0 Ok, 1 Has, 2 Error }`. `Action` 0 asks whether the
 engine holds a remembered password for this server and login, 1 forgets it. The reply says yes or no and never carries a password.
-Only PostgreSQL is served: any other `Kind`, or a missing login, finds nothing and touches nothing. The password lives in the engine's
-protected credential store under `pg://{server}:{port}` and the login, and is filled into a connection that arrives without one.
+PostgreSQL (`Kind` 1): the password lives in the engine's protected credential store under `pg://{server}:{port}` and the login, and is
+filled into a connection that arrives without one. With `postgreSql.enabled` false a PostgreSQL request is answered `Ok = false`,
+`Has = false`, `Error` `PostgreSQL support is switched off in this engine (postgreSql.enabled).`, and nothing is read or written.
+
+SQL Server (`Kind` 0, `credentials.sqlserver.v1`, spec 043 follow-up): the web edition's remembered logins — never the logins the
+SSMS extension saves — saved when `TestSqlConnectionRequest.RememberPassword` is set, once the server accepted the typed password
+(`TestSqlConnectionResponse.Remembered` says it was kept, from engines advertising `credentials.sqlserver.v2`), and filled only into a
+bridge request on SQL authentication that has no
+password (`SqlServerCredentialResolver`). Review (`credentials.sqlserver.v2`): the password is bound to the certificate checking it was
+given with. One saved from a connection that validates the server certificate is under `mssql-web://{data source}`, one saved with
+`TrustServerCertificate=true` under `mssql-web-trust://{data source}` (an alias resolved first, case-insensitive), with the login. A
+request that trusts any certificate gets only the `mssql-web-trust` password; a validating request may get either (the validated one
+first). One password is kept per server and login: saving under one key removes the other, in the same store write. The engines that
+advertise only `credentials.sqlserver.v1` (1.26.1022.0927, 1.26.1022.1042) wrote EVERY web password under `mssql-web://{data source}`,
+whatever `TrustServerCertificate` said — and the web client always trusts the certificate of a server on the engine's own machine. So a
+trusting request for a server on the engine's machine (`localhost`, `.`, `(local)`, a loopback address, the machine's name, with or
+without an instance or port) also reads the `mssql-web://` entry when its own key has none: certificate checking on a loopback hop
+protects nothing. No other trusting request does, and a read never rewrites the entry (the next remember moves it). Only a plain SQL
+login is served or saved: SQL authentication (not Windows or Entra), `Encrypt` Mandatory or Strict (never Optional), and no
+`Failover Partner`, `HostNameInCertificate`, `Server Certificate`, `Server SPN` or `Failover Partner SPN` — a request that sets one of
+these gets nothing (the web client sends none of them). `Action` 1 forgets both keys, whatever key 5 says, and answers yes when either
+held a password.
+
+Key 5 `TrustServerCertificate` (`bool?`, spec 043 follow-up, review round 3, `credentials.sqlserver.v2`): the connection's "Trust server
+certificate" choice, so that `Action` 0 answers by the rule the engine fills a password by — the browser skips the password prompt only
+when the connect will really be given one. One list of keys serves both (`SqlServerCredentialResolver.FillKeys`): `false`, a validating
+connection, reads `mssql-web://` then `mssql-web-trust://`; `true`, a trusting one, reads `mssql-web-trust://`, and for a server on the
+engine's own machine then `mssql-web://` (the entry the released builds wrote). `null` (a client from before key 5) answers yes when
+either key holds a password, as before — which may say yes for a trusting remote connection the engine will not fill; its test or
+database list is then answered `dialect.password-required`. PostgreSQL ignores the key. An engine that advertises only `credentials.sqlserver.v1` ignores it.
+
+A forget whose removal the store could not write — or could not read, so nothing could be removed (review round 3: an unreadable store is
+never written and never answered "nothing to forget") — is answered `Ok = false`, `Has = false`, `Error`
+`The credential store could not be written.` (the password is still remembered; the same for PostgreSQL); a store that fails in any other
+way is answered `Ok = false`, `Error` `The credential store could not be read or written.`. An unreadable store answers `Action` 0 "no".
+A missing server or login finds nothing.
 
 ### `RedactRequest` (223) → `RedactResponse` (224)
 
@@ -1270,8 +1377,10 @@ quoting the text: the client must not send the original without the user's say-s
 ### Capability, dispatch by kind and the `dialect.*` errors
 
 - **Capability.** `HandshakeResponse.EngineCapabilities` carries `dialect.postgresql.v1` when `postgreSql.enabled` is true. A client checks it before offering
-  PostgreSQL (the web connection dialog, formatting, analysis) and shows "requires an engine that supports PostgreSQL" otherwise. Messages 221 to 224 are
-  registered only then.
+  PostgreSQL (the web connection dialog, formatting, analysis) and shows "requires an engine that supports PostgreSQL" otherwise. Messages 223 and 224 are
+  registered only then; 221 and 222 always on an engine that advertises `credentials.sqlserver.v2` (they also serve SQL Server, and answer a PostgreSQL
+  request with the feature-off message). The engines that advertise only `credentials.sqlserver.v1` (1.26.1022.0927, 1.26.1022.1042) registered 221 and
+  222 only then too: with the switch off, a `CredentialRequest` of either kind gets no reply there.
 - **Dispatch by kind.** `ConnectionInfo.Kind` (key 5, 0 SQL Server, 1 PostgreSQL) is stored on the session. A request that names a `SessionId` is routed by
   `SessionManager.KindOf`: completion, quick info, signature help, wildcard expansion, statement boundaries, definitions, execute, parse, apply, change database,
   list databases, snippets, format (document, selection, action, preview), analysis and History go to the PostgreSQL implementation for a PostgreSQL session and to
@@ -1281,10 +1390,14 @@ quoting the text: the client must not send the original without the user's say-s
   `Message` `dialect.unsupported: Not available for PostgreSQL`.
 - **Error ids** that travel in `ErrorCode` fields of connection replies: `dialect.unsupported` (4201), `dialect.password-required` (4202: the engine holds no
   password for this server and login, so the client should ask), `dialect.credentials-required` (4203: the connection is refused because it has no user name,
-  asks for integrated authentication, or names a certificate by a relative path).
+  asks for integrated authentication, or names a certificate by a relative path), `postgresql.login-failed` (spec 043 follow-up, review: the server refused
+  the password, SQLSTATE 28P01 — a wrong or out-of-date password, told without reading the server's words; the message is unchanged; not sent by the
+  engines that advertise `session.copy.v1` without `session.copy.v2`) and `sqlserver.login-failed` (SQL Server's 18456).
 - **The feature switched off** (`postgreSql.enabled = false`, FR-093): the engine makes no PostgreSQL session at all. `ConnectionChanged` with `Kind` 1 is ignored
   (logged), and `TestSqlConnection` / `ListDatabases` for a PostgreSQL target answer `Ok = false` with the message
-  `PostgreSQL support is switched off in this engine (postgreSql.enabled).` and no `ErrorCode`. The switch is read when the engine starts.
+  `PostgreSQL support is switched off in this engine (postgreSql.enabled).` and no `ErrorCode`; a `CredentialRequest` with `Kind` 1 answers `Ok = false` with
+  the same message in `Error` (from `credentials.sqlserver.v2`; an older engine registered no handler with the switch off and gives no reply). The switch is
+  read when the engine starts.
 - **Appended keys** (all append-only; an older peer ignores them): see `specs/042-postgresql-support/contracts/ipc.md` for the full list. In this file they appear
   where the message is described: `Dialect` on `FormatPreviewRequest` (3), `ProfileJson` on the three format requests (6), `Kind` on `SnippetListRequest` (5),
   `IncludePostgreSql` on `ListAnalysisRulesRequest` (1), `Kind` (9) and `ReferenceUrl` (10) on `AnalysisRuleInfoDto`.

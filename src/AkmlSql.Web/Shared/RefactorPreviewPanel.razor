@@ -124,10 +124,11 @@
         border-bottom: 1px solid var(--akml-border-default);
     }
     .akml-rpv-title { font-weight: bold; }
+    /* Spec 043 (FR-032): the neutral badge tokens; white on the secondary text colour read 2.6:1 in the dark theme. */
     .akml-rpv-badge {
-        font-size: 11px; color: var(--akml-text-onaccent);
-        background-color: var(--akml-text-secondary); border-radius: var(--akml-scalar-radius-xs);
-        padding: 0 var(--akml-scalar-spacing-xs);
+        font-size: 11px; color: var(--akml-badge-neutraltext);
+        background-color: var(--akml-badge-neutral); border-radius: var(--akml-scalar-radius-xs);
+        padding: 0 var(--akml-scalar-spacing-xs); white-space: nowrap;
     }
     .akml-rpv-empty { padding: var(--akml-scalar-spacing-m); color: var(--akml-text-secondary); font-style: italic; }
     .akml-rpv-diff { flex: 1 1 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; min-height: 0; overflow: hidden; }
@@ -140,7 +141,8 @@
     .akml-rpv-code {
         margin: 0; flex: 1 1 auto; overflow: auto; white-space: pre;
         padding: var(--akml-scalar-spacing-s);
-        font-family: var(--akml-type-editor-family);
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        line-height: var(--akml-type-editor-line-height);
         background-color: var(--akml-surface-editor, var(--akml-surface-panel));
     }
     .akml-rpv-before { border-right: 1px solid var(--akml-border-default); }

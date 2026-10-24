@@ -35,9 +35,24 @@ public class TestSqlConnectionHandlerPgTests
 
         Assert.StartsWith("password authentication failed for user \"app\" (SQLSTATE 28P01).", password.Message);
         Assert.Contains("Check the user name and password.", password.Message);
-        Assert.Null(password.ErrorCode);
         Assert.Contains("database \"nodb\" does not exist (SQLSTATE 3D000)", database.Message);
         Assert.Contains("list the databases", database.Message);
+        Assert.Null(database.ErrorCode);
+    }
+
+    [Fact]
+    public async Task A_refused_password_carries_its_own_id_through_the_TLS_diagnosis_too()
+    {
+        // Spec 043 follow-up (review): the client tells a wrong or out-of-date password by the id, not by the server's words
+        // (which follow its language). The message is unchanged.
+        var wrongPassword = new PostgresException("password authentication failed for user \"app\"", "FATAL", "FATAL", "28P01");
+
+        var described = PgConnectionFailure.Describe(wrongPassword, "db1", 5432);
+        var throughDiagnosis = await PgConnectionFailure.DescribeAsync(wrongPassword, "Host=db1;Username=app", "db1", 5432, CancellationToken.None);
+
+        Assert.Equal(DialectErrors.PgLoginFailed, described.ErrorCode);
+        Assert.Equal("postgresql.login-failed", described.ErrorCode);
+        Assert.Equal(described, throughDiagnosis);
     }
 
     [Fact]
@@ -185,7 +200,8 @@ public class TestSqlConnectionHandlerPgTests
         Assert.False(wrongPassword.Ok);
         Assert.Contains("password authentication failed", wrongPassword.ErrorMessage);
         Assert.Contains("28P01", wrongPassword.ErrorMessage);
-        Assert.Null(wrongPassword.ErrorCode);
+        Assert.Equal(DialectErrors.PgLoginFailed, wrongPassword.ErrorCode);   // spec 043 follow-up (review): the id, not the words
+        Assert.Null(unknownDatabase.ErrorCode);
 
         Assert.False(unknownDatabase.Ok);
         Assert.Contains("3D000", unknownDatabase.ErrorMessage);

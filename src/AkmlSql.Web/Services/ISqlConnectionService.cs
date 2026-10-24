@@ -10,10 +10,10 @@ using AkmlSql.Core.Ipc.Messages;
 namespace AkmlSql.Web.Services;
 
 /// <summary>
-/// Spec 030 — the browser-side "Connect to SQL Server" service. Holds the ONE canonical web
-/// <see cref="SessionId"/> (the source of truth the advisor flagged) used for
-/// <c>ConnectionChanged</c>, <c>DocumentChanged</c> and every completion request, so the engine
-/// associates them with a single session. On connect it tells the paired engine (over the bridge)
+/// Spec 030 — the browser-side "Connect to database" service. Spec 043: every query tab has its own engine session
+/// (<see cref="SqlSessionState"/>); the members without a session parameter read and act on the ACTIVE tab's, whose
+/// <see cref="SessionId"/> is the one used for <c>ConnectionChanged</c>, <c>DocumentChanged</c> and every completion
+/// request, so the engine associates them with that tab's session. On connect it tells the paired engine (over the bridge)
 /// which SQL Server + database to open; the engine connects under ITS OWN Windows identity when
 /// Windows auth is chosen, then loads the schema (Phase A/B) so live IntelliSense works.
 /// </summary>
@@ -168,8 +168,87 @@ public interface ISqlConnectionService
     /// <summary>Spec 042 (FR-105): does the engine hold a remembered PostgreSQL password for this server and login?</summary>
     Task<bool> HasRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) => Task.FromResult(false);
 
-    /// <summary>Spec 042 (FR-106): ask the engine to forget the remembered PostgreSQL password; true when it had one.</summary>
-    Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) => Task.FromResult(false);
+    /// <summary>
+    /// Spec 042 (FR-106): ask the engine to forget the remembered PostgreSQL password. True when it had one, false when it had
+    /// none; null when there is no confirmed answer (not paired, too old, no reply in time, or the engine said it could not —
+    /// for example its store could not be written; review, round 2) — the password may still be there.
+    /// </summary>
+    Task<bool?> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) => Task.FromResult<bool?>(false);
+
+    /// <summary>Spec 043 follow-up: the paired engine can remember a SQL Server login's password (<c>credentials.sqlserver.v1</c>).</summary>
+    bool EngineRemembersSqlServerPasswords => false;
+
+    /// <summary>
+    /// Spec 043 follow-up: does the engine hold a remembered password for this SQL Server and login? Review, round 3: one it would
+    /// fill into a connection with this "Trust server certificate" choice (<paramref name="trustServerCertificate"/>; a server on
+    /// the engine's own machine is always trusted) — a password remembered for a validated connection is never given to a
+    /// trusting one. An engine before <c>credentials.sqlserver.v2</c> is not told and answers for any.
+    /// </summary>
+    Task<bool> HasRememberedSqlServerPasswordAsync(string server, string login, bool trustServerCertificate, CancellationToken ct) =>
+        Task.FromResult(false);
+
+    /// <summary>Spec 043 follow-up: ask the engine to forget a SQL Server login's remembered password; true when it had one, false
+    /// when it had none, null when there is no confirmed answer (see <see cref="ForgetRememberedPasswordAsync"/>).</summary>
+    Task<bool?> ForgetRememberedSqlServerPasswordAsync(string server, string login, CancellationToken ct) => Task.FromResult<bool?>(false);
+
+    /// <summary>
+    /// Spec 043 follow-up (review): the paired engine can give a new tab's Connect to database dialog the password of the tab it
+    /// was opened from, so the dialog can test and list databases before any password is typed. Review, round 2: that needs
+    /// <c>session.copy.v2</c> — an engine with only <c>session.copy.v1</c> ignores the list's copy source (and the page's
+    /// identity), so its dialog asks for the password as before. The tab's own reconnect still copies from v1
+    /// (<see cref="ConnectAsync(ConnectionTarget, SqlSessionState, CancellationToken)"/>).
+    /// </summary>
+    bool EngineCopiesSessionPasswords => false;
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 2): the query tab session with this engine session id, while its tab is open; null when
+    /// there is none (closed, or a fake that has no sessions). The dialog compares a new tab's sign-in with the tab it was opened
+    /// from before it offers that tab's password.
+    /// </summary>
+    SqlSessionState? FindSession(string sessionId) => null;
+
+    // ── Spec 043 (research R1, R2) — query tabs ─────────────────────────────────────────────────────────────
+    // Every query tab has its own SqlSessionState. The members above read and act on the ACTIVE tab's; the ones below name a
+    // tab, for work that can outlive a tab switch (a run, its history record, an Apply, a rollback). Default members: a fake
+    // that does not implement them is one session, as before tabs.
+
+    /// <summary>The active tab's session; null in a fake that has no sessions.</summary>
+    SqlSessionState? ActiveSession => null;
+
+    /// <summary>A session for a new or restored tab (its id reused after a reload). Not active until <see cref="Activate"/>.</summary>
+    SqlSessionState CreateSession(string? sessionId = null) => new(sessionId);
+
+    /// <summary>Make <paramref name="session"/> the one the members above read; raises <see cref="StateChanged"/>.</summary>
+    void Activate(SqlSessionState session) { }
+
+    /// <summary>A closed tab's session: no longer kept up to date (after <see cref="DisconnectSessionAsync(SqlSessionState, bool, CancellationToken)"/>).</summary>
+    void ForgetSession(SqlSessionState session) { }
+
+    /// <summary><see cref="ConnectAsync(ConnectionTarget, CancellationToken)"/> for a given tab.</summary>
+    Task<ConnectResult> ConnectAsync(ConnectionTarget target, SqlSessionState session, CancellationToken ct) => ConnectAsync(target, ct);
+
+    /// <summary>
+    /// A restored tab's first connect in this page (R2): <c>SessionDisconnect</c> for its persisted session id, the reply
+    /// awaited (an open transaction left by the previous page is rolled back first), then a connect with its binding and
+    /// <paramref name="password"/> when one is needed.
+    /// </summary>
+    Task<ConnectResult> ReattachAsync(SqlSessionState session, string? password, CancellationToken ct) =>
+        Task.FromResult(ConnectResult.Failed("Reconnecting a query tab needs a newer web edition."));
+
+    /// <summary>Disconnect a given tab; <paramref name="release"/> (the tab is closed) also tells the engine to forget the session.</summary>
+    Task<DisconnectResult> DisconnectSessionAsync(SqlSessionState session, bool release, CancellationToken ct) => DisconnectSessionAsync(ct);
+
+    /// <summary><see cref="SendDocumentAsync(string, CancellationToken)"/> for a given tab.</summary>
+    Task SendDocumentAsync(SqlSessionState session, string documentText, CancellationToken ct) => SendDocumentAsync(documentText, ct);
+
+    /// <summary><see cref="ReportCurrentDatabase(string?)"/> for the tab a run belonged to.</summary>
+    void ReportCurrentDatabase(SqlSessionState session, string? database) => ReportCurrentDatabase(database);
+
+    /// <summary><see cref="ReportTransactionState(AkmlSql.Core.TransactionState)"/> for the tab a run belonged to.</summary>
+    void ReportTransactionState(SqlSessionState session, AkmlSql.Core.TransactionState state) => ReportTransactionState(state);
+
+    /// <summary>A run on this tab came back without a connection: the tab shows disconnected and reconnects next time.</summary>
+    void MarkConnectionLost(SqlSessionState session) { }
 }
 
 internal sealed class SqlConnectionService : ISqlConnectionService
@@ -182,42 +261,125 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _bridge.StateChanged += OnBridgeStateChanged;
+        _active = CreateSession();
     }
 
-    public int ConnectionGeneration { get; private set; }
+    // ── Spec 043 (research R1): the sessions of the query tabs ────────────────────────────────────────────────────
+    // Before tabs this service held one session's fields; they live in SqlSessionState now, one per tab. The members of
+    // ISqlConnectionService read the ACTIVE one; the overloads that take a session act on that tab whatever is shown.
+    private SqlSessionState _active;
+    private readonly List<SqlSessionState> _sessions = new();
 
-    // The engine the session was opened on: the bridge reopening on another one is a new target.
-    private string? _engineUrl;
+    public SqlSessionState ActiveSession => _active;
 
-    private void OnBridgeStateChanged(BridgeState state)
+    public SqlSessionState CreateSession(string? sessionId = null)
     {
-        if (state != BridgeState.Open || !IsConnected) return;
-        var url = _bridge.ConnectedUrl;
-        if (string.Equals(url, _engineUrl, StringComparison.OrdinalIgnoreCase)) return;
-        _engineUrl = url;
-        ConnectionGeneration++;
+        var session = new SqlSessionState(sessionId);
+        _sessions.Add(session);
+        return session;
+    }
+
+    public void Activate(SqlSessionState session)
+    {
+        if (session == null) throw new ArgumentNullException(nameof(session));
+        if (!_sessions.Contains(session)) _sessions.Add(session);
+        if (ReferenceEquals(_active, session)) return;
+        _active = session;
         StateChanged?.Invoke();
     }
 
-    /// <summary>A new target: the session now writes to a different server, database, login, kind or engine.</summary>
-    private void NewTarget()
+    public void ForgetSession(SqlSessionState session)
     {
-        ConnectionGeneration++;
-        _engineUrl = _bridge.ConnectedUrl;
+        session.IsReleased = true;   // a connect still on its way for it sends nothing now
+        if (!ReferenceEquals(session, _active)) _sessions.Remove(session);
     }
 
-    // One stable id per browser session — used by ConnectionChanged, DocumentChanged, and completion.
-    public string SessionId { get; } = Guid.NewGuid().ToString("N");
+    public SqlSessionState? FindSession(string sessionId) =>
+        string.IsNullOrEmpty(sessionId) ? null : _sessions.FirstOrDefault(s => !s.IsReleased && s.SessionId == sessionId);
 
-    public bool IsConnected { get; private set; }
-    public string? Server { get; private set; }
-    public string? Database { get; private set; }
+    // Review of US1: a release the engine could not be told about (the link was down) is sent when the engine is back, so a
+    // closed tab's connection, transaction and schema cache do not wait for the engine's idle clean-up. Each is kept with the
+    // engine the session was opened through (null: not known) and is sent only to that engine; another one never had it.
+    private readonly Dictionary<string, string?> _pendingReleases = new();
+
+    private void AddPendingRelease(SqlSessionState session)
+    {
+        lock (_pendingReleases) _pendingReleases[session.SessionId] = session.EngineUrl;
+    }
+
+    private async Task SendPendingReleasesAsync()
+    {
+        var url = _bridge.ConnectedUrl;
+        string[] ids;
+        lock (_pendingReleases)
+        {
+            ids = _pendingReleases
+                .Where(p => p.Value == null || string.Equals(p.Value, url, StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Key).ToArray();
+        }
+        foreach (var id in ids)
+        {
+            try
+            {
+                await _bridge.SendAsync<SessionDisconnectRequest, SessionDisconnectResponse>(
+                    MessageTypes.SessionDisconnect, new SessionDisconnectRequest { SessionId = id, Release = true }, CancellationToken.None).ConfigureAwait(false);
+                lock (_pendingReleases) _pendingReleases.Remove(id);
+            }
+            catch (Exception ex)
+            {
+                _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"A delayed release failed: {ex.GetType().Name}");
+                return;   // the link went again: the next open tries the rest
+            }
+        }
+    }
+
+    /// <summary>The tab's own event, and the facade's when it is the active tab.</summary>
+    private void Changed(SqlSessionState session)
+    {
+        session.RaiseChanged();
+        if (ReferenceEquals(session, _active)) StateChanged?.Invoke();
+    }
+
+    public int ConnectionGeneration => _active.ConnectionGeneration;
+
+    // The engine a session was opened on: the bridge reopening on another one is a new target for every connected tab.
+    // A drop of the link alone changes nothing here (the status bar shows Offline or Cached, and the engine may well still
+    // hold the session); a run that comes back without a connection says so (MarkConnectionLost).
+    private void OnBridgeStateChanged(BridgeState state)
+    {
+        if (state != BridgeState.Open) return;
+        bool pending;
+        lock (_pendingReleases) pending = _pendingReleases.Count > 0;
+        if (pending && _bridge.Advertises(CapabilitySessionDisconnect)) _ = SendPendingReleasesAsync();
+        var url = _bridge.ConnectedUrl;
+        foreach (var session in _sessions.ToArray())
+        {
+            if (!session.IsConnected || string.Equals(url, session.EngineUrl, StringComparison.OrdinalIgnoreCase)) continue;
+            session.EngineUrl = url;
+            session.ConnectionGeneration++;
+            Changed(session);
+        }
+    }
+
+    /// <summary>A new target: the session now writes to a different server, database, login, kind or engine.</summary>
+    private void NewTarget(SqlSessionState session)
+    {
+        session.ConnectionGeneration++;
+        session.EngineUrl = _bridge.ConnectedUrl;
+    }
+
+    // One stable id per query tab — used by ConnectionChanged, DocumentChanged, and completion.
+    public string SessionId => _active.SessionId;
+
+    public bool IsConnected => _active.IsConnected;
+    public string? Server => _active.Server;
+    public string? Database => _active.Database;
 
     /// <summary>Spec 041: kept from connect — the guard judges a switch with the same authentication.</summary>
-    public bool WindowsAuth { get; private set; } = true;
+    public bool WindowsAuth => _active.WindowsAuth;
 
     /// <summary>Spec 041: the SQL Server login (shown in the status bar); never the password.</summary>
-    public string? Login { get; private set; }
+    public string? Login => _active.Login;
 
     /// <summary>The engine capability the database selector needs (contracts/ipc.md).</summary>
     public const string CapabilitySessionDatabase = "session.database.v1";
@@ -230,13 +392,11 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     // ── Spec 042 ──────────────────────────────────────────────────────────────────────────────────────────
     public const string CapabilityPostgreSql = "dialect.postgresql.v1";
 
-    public AkmlSql.Core.DatabaseKind Kind { get; private set; } = AkmlSql.Core.DatabaseKind.SqlServer;
+    public AkmlSql.Core.DatabaseKind Kind => _active.Kind;
 
-    public string? ServerVersionText { get; private set; }
+    public string? ServerVersionText => _active.ServerVersionText;
 
-    public AkmlSql.Core.TransactionState TransactionState { get; private set; } = AkmlSql.Core.TransactionState.None;
-
-    private string? _schemaIdentity;
+    public AkmlSql.Core.TransactionState TransactionState => _active.TransactionState;
 
     /// <summary>
     /// The browser's schema-cache key for this connection: the server as the engine reaches it, scoped to the engine the session
@@ -249,8 +409,8 @@ internal sealed class SqlConnectionService : ISqlConnectionService
     {
         get
         {
-            var server = Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _schemaIdentity != null ? _schemaIdentity : Server;
-            return server == null ? null : ScopeToEngine(server, _engineUrl);
+            var server = Kind == AkmlSql.Core.DatabaseKind.PostgreSql && _active.PgServerKey != null ? _active.PgServerKey : Server;
+            return server == null ? null : ScopeToEngine(server, _active.EngineUrl);
         }
     }
 
@@ -263,11 +423,13 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public bool EngineSupportsPostgres => _bridge.Advertises(CapabilityPostgreSql);
 
-    public void ReportTransactionState(AkmlSql.Core.TransactionState state)
+    public void ReportTransactionState(AkmlSql.Core.TransactionState state) => ReportTransactionState(_active, state);
+
+    public void ReportTransactionState(SqlSessionState session, AkmlSql.Core.TransactionState state)
     {
-        if (!IsConnected || TransactionState == state) return;
-        TransactionState = state;
-        StateChanged?.Invoke();
+        if (!session.IsConnected || session.TransactionState == state) return;
+        session.TransactionState = state;
+        Changed(session);
     }
 
     /// <summary>The text when a PostgreSQL connection is attempted against an engine that does not advertise it (FR-006).</summary>
@@ -276,17 +438,39 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public Task<ConnectResult> TestAsync(ConnectionTarget target, CancellationToken ct) =>
         target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
-            ? TestPostgresAsync(target, ct)
-            : AdaptAsync(TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct));
+            ? TestPostgresAsync(target, ct, CopySourceOf(target, null))
+            : TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct,
+                CopySourceOf(target, null));
 
     public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
         target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
-            ? ListPostgresDatabasesAsync(target, ct)
-            : ListSqlServerDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct);
+            ? ListPostgresDatabasesAsync(target, ct, CopySourceOf(target, null))
+            : ListSqlServerDatabasesAsync(target.Server, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct,
+                CopySourceOf(target, null));
+
+    /// <summary>
+    /// Spec 043 follow-up (review): the engine session whose password a request with no password typed is sent with — the
+    /// target's own (a new tab's Connect to database dialog), else the tab's (<paramref name="sessionCopy"/>). Null when a
+    /// password is typed or the engine cannot copy one; the engine checks the server and login and answers PasswordRequired
+    /// when they are not the other session's, so it never sends an empty password to the server.
+    /// Review, round 2: the dialog's source needs <c>session.copy.v2</c> (an engine with only v1 ignores it on a database list,
+    /// so the list would go out with no password at all); the tab's own source — New query's reconnect, through
+    /// <c>ConnectionInfo</c> key 7 and <c>TestSqlConnectionRequest</c> key 2, which v1 engines honour — keeps working from v1.
+    /// </summary>
+    private string? CopySourceOf(ConnectionTarget target, string? sessionCopy)
+    {
+        if (!string.IsNullOrEmpty(target.Password)) return null;
+        if (target.CopyPasswordFrom != null && EngineCopiesSessionPasswords) return target.CopyPasswordFrom;
+        return sessionCopy != null && EngineCopiesTabPasswords ? sessionCopy : null;
+    }
+
+    // The tab's own copy (see CopySourceOf): any engine that copies at all.
+    private bool EngineCopiesTabPasswords => _bridge.Advertises(CapabilitySessionCopy) || _bridge.Advertises(CapabilitySessionCopyV2);
 
     /// <summary>The databases the role may connect to (templates left out), listed by the engine through the typed database, or
     /// <c>postgres</c> when none is typed. The same parse and guard as Test; a remembered password is filled in by the engine.</summary>
-    private async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListPostgresDatabasesAsync(ConnectionTarget target, CancellationToken ct)
+    private async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListPostgresDatabasesAsync(ConnectionTarget target, CancellationToken ct,
+        string? copyFrom = null)
     {
         var (pg, error) = ParsePostgresTarget(target);
         if (pg is null) return (false, Array.Empty<string>(), error);
@@ -298,7 +482,11 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         {
             var response = await _bridge.SendAsync<ListDatabasesRequest, ListDatabasesResponse>(
                 MessageTypes.ListDatabases,
-                new ListDatabasesRequest { ConnectionString = BuildPostgresConnectionString(pg), Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql },
+                new ListDatabasesRequest
+                {
+                    ConnectionString = BuildPostgresConnectionString(pg), Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+                    CopyPasswordFromSessionId = copyFrom,
+                },
                 ct).ConfigureAwait(false);
             if (response == null) return (false, Array.Empty<string>(), "The engine did not return a database list.");
             if (response.Ok) return (true, response.Databases ?? new List<string>(), null);
@@ -311,29 +499,58 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    public async Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
+    public Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct) => ConnectAsync(target, _active, ct);
+
+    public async Task<ConnectResult> ConnectAsync(ConnectionTarget target, SqlSessionState session, CancellationToken ct)
     {
+        int epoch = ++session.ConnectEpoch;
+        if (session.IsReleased) return ConnectResult.Failed(ClosedTabText);
+
+        // Spec 043 (R2): a restored tab's session may still be held by the engine from before the reload (an open transaction
+        // and its locks). Whatever connects it first — showing the tab, its first run, or the Connect dialog — releases that first.
+        if (session.NeedsReattach) await DisconnectStaleAsync(session, ct).ConfigureAwait(false);
+
+        // Spec 043 follow-up: a new tab opened on a connected tab takes that tab's password on the engine (nothing typed).
+        var copyFrom = CopySourceOf(target, session.CopyPasswordFrom);
+        bool nothingTyped = string.IsNullOrEmpty(target.Password);
+
         if (target.Kind != AkmlSql.Core.DatabaseKind.PostgreSql)
-            return await AdaptAsync(ConnectSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct)).ConfigureAwait(false);
+        {
+            // A SQL login with nothing typed and no password the engine is asked to supply (neither from another tab nor one it
+            // remembers for a binding that asked it to): ask, without sending an empty password to the server. Review: a login
+            // whose Remember is off types its password even when the engine still holds one.
+            if (!target.WindowsAuth && nothingTyped && copyFrom == null && !(target.RememberPassword && EngineRemembersSqlServerPasswords))
+                return NotePasswordMissing(session, target, new ConnectResult(false, "Enter the password for this login.", PasswordRequired: true), refused: false);
+            var sql = await ConnectSqlServerAsync(session, target.Server, target.Database, target.WindowsAuth, target.User, target.Password,
+                target.TrustServerCertificate, ct, ConnectionBinding.FromTarget(target, target.SavedConnectionId), epoch, copyFrom).ConfigureAwait(false);
+            // Review: the server refusing the password the engine supplied (remembered or copied) is as good as none — every quiet
+            // retry would be another failed login, so the tab asks on its next run. A password the user typed is theirs to retype.
+            bool refusedSupplied = !sql.Ok && !target.WindowsAuth && nothingTyped && sql.ErrorCode == DialectErrors.LoginFailed;
+            return sql.PasswordRequired || refusedSupplied ? NotePasswordMissing(session, target, sql, refused: !sql.PasswordRequired) : sql;
+        }
 
         // ConnectionChanged is a notification: the engine cannot say the password was wrong. So a PostgreSQL connect first
         // asks the engine to open the connection (the test), and only a server that accepted it becomes the session.
-        var tested = await TestPostgresAsync(target, ct).ConfigureAwait(false);
+        var tested = await TestPostgresAsync(target, ct, copyFrom).ConfigureAwait(false);
+        if (tested.PasswordRequired || (!tested.Ok && nothingTyped && IsPgPasswordRefused(tested)))
+            NotePasswordMissing(session, target, tested, refused: !tested.PasswordRequired);
         if (!tested.Ok) return tested;
 
         var (pg, _) = ParsePostgresTarget(target);
         var connectionString = BuildPostgresConnectionString(pg!);
+        if (Superseded(session, epoch) is { } supersededPg) return ConnectResult.Failed(supersededPg);
         try
         {
             await _bridge.SendNotificationAsync(
                 MessageTypes.ConnectionChanged,
                 new ConnectionInfo
                 {
-                    SessionId = SessionId,
+                    SessionId = session.SessionId,
                     ConnectionString = connectionString,
                     DatabaseName = pg!.Database,
                     Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
                     RememberPassword = pg.RememberPassword,
+                    CopyPasswordFromSessionId = copyFrom,
                 },
                 ct).ConfigureAwait(false);
         }
@@ -343,32 +560,90 @@ internal sealed class SqlConnectionService : ISqlConnectionService
             return ConnectResult.Failed("Could not reach the engine: " + ex.Message);
         }
 
-        Server = pg.Host + ":" + pg.Port;
-        _schemaIdentity = PgConnectionString.ServerKey(pg.Host, pg.Port);
-        Database = pg.Database;
-        WindowsAuth = false;
-        Login = pg.User;
-        Kind = AkmlSql.Core.DatabaseKind.PostgreSql;
-        ServerVersionText = VersionNumberOf(tested.ServerVersion);
-        TransactionState = AkmlSql.Core.TransactionState.None;
-        IsConnected = true;
-        NewTarget();
+        session.Server = pg.Host + ":" + pg.Port;
+        session.PgServerKey = PgConnectionString.ServerKey(pg.Host, pg.Port);
+        session.Database = pg.Database;
+        session.WindowsAuth = false;
+        session.Login = pg.User;
+        session.Kind = AkmlSql.Core.DatabaseKind.PostgreSql;
+        session.ServerVersionText = VersionNumberOf(tested.ServerVersion);
+        session.TransactionState = AkmlSql.Core.TransactionState.None;
+        session.IsConnected = true;
+        session.MayBeOnEngine = true;
+        session.Binding = ConnectionBinding.FromTarget(target, target.SavedConnectionId);
+        session.DisconnectedByUser = false;
+        session.NeedsReattach = false;
+        session.CopyPasswordFrom = null;
+        ClearPasswordMissing(session);
+        NewTarget(session);
         _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
-            $"Requested engine connect to PostgreSQL {Server}/{Database} as {pg.User} (tls={pg.SslMode}). Schema loads asynchronously.");
-        StateChanged?.Invoke();
+            $"Requested engine connect to PostgreSQL {session.Server}/{session.Database} as {pg.User} (tls={pg.SslMode}). Schema loads asynchronously.");
+        Changed(session);
         return tested;
     }
 
-    public Task<bool> HasRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
-        AskCredentialAsync(CredentialAction.Has, host, port, user, ct);
+    public async Task<bool> HasRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
+        await AskCredentialAsync(CredentialAction.Has, AkmlSql.Core.DatabaseKind.PostgreSql, host, port ?? SavedSqlConnection.DefaultPostgresPort, user, ct)
+            .ConfigureAwait(false) == true;
 
-    public Task<bool> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
-        AskCredentialAsync(CredentialAction.Forget, host, port, user, ct);
+    public Task<bool?> ForgetRememberedPasswordAsync(string host, int? port, string user, CancellationToken ct) =>
+        AskCredentialAsync(CredentialAction.Forget, AkmlSql.Core.DatabaseKind.PostgreSql, host, port ?? SavedSqlConnection.DefaultPostgresPort, user, ct);
 
-    private async Task<bool> AskCredentialAsync(int action, string host, int? port, string user, CancellationToken ct)
+    /// <summary>The engine capability that lets a new tab take its password from the tab it was opened from (New query).</summary>
+    public const string CapabilitySessionCopy = "session.copy.v1";
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 2): the engine also copies into a database list (<c>ListDatabasesRequest</c> key 3), and
+    /// only for the page that connected the source session (<c>HandshakeRequest.ClientInstanceId</c>). Engines 1.26.1022.0927 and
+    /// 1.26.1022.1042 advertise v1 and do neither, so the Connect to database dialog offers the other tab's password from v2 only.
+    /// </summary>
+    public const string CapabilitySessionCopyV2 = "session.copy.v2";
+
+    /// <summary>The engine capability that lets a SQL Server login's password be remembered on the engine machine.</summary>
+    public const string CapabilitySqlServerCredentials = "credentials.sqlserver.v1";
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 2): the engine says whether it kept a password it was asked to remember
+    /// (<c>TestSqlConnectionResponse.Remembered</c>, key 4). An engine with only v1 never sends the key; it kept every password it
+    /// was asked to, so its silence is not read as "not kept".
+    /// </summary>
+    public const string CapabilitySqlServerCredentialsV2 = "credentials.sqlserver.v2";
+
+    public bool EngineRemembersSqlServerPasswords => _bridge.Advertises(CapabilitySqlServerCredentials) || EngineConfirmsRememberedPasswords;
+
+    // v2: TestSqlConnectionResponse.Remembered is the engine's word (see CapabilitySqlServerCredentialsV2).
+    private bool EngineConfirmsRememberedPasswords => _bridge.Advertises(CapabilitySqlServerCredentialsV2);
+
+    public bool EngineCopiesSessionPasswords => _bridge.Advertises(CapabilitySessionCopyV2);
+
+    // Review, round 3: the answer follows the rule the engine fills a password by, so the trust choice goes with the question
+    // (CredentialRequest key 5) as BuildConnectionString puts it on the wire: always trusted for a server on the engine's machine.
+    // Only to an engine that reads it (credentials.sqlserver.v2); an older one answers for any remembered password, as before.
+    public async Task<bool> HasRememberedSqlServerPasswordAsync(string server, string login, bool trustServerCertificate, CancellationToken ct) =>
+        await AskCredentialAsync(CredentialAction.Has, AkmlSql.Core.DatabaseKind.SqlServer, server, 0, login, ct,
+            EngineConfirmsRememberedPasswords ? ConnectionBinding.EffectiveTrust(server, trustServerCertificate) : null).ConfigureAwait(false) == true;
+
+    public Task<bool?> ForgetRememberedSqlServerPasswordAsync(string server, string login, CancellationToken ct) =>
+        AskCredentialAsync(CredentialAction.Forget, AkmlSql.Core.DatabaseKind.SqlServer, server, 0, login, ct);
+
+    /// <summary>Spec 043 follow-up (review): how long a question about a remembered password waits for the engine's answer.</summary>
+    internal TimeSpan CredentialAnswerTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The engine's answer about a remembered password: whether it has (or, for Forget, had) one. Review: null when there is
+    /// no answer — the bridge is not open, the engine cannot be asked, the reply did not come in time (the bridge waits for a
+    /// reply forever, so this call puts a limit on it), the request failed or the engine refused it. A caller must not take
+    /// null for "forgotten". <paramref name="trustServerCertificate"/> (review, round 3): a SQL Server Has's effective trust, null
+    /// for anything else.
+    /// </summary>
+    private async Task<bool?> AskCredentialAsync(int action, AkmlSql.Core.DatabaseKind kind, string host, int port, string user, CancellationToken ct,
+        bool? trustServerCertificate = null)
     {
-        if (_bridge.State != BridgeState.Open || !EngineSupportsPostgres) return false;
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user)) return false;
+        bool supported = kind == AkmlSql.Core.DatabaseKind.PostgreSql ? EngineSupportsPostgres : EngineRemembersSqlServerPasswords;
+        if (_bridge.State != BridgeState.Open || !supported) return null;
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user)) return null;
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(CredentialAnswerTimeout);
         try
         {
             var response = await _bridge.SendAsync<CredentialRequest, CredentialResponse>(
@@ -376,22 +651,27 @@ internal sealed class SqlConnectionService : ISqlConnectionService
                 new CredentialRequest
                 {
                     Action = action,
-                    Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+                    Kind = (int)kind,
                     Server = host.Trim(),
-                    Port = port ?? SavedSqlConnection.DefaultPostgresPort,
+                    Port = port,
                     Login = user.Trim(),
+                    TrustServerCertificate = trustServerCertificate,
                 },
-                ct).ConfigureAwait(false);
-            return response is { Ok: true, Has: true };
+                limit.Token).ConfigureAwait(false);
+            if (response is not { Ok: true }) return null;
+            return response.Has;
         }
         catch (Exception ex)
         {
-            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"Credential request failed: {ex.Message}");
-            return false;
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect",
+                limit.IsCancellationRequested && !ct.IsCancellationRequested
+                    ? "Credential request: the engine did not answer in time."
+                    : $"Credential request failed: {ex.Message}");
+            return null;
         }
     }
 
-    private async Task<ConnectResult> TestPostgresAsync(ConnectionTarget target, CancellationToken ct)
+    private async Task<ConnectResult> TestPostgresAsync(ConnectionTarget target, CancellationToken ct, string? copyFrom = null)
     {
         var (pg, error) = ParsePostgresTarget(target);
         if (pg is null) return ConnectResult.Failed(error!);
@@ -404,7 +684,11 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         {
             var response = await _bridge.SendAsync<TestSqlConnectionRequest, TestSqlConnectionResponse>(
                 MessageTypes.TestSqlConnection,
-                new TestSqlConnectionRequest { ConnectionString = BuildPostgresConnectionString(pg), Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql },
+                new TestSqlConnectionRequest
+                {
+                    ConnectionString = BuildPostgresConnectionString(pg), Kind = (int)AkmlSql.Core.DatabaseKind.PostgreSql,
+                    CopyPasswordFromSessionId = copyFrom,
+                },
                 ct).ConfigureAwait(false);
 
             if (response == null) return ConnectResult.Failed("The engine did not return a result for the connection test.");
@@ -415,9 +699,12 @@ internal sealed class SqlConnectionService : ISqlConnectionService
                 return new ConnectResult(true, null, false, response.ServerVersion);
             }
 
+            // Review: the error code goes with the result, so a refused password (PgLoginFailed, SQLSTATE 28P01) is told apart
+            // from any other failure without reading the server's words.
             var passwordRequired = response.ErrorCode == DialectErrors.PasswordRequired;
             return new ConnectResult(false,
-                string.IsNullOrEmpty(response.ErrorMessage) ? "The connection test failed." : response.ErrorMessage, passwordRequired);
+                string.IsNullOrEmpty(response.ErrorMessage) ? "The connection test failed." : response.ErrorMessage, passwordRequired,
+                ErrorCode: response.ErrorCode);
         }
         catch (Exception ex)
         {
@@ -426,11 +713,53 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    private static async Task<ConnectResult> AdaptAsync(Task<(bool Ok, string? Error)> inner)
+    private static async Task<(bool Ok, string? Error)> ToTupleAsync(Task<ConnectResult> inner)
     {
-        var (ok, error) = await inner.ConfigureAwait(false);
-        return new ConnectResult(ok, error);
+        var result = await inner.ConfigureAwait(false);
+        return (result.Ok, result.Error);
     }
+
+    /// <summary>
+    /// Spec 043 follow-up (review): nothing could supply the tab's password — the tab it was opened from is gone or another
+    /// engine, or the remembered one was forgotten — or the server refused the password the engine supplied (a remembered or
+    /// copied one that is out of date: <c>sqlserver.login-failed</c>, <c>postgresql.login-failed</c>). The tab stops
+    /// reconnecting on its own (every quiet try would be refused again, and each refused login counts towards a lockout) and
+    /// asks on its next run; a successful connect clears it.
+    /// Review, round 2: only for the tab's own sign-in (<see cref="ConnectionBinding.SameSignInAs"/>; a tab with no binding yet
+    /// has no other). Another server or login tried in the Connect to database dialog says nothing about the tab's password: the
+    /// tab keeps reconnecting as it did, and a new tab keeps the tab it may copy from.
+    /// Review, round 3: the mark says which sign-in it is about (<see cref="SqlSessionState.PasswordMissingFor"/>, the target
+    /// without its password) and why (<paramref name="refused"/>: the server refused the password the engine supplied; else the
+    /// engine had none to supply). A tab with no binding has nothing else to name it — the Status bar's restore of a remembered
+    /// login on a fresh page — and the Connect to database dialog needs it to keep from sending the refused password again.
+    /// </summary>
+    private static ConnectResult NotePasswordMissing(SqlSessionState session, ConnectionTarget target, ConnectResult result, bool refused)
+    {
+        if (session.Binding is { } own && !own.SameSignInAs(target)) return result;
+        session.CopyPasswordFrom = null;
+        session.PasswordMissing = true;
+        session.PasswordMissingFor = ConnectionBinding.FromTarget(target, target.SavedConnectionId);
+        session.PasswordRefused = refused;
+        return result;
+    }
+
+    // A connect that the server accepted: the tab has its password again.
+    private static void ClearPasswordMissing(SqlSessionState session)
+    {
+        session.PasswordMissing = false;
+        session.PasswordMissingFor = null;
+        session.PasswordRefused = false;
+    }
+
+    /// <summary>
+    /// Review: PostgreSQL refused the password (SQLSTATE 28P01) — the engine's <c>postgresql.login-failed</c> code, or, from an
+    /// engine before the code (round 2: 1.26.1022.0927 and 1.26.1022.1042 send none), the server's words.
+    /// </summary>
+    internal static bool IsPgPasswordRefused(ConnectResult result) =>
+        result.ErrorCode == DialectErrors.PgLoginFailed
+        || (result.ErrorCode == null && result.Error != null
+            && (result.Error.Contains("28P01", StringComparison.Ordinal)
+                || result.Error.Contains("password authentication failed", StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>"PostgreSQL 18.1" becomes "18.1"; anything else is kept as the engine sent it.</summary>
     internal static string? VersionNumberOf(string? serverVersion)
@@ -547,27 +876,36 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public Task<(bool Ok, string? Error)> ConnectAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
-        ConnectSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct);
+        ToTupleAsync(ConnectSqlServerAsync(_active, server, database, windowsAuth, user, password, trustServerCertificate: false, ct,
+            new ConnectionBinding { Server = server ?? string.Empty, Database = database ?? string.Empty, WindowsAuth = windowsAuth, Login = windowsAuth ? null : user }));
 
-    private async Task<(bool Ok, string? Error)> ConnectSqlServerAsync(
-        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
+    private async Task<ConnectResult> ConnectSqlServerAsync(SqlSessionState session,
+        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct,
+        ConnectionBinding binding, int epoch = 0, string? copyFrom = null)
     {
         // Identifier + loopback (SSRF) guard — single-sourced in ValidateTarget so ConnectAsync and
         // TestAsync enforce IDENTICAL rules. Runs before anything touches the bridge.
         var (ok, error) = ValidateTarget(server, database, windowsAuth);
-        if (!ok) return (false, error);
+        if (!ok) return ConnectResult.Failed(error!);
 
         if (_bridge.State != BridgeState.Open)
-            return (false, "Pair an engine first (Engine connections → Add), then connect to SQL Server.");
+            return ConnectResult.Failed("Pair an engine first (Engine connections → Add), then connect to a database.");
 
         // Review WEB-19: ConnectionChanged is a notification — the engine cannot say the password was wrong or the server
         // is down. So, as for PostgreSQL, the engine first opens the connection (the test) and only a server that accepted
         // it becomes the session; on failure the session and the form stay as they were. (A server that goes away between
         // the two shows up on the first run, as any later drop does.)
-        var (tested, testError) = await TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate, ct).ConfigureAwait(false);
-        if (!tested) return (false, testError);
+        // The test is where a typed password is known to be accepted, so the engine remembers it there when asked.
+        bool remember = !windowsAuth && binding.RememberPassword && !string.IsNullOrEmpty(password) && EngineRemembersSqlServerPasswords;
+        var tested = await TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate, ct, copyFrom, remember).ConfigureAwait(false);
+        if (!tested.Ok) return tested;
+        // Review: a typed password the tab asked to keep is remembered only when the engine says it stored it (it may have
+        // failed to write its store, or not offer remembering at all), so the tab never claims a password the engine lacks.
+        // An engine with only credentials.sqlserver.v1 cannot say, and is taken at its word as before (TestSqlServerAsync).
+        if (!windowsAuth && !string.IsNullOrEmpty(password) && binding.RememberPassword) binding.RememberPassword = remember && tested.Remembered;
 
         var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password, trustServerCertificate);
+        if (epoch != 0 && Superseded(session, epoch) is { } supersededText) return ConnectResult.Failed(supersededText);
 
         try
         {
@@ -575,42 +913,50 @@ internal sealed class SqlConnectionService : ISqlConnectionService
                 MessageTypes.ConnectionChanged,
                 new ConnectionInfo
                 {
-                    SessionId = SessionId,
+                    SessionId = session.SessionId,
                     ConnectionString = connStr,
                     DatabaseName = database.Trim(),
                     ServerVersion = 0,
                     EngineEdition = 0,
+                    CopyPasswordFromSessionId = windowsAuth ? null : copyFrom,
                 },
                 ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"ConnectionChanged send failed: {ex.Message}");
-            return (false, "Could not reach the engine: " + ex.Message);
+            return ConnectResult.Failed("Could not reach the engine: " + ex.Message);
         }
 
-        Server = server.Trim();
-        Database = database.Trim();
-        WindowsAuth = windowsAuth;
-        Login = windowsAuth ? null : user?.Trim();
-        Kind = AkmlSql.Core.DatabaseKind.SqlServer;
-        _schemaIdentity = null;
-        ServerVersionText = null;
-        TransactionState = AkmlSql.Core.TransactionState.None;
-        IsConnected = true;
-        NewTarget();
+        session.Server = server.Trim();
+        session.Database = database.Trim();
+        session.WindowsAuth = windowsAuth;
+        session.Login = windowsAuth ? null : user?.Trim();
+        session.Kind = AkmlSql.Core.DatabaseKind.SqlServer;
+        session.PgServerKey = null;
+        session.ServerVersionText = null;
+        session.TransactionState = AkmlSql.Core.TransactionState.None;
+        session.IsConnected = true;
+        session.MayBeOnEngine = true;
+        session.Binding = binding;
+        session.DisconnectedByUser = false;
+        session.NeedsReattach = false;
+        session.CopyPasswordFrom = null;
+        ClearPasswordMissing(session);
+        NewTarget(session);
         _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
-            $"Requested engine connect to {Server}/{Database} (auth={(windowsAuth ? "Windows" : "SQL")}). Schema loads asynchronously.");
-        StateChanged?.Invoke();
-        return (true, null);
+            $"Requested engine connect to {session.Server}/{session.Database} (auth={(windowsAuth ? "Windows" : "SQL")}). Schema loads asynchronously.");
+        Changed(session);
+        return tested;
     }
 
     public Task<(bool Ok, string? Error)> TestAsync(
         string server, string database, bool windowsAuth, string? user, string? password, CancellationToken ct) =>
-        TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct);
+        ToTupleAsync(TestSqlServerAsync(server, database, windowsAuth, user, password, trustServerCertificate: false, ct));
 
-    private async Task<(bool Ok, string? Error)> TestSqlServerAsync(
-        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
+    private async Task<ConnectResult> TestSqlServerAsync(
+        string server, string database, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct,
+        string? copyFrom = null, bool rememberPassword = false)
     {
         // SECURITY (Phase 4): run the SAME identifier + loopback guard as ConnectAsync, and run it
         // FIRST — before building the connection string and before sending anything to the engine.
@@ -618,10 +964,10 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         // so omitting this would make Test an SSRF/confused-deputy hole. Behaviour is unchanged:
         // loopback-only; remote/UNC/Azure targets are rejected here, never reaching the engine.
         var (ok, error) = ValidateTarget(server, database, windowsAuth);
-        if (!ok) return (false, error);
+        if (!ok) return ConnectResult.Failed(error!);
 
         if (_bridge.State != BridgeState.Open)
-            return (false, "Pair an engine first (Engine connections → Add), then test the SQL connection.");
+            return ConnectResult.Failed("Pair an engine first (Engine connections → Add), then test the database connection.");
 
         var connStr = BuildConnectionString(server.Trim(), database.Trim(), windowsAuth, user, password, trustServerCertificate);
 
@@ -632,25 +978,28 @@ internal sealed class SqlConnectionService : ISqlConnectionService
             // replies Ok / ErrorMessage. This is the only path that truly validates a SQL password.
             var response = await _bridge.SendAsync<TestSqlConnectionRequest, TestSqlConnectionResponse>(
                 MessageTypes.TestSqlConnection,
-                new TestSqlConnectionRequest { ConnectionString = connStr },
+                new TestSqlConnectionRequest { ConnectionString = connStr, CopyPasswordFromSessionId = windowsAuth ? null : copyFrom, RememberPassword = rememberPassword },
                 ct).ConfigureAwait(false);
 
             if (response == null)
-                return (false, "The engine did not return a result for the connection test.");
+                return ConnectResult.Failed("The engine did not return a result for the connection test.");
 
             if (response.Ok)
             {
                 _diagnostics.Log(DiagnosticLevel.Info, "sql-connect",
                     $"Test connection to {server.Trim()}/{database.Trim()} succeeded (auth={(windowsAuth ? "Windows" : "SQL")}).");
-                return (true, null);
+                // Review, round 2: an engine before credentials.sqlserver.v2 never says (key 4); it kept what it was asked to keep.
+                return new ConnectResult(true, ServerVersion: response.ServerVersion,
+                    Remembered: rememberPassword && (response.Remembered || !EngineConfirmsRememberedPasswords));
             }
 
-            return (false, string.IsNullOrEmpty(response.ErrorMessage) ? "The connection test failed." : response.ErrorMessage);
+            return new ConnectResult(false, string.IsNullOrEmpty(response.ErrorMessage) ? "The connection test failed." : response.ErrorMessage,
+                PasswordRequired: response.ErrorCode == DialectErrors.PasswordRequired, ErrorCode: response.ErrorCode);
         }
         catch (Exception ex)
         {
             _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"TestSqlConnection send failed: {ex.Message}");
-            return (false, "Could not reach the engine: " + ex.Message);
+            return ConnectResult.Failed("Could not reach the engine: " + ex.Message);
         }
     }
 
@@ -659,7 +1008,8 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         ListSqlServerDatabasesAsync(server, windowsAuth, user, password, trustServerCertificate: false, ct);
 
     private async Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListSqlServerDatabasesAsync(
-        string server, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct)
+        string server, bool windowsAuth, string? user, string? password, bool trustServerCertificate, CancellationToken ct,
+        string? copyFrom = null)
     {
         // SECURITY: identical loopback/identifier guard as Connect/Test, run FIRST — the engine opens
         // this connection under its own identity, so an unguarded server is an SSRF/confused-deputy
@@ -676,7 +1026,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         {
             var response = await _bridge.SendAsync<ListDatabasesRequest, ListDatabasesResponse>(
                 MessageTypes.ListDatabases,
-                new ListDatabasesRequest { ConnectionString = connStr },
+                new ListDatabasesRequest { ConnectionString = connStr, CopyPasswordFromSessionId = windowsAuth ? null : copyFrom },
                 ct).ConfigureAwait(false);
 
             if (response == null)
@@ -706,18 +1056,60 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public async Task DisconnectAsync() => await DisconnectSessionAsync(CancellationToken.None).ConfigureAwait(false);
 
-    public async Task<DisconnectResult> DisconnectSessionAsync(CancellationToken ct)
+    public Task<DisconnectResult> DisconnectSessionAsync(CancellationToken ct) => DisconnectSessionAsync(_active, release: false, ct);
+
+    /// <summary>
+    /// Disconnect a tab. With <paramref name="release"/> (spec 043: the tab is closed) the engine also forgets the session; it
+    /// is sent even when the tab is not connected in this page, because a restored tab's session may still be held by the
+    /// engine from before the reload.
+    /// </summary>
+    /// <summary>The text a connect gives back when it gave way: the tab was closed, or a newer connect of it started.</summary>
+    internal const string ClosedTabText = "This query tab was closed.";
+    internal const string SupersededText = "A newer connect of this query tab replaced this one.";
+
+    // Checked when a connect's ConnectionChanged is due, after its awaits.
+    private static string? Superseded(SqlSessionState session, int epoch) =>
+        session.IsReleased ? ClosedTabText : session.ConnectEpoch != epoch ? SupersededText : null;
+
+    public async Task<DisconnectResult> DisconnectSessionAsync(SqlSessionState session, bool release, CancellationToken ct)
     {
-        if (!IsConnected) return new DisconnectResult(true, false, null);
+        if (release)
+        {
+            // The tab is closing: a connect still on its way for it sends nothing now.
+            session.IsReleased = true;
+            session.ConnectEpoch++;
+        }
+        else
+        {
+            // Review of US1 (FR-002): the user's Disconnect leaves the tab with no connection. New query from it starts without one,
+            // and a reload does not reconnect it (MarkConnectionLost, by contrast, keeps the binding to reconnect).
+            session.Binding = null;
+            session.NeedsReattach = false;
+            session.DisconnectedByUser = true;
+            session.ConnectEpoch++;
+            // Spec 043 follow-up (review, round 4): and with it the mark of a password the tab was missing. The Connect to database
+            // dialog opens an unbound tab on the mark's sign-in, so a mark kept past the user's Disconnect would bring back a
+            // connection the user ended.
+            ClearPasswordMissing(session);
+        }
+        if (!session.IsConnected && !release)
+        {
+            Changed(session);
+            return new DisconnectResult(true, false, null);
+        }
 
         if (_bridge.State != BridgeState.Open)
         {
-            ForgetConnection();
+            bool onEngine = session.IsConnected || session.MayBeOnEngine;
+            ForgetConnection(session);
+            // A session that never reached the engine has nothing there to close: nothing to send later, nothing to warn about.
+            if (!onEngine) return new DisconnectResult(true, false, null);
+            if (release) AddPendingRelease(session);
             return new DisconnectResult(false, false, DisconnectUnconfirmed);
         }
         if (!_bridge.Advertises(CapabilitySessionDisconnect))
         {
-            ForgetConnection();
+            ForgetConnection(session);
             return new DisconnectResult(false, false, DisconnectNeedsNewerEngine);
         }
 
@@ -725,36 +1117,101 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         try
         {
             response = await _bridge.SendAsync<SessionDisconnectRequest, SessionDisconnectResponse>(
-                MessageTypes.SessionDisconnect, new SessionDisconnectRequest { SessionId = SessionId }, ct).ConfigureAwait(false);
+                MessageTypes.SessionDisconnect, new SessionDisconnectRequest { SessionId = session.SessionId, Release = release }, ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"SessionDisconnect failed: {ex.GetType().Name}");
-            ForgetConnection();
+            ForgetConnection(session);
+            if (release) AddPendingRelease(session);
             return new DisconnectResult(false, false, DisconnectUnconfirmed);
         }
 
         // Any reply means the engine has already forgotten the session's connection; a refusal only says the close
         // itself waits for a statement that is still running.
-        ForgetConnection();
+        ForgetConnection(session);
         if (response == null) return new DisconnectResult(false, false, DisconnectUnconfirmed);
-        _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Disconnected (rolledBack={response.RolledBack}, ok={response.Ok}).");
+        _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Disconnected (rolledBack={response.RolledBack}, ok={response.Ok}, release={release}).");
         return new DisconnectResult(response.Ok, response.RolledBack, response.Ok ? null : response.ErrorMessage);
     }
 
-    private void ForgetConnection()
+    /// <summary>
+    /// Spec 043 (R2, contracts/ipc.md §1–§2): a restored tab's first connect in this page. The engine may still hold the session
+    /// from before the reload (an open transaction and its locks), so it is disconnected first and the reply AWAITED — the
+    /// engine applies a notification without waiting for an earlier request — and only then is the binding connected. An older
+    /// engine without session.disconnect.v1 just reconnects.
+    /// </summary>
+    public Task<ConnectResult> ReattachAsync(SqlSessionState session, string? password, CancellationToken ct)
     {
-        ConnectionGeneration++;
-        IsConnected = false;
-        Server = null;
-        Database = null;
-        Login = null;
-        WindowsAuth = true;
-        Kind = AkmlSql.Core.DatabaseKind.SqlServer;
-        ServerVersionText = null;
-        _schemaIdentity = null;
-        TransactionState = AkmlSql.Core.TransactionState.None;
-        StateChanged?.Invoke();
+        // One reattach per tab at a time: the status bar (after a reload on any page) and the editor page (showing the tab) may
+        // both ask; a second SessionDisconnect sent after the first ConnectionChanged would drop the connection just made.
+        lock (_reattachGate)
+        {
+            if (_reattaching.TryGetValue(session, out var running)) return running;
+            var task = ReattachCoreAsync(session, password, ct);
+            if (task.IsCompleted) return task;
+            _reattaching[session] = task;
+            _ = task.ContinueWith(_ => { lock (_reattachGate) _reattaching.Remove(session); }, CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            return task;
+        }
+    }
+
+    private readonly object _reattachGate = new();
+    private readonly Dictionary<SqlSessionState, Task<ConnectResult>> _reattaching = new();
+
+    private async Task<ConnectResult> ReattachCoreAsync(SqlSessionState session, string? password, CancellationToken ct)
+    {
+        if (session.Binding is not { } binding) return ConnectResult.Failed("This query tab has no connection to restore.");
+        session.NeedsReattach = true;   // ConnectAsync releases the engine's stale session first
+        var result = await ConnectAsync(binding.ToTarget(password), session, ct).ConfigureAwait(false);
+        if (result.Ok) session.NeedsReattach = false;
+        return result;
+    }
+
+    // The engine applies a notification without waiting for an earlier request, so the disconnect is a request whose reply is
+    // awaited before ConnectionChanged goes out. An older engine without session.disconnect.v1 just reconnects.
+    private async Task DisconnectStaleAsync(SqlSessionState session, CancellationToken ct)
+    {
+        if (_bridge.State != BridgeState.Open || !_bridge.Advertises(CapabilitySessionDisconnect)) return;
+        try
+        {
+            await _bridge.SendAsync<SessionDisconnectRequest, SessionDisconnectResponse>(
+                MessageTypes.SessionDisconnect, new SessionDisconnectRequest { SessionId = session.SessionId }, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _diagnostics.Log(DiagnosticLevel.Warn, "sql-connect", $"Reattach: SessionDisconnect failed: {ex.GetType().Name}");
+        }
+    }
+
+    /// <summary>
+    /// Spec 043 (edge case "the engine is lost"): a run on this tab came back without a connection (the engine restarted and
+    /// forgot the session, or the link was down). The tab shows disconnected and keeps its binding; its next run, or showing
+    /// it when no password is needed, reconnects.
+    /// </summary>
+    public void MarkConnectionLost(SqlSessionState session)
+    {
+        if (!session.IsConnected) return;
+        session.IsConnected = false;
+        session.NeedsReattach = session.Binding != null;
+        session.ConnectionGeneration++;
+        Changed(session);
+    }
+
+    private void ForgetConnection(SqlSessionState session)
+    {
+        session.ConnectionGeneration++;
+        session.IsConnected = false;
+        session.Server = null;
+        session.Database = null;
+        session.Login = null;
+        session.WindowsAuth = true;
+        session.Kind = AkmlSql.Core.DatabaseKind.SqlServer;
+        session.ServerVersionText = null;
+        session.PgServerKey = null;
+        session.TransactionState = AkmlSql.Core.TransactionState.None;
+        Changed(session);
     }
 
     // ── Spec 041 (research R25–R28) — the database selector ─────────────────────────────────────────────
@@ -788,6 +1245,7 @@ internal sealed class SqlConnectionService : ISqlConnectionService
 
     public async Task<(bool Ok, string? Error, bool ConnectionWasReset)> ChangeDatabaseAsync(string database, CancellationToken ct)
     {
+        var session = _active;   // the database selector is the active tab's; the reply goes to that tab even after a switch
         if (!IsConnected || Server == null) return (false, "Connect to a database server first.", false);
         if (Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
         {
@@ -804,13 +1262,13 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         try
         {
             var response = await _bridge.SendAsync<ChangeDatabaseRequest, ChangeDatabaseResponse>(
-                MessageTypes.ChangeDatabase, new ChangeDatabaseRequest { SessionId = SessionId, DatabaseName = database!.Trim() }, ct).ConfigureAwait(false);
+                MessageTypes.ChangeDatabase, new ChangeDatabaseRequest { SessionId = session.SessionId, DatabaseName = database!.Trim() }, ct).ConfigureAwait(false);
             if (response == null) return (false, "The engine did not answer.", false);
             if (!response.Ok) return (false, string.IsNullOrEmpty(response.ErrorMessage) ? "Could not switch database." : response.ErrorMessage, false);
             _diagnostics.Log(DiagnosticLevel.Info, "sql-connect", $"Switched to {response.DatabaseName}" + (response.ConnectionWasReset ? " (the connection was reopened)." : "."));
-            ReportCurrentDatabase(string.IsNullOrEmpty(response.DatabaseName) ? database!.Trim() : response.DatabaseName);
+            ReportCurrentDatabase(session, string.IsNullOrEmpty(response.DatabaseName) ? database!.Trim() : response.DatabaseName);
             // Spec 042 (FR-009): a PostgreSQL switch reconnects, and no transaction survives it.
-            if (Kind == AkmlSql.Core.DatabaseKind.PostgreSql) ReportTransactionState((AkmlSql.Core.TransactionState)response.TransactionState);
+            if (session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql) ReportTransactionState(session, (AkmlSql.Core.TransactionState)response.TransactionState);
             return (true, null, response.ConnectionWasReset);
         }
         catch (Exception ex)
@@ -820,25 +1278,30 @@ internal sealed class SqlConnectionService : ISqlConnectionService
         }
     }
 
-    public void ReportCurrentDatabase(string? database)
+    public void ReportCurrentDatabase(string? database) => ReportCurrentDatabase(_active, database);
+
+    public void ReportCurrentDatabase(SqlSessionState session, string? database)
     {
-        if (!IsConnected || string.IsNullOrEmpty(database)) return;
-        if (string.Equals(Database, database, StringComparison.Ordinal)) return;
-        Database = database;
-        NewTarget();
-        StateChanged?.Invoke();
+        if (!session.IsConnected || string.IsNullOrEmpty(database)) return;
+        if (string.Equals(session.Database, database, StringComparison.Ordinal)) return;
+        session.Database = database;
+        if (session.Binding != null) session.Binding.Database = database;   // a reload reconnects to where the script moved it
+        NewTarget(session);
+        Changed(session);
     }
 
-    public async Task SendDocumentAsync(string documentText, CancellationToken ct)
+    public Task SendDocumentAsync(string documentText, CancellationToken ct) => SendDocumentAsync(_active, documentText, ct);
+
+    public async Task SendDocumentAsync(SqlSessionState session, string documentText, CancellationToken ct)
     {
-        if (!IsConnected || _bridge.State != BridgeState.Open) return;
+        if (!session.IsConnected || _bridge.State != BridgeState.Open) return;
         try
         {
             await _bridge.SendNotificationAsync(
                 MessageTypes.DocumentChanged,
                 new DocumentChange
                 {
-                    SessionId = SessionId,
+                    SessionId = session.SessionId,
                     ChangeType = 0,
                     FullText = documentText ?? string.Empty,
                 },

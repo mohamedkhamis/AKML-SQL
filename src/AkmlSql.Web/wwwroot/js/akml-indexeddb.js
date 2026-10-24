@@ -10,7 +10,8 @@
 const DB_NAME = 'AkmlSqlWeb';
 // Phase 4 (web connection manager) added the 'savedSqlConnections' bucket: 2 -> 3.
 // Spec 041 (R36) added the 'workspaceLayout' bucket: 3 -> 4.
-export const DB_VERSION = 4;
+// Spec 043 (R8) added the 'editorTabs' bucket (query tabs): 4 -> 5.
+export const DB_VERSION = 5;
 
 export const STORES = [
     'profiles',
@@ -35,6 +36,9 @@ export const STORES = [
     'savedSqlConnections',
     // Spec 041 (R36) -- the editor workspace layout, one record per field (DB_VERSION 3->4).
     'workspaceLayout',
+    // Spec 043 (R8) -- query tabs: one record per tab ('tab:{id}') and the tab set ('set') (DB_VERSION 4->5).
+    // 'editorSession' above stays: its single-document record is moved into tab 1 once, on the first load.
+    'editorTabs',
 ];
 
 let _dbPromise = null;
@@ -101,6 +105,26 @@ export async function set(storeName, key, value) {
         const req = store.put(value, key);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
+    });
+}
+
+/**
+ * Spec 043 (review of US1): insert a record only when its key is free, in one IndexedDB request (`add`), so of two windows
+ * writing the same key exactly one wins. True when written; false when the key exists (the transaction is kept, not aborted).
+ */
+export async function add(storeName, key, value) {
+    const store = await tx(storeName, 'readwrite');
+    return await new Promise((resolve, reject) => {
+        const req = store.add(value, key);
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => {
+            if (req.error && req.error.name === 'ConstraintError') {
+                e.preventDefault();   // a taken key is an answer, not a failure: keep the transaction
+                resolve(false);
+            } else {
+                reject(req.error);
+            }
+        };
     });
 }
 

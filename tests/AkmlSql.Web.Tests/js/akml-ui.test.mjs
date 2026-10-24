@@ -180,6 +180,89 @@ test('trapTabStripKeys tolerates a missing element', () => {
     assert.doesNotThrow(() => ui.trapTabStripKeys(null));
 });
 
+// Spec 043 (T016, R10): the query tabs are div tabs, so Space on a tab would scroll the page.
+function closableStripElement() {
+    const listeners = { keydown: [], mousedown: [] };
+    return {
+        dataset: {},
+        addEventListener(type, fn) { listeners[type].push(fn); },
+        fire(key, role) {
+            const e = { key, target: { getAttribute: (n) => (n === 'role' ? role : null) }, prevented: false, preventDefault() { this.prevented = true; } };
+            listeners.keydown.forEach(fn => fn(e));
+            return e.prevented;
+        },
+        press(button) {
+            const e = { button, prevented: false, preventDefault() { this.prevented = true; } };
+            listeners.mousedown.forEach(fn => fn(e));
+            return e.prevented;
+        },
+    };
+}
+
+test('trapTabStripKeys on a closable strip also owns Space on a tab, never on its close button', () => {
+    const el = closableStripElement();
+    ui.trapTabStripKeys(el, true);
+    assert.equal(el.fire(' ', 'tab'), true);
+    assert.equal(el.fire(' ', null), false);
+    assert.equal(el.fire('Tab', 'tab'), false);
+    assert.equal(el.fire('ArrowRight', 'tab'), true);
+});
+
+test('trapTabStripKeys on a closable strip cancels only the middle-button press', () => {
+    const el = closableStripElement();
+    ui.trapTabStripKeys(el, true);
+    assert.equal(el.press(1), true);
+    assert.equal(el.press(0), false);
+    assert.equal(el.press(2), false);
+});
+
+test('revealTab scrolls the named tab into view and tolerates a missing one', () => {
+    const calls = [];
+    const saved = globalThis.document;
+    globalThis.document = { getElementById: (id) => (id === 'doc-tab-q2' ? { scrollIntoView: (o) => calls.push(o) } : null) };
+    try {
+        ui.revealTab({}, 'doc-tab-q2');
+        assert.deepEqual(calls, [{ block: 'nearest', inline: 'nearest' }]);
+        assert.doesNotThrow(() => ui.revealTab({}, 'doc-tab-missing'));
+        assert.doesNotThrow(() => ui.revealTab(null, 'doc-tab-q2'));
+    } finally {
+        globalThis.document = saved;
+    }
+});
+
+// Spec 043 (review of US1): a closed query tab that had focus hands it to the tab now active.
+function fakeStrip() {
+    const body = { name: 'body' };
+    const tab = { focused: 0, focus() { this.focused++; doc.activeElement = this; } };
+    const list = { contains: (n) => n === tab };
+    const doc = { body, activeElement: body, getElementById: (id) => (id === 'doc-tab-q1' ? tab : null) };
+    return { body, tab, list, doc };
+}
+
+test('refocusTabStrip focuses the active tab when the closed one had focus (focus fell to the page body)', () => {
+    const { tab, list, doc } = fakeStrip();
+    assert.equal(ui.refocusTabStrip(list, 'doc-tab-q1', doc), true);
+    assert.equal(tab.focused, 1);
+    assert.equal(doc.activeElement, tab);
+});
+
+test('refocusTabStrip leaves focus that is elsewhere (the editor, a dialog) where it is', () => {
+    const { tab, list, doc } = fakeStrip();
+    const editor = { name: 'cm-content' };
+    doc.activeElement = editor;
+    assert.equal(ui.refocusTabStrip(list, 'doc-tab-q1', doc), false);
+    assert.equal(tab.focused, 0);
+    assert.equal(doc.activeElement, editor);
+});
+
+test('refocusTabStrip tolerates a missing strip, tab or document', () => {
+    const { list, doc } = fakeStrip();
+    assert.equal(ui.refocusTabStrip(null, 'doc-tab-q1', doc), false);
+    assert.equal(ui.refocusTabStrip(list, 'doc-tab-gone', doc), false);
+    assert.equal(ui.refocusTabStrip({ contains: () => false }, 'doc-tab-q1', doc), false);
+    assert.equal(ui.refocusTabStrip(list, 'doc-tab-q1', null), false);
+});
+
 // ── trapListKeys (review WEB-13: History and Snippets lists) ──────────────────────────────────
 function listElement() {
     const listeners = [];

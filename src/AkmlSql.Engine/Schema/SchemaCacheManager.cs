@@ -27,7 +27,16 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     private readonly ChangeDetector _changeDetector = new();
     private Timer? _periodicRefreshTimer;
     private readonly ConcurrentDictionary<string, string> _connectionStrings = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, byte> _populating = new(StringComparer.OrdinalIgnoreCase);
+
+    // Spec 043 follow-up (review, round 4): a population claim belongs to the cache object being loaded, not to its key. Keyed by
+    // the "{session}:{db}" string, a load still running on a cache that RemoveSession had discarded held the key: the new connect's
+    // load of the new cache under the same key found it claimed and gave up, the old load finished into the discarded cache, and
+    // the tab had no schema until its next ConnectionChanged; and the old load's release would have freed a claim it never made.
+    private readonly ConcurrentDictionary<DatabaseCache, byte> _populating = new(ReferenceEqualityComparer.Instance);
+
+    // The keys a ReloadMissing reload is running for: there is no cache object yet to claim, so this only keeps a burst of lookups of
+    // a missing cache to one reload. The reload claims the cache it creates like any other load (EngineComposition.ReloadSessionCacheAsync).
+    private readonly ConcurrentDictionary<string, byte> _reloading = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
     /// <summary>
@@ -86,29 +95,30 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
         }
 
         var reload = ReloadMissing;
-        if (reload != null && TryClaimPopulation(key))
+        if (reload != null && _reloading.TryAdd(key, 0))
         {
             _ = Task.Run(async () =>
             {
                 try { await reload(serverName, databaseName).ConfigureAwait(false); }
                 catch (Exception ex) { Log.Warning(ex, "Reloading the schema cache for {Key} failed", key); }
-                finally { ReleasePopulation(key); }
+                finally { _reloading.TryRemove(key, out _); }
             });
         }
         return null;
     }
 
     /// <summary>
-    /// Claims the right to populate the cache <paramref name="cacheKey"/>; false while another
-    /// population of it runs. Pair with <see cref="ReleasePopulation"/>.
+    /// Claims the right to populate <paramref name="cache"/>; false while another population of that same cache object runs.
+    /// Pair with <see cref="ReleasePopulation"/>. Spec 043 follow-up (review, round 4): the claim is the object's, not its key's,
+    /// so a cache created under the key of one <see cref="RemoveSession"/> discarded can be loaded while the old one's load ends.
     /// </summary>
-    public bool TryClaimPopulation(string cacheKey) => _populating.TryAdd(cacheKey, 0);
+    public bool TryClaimPopulation(DatabaseCache cache) => _populating.TryAdd(cache, 0);
 
-    /// <summary>Ends a population claimed with <see cref="TryClaimPopulation"/>.</summary>
-    public void ReleasePopulation(string cacheKey) => _populating.TryRemove(cacheKey, out _);
+    /// <summary>Ends a population of <paramref name="cache"/> claimed with <see cref="TryClaimPopulation"/>; another cache's claim is untouched.</summary>
+    public void ReleasePopulation(DatabaseCache cache) => _populating.TryRemove(cache, out _);
 
-    /// <summary>True while a population of the cache <paramref name="cacheKey"/> is claimed: a load is running on it.</summary>
-    public bool IsPopulating(string cacheKey) => _populating.ContainsKey(cacheKey);
+    /// <summary>True while a population of <paramref name="cache"/> is claimed: a load is running on it.</summary>
+    public bool IsPopulating(DatabaseCache cache) => _populating.ContainsKey(cache);
 
     /// <summary>The cache for the server/database if it exists; nothing else (no reload is started, no use is recorded).</summary>
     public DatabaseCache? FindCache(string serverName, string databaseName) =>
@@ -148,6 +158,30 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     }
 
     public int CacheCount => _caches.Count;
+
+    /// <summary>
+    /// Spec 043 (research R5): forget every cache of one session — every database it used, either kind — and their refresh
+    /// connection strings. Called when the web edition closes the query tab that owned the session
+    /// (<c>SessionDisconnect</c> with <c>Release</c>). Keys are <c>{session}:{database}</c> or <c>pg|{session}:{database}</c>
+    /// (<see cref="BuildCacheKey"/>); nothing is persisted to disk, so memory is all there is. Returns how many were removed.
+    /// A load still running on a removed cache keeps its claim on that object only (<see cref="TryClaimPopulation"/>): it ends
+    /// into the discarded cache, and a cache created afterwards under the same key is claimed and loaded on its own.
+    /// </summary>
+    public int RemoveSession(string sessionId)
+    {
+        if (string.IsNullOrEmpty(sessionId)) return 0;
+        bool Owned(string key) =>
+            key.StartsWith(sessionId + ":", StringComparison.OrdinalIgnoreCase)
+            || key.StartsWith("pg|" + sessionId + ":", StringComparison.OrdinalIgnoreCase);
+
+        int removed = 0;
+        foreach (var key in _caches.Keys.Where(Owned).ToList())
+        {
+            if (_caches.TryRemove(key, out _)) removed++;
+        }
+        foreach (var key in _connectionStrings.Keys.Where(Owned).ToList()) _connectionStrings.TryRemove(key, out _);
+        return removed;
+    }
 
     // ========================================================================
     // T076: Disk cache persistence

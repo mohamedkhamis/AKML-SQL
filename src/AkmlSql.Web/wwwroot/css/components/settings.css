@@ -33,17 +33,26 @@
     display: block;
     padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
     color: var(--akml-text-primary);
+    font-family: var(--akml-type-chrome-family);
+    font-size: var(--akml-type-chrome-size);
     text-decoration: none;
     border-radius: var(--akml-scalar-radius-xs);
 }
 
-.akml-settings-nav-link:hover { background-color: var(--akml-surface-hover); }
+.akml-settings-nav-link:hover { background-color: var(--akml-surface-hover); text-decoration: none; }
 
 .akml-settings-nav-link[aria-current="page"] {
     background-color: var(--akml-surface-selection);
     box-shadow: inset 3px 0 0 var(--akml-accent-primary);   /* the current section's marker */
     font-weight: 600;
 }
+
+/* High contrast fills hover and selection with CanvasText: the text (and its match count) inverts, as in shell.css lists. */
+[data-akml-theme="high-contrast"] .akml-settings-nav-link:hover,
+[data-akml-theme="high-contrast"] .akml-settings-nav-link[aria-current="page"],
+[data-akml-theme="high-contrast"] .akml-settings-nav-link:hover .akml-settings-nav-count,
+[data-akml-theme="high-contrast"] .akml-settings-nav-link[aria-current="page"] .akml-settings-nav-count { color: var(--akml-text-onaccent); }
+[data-akml-theme="high-contrast"] .akml-settings-nav-link[aria-current="page"] { box-shadow: none; }
 
 .akml-settings-nav-link[aria-disabled="true"] {
     color: var(--akml-text-disabled);

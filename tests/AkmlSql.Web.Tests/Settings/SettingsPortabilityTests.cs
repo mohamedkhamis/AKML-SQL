@@ -101,6 +101,35 @@ public sealed class SettingsPortabilityTests
         Assert.Equal("Imported 1 section.", result.Summary);
     }
 
+    // Spec 043 (T062, FR-017): the editor font travels with the editor section; an export from before it keeps the font.
+    [Fact]
+    public async Task The_editor_font_is_exported_by_name_and_imported_back()
+    {
+        var host = new SettingsStoresHost();
+        await new EditorSettingsStore(host.Db).SetAsync(new EditorSettings { FontFamily = EditorFontFamily.CascadiaMono });
+
+        using (var doc = JsonDocument.Parse(await host.Portability.ExportAsync(Now)))
+        {
+            Assert.Equal("cascadiaMono", doc.RootElement.GetProperty("sections").GetProperty("editor").GetProperty("fontFamily").GetString());
+        }
+
+        var result = await host.Portability.ImportAsync("""
+            { "format": "akmlsql-web-settings", "version": 1,
+              "sections": { "editor": { "fontFamily": "consolas" } } }
+            """);
+        Assert.True(result.Ok);
+        Assert.Equal(0, result.Skipped);
+        Assert.Equal(EditorFontFamily.Consolas, (await new EditorSettingsStore(host.Db).GetAsync()).FontFamily);
+
+        await host.Portability.ImportAsync("""
+            { "format": "akmlsql-web-settings", "version": 1,
+              "sections": { "editor": { "fontSize": 16 } } }
+            """);
+        var after = await new EditorSettingsStore(host.Db).GetAsync();
+        Assert.Equal(EditorFontFamily.Consolas, after.FontFamily);   // absent → unchanged
+        Assert.Equal(16, after.FontSize);
+    }
+
     [Fact]
     public async Task Unknown_properties_nested_ones_too_and_unknown_sections_are_counted()
     {

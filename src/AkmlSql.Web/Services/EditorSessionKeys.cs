@@ -118,4 +118,49 @@ internal static class EditorSessionKeys
         record.DocumentText = documentText;
         await store.SaveAsync(record).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Spec 043 (research R8, data-model §5): the first load after the upgrade to query tabs. The single document of before
+    /// tabs — its text, caret, name, modified state, history key and default-name counter — becomes tab 1, with a new engine
+    /// session id. The tab record is written first, then the set — only if no other window of the app made one meanwhile
+    /// (review of US1: that window's set then stands, and this copy of tab 1 is deleted) — then the old record is cleared, so a
+    /// load stopped at any point finds either no set (and moves the document again) or a set and its tab.
+    /// With no old record the editor starts with one empty <c>SQLQuery1</c>.
+    /// </summary>
+    internal static async Task<EditorTabSetRecord> MigrateLegacyAsync(IEditorSessionStore store)
+    {
+        var legacy = await store.RestoreAsync().ConfigureAwait(false);
+        int next = Math.Max(1, legacy?.NextDefaultNumber ?? 1);
+        var tabId = Guid.NewGuid().ToString("N");
+        string name;
+        if (string.IsNullOrWhiteSpace(legacy?.DocumentName)) name = EditorDocument.DefaultName(next++);
+        else name = legacy!.DocumentName!;
+
+        var record = new EditorSessionRecord
+        {
+            TabId = tabId,
+            DocumentText = legacy?.DocumentText ?? string.Empty,
+            CursorOffset = legacy?.CursorOffset ?? 0,
+            ActiveProfileId = legacy?.ActiveProfileId,
+            SessionKey = legacy?.SessionKey ?? Guid.NewGuid().ToString("N"),
+            DocumentName = name,
+            IsModified = legacy?.IsModified ?? false,
+            NextDefaultNumber = next,
+            EngineSessionId = Guid.NewGuid().ToString("N"),
+        };
+        var set = new EditorTabSetRecord { Order = new() { tabId }, ActiveId = tabId, NextDefaultNumber = next };
+
+        // The tab record first (no set yet, so nothing stops it), then the set, then the old record: a load stopped at any
+        // point finds either no set (and migrates again from the old record) or the set and its tab, never a set without it.
+        await store.SaveTabAsync(tabId, record).ConfigureAwait(false);
+        await store.FlushAsync().ConfigureAwait(false);
+        if (!await store.CreateSetAsync(set).ConfigureAwait(false))
+        {
+            // Another window moved the document first: its set and its tab 1 stand; this window's copy goes.
+            await store.DeleteTabAsync(tabId).ConfigureAwait(false);
+            return await store.RestoreSetAsync().ConfigureAwait(false) ?? set;
+        }
+        if (legacy != null) await store.ClearAsync().ConfigureAwait(false);
+        return set;
+    }
 }

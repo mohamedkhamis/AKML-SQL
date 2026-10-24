@@ -355,6 +355,37 @@ public sealed class MarkdownRendererTests : IDisposable
     }
 
     [Fact]
+    public void FragmentLinks_CarryTheDocumentRoute_WhenItIsKnown()
+    {
+        // <base href="/"> resolves a bare "#details" against the home page, and enhanced navigation
+        // then loads Home: in-page links and heading permalinks must name the doc's own route.
+        var renderer = CreateRenderer();
+        var markdown = "# Title\n\n[jump](#details) [doc](./ipc-api.md#authentication)\n\n## Details\n";
+
+        var html = renderer.Render(markdown, "architecture.md", documentTitle: "Title", documentRoute: "/docs/architecture").Html;
+
+        Assert.Contains("href=\"/docs/architecture#details\"", html);
+        Assert.Contains("<a class=\"doc-anchor\" href=\"/docs/architecture#details\"", html);
+        Assert.Contains("href=\"/docs/ipc-api#authentication\"", html);
+        Assert.DoesNotContain("href=\"#", html);
+    }
+
+    [Fact]
+    public void TableAlignment_IsAClass_NotAnInlineStyle()
+    {
+        // The site's CSP (style-src 'self') blocks inline style attributes.
+        var renderer = CreateRenderer();
+        var markdown = "| Name | Count | Mid |\n|:-----|------:|:---:|\n| a | 1 | x |\n";
+
+        var html = renderer.Render(markdown, "architecture.md").Html;
+
+        Assert.DoesNotContain("style=", html);
+        Assert.Contains("<th class=\"align-left\">Name</th>", html);
+        Assert.Contains("<td class=\"align-right\">1</td>", html);
+        Assert.Contains("<td class=\"align-center\">x</td>", html);
+    }
+
+    [Fact]
     public void RelativeImage_ResolvesAgainstSeparateAssetsRoot()
     {
         // S3: images live in Content/docs-assets/ apart from the .md tree; the existence
