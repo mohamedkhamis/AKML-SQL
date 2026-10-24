@@ -436,6 +436,19 @@ public class ReferenceGenTests
     }
 
     [Fact]
+    public void A_lexical_entry_links_to_its_section_anchor_when_the_section_is_not_a_page()
+    {
+        var result = Build();
+
+        // Nested sections are upper-case anchors on their parent page; a chapter-level one keeps its own page.
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS", Entry(result, EntryKinds.Lexical, "identifier").Url);
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-expressions.html#FIELD-SELECTION",
+            result.File.Entries.Single(e => e.Kind == EntryKinds.Lexical && e.Source.SectionId == "field-selection").Url);
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-syntax-calling-funcs.html",
+            result.File.Entries.Single(e => e.Kind == EntryKinds.Lexical && e.Source.SectionId == "sql-syntax-calling-funcs").Url);
+    }
+
+    [Fact]
     public void Aggregates_and_window_functions_are_told_apart_by_the_catalog()
     {
         var result = Build();
@@ -574,7 +587,7 @@ public class ReferenceGenTests
         {
             Assert.False(string.IsNullOrWhiteSpace(e.Summary), e.Kind + " " + e.Name);
             Assert.False(string.IsNullOrWhiteSpace(e.Source.SectionId), e.Kind + " " + e.Name);
-            Assert.Matches(new Regex(@"^https://www\.postgresql\.org/docs/18/[a-z0-9\-]+\.html$"), e.Url);
+            Assert.Matches(new Regex(@"^https://www\.postgresql\.org/docs/18/[a-z0-9\-]+\.html(#[A-Z0-9\-]+)?$"), e.Url);
             Assert.InRange(e.MinVersion, 14, 18);
         });
     }

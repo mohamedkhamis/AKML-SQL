@@ -58,6 +58,18 @@ public class PgRuleRegistryTests
     }
 
     [Fact]
+    public void A_nested_manual_section_links_to_its_anchor_on_the_parent_page()
+    {
+        // sql-syntax-identifiers has no page of its own (docs/18/sql-syntax-identifiers.html is a 404): it is an upper-case
+        // anchor on Lexical Structure.
+        var pgnm001 = Rules.Single(r => r.RuleId == "PGNM001");
+        Assert.Equal("https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS", pgnm001.ReferenceUrl);
+
+        var pgse001 = Rules.Single(r => r.RuleId == "PGSE001");
+        Assert.Equal("https://www.postgresql.org/docs/18/plpgsql-statements.html#PLPGSQL-STATEMENTS-EXECUTING-DYN", pgse001.ReferenceUrl);
+    }
+
+    [Fact]
     public void The_rules_cover_the_eight_categories_with_the_counts_of_the_catalogue()
     {
         var counts = Rules.GroupBy(r => r.Category).ToDictionary(g => g.Key, g => g.Count());

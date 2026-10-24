@@ -173,7 +173,9 @@
                     <li>
                         <strong>Run the installer.</strong>
                         It finds SQL Server Management Studio 22 on the machine and adds AKML SQL
-                        to it.
+                        to it. If Windows SmartScreen says it protected your PC, the installer is
+                        simply new to it: check the file against the SHA-256 on this page, then
+                        choose <em>More info</em> and <em>Run anyway</em>.
                     </li>
                     <li>
                         <strong>Let it close SSMS if it is open.</strong>
@@ -239,7 +241,7 @@
                     </li>
                     @if (_previousReleases.Count > 0)
                     {
-                        <li><a href="#previous-releases-heading">Previous versions</a></li>
+                        <li><a href="/download#previous-releases-heading">Previous versions</a></li>
                     }
                     <li>
                         <a href="https://github.com/mohamedkhamis/AKML-SQL" target="_blank" rel="noopener noreferrer">Source code</a>

@@ -27,8 +27,20 @@ public abstract class PgRuleBase : IPgAnalysisRule
         Description = description;
         RequiresSchema = requiresSchema;
         AutoFixable = autoFixable;
-        ReferenceUrl = manualSection.StartsWith("http", StringComparison.Ordinal) ? manualSection : ManualRoot + manualSection + ".html";
+        ReferenceUrl = manualSection.StartsWith("http", StringComparison.Ordinal) ? manualSection : ManualUrl(manualSection);
         CategoryCode = ruleId.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
+    }
+
+    /// <summary>
+    /// "page" links to the manual page; "page#section" to a section inside it. Only a chapter-level section has a page of its own
+    /// - a nested one such as sql-syntax-identifiers is an anchor on its parent page, which the manual writes in upper case.
+    /// </summary>
+    private static string ManualUrl(string manualSection)
+    {
+        var hash = manualSection.IndexOf('#');
+        return hash < 0
+            ? ManualRoot + manualSection + ".html"
+            : ManualRoot + manualSection[..hash] + ".html#" + manualSection[(hash + 1)..].ToUpperInvariant();
     }
 
     public string RuleId { get; }

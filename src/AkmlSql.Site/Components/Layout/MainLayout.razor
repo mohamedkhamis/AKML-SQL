@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
 @* Spec 034 T006 / contracts/site-routes.md: semantic landmarks, keyboard-navigable nav,
    FR-011 repository + license links. Styles live in wwwroot/css/site.css on --akml-* tokens.
@@ -6,7 +7,9 @@
    multi-column footer. <main> no longer carries .container — pages opt into .page-body so
    the Home hero can run full-bleed. *@
 
-<a class="skip-link" href="#main-content">Skip to content</a>
+@* The skip link carries the current path: <base href="/"> resolves a bare "#main-content"
+   against the home page, and Blazor's enhanced navigation then loads Home. *@
+<a class="skip-link" href="@SkipLinkHref">Skip to content</a>
 
 <header class="site-header">
     <nav class="site-nav container" aria-label="Main navigation">
@@ -146,3 +149,15 @@
         <!-- Site metrics live at /admin — a direct URL for the owner, intentionally not linked anywhere public. -->
     </div>
 </footer>
+
+@code {
+    private string SkipLinkHref
+    {
+        get
+        {
+            var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+            var hash = relative.IndexOf('#');
+            return "/" + (hash < 0 ? relative : relative[..hash]) + "#main-content";
+        }
+    }
+}

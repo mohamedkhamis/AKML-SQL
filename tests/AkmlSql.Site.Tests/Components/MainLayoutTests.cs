@@ -58,8 +58,21 @@ public sealed class MainLayoutTests : IDisposable
         var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
 
         var skip = cut.Find("a.skip-link");
-        Assert.Equal("#main-content", skip.GetAttribute("href"));
+        Assert.Equal("/#main-content", skip.GetAttribute("href"));
         Assert.NotNull(cut.Find("main#main-content"));
+    }
+
+    [Fact]
+    public void SkipLink_KeepsTheCurrentPage()
+    {
+        // A bare "#main-content" resolves against <base href="/">, and enhanced navigation then
+        // loads the home page instead of moving to this page's main landmark.
+        using var ctx = NewCtx();
+        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("/docs/topics/snippets?x=1");
+
+        var cut = ctx.Render<MainLayout>(ps => ps.Add(p => p.Body, "<p>body</p>"));
+
+        Assert.Equal("/docs/topics/snippets?x=1#main-content", cut.Find("a.skip-link").GetAttribute("href"));
     }
 
     [Fact]

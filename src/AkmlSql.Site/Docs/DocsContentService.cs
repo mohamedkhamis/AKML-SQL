@@ -195,7 +195,7 @@ public sealed class DocsContentService
         foreach (var document in documents)
         {
             var markdown = File.ReadAllText(Path.Combine(contentRootPath, document.SourcePath.Replace('/', Path.DirectorySeparatorChar)));
-            var rendered = renderer.Render(markdown, document.SourcePath, document.Title);
+            var rendered = renderer.Render(markdown, document.SourcePath, document.Title, document.Route);
             document.HtmlContent = rendered.Html;
             document.PlainText = rendered.PlainText;
             document.Headings = rendered.Headings;

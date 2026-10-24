@@ -72,8 +72,9 @@ public class ReferenceCoverageTests
             var label = e.Kind + " " + e.Name;
             Assert.False(string.IsNullOrWhiteSpace(e.Summary), label + ": summary");
             Assert.False(string.IsNullOrWhiteSpace(e.SectionId), label + ": section");
-            Assert.Matches(new Regex(@"^https://www\.postgresql\.org/docs/18/[a-z0-9\-]+\.html$"), e.Url);
-            Assert.EndsWith("/" + e.SectionId + ".html", e.Url);
+            Assert.Matches(new Regex(@"^https://www\.postgresql\.org/docs/18/[a-z0-9\-]+\.html(#[A-Z0-9\-]+)?$"), e.Url);
+            Assert.True(e.Url.EndsWith("/" + e.SectionId + ".html", StringComparison.Ordinal)
+                || e.Url.EndsWith(".html#" + e.SectionId.ToUpperInvariant(), StringComparison.Ordinal), label + ": " + e.Url);
         });
     }
 

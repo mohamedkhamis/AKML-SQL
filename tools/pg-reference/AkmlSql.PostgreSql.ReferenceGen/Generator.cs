@@ -181,7 +181,14 @@ public static partial class Generator
     /// <summary>14 for <c>REL_14_STABLE</c>; 0 when the tag has no number.</summary>
     public static int MajorOf(string tag) => TagMajor().Match(tag) is { Success: true } m ? int.Parse(m.Groups[1].Value) : 0;
 
-    public static string Url(int docMajor, string sectionId) => $"https://www.postgresql.org/docs/{docMajor}/{sectionId}.html";
+    /// <summary>
+    /// The manual link for a section. A nested section (one with a <paramref name="parentPage"/>) has no page of its own: it is an
+    /// anchor on its parent page, written in upper case as the manual writes it.
+    /// </summary>
+    public static string Url(int docMajor, string sectionId, string? parentPage = null) =>
+        parentPage is null
+            ? $"https://www.postgresql.org/docs/{docMajor}/{sectionId}.html"
+            : $"https://www.postgresql.org/docs/{docMajor}/{parentPage}.html#{sectionId.ToUpperInvariant()}";
 
     /// <summary>
     /// The catalogs name types by their internal names (<c>int4</c>, <c>float8</c>, <c>timestamptz</c>, <c>_text</c> for an array);
@@ -602,7 +609,7 @@ public static partial class Generator
                 Summary = summary,
                 MinVersion = oldestMajor,
                 Source = new ReferenceSource { File = "doc/src/sgml/syntax.sgml", SectionId = sectionId },
-                Url = Url(docMajor, sectionId),
+                Url = Url(docMajor, sectionId, LexicalEntries.ParentPage(sectionId)),
             });
         }
     }

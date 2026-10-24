@@ -80,8 +80,11 @@ public sealed class MarkdownRenderer
     /// <paramref name="documentTitle"/> is the catalog title; when the body's first block is an
     /// H1 with the same text it is dropped from the rendered HTML (U3: the page component
     /// renders its own <c>&lt;h1&gt;</c>, so the title would otherwise appear twice).
+    /// <paramref name="documentRoute"/> is the page's route (<c>/docs/configuration</c>): every
+    /// in-page link (<c>#id</c>) is written as route + fragment, because the site's
+    /// <c>&lt;base href="/"&gt;</c> resolves a bare fragment against the home page.
     /// </summary>
-    public RenderedDocument Render(string markdown, string sourceRelativePath, string? documentTitle = null)
+    public RenderedDocument Render(string markdown, string sourceRelativePath, string? documentTitle = null, string? documentRoute = null)
     {
         markdown ??= string.Empty;
 
@@ -91,10 +94,11 @@ public sealed class MarkdownRenderer
 
         var headings = ExtractHeadings(document);
         var summary = ExtractSummary(document);
-        SanitizeAndRewriteLinks(document, sourceRelativePath);
+        SanitizeAndRewriteLinks(document, sourceRelativePath, documentRoute);
 
         var html = Markdig.Markdown.ToHtml(document, _pipeline);
-        html = AddHeadingPermalinks(html);
+        html = AddHeadingPermalinks(html, documentRoute);
+        html = AlignmentStyleToClass(html);
         // Mobile tables: wrap in a scroll container — a display:block table with
         // border-collapse does not scroll reliably in Chromium at narrow widths, so the
         // wrapper owns the scrolling and the table stays a real table.
@@ -119,22 +123,34 @@ public sealed class MarkdownRenderer
     /// directly to a section. Markdig's AutoIdentifier extension already emits the ids; only
     /// the affordance was missing.
     /// <para>
-    /// The href is a bare fragment, which is safe here because the docs pages do not rely on
-    /// <c>&lt;base href&gt;</c> resolution for it — the anchor is activated in-page and the
-    /// browser scrolls without navigating. (The "On this page" nav in DocPage.razor uses the
-    /// full route because it is rendered before the document is known to be current.)
+    /// The href is route + fragment when the route is known: a bare <c>#id</c> resolves against
+    /// <c>&lt;base href="/"&gt;</c>, and Blazor's enhanced navigation then loads the home page.
     /// </para>
     /// The link is aria-hidden with a title, so screen readers are not read a "#" after every
     /// heading; CSS reveals it on hover/focus of the heading.
     /// </summary>
-    internal static string AddHeadingPermalinks(string html) =>
+    internal static string AddHeadingPermalinks(string html, string? documentRoute = null) =>
         HeadingWithId.Replace(html, match =>
         {
             var level = match.Groups["level"].Value;
             var id = match.Groups["id"].Value;
             return $"<h{level} id=\"{id}\" class=\"doc-heading\">"
-                 + $"<a class=\"doc-anchor\" href=\"#{id}\" title=\"Link to this section\" aria-hidden=\"true\" tabindex=\"-1\">#</a>";
+                 + $"<a class=\"doc-anchor\" href=\"{documentRoute}#{id}\" title=\"Link to this section\" aria-hidden=\"true\" tabindex=\"-1\">#</a>";
         });
+
+    /// <summary>Matches the inline alignment Markdig writes on pipe-table cells.</summary>
+    private static readonly Regex CellAlignmentStyle = new(
+        @"<(?<tag>th|td) style=""text-align: (?<align>left|center|right);"">",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Pipe-table column alignment (<c>|---:|</c>) is emitted as an inline <c>style</c>, which the
+    /// site's CSP (<c>style-src 'self'</c>) blocks — one console error per cell and the alignment
+    /// lost. A class carries the same alignment through site.css.
+    /// </summary>
+    internal static string AlignmentStyleToClass(string html) =>
+        CellAlignmentStyle.Replace(html, match =>
+            $"<{match.Groups["tag"].Value} class=\"align-{match.Groups["align"].Value}\">");
 
     /// <summary>
     /// U3: the doc page renders its own <c>&lt;h1&gt;@Title&lt;/h1&gt;</c>, so a leading source
@@ -255,7 +271,7 @@ public sealed class MarkdownRenderer
         return builder.ToString().Trim();
     }
 
-    private void SanitizeAndRewriteLinks(MarkdownDocument document, string sourceRelativePath)
+    private void SanitizeAndRewriteLinks(MarkdownDocument document, string sourceRelativePath, string? documentRoute)
     {
         var sourceFolder = FolderOf(sourceRelativePath);
         // Wrapped after the walk: replacing nodes while Descendants() enumerates is unsafe.
@@ -285,7 +301,9 @@ public sealed class MarkdownRenderer
 
             link.Url = link.IsImage
                 ? RewriteImageUrl(link.Url, sourceFolder)
-                : RewriteLinkUrl(link.Url, sourceFolder);
+                : link.Url.StartsWith('#') && documentRoute is not null
+                    ? documentRoute + link.Url
+                    : RewriteLinkUrl(link.Url, sourceFolder);
 
             if (link.IsImage
                 && link.Url is { } imageUrl

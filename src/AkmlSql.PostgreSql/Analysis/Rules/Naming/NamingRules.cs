@@ -18,7 +18,7 @@ public sealed class Pgnm001IdentifierTooLong : PgRuleBase
     public Pgnm001IdentifierTooLong() : base("PGNM001", "Naming", "Identifier longer than 63 bytes", DiagnosticSeverity.Warning,
         "PostgreSQL stores a name in 63 bytes (NAMEDATALEN - 1) and silently truncates a longer one, with only a NOTICE. Two long names that differ after the 63rd byte "
         + "become the same name, and the stored name no longer matches what was written. The limit counts UTF-8 bytes, not characters.",
-        "sql-syntax-identifiers") { }
+        "sql-syntax-lexical#sql-syntax-identifiers") { }
 
     protected override void Run(PgAnalysisContext ctx, PgReporter report)
     {
@@ -41,7 +41,7 @@ public sealed class Pgnm002FoldedCase : PgRuleBase
     public Pgnm002FoldedCase() : base("PGNM002", "Naming", "Capitals in an unquoted name", DiagnosticSeverity.Information,
         "PostgreSQL folds an unquoted name to lower case: Orders, ORDERS and orders are the same table. A table created as \"Orders\" (quoted) is a different table that "
         + "unquoted references can never reach. Write names in lower case, or quote them every time. Function names and types are not reported.",
-        "sql-syntax-identifiers") { }
+        "sql-syntax-lexical#sql-syntax-identifiers") { }
 
     protected override void Run(PgAnalysisContext ctx, PgReporter report)
     {
@@ -114,7 +114,7 @@ public sealed class Pgnm004QuotedUnquotedMix : PgRuleBase
     public Pgnm004QuotedUnquotedMix() : base("PGNM004", "Naming", "Name used both quoted and unquoted", DiagnosticSeverity.Warning,
         "\"Orders\" (quoted, with a capital) and Orders (unquoted, folded to orders) are two different names. A script that uses both for one object "
         + "refers to two objects, and the unquoted one usually fails with \"does not exist\".",
-        "sql-syntax-identifiers") { }
+        "sql-syntax-lexical#sql-syntax-identifiers") { }
 
     protected override void Run(PgAnalysisContext ctx, PgReporter report)
     {
@@ -147,7 +147,7 @@ public sealed class Pgnm005NameNeedsQuotes : PgRuleBase
     public Pgnm005NameNeedsQuotes() : base("PGNM005", "Naming", "Name that always needs quotes", DiagnosticSeverity.Information,
         "A name with spaces or punctuation, or one that begins with a digit, cannot be written without double quotes in any statement, view, function body or tool. "
         + "Letters, digits and underscores, starting with a letter or underscore, keep the name usable everywhere.",
-        "sql-syntax-identifiers") { }
+        "sql-syntax-lexical#sql-syntax-identifiers") { }
 
     protected override void Run(PgAnalysisContext ctx, PgReporter report)
     {

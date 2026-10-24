@@ -102,6 +102,12 @@
                 var opening = menu.hidden;
                 menu.hidden = !opening;
                 toggle.setAttribute('aria-expanded', opening ? 'true' : 'false');
+                // Radio-group pattern: opening puts focus on the active option, so the arrow
+                // keys work at once instead of only after a Tab into the menu.
+                if (opening) {
+                    var checked = menu.querySelector('[aria-checked="true"]') || menu.querySelector('[data-theme-value]');
+                    if (checked) { checked.focus(); }
+                }
             }
 
             return;
@@ -112,14 +118,37 @@
     });
 
     document.addEventListener('keydown', function (event) {
+        var menu = document.getElementById(MENU_ID);
+        if (!menu || menu.hidden) { return; }
+
         if (event.key === 'Escape') {
-            var menu = document.getElementById(MENU_ID);
-            if (menu && !menu.hidden) {
-                closeMenu();
-                var button = document.getElementById(BUTTON_ID);
-                if (button) { button.focus(); }
-            }
+            closeMenu();
+            var button = document.getElementById(BUTTON_ID);
+            if (button) { button.focus(); }
+            return;
         }
+
+        // Arrow keys, Home and End move between the options while focus is inside the menu.
+        if (!menu.contains(document.activeElement)) { return; }
+        var options = Array.prototype.slice.call(menu.querySelectorAll('[data-theme-value]'));
+        var index = options.indexOf(document.activeElement);
+        var next = -1;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowRight') { next = (index + 1) % options.length; }
+        else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') { next = (index - 1 + options.length) % options.length; }
+        else if (event.key === 'Home') { next = 0; }
+        else if (event.key === 'End') { next = options.length - 1; }
+        if (next >= 0) {
+            event.preventDefault();
+            options[next].focus();
+        }
+    });
+
+    // Tabbing out of the picker closes the menu, as a click elsewhere does.
+    document.addEventListener('focusout', function (event) {
+        var menu = document.getElementById(MENU_ID);
+        if (!menu || menu.hidden) { return; }
+        var picker = menu.closest('.theme-picker');
+        if (picker && event.relatedTarget && !picker.contains(event.relatedTarget)) { closeMenu(); }
     });
 
     apply(selectedTheme, false);
