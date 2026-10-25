@@ -130,11 +130,83 @@ product-tour.js progressively adds selection, while the existing viewer owns zoo
                             <li>PostgreSQL formatting and analysis</li>
                             <li>Query execution and eligible result editing</li>
                         </ul>
-                        <a href="#support">Check the support details ↗</a>
+                        <a href="#support">See what PostgreSQL supports ↓</a>
                     </div>
                 </article>
             </div>
-            <p class="support-note" id="support">PostgreSQL requires an AKML engine with PostgreSQL enabled. It is available in the browser edition; the SSMS extension targets SQL Server. Feature availability differs by database.</p>
+            @* Facts here follow spec 042 (PostgreSQL in the engine and web edition) and what shipped:
+               52 PostgreSQL rules (PgRuleRegistryTests), a reference built from the PostgreSQL 14-18
+               manual, TLS modes from ConnectionManagerModal. Keep them in step with
+               doc/topics/browser-setup.md. *@
+            <section class="support-panel" id="support" aria-labelledby="support-heading">
+                <p class="eyebrow">SUPPORT DETAILS</p>
+                <h3 id="support-heading">PostgreSQL works in the AKML browser workspace only.</h3>
+                <p class="support-lead">
+                    The SSMS 22 extension is for SQL Server. To work with PostgreSQL, use the browser
+                    workspace with an AKML engine; the engine connects to your server and runs the
+                    PostgreSQL language services.
+                </p>
+                <div class="table-scroll">
+                    <table class="support-matrix">
+                        <caption class="visually-hidden">Where each database is supported</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Where you work</th>
+                                <th scope="col">SQL Server</th>
+                                <th scope="col">PostgreSQL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th scope="row">SSMS 22 extension</th>
+                                <td><span class="support-yes">Supported</span></td>
+                                <td><span class="support-no">Not available</span> SSMS connects to SQL Server only.</td>
+                            </tr>
+                            <tr>
+                                <th scope="row">Browser workspace</th>
+                                <td><span class="support-yes">Supported</span> Formatting and analysis also work without an engine.</td>
+                                <td><span class="support-yes">Supported</span> Through an AKML engine with PostgreSQL support.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="support-columns">
+                    <div>
+                        <h4>Included for PostgreSQL</h4>
+                        <ul>
+                            <li>Completion for schemas, tables, columns, functions and JOIN conditions; names are quoted only when they need it.</li>
+                            <li>Quick info and signature help from a reference built from the PostgreSQL 14 to 18 manual. Entries newer than your server are not offered.</li>
+                            <li>Formatting, with PL/pgSQL and other function bodies kept as written.</li>
+                            <li>52 PostgreSQL analysis rules.</li>
+                            <li>Scripts run one statement at a time, so an error does not undo the statements before it. <code>BEGIN</code> keeps a transaction open between runs.</li>
+                            <li>Editing in the results grid for rows that can be identified by a key.</li>
+                            <li>SQL History marks PostgreSQL runs and can filter them; PostgreSQL snippets are built in.</li>
+                            <li>Optional AI. When a cloud provider explains, fixes or completes a script, the engine first removes its literal values; if it cannot, nothing is sent without your say. Chat messages are sent as you write them.</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4>What you need</h4>
+                        <ul>
+                            <li>An AKML engine with PostgreSQL support, paired with the browser workspace. PostgreSQL is on by default; an administrator can switch it off with <code>postgreSql.enabled</code> in the engine's <code>config.json</code>.</li>
+                            <li>A PostgreSQL server the engine machine can reach; the reference covers PostgreSQL 14 to 18.</li>
+                            <li>A user name and password. TLS can be disable, prefer (the default), require, verify-ca or verify-full.</li>
+                        </ul>
+                        <h4>Not included yet</h4>
+                        <ul>
+                            <li>PostgreSQL in the SSMS extension.</li>
+                            <li>Refactorings and Find invalid objects.</li>
+                            <li>psql meta-commands such as <code>\dt</code>, and <code>COPY</code> to or from the client. They are not sent; the script stops with a hint.</li>
+                            <li>Certificate, Kerberos, LDAP and PAM sign-in.</li>
+                            <li>Administration tools: roles, backups, vacuum and replication.</li>
+                        </ul>
+                    </div>
+                </div>
+                <p class="support-actions">
+                    <a class="btn btn-secondary" href="/docs/topics/browser-setup">Set up the browser workspace</a>
+                    <a href="/docs/postgresql-reference">PostgreSQL reference</a>
+                    <a href="/docs/analysis-rules#postgresql-rules-pg">PostgreSQL analysis rules</a>
+                </p>
+            </section>
         </div>
     </section>
     <section class="section wrap" id="product-tour">

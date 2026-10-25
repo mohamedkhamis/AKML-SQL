@@ -82,9 +82,35 @@ public sealed class HomePageTests
         var pg = cut.FindAll(".database").Single(el => el.QuerySelector("h3")!.TextContent == "PostgreSQL");
         Assert.Contains("SSMS 22 + BROWSER", sql.TextContent);
         Assert.Contains("BROWSER + AKML ENGINE", pg.TextContent);
-        Assert.Contains("PostgreSQL requires an AKML engine with PostgreSQL enabled", cut.Find("#support").TextContent);
-        Assert.Contains("SSMS extension targets SQL Server", cut.Find("#support").TextContent);
         Assert.DoesNotContain("Visual Studio", cut.Find(".hero").TextContent);
+
+        // The PostgreSQL card links to the support details on this page, not to another site.
+        Assert.Equal("#support", pg.QuerySelector("a[href='#support']")!.GetAttribute("href"));
+        var support = cut.Find("#support");
+        Assert.Equal("PostgreSQL works in the AKML browser workspace only.", support.QuerySelector("h3")!.TextContent);
+    }
+
+    [Fact]
+    public void SupportMatrix_ShowsPostgresInTheBrowserOnly()
+    {
+        using var ctx = NewCtx();
+        var cut = ctx.Render<Home>();
+        var rows = cut.FindAll("#support .support-matrix tbody tr");
+
+        var ssms = rows.Single(r => r.QuerySelector("th")!.TextContent == "SSMS 22 extension").QuerySelectorAll("td");
+        Assert.Equal("Supported", ssms[0].QuerySelector(".support-yes")!.TextContent);
+        Assert.Equal("Not available", ssms[1].QuerySelector(".support-no")!.TextContent);
+
+        var browser = rows.Single(r => r.QuerySelector("th")!.TextContent == "Browser workspace").QuerySelectorAll("td");
+        Assert.NotNull(browser[0].QuerySelector(".support-yes"));
+        Assert.NotNull(browser[1].QuerySelector(".support-yes"));
+
+        // Facts that must stay in step with the product (PgRuleRegistryTests pins 52; the reference covers 14-18).
+        var text = cut.Find("#support").TextContent;
+        Assert.Contains("52 PostgreSQL analysis rules", text);
+        Assert.Contains("PostgreSQL 14 to 18", text);
+        Assert.Contains("PostgreSQL in the SSMS extension", text);
+        Assert.NotNull(cut.Find("#support a[href='/docs/topics/browser-setup']"));
     }
 
     [Fact]
