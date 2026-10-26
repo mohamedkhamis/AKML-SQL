@@ -42,14 +42,18 @@ Facts about the current installer and web edition that this spec builds on (read
 - If IIS is chosen and is not installed, clicking Next opens a dialog with three answers: enable
   IIS now (turns the Windows feature on, up to a minute), switch to "Don't host", or cancel
   setup.
-- Setup decides that IIS is installed from IIS's presence alone. A machine can have IIS but not
-  IIS's management scripting tools. It passes that check, but the site is not created at the
-  end of setup. The user finds out from a warning in the install summary and from a dialog that
-  points to the "Repair AKML SQL Web hosting" Start-menu shortcut.
+- Setup decides that IIS is installed from IIS's presence alone: the IIS settings key and IIS's
+  command-line tool. When the site was not created, the install summary and a dialog blamed
+  missing "IIS management scripting tools" and pointed to the "Repair AKML SQL Web hosting"
+  Start-menu shortcut. The real cause was that setup ran IIS's configuration tools in 32-bit
+  PowerShell, which cannot load them, and an earlier release fixed that. On the owner's
+  workstation, IIS's management scripting tools are switched off in Windows Features, yet setup
+  creates and configures the site without trouble. This is a plan-time finding from
+  2026-10-26.
 - The choice on the hosting page does not decide on its own whether IIS is set up. The IIS step
   follows the "Host on local IIS" component tick. If that component is still ticked, choosing
-  "Don't host" on the page (or passing `/WEB_HOST=NONE` to a silent install) can still create
-  the IIS site. This comes from reading setup's script and must be confirmed during planning.
+  "Don't host" on the page (or passing `/WEB_HOST=NONE` to a silent install) still creates the
+  IIS site. Planning confirmed this on 2026-10-26.
 - The "AKML SQL Web Engine" Windows service runs the engine that the browser talks to, on the
   engine port (default 47291). It does **not** serve the web edition's pages. Opening the
   engine's address in a browser shows only a short page that says it is the connection point.
@@ -81,14 +85,28 @@ Facts about the current installer and web edition that this spec builds on (read
   install that would host on IIS when IIS is not installed is stopped. The installer smoke
   tests pass `/WEB_HOST=IIS` explicitly.
 - The Finish page's "Open AKML SQL Web" link appears only when IIS hosts the web edition.
-- The browser keeps the web edition's saved connections, settings, query history and open
-  query tabs separately for each address (scheme, host and port). If the web edition is opened
-  at a different address, none of them are there. Settings can be exported and imported. Saved
-  connections cannot.
-- The owner's machine runs the web edition on IIS on a non-default port
-  (`http://localhost:59416/`).
-- Uninstall removes the IIS site, the HTTPS binding that setup created, the firewall rules and
-  the service. It asks before it deletes the web edition's data.
+- The browser keeps much of the web edition's data separately for each address (scheme, host
+  and port): saved engine and database connections, pairing tokens, AI keys, AI chat, snippets,
+  settings, layout, theme and open query tabs. If the web edition is opened at a different
+  address, none of them are there. Query history is kept by the engine, so it is still there.
+  Settings can be exported and imported. Saved connections cannot.
+- The owner has two IIS installs that must keep working:
+  - the workstation, on IIS at `http://localhost:8083/` in localhost mode;
+  - a server, on IIS at `http://localhost:59416/` in LAN mode (secure site port 59418, engine
+    port 59417).
+  Planning corrected this: the first draft gave 59416 as the workstation's address.
+- IIS hosting writes the site's settings (file types, policy, caching, deep links) into a
+  `web.config` file inside the web edition's folder. Setup itself never installs or removes that
+  file.
+- The web edition's folder keeps files from earlier versions. Setup copies the new files but
+  never deletes old ones.
+- Uninstall removes the IIS site, the HTTPS binding that setup created and the service. It asks
+  before it deletes the web edition's data. It means to remove the firewall rules too, but it
+  calls a copy of the firewall script that setup has already deleted, so the rules stay. This
+  is a plan-time finding.
+- An upgrade forgets LAN mode when IIS does not host the web edition. Setup remembers the LAN
+  choice only for IIS installs, and a silent upgrade ignores what was remembered. Either way a
+  LAN install comes back as localhost. This is a plan-time finding.
 
 ## Clarifications
 
@@ -172,8 +190,8 @@ something setup needs, the IIS choice is disabled and names the missing part.
    at the chosen site address and behaves as it does today. The Windows service runs the engine
    only, and the engine's address still shows its short page.
 3. **Given** IIS is enabled but lacks something setup needs to create the site (for example,
-   IIS's management scripting tools), **When** the hosting page appears, **Then** the IIS
-   choice is disabled, and the reason names the missing part and where to turn it on.
+   IIS's configuration tools cannot be loaded), **When** the hosting page appears, **Then**
+   the IIS choice is disabled, and the reason names the missing part and where to turn it on.
 4. **Given** IIS is not enabled, **When** the hosting page appears, **Then** the IIS choice is
    disabled, and the reason says how to turn IIS on in Windows Features and that the user can
    choose IIS afterwards. Setup offers no way to turn IIS on itself.
@@ -192,7 +210,7 @@ change, moves the web edition over, and removes what the old host left behind.
 
 **Why this priority**: Existing installs must not break on update, including the owner's IIS
 install on a non-default port. If the address changes, the browser's saved connections,
-settings, history and tabs disappear without any message.
+settings, tabs and other browser data disappear without any message.
 
 **Independent Test**: Install on IIS on port X, use it, and save a connection. Upgrade: IIS is
 preselected, and the address and the saved connection still work. Re-run setup and choose
@@ -207,9 +225,10 @@ data. Afterwards, only the standalone service serves the web edition and the IIS
 2. **Given** an upgrade that keeps the same host, **When** setup finishes, **Then** the address
    is unchanged and the browser's saved data at that address still opens.
 3. **Given** an IIS install, **When** the user chooses standalone, **Then** before installing
-   setup shows the current and new addresses. It says that the connections, history and tabs
-   saved in the browser at the current address will not appear at the new one, and that
-   settings can be exported first.
+   setup shows the current and new addresses. It says that the connections, tabs and other
+   data saved in the browser at the current address will not appear at the new one, that query
+   history is kept by the engine and will still be there, and that settings can be exported
+   first.
 4. **Given** the user goes ahead with switching from IIS to standalone, **When** setup finishes,
    **Then** the AKML SQL site and its firewall rule are gone from IIS and Windows Firewall. No
    other IIS site, no IIS setting and not the IIS feature itself has been changed. The
@@ -248,8 +267,9 @@ from the install summary, trust the certificate, pair and run a query.
 3. **Given** another computer opens the standalone address, **When** the web edition loads,
    **Then** its default engine is the engine at that address. The user pairs with the PIN as
    today, without typing an engine address.
-4. **Given** localhost exposure, **Then** no firewall rule is added, and other computers can
-   reach neither the pages nor the engine.
+4. **Given** localhost exposure and standalone hosting, **Then** no firewall rule is added,
+   and other computers can reach neither the pages nor the engine. With IIS hosting, the site's
+   plain-HTTP port behaves as it does today.
 5. **Given** LAN exposure on IIS, **Then** the firewall rules and the secure site port behave
    as they do today.
 
@@ -423,7 +443,8 @@ answers again. Then uninstall and check that nothing remains.
 
 - **FR-021**: When IIS is chosen and ready, setup MUST host the web edition on IIS as it does
   today: the site and its ports, file types, security policy, deep links, HTTPS and firewall
-  rules for LAN mode, and the repair shortcut.
+  rules for LAN mode, and the repair shortcut. One addition: IIS also serves `.sql` files as
+  plain text, as the standalone host does.
 - **FR-022**: Only one host MUST serve the web edition's pages at a time. When IIS is chosen,
   the Windows service MUST NOT also serve them; the engine's address keeps its short page.
 
@@ -448,13 +469,15 @@ answers again. Then uninstall and check that nothing remains.
   firewall rule. Setup MUST NOT change other IIS sites, IIS's own settings or the IIS feature.
 - **FR-033**: The two hosts use different addresses, so switching host changes the address.
   Before installing, the hosting page MUST show the current and new addresses. It MUST say that
-  the connections, history and tabs saved in the browser at the current address will not appear
-  at the new one, and that settings can be exported first and imported afterwards. The install
-  summary MUST repeat the new address.
+  the connections, tabs and other data saved in the browser at the current address will not
+  appear at the new one, that query history is kept by the engine and is not lost, and that
+  settings can be exported first and imported afterwards. The install summary MUST repeat the
+  new address.
 - **FR-034**: An install whose recorded choice is "Don't host" MUST stay that way on upgrade
   unless the user picks a host (see FR-030a for installs from before this feature).
-- **FR-035**: Changing the web edition's port on a re-run MUST give the same address-change
-  warning as FR-033.
+- **FR-035**: Any other change of the web edition's address on a re-run MUST give the same
+  warning as FR-033: a new port, or a standalone install switching between localhost and LAN
+  (which changes the scheme and host).
 
 **Silent installs**
 
@@ -464,7 +487,9 @@ answers again. Then uninstall and check that nothing remains.
   and write the reason and the new address to its log.
 - **FR-042**: `/WEB_HOST=IIS` when IIS is not ready MUST stop setup before any change, and the
   log MUST name what is missing, as today.
-- **FR-043**: `/WEB_HOST=NONE` MUST set up no host at all.
+- **FR-043**: `/WEB_HOST=NONE` MUST set up no page host. No IIS site is created, and the engine
+  service does not serve the pages. The engine service is still installed, as today, so that
+  pages served from somewhere else can connect to it.
 - **FR-044**: `/WEB_EXPOSURE` and `/BRIDGE_PORT` MUST keep their meaning and checks for both
   hosts. With standalone hosting, `/BRIDGE_PORT` sets the port of the one shared address.
   `/WEB_PORT` and `/WEB_HTTPS_PORT` apply to IIS hosting only. If either is passed and the host
@@ -501,8 +526,11 @@ answers again. Then uninstall and check that nothing remains.
   MUST describe the three hosting choices, when IIS counts as ready, the standalone address and
   its firewall rule, the silent flag values, and how switching host changes the address.
 - **FR-071**: The SSMS 22 part of setup, how the engine works with the browser, and the web
-  edition's features MUST NOT change, except where the standalone host needs it (FR-013,
-  FR-014).
+  edition's features MUST NOT change, except in two places:
+  - where the standalone host needs it (FR-013, FR-014);
+  - the uninstall question about the desktop settings: a silent uninstall keeps those settings
+    without asking, as it does for the web edition's data (FR-062), so that a silent uninstall
+    never waits on a dialog.
 
 ### Key Entities
 
@@ -540,15 +568,18 @@ answers again. Then uninstall and check that nothing remains.
   reloaded or opened directly.
 - **SC-006**: For the same web edition files, the standalone host and IIS apply the same
   security policy and caching behaviour, and every file the app loads succeeds (the browser
-  console shows no failed loads). Checked by comparing the two hosts.
+  console shows no failed loads). Checked by comparing the two hosts. The IIS side of the
+  comparison must be a clean IIS install made by this setup, not one with hand-made changes.
 - **SC-007**: Upgrading an existing IIS install, including one on a non-default port, keeps IIS,
-  the address and the browser's saved connections, with no extra step for the user.
+  the address and the browser's saved connections, with no extra step for the user. Both owner
+  installs are checked: the workstation (`:8083`, localhost) and the server (`:59416`, LAN).
 - **SC-008**: In every switch of host, the address change is shown before anything is
   installed. Afterwards exactly one host serves the web edition, and nothing set up for the
   previous host remains, firewall rules included.
-- **SC-009**: In LAN mode, another computer pairs and runs a query over HTTPS on both hosts, and
-  no app page reaches another computer over plain HTTP. With standalone hosting there is exactly
-  one AKML SQL Web firewall rule and one certificate to trust.
+- **SC-009**: In LAN mode, another computer pairs and runs a query over HTTPS on both hosts.
+  With standalone hosting, no app page reaches another computer over plain HTTP, there is
+  exactly one AKML SQL Web firewall rule, and there is one certificate to trust. With IIS
+  hosting, the site's plain-HTTP port stays as it is today: setup opens no firewall rule for it.
 - **SC-010**: Every documented `/WEB_HOST` value gives its documented result, and every invalid
   command line stops before any change with the reason in the log. The installer's automated
   smoke tests cover this.
@@ -580,9 +611,17 @@ answers again. Then uninstall and check that nothing remains.
 - An existing silent script that passes `/WEB_PORT` without `/WEB_HOST` now stops with a clear
   log message instead of quietly getting a different address (FR-044). The documented examples
   already pass `/WEB_HOST=IIS`.
-- IIS counts as ready when the IIS web server and its management scripting tools are enabled
-  and the IIS web service is not disabled. Setup does not need IIS's URL Rewrite module (deep
-  links already work without it).
+- IIS counts as ready when all of these hold:
+  - the IIS web server is enabled, with the parts the AKML SQL site uses: Static Content,
+    Default Document and HTTP Errors;
+  - neither the IIS web service nor the Windows Process Activation Service it depends on is
+    disabled;
+  - setup can load IIS's configuration tools. Setup checks this by trying them, not by reading
+    the Windows Features list, which can disagree with what works.
+  Setup does not need IIS's URL Rewrite module; deep links already work without it.
+- Where the standalone host differs from IIS on purpose, the plan records the difference. One
+  example is the status code of a reloaded deep link; another is a stricter file-type rule. The
+  behaviours in FR-012 are what must match.
 - Setup keeps running elevated, and on the Windows versions it already supports.
 - The 30-second answer check in FR-051 replaces today's 10-second check that the service is
   running. It covers a host that is still starting.

@@ -58,6 +58,20 @@
     standalone, IIS-only ports are ignored and logged rather than stopping setup.
   - FR-019 and FR-020 (serve only the web edition's files, never its state) had no acceptance
     criteria. They now have Story 1 scenario 9 and SC-013.
+- Pass 4 (2026-10-26, plan time): the spec was amended from verified codebase facts and the
+  plan review. The full list is in plan.md › Spec amendments 1–11. The main changes:
+  - the owner's install addresses;
+  - the cause of the old IIS failures;
+  - query history survives an address change;
+  - confirmed defects recorded in Today;
+  - FR-021 (.sql), FR-035 (a switch between localhost and LAN), FR-043, FR-071 (the silent
+    uninstall prompt);
+  - SC-006 (clean IIS reference), SC-007 (both owner installs), SC-009 and US4-4 (the IIS
+    plain-HTTP exception);
+  - the readiness Assumption (functional check; named IIS parts).
+
+  The checklist items still pass. There are no NEEDS CLARIFICATION markers, and the
+  requirements stay product-level.
 - "IIS", "Windows service", "Windows Firewall", "HTTPS" and the `/WEB_HOST`-style silent flags
   appear as product terms the user sees or types, not as implementation choices. Whether the
   engine's existing service also serves the pages, or a second service does, is left to planning
