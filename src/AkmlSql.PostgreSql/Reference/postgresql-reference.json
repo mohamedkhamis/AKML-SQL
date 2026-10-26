@@ -62009,7 +62009,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-identifiers"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-identifiers.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS"
     },
     {
       "kind": "lexical",
@@ -62027,7 +62027,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-dollar-quoting"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-dollar-quoting.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-DOLLAR-QUOTING"
     },
     {
       "kind": "lexical",
@@ -62044,7 +62044,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-expressions-parameters-positional"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-expressions-parameters-positional.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#SQL-EXPRESSIONS-PARAMETERS-POSITIONAL"
     },
     {
       "kind": "lexical",
@@ -62061,7 +62061,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-strings"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-strings.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS"
     },
     {
       "kind": "lexical",
@@ -62079,7 +62079,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-comments"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-comments.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-COMMENTS"
     },
     {
       "kind": "lexical",
@@ -62097,7 +62097,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-type-casts"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-type-casts.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"
     },
     {
       "kind": "lexical",
@@ -62132,7 +62132,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-array-constructors"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-array-constructors.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-ARRAY-CONSTRUCTORS"
     },
     {
       "kind": "lexical",
@@ -62150,7 +62150,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-bit-strings"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-bit-strings.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-BIT-STRINGS"
     },
     {
       "kind": "lexical",
@@ -62167,7 +62167,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-collate-exprs"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-collate-exprs.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-COLLATE-EXPRS"
     },
     {
       "kind": "lexical",
@@ -62184,7 +62184,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-strings-escape"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-strings-escape.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-ESCAPE"
     },
     {
       "kind": "lexical",
@@ -62201,7 +62201,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "field-selection"
       },
-      "url": "https://www.postgresql.org/docs/18/field-selection.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#FIELD-SELECTION"
     },
     {
       "kind": "lexical",
@@ -62218,7 +62218,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-identifiers"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-identifiers.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-IDENTIFIERS"
     },
     {
       "kind": "lexical",
@@ -62235,7 +62235,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-constants-numeric"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-constants-numeric.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-CONSTANTS-NUMERIC"
     },
     {
       "kind": "lexical",
@@ -62252,7 +62252,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-operators"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-operators.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-OPERATORS"
     },
     {
       "kind": "lexical",
@@ -62269,7 +62269,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-precedence"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-precedence.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-PRECEDENCE"
     },
     {
       "kind": "lexical",
@@ -62286,7 +62286,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-row-constructors"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-row-constructors.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#SQL-SYNTAX-ROW-CONSTRUCTORS"
     },
     {
       "kind": "lexical",
@@ -62303,7 +62303,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-special-chars"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-special-chars.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-SPECIAL-CHARS"
     },
     {
       "kind": "lexical",
@@ -62320,7 +62320,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-constants-generic"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-constants-generic.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-CONSTANTS-GENERIC"
     },
     {
       "kind": "lexical",
@@ -62337,7 +62337,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-syntax-strings-uescape"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-syntax-strings-uescape.html"
+      "url": "https://www.postgresql.org/docs/18/sql-syntax-lexical.html#SQL-SYNTAX-STRINGS-UESCAPE"
     },
     {
       "kind": "lexical",
@@ -62354,7 +62354,7 @@
         "file": "doc/src/sgml/syntax.sgml",
         "sectionId": "sql-expressions-subscripts"
       },
-      "url": "https://www.postgresql.org/docs/18/sql-expressions-subscripts.html"
+      "url": "https://www.postgresql.org/docs/18/sql-expressions.html#SQL-EXPRESSIONS-SUBSCRIPTS"
     }
   ]
 }

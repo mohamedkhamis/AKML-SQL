@@ -49,24 +49,33 @@
     private bool _busy;
     private string? _error;
     private IReadOnlyList<MenuItem>? _menu;
+    private SqlSessionState? _menuSession;   // the query tab whose databases the open menu lists
     private double _x, _y;
 
     private string Current => string.IsNullOrEmpty(Sql.Database) ? "No database" : Sql.Database!;
 
-    private bool Disabled => !Sql.IsConnected || !Sql.CanChangeDatabase || IsRunning || _busy;
+    // Spec 043 (T055): the active tab's run, wherever it was started from (the page passes IsRunning; the tab's session knows too).
+    private bool Busy => IsRunning || Sql.ActiveSession?.IsBusy == true;
+
+    private bool Disabled => !Sql.IsConnected || !Sql.CanChangeDatabase || Busy || _busy;
 
     private bool IsPostgres => Sql.Kind == DatabaseKind.PostgreSql;
 
     private string Title =>
         !Sql.IsConnected ? "Connect to a database server to choose a database"
         : !Sql.CanChangeDatabase ? "Switching database needs a newer engine"
-        : IsRunning ? "The database cannot change while a query runs"
+        : Busy ? "Wait for the current run to finish"
         : IsPostgres ? "Change the database (PostgreSQL reconnects: temporary tables and session settings are lost)"
         : "Change the database (the connection, its #temp tables and SET options are kept)";
 
     protected override void OnInitialized() => Sql.StateChanged += OnStateChanged;
 
-    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+    // Review of US1 (finding 35): the menu lists one tab's databases, so another tab shown closes it.
+    private void OnStateChanged() => _ = InvokeAsync(() =>
+    {
+        if (_menu != null && !ReferenceEquals(Sql.ActiveSession, _menuSession)) _menu = null;
+        StateHasChanged();
+    });
 
     private async Task OpenAsync(Microsoft.AspNetCore.Components.Web.MouseEventArgs e)
     {
@@ -75,9 +84,15 @@
         _busy = true;
         _x = e.ClientX;
         _y = e.ClientY + 12;
+        _menuSession = Sql.ActiveSession;
         StateHasChanged();
         var (ok, databases, error) = await Sql.ListDatabasesForSessionAsync(CancellationToken.None);
         _busy = false;
+        if (!ReferenceEquals(Sql.ActiveSession, _menuSession))
+        {
+            StateHasChanged();   // another tab was shown while the list loaded: its menu is not this one
+            return;
+        }
         if (!ok)
         {
             _error = error ?? "Could not list databases.";
@@ -99,12 +114,16 @@
 
     private async Task SwitchAsync(string database)
     {
+        var session = _menuSession;
         _menu = null;
+        // Review of US1 (finding 35): the pick is for the tab the menu was opened on, and never while that tab runs.
+        if (!StillFor(session)) return;
         if (string.Equals(database, Sql.Database, StringComparison.OrdinalIgnoreCase)) return;
 
         // Spec 042 (FR-031, FR-009): a PostgreSQL connection is to one database, so the switch is a reconnect. Say what it costs
         // before doing it, and when a transaction is open say it will be rolled back (never committed).
         if (IsPostgres && !await ConfirmReconnectAsync(database)) return;
+        if (!StillFor(session)) return;
 
         _busy = true;
         StateHasChanged();
@@ -114,6 +133,15 @@
         else if (wasReset && IsPostgres) Notifications.Notify($"Switched to {database}. The connection was reopened: temporary tables and session settings were lost.", NotificationKind.Warning);
         else if (wasReset) Notifications.Notify($"Switched to {database}. The connection was reopened: #temp tables and SET options were lost.", NotificationKind.Warning);
         StateHasChanged();
+    }
+
+    private bool StillFor(SqlSessionState? session)
+    {
+        if (!ReferenceEquals(Sql.ActiveSession, session)) return false;
+        if (!Busy) return true;
+        _error = "Wait for the current run to finish.";
+        StateHasChanged();
+        return false;
     }
 
     // Resolved when used: a page that never switches a PostgreSQL database needs no dialog service.

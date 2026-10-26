@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject NavigationManager Navigation
 
 @* Spec 034 T006 / contracts/site-routes.md: semantic landmarks, keyboard-navigable nav,
    FR-011 repository + license links. Styles live in wwwroot/css/site.css on --akml-* tokens.
@@ -6,7 +7,9 @@
    multi-column footer. <main> no longer carries .container — pages opt into .page-body so
    the Home hero can run full-bleed. *@
 
-<a class="skip-link" href="#main-content">Skip to content</a>
+@* The skip link carries the page's own address (PageAddress): <base href="/"> resolves a bare
+   "#main-content" against the home page, and Blazor's enhanced navigation then loads Home. *@
+<a class="skip-link" href="@PageAddress.Fragment(Navigation, HttpContext, "main-content")">Skip to content</a>
 
 <header class="site-header">
     <nav class="site-nav container" aria-label="Main navigation">
@@ -106,7 +109,8 @@
                 <span>AKML SQL</span>
             </a>
             <p class="site-footer-tagline">
-                AI-powered SQL development assistance for SQL Server Management Studio 22.
+                Write, review and reuse SQL. SQL Server in SSMS 22 or your browser;
+                PostgreSQL in the browser with an AKML engine.
             </p>
         </div>
         <nav class="site-footer-col" aria-label="Product">
@@ -145,3 +149,8 @@
         <!-- Site metrics live at /admin — a direct URL for the owner, intentionally not linked anywhere public. -->
     </div>
 </footer>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+}

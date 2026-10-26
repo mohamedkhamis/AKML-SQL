@@ -295,9 +295,10 @@
     .akml-schema-icon--function { color: var(--akml-iconbadge-function); }
     .akml-schema-icon--column { color: var(--akml-iconbadge-column); }
     .akml-schema-icon--index { color: var(--akml-iconbadge-index); }
+    /* Spec 043 (FR-032): a badge token behind white text; the status colour read under 3:1 in the dark theme. */
     .akml-schema-tree-stale {
         padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
-        background-color: var(--akml-status-warning);
+        background-color: var(--akml-badge-warning);
         color: var(--akml-text-onaccent);
         font-size: 11px;
     }
@@ -480,7 +481,7 @@
     private string RefreshTitle =>
         _refreshing ? "Refreshing…"
         : _bridgeState != BridgeState.Open ? "Refresh needs a connected engine"
-        : string.IsNullOrEmpty(SessionId) ? "Refresh needs a SQL Server connection"
+        : string.IsNullOrEmpty(SessionId) ? "Refresh needs a database connection"
         : "Refresh schema from the server";
 
     private static string Chevron(bool open) => open ? "chevron-down" : "chevron-right";

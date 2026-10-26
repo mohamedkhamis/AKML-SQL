@@ -14,14 +14,19 @@ namespace AkmlSql.Web.E2E.Tests.Harness;
 /// </summary>
 public sealed class SandboxEngine : IAsyncDisposable
 {
-    private SandboxEngine(Process process, string root, int port)
+    private SandboxEngine(Process process, string root, int port, string exe, string config)
     {
         Process = process;
         Root = root;
         Port = port;
+        _exe = exe;
+        _config = config;
     }
 
-    public Process Process { get; }
+    private readonly string _exe;
+    private readonly string _config;
+
+    public Process Process { get; private set; }
 
     /// <summary>The engine's private app-data root (deleted on dispose).</summary>
     public string Root { get; }
@@ -52,6 +57,34 @@ public sealed class SandboxEngine : IAsyncDisposable
             bridge = new { enabled = true, bindAddress = "127.0.0.1", port, tokenStorePath = Path.Combine(root, "tokens.json"), tokenTtlDays = 1 },
         }));
 
+        var engine = new SandboxEngine(Launch(exe, config, root), root, port, exe, config);
+        try
+        {
+            await engine.WaitListeningAsync();
+            return engine;
+        }
+        catch
+        {
+            await engine.DisposeAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Spec 043 (review of US1): stop the engine and start it again on the same port, app-data root and token store, as a service
+    /// restart does. The engine forgets every session; a paired browser reconnects without pairing again.
+    /// </summary>
+    public async Task RestartAsync()
+    {
+        try { if (!Process.HasExited) Process.Kill(entireProcessTree: true); } catch { /* already gone */ }
+        await Process.WaitForExitAsync();
+        Process.Dispose();
+        Process = Launch(_exe, _config, Root);
+        await WaitListeningAsync();
+    }
+
+    private static Process Launch(string exe, string config, string root)
+    {
         var psi = new ProcessStartInfo(exe, $"--web --config \"{config}\"")
         {
             UseShellExecute = false,
@@ -66,25 +99,23 @@ public sealed class SandboxEngine : IAsyncDisposable
         process.ErrorDataReceived += (_, _) => { };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        var engine = new SandboxEngine(process, root, port);
+        return process;
+    }
 
+    private async Task WaitListeningAsync()
+    {
         var deadline = DateTime.UtcNow.AddSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
-            if (process.HasExited)
-            {
-                await engine.DisposeAsync();
-                throw new InvalidOperationException($"Engine exited with code {process.ExitCode}.");
-            }
+            if (Process.HasExited) throw new InvalidOperationException($"Engine exited with code {Process.ExitCode}.");
             try
             {
                 using var client = new TcpClient();
-                await client.ConnectAsync(IPAddress.Loopback, port);
-                return engine;
+                await client.ConnectAsync(IPAddress.Loopback, Port);
+                return;
             }
             catch (SocketException) { await Task.Delay(300); }
         }
-        await engine.DisposeAsync();
         throw new TimeoutException("Engine bridge did not start listening.");
     }
 

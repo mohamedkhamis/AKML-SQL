@@ -107,6 +107,25 @@ public class WildcardExpansionHandlerTests
         Assert.Equal("o", result.Tables[0].Qualifier);
     }
 
+    // Spec 043 follow-up (review): the web editor sends a bracketed or double-quoted qualifier ('[o].*', '"o".*') as the name it
+    // quotes. The FROM clause registers a bracketed alias or table under that name too, and matches it without regard to case.
+    [Theory]
+    [InlineData("SELECT [o].* FROM dbo.Orders AS [o] JOIN dbo.OrderDetails AS [od] ON [o].OrderId = [od].OrderId", 12, "o")]
+    [InlineData("SELECT \"o\".* FROM dbo.Orders AS o JOIN dbo.OrderDetails AS od ON o.OrderId = od.OrderId", 12, "o")]
+    [InlineData("SELECT [O].* FROM dbo.Orders AS [o] JOIN dbo.OrderDetails AS [od] ON [o].OrderId = [od].OrderId", 12, "O")]
+    [InlineData("SELECT [Orders].* FROM [dbo].[Orders] JOIN [dbo].[OrderDetails] ON 1 = 1", 17, "Orders")]
+    [InlineData("SELECT [o].* FROM dbo.Orders AS [o] WHERE", 12, "o")]
+    public void QualifiedWildcard_BracketedOrQuotedQualifier_SentAsItsName_FindsItsTable(string sql, int cursorOffset, string qualifier)
+    {
+        var result = _handler.Handle(sql, cursorOffset, qualifier, _cache);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        var group = Assert.Single(result.Tables);
+        Assert.Equal("Orders", group.TableName);
+        Assert.Equal(qualifier, group.Qualifier);
+        Assert.Equal(3, group.Columns.Length);
+    }
+
     [Fact]
     public void ColumnsNotLoaded_ReturnsFailure()
     {

@@ -30,6 +30,9 @@ public interface IWorkspaceStatus
     /// engine's elapsed time (or the time to failure).</summary>
     long ElapsedMs { get; }
 
+    /// <summary>Spec 043: the status clock's now; a query tab's running clock counts from its own start against it.</summary>
+    DateTimeOffset Now => DateTimeOffset.UtcNow;
+
     /// <summary>Rows returned across every result set, or rows affected when there was no set.</summary>
     long RowCount { get; }
 
@@ -73,6 +76,36 @@ public interface IWorkspaceStatus
     /// successfully." describe another server. The kept result stays: the page shows it as from an earlier connection.
     /// </summary>
     void ClearOutcome();
+
+    /// <summary>Spec 043 (T036): the run as shown now — phase, start, time, rows, error — for a query tab to keep.</summary>
+    RunSnapshot Snapshot();
+
+    /// <summary>Spec 043 (T036): show a query tab's run: the active tab's, on activation and whenever its run changes.</summary>
+    void Show(RunSnapshot run);
+}
+
+/// <summary>
+/// Spec 043 (T036) — one query tab's run as the status bar shows it. Every tab keeps its own; the status bar shows the active
+/// tab's, so a switch shows that tab's outcome and rows (FR-005) and a run finishing in another tab changes nothing on screen.
+/// </summary>
+/// <param name="ElapsedMs">The run's time once it ended (while running, the status counts up from <paramref name="StartedAt"/>).</param>
+public sealed record RunSnapshot(ExecutionPhase Phase, DateTimeOffset? StartedAt, long ElapsedMs, long RowCount, string? ErrorMessage)
+{
+    /// <summary>No run yet (or its outcome was cleared).</summary>
+    public static RunSnapshot Idle { get; } = new(ExecutionPhase.Idle, null, 0, 0, null);
+
+    /// <summary>A run that began at <paramref name="startedAt"/>.</summary>
+    public static RunSnapshot Running(DateTimeOffset startedAt) => new(ExecutionPhase.Running, startedAt, 0, 0, null);
+
+    /// <summary>A run's reply: rows returned across every set (rows affected when there was none), its time and its error.</summary>
+    public static RunSnapshot Of(ExecuteQueryResult result, DateTimeOffset? startedAt = null)
+    {
+        if (result == null) throw new ArgumentNullException(nameof(result));
+        var sets = result.ResultSets ?? Array.Empty<ExecuteResultSet>();
+        long rows = sets.Length > 0 ? sets.Sum(s => (long)(s.Rows?.Length ?? 0)) : Math.Max(0, result.TotalRowsAffected);
+        bool ok = result.Status == ExecuteStatus.Ok;
+        return new(ok ? ExecutionPhase.Succeeded : ExecutionPhase.Failed, startedAt, result.ElapsedMs, rows, ok ? null : result.ErrorMessage);
+    }
 }
 
 /// <summary>A result as the editor page showed it: the reply, the connection generation it was read under, where the executed text
@@ -93,6 +126,9 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
 
     /// <summary>Tests pass a clock so elapsed time is deterministic.</summary>
     public WorkspaceStatus(Func<DateTimeOffset> clock) => _clock = clock ?? throw new ArgumentNullException(nameof(clock));
+
+    /// <inheritdoc />
+    public DateTimeOffset Now => _clock();
 
     public event Action? Changed;
 
@@ -136,22 +172,24 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
 
     public void Complete(ExecuteQueryResult result)
     {
-        if (result == null) throw new ArgumentNullException(nameof(result));
-        var sets = result.ResultSets ?? Array.Empty<ExecuteResultSet>();
-        RowCount = sets.Length > 0
-            ? sets.Sum(s => (long)(s.Rows?.Length ?? 0))
-            : Math.Max(0, result.TotalRowsAffected);
-        _elapsedMs = result.ElapsedMs;
-        if (result.Status == ExecuteStatus.Ok)
-        {
-            Phase = ExecutionPhase.Succeeded;
-            ErrorMessage = null;
-        }
-        else
-        {
-            Phase = ExecutionPhase.Failed;
-            ErrorMessage = result.ErrorMessage;
-        }
+        var run = RunSnapshot.Of(result, StartedAt);
+        RowCount = run.RowCount;
+        _elapsedMs = run.ElapsedMs;
+        Phase = run.Phase;
+        ErrorMessage = run.ErrorMessage;
+        Changed?.Invoke();
+    }
+
+    public RunSnapshot Snapshot() => new(Phase, StartedAt, Phase == ExecutionPhase.Running ? 0 : _elapsedMs, RowCount, ErrorMessage);
+
+    public void Show(RunSnapshot run)
+    {
+        run ??= RunSnapshot.Idle;
+        Phase = run.Phase;
+        StartedAt = run.StartedAt;
+        _elapsedMs = run.ElapsedMs;
+        RowCount = run.RowCount;
+        ErrorMessage = run.ErrorMessage;
         Changed?.Invoke();
     }
 

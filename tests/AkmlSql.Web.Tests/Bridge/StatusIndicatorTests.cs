@@ -194,6 +194,168 @@ public sealed class StatusIndicatorTests : BunitContext
         cut.WaitForAssertion(() =>
             Assert.Equal("Cached", cut.Find("[data-testid='status-pill']").TextContent));
     }
+
+    // ── Spec 043 (R19, FR-009): the one-time restore after a reload, with query tabs ─────────────────────────────
+
+    private sealed class NoDownloads : IFileDownloader
+    {
+        public Task DownloadTextAsync(string fileName, string mimeType, string text, bool withBom) => Task.CompletedTask;
+    }
+
+    private async Task<SavedSqlConnection> SeedSavedNorthwindAsync()
+    {
+        var savedStore = Services.GetRequiredService<ISavedSqlConnectionStore>();
+        var saved = new SavedSqlConnection { Name = "dev", Server = "localhost", Database = "Northwind_AutoTest", WindowsAuth = true };
+        await savedStore.AddAsync(saved);
+        await savedStore.SetActiveIdAsync(saved.Id);
+        return saved;
+    }
+
+    [Fact]
+    public async Task Open_reconnects_a_restored_tab_to_its_own_connection_and_not_to_the_saved_one()
+    {
+        var tabStore = new EditorSessionStore(new InMemoryIndexedDbAdapter());
+        await tabStore.SaveTabAsync("t1", new EditorSessionRecord
+        {
+            TabId = "t1", DocumentName = "SQLQuery1", SessionKey = "k1", EngineSessionId = "tab-session-1",
+            Binding = ConnectionBinding.FromTarget(new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, "localhost", "TabDb", WindowsAuth: true), null),
+        });
+        await tabStore.SaveSetAsync(new EditorTabSetRecord { Order = new System.Collections.Generic.List<string> { "t1" }, ActiveId = "t1", NextDefaultNumber = 2 });
+        await tabStore.FlushAsync();
+        Services.AddSingleton<IEditorSessionStore>(tabStore);
+        Services.AddSingleton<IQueryTabs>(sp => new QueryTabs(tabStore, sp.GetRequiredService<ISqlConnectionService>(),
+            new FakeDialogService(), new FakeNotificationService(), new NoDownloads()));
+        await SeedActiveConnectionAsync();
+        await SeedSavedNorthwindAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        // Whatever page the reload landed on, the tab comes back on its own connection.
+        cut.WaitForAssertion(() => Assert.Contains("TabDb", cut.Find("[data-testid='status-connection']").TextContent));
+        Assert.Equal("tab-session-1", Services.GetRequiredService<ISqlConnectionService>().SessionId);
+    }
+
+    [Fact]
+    public async Task Open_leaves_a_tab_the_user_disconnected_without_a_connection()
+    {
+        var tabStore = new EditorSessionStore(new InMemoryIndexedDbAdapter());
+        await tabStore.SaveTabAsync("t1", new EditorSessionRecord
+        {
+            TabId = "t1", DocumentName = "SQLQuery1", SessionKey = "k1", EngineSessionId = "tab-session-1", DisconnectedByUser = true,
+        });
+        await tabStore.SaveSetAsync(new EditorTabSetRecord { Order = new System.Collections.Generic.List<string> { "t1" }, ActiveId = "t1", NextDefaultNumber = 2 });
+        await tabStore.FlushAsync();
+        Services.AddSingleton<IEditorSessionStore>(tabStore);
+        Services.AddSingleton<IQueryTabs>(sp => new QueryTabs(tabStore, sp.GetRequiredService<ISqlConnectionService>(),
+            new FakeDialogService(), new FakeNotificationService(), new NoDownloads()));
+        await SeedActiveConnectionAsync();
+        await SeedSavedNorthwindAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+        await Task.Delay(300);
+
+        var tab = Services.GetRequiredService<IQueryTabs>().Active!;
+        Assert.False(tab.Session.IsConnected);   // the reload does not undo the user's Disconnect
+        Assert.DoesNotContain("Northwind_AutoTest", cut.Find("[data-testid='status-connection']").TextContent);
+    }
+
+    [Fact]
+    public async Task Open_restores_the_saved_connection_into_the_active_tab_only_when_it_has_none()
+    {
+        var tabStore = new EditorSessionStore(new InMemoryIndexedDbAdapter());   // a fresh profile: one empty tab, no connection
+        Services.AddSingleton<IEditorSessionStore>(tabStore);
+        Services.AddSingleton<IQueryTabs>(sp => new QueryTabs(tabStore, sp.GetRequiredService<ISqlConnectionService>(),
+            new FakeDialogService(), new FakeNotificationService(), new NoDownloads()));
+        await SeedActiveConnectionAsync();
+        var saved = await SeedSavedNorthwindAsync();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        cut.WaitForAssertion(() => Assert.Contains("Northwind_AutoTest", cut.Find("[data-testid='status-connection']").TextContent));
+        var tab = Services.GetRequiredService<IQueryTabs>().Active!;
+        Assert.Equal(saved.Id, tab.Session.Binding!.SavedConnectionId);   // the tab remembers which saved row it came from
+        Assert.True(tab.Session.IsConnected);
+    }
+
+    // ── Spec 043 follow-up (review): a saved SQL login whose password the engine remembers comes back too ───────────────────
+
+    private async Task<SavedSqlConnection> SeedSavedSqlLoginAsync(bool remember)
+    {
+        var savedStore = Services.GetRequiredService<ISavedSqlConnectionStore>();
+        var saved = new SavedSqlConnection
+        {
+            Name = "app", Server = "localhost", Database = "Northwind_AutoTest", WindowsAuth = false, Login = "app_user", RememberPassword = remember,
+        };
+        await savedStore.AddAsync(saved);
+        await savedStore.SetActiveIdAsync(saved.Id);
+        return saved;
+    }
+
+    private System.Collections.Generic.IEnumerable<ConnectionInfo> ConnectionChanges =>
+        _bridge.Notifications.Where(n => n.Type == AkmlSql.Core.Ipc.MessageTypes.ConnectionChanged).Select(n => (ConnectionInfo)n.Payload);
+
+    [Fact]
+    public async Task Open_autorestores_a_saved_SQL_login_whose_password_the_engine_remembers_without_sending_one()
+    {
+        await SeedActiveConnectionAsync();
+        var saved = await SeedSavedSqlLoginAsync(remember: true);
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        cut.WaitForAssertion(() => Assert.Equal("Live", cut.Find("[data-testid='status-pill']").TextContent));
+        var sent = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = Assert.Single(ConnectionChanges).ConnectionString };
+        Assert.Equal("app_user", sent["User ID"]);
+        Assert.Equal(string.Empty, sent.TryGetValue("Password", out var pw) ? pw?.ToString() ?? string.Empty : string.Empty);
+        var session = Services.GetRequiredService<ISqlConnectionService>().ActiveSession!;
+        Assert.True(session.Binding!.RememberPassword);
+        Assert.Equal(saved.Id, session.Binding.SavedConnectionId);
+    }
+
+    [Theory]
+    [InlineData(false, true)]    // the row does not ask the engine to remember its password
+    [InlineData(true, false)]    // an engine that cannot remember SQL Server passwords
+    public async Task Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect(bool remember, bool engineRemembers)
+    {
+        await SeedActiveConnectionAsync();
+        await SeedSavedSqlLoginAsync(remember);
+        _bridge.EngineCapabilities = engineRemembers ? new[] { SqlConnectionService.CapabilitySqlServerCredentials } : Array.Empty<string>();
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+        await Task.Delay(200);
+
+        Assert.Equal("Live · no SQL", cut.Find("[data-testid='status-pill']").TextContent);
+        Assert.Empty(ConnectionChanges);
+    }
+
+    [Fact]
+    public async Task Open_with_a_remembered_SQL_password_the_server_refuses_leaves_the_tab_asking_on_its_next_run()
+    {
+        await SeedActiveConnectionAsync();
+        await SeedSavedSqlLoginAsync(remember: true);
+        _bridge.EngineCapabilities = new[] { SqlConnectionService.CapabilitySqlServerCredentials };
+        _bridge.TestSqlReply = new TestSqlConnectionResponse { Ok = false, ErrorMessage = "Login failed for user 'app_user'.", ErrorCode = DialectErrors.LoginFailed };
+        _bridge.SetState(BridgeState.Open);
+
+        var cut = Render<StatusBar>();
+
+        var session = Services.GetRequiredService<ISqlConnectionService>().ActiveSession!;
+        cut.WaitForAssertion(() => Assert.True(session.PasswordMissing));
+        Assert.Equal("Live · no SQL", cut.Find("[data-testid='status-pill']").TextContent);
+        Assert.Empty(ConnectionChanges);
+
+        // Review, round 3: the tab has no binding, so the mark names the sign-in itself and says the password was refused — what
+        // the Connect to database dialog needs to keep from listing or connecting with that password again.
+        Assert.Null(session.Binding);
+        Assert.True(session.PasswordRefused);
+        Assert.True(session.PasswordMissingFor!.SameSignInAs(new ConnectionTarget(AkmlSql.Core.DatabaseKind.SqlServer, "localhost", "master",
+            WindowsAuth: false, User: "app_user")));
+    }
 }
 
 /// <summary>

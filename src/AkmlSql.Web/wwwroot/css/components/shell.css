@@ -303,6 +303,31 @@ a.akml-btn { text-decoration: none; }
 }
 .akml-tab-badge[data-kind="error"] { color: var(--akml-text-ondanger); background-color: var(--akml-badge-error); }
 .akml-tab-badge[data-kind="warning"] { color: var(--akml-text-onaccent); background-color: var(--akml-badge-warning); }
+/* Spec 043 (R10): the query tabs. A closable tab is a div holding its label (cut at 180 px; the full name is the
+   title), a "*" while modified and a close button shown on the active and the hovered tab. */
+.akml-tab--closable { padding-right: var(--akml-scalar-spacing-xs); }
+.akml-tab--closable .akml-tab-label { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.akml-tab-modified { font-weight: 600; }
+.akml-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    color: inherit;
+    background-color: transparent;
+    border: none;
+    border-radius: var(--akml-scalar-radius-xs);
+    cursor: pointer;
+    opacity: 0;
+}
+.akml-tab--closable:hover .akml-tab-close,
+.akml-tab--closable[aria-selected="true"] .akml-tab-close,
+.akml-tab--closable:focus-visible .akml-tab-close { opacity: 1; }
+.akml-tab-close:hover { color: var(--akml-text-primary); background-color: var(--akml-surface-hover); }
+.akml-tab--closable:focus-visible { outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
+[data-akml-theme="high-contrast"] .akml-tab-close:hover { color: var(--akml-text-onaccent); }
 
 /* ── Menus (Shared/ContextMenu.razor) ────────────────────────────────────── */
 .akml-menu-scrim { position: fixed; inset: 0; z-index: 1090; background: transparent; }

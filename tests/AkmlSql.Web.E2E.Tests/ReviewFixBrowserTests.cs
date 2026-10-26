@@ -152,9 +152,14 @@ public sealed class ReviewFixBrowserTests
         var page = s.Page;
         await page.ClickAsync("nav >> text=Snippets");
         await Assertions.Expect(Id(page, "snippet-row").First).ToBeVisibleAsync(new() { Timeout = 30_000 });
+        // Spec 043 (FR-033, baseline.md US4): every snippet row is one line now (the "built-in" badge no longer wraps to
+        // "built-/in"), so the 22 built-ins (about 22 x 28 px) fit the list at 1440 x 900; the review's overflow came from 14
+        // two-line rows. A short window, as REV-08's acceptance asks ("a short desktop viewport"), leaves the list about 444 px.
+        // The fixture has paired and connected at 1440 x 900.
+        await page.SetViewportSizeAsync(1440, 600);
         await page.SelectOptionAsync("[data-testid='snippet-kind-filter']", "-1");   // every snippet, as in the review
         var list = Id(page, "snippet-list");
-        // The review's case: more options than the list shows (22 built-ins at 1440 x 900).
+        // The review's case: more options than the list shows (22 built-ins at 1440 x 600, see above).
         Assert.True(await list.EvaluateAsync<bool>("l => l.scrollHeight > l.clientHeight"), "The snippet list does not overflow; the test needs it to.");
 
         const string Visible = """

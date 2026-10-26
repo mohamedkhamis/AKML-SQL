@@ -31,11 +31,34 @@
         min-height: 320px;
         position: relative; /* anchors the go-to-definition peek panel */
         background-color: var(--akml-surface-editor);
-        font-family: var(--akml-type-editor-family);
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));   /* Settings › Editor › Font (spec 043) */
         font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));   /* Settings › Editor (spec 041 R53) */
     }
     .akml-editor .cm-editor { height: 100%; }
-    .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; }
+    /* Spec 043 (R12, FR-016): an explicit line spacing instead of CodeMirror's 1.4. The gutter sits inside the scroller,
+       so its numbers share each line's height and baseline. */
+    .akml-editor .cm-scroller { font-family: inherit; font-size: inherit; line-height: var(--akml-type-editor-line-height); }
+
+    /* Spec 043 (R13, FR-019): the caret, the selection, the active line, the matching bracket and find matches, from the
+       theme tokens. CodeMirror's own defaults are light-theme colours that stayed light in the dark theme. The selection
+       is the browser's (no drawSelection layer), so it is styled with ::selection. */
+    .akml-editor .cm-content { caret-color: var(--akml-text-primary); }
+    .akml-editor .cm-cursor, .akml-editor .cm-dropCursor { border-left-color: var(--akml-text-primary); }
+    .akml-editor .cm-content ::selection { background-color: var(--akml-editor-selection); color: var(--akml-text-primary); }
+    .akml-editor .cm-editor .cm-activeLine { background-color: var(--akml-editor-activeline); }
+    .akml-editor .cm-editor .cm-matchingBracket,
+    .akml-editor .cm-editor.cm-focused .cm-matchingBracket {
+        background-color: transparent;
+        outline: 1px solid var(--akml-editor-matchingbracket);
+        border-radius: 2px;
+    }
+    .akml-editor .cm-editor .cm-nonmatchingBracket,
+    .akml-editor .cm-editor.cm-focused .cm-nonmatchingBracket {
+        background-color: transparent;
+        outline: 1px dashed var(--akml-status-danger);
+    }
+    .akml-editor .cm-editor .cm-searchMatch { background-color: var(--akml-editor-searchmatch); color: var(--akml-text-primary); }
+    .akml-editor .cm-editor .cm-searchMatch-selected { outline: 1px solid var(--akml-editor-matchingbracket); }
     /* Theme the line-number gutter — CodeMirror's default is a hardcoded light #f5f5f5 that stayed
        light in dark mode (a jarring strip down the editor's left edge). Token-drive it so it follows
        the editor surface in every theme; the active line gets a subtle hover tint. */
@@ -131,7 +154,7 @@
     }
     .akml-qi-header, .akml-sig-label { font-weight: 600; }
     .akml-qi-desc, .akml-sig-doc { color: var(--akml-text-secondary); margin-top: 2px; }
-    .akml-qi-details { margin-top: 4px; color: var(--akml-text-secondary); font-family: var(--akml-type-editor-family); }
+    .akml-qi-details { margin-top: 4px; color: var(--akml-text-secondary); font-family: var(--akml-editor-font-family, var(--akml-type-editor-family)); }
     .akml-sig-active { margin-top: 3px; color: var(--akml-text-link); font-weight: 600; }
 
     /* Go-to-definition peek panel — anchored to the bottom of the editor. */
@@ -155,7 +178,9 @@
     .akml-peek-close:hover { color: var(--akml-text-primary); }
     .akml-peek-body {
         margin: 0; padding: 8px; overflow: auto; white-space: pre;
-        font-family: var(--akml-type-editor-family); font-size: var(--akml-type-editor-size);
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));
+        line-height: var(--akml-type-editor-line-height);
         color: var(--akml-text-primary);
     }
 </style>
@@ -178,7 +203,25 @@
     /// </summary>
     [Parameter] public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
 
+    /// <summary>
+    /// Spec 043 (research R6): a text change with the query tab it was made in (the tab shown when CodeMirror reported it).
+    /// When set it is raised instead of <see cref="OnTextChanged"/>.
+    /// </summary>
+    [Parameter] public EventCallback<EditorTabText> OnTabTextChanged { get; set; }
+
     private string HostId { get; } = $"akml-editor-{Guid.NewGuid():N}";
+
+    // Spec 043 (R6): the query tab the one CodeMirror view shows; other tabs' states wait in akml-editor.js.
+    private string? _currentTabId;
+    // A switch asked for before CodeMirror existed: the view is created showing this tab and text.
+    private (string Text, AkmlSql.Core.DatabaseKind Kind)? _pendingSeed;
+
+    // The tabs whose state akml-editor.js holds. Showing one of them again sends no text: a 10 MB document crosses the interop
+    // boundary only the first time it is shown (plan › Performance Goals: a swap under 200 ms).
+    private readonly HashSet<string> _jsTabs = new();
+
+    /// <summary>Spec 043: the query tab the editor shows (null before the page names one).</summary>
+    public string? CurrentTabId => _currentTabId;
     private AkmlSql.Core.DatabaseKind _appliedKind = AkmlSql.Core.DatabaseKind.SqlServer;
     private ElementReference _host;
     private IJSObjectReference? _module;
@@ -206,17 +249,52 @@
 
         var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
         if (_disposed) { await module.DisposeAsync(); return; }
-        _module = module;
         _selfRef = DotNetObjectReference.Create(this);
-        var seed = InitialText;
         // Spec 041 (R53): the editor options from Settings › Editor, applied at create and on every change.
         var options = await EditorSettings.GetAsync();
-        if (_disposed) return;
-        var kindAtCreate = Kind;
-        await _module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate));
+        if (_disposed) { await module.DisposeAsync(); return; }
+        // Spec 043: a tab switch that came before CodeMirror existed decides what it is created showing. _module stays null
+        // until create has run, and the seed stays in force meanwhile: reads see its text, writes change it, a switch replaces
+        // it — and whatever it holds when create returns is shown just below, never sent to an editor that does not exist yet.
+        var pending = _pendingSeed;
+        var seed = pending?.Text ?? InitialText;
+        var kindAtCreate = pending?.Kind ?? Kind;
+        var tabAtCreate = _currentTabId;
+        await module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate, tabAtCreate));
+        _module = module;
         _appliedKind = kindAtCreate;
-        _appliedInitialText = seed;
-        _lastInitialTextParameter = seed;
+        if (tabAtCreate != null) _jsTabs.Add(tabAtCreate);
+        if (_disposed)
+        {
+            // Left while CodeMirror was being created: DisposeAsync found no module, so the editor is released here.
+            try { await module.InvokeVoidAsync("dispose", HostId); await module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (JSException) { }
+            return;
+        }
+        var later = _pendingSeed;
+        _pendingSeed = null;
+        if (later is { } shown && _currentTabId != null && _currentTabId != tabAtCreate)
+        {
+            // Another tab was shown while CodeMirror was being created.
+            _appliedKind = shown.Kind;
+            _jsTabs.Add(_currentTabId);
+            await _module.InvokeVoidAsync("switchTab", HostId, _currentTabId, shown.Text, AkmlSql.Core.DatabaseKindNames.ToName(shown.Kind));
+        }
+        else if (later is { } same && pending != null && !string.Equals(same.Text, seed, StringComparison.Ordinal))
+        {
+            // The same tab's text was set while CodeMirror was being created.
+            await _module.InvokeVoidAsync("setText", HostId, same.Text);
+        }
+        // Findings asked for while CodeMirror did not exist (the page shows a tab's findings on its first show).
+        if (_pendingDiagnostics is { } diagnostics)
+        {
+            _pendingDiagnostics = null;
+            if (_pendingDiagnosticsTab == _currentTabId)
+                await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics);
+        }
+        _appliedInitialText = pending == null ? seed : InitialText;
+        _lastInitialTextParameter = InitialText;
         EditorSettings.Changed += OnEditorSettingsChanged;
 
         // Spec 028 (M6) US5: tell the editor whether ghost text is enabled + the debounce.
@@ -276,10 +354,50 @@
     /// non-blocking invoke so the editor doesn't block on the C# debounce path.
     /// </summary>
     [JSInvokable]
-    public Task OnTextChangedFromJs(string text)
+    public Task OnTextChangedFromJs(string text, string? tabId)
     {
+        // Spec 043: the tab CodeMirror showed when it reported the change; a page with query tabs files it under that tab.
+        if (OnTabTextChanged.HasDelegate) return OnTabTextChanged.InvokeAsync(new EditorTabText(tabId ?? _currentTabId, text));
         return OnTextChanged.InvokeAsync(text);
     }
+
+    /// <summary>
+    /// Spec 043 (R6, plan › Design notes › Tab switch): show query tab <paramref name="tabId"/>. The shown tab's text, caret,
+    /// selection, undo history, scroll and diagnostics are kept for it; <paramref name="tabId"/>'s come back, or are made from
+    /// <paramref name="seedText"/> the first time it is shown, with <paramref name="kind"/>'s SQL language. Raises no text change.
+    /// </summary>
+    public async Task SwitchTabAsync(string tabId, string seedText, AkmlSql.Core.DatabaseKind kind)
+    {
+        if (string.IsNullOrEmpty(tabId) || _disposed) return;
+        if (_module == null)
+        {
+            _currentTabId = tabId;
+            _pendingSeed = (seedText ?? string.Empty, kind);
+            return;
+        }
+        if (tabId == _currentTabId) return;
+        _currentTabId = tabId;
+        _appliedKind = kind;
+        // A tab the editor already holds comes back from its kept state: its text is not sent again.
+        string? seed = _jsTabs.Add(tabId) ? seedText ?? string.Empty : null;
+        await _module.InvokeVoidAsync("switchTab", HostId, tabId, seed, AkmlSql.Core.DatabaseKindNames.ToName(kind));
+    }
+
+    /// <summary>Spec 043: forget a closed query tab's kept state. The page shows another tab first.</summary>
+    public async Task CloseTabAsync(string tabId)
+    {
+        if (string.IsNullOrEmpty(tabId)) return;
+        if (tabId == _currentTabId) _currentTabId = null;
+        _jsTabs.Remove(tabId);
+        if (_module == null || _disposed) return;
+        await _module.InvokeVoidAsync("closeTab", HostId, tabId);
+    }
+
+    // A call that names no tab, or the shown one, acts on the view; any other acts on that tab's kept state.
+    private bool IsShown(string? tabId) => tabId == null || tabId == _currentTabId;
+
+    // A tab never shown in this editor has no kept state: the page holds its text and puts its findings back on the first show.
+    private bool IsKept(string tabId) => _jsTabs.Contains(tabId);
 
     /// <summary>Spec 041 (R65, FR-083): the caret moved (throttled in akml-editor.js) — the status bar shows it.</summary>
     [JSInvokable]
@@ -302,20 +420,23 @@
     {
         try
         {
-            // Spec 030: when connected to a SQL Server (via the engine bridge), use the ONE canonical
-            // session id so the engine resolves the live schema; otherwise empty → offline/keyword path.
+            // Spec 043: the shown tab's connection, captured before the first await, so a tab switch while the request
+            // is on its way never sends this tab's text to another tab's session.
+            var session = TabSession();
+            // Spec 030: when connected to a SQL Server (via the engine bridge), use the tab's session id so the engine
+            // resolves the live schema; otherwise empty → offline/keyword path.
             var request = new CompletionRequest
             {
-                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                SessionId = session.Connected ? session.Id : string.Empty,
                 CursorOffset = cursorOffset,
                 TriggerKind = 0,
             };
             // Spec 030: push the live document to the engine session FIRST (DocumentChanged), then ask
             // for completion. Frames are delivered in order over the one socket, so the engine has the
             // current text (clause context) before it completes. No-op offline.
-            if (SqlConn.IsConnected && documentText != null)
+            if (session.Connected && documentText != null)
             {
-                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+                await SendDocumentAsync(session, documentText);
             }
             // documentText is the LIVE editor text, passed straight from JS so the offline
             // smart GROUP BY action parses what the user actually sees (the online path ignores
@@ -370,12 +491,13 @@
     {
         try
         {
-            if (SqlConn.IsConnected && documentText != null)
-                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+            var session = TabSession();
+            if (session.Connected && documentText != null)
+                await SendDocumentAsync(session, documentText);
 
             var r = await QuickInfo.GetAsync(new QuickInfoRequest
             {
-                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                SessionId = session.Connected ? session.Id : string.Empty,
                 CursorOffset = cursorOffset,
             }, CancellationToken.None);
 
@@ -404,12 +526,13 @@
     {
         try
         {
-            if (SqlConn.IsConnected && documentText != null)
-                await SqlConn.SendDocumentAsync(documentText, CancellationToken.None);
+            var session = TabSession();
+            if (session.Connected && documentText != null)
+                await SendDocumentAsync(session, documentText);
 
             var r = await SignatureHelp.GetAsync(new SignatureRequest
             {
-                SessionId = SqlConn.IsConnected ? SqlConn.SessionId : string.Empty,
+                SessionId = session.Connected ? session.Id : string.Empty,
                 CursorOffset = cursorOffset,
             }, CancellationToken.None);
 
@@ -437,16 +560,17 @@
     {
         try
         {
+            var session = TabSession();
             var doc = documentText ?? string.Empty;
             var token = OfflineSqlScanner.FindIdentifierAt(doc, cursorOffset);
             if (!token.IsValid)
                 return new DefinitionDto { Found = false, Message = "No object under the cursor." };
-            if (!SqlConn.IsConnected)
-                return new DefinitionDto { Found = false, Message = "Connect to a SQL Server to view object definitions." };
+            if (!session.Connected)
+                return new DefinitionDto { Found = false, Message = "Connect to a database to view object definitions." };
 
             var r = await GotoDefinition.GetAsync(new GetObjectDefinitionRequest
             {
-                SessionId = SqlConn.SessionId,
+                SessionId = session.Id,
                 ObjectName = token.Identifier,
                 SchemaName = string.IsNullOrEmpty(token.Prefix) ? null : token.Prefix,
                 PeekOnly = true,
@@ -472,14 +596,16 @@
     /// connected, not a wildcard, or the engine can't expand it — the JS side then leaves Tab alone.
     /// The column layout mirrors the desktop: first column on the <c>*</c>'s line, the rest wrapped
     /// and aligned to the <c>*</c>'s indent; columns are qualified only when more than one source
-    /// table is expanded (or the user wrote <c>alias.*</c>).</summary>
+    /// table is expanded (or the user wrote <c>alias.*</c>). Names are written as the dialect needs
+    /// (<see cref="WrittenName"/>).</summary>
     [JSInvokable]
     public async Task<WildcardExpandDto?> ExpandWildcardFromJs(int caretOffset, string? documentText)
     {
         try
         {
+            var session = TabSession();
             var doc = documentText ?? string.Empty;
-            if (!SqlConn.IsConnected) return null;
+            if (!session.Connected) return null;
 
             // Locate the '*' at or adjacent to the caret (mirrors desktop DetectWildcardAtCursor).
             int starPos = -1;
@@ -488,24 +614,25 @@
             if (starPos < 0) return null;
 
             // Qualified wildcard "identifier.*" — the replacement span also covers "identifier.".
+            // Spec 043 follow-up (review): a bracketed or double-quoted qualifier ('[o].*', '"o".*') is sent as the name it
+            // quotes and replaced from its opening bracket or quote (TryReadQualifier). The walk back used to stop inside it,
+            // so the engine was asked for 'o]' and nothing expanded — and a found one would have left the '[' behind. A '.'
+            // with no name before it is not a wildcard the engine can expand.
             string? qualifier = null;
+            string? writtenQualifier = null;
             int spanStart = starPos;
-            if (starPos >= 2 && doc[starPos - 1] == '.')
+            if (starPos >= 1 && doc[starPos - 1] == '.')
             {
-                int idEnd = starPos - 2;
-                int idStart = idEnd;
-                while (idStart > 0 && IsIdentifierChar(doc[idStart - 1])) idStart--;
-                if (idStart <= idEnd)
-                {
-                    qualifier = doc.Substring(idStart, idEnd - idStart + 1);
-                    spanStart = idStart;
-                }
+                if (!TryReadQualifier(doc, starPos - 1, out var name, out var nameStart)) return null;
+                qualifier = name;
+                writtenQualifier = doc.Substring(nameStart, starPos - 1 - nameStart);
+                spanStart = nameStart;
             }
             int spanLength = starPos - spanStart + 1;   // include the '*' itself
 
             var resp = await Wildcard.GetAsync(new WildcardExpansionRequest
             {
-                SessionId = SqlConn.SessionId,
+                SessionId = session.Id,
                 CursorOffset = caretOffset,
                 DocumentText = doc,
                 Qualifier = qualifier,
@@ -529,7 +656,14 @@
             int indentChars = lineStart < 0 ? spanStart : spanStart - (lineStart + 1);
             string indent = new string(' ', System.Math.Max(0, indentChars));
 
-            var parts = columns.Select(c => useQualifier ? c.Qualifier + "." + c.ColumnName : c.ColumnName).ToList();
+            // Spec 043 follow-up (review): the columns of a qualified wildcard carry the qualifier as the user wrote it
+            // ('[o].OrderID', '"o".OrderID'), so a name that needs its brackets or quotes ('[Order Lines].*') keeps them.
+            // The engine's names are written as the dialect needs (WrittenName): 'Order Details'.'Order Date' came out as
+            // 'Order Details.Order Date', which does not parse.
+            var kind = session.State?.Kind ?? SqlConn.Kind;
+            var parts = columns.Select(c => useQualifier
+                ? (writtenQualifier ?? WrittenName(c.Qualifier, kind)) + "." + WrittenName(c.ColumnName, kind)
+                : WrittenName(c.ColumnName, kind)).ToList();
             string text = parts.Count == 1 ? parts[0] : string.Join(",\n" + indent, parts);
 
             return new WildcardExpandDto { Ok = true, SpanStart = spanStart, SpanLength = spanLength, Text = text };
@@ -540,17 +674,74 @@
     private static bool IsIdentifierChar(char c)
         => char.IsLetterOrDigit(c) || c == '_' || c == '$' || c == '#' || c == '@';
 
+    /// <summary>Spec 043 follow-up (review) — a column or qualifier name from a wildcard expansion as it is written in the
+    /// query. SQL Server's engine sends the names as they are (<c>Order Details</c>, <c>Order Date</c>, <c>a]b</c>): they
+    /// are bracketed when they are not a regular identifier or are a reserved word (<c>[Order Details]</c>, <c>[Order]</c>,
+    /// <c>[a]]b]</c>) — the rule completions use (SqlIdentifier). PostgreSQL's expander (PgWildcardExpander) already sends
+    /// them written, double-quoted only where the name needs it (<c>"Order Date"</c>), so they are left as they are:
+    /// quoting them again would double every quote.</summary>
+    internal static string WrittenName(string? name, AkmlSql.Core.DatabaseKind kind) =>
+        kind == AkmlSql.Core.DatabaseKind.PostgreSql
+            ? name ?? string.Empty
+            : AkmlSql.Engine.Completion.SqlIdentifier.QuoteIfNeeded(name);
+
+    /// <summary>Spec 043 follow-up (review) — the qualifier written just before the '.' at <paramref name="dot"/> of a
+    /// 'qualifier.*': a plain name (<c>o</c>), a bracketed one (<c>[o]</c>, <c>]]</c> inside it for a <c>]</c>) or a
+    /// double-quoted one (<c>"o"</c>, <c>""</c> inside it for a <c>"</c>). Gives the name it stands for (unquoted and
+    /// unescaped: the engine matches it against the FROM aliases and tables, and PostgreSQL reads a quoted one's case from
+    /// the text) and the offset it is written from; false when no name is written there (<c>.*</c>, <c>[].*</c>, a
+    /// <c>]</c> no <c>[</c> opens). A bracketed name is taken from the nearest <c>[</c>, so <c>[a[b].*</c> reads as
+    /// <c>b</c>.</summary>
+    internal static bool TryReadQualifier(string doc, int dot, out string name, out int start)
+    {
+        name = string.Empty;
+        start = dot;
+        if (dot < 1 || dot > doc.Length) return false;
+        int close = dot - 1;
+        char quote = doc[close];
+        if (quote == ']' || quote == '"')
+        {
+            char open = quote == ']' ? '[' : '"';
+            for (int i = close - 1; i >= 0; i--)
+            {
+                char c = doc[i];
+                if (c == quote)
+                {
+                    if (i > 0 && doc[i - 1] == quote) { i--; continue; }   // ']]' / '""': the quote character inside the name
+                    if (quote != open) return false;                      // a lone ']': no '[' opens this name
+                }
+                if (c != open) continue;
+                if (i == close - 1) return false;                         // '[]' / '""': no name
+                start = i;
+                name = doc.Substring(i + 1, close - i - 1).Replace(new string(quote, 2), quote.ToString());
+                return true;
+            }
+            return false;
+        }
+
+        int s = dot;
+        while (s > 0 && IsIdentifierChar(doc[s - 1])) s--;
+        if (s == dot) return false;
+        start = s;
+        name = doc.Substring(s, dot - s);
+        return true;
+    }
+
+    // CodeMirror uses the type only for the badge's class (cm-completionIcon-{type}, styled in Pages/Editor.razor); the JS
+    // editor branches on "snippet" alone.
     private static string ToCmType(int objectType) => objectType switch
     {
         (int)CompletionObjectType.Table     => "class",
-        (int)CompletionObjectType.View      => "class",
+        // Spec 043 follow-up (review): views and procedures get their own badges ('V', 'P') instead of sharing the table's
+        // and the function's.
+        (int)CompletionObjectType.View      => "view",
         (int)CompletionObjectType.Column    => "property",
         (int)CompletionObjectType.Keyword   => "keyword",
         // Spec 027 T011: a distinct CM type so akml-editor.js routes snippet items to the
         // expanding `apply` (tab-stops) rather than inserting the body literally.
         (int)CompletionObjectType.Snippet   => "snippet",
         (int)CompletionObjectType.Function  => "function",
-        (int)CompletionObjectType.Procedure => "function",
+        (int)CompletionObjectType.Procedure => "procedure",
         (int)CompletionObjectType.Schema    => "namespace",
         (int)CompletionObjectType.Database  => "namespace",
         (int)CompletionObjectType.Variable  => "variable",
@@ -619,8 +810,16 @@
 
     public async Task<string> GetTextAsync()
     {
-        if (_module == null) return InitialText;
+        if (_module == null) return _pendingSeed?.Text ?? InitialText;
         return await _module.InvokeAsync<string>("getText", HostId);
+    }
+
+    /// <summary>Spec 043: the text of query tab <paramref name="tabId"/> (the shown tab's live text, or another tab's kept text).</summary>
+    public async Task<string> GetTextAsync(string? tabId)
+    {
+        if (IsShown(tabId)) return await GetTextAsync();
+        if (_module == null || !IsKept(tabId!)) return string.Empty;
+        return await _module.InvokeAsync<string>("getText", HostId, tabId);
     }
 
     /// <summary>Spec 028 (M6) — the current editor selection (empty when nothing is selected).
@@ -641,9 +840,24 @@
         return info ?? new EditorSelectionInfo(string.Empty, 1);
     }
 
+    /// <summary>Spec 043: replace query tab <paramref name="tabId"/>'s text; a tab that is not shown changes without a text
+    /// report (the page keeps that tab's text itself).</summary>
+    public async Task SetTextAsync(string text, string? tabId)
+    {
+        if (IsShown(tabId)) { await SetTextAsync(text); return; }
+        // Never shown yet: the page seeds it with its own text on the first switch, so nothing is sent now.
+        if (_module == null || !IsKept(tabId!)) return;
+        await _module.InvokeVoidAsync("setText", HostId, text, tabId);
+    }
+
     public async Task SetTextAsync(string text)
     {
-        if (_module == null) { InitialText = text; return; }
+        if (_module == null)
+        {
+            if (_pendingSeed is { } seed) _pendingSeed = (text, seed.Kind);
+            else InitialText = text;
+            return;
+        }
         // Spec 041: what was applied, so a page that keeps InitialText in step does not push it twice.
         _appliedInitialText = text;
         await _module.InvokeVoidAsync("setText", HostId, text);
@@ -653,10 +867,25 @@
     /// Review WEB-10: replace the document with <paramref name="text"/> only if it still reads <paramref name="expected"/>, as one
     /// undoable change; false (nothing changed) when it was edited or replaced in the meantime.
     /// </summary>
+    /// <summary>Spec 043: <see cref="ReplaceTextIfUnchangedAsync(string, string)"/> on query tab <paramref name="tabId"/> — a
+    /// Format reply for a tab the user left meanwhile lands in that tab, never in the one now shown.</summary>
+    public async Task<bool> ReplaceTextIfUnchangedAsync(string expected, string text, string? tabId)
+    {
+        if (IsShown(tabId)) return await ReplaceTextIfUnchangedAsync(expected, text);
+        if (_module == null || !IsKept(tabId!)) return false;
+        return await _module.InvokeAsync<bool>("replaceTextIfUnchanged", HostId, expected, text, tabId);
+    }
+
     public async Task<bool> ReplaceTextIfUnchangedAsync(string expected, string text)
     {
         if (_module == null)
         {
+            if (_pendingSeed is { } seed)
+            {
+                if (!string.Equals(seed.Text, expected, StringComparison.Ordinal)) return false;
+                _pendingSeed = (text, seed.Kind);
+                return true;
+            }
             if (!string.Equals(InitialText, expected, StringComparison.Ordinal)) return false;
             InitialText = text;
             return true;
@@ -687,16 +916,45 @@
 
     /// <summary>Spec 041 (R39) — show findings in the editor (underline, gutter marker, message on hover),
     /// replacing any shown before. Lines past the end of the document are ignored.</summary>
+    /// <summary>Spec 043: show <paramref name="diagnostics"/> on query tab <paramref name="tabId"/> (kept with it when not shown).</summary>
+    public async Task SetDiagnosticsAsync(IReadOnlyList<EditorDiagnostic> diagnostics, string? tabId)
+    {
+        if (IsShown(tabId)) { await SetDiagnosticsAsync(diagnostics); return; }
+        if (_module == null || !IsKept(tabId!)) return;
+        await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>(), tabId);
+    }
+
+    /// <summary>Spec 043: clear query tab <paramref name="tabId"/>'s diagnostics.</summary>
+    public async Task ClearDiagnosticsAsync(string? tabId)
+    {
+        if (IsShown(tabId)) { await ClearDiagnosticsAsync(); return; }
+        if (_module == null || !IsKept(tabId!)) return;
+        await _module.InvokeVoidAsync("clearDiagnostics", HostId, tabId);
+    }
+
     public async Task SetDiagnosticsAsync(IReadOnlyList<EditorDiagnostic> diagnostics)
     {
-        if (_module == null) return;
+        if (_module == null)
+        {
+            // Kept until CodeMirror exists, for the tab shown then (a page coming back shows the active tab's findings at once).
+            _pendingDiagnostics = diagnostics ?? System.Array.Empty<EditorDiagnostic>();
+            _pendingDiagnosticsTab = _currentTabId;
+            return;
+        }
         await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>());
     }
+
+    private IReadOnlyList<EditorDiagnostic>? _pendingDiagnostics;
+    private string? _pendingDiagnosticsTab;
 
     /// <summary>Spec 041 (R39) — remove every finding shown in the editor.</summary>
     public async Task ClearDiagnosticsAsync()
     {
-        if (_module == null) return;
+        if (_module == null)
+        {
+            _pendingDiagnostics = null;   // nothing to show once CodeMirror exists
+            return;
+        }
         await _module.InvokeVoidAsync("clearDiagnostics", HostId);
     }
 
@@ -759,8 +1017,22 @@
         return await _module.InvokeAsync<string>("getText", HostId);
     }
 
-    private static object ToJs(EditorSettings o, AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer) =>
-        new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize, dialect = AkmlSql.Core.DatabaseKindNames.ToName(kind) };
+    private static object ToJs(EditorSettings o, AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer, string? tabId = null) =>
+        new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize, fontFamily = AkmlSql.Web.Services.EditorSettings.FontName(o.FontFamily),
+              dialect = AkmlSql.Core.DatabaseKindNames.ToName(kind), tabId };
+
+    // Spec 043 (T042): the shown tab's session, read once when a request starts. The shown tab is the active one, whose
+    // session is the connection service's active session.
+    private (SqlSessionState? State, string Id, bool Connected) TabSession()
+    {
+        var state = SqlConn.ActiveSession;
+        return state != null ? (state, state.SessionId, state.IsConnected) : (null, SqlConn.SessionId, SqlConn.IsConnected);
+    }
+
+    private Task SendDocumentAsync((SqlSessionState? State, string Id, bool Connected) session, string text) =>
+        session.State != null
+            ? SqlConn.SendDocumentAsync(session.State, text, CancellationToken.None)
+            : SqlConn.SendDocumentAsync(text, CancellationToken.None);
 
     private void OnEditorSettingsChanged() => _ = InvokeAsync(async () =>
     {

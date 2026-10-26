@@ -17,6 +17,7 @@
 @inject IEngineAutoConnect AutoConnect
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject IEditorSettingsStore EditorPrefs
 
 <div class="akml-app">
     @* Spec 041 (R42): the editor page may hide the navigation bar; a strip brings it back. *@
@@ -144,7 +145,31 @@
             // The wake hooks are an accelerant, not the mechanism — the backoff loop still recovers
             // on its own if the JS module is unavailable.
         }
+
+        // Spec 043 (FR-020): the editor font and size on the document root, so every page that shows SQL (History,
+        // Format styles, AI answers) follows Settings › Editor even when no editor is open.
+        EditorPrefs.Changed += OnEditorSettingsChanged;
+        await ApplyEditorAppearanceAsync();
     }
+
+    private void OnEditorSettingsChanged() => _ = InvokeAsync(ApplyEditorAppearanceAsync);
+
+    private async Task ApplyEditorAppearanceAsync()
+    {
+        try
+        {
+            var s = await EditorPrefs.GetAsync();
+            _editorModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-editor.js");
+            await _editorModule.InvokeVoidAsync("applyEditorAppearanceToRoot",
+                new { fontSize = s.FontSize, fontFamily = EditorSettings.FontName(s.FontFamily) });
+        }
+        catch (Exception)
+        {
+            // Appearance only: the theme's editor font and size still apply.
+        }
+    }
+
+    private IJSObjectReference? _editorModule;
 
     private DotNetObjectReference<MainLayout>? _wakeRef;
 
@@ -164,6 +189,14 @@
     {
         try
         {
+            // Spec 043 (T053): the facade speaks for the active query tab, and a tab switch raises it too. The sync follows the
+            // active tab's (session, server, database, connection generation); a change that moves none of them (a transaction
+            // state, another tab's connect) leaves the running sync alone.
+            string? key = SqlConn.IsConnected
+                ? $"{SqlConn.SessionId}|{SqlConn.SchemaIdentity ?? SqlConn.Server}|{SqlConn.Database}|{SqlConn.ConnectionGeneration}"
+                : null;
+            if (key == _syncKey) return;
+            _syncKey = key;
             await SchemaSync.StopAsync();
             if (SqlConn.IsConnected)
             {
@@ -176,9 +209,13 @@
         }
     });
 
+    // What the running schema sync follows (null: none).
+    private string? _syncKey;
+
     public void Dispose()
     {
         SqlConn.StateChanged -= OnSqlConnStateChanged;
+        EditorPrefs.Changed -= OnEditorSettingsChanged;
         _wakeRef?.Dispose();
     }
 }

@@ -168,7 +168,7 @@
             alt: img.getAttribute('alt') || '',
             caption: text(fig.querySelector('.screenshot-caption-text')),
             eyebrow: row ? text(row.querySelector('.media-text .eyebrow')) : '',
-            heading: row ? text(row.querySelector('.media-text h2')) : '',
+            heading: row ? text(row.querySelector('.media-text h2, .media-text h3')) : '',
             body: paras.length ? text(paras[paras.length - 1]) : ''
         };
     }

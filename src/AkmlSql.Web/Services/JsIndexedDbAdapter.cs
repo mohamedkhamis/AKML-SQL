@@ -69,6 +69,12 @@ internal sealed class JsIndexedDbAdapter : IIndexedDbAdapter
         await mod.InvokeVoidAsync("clear", store).ConfigureAwait(false);
     }
 
+    public async Task<bool> AddAsync(string store, string key, string valueJson)
+    {
+        var mod = await _moduleLoader.Value.ConfigureAwait(false);
+        return await mod.InvokeAsync<bool>("add", store, key, valueJson).ConfigureAwait(false);
+    }
+
     private sealed class JsRecord
     {
         [System.Text.Json.Serialization.JsonPropertyName("key")] public string Key { get; set; } = string.Empty;
@@ -114,4 +120,8 @@ public static class StoreNames
 
     // Spec 041 (R36) -- the editor workspace layout, one record per field (IndexedDB version 4).
     public const string WorkspaceLayout = "workspaceLayout";
+
+    // Spec 043 (R8) -- query tabs: "tab:{id}" per tab and "set" for their order, the active one and the default-name
+    // counter (IndexedDB version 5). Never a password: a tab's connection binding holds no secret.
+    public const string EditorTabs = "editorTabs";
 }

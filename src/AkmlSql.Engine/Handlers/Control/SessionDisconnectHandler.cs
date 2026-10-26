@@ -38,7 +38,8 @@ namespace AkmlSql.Engine.Handlers.Control
             {
                 bool rolledBack = ctx.SessionConnections != null
                     && await ctx.SessionConnections.CloseAsync(sessionId, RunningCommandWait, ct).ConfigureAwait(false);
-                Log.Information("SessionDisconnect: session {Session} closed (rolledBack={RolledBack})", sessionId, rolledBack);
+                Log.Information("SessionDisconnect: session {Session} closed (rolledBack={RolledBack}, release={Release})",
+                    sessionId, rolledBack, request.Release);
                 return new SessionDisconnectResponse { Ok = true, RolledBack = rolledBack };
             }
             catch (TimeoutException)
@@ -50,6 +51,20 @@ namespace AkmlSql.Engine.Handlers.Control
                                    "and an open transaction rolls back, when it ends.",
                 };
             }
+            finally
+            {
+                // Spec 043 (R5): the query tab that owned the session is gone. Forget the session, its document and its schema
+                // caches, so a closed tab leaves nothing behind (before, no session was ever removed). Done even when a running
+                // statement kept the connection: that statement ends on its own and nothing will ask for this session again.
+                if (request.Release) Release(ctx, sessionId);
+            }
+        }
+
+        private static void Release(RpcContext ctx, string sessionId)
+        {
+            ctx.Sessions.RemoveSession(sessionId);   // with it the page that connected it, so no new tab can copy its password
+            int caches = ctx.SchemaCache.RemoveSession(sessionId);
+            Log.Information("SessionDisconnect: session {Session} released ({Caches} schema cache(s) dropped)", sessionId, caches);
         }
     }
 }

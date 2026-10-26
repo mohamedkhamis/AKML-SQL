@@ -6,9 +6,20 @@
 @implements IDisposable
 @inject IEditorSettingsStore Store
 @inject IEditorSessionStore Session
+@inject IServiceProvider Services
 @inject IDialogService Dialogs
 @inject INotificationService Notifications
 
+@* Spec 043 (FR-017): a short list of fonts, never a free-text name. *@
+<SettingRow Id="editor-font-family" Kind="select">
+    <select id="setting-editor-font-family-control" class="akml-select" aria-describedby="setting-editor-font-family-help"
+            value="@_settings.FontFamily" @onchange="OnFontFamilyAsync">
+        @foreach (var font in Enum.GetValues<EditorFontFamily>())
+        {
+            <option value="@font" selected="@(font == _settings.FontFamily)">@EditorSettings.FontLabel(font)</option>
+        }
+    </select>
+</SettingRow>
 <SettingRow Id="editor-font-size" Kind="number">
     <input id="setting-editor-font-size-control" type="number" class="akml-input" min="@EditorSettings.MinFontSize" max="@EditorSettings.MaxFontSize"
            value="@_settings.FontSize" aria-describedby="setting-editor-font-size-help" @onchange="OnFontSizeAsync" />
@@ -22,8 +33,15 @@
     <input id="setting-editor-tab-size-control" type="number" class="akml-input" min="@EditorSettings.MinTabSize" max="@EditorSettings.MaxTabSize"
            value="@_settings.TabSize" aria-describedby="setting-editor-tab-size-help" @onchange="OnTabSizeAsync" />
 </SettingRow>
+@* Spec 043 (FR-036, FR-038): nothing to set; says what the SQL surfaces ask of browser writing assistants. *@
+<SettingRow Id="editor-writing-assistants" Kind="block">
+    <p class="akml-settings-status" data-testid="editor-writing-assistants-note">
+        The SQL editor, snippet bodies and the Format styles preview ask browser writing assistants such as Grammarly
+        and LanguageTool, and the browser's spell checker, to leave SQL alone. The AI chat box keeps them.
+    </p>
+</SettingRow>
 <SettingRow Id="editor-reset-session" Kind="action"
-            Help="Clears the document kept between visits, its caret position and its history grouping. Your styles, snippets and history are kept.">
+            Help="Clears the document kept between visits, its caret position and its history grouping — every query tab, with its connection. Your styles, snippets and history are kept.">
     <button id="setting-editor-reset-session-control" type="button" class="akml-btn akml-btn--danger"
             aria-describedby="setting-editor-reset-session-help" @onclick="ResetSessionAsync">Reset editor session…</button>
 </SettingRow>
@@ -54,6 +72,13 @@
         return SaveAsync(next, $"Editor font size: {next.Clamped().FontSize} px.");
     }
 
+    private Task OnFontFamilyAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse<EditorFontFamily>(e.Value?.ToString(), out var font) || !Enum.IsDefined(font)) return Task.CompletedTask;
+        var next = Copy(); next.FontFamily = font;
+        return SaveAsync(next, $"Editor font: {EditorSettings.FontLabel(font)}.");
+    }
+
     private Task OnWordWrapAsync(ChangeEventArgs e)
     {
         var next = Copy(); next.WordWrap = e.Value is bool b && b;
@@ -67,29 +92,42 @@
         return SaveAsync(next, $"Tab size: {next.Clamped().TabSize}.");
     }
 
-    private EditorSettings Copy() => new() { FontSize = _settings.FontSize, WordWrap = _settings.WordWrap, TabSize = _settings.TabSize };
+    private EditorSettings Copy() => new() { FontSize = _settings.FontSize, WordWrap = _settings.WordWrap, TabSize = _settings.TabSize, FontFamily = _settings.FontFamily };
 
     private async Task ResetSessionAsync()
     {
-        var record = await Session.RestoreAsync();
+        // Spec 043 (T059): with query tabs, every tab is closed — its record, its engine session — and one empty tab is left.
+        var tabs = Services.GetService(typeof(IQueryTabs)) as IQueryTabs;
+        if (tabs != null) await tabs.LoadAsync();
+        var open = tabs?.Tabs ?? Array.Empty<QueryTab>();
+        string what = open.Count > 1
+            ? $"the {open.Count} query tabs kept between visits"
+            : DocumentDescription(open.Count == 1 ? open[0].Text : (await Session.RestoreAsync())?.DocumentText);
         var ok = await Dialogs.ConfirmAsync(new DialogRequest
         {
             Title = "Reset editor session",
-            Message = $"Clear {DocumentDescription(record?.DocumentText)}? This cannot be undone.",
+            Message = $"Clear {what}? This cannot be undone.",
             Details = new[]
             {
-                "The document kept between visits, and its caret position.",
-                "Its history grouping: the next run starts a new history session.",
-                "Styles, snippets, history and connections are kept.",
+                "The documents kept between visits, their caret positions, names and connections.",
+                "Their history grouping: the next run starts a new history session.",
+                "Styles, snippets, history and saved connections are kept.",
             },
             ConfirmLabel = "Reset session",
             Destructive = true,
         });
         if (!ok) return;
-        await Session.ClearAsync();
-        // T9: reset the key explicitly so the intent never depends on ClearAsync's scope.
-        await EditorSessionKeys.ResetAsync(Session);
-        Notifications.Notify("Editor session cleared. The editor starts empty next time it opens.", NotificationKind.Success);
+        if (tabs != null)
+        {
+            await tabs.ResetAsync();
+        }
+        else
+        {
+            await Session.ClearAsync();
+            // T9: reset the key explicitly so the intent never depends on ClearAsync's scope.
+            await EditorSessionKeys.ResetAsync(Session);
+        }
+        Notifications.Notify("Editor session cleared. The editor starts with one empty query tab.", NotificationKind.Success);
     }
 
     /// <summary>The document, by its first line (documents get names with spec 041 US5).</summary>

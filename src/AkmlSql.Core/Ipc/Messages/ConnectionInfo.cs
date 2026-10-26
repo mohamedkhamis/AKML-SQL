@@ -30,5 +30,13 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(6)]
         public bool RememberPassword { get; set; }
+
+        /// <summary>
+        /// Spec 043 follow-up (<c>session.copy.v1</c>): a new query tab opened on another tab's connection names that tab's
+        /// session here and sends its string without the password; the engine takes the password from that session when it is
+        /// connected to the same server with the same login (as SSMS's New Query reuses the open connection). Absent = none.
+        /// </summary>
+        [Key(7)]
+        public string? CopyPasswordFromSessionId { get; set; }
     }
 }

@@ -189,7 +189,7 @@ namespace AkmlSql.Engine.Handlers.Control
             // Spec 042: the catalog reader of the session's kind.
             var metadata = ctx.SchemaMetadataFor(ctx.Sessions.KindOf(sessionId));
             if (cache.PermissionDenied || metadata == null) return;
-            if (cache.Phase != PopulationPhase.NotLoaded || !ctx.SchemaCache.TryClaimPopulation(cache.CacheKey)) return;
+            if (cache.Phase != PopulationPhase.NotLoaded || !ctx.SchemaCache.TryClaimPopulation(cache)) return;
 
             var manager = ctx.SchemaCache;
             _ = Task.Run(async () =>
@@ -207,7 +207,7 @@ namespace AkmlSql.Engine.Handlers.Control
                 }
                 finally
                 {
-                    manager.ReleasePopulation(cache.CacheKey);
+                    manager.ReleasePopulation(cache);
                 }
             });
         }

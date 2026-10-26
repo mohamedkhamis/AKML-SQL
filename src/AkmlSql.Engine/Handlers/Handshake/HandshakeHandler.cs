@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Engine.Pairing;
 using AkmlSql.Engine.Transports;
 
 namespace AkmlSql.Engine.Handlers.Handshake
@@ -78,6 +79,12 @@ namespace AkmlSql.Engine.Handlers.Handshake
         public int RequestMessageType => MessageTypes.HandshakeRequest;
         public int ResponseMessageType => MessageTypes.HandshakeResponse;
 
+        /// <remarks>
+        /// Spec 043 follow-up (review): an accepted handshake — and only an accepted one — records the page id the client sent
+        /// (<see cref="HandshakeRequest.ClientInstanceId"/>) on the connection (<see cref="BridgeConnection.Adopt"/>), so a page
+        /// that reconnects after a link drop is still the page that connected its tabs' sessions. A refused handshake records
+        /// nothing.
+        /// </remarks>
         public Task<HandshakeResponse> HandleAsync(HandshakeRequest request, RpcContext ctx, CancellationToken ct)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
@@ -113,6 +120,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                     }
 
                     var minted = _bearerMinter(request.BrowserLabel ?? string.Empty);
+                    BridgeConnection.Adopt(request.ClientInstanceId);
                     return Task.FromResult(new HandshakeResponse
                     {
                         Status = HandshakeStatus.Ok,
@@ -146,6 +154,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         });
                     }
 
+                    BridgeConnection.Adopt(request.ClientInstanceId);
                     return Task.FromResult(new HandshakeResponse
                     {
                         Status = HandshakeStatus.Ok,
@@ -174,6 +183,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
             }
 
             // 3. Localhost mode: accept any inbound.
+            BridgeConnection.Adopt(request.ClientInstanceId);
             return Task.FromResult(new HandshakeResponse
             {
                 Status = HandshakeStatus.Ok,

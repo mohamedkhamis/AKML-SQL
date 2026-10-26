@@ -7,7 +7,7 @@ namespace AkmlSql.Engine.PostgreSql;
 
 /// <summary>What to tell the person who tried to connect, and the stable id when the failure has one.</summary>
 /// <param name="Message">The server's own words where it spoke, the driver's where it did not, and a one-line hint.</param>
-/// <param name="ErrorCode">A <see cref="DialectErrors"/> id (a password is needed), otherwise null.</param>
+/// <param name="ErrorCode">A <see cref="DialectErrors"/> id (a password is needed, the password was refused), otherwise null.</param>
 public sealed record ConnectionFailure(string Message, string? ErrorCode);
 
 /// <summary>
@@ -18,6 +18,12 @@ public sealed record ConnectionFailure(string Message, string? ErrorCode);
 /// <para>
 /// The driver has no typed signal for most of these, so the classification reads the exception types it does expose
 /// (a server error with its SQLSTATE, a socket error, a TLS error) and, for the password case, the one message it gives.
+/// </para>
+///
+/// <para>
+/// Spec 043 follow-up (review): a password the server refused (SQLSTATE 28P01) carries <see cref="DialectErrors.PgLoginFailed"/>,
+/// so the web client knows a remembered or copied password is wrong or out of date without reading the server's words, which
+/// vary with its language. The message is unchanged.
 /// </para>
 /// </summary>
 public static class PgConnectionFailure
@@ -33,7 +39,8 @@ public static class PgConnectionFailure
         switch (ex)
         {
             case PostgresException pg:
-                return new ConnectionFailure(WithHint($"{pg.MessageText} (SQLSTATE {pg.SqlState})", ServerHint(pg)), null);
+                return new ConnectionFailure(WithHint($"{pg.MessageText} (SQLSTATE {pg.SqlState})", ServerHint(pg)),
+                    pg.SqlState == PostgresErrorCodes.InvalidPassword ? DialectErrors.PgLoginFailed : null);
 
             case NpgsqlException when ex.Message.Contains(NoPasswordSignature, StringComparison.Ordinal):
                 return new ConnectionFailure("The server asked for a password and none was supplied. Enter the password for this user.",

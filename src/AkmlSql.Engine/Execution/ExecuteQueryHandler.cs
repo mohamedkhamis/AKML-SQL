@@ -141,19 +141,19 @@ namespace AkmlSql.Engine.Execution
                     return cache;
                 }
 
-                // The whole script is bounded, not just each command: the engine connection serves one request
-                // at a time, so a script without an end would hold up completion, schema refresh and Cancel.
+                // The whole script is bounded, not just each command: a session's connection serves one script at a time, so a
+                // script without an end would hold up that session's next run and Apply (Cancel itself is read while it runs, R3).
                 long commandRuns = parseOnly ? split.Batches.Count : split.Batches.Sum(b => (long)Math.Min(Math.Max(1, b.RepeatCount), ExecuteOutcome.MaxBatchRepeat));
                 var scriptLimit = ExecuteLimits.ScriptTimeLimit(timeoutSec, commandRuns);
 
-                // Per-execute CTS — the transport ct is per-CONNECTION, never per-request.
-                // IMPORTANT: RegisterQuery must happen INSIDE the gate (after RunExclusiveAsync
-                // acquires it), not before. Registering before the gate is entered means a
-                // CancelQuery request that arrives while this execute is still queued (waiting
-                // for the semaphore) would cancel a not-yet-running request. We register inside
-                // the work callback so the CTS is only visible to TryCancel once the request is
-                // actually the active one executing on the connection.
+                // Per-execute CTS — the transport ct is per-CONNECTION, never per-request. Spec 043 (review of US1): it is
+                // registered before the gate, and its token also bounds the wait for the gate and the opening of the connection,
+                // so a Cancel (or a closed tab's release) stops this execute wherever it is: queued behind another run, waiting
+                // for the server to accept the connection, or running. Registering only once the work started lost a Cancel
+                // sent while the connection was still opening, and the whole script then ran.
                 using var cts = new CancellationTokenSource();
+                using var running = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
+                sessionConn.RegisterQuery(queryId, cts);
                 var sw = Stopwatch.StartNew();
 
                 try
@@ -162,8 +162,6 @@ namespace AkmlSql.Engine.Execution
                         connStr!,
                         async (conn, _) =>
                         {
-                            // We now hold the gate — register the CTS so TryCancel can reach it.
-                            sessionConn.RegisterQuery(queryId, cts);
                             try
                             {
                                 return await RunScriptAsync(conn, req, split.Batches, maxRows, timeoutSec, scriptLimit, CacheFor, parseOnly, cts.Token).ConfigureAwait(false);
@@ -173,14 +171,18 @@ namespace AkmlSql.Engine.Execution
                                 currentDatabase = CurrentDatabaseOf(conn);
                             }
                         },
-                        ct).ConfigureAwait(false);
+                        running.Token).ConfigureAwait(false);
 
                     sw.Stop();
                     result.QueryId = queryId;
                     result.ElapsedMs = sw.ElapsedMilliseconds;
                     result.ConnectionWasReset = wasReset;
                     result.CurrentDatabase = currentDatabase;
-                    NoteDatabase(req.SessionId, dbName, currentDatabase);
+                    // Spec 043 (review of US1): with requests answered side by side, the session can be disconnected and connected
+                    // again while this run finishes (a reload's reattach, or a connect after the browser gave up waiting). Only a
+                    // run on the session's current connection may move the session to the database its script ended in.
+                    if (ReferenceEquals(_registry.TryGet(req.SessionId), sessionConn))
+                        NoteDatabase(req.SessionId, dbName, currentDatabase);
                     // Stamped after a USE re-keyed the session: the stamp is the connection the grid's edits will be written through.
                     result.ConnectionStamp = ConnectionStamp.Of(DatabaseKind.SqlServer, sessionLookup(req.SessionId).ConnectionString);
                     return Respond(request.RequestId, replyType, result);
@@ -229,7 +231,10 @@ namespace AkmlSql.Engine.Execution
             _registry.EvictIdle();
 
             var sessionConn = _registry.GetOrCreate(req.SessionId, connStr, DatabaseKind.PostgreSql);
+            // As for SQL Server: the cancel reaches this execute from the moment it is known — queued, opening, running.
             using var cts = new CancellationTokenSource();
+            using var running = CancellationTokenSource.CreateLinkedTokenSource(ct, cts.Token);
+            sessionConn.RegisterQuery(queryId, cts);
             var sw = Stopwatch.StartNew();
             try
             {
@@ -237,8 +242,6 @@ namespace AkmlSql.Engine.Execution
                     connStr,
                     async (conn, _) =>
                     {
-                        // The gate is held: only now can a cancel reach this execute.
-                        sessionConn.RegisterQuery(queryId, cts);
                         var run = await _postgresRunner.RunAsync(conn, req.Sql, sessionConn.TransactionState, maxRows, timeoutSec, null, cts.Token,
                                 _schemaChanged == null ? null : () => _schemaChanged(req.SessionId), req.IncludeProvenance,
                                 sessionConn.SchemaChange)
@@ -246,7 +249,7 @@ namespace AkmlSql.Engine.Execution
                         sessionConn.TransactionState = (TransactionState)run.TransactionState;
                         return run;
                     },
-                    ct).ConfigureAwait(false);
+                    running.Token).ConfigureAwait(false);
 
                 sw.Stop();
                 result.QueryId = queryId;

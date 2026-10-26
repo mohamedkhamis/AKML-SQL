@@ -123,8 +123,8 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
 
                 // Chat (v2.1: assistant bubble deepened slate-100 → slate-200 — with the new
                 // Border.Strong bubble edge it now reads on the white panel)
-                // Syntax (SQL previews) — keyword/comment as docs/theme-tokens.json; strings one step
-                // darker than its #16A34A, which reads at 3.3:1 on white (this is 5.0:1).
+                // Syntax (SQL previews) — as docs/theme-tokens.json. Strings are one step darker than the
+                // old #16A34A, which read at 3.3:1 on white (this is 5.0:1); spec 043 moved the JSON to this value.
                 [ThemeTokens.SyntaxKeyword] = Solid(0x25, 0x63, 0xEB),
                 [ThemeTokens.SyntaxString]  = Solid(0x15, 0x80, 0x3D),
                 [ThemeTokens.SyntaxComment] = Solid(0x64, 0x74, 0x8B),
@@ -228,7 +228,8 @@ namespace AkmlSql.Shell.Shared.Ui.Theme
                 // Chat
                 // Syntax (SQL previews) — keyword/string as docs/theme-tokens.json (blue-400 reads
                 // 5.8:1 here; the blue-600 accent the preview used read 2.8:1); comments lighter than
-                // its #64748B (3.1:1) at 5.0:1, set apart from the line numbers by italics.
+                // the old #64748B (3.1:1) at 5.0:1, set apart from the line numbers by italics; spec 043 moved the
+                // JSON to this value, so the web editor and these previews now agree.
                 [ThemeTokens.SyntaxKeyword] = Solid(0x60, 0xA5, 0xFA),
                 [ThemeTokens.SyntaxString]  = Solid(0x4A, 0xDE, 0x80),
                 [ThemeTokens.SyntaxComment] = Solid(0x8A, 0x99, 0xAF),

@@ -284,9 +284,10 @@ internal static class EngineHandlerRegistry
         router.Register(new Handlers.Control.ConnectionChangedHandler());
         // Spec 029: validate SQL-auth credential before the shell stores it.
         router.Register(new Handlers.Control.TestSqlConnectionHandler());
-        // Spec 042 (FR-105, FR-106): whether a PostgreSQL password is remembered for a server and login, and forgetting it.
-        if (ctx.EnsureSettings().PostgreSql.Enabled)
-            router.Register(new PostgreSql.CredentialHandler(new PostgreSql.PgCredentialResolver()));
+        // Spec 042 (FR-105, FR-106): whether a password is remembered for a server and login, and forgetting it. Registered
+        // whatever postgreSql.enabled says (spec 043 follow-up, review): it also answers the SQL Server kind, which
+        // credentials.sqlserver.v1 always advertises; with the feature off a PostgreSQL request gets the feature-off answer.
+        router.Register(new PostgreSql.CredentialHandler(new PostgreSql.PgCredentialResolver(), ctx.EnsureSettings().PostgreSql.Enabled));
         // Spec 042 (FR-081): literal redaction of PostgreSQL text for the web edition's cloud AI calls (223 -> 224).
         if (ctx.EnsureSettings().PostgreSql.Enabled)
             router.Register(new PostgreSql.RedactHandler());

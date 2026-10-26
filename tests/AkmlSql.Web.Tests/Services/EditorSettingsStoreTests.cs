@@ -66,6 +66,41 @@ public sealed class EditorSettingsStoreTests
         Assert.Equal(expected, (await store.GetAsync()).TabSize);
     }
 
+    // ── Spec 043 (T062, research R12, FR-017): the editor font ───────────────────────────────────
+
+    [Fact]
+    public async Task The_font_is_the_default_until_one_is_chosen_and_then_it_is_kept()
+    {
+        var db = new RecordingIndexedDbAdapter();
+        Assert.Equal(EditorFontFamily.Default, (await new EditorSettingsStore(db).GetAsync()).FontFamily);
+
+        await new EditorSettingsStore(db).SetAsync(new EditorSettings { FontFamily = EditorFontFamily.CascadiaMono });
+
+        Assert.Equal(EditorFontFamily.CascadiaMono, (await new EditorSettingsStore(db).GetAsync()).FontFamily);
+    }
+
+    [Fact]
+    public async Task A_record_from_before_the_font_setting_or_with_an_unknown_font_reads_the_default_font()
+    {
+        var db = new RecordingIndexedDbAdapter();
+        db.Seed(StoreNames.AnalysisSettings, "editorSettings", JsonSerializer.Serialize(new { FontSize = 15, TabSize = 4 }));
+        var old = await new EditorSettingsStore(db).GetAsync();
+        Assert.Equal(EditorFontFamily.Default, old.FontFamily);
+        Assert.Equal(15, old.FontSize);
+
+        var odd = new RecordingIndexedDbAdapter();
+        odd.Seed(StoreNames.AnalysisSettings, "editorSettings", JsonSerializer.Serialize(new { FontSize = 13, FontFamily = 99 }));
+        Assert.Equal(EditorFontFamily.Default, (await new EditorSettingsStore(odd).GetAsync()).FontFamily);
+    }
+
+    [Theory]
+    [InlineData(EditorFontFamily.Default, "default")]
+    [InlineData(EditorFontFamily.CascadiaMono, "cascadia-mono")]
+    [InlineData(EditorFontFamily.Consolas, "consolas")]
+    [InlineData(EditorFontFamily.SystemMonospace, "system-monospace")]
+    public void Each_font_has_the_name_the_editor_module_knows(EditorFontFamily font, string name) =>
+        Assert.Equal(name, EditorSettings.FontName(font));
+
     [Fact]
     public async Task A_corrupt_record_reads_as_the_defaults()
     {

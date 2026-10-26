@@ -1,0 +1,910 @@
+AkmlSql.Site.Tests.Admin.AdminAuthTests.AdminGuard_AllowsAuthenticatedRequestsAndTheLoginPage
+AkmlSql.Site.Tests.Admin.AdminAuthTests.AdminGuard_ChallengesUnauthenticatedRequestsToProtectedPaths
+AkmlSql.Site.Tests.Admin.AdminAuthTests.AdminGuard_IgnoresPublicPathsAndLookalikeSegments
+AkmlSql.Site.Tests.Admin.AdminAuthTests.HashPassword_ProducesVersionedSaltedFormat
+AkmlSql.Site.Tests.Admin.AdminAuthTests.HashPassword_RefusesAWorkFactorBelowTheFloor
+AkmlSql.Site.Tests.Admin.AdminAuthTests.HashPassword_UsesAFreshSaltEachTime
+AkmlSql.Site.Tests.Admin.AdminAuthTests.IsConfigured_TrueOnlyForWellFormedHash
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Throttle_ForgetsFailuresAfterTheIdleWindow
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Throttle_LocksOutAfterFiveFailures_AndResets
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Throttle_NoLockoutBelowThreshold_ThenExponentialWithCap
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Throttle_PrunesExpiredEntriesSoStateStaysBounded
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Throttle_RetryAfterCountsDownAndClearsWhenTheLockoutElapses
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Throttle_StopsAdmittingNewAddressesPastTheHardCap
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_AcceptsCorrectPassword
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_AcceptsPasswordAgainstAnIndependentlyGeneratedHash
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsHashWithDowngradedIterationCount
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "   ")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a"···)
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "AKML1$210000$notbase64$notbase64")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "AKML1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAA"···)
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "AKML9$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAA"···)
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: "not-a-hash")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWhenHashMissingOrMalformed(configuredHash: null)
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWrongPassword(password: "")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWrongPassword(password: "correct horse battery stapl")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWrongPassword(password: "Correct horse battery staple")
+AkmlSql.Site.Tests.Admin.AdminAuthTests.Verify_RejectsWrongPassword(password: null)
+AkmlSql.Site.Tests.Admin.AdminNavTests.ActiveSection_ResolvesTheOwningSection
+AkmlSql.Site.Tests.Admin.AdminNavTests.EverySection_LivesUnderAdmin_SoTheExistingGuardCoversIt
+AkmlSql.Site.Tests.Admin.AdminNavTests.IsActive_ForASection_MatchesItsChildRoutes
+AkmlSql.Site.Tests.Admin.AdminNavTests.IsActive_ForOverview_MatchesOnlyTheExactPath
+AkmlSql.Site.Tests.Admin.AdminNavTests.IsActive_WithNoPath_IsFalse(path: "")
+AkmlSql.Site.Tests.Admin.AdminNavTests.IsActive_WithNoPath_IsFalse(path: null)
+AkmlSql.Site.Tests.Admin.AdminNavTests.Sections_HaveUniqueRoutesAndTitles
+AkmlSql.Site.Tests.Admin.AdminNavTests.Sections_LeadWithDownloadsAndPeople_NotPageVisits
+AkmlSql.Site.Tests.Admin.AdminNavTests.WithRange_AppendsTheWindowToEveryLink
+AkmlSql.Site.Tests.Admin.AdminNavTests.WithRange_OnALinkThatAlreadyHasAQuery_UsesAmpersand
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.APathThatMerelyStartsWithAdmin_IsNotTreatedAsThePortal
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/downloads.csv")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/metrics.csv")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/pages.csv")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/people.csv")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/people.csv?days=365&country=EG")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/people/3f2a9cdeadbeef01")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryOtherPortalSurface_IsGuarded(path: "/admin/settings?saved=1")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryPortalMutation_IsGuarded(path: "/admin/logout", method: "POST")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryPortalMutation_IsGuarded(path: "/admin/people/abc/delete", method: "POST")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EveryPortalMutation_IsGuarded(path: "/admin/settings", method: "POST")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.EverySectionInTheNavigation_IsGuarded
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.OnlyTheSignInPageIsOpen(path: "/admin/login")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.OnlyTheSignInPageIsOpen(path: "/admin/login?error=1")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/consent")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/dl/AKMLSQLSetup-1.26.0910.2248.exe")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/docs")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/download")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/privacy")
+AkmlSql.Site.Tests.Admin.PortalAuthorizationTests.PublicSurfaces_AreNotGuarded(path: "/privacy/forget")
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.ErrorPagingAndExportHonorAllFiltersWithoutTwoHundredCap
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.FailedMaintenanceKeepsLastSuccessAndReportsFailure
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.FeedbackPagingSearchAndExportReachOldestMessages
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.LatestDimensionsAndCountryFilterUseAllMatchingPersonsEvents
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.PeopleExportIncludesAllRowsBeyondFiveHundredAndStableTies
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.QueueFailuresAreVisibleAndDoNotTerminateConsumer
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.QueueOverflowAndPersistenceAreMeasuredWithoutBlockingProducer
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.ReadSnapshotDoesNotBlockWriterAndRemainsConsistent
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.RetentionBacklogUsesCleanupBoundaryAndCountsBothTables
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.RetentionChangeTriggersCleanupWhileServiceIsRunning
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.StreamingCsvPreservesTextAndNeutralizesFormulas(value: "  @SUM(A1)", expected: "\"'  @SUM(A1)\"")
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.StreamingCsvPreservesTextAndNeutralizesFormulas(value: "=1+1", expected: "\"'=1+1\"")
+AkmlSql.Site.Tests.Analytics.AdminReviewFollowUpTests.StreamingCsvPreservesTextAndNeutralizesFormulas(value: "a,\"b\"\nline", expected: "\"a,\"\"b\"\"\nline\"")
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.BotDownloads_AreExcludedFromDownloadFigures
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.BotVisits_AreExcludedFromEveryVisitorFigure_ButCountedSeparately
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.BrowserMix_AggregatesTheRecordedUserAgentFamilies
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ClearSameOriginReferrers_KeepsTheVisitsThemselves
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ClearSameOriginReferrers_RepairsHistory_AndIsIdempotent
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ClearSameOriginReferrers_WithNoHost_DoesNothing(host: "")
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ClearSameOriginReferrers_WithNoHost_DoesNothing(host: null)
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.Csv_ContainsTotalsSeriesAndBreakdowns
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.Csv_QuotesKeysContainingSeparators
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.CsvFileName_CarriesTheWindowAndDate
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.DailyDownloads_AreZeroFilledAcrossTheWindow
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.DayColumn_IsPopulatedAndIndexed
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ExistingDatabase_WithoutTheDayColumn_IsUpgradedAndBackfilled
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.NotFound_PathsAreAggregated_AndKeptOutOfVisitFigures
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.NotFound_RespectsTheWindow
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.Prune_RemovesRowsOlderThanRetention_AndKeepsTheRest
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.Prune_WithNonPositiveRetention_KeepsEverything
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ScriptedClients_AreExcludedFromVisitsLikeCrawlers
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.ScriptedDownloads_StillCount_BecauseTheyAreRealAcquisitions
+AkmlSql.Site.Tests.Analytics.AnalyticsInsightsTests.UniqueVisitors_CountDistinctIpHashes_NotPageViews
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.Constructor_CreatesDatabaseSaltAndWorkingSchema
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.GetSummary_EmptyDatabase_ReturnsZeroFilledSeries
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.IpHash_NeverStoresRawIp_AndRotatesByDay
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.ResolveDatabasePath_DefaultsToProgramData
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.ResolveDatabasePath_ExpandsEnvironmentVariables
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.RoundTrip_TotalsPerPageByFileDailySeriesAndReferrers
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.Salt_DiffersBetweenInstallations
+AkmlSql.Site.Tests.Analytics.AnalyticsStoreTests.Salt_PersistsAcrossReopen
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.ABotThatAcceptedACookie_IsExcludedFromBothTheStatAndTheList
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.AFileWithNoRecoverableVersion_StaysUnattributed
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.DistinctIndividuals_MatchesTheNumberOfRowsTheListReturns
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.HistoricalDownloads_ShowTheirVersionRatherThanUnattributed
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.NewPlusReturning_AlwaysEqualsDistinct
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.TheStoredVersionStillWins_WhereItExists
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.VersionFromFileName_RecoversTheVersionHistoryNeverStored(file: "", expected: null)
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.VersionFromFileName_RecoversTheVersionHistoryNeverStored(file: "AKMLSQLSetup-1.26.0901.1502.exe", expected: "1.26.0901.1502")
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.VersionFromFileName_RecoversTheVersionHistoryNeverStored(file: "AKMLSQLSetup-1.26.0910.2248.exe", expected: "1.26.0910.2248")
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.VersionFromFileName_RecoversTheVersionHistoryNeverStored(file: "setup.exe", expected: null)
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.VersionFromFileName_RecoversTheVersionHistoryNeverStored(file: null, expected: null)
+AkmlSql.Site.Tests.Analytics.CoverageConsistencyTests.WithOnlyBots_BothReportZero
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.ExportsCarryingIdentifiableDataAreLabelled
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.NoLogMessageInterpolatesAFullAddressOrVisitorId
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.OnlyTheAuthenticatedPersonViewRendersAnAddress
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.TheCountryExportCarriesNoIdentifiableData_AndIsNotLabelled
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.TheHealthProbeExposesNoPersonalData
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.TheOnlyAddressInLogs_IsTheAdminSignInAuditTrail
+AkmlSql.Site.Tests.Analytics.DisclosureBoundaryTests.ThePublicPagesNeverRenderAnAddressOrVisitorId
+AkmlSql.Site.Tests.Analytics.DownloadCountingTests.CdnRedirect_CountsOnceAndTheBeaconIsTheOtherPath_NotAnExtraCount
+AkmlSql.Site.Tests.Analytics.DownloadCountingTests.Handle_WithARangeHeader_StreamsButDoesNotCount
+AkmlSql.Site.Tests.Analytics.DownloadCountingTests.Handle_WithoutARangeHeader_CountsExactlyOnce
+AkmlSql.Site.Tests.Analytics.DownloadCountingTests.HandleCount_WithARangeHeader_DoesNotCount
+AkmlSql.Site.Tests.Analytics.DownloadCountingTests.MetricsFailure_DoesNotBreakTheDownload
+AkmlSql.Site.Tests.Analytics.DownloadEndpointIgnoresVisibilityTests.AHiddenReleasesCdnLink_StillRedirectsAndStillCounts
+AkmlSql.Site.Tests.Analytics.DownloadEndpointIgnoresVisibilityTests.AHiddenReleasesDirectLink_StillServesAndStillCounts
+AkmlSql.Site.Tests.Analytics.DownloadEndpointIgnoresVisibilityTests.TheDownloadEndpoint_CannotConsultTheSettingsStoreAtAll
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.DownloadsInfo_ListsFilesNewestFirst_AndToleratesMissingFolder
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_CdnLookupIgnoresTraversalAndSubpaths(requestPath: "../setup.exe")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_CdnLookupIgnoresTraversalAndSubpaths(requestPath: "..\\setup.exe")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_CdnLookupIgnoresTraversalAndSubpaths(requestPath: "sub/setup.exe")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_ManifestHasCdnUrl_RedirectsAndLogsDownload
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_ManifestWithoutCdnUrl_StreamsLocalFile
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_MissingFile_Returns404AndLogsNothing
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.Handle_StreamsFile_LogsDownload_AndSetsAttachmentHeaders
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.HandleCount_CdnMirroredFile_Returns204AndLogsDownload
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.HandleCount_LocallyPresentFileWithoutCdn_Returns204AndLogsDownload
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.HandleCount_UnknownOrInvalidFile_Returns404AndLogsNothing(requestPath: "../setup.exe")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.HandleCount_UnknownOrInvalidFile_Returns404AndLogsNothing(requestPath: "invented.exe")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.HandleCount_UnknownOrInvalidFile_Returns404AndLogsNothing(requestPath: null)
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveCdnUrl_MatchesFilenameCaseInsensitively_AndRejectsUnknownFiles
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsRootedAbsolutePaths
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "%2e%2e%2fweb.config")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "%2e%2e%5cweb.config")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "../../etc/passwd")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "../web.config")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "..\\web.config")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: "sub/../../web.config")
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_RejectsTraversalAndEmptyInput(requestPath: null)
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_ResolvesFileInsideRoot
+AkmlSql.Site.Tests.Analytics.DownloadEndpointTests.ResolveFilePath_ReturnsNull_ForMissingFileAndDirectories
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.ADatabaseThatAlreadyHasTheFinerColumns_HasThemRemoved
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.AMissingUserAgent_YieldsTheUnknownShape(ua: "")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.AMissingUserAgent_YieldsTheUnknownShape(ua: null)
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.AnOlderDatabase_GainsTheEnrichmentColumnsInPlace
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.ConsecutiveVisits_ShareASession_AndAGapStartsANewOne
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Crawlers_AreClassifiedAsBots_NotAsWhicheverBrowserTheyImpersonate
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.DifferentDevicesBehindOneAddress_DoNotShareASession
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.DifferentVisitors_NeverShareASession
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.EnrichedVisits_AggregateIntoTheirDimensions
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.EntryAndExitPages_AreTheFirstAndLastOfEachSession
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.ExternalReferrerHosts_AreStillRecorded
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.ExternalReferrers_KeepTheirPath
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.FullAddresses_AreNeverWrittenToTheDatabase
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.GeoLookup_ReturnsUnknownForAddressesNoDatabaseCovers(ip: "10.0.0.5")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.GeoLookup_ReturnsUnknownForAddressesNoDatabaseCovers(ip: "127.0.0.1")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.GeoLookup_ReturnsUnknownForAddressesNoDatabaseCovers(ip: "192.168.1.10")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.GeoLookup_ReturnsUnknownForAddressesNoDatabaseCovers(ip: null)
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.GeoLookup_WithACorruptDatabase_DegradesInsteadOfThrowing
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.GeoLookup_WithoutADatabase_IsInertRatherThanFatal
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Ipv4_IsTruncatedToItsSlash24(input: "::ffff:203.0.113.7", expected: "203.0.113.0")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Ipv4_IsTruncatedToItsSlash24(input: "192.168.1.55", expected: "192.168.1.0")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Ipv4_IsTruncatedToItsSlash24(input: "203.0.113.7", expected: "203.0.113.0")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Ipv4_IsTruncatedToItsSlash24(input: "8.8.8.8", expected: "8.8.8.0")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Ipv6_IsTruncatedToItsSlash48(input: "2001:db8:abcd:1234:5678::1", expected: "2001:db8:abcd::")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.Ipv6_IsTruncatedToItsSlash48(input: "2a00:1450:4009:81f::200e", expected: "2a00:1450:4009::")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.NoUtmParameters_YieldsAnAbsentCampaign
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.OnlyTheCountryIsStored_NoCityRegionOrTimezone
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.PrimaryLanguage_IsTakenFromAcceptLanguage(header: "", expected: null)
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.PrimaryLanguage_IsTakenFromAcceptLanguage(header: "*", expected: null)
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.PrimaryLanguage_IsTakenFromAcceptLanguage(header: "ar-EG,ar;q=0.9,en;q=0.8", expected: "ar-eg")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.PrimaryLanguage_IsTakenFromAcceptLanguage(header: "de;q=0.5,fr;q=0.9", expected: "fr")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.PrimaryLanguage_IsTakenFromAcceptLanguage(header: "en-GB,en;q=0.9", expected: "en-gb")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.ReferrerHostComparison_IsCaseInsensitive
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.RowsWithoutEnrichment_AreOmittedRatherThanBucketedAsUnknown
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.SameOriginReferrers_AreDropped
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.SameOriginReferrers_AreDroppedFromTheHostToo_NotJustTheUrl
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.SlowestPages_NeedEnoughSamplesToBeMeaningful
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.TheStoredPrefix_CannotDistinguishHostsOnTheSameNetwork
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UnparseableAddresses_YieldNoPrefix(input: "   ")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UnparseableAddresses_YieldNoPrefix(input: "")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UnparseableAddresses_YieldNoPrefix(input: "not-an-ip")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UnparseableAddresses_YieldNoPrefix(input: null)
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) Appl"···, browser: "Safari", browserVersion: "17", os: "iOS", osVersion: "17.2", device: "tablet")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac O"···, browser: "Safari", browserVersion: "17", os: "iOS", osVersion: "17.2", device: "mobile")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebK"···, browser: "Chrome", browserVersion: "119", os: "Android", osVersion: "13", device: "tablet")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebK"···, browser: "Chrome", browserVersion: "120", os: "Android", osVersion: "14", device: "mobile")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Ap"···, browser: "Safari", browserVersion: "17", os: "macOS", osVersion: "10.15.7", device: "desktop")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb"···, browser: "Chrome", browserVersion: "120", os: "Windows", osVersion: "10/11", device: "desktop")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb"···, browser: "Edge", browserVersion: "120", os: "Windows", osVersion: "10/11", device: "desktop")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0"···, browser: "Firefox", browserVersion: "121", os: "Windows", osVersion: "10/11", device: "desktop")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UserAgent_IsParsedIntoBrowserOsAndDevice(ua: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"···, browser: "Chrome", browserVersion: "120", os: "Linux", osVersion: null, device: "desktop")
+AkmlSql.Site.Tests.Analytics.EnrichmentTests.UtmParameters_AreCapturedFromTheQueryString
+AkmlSql.Site.Tests.Analytics.GeoDatabaseSmokeTests.GarbageInput_IsHandledWithoutThrowing
+AkmlSql.Site.Tests.Analytics.GeoDatabaseSmokeTests.PrivateAndLoopbackAddresses_StayUnknown
+AkmlSql.Site.Tests.Analytics.GeoDatabaseSmokeTests.TheDatabase_ResolvesWellKnownPublicAddresses
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.ADeIdentifiedVisitor_NoLongerResolvesToAnIndividual
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.DeIdentify_ErasesTheAddressAndIdentifier_ButKeepsTheRow
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.DeIdentify_IsIdempotent
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.DeIdentify_LeavesEveryAggregateForThatPeriodUnchanged
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.DeIdentify_LeavesRowsInsideTheWindowAlone
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.DeIdentify_WithANonPositivePeriod_DoesNothing(days: 0)
+AkmlSql.Site.Tests.Analytics.IdentifiableRetentionTests.DeIdentify_WithANonPositivePeriod_DoesNothing(days: -1)
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.AClearedCookie_ProducesANewIndividual_NeverAMerge
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.ACrawlerNeverAppearsAsAnIndividual
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.AScriptedInstallerFetchCounts_ButACrawlerDoesNot
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.AVisitorActiveAcrossDays_IsOnePersonWithASpanningHistory
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Coverage_ReportsAutomatedTrafficSeparatelyRatherThanDiscardingIt
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Coverage_ReportsTheUnattributedShare
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Coverage_SplitsNewFromReturning
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Detail_ForAnUnknownId_IsNull
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Detail_InterleavesVisitsAndDownloadsInTimeOrder
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.DownloadsByCountry_RanksCountriesAndReconcilesToTheTotal
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.DownloadsByCountry_ShowsUnknownAsAnExplicitBucket_NeverDropsIt
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.DownloadsByVersion_GroupsByTheVersionRecordedAtDownloadTime
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.FilteringByCountry_NarrowsTheList
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.FilteringByDownloaded_NarrowsTheListBothWays
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Individuals_AggregateVisitsAndDownloadsPerPerson
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.NonConsentingTraffic_NeverBecomesAnIndividual_ButStillCounts
+AkmlSql.Site.Tests.Analytics.IndividualsQueryTests.Paging_ReturnsDistinctSlices
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.AVisitAtOneInTheMorning_CountsToday_NotYesterday
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.AVisitorActiveAcrossUtcMidnight_IsOneUniqueVisitorForTheLocalDay
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.Conversion_IsAttributedToTheFirstPageAndSourceOfTheDay
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.Conversion_IsVisitorDaysThatDownloaded_OverVisitorDays
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.NewVersusReturning_UsesTheWholeHistory_AndStatesItsCoverage
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.TheDailyChart_PutsEachVisitOnItsLocalDay
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.ThePeopleList_MarksReturningVisitors_AndShowsWhenTheyWereFirstSeenEver
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.Today_IsComparedWithYesterdayUpToTheSameTime
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.WhenPeopleVisit_UsesTheLocalClock
+AkmlSql.Site.Tests.Analytics.LocalTimeAnalyticsTests.Yesterday_CountsExactlyThatLocalDay
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.AnAmbiguousLocalTime_ResolvesToItsFirstOccurrence
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Describe_NamesTheTimezone_SoTheFigureIsNeverAmbiguous
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.InUtc_TheWindowsMatchTheOldBehaviour
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.LastSevenDays_CoversSevenCalendarDaysIncludingToday
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.LastSevenDays_IsComparedWithTheSevenBefore_UpToTheSameMoment
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "", expected: "30")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "<script>", expected: "30")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "365", expected: "365")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "7", expected: "7")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "TODAY", expected: "today")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "today", expected: "today") [#2]
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "tomorrow", expected: "30")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: "yesterday", expected: "yesterday")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Parse_AcceptsKnownRanges_AndFallsBackForAnythingElse(key: null, expected: "30")
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.TheComparisonPeriod_LinesUpWallClockTimes_AcrossASummerTimeChange
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.TheDaySummerTimeEnds_IsTwentyFiveHoursLong
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.TheDaySummerTimeStarts_BeginsAtItsFirstRealMinute
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Today_IsTheOwnersDay_NotTheUtcDay
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.TodaySoFar_IsComparedWithYesterdayUpToTheSameTime
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Yesterday_IsComparedWithTheWholeDayBefore
+AkmlSql.Site.Tests.Analytics.ReportWindowTests.Yesterday_IsOneWholeLocalDay_WithBothEndsClosed
+AkmlSql.Site.Tests.Analytics.SchemaMigrationTests.InitializeSchema_AddsTheFeature038ColumnsToDownloads
+AkmlSql.Site.Tests.Analytics.SchemaMigrationTests.InitializeSchema_AddsTheFeature038ColumnsToVisits
+AkmlSql.Site.Tests.Analytics.SchemaMigrationTests.InitializeSchema_CreatesTheFeature038Indexes
+AkmlSql.Site.Tests.Analytics.SchemaMigrationTests.InitializeSchema_IsIdempotentAcrossRepeatedOpens
+AkmlSql.Site.Tests.Analytics.SchemaMigrationTests.Reopen_PreservesExistingRowsAndLeavesNewColumnsNull
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.AutomationFamilies_AreRecognisedAsSuch(family: "bot")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.AutomationFamilies_AreRecognisedAsSuch(family: "curl")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.AutomationFamilies_AreRecognisedAsSuch(family: "powershell")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.AutomationFamilies_AreRecognisedAsSuch(family: "python")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.AutomationFamilies_AreRecognisedAsSuch(family: "wget")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.BrowsersAndUnknownAgents_AreNotAutomation(family: "Chrome")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.BrowsersAndUnknownAgents_AreNotAutomation(family: "Edge")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.BrowsersAndUnknownAgents_AreNotAutomation(family: "Firefox")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.BrowsersAndUnknownAgents_AreNotAutomation(family: "other")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.BrowsersAndUnknownAgents_AreNotAutomation(family: "Safari")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.BrowsersAndUnknownAgents_AreNotAutomation(family: null)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/_framework/blazor.web.js", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/ADMIN", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/admin", expected: False) [#2]
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/admin/anything", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/admin/login", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/administer", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/css/site.css", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/dl", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/DL/setup.exe", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/dl/setup.exe", expected: False) [#2]
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/docs", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/docs/formatting", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/docs-assets/img.png", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/download", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/downloads-info", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/favicon.svg", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/features", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/js/theme-boot.js", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/not-found", expected: True)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/robots.txt", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/search-index.json", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "/sitemap.xml", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: "relative/path", expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.IsTrackablePath_ClassifiesPaths(path: null, expected: False)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_IgnoresEverythingElse(path: "/admin/nope", method: "GET", status: 404)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_IgnoresEverythingElse(path: "/css/missing.css", method: "GET", status: 404)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_IgnoresEverythingElse(path: "/docs/exists", method: "GET", status: 200)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_IgnoresEverythingElse(path: "/docs/gone", method: "POST", status: 404)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_IgnoresEverythingElse(path: "/favicon.ico", method: "GET", status: 404)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_IsNotContentTypeSensitive
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.NotFoundGate_RecordsA404ForAContentPath
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: "", expected: null)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: "/relative/path", expected: null)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: "http://example.com", expected: "example.com")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: "https://example.com/some/page?q=1", expected: "example.com")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: "https://sub.example.co.uk:8443/x", expected: "sub.example.co.uk")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: "not a uri", expected: null)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ReferrerHost_KeepsHostOnly(referer: null, expected: null)
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.ShouldTrack_Requires2xxGetOrHeadHtmlAndTrackablePath
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "", expected: "other")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "curl/8.7.1", expected: "curl")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Go-http-client/2.0", expected: "go")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "HeadlessChrome/126.0.0.0", expected: "bot")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://ww"···, expected: "bot")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) Apple"···, expected: "Safari")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb"···, expected: "Chrome")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWeb"···, expected: "Edge")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0"···, expected: "Firefox")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) W"···, expected: "powershell")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko;"···, expected: "bot")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "PostmanRuntime/7.37.0", expected: "postman")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "python-requests/2.31.0", expected: "python")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: "Wget/1.21", expected: "wget")
+AkmlSql.Site.Tests.Analytics.VisitTrackingMiddlewareTests.UserAgentBuckets_MapToCoarseFamilies(ua: null, expected: "other")
+AkmlSql.Site.Tests.Components.AdminDownloadsBannerTests.TheCountriesStat_CountsResolvedCountriesOnly
+AkmlSql.Site.Tests.Components.AdminDownloadsBannerTests.WithADatabaseButOlderDownloads_ItSaysSoInstead
+AkmlSql.Site.Tests.Components.AdminDownloadsBannerTests.WithCountriesRecorded_NoBannerAtAll
+AkmlSql.Site.Tests.Components.AdminDownloadsBannerTests.WithNoDatabase_ItSaysTheDatabaseIsMissing_AndHowToInstallIt
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 0, previous: 0, direction: "flat", text: "—")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 0, previous: 7, direction: "down", text: "▼ 100%")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 100, previous: 100, direction: "flat", text: "● 0%")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 1001, previous: 1000, direction: "up", text: "▲ 0.1%")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 105, previous: 100, direction: "up", text: "▲ 5%")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 112, previous: 100, direction: "up", text: "▲ 12%")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 5, previous: 0, direction: "new", text: "▲ new")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInACount_ReadsTheWayItShould(current: 88, previous: 100, direction: "down", text: "▼ 12%")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInARate_IsInPercentagePoints(current: 2, previous: 2, direction: "flat", text: "● 0 pts")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInARate_IsInPercentagePoints(current: 2, previous: 3.5, direction: "down", text: "▼ 1.5 pts")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ChangeInARate_IsInPercentagePoints(current: 3, previous: 2, direction: "up", text: "▲ 1 pts")
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.Conversion_IsStatedWithItsUnit_AndBrokenDown
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.ForOneDay_ThereIsNoWeekGrid_ButThereAreHourlyCharts
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.NewVersusReturning_StatesItsSampleSize
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.OverSeveralDays_TheUnitIsVisitorDays_AndTheWeekGridIsShown
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.TheHourlyChart_HasTwentyFourBars_AndATableWithTheSameData
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.TheMeterWidth_ComesFromAClass_NotAnInlineStyle
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.WithNoTraffic_ItSaysSoRatherThanDrawingEmptyCharts
+AkmlSql.Site.Tests.Components.AdminInsightsPageTests.WithoutConsentedVisitors_TheSplitExplainsWhyItIsEmpty
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "0")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "-5")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "banana")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_IsNoIndexed
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_MarksOnlyTheActiveSection
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_MarksTheOwningSectionForAChildRoute
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_MarksTheSelectedWindowCurrent(days: 30, label: "30 days")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_MarksTheSelectedWindowCurrent(days: 365, label: "12 months")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_MarksTheSelectedWindowCurrent(days: 7, label: "7 days")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_MarksTheSelectedWindowCurrent(days: 90, label: "90 days")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_OffersTodayAndYesterday_AndNamesTheDay(key: "today", label: "Today")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_OffersTodayAndYesterday_AndNamesTheDay(key: "yesterday", label: "Yesterday")
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_PropagatesTheWindowToEverySectionLink
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_RendersEverySectionInTheNavigation
+AkmlSql.Site.Tests.Components.AdminLayoutTests.Layout_RendersSignOutPostingToTheLogoutEndpoint
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_ChartsCarryAnAccessibleDataTable
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_EmptyStore_RendersZeroesAndEmptyStates
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_ExcludesBotTraffic_ButReportsItSeparately
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "0")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "-5")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_FallsBackToTheDefaultWindow_ForAMalformedValue(days: "banana")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_HonoursTheRequestedWindow(days: 365, label: "12 months")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_HonoursTheRequestedWindow(days: 7, label: "7 days")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_HonoursTheRequestedWindow(days: 90, label: "90 days")
+AkmlSql.Site.Tests.Components.AdminPagesTests.Dashboard_RendersStatsChartTablesAndFolderFiles
+AkmlSql.Site.Tests.Components.AdminPagesTests.Errors_EmptyStore_RendersEmptyStates
+AkmlSql.Site.Tests.Components.AdminPagesTests.Errors_LevelQuery_FiltersRecentRowsAndPreservesItselfInLinks
+AkmlSql.Site.Tests.Components.AdminPagesTests.Errors_RendersStoredErrorsStatsAndLevelBreakdown
+AkmlSql.Site.Tests.Components.AdminPagesTests.Login_Configured_RendersPasswordForm
+AkmlSql.Site.Tests.Components.AdminPagesTests.Login_NotConfigured_ShowsNoticeInsteadOfForm
+AkmlSql.Site.Tests.Components.AdminPagesTests.Login_Throttled_ExplainsTheWaitInsteadOfBlamingThePassword
+AkmlSql.Site.Tests.Components.AdminPagesTests.Login_WithErrorQuery_ShowsErrorState
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.EveryOtherPortalPage_DoesUseTheShell
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.LoginPage_DoesNotUseThePortalShell
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.PeoplePage_ExportLinkCarriesTheWindowAndFilters
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.PeoplePage_FiltersTravelInTheQueryString_SoTheViewIsBookmarkable
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.PeoplePage_LeadsWithWhatTheListCannotSee
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.PeoplePage_ListsIndividuals
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.PeoplePage_StatesThatOneRowIsOneBrowser_NotOnePerson
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.PeoplePage_WithNobodyTracked_ExplainsWhyRatherThanRenderingAnEmptyTable
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.ReleasesPage_FlagsAdvertisedButMissing
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.ReleasesPage_FlagsPresentButUnadvertised
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.ReleasesPage_IsReadOnly
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.ReleasesPage_SaysHiddenReleasesStayReachable
+AkmlSql.Site.Tests.Components.AdminPortalPageTests.ReleasesPage_ShowsCdnBackedReleasesAsAvailableWithoutALocalFile
+AkmlSql.Site.Tests.Components.AdminPrivacyNoticeTests.ItStatesWhatIsStoredForConsentingVisitors
+AkmlSql.Site.Tests.Components.AdminPrivacyNoticeTests.ItStatesWhatRemainsTrueForEveryoneElse
+AkmlSql.Site.Tests.Components.AdminPrivacyNoticeTests.TheClaimsTheReversalInvalidated_AreGone
+AkmlSql.Site.Tests.Components.AdminPrivacyNoticeTests.TheStatedRetentionFollowsTheLiveSetting(days: 30)
+AkmlSql.Site.Tests.Components.AdminPrivacyNoticeTests.TheStatedRetentionFollowsTheLiveSetting(days: 365)
+AkmlSql.Site.Tests.Components.AdminPrivacyNoticeTests.TheStatedRetentionFollowsTheLiveSetting(days: 90)
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.Form_PostsWithoutJavaScript
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.Page_MarksTheSavedChoiceAsSelected
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.Page_RendersEveryVisibilityOptionWithItsDescription
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.Preview_ListsExactlyWhatThePublicPageWouldShow
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.Preview_SaysHiddenReleasesRemainReachable
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.SavedFlag_ConfirmsWhatChangedAndWhenItTakesEffect
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.SettingsRoutes_RequireAuthentication
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.ValidationErrors_RenderInlineAndNameTheBound
+AkmlSql.Site.Tests.Components.AdminSettingsPageTests.WhenTheStoreCouldNotBeRead_TheOwnerIsToldRatherThanLeftGuessing
+AkmlSql.Site.Tests.Components.ConsentBarTests.AcceptAndDeclineAreBothOfferedAsSubmitButtons
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItCarriesAnAntiforgeryToken
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItDoesNotReciteTheSpecificsInTheBanner
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItDoesNotRenderOnceTheVisitorHasAnswered(state: Denied)
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItDoesNotRenderOnceTheVisitorHasAnswered(state: Granted)
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItIsNotAModal_AndBlocksNothing
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItRendersForAVisitorWhoHasNotAnswered
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItReturnsTheVisitorToThePageTheyWereOn
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItStaysShort_SoPeopleActuallyReadIt
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItUsesGenericWording_AndLinksToTheFullNotice
+AkmlSql.Site.Tests.Components.ConsentBarTests.ItWorksWithoutJavaScript
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocPage_OmitsOnThisPageNav_WhenFewerThanTwoH2Anchors
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocPage_RendersCachedHtml_AndTitle_ForKnownSlug
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocPage_RendersNewBadge_NextToH1
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocPage_RendersOnThisPageNav_WhenAtLeastTwoH2Anchors
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocPage_UnknownSlug_InvokesNotFound
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_EmptyCatalog_RendersEmptyState_NotError
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_FilterQueryParam_FiltersDocumentsByTitle
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_Legend_UsesConfiguredBadgeWindow
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_NoFilter_ShowsEveryDocument
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_NoMatchFilter_RendersSingleNoMatchMessage
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_RendersSectionTreeWithLinks
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_RendersUpdatedBadge_AndLegendWithDefaultWindow
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsIndex_StripsAkmlSqlPrefix_FromIndexLinks
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_FilterForm_KeepsDocsFilterClass_AsCssHideHook
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_MarksCurrentDocumentInSidebar
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_NoMatchFilter_RendersNothingExtra_InSidebar
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_RendersNewBadge_InSidebar_ForFreshDoc
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_RendersSidebarWithNoJsFilterForm_AndSectionTree
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_SearchResults_HaveLiveRegionWiring
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsLayout_StripsAkmlSqlPrefix_FromSidebarNavTitles
+AkmlSql.Site.Tests.Components.DocsPagesTests.DocsPages_NoBadges_ForDocsWithoutFreshMetadata
+AkmlSql.Site.Tests.Components.DownloadInstructionsTests.TheChecksumIsVisible_NotHiddenBehindADisclosure
+AkmlSql.Site.Tests.Components.DownloadInstructionsTests.TheFactsPanelAnswersTheQuestionsAskedBeforeClicking
+AkmlSql.Site.Tests.Components.DownloadInstructionsTests.TheInstallSteps_DoNotTellPeopleToCloseTheirEditorFirst
+AkmlSql.Site.Tests.Components.DownloadInstructionsTests.TheSilentInstallCommand_UsesSwitchesTheInstallerActuallyParses
+AkmlSql.Site.Tests.Components.DownloadPageProbeTests.Render_ProbesEachLocalReleaseAtMostOnce
+AkmlSql.Site.Tests.Components.DownloadPageProbeTests.Render_SizeIsResolvedOnceForThePrimaryCardOnly
+AkmlSql.Site.Tests.Components.DownloadPageProbeTests.Render_WithAHundredLocalReleases_StillProbesEachOnlyOnce
+AkmlSql.Site.Tests.Components.DownloadPageProbeTests.Render_WithCdnBackedReleases_ProbesOnlyThePrimaryCardsSize
+AkmlSql.Site.Tests.Components.DownloadPageTests.AdvertisedButMissingInstaller_FallsBackInsteadOfOfferingADeadLink
+AkmlSql.Site.Tests.Components.DownloadPageTests.BrokenManifest_DoesNotRenderReleaseCards
+AkmlSql.Site.Tests.Components.DownloadPageTests.BrokenManifest_RendersFriendlyFallbackWithRepoLink
+AkmlSql.Site.Tests.Components.DownloadPageTests.DownloadLink_AbsoluteUrl_IsNotRewritten
+AkmlSql.Site.Tests.Components.DownloadPageTests.LatestReleaseCard_RendersCopyHashButton_WithDataTarget
+AkmlSql.Site.Tests.Components.DownloadPageTests.LatestReleaseCard_RendersVersionDateHostsHashAndDownloadLink
+AkmlSql.Site.Tests.Components.DownloadPageTests.LatestReleaseCard_ShowsTheDownloadSizeReadFromTheFile
+AkmlSql.Site.Tests.Components.DownloadPageTests.LatestReleaseCard_TrimsTrailingPointZero_InMinimumOsVersion
+AkmlSql.Site.Tests.Components.DownloadPageTests.Minimum_os_version_reads_as_people_name_it(version: "10.0", shown: "10")
+AkmlSql.Site.Tests.Components.DownloadPageTests.Minimum_os_version_reads_as_people_name_it(version: "10.0.12345", shown: "10.0.12345")
+AkmlSql.Site.Tests.Components.DownloadPageTests.Minimum_os_version_reads_as_people_name_it(version: "10.0.17763", shown: "10 version 1809")
+AkmlSql.Site.Tests.Components.DownloadPageTests.Minimum_os_version_reads_as_people_name_it(version: "10.0.22000", shown: "11")
+AkmlSql.Site.Tests.Components.DownloadPageTests.OlderReleases_AreListedBelowLatest
+AkmlSql.Site.Tests.Components.DownloadPageTests.Page_AnnouncesSsms22Only_AndOffersNoVisualStudioInstall
+AkmlSql.Site.Tests.Components.DownloadPageTests.PreviousRelease_WithAMissingInstaller_IsOmittedFromTheHistory
+AkmlSql.Site.Tests.Components.DownloadPageTests.RemoteRelease_IsOfferedWithoutALocalFile
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.All_OffersEveryDownloadableRelease
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.AnUnreadableSettingsStore_StillServesThePageOnTheDocumentedDefault
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.LatestN_OffersTheNewestNAndProbesOnlyThose
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.LatestOnly_OffersExactlyOneReleaseAndRendersNoHistorySection
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.LatestOnly_WithAHundredReleases_CostsAtMostOneProbe
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.NExceedingTheManifest_ShowsAllOfThemWithoutError
+AkmlSql.Site.Tests.Components.DownloadPageVisibilityTests.WithNothingSaved_TheDefaultIsLatestThree_NotEverything
+AkmlSql.Site.Tests.Components.FeaturesPageTests.CapabilityCards_RenderStrokeIcons
+AkmlSql.Site.Tests.Components.FeaturesPageTests.MediaRowImages_AreLazyLoaded_WithExplicitDimensions
+AkmlSql.Site.Tests.Components.FeaturesPageTests.MediaRows_ShowTheSelectedSsmsFeatures_WithAlternatingLayout
+AkmlSql.Site.Tests.Components.FeaturesPageTests.Screenshots_OpenInThePageViewer_NotANewTab
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AFailedEmail_IsShownInTheInbox
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AFilledSpamTrap_LooksLikeSuccess_ButStoresNothing
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AForeignPageOrUnknownCategory_IsIgnored(path: "/feedback?from=//evil.example&about=")
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AForeignPageOrUnknownCategory_IsIgnored(path: "/feedback?from=https://evil.example/&about=nonsens"···)
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AfterSending_TheFormIsReplacedByAConfirmation
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.ALinkCanPreselectTheCategory_AndRecordWhereItCameFrom
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AMessageWithAnAddress_CanBeRepliedTo
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AnEmptyInbox_SaysSo
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AnIncompleteMessage_ComesBackWithTheProblemsNamed_AndNothingStored
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.AValidMessage_IsStored_AndTheVisitorIsRedirected
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.NoOpenMessages_NoBadge
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.OpenMessages_AreCountedBesideFeedbackOnEveryPortalPage
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheForm_OffersEveryCategory_AndMakesEmailOptional
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheHandledTab_OffersReopen
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheInbox_ShowsOpenMessagesWithTabCounts
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheResultOfAnAction_IsConfirmed(result: "deleted", expected: "Deleted")
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheResultOfAnAction_IsConfirmed(result: "handled", expected: "Marked handled.")
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheResultOfAnAction_IsConfirmed(result: "missing", expected: "no longer exists")
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.TheSpamTrap_IsHiddenFromPeopleAndScreenReaders
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.WhatAStrangerWrote_IsShownAsText
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.WithEmailOff_TheInboxExplainsHowToTurnItOn
+AkmlSql.Site.Tests.Components.FeedbackPagesTests.WithEmailOn_TheInboxOffersATest_AndNeverShowsThePassword
+AkmlSql.Site.Tests.Components.FooterDocLinksTests.EveryHardcodedDocLinkInTheLayoutResolvesToARealDocument
+AkmlSql.Site.Tests.Components.HomePageTests.FeatureCards_RenderStrokeIcons
+AkmlSql.Site.Tests.Components.HomePageTests.Hero_LeadsWithValue_NotACompetitorComparison
+AkmlSql.Site.Tests.Components.HomePageTests.Hero_PrimaryCta_NamesTheCurrentVersion
+AkmlSql.Site.Tests.Components.HomePageTests.Hero_RendersPrimaryAndSecondaryCtas
+AkmlSql.Site.Tests.Components.HomePageTests.Hero_RendersScreenshot_WithExplicitDimensions
+AkmlSql.Site.Tests.Components.HomePageTests.Hero_StatesTheFreeOpenSourceFact
+AkmlSql.Site.Tests.Components.HomePageTests.Page_AnnouncesSsms22Only_AndNoLongerOffersVisualStudio
+AkmlSql.Site.Tests.Components.HomePageTests.ProofStrip_CarriesVerifiableNumbers_ThatLinkToTheDocs
+AkmlSql.Site.Tests.Components.HomePageTests.TheComparisonIsMadeProperly_InItsOwnSection
+AkmlSql.Site.Tests.Components.HomePageTests.WithNoRelease_TheHeroStillRenders_WithoutAVersion
+AkmlSql.Site.Tests.Components.MainLayoutTests.Footer_RendersLinkColumns_WithHeadings
+AkmlSql.Site.Tests.Components.MainLayoutTests.Header_RendersThemeToggleButton_WithAccessibleLabel
+AkmlSql.Site.Tests.Components.MainLayoutTests.HeaderNav_HasAriaLabel_AndAllPrimaryLinks
+AkmlSql.Site.Tests.Components.MainLayoutTests.MobileNav_RendersCssOnlyCheckboxToggle_InsideLabel
+AkmlSql.Site.Tests.Components.MainLayoutTests.SkipLink_TargetsMainContentLandmark
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.ConsentBar_ChoicesAreRealKeyboardOperableButtons
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.ConsentBar_DoesNotStealOrTrapFocus
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.ConsentBar_IsAnAnnouncedLandmark
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.ConsentBar_LinksToTheNoticeWithDescriptiveText
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.PeopleFilters_HaveAssociatedLabels
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.PeopleTable_UsesScopedHeaders
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.PortalNavigation_IsALabelledLandmarkWithAnActiveMarker
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.PortalRangeSelector_IsALabelledLandmark
+AkmlSql.Site.Tests.Components.PortalAccessibilityTests.TheCanonicalTermIsIndividual_NotUser
+AkmlSql.Site.Tests.Components.PrivacyPageTests.AfterDeletion_ItConfirmsWhatWasRemoved
+AkmlSql.Site.Tests.Components.PrivacyPageTests.AfterDeletionWithNothingStored_ItSaysSoWithoutImplyingAnError
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItAttributesTheGeoDatabase
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItExplainsTheAppsErrorReports_WhereTheInstallerLinks
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItExplainsWhatHappensToFeedback_WhereTheFormLinks
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItIsPubliclyReachable_AndNotNoIndexed
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItListsEveryCookieTheSiteSets
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItOffersWithdrawalAndDeletion_WithoutJavaScript
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItSaysTheLookupHappensOnTheServer
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItStatesPlainlyThatTheFullAddressAndAnIdentifierAreStoredWithConsent
+AkmlSql.Site.Tests.Components.PrivacyPageTests.ItStatesThatDecliningChangesNothingAboutTheDownload
+AkmlSql.Site.Tests.Components.PrivacyPageTests.TheStatedRetentionFollowsTheConfiguredSetting(days: 30)
+AkmlSql.Site.Tests.Components.PrivacyPageTests.TheStatedRetentionFollowsTheConfiguredSetting(days: 365)
+AkmlSql.Site.Tests.Components.PrivacyPageTests.TheStatedRetentionFollowsTheConfiguredSetting(days: 90)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.CookieLifetime_DoesNotOutliveTheDataItPointsAt
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Deny_RemembersTheRefusalWithoutIssuingAnIdentifier
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Grant_IssuesAVisitorIdInTheCanonicalShape
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Grant_SetsBothCookies_WithASafeConfiguration
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_MapsOnlyExactValues_AndTreatsEverythingElseAsUnanswered(cookie: "", expected: Unknown)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_MapsOnlyExactValues_AndTreatsEverythingElseAsUnanswered(cookie: "denied", expected: Denied)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_MapsOnlyExactValues_AndTreatsEverythingElseAsUnanswered(cookie: "granted", expected: Granted)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_MapsOnlyExactValues_AndTreatsEverythingElseAsUnanswered(cookie: "GRANTED", expected: Unknown)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_MapsOnlyExactValues_AndTreatsEverythingElseAsUnanswered(cookie: "true", expected: Unknown)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_MapsOnlyExactValues_AndTreatsEverythingElseAsUnanswered(cookie: "yes", expected: Unknown)
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.Read_WithNoCookie_IsUnknown
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.ReadVisitorId_AcceptsAWellFormedId
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.ReadVisitorId_RejectsAnythingNotInTheCanonicalShape(cookie: "../../etc/passwd")
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.ReadVisitorId_RejectsAnythingNotInTheCanonicalShape(cookie: "<script>")
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.ReadVisitorId_RejectsAnythingNotInTheCanonicalShape(cookie: "ABCDEF01234567890ABCDEF012345678")
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.ReadVisitorId_RejectsAnythingNotInTheCanonicalShape(cookie: "g1234567890123456789012345678901")
+AkmlSql.Site.Tests.Consent.ConsentCookiesTests.ReadVisitorId_RejectsAnythingNotInTheCanonicalShape(cookie: "short")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.ALocalPath_IsHonoured(returnUrl: "/", expected: "/")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.ALocalPath_IsHonoured(returnUrl: "/docs/topics/getting-started", expected: "/docs/topics/getting-started")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.ALocalPath_IsHonoured(returnUrl: "/download", expected: "/download")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.ALocalPath_IsHonoured(returnUrl: "/download?utm_source=x", expected: "/download?utm_source=x")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "//evil.example")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "/\\evil.example")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "evil.example")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "http://evil.example/path")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "https://evil.example")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: "javascript:alert(1)")
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnExternalReturnUrl_CollapsesToTheHomePage(returnUrl: null)
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.AnUnrecognisedChoice_ChangesNothing
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.Denied_RecordsTheRefusalWithoutIssuingAnIdentifier
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.Forget_DeletesTheVisitorsRowsAndRevokesConsent
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.Forget_WithAMalformedCookie_DeletesNothingAndStillSucceeds
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.Forget_WithNothingStored_SucceedsIdempotently
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.Granted_IssuesBothCookies
+AkmlSql.Site.Tests.Consent.ConsentEndpointsTests.ItReturnsTheVisitorToWhereTheyWere
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.AVisitorWhoseCookieWasCleared_BecomesANewIndividual_NotTheOldOne
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.Denied_ResolvesDeniedAndIssuesNothing
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.Granted_WithAMalformedId_IssuesAFreshOne_AndDoesNotReuseTheBadValue
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.Granted_WithAValidId_ReusesIt
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.Granted_WithNoId_IssuesAFreshOne
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.NoCookies_ResolvesUnknownAndIssuesNothing
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.Resolution_NeverConsultsTheGeoDatabase
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.ResolutionIsIdenticalWhateverTheCountry(countryCode: "EG")
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.ResolutionIsIdenticalWhateverTheCountry(countryCode: "GB")
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.ResolutionIsIdenticalWhateverTheCountry(countryCode: null)
+AkmlSql.Site.Tests.Consent.ConsentMiddlewareTests.StateOf_WithNoResolution_DefaultsToUnknown
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.AnUnattributableRequest_IsNeverThrottled(ip: "")
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.AnUnattributableRequest_IsNeverThrottled(ip: null)
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.OneAddressCannotBlockAnother
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.RequestsBeyondTheAllowance_AreRefused
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.RequestsWithinTheAllowance_AreAdmitted
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.TheLimitIsSofterThanTheAdminLoginThrottle
+AkmlSql.Site.Tests.Consent.ConsentRateLimitTests.TheWindowRolls
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.ADeclinedDownload_IsStillRecordedAndStillCounted
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.DeleteVisitor_RemovesEveryRowAcrossBothTables
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.DeleteVisitor_WithNothingStored_IsAHarmlessNoOp
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.ReleaseVersion_IsStoredRegardlessOfConsent
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.TheGateIsInTheStore_NotMerelyInTheCaller
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.TheSameGateAppliesToDownloads
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.WithConsent_TheAddressAndIdentifierArePersisted
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.WithoutConsent_NoAddressAndNoIdentifierReachDisk(consent: Denied, expectedColumn: "denied")
+AkmlSql.Site.Tests.Consent.ConsentStorageGateTests.WithoutConsent_NoAddressAndNoIdentifierReachDisk(consent: Unknown, expectedColumn: "unknown")
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Ordering_LeadingNumericPrefixForcesPosition_ThenTitleOrdinalIgnoreCase
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_DiscoversTopLevelAndNestedMarkdownFiles
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_DiscoversUppercaseMarkdownExtension
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_EmptyContentRoot_ReturnsEmptyCatalog
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_ExtractsFirstH1AsTitle
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_FallsBackToFilenameTitle_WhenNoH1
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_HonorsExclusionList_FoldersAndFilesAtAnyDepth
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_IgnoresNonMarkdownFiles
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_MissingContentRoot_ReturnsEmptyCatalog
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Scan_Title_IgnoresHashLinesInsideFencedCodeBlocks
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Section_HonorsSectionTitlesOverride
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Section_ProductionConfig_TopLevelDeveloperReference_TopicsUserGuides
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Section_TopLevelFilesMapToGuides_SubfoldersTitleCased
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Sections_AreOrderedByNameOrdinalIgnoreCase
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Sections_NoSectionOrder_FallsBackToAlphabetical
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Sections_SectionOrder_PinsListedFirst_UnlistedAlphabeticalAfter
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Slug_DuplicatesGetNumericSuffixes
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Slug_IsRelativePathWithoutExtension_Lowercase_SeparatorsToDashes
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Slug_RestrictsToUrlSafeCharacters
+AkmlSql.Site.Tests.Docs.DocsCatalogTests.Slug_ThreeWayDedup_ThirdFileGetsDash3
+AkmlSql.Site.Tests.Docs.DocsContentServiceTests.Build_AppliesFreshnessBadges_FromWwwrootDocsMetadata
+AkmlSql.Site.Tests.Docs.DocsContentServiceTests.Build_MalformedDocsMetadata_Tolerated_NoBadges
+AkmlSql.Site.Tests.Docs.DocsContentServiceTests.Build_MissingContentRoots_YieldsEmptyService
+AkmlSql.Site.Tests.Docs.DocsContentServiceTests.Build_OrdersSections_PerSectionOrderConfig
+AkmlSql.Site.Tests.Docs.DocsContentServiceTests.Build_ResolvesImagesAgainstAssetsRoot_DropsDuplicateH1_AndCapturesToc
+AkmlSql.Site.Tests.Docs.DocsContentServiceTests.Build_WithoutDocsMetadata_LeavesAllBadgesNone
+AkmlSql.Site.Tests.Docs.DocsExclusionSyncTests.ContributorDocsAreExcludedFromThePublicSite
+AkmlSql.Site.Tests.Docs.DocsExclusionSyncTests.EveryAppsettingsExclusionHasAMatchingCsprojRemove
+AkmlSql.Site.Tests.Docs.DocsExclusionSyncTests.EveryCsprojRemoveHasAMatchingAppsettingsExclusion
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.ComputeBadge_AddedOnWindowEdge_IsNew
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.ComputeBadge_AddedOutside_UpdatedWithin_IsUpdated
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.ComputeBadge_AddedToday_IsNew
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.ComputeBadge_BothDatesJustOutside_IsNone
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.ComputeBadge_NewBeatsUpdated_WhenBothWithinWindow
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.ComputeBadge_UpdatedOnWindowEdge_IsUpdated
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Load_MalformedFile_YieldsEmpty
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Load_MissingFile_YieldsEmpty
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Parse_AllEntriesInvalid_YieldsEmpty
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Parse_EntryWithBadDates_Skipped_ValidEntriesSurvive
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Parse_MalformedJson_YieldsEmpty
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Parse_MissingDocsProperty_YieldsEmpty
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Parse_NonObjectRoot_YieldsEmpty
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.Parse_ValidPayload_ResolvesDates_CaseInsensitivePathLookup
+AkmlSql.Site.Tests.Docs.DocsMetadataTests.TryGet_UnknownPath_ReturnsFalse
+AkmlSql.Site.Tests.Docs.DocsNavigationTests.Neighbours_LinkAcrossASectionBoundary
+AkmlSql.Site.Tests.Docs.DocsNavigationTests.Neighbours_OfADocumentNotInTheCorpus_AreBothNull
+AkmlSql.Site.Tests.Docs.DocsNavigationTests.Neighbours_OfASingleDocumentCorpus_AreBothNull
+AkmlSql.Site.Tests.Docs.DocsNavigationTests.Neighbours_OmitPreviousAtTheStartAndNextAtTheEnd
+AkmlSql.Site.Tests.Docs.DocsNavigationTests.ReadingOrder_FollowsSectionOrder_ThenDocumentOrder
+AkmlSql.Site.Tests.Docs.F1SlugTests.EveryF1AnchorIsAHeadingIdOfItsDocument
+AkmlSql.Site.Tests.Docs.F1SlugTests.EveryF1TopicNamesAPublishedDocument
+AkmlSql.Site.Tests.Docs.F1SlugTests.EveryOptionsPageHasAHelpTopic
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.ContentImages_LazyLoad
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.CSharpFence_GetsServerSideColorCodeHighlighting
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Extracts_Headings_AndWhitespaceNormalizedPlainText
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.ImagesThatAreAlreadyLinks_AreNotWrappedTwice
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.LinkToExcludedOrUnknownFile_IsLeftAsIs
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.MalformedMarkdown_RendersWhatParses_WithoutThrowing
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.PublishedImages_OpenInTheScreenshotViewer
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeImage_BackslashDotDotEscape_ToSiblingPrefixFolder_IsNotRewritten
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeImage_IsLeftAsIs_WhenAssetMissing
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeImage_ResolvesAgainstSeparateAssetsRoot
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeImage_ResolvesToContentAssetPath_WhenAssetExists
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeMarkdownLink_PreservesFragment
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeMarkdownLink_ResolvesAgainstSourceFolder
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.RelativeMarkdownLink_RewrittenToSiteRoute
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_AddsPermalinkAnchors_ToH2ThroughH4
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_CapturesH2Anchors_WithExactMarkdigIds
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_DoesNotAddAPermalinkToH1
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_DropsLeadingH1_WhenItMatchesTheDocumentTitle
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_KeepsLeadingH1_WhenItDoesNotMatchTheDocumentTitle
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_KeepsLeadingH1_WhenNoTitleProvided
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Render_PermalinkAnchors_AreHiddenFromAssistiveTech
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Renders_Headings_Lists_Tables_AndExternalLinks
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Sanitization_AllowsHttpsMailtoFragmentAndRelativeLinks
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Sanitization_NeutralizesFileProtocolUrls
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Sanitization_NeutralizesProtocolRelativeUrls_ForLinksAndImages
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Sanitization_RawHtmlNeverBecomesLiveMarkup
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Sanitization_StripsJavascriptUrls
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.SqlFence_GetsServerSideColorCodeHighlighting
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Summary_IsEmpty_WhenDocumentHasNoParagraph
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.Summary_IsFirstParagraphText_ForMetaDescription
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.UnpublishedImages_AreNotWrapped(markdown: "![Missing](images/missing.png)")
+AkmlSql.Site.Tests.Docs.MarkdownRendererTests.UnpublishedImages_AreNotWrapped(markdown: "![Remote](https://example.com/remote.png)")
+AkmlSql.Site.Tests.DocsScreenshotsTests.DocsScreenshots_AreIdenticalToTheSitesDarkCaptures
+AkmlSql.Site.Tests.DocsScreenshotsTests.EveryImageATopicPageShows_Exists
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.AnUnknownId_SaysSo
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.AnythingButAKnownTab_IsDropped(show: "")
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.AnythingButAKnownTab_IsDropped(show: "handled&result=x")
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.AnythingButAKnownTab_IsDropped(show: "https://evil.example")
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.AnythingButAKnownTab_IsDropped(show: "open")
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.Delete_DeletesIt
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.MarkHandled_HandlesIt_AndReturnsToTheOpenTab
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.Reopen_OpensItAgain_AndStaysOnTheTabItCameFrom
+AkmlSql.Site.Tests.Feedback.FeedbackEndpointsTests.TheTestEmail_ReportsFailureWhenEmailIsOff
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.AFailingServer_IsReportedWithItsOwnWords
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.AMisconfiguredAddress_FailsTheEmailNotTheSite
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.ATestEmail_IsSentAndRecorded
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.HeaderLikeTextInTheMessage_StaysInTheBody
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.NotConfigured_NothingIsQueuedOrSent
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.OneFailure_DoesNotStopLaterMessages
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.QueuedMessages_AreSentInTheBackground
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.ReplyingReachesTheVisitor_WhenTheyLeftAnAddress
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.TheBodyCarriesTheMessageAndItsContext_InTheOwnersTime
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.TheSender_FallsBackSensibly(from: "", userName: "", expected: "owner@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.TheSender_FallsBackSensibly(from: "", userName: "sender@example.com", expected: "sender@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.TheSender_FallsBackSensibly(from: "noreply@example.com", userName: "sender@example.com", expected: "noreply@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.TheSubjectIsTheCategoryAndIdOnly
+AkmlSql.Site.Tests.Feedback.FeedbackNotifierTests.WithoutAnAddress_ThereIsNoReplyTo_AndTheBodySaysSo
+AkmlSql.Site.Tests.Feedback.FeedbackRateLimitTests.AddressesAreLimitedIndependently
+AkmlSql.Site.Tests.Feedback.FeedbackRateLimitTests.NoAddress_IsNotLimited(ip: "")
+AkmlSql.Site.Tests.Feedback.FeedbackRateLimitTests.NoAddress_IsNotLimited(ip: null)
+AkmlSql.Site.Tests.Feedback.FeedbackRateLimitTests.TheAllowanceComesBackAfterTheWindow
+AkmlSql.Site.Tests.Feedback.FeedbackRateLimitTests.TheAllowanceIsGranted_ThenRefused
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.ActionsOnAnUnknownId_ReportFailureInsteadOfThrowing
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.AnAddedMessage_IsOpenAndReadsBackIntact
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.AnEmptyInbox_CountsZero
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.ARetiredCategory_StillDisplays
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.Delete_RemovesTheMessageForGood
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.Handling_MovesAMessageBetweenTheTabs_AndBackAgain
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.ItSharesTheAnalyticsDatabaseWithoutDisturbingIt
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.MessagesAreListedNewestFirst
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.MessagesSurviveARestart
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.NoAddressOrVisitorIdIsEverStored
+AkmlSql.Site.Tests.Feedback.FeedbackStoreTests.TheListIsCapped
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.ABadPage_NeverRejectsTheMessage
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.ALocalPage_IsKeptAsAPath(raw: " /features ", expected: "/features")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.ALocalPage_IsKeptAsAPath(raw: "/docs/formatting", expected: "/docs/formatting")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.ALocalPage_IsKeptAsAPath(raw: "/download", expected: "/download")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.ALocalPage_IsKeptAsAPath(raw: "/download?ref=mail#top", expected: "/download")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AMessageAndACategory_AreEnough
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AMessageAtTheLimit_IsAccepted
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnEmptyOrTinyMessage_IsRejected(message: "    ")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnEmptyOrTinyMessage_IsRejected(message: "")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnEmptyOrTinyMessage_IsRejected(message: "hi")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnEmptyOrTinyMessage_IsRejected(message: null)
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnOverlongEmail_IsRejected
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnOverlongMessage_IsRejected
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnOverlongPage_IsCut
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnUnknownCategory_IsRejected(key: "")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnUnknownCategory_IsRejected(key: "<script>")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnUnknownCategory_IsRejected(key: "spam")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnUnknownCategory_IsRejected(key: null)
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "//evil.example/")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "/\\evil.example")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "/<script>")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "/a\"onmouseover=\"x")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "download")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: "https://evil.example/")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButALocalPath_IsDropped(raw: null)
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButOnePlainAddress_IsRejected(email: "a@example.com, b@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButOnePlainAddress_IsRejected(email: "not an email")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButOnePlainAddress_IsRejected(email: "Someone <someone@example.com>")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButOnePlainAddress_IsRejected(email: "someone@")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButOnePlainAddress_IsRejected(email: "someone@example.com\nBcc: victim@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AnythingButOnePlainAddress_IsRejected(email: "someone@example.com\r\nBcc: victim@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AValidEmail_IsKept(raw: "  someone@example.com  ", expected: "someone@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.AValidEmail_IsKept(raw: "someone@example.com", expected: "someone@example.com")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.EveryProblemIsReportedAtOnce
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.NoEmail_IsFine(email: "   ")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.NoEmail_IsFine(email: "")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.NoEmail_IsFine(email: null)
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.Preview_ShortensLongMessages
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.TheCategoryIsMatchedLoosely(key: " download ")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.TheCategoryIsMatchedLoosely(key: "DOWNLOAD")
+AkmlSql.Site.Tests.Feedback.FeedbackValidationTests.TheMessageIsTrimmed
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.ApiOnlyReleaseRendersDirectNativeLinkWithVersionSizeAndCountsOnce
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.CombinedHistoryKeepsLatestUniqueAndPreservesReleaseNotes
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.MalformedResponseRetainsManifestFallback(payload: "[]")
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.MalformedResponseRetainsManifestFallback(payload: "{}")
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.MalformedResponseRetainsManifestFallback(payload: "not json")
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.RefreshCachesMetadataAndSurvivesApiFailureAndRestart
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.UnusableAssetDoesNotReplaceLastGood(url: "https://example.invalid/setup.exe", name: "AKMLSQLSetup-2.0.0.exe", prerelease: False)
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.UnusableAssetDoesNotReplaceLastGood(url: "https://github.com/mohamedkhamis/AKML-SQL/releases"···, name: "AKMLSQLSetup-2.0.0.exe", prerelease: False)
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.UnusableAssetDoesNotReplaceLastGood(url: "https://github.com/mohamedkhamis/AKML-SQL/releases"···, name: "AKMLSQLSetup-2.0.0.exe", prerelease: True)
+AkmlSql.Site.Tests.Releases.LatestGitHubReleaseTests.UnusableAssetDoesNotReplaceLastGood(url: "https://github.com/mohamedkhamis/AKML-SQL/releases"···, name: "updater.exe", prerelease: False)
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.DisplaySize_ForACdnOnlyRelease_IsNullRatherThanGuessed
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.DisplaySize_ForALocalRelease_ReadsTheFile
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.FormatSize_MatchesTheDisplayUsedAcrossThePageAndPortal(bytes: 2048, expected: "2 KB")
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.FormatSize_MatchesTheDisplayUsedAcrossThePageAndPortal(bytes: 512, expected: "512 B")
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.FormatSize_MatchesTheDisplayUsedAcrossThePageAndPortal(bytes: 69483456, expected: "66.3 MB")
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_LocalOnlyWithTheFileMissing_IsFalse
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_LocalOnlyWithThePresentFile_IsTrue
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_WithACdnMirror_DoesNotTouchTheFilesystemAtAll
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_WithACdnMirrorAndNoLocalFile_IsTrue
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_WithAnAbsoluteNonCdnUrl_IsTrueWithoutProbing
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_WithAnEmptyCdnUrl_FallsBackToTheLocalProbe
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.IsDownloadable_WithNullRelease_IsFalse
+AkmlSql.Site.Tests.Releases.ReleaseAvailabilityTests.TrackedUrl_RoutesLocalReleasesThroughTheCountingEndpoint
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.CdnUrl_AbsoluteHttps_Parsed
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.CdnUrl_NotAbsoluteHttp_TreatedAsNull_EntrySurvives(cdnUrl: "//evil.example.com/x.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.CdnUrl_NotAbsoluteHttp_TreatedAsNull_EntrySurvives(cdnUrl: "downloads/AKMLSQLSetup-1.0.0.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.CdnUrl_NotAbsoluteHttp_TreatedAsNull_EntrySurvives(cdnUrl: "file:///C:/x.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.CdnUrl_NotAbsoluteHttp_TreatedAsNull_EntrySurvives(cdnUrl: "javascript:alert(1)")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_HttpHttpsOrSiteRelative_AcceptsEntry(downloadUrl: "/downloads/AKMLSQLSetup-1.0.0.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_HttpHttpsOrSiteRelative_AcceptsEntry(downloadUrl: "downloads/AKMLSQLSetup-1.0.0.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_HttpHttpsOrSiteRelative_AcceptsEntry(downloadUrl: "http://cdn.example.com/AKMLSQLSetup.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_HttpHttpsOrSiteRelative_AcceptsEntry(downloadUrl: "https://github.com/mohamedkhamis/AKML-SQL/releases"···)
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_NotHttpOrStrictSiteRelative_RejectsEntry(downloadUrl: "//evil.example.com/AKMLSQLSetup.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_NotHttpOrStrictSiteRelative_RejectsEntry(downloadUrl: "data:text/html;base64,PHNjcmlwdD4=")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_NotHttpOrStrictSiteRelative_RejectsEntry(downloadUrl: "downloads/AKML:Setup.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_NotHttpOrStrictSiteRelative_RejectsEntry(downloadUrl: "file:///C:/installers/AKMLSQLSetup.exe")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.DownloadUrl_NotHttpOrStrictSiteRelative_RejectsEntry(downloadUrl: "javascript:alert(1)")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.EmptyReleasesArray_ReturnsUnavailableFallback
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.InvalidJson_ReturnsUnavailableFallback
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.MissingFile_ReturnsUnavailableFallback
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.Parse_NonObjectRoot_ReturnsUnavailableFallback(json: "[]")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.Parse_NonObjectRoot_ReturnsUnavailableFallback(json: "\"x\"")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.Parse_NonObjectRoot_ReturnsUnavailableFallback(json: "42")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.Parse_NonObjectRoot_ReturnsUnavailableFallback(json: "null")
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.ReleaseNotesUrl_Invalid_TreatedAsNull_EntrySurvives
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.SchemaViolatingEntries_AreSkipped_WhileValidOnesSurvive
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.UnavailableSingleton_IsEmptyFallback
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.ValidManifest_OptionalFields_DefaultToNull
+AkmlSql.Site.Tests.Releases.ReleasesManifestTests.ValidManifest_ParsesNewestFirst_WithIsLatestDerived
+AkmlSql.Site.Tests.Releases.UpdateManifestConsistencyTests.Manifest_AndNewestReleaseEntry_NameSameVersionFileAndHash
+AkmlSql.Site.Tests.Releases.UpdateManifestConsistencyTests.Manifest_DownloadUrl_IsAlwaysAbsoluteHttps
+AkmlSql.Site.Tests.SanityTests.SiteAssemblyLoads
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.CrawlingIsAllowedForPublicContent
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.NonContentPathsAreDisallowed(path: "/admin")
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.NonContentPathsAreDisallowed(path: "/dl/")
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.NonContentPathsAreDisallowed(path: "/health")
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.SitemapLineTracksAHostChange
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.SitemapLineUsesTheConfiguredHost
+AkmlSql.Site.Tests.Seo.RobotsTxtTests.TrailingSlashOnTheBaseUrlDoesNotDoubleUp
+AkmlSql.Site.Tests.Seo.SitemapTests.Build_DatesTheHomeAndDocsIndex_FromTheNewestDocument
+AkmlSql.Site.Tests.Seo.SitemapTests.Build_EmitsLastMod_FromTheDocumentGitDates
+AkmlSql.Site.Tests.Seo.SitemapTests.Build_IncludesStaticRoutes_AndAllDocRoutes
+AkmlSql.Site.Tests.Seo.SitemapTests.Build_OmitsLastMod_ForDocumentsWithNoDates
+AkmlSql.Site.Tests.Seo.SitemapTests.Build_TrimsTrailingSlash_FromBaseUrl
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.ACountLargerThanTheList_ReturnsAllOfThem_NotAnError
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.All_SelectsEverything
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.AnEmptyOrNullManifest_ReturnsEmptyWithoutThrowing(mode: All)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.AnEmptyOrNullManifest_ReturnsEmptyWithoutThrowing(mode: LatestN)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.AnEmptyOrNullManifest_ReturnsEmptyWithoutThrowing(mode: LatestOnly)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Label_ReadsAsPlainLanguageForTheSettingsPage
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.LatestN_SelectsTheNewestNInOriginalOrder
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.LatestOnly_SelectsExactlyTheNewest
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.NoMode_EverReordersTheList(mode: All)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.NoMode_EverReordersTheList(mode: LatestN)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.NoMode_EverReordersTheList(mode: LatestOnly)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Parse_FallsBackToTheDefaultForAnythingUnrecognised(stored: "", expected: LatestN)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Parse_FallsBackToTheDefaultForAnythingUnrecognised(stored: "All", expected: All)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Parse_FallsBackToTheDefaultForAnythingUnrecognised(stored: "latestn", expected: LatestN)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Parse_FallsBackToTheDefaultForAnythingUnrecognised(stored: "LatestOnly", expected: LatestOnly)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Parse_FallsBackToTheDefaultForAnythingUnrecognised(stored: "nonsense", expected: LatestN)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.Parse_FallsBackToTheDefaultForAnythingUnrecognised(stored: null, expected: LatestN)
+AkmlSql.Site.Tests.Settings.ReleaseVisibilityTests.TheDefault_IsNotShowEverything
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Current_IsReadableWithoutTouchingTheDatabase
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Load_WhenTheTableIsMissing_FallsBackToDefaultsWithoutThrowing
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Load_WithAGarbageStoredValue_FallsBackPerKeyRatherThanFailing
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Load_WithNothingSaved_AppliesTheDocumentedDefaults
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_ThenReopen_PersistsAcrossRestart
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_TwiceInSuccession_LastWinsAndRecordsWhoAndWhen
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithCountOutOfRange_IsRejectedAndWritesNothing(count: 0)
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithCountOutOfRange_IsRejectedAndWritesNothing(count: -1)
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithCountOutOfRange_IsRejectedAndWritesNothing(count: 51)
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithCountOutOfRange_IsRejectedAndWritesNothing(count: 999)
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithRetentionOutOfRange_IsRejectedAndWritesNothing(days: 0)
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithRetentionOutOfRange_IsRejectedAndWritesNothing(days: -5)
+AkmlSql.Site.Tests.Settings.SiteSettingsStoreTests.Save_WithRetentionOutOfRange_IsRejectedAndWritesNothing(days: 99999)
+AkmlSql.Site.Tests.SiteCssSanityTests.EveryVarReferenceHasADefinitionOrAFallback
+AkmlSql.Site.Tests.SiteCssSanityTests.NoCustomPropertyIsDefinedAsItself
+AkmlSql.Site.Tests.SiteCssSanityTests.TheSpacingScaleResolvesToRealLengths
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_BatchCapDropsEverything_Returns204WithoutEnqueuing
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_Disabled_Returns404AndAcceptsNothing
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_EmptyBatch_Returns204AndEnqueuesNothing(json: "{ \"installId\": \"abc\" }")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_EmptyBatch_Returns204AndEnqueuesNothing(json: "{ \"installId\": \"abc\", \"events\": [] }")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_EnforcesConfiguredCaps
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_IngestKeyConfigured_MatchingHeader_Returns204AndEnqueues
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_IngestKeyConfigured_MissingHeader_Returns404
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_IngestKeyConfigured_WrongHeader_Returns404
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_MalformedOrWrongShapeJson_Returns400(json: "[1,2,3]")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_MalformedOrWrongShapeJson_Returns400(json: "{ not json")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_MalformedOrWrongShapeJson_Returns400(json: "null")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_MissingEventTimestamp_UsesTheReceiveTime
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_NoIngestKeyConfigured_AcceptsWithoutHeader
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_OversizedBodyWithoutContentLength_Returns400
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_OversizedContentLength_Returns400WithoutReading
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Handle_ValidBatch_Returns204AndEnqueuesOneNormalizedBatch
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "   ", expected: null)
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: " fatal ", expected: "Fatal")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "", expected: null)
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "Debug", expected: "Debug")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "eRRoR", expected: "Error")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "INFORMATION", expected: "Information")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "verbose", expected: "Verbose")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "warn", expected: null)
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: "Warning", expected: "Warning")
+AkmlSql.Site.Tests.Telemetry.ClientErrorEndpointTests.Normalize_MapsSerilogLevelNamesOnly(input: null, expected: null)
+AkmlSql.Site.Tests.Telemetry.ClientErrorStoreTests.DistinctInstalls_ExcludesNullAndEmpty
+AkmlSql.Site.Tests.Telemetry.ClientErrorStoreTests.LogClientErrors_RoundTrips_IntoSummary
+AkmlSql.Site.Tests.Telemetry.ClientErrorStoreTests.Prune_RemovesOldClientErrorRows
+AkmlSql.Site.Tests.Telemetry.ClientErrorStoreTests.Summary_ClampsTheRecentLimit
+AkmlSql.Site.Tests.Telemetry.ClientErrorStoreTests.Summary_LevelFilterAppliesToRecentOnly
+AkmlSql.Site.Tests.Telemetry.ClientErrorStoreTests.Summary_WindowIsTodayInclusive
+AkmlSql.Site.Tests.ThemeCssSyncTests.SiteAndWebThemeFilesAreIdentical(fileName: "dark.css")
+AkmlSql.Site.Tests.ThemeCssSyncTests.SiteAndWebThemeFilesAreIdentical(fileName: "high-contrast.css")
+AkmlSql.Site.Tests.ThemeCssSyncTests.SiteAndWebThemeFilesAreIdentical(fileName: "light.css")

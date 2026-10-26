@@ -54,6 +54,9 @@ public class SessionManager
                 existing.Kind = kind;
                 existing.SearchPath = System.Array.Empty<string>();
                 existing.ServerVersionText = string.Empty;
+                // Spec 043 follow-up (review): who connected it is noted again by the caller (SessionPasswordCopy.NoteConnected);
+                // until then no page may copy the new connection's password.
+                existing.BridgeOrigin = null;
                 return existing;
             });
     }
@@ -163,6 +166,26 @@ public class SessionState
 
     /// <summary>Spec 042 (FR-061): the PostgreSQL search path (<c>current_schemas(false)</c>) at connect time and after <c>SET search_path</c>.</summary>
     public string[] SearchPath { get; set; } = System.Array.Empty<string>();
+
+    /// <summary>
+    /// Spec 043 follow-up (review): the web page that connected the session over the bridge (<c>BridgeConnection.Current</c>:
+    /// <c>page:{id}</c>, or <c>socket:{id}</c> for a client that sends no page id); null when it was connected over the named
+    /// pipe. A new query tab may take this session's password only from the same page (<c>SessionPasswordCopy</c>). It goes
+    /// with the session when the tab is closed (<see cref="SessionManager.RemoveSession"/>).
+    /// </summary>
+    public string? BridgeOrigin { get; set; }
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 3): the SQL Server server, login and authentication the session's schema caches were
+    /// loaded for (<c>ConnectionChangedHandler.ServerIdentity</c>: never the password or the database); null until the first
+    /// <c>ConnectionChanged</c>. A connect whose identity differs drops the session's caches, or a database of the same
+    /// name on the previous server would be offered for the new one. It survives <see cref="SessionManager.Disconnect"/>, which
+    /// clears only the connection string, so a tab reattached to its own server keeps its caches and a tab disconnected and then
+    /// connected elsewhere does not. Spec 043 follow-up (review, round 4): a PostgreSQL connect notes its own
+    /// (<c>ConnectionChangedHandler.PostgresIdentity</c>: <c>pg://host:port</c> and the role), which never equals a SQL Server
+    /// one, so a move between the kinds always counts as a move to another server.
+    /// </summary>
+    public string? SchemaIdentity { get; set; }
 
     // The PostgreSQL transaction state (FR-016) lives on the session's persistent connection
     // (SessionConnection.TransactionState): it belongs to the connection that holds the transaction.

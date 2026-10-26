@@ -189,7 +189,10 @@ try {
                 }
                 $manifest.generatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
                 $manifest.releases = @($entry) + @($manifest.releases)
-                ($manifest | ConvertTo-Json -Depth 6) | Set-Content $manifestPath -Encoding UTF8
+                # No BOM (UTF8Encoding $false): Set-Content -Encoding UTF8 writes one under Windows
+                # PowerShell, and strict JSON readers (JSON.parse over the text, Python's json) reject it.
+                $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+                [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 6), $utf8NoBom)
 
                 # Spec 036 US5 / FR-036: the updater manifest is emitted from the SAME $entry
                 # object — one write, two files, no second computation of version or hash, so the
@@ -205,7 +208,7 @@ try {
                     minimumOsVersion = $entry.minimumOsVersion
                     sha256Hash       = $entry.sha256Hash
                 }
-                ($updateManifest | ConvertTo-Json -Depth 4) | Set-Content (Join-Path $RepoRoot 'src\AkmlSql.Site\wwwroot\update-manifest.json') -Encoding UTF8
+                [System.IO.File]::WriteAllText((Join-Path $RepoRoot 'src\AkmlSql.Site\wwwroot\update-manifest.json'), ($updateManifest | ConvertTo-Json -Depth 4), $utf8NoBom)
                 Log "Update manifest written for $version (downloadUrl $($updateManifest.downloadUrl))"
 
                 Log "Staged release $version -> $fileName (sha256 $($sha.Substring(0,12))..., $sizeMb MB)"

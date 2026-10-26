@@ -82,7 +82,7 @@ public sealed class Pgex002DestructiveOutsideTransaction : PgRuleBase
     public Pgex002DestructiveOutsideTransaction() : base("PGEX002", "Execution", "DROP or TRUNCATE outside a transaction", DiagnosticSeverity.Hint,
         "In autocommit mode each statement commits as it finishes, so a DROP or TRUNCATE cannot be undone. PostgreSQL, unlike most databases, runs DDL inside a "
         + "transaction: BEGIN; ... ROLLBACK; lets you check the effect first.",
-        "sql-drop") { }
+        "sql-begin") { }
 
     protected override void Run(PgAnalysisContext ctx, PgReporter report)
     {

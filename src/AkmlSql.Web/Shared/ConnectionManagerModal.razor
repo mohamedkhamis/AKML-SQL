@@ -1,5 +1,6 @@
 @*
-    Phase 4 (web connection manager) — the app-global "Connect to SQL Server" modal. Hosted once
+    Phase 4 (web connection manager) — the app-global "Connect to database" modal (spec 043: one dialog for SQL Server
+    and PostgreSQL, the kind chosen inside). Hosted once
     in MainLayout; opened by IConnectionManagerController.Open() (command palette / Settings /
     StatusBar). Two panes: saved-connections list (left) + connect form (right). Actions:
     Test / Save / Delete / Connect.
@@ -31,12 +32,14 @@
 @if (_open)
 {
     <div class="akml-scrim akml-connmgr-scrim" @onclick="Close" data-testid="connection-manager-scrim">
-        <div class="akml-dialog akml-connmgr-panel" role="dialog" aria-modal="true" aria-label="Connection manager"
+        @* Review of US1 (finding 29): named by its visible title, so a screen reader announces "Connect to database". *@
+        <div class="akml-dialog akml-connmgr-panel" role="dialog" aria-modal="true" aria-labelledby="akml-connmgr-title"
              tabindex="-1" @ref="_panelRef" @onkeydown="OnPanelKeyDown"
              @onclick:stopPropagation="true" data-testid="connection-manager">
 
             <div class="akml-connmgr-header">
-                <span class="akml-connmgr-title" data-testid="conn-title">@(_kind == DatabaseKind.PostgreSql ? "Connect to PostgreSQL" : "Connect to SQL Server")</span>
+                @* Spec 043 (FR-024): one title for both kinds; the kind is the first choice in the form. *@
+                <h2 class="akml-connmgr-title" id="akml-connmgr-title" data-testid="conn-title">Connect to database</h2>
                 <button type="button" class="akml-connmgr-close" @onclick="Close"
                         aria-label="Close" data-testid="conn-close-btn"><Icon Name="x" /></button>
             </div>
@@ -62,20 +65,27 @@
                             {
                                 <li class="akml-connmgr-row @(c.Id == _selectedId ? "selected" : "")"
                                     @onclick="@(() => OnSavedRowClickAsync(c))" data-testid="conn-row" data-conn-id="@c.Id">
-                                    <span class="akml-connmgr-row-name">@c.Name</span>
-                                    <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
-                                    <span class="akml-connmgr-row-badge" data-testid="conn-row-kind"
-                                          title="@(c.Kind == DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server")">@(c.Kind == DatabaseKind.PostgreSql ? "PG" : c.WindowsAuth ? "Win" : "SQL")</span>
+                                    @* Review of US1 (finding 30, FR-030): a button, so the saved rows are in the Tab order and Enter or Space
+                                       picks one (its click reaches the row's handler). *@
+                                    <button type="button" class="akml-connmgr-rowbtn" data-testid="conn-row-pick"
+                                            aria-current="@(c.Id == _selectedId ? "true" : null)">
+                                        <span class="akml-connmgr-row-name">@c.Name</span>
+                                        <span class="akml-connmgr-row-sub">@c.Server / @c.Database</span>
+                                        <span class="akml-connmgr-row-badge" data-testid="conn-row-kind"
+                                              title="@(c.Kind == DatabaseKind.PostgreSql ? "PostgreSQL" : "SQL Server")">@(c.Kind == DatabaseKind.PostgreSql ? "PG" : c.WindowsAuth ? "Win" : "SQL")</span>
+                                    </button>
                                 </li>
                             }
                         </ul>
                     }
                 </div>
 
-                <!-- RIGHT: connect form -->
+                <!-- RIGHT: connect form. Spec 043 (FR-024, research R16): the kind first, then four groups in the order a
+                     connection is described - Server, Sign-in, Database, Security - with paired fields side by side, so the
+                     SQL Server form fits a 1280x720 window without scrolling and the trust choice is never below the fold. -->
                 <div class="akml-connmgr-form-pane">
                     @* Spec 042 (FR-001): every connection has a kind, chosen here. The choice is two buttons, not a colour. *@
-                    <div class="akml-field akml-connmgr-field">
+                    <div class="akml-field akml-connmgr-field akml-connmgr-kindrow">
                         <span class="akml-field-label" id="conn-kind-label">Database kind</span>
                         <div class="akml-connmgr-kind" role="group" aria-labelledby="conn-kind-label">
                             <button type="button" class="akml-btn akml-connmgr-kindbtn @(_kind == DatabaseKind.SqlServer ? "selected" : "")"
@@ -93,78 +103,50 @@
                                           EngineConnected="@(PairedEngine is null || PairedEngine.State == BridgeState.Open)"
                                           EngineVersion="@PairedEngine?.EngineVersion" />
                     </div>
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-field-label" for="conn-name">Display name</label>
-                        <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
-                               placeholder="e.g. Local master" data-testid="conn-name-input" />
-                    </div>
                     @if (_kind == DatabaseKind.PostgreSql)
                     {
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-host">Host</label>
-                            <input id="conn-pg-host" class="akml-input" @bind="_pgHost" @bind:event="oninput"
-                                   @onchange="OnPgIdentityChanged"
-                                   placeholder="db.example.com, 10.0.0.5 or [::1]" data-testid="conn-pg-host" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-port">Port</label>
-                            <input id="conn-pg-port" class="akml-input" type="number" min="1" max="65535"
-                                   @bind="_pgPort" @bind:event="oninput" @onchange="OnPgIdentityChanged" data-testid="conn-pg-port" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-database">Database</label>
-                            @* Typed, or picked from the server's list (the refresh button, or automatically once a password
-                               is remembered): the same choice SQL Server's form offers. *@
-                            <div class="akml-connmgr-db-row">
-                                <input id="conn-pg-database" class="akml-input akml-connmgr-select" @bind="_pgDatabase" @bind:event="oninput"
-                                       list="conn-pg-database-list" autocomplete="off" placeholder="postgres" data-testid="conn-pg-database" />
-                                <datalist id="conn-pg-database-list">
-                                    @foreach (var db in _databases)
-                                    {
-                                        <option value="@db"></option>
-                                    }
-                                </datalist>
-                                <button type="button" class="akml-btn akml-connmgr-db-refresh"
-                                        @onclick="LoadPgDatabasesAsync" disabled="@(_busy || _dbLoading)"
-                                        title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
-                                        data-testid="conn-pg-database-refresh"><Icon Name="refresh-cw" /></button>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-server">
+                            <legend>Server</legend>
+                            <div class="akml-connmgr-grid akml-connmgr-grid--hostport">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-name">Display name</label>
+                                    <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
+                                           placeholder="e.g. Local master" data-testid="conn-name-input" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-host">Host</label>
+                                    <input id="conn-pg-host" class="akml-input" @bind="_pgHost" @bind:event="oninput"
+                                           @onchange="OnPgIdentityChanged"
+                                           placeholder="db.example.com, 10.0.0.5 or [::1]" data-testid="conn-pg-host" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-port">Port</label>
+                                    <input id="conn-pg-port" class="akml-input" type="number" min="1" max="65535"
+                                           @bind="_pgPort" @bind:event="oninput" @onchange="OnPgIdentityChanged" data-testid="conn-pg-port" />
+                                </div>
                             </div>
-                            @if (!string.IsNullOrEmpty(_dbMessage))
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-signin">
+                            <legend>Sign-in</legend>
+                            <div class="akml-connmgr-grid">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-user">User name</label>
+                                    <input id="conn-pg-user" class="akml-input" @bind="_pgUser" @bind:event="oninput"
+                                           @onchange="OnPgIdentityChanged" autocomplete="off" data-testid="conn-pg-user" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-password">Password</label>
+                                    <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
+                                           @bind="_pgPassword" @bind:event="oninput"
+                                           placeholder="@(UsesRememberedPgPassword ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
+                                </div>
+                            </div>
+                            @if (PasswordMissingForForm)
                             {
-                                <span class="akml-connmgr-hint" data-testid="conn-pg-database-hint">@_dbMessage</span>
+                                @* Spec 043 follow-up (review, round 3): why this sign-in needs its password typed. *@
+                                <span class="akml-connmgr-hint" data-testid="@(MissingPasswordRefused ? "conn-pg-refused-hint" : "conn-pg-missing-hint")">@MissingPasswordHint</span>
                             }
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-user">User name</label>
-                            <input id="conn-pg-user" class="akml-input" @bind="_pgUser" @bind:event="oninput"
-                                   @onchange="OnPgIdentityChanged" autocomplete="off" data-testid="conn-pg-user" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-password">Password</label>
-                            <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
-                                   @bind="_pgPassword" @bind:event="oninput"
-                                   placeholder="@(_pgHasRemembered ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
                             <span class="akml-connmgr-hint">Not saved in the browser. @(_pgRemember ? "It will be kept on the engine machine." : "Re-entered each time you connect.")</span>
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-pg-sslmode">TLS mode</label>
-                            <select id="conn-pg-sslmode" class="akml-select" @bind="_pgSslMode" data-testid="conn-pg-sslmode">
-                                @foreach (var mode in SavedSqlConnection.SslModes)
-                                {
-                                    <option value="@mode">@mode</option>
-                                }
-                            </select>
-                        </div>
-                        @if (_pgSslMode is "verify-ca" or "verify-full")
-                        {
-                            <div class="akml-field akml-connmgr-field">
-                                <label class="akml-field-label" for="conn-pg-rootcert">CA certificate path</label>
-                                <input id="conn-pg-rootcert" class="akml-input" @bind="_pgRootCert" @bind:event="oninput"
-                                       placeholder="C:\certs\root.crt" data-testid="conn-pg-rootcert" />
-                                <span class="akml-connmgr-hint">A path on the engine machine.</span>
-                            </div>
-                        }
-                        <div class="akml-field akml-connmgr-field">
                             <label class="akml-connmgr-radio" for="conn-pg-remember">
                                 <input id="conn-pg-remember" type="checkbox" @bind="_pgRemember" data-testid="conn-pg-remember" />
                                 Remember the password on the engine machine
@@ -175,103 +157,207 @@
                             </span>
                             @if (_pgHasRemembered)
                             {
-                                <button type="button" class="akml-btn" @onclick="ForgetPasswordAsync" disabled="@_busy"
+                                <button type="button" class="akml-btn akml-connmgr-forget" @onclick="ForgetPasswordAsync" disabled="@_busy"
                                         data-testid="conn-pg-forget">Forget the remembered password</button>
                             }
-                        </div>
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-database">
+                            <legend>Database</legend>
+                            <div class="akml-field akml-connmgr-field">
+                                <label class="akml-field-label" for="conn-pg-database">Database</label>
+                                @* Typed, or picked from the server's list (the refresh button, or automatically once a password
+                                   is remembered): the same choice SQL Server's form offers. *@
+                                <div class="akml-connmgr-db-row">
+                                    <input id="conn-pg-database" class="akml-input akml-connmgr-select" @bind="_pgDatabase" @bind:event="oninput"
+                                           list="conn-pg-database-list" autocomplete="off" placeholder="postgres" data-testid="conn-pg-database" />
+                                    <datalist id="conn-pg-database-list">
+                                        @foreach (var db in _databases)
+                                        {
+                                            <option value="@db"></option>
+                                        }
+                                    </datalist>
+                                    <button type="button" class="akml-btn akml-connmgr-db-refresh"
+                                            @onclick="LoadPgDatabasesAsync" disabled="@(_busy || _dbLoading)"
+                                            title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
+                                            data-testid="conn-pg-database-refresh"><Icon Name="refresh-cw" /></button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(_dbMessage))
+                                {
+                                    <span class="akml-connmgr-hint" data-testid="conn-pg-database-hint">@_dbMessage</span>
+                                }
+                            </div>
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-security">
+                            <legend>Security</legend>
+                            <div class="akml-connmgr-grid">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-pg-sslmode">TLS mode</label>
+                                    <select id="conn-pg-sslmode" class="akml-select" @bind="_pgSslMode" data-testid="conn-pg-sslmode">
+                                        @foreach (var mode in SavedSqlConnection.SslModes)
+                                        {
+                                            <option value="@mode">@mode</option>
+                                        }
+                                    </select>
+                                </div>
+                                @if (_pgSslMode is "verify-ca" or "verify-full")
+                                {
+                                    <div class="akml-field akml-connmgr-field">
+                                        <label class="akml-field-label" for="conn-pg-rootcert">CA certificate path</label>
+                                        <input id="conn-pg-rootcert" class="akml-input" @bind="_pgRootCert" @bind:event="oninput"
+                                               placeholder="C:\certs\root.crt" data-testid="conn-pg-rootcert" />
+                                        <span class="akml-connmgr-hint">A path on the engine machine.</span>
+                                    </div>
+                                }
+                            </div>
+                        </fieldset>
                     }
                     else
                     {
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-field-label" for="conn-server">Server</label>
-                        <input id="conn-server" class="akml-input" @bind="_server" @bind:event="oninput"
-                               @onchange="OnServerChanged"
-                               placeholder="localhost, server\instance, or a remote host,port" data-testid="conn-server-input" />
-                    </div>
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-field-label" for="conn-database">Database</label>
-                        <div class="akml-connmgr-db-row">
-                            <select id="conn-database" class="akml-select akml-connmgr-select"
-                                    @bind="_database" disabled="@_dbLoading" title="@(_dbLoading ? "Loading databases…" : null)" data-testid="conn-database-select">
-                                @* Always keep the current value selectable — a saved/typed DB may not be
-                                   in the freshly-loaded list (or the list may not be loaded yet). *@
-                                @if (!string.IsNullOrEmpty(_database) &&
-                                     !_databases.Contains(_database, StringComparer.OrdinalIgnoreCase))
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-server">
+                            <legend>Server</legend>
+                            <div class="akml-connmgr-grid">
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-name">Display name</label>
+                                    <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
+                                           placeholder="e.g. Local master" data-testid="conn-name-input" />
+                                </div>
+                                <div class="akml-field akml-connmgr-field">
+                                    <label class="akml-field-label" for="conn-server">Server</label>
+                                    <input id="conn-server" class="akml-input" @bind="_server" @bind:event="oninput"
+                                           @onchange="OnServerChanged"
+                                           placeholder="localhost, server\instance or host,port" data-testid="conn-server-input" />
+                                </div>
+                            </div>
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-signin">
+                            <legend>Sign-in</legend>
+                            <div class="akml-connmgr-auth" role="radiogroup" aria-label="Authentication">
+                                <label class="akml-connmgr-radio">
+                                    <input type="radio" name="connauth" checked="@_windowsAuth"
+                                           @onchange="@(() => SetAuth(true))" data-testid="conn-auth-windows" />
+                                    Windows authentication
+                                </label>
+                                <label class="akml-connmgr-radio">
+                                    <input type="radio" name="connauth" checked="@(!_windowsAuth)"
+                                           @onchange="@(() => SetAuth(false))" data-testid="conn-auth-sql" />
+                                    SQL Server authentication
+                                </label>
+                            </div>
+                            @* The one rule that decides remote connections, stated where the choice is made. Once SQL Server
+                               authentication is chosen it has been followed, and the room goes to the remember option. *@
+                            @if (_windowsAuth)
+                            {
+                                <span class="akml-connmgr-hint" data-testid="conn-auth-hint">
+                                    Windows authentication works for a SQL Server on the engine's own computer.
+                                    For a remote server, use SQL Server authentication.
+                                </span>
+                            }
+                            else
+                            {
+                                <div class="akml-connmgr-grid">
+                                    <div class="akml-field akml-connmgr-field">
+                                        <label class="akml-field-label" for="conn-login">Login</label>
+                                        <input id="conn-login" class="akml-input" @bind="_login" @bind:event="oninput"
+                                               @onchange="OnSqlLoginChanged" autocomplete="off" data-testid="conn-login-input" />
+                                    </div>
+                                    <div class="akml-field akml-connmgr-field">
+                                        <label class="akml-field-label" for="conn-password">Password</label>
+                                        <input id="conn-password" class="akml-input" type="password" autocomplete="new-password"
+                                               @bind="_password" @bind:event="oninput"
+                                               placeholder="@SqlPasswordPlaceholder" data-testid="conn-password-input" />
+                                    </div>
+                                </div>
+                                @if (PasswordMissingForForm)
                                 {
-                                    <option value="@_database" selected>@_database</option>
+                                    @* Spec 043 follow-up (review, round 3): why this sign-in needs its password typed. *@
+                                    <span class="akml-connmgr-hint" data-testid="@(MissingPasswordRefused ? "conn-sql-refused-hint" : "conn-sql-missing-hint")">@MissingPasswordHint</span>
                                 }
-                                @foreach (var db in _databases)
+                                @if (SqlConn.EngineRemembersSqlServerPasswords)
                                 {
-                                    @* The list arrives after the value is bound: without `selected` the browser shows the first
-                                       option while the connection uses _database, so the dialog connected to another database
-                                       than the one it showed. *@
-                                    <option value="@db" selected="@string.Equals(db, _database, StringComparison.OrdinalIgnoreCase)">@db</option>
+                                    @* One line each: the SQL Server form must still fit 1280x720 with SQL authentication (ConnectDialogTests). *@
+                                    <div class="akml-connmgr-remember">
+                                        <label class="akml-connmgr-radio" for="conn-sql-remember">
+                                            @* Review, round 2: the user's own change is counted, so a late answer from the engine never undoes it. *@
+                                            <input id="conn-sql-remember" type="checkbox" checked="@_sqlRemember" @onchange="OnSqlRememberChanged"
+                                                   data-testid="conn-sql-remember" aria-describedby="conn-sql-remember-help" />
+                                            Remember the password on the engine machine
+                                        </label>
+                                        <span class="akml-connmgr-hint" id="conn-sql-remember-help" data-testid="conn-sql-remember-help">
+                                            (never in the browser; any client paired with this engine can use it)
+                                        </span>
+                                        @if (_sqlHasRemembered)
+                                        {
+                                            <button type="button" class="akml-btn akml-connmgr-forget" @onclick="ForgetSqlPasswordAsync" disabled="@_busy"
+                                                    data-testid="conn-sql-forget">Forget it</button>
+                                        }
+                                    </div>
                                 }
-                            </select>
-                            <button type="button" class="akml-btn akml-connmgr-db-refresh"
-                                    @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
-                                    title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
-                                    data-testid="conn-database-refresh"><Icon Name="refresh-cw" /></button>
-                        </div>
-                        @if (!string.IsNullOrEmpty(_dbMessage))
-                        {
-                            <span class="akml-connmgr-hint" data-testid="conn-database-hint">@_dbMessage</span>
-                        }
-                        @* Spec 032 FR-033: the engine enumerates databases under ITS service
-                           account — databases it lacks grants for are silently absent, which
-                           surprised even the campaign (the sandbox needed a grant to appear). *@
-                        <span class="akml-connmgr-hint" data-testid="conn-database-scope-hint">
-                            @(_windowsAuth
-                                ? "With Windows authentication only the databases the engine's account can open are listed. For another database, grant that account access or use SQL Server authentication."
-                                : "Lists the databases this login can open.")
-                        </span>
-                    </div>
-                    <div class="akml-field akml-connmgr-field">
-                        <span class="akml-field-label">Authentication</span>
-                        <label class="akml-connmgr-radio">
-                            <input type="radio" name="connauth" checked="@_windowsAuth"
-                                   @onchange="@(() => SetAuth(true))" data-testid="conn-auth-windows" />
-                            Windows authentication
-                        </label>
-                        <label class="akml-connmgr-radio">
-                            <input type="radio" name="connauth" checked="@(!_windowsAuth)"
-                                   @onchange="@(() => SetAuth(false))" data-testid="conn-auth-sql" />
-                            SQL Server authentication
-                        </label>
-                        @* The one rule that decides remote connections, stated where the choice is made. *@
-                        <span class="akml-connmgr-hint" data-testid="conn-auth-hint">
-                            Windows authentication works for a SQL Server on the engine's own computer.
-                            For a remote server, use SQL Server authentication.
-                        </span>
-                    </div>
-                    @if (!_windowsAuth)
-                    {
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-login">Login</label>
-                            <input id="conn-login" class="akml-input" @bind="_login" @bind:event="oninput"
-                                   data-testid="conn-login-input" />
-                        </div>
-                        <div class="akml-field akml-connmgr-field">
-                            <label class="akml-field-label" for="conn-password">Password</label>
-                            <input id="conn-password" class="akml-input" type="password"
-                                   @bind="_password" @bind:event="oninput" data-testid="conn-password-input" />
-                            <span class="akml-connmgr-hint">Not saved — re-entered each time you connect.</span>
-                        </div>
+                                else
+                                {
+                                    <span class="akml-connmgr-hint">The password is not saved; it is re-entered each time you connect.</span>
+                                }
+                            }
+                        </fieldset>
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-database">
+                            <legend>Database</legend>
+                            <div class="akml-field akml-connmgr-field">
+                                <label class="akml-field-label" for="conn-database">Database</label>
+                                <div class="akml-connmgr-db-row">
+                                    <select id="conn-database" class="akml-select akml-connmgr-select"
+                                            @bind="_database" disabled="@_dbLoading" title="@(_dbLoading ? "Loading databases…" : null)" data-testid="conn-database-select">
+                                        @* Always keep the current value selectable — a saved/typed DB may not be
+                                           in the freshly-loaded list (or the list may not be loaded yet). *@
+                                        @if (!string.IsNullOrEmpty(_database) &&
+                                             !_databases.Contains(_database, StringComparer.OrdinalIgnoreCase))
+                                        {
+                                            <option value="@_database" selected>@_database</option>
+                                        }
+                                        @foreach (var db in _databases)
+                                        {
+                                            @* The list arrives after the value is bound: without `selected` the browser shows the first
+                                               option while the connection uses _database, so the dialog connected to another database
+                                               than the one it showed. *@
+                                            <option value="@db" selected="@string.Equals(db, _database, StringComparison.OrdinalIgnoreCase)">@db</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="akml-btn akml-connmgr-db-refresh"
+                                            @onclick="LoadDatabasesAsync" disabled="@(_busy || _dbLoading)"
+                                            title="@(_busy || _dbLoading ? "Wait for the current connection operation" : "Load the database list from the server")"
+                                            data-testid="conn-database-refresh"><Icon Name="refresh-cw" /></button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(_dbMessage))
+                                {
+                                    <span class="akml-connmgr-hint" data-testid="conn-database-hint">@_dbMessage</span>
+                                }
+                                @* Spec 032 FR-033: the engine enumerates databases under ITS service
+                                   account — databases it lacks grants for are silently absent, which
+                                   surprised even the campaign (the sandbox needed a grant to appear). *@
+                                <span class="akml-connmgr-hint" data-testid="conn-database-scope-hint">
+                                    @(_windowsAuth
+                                        ? "With Windows authentication only the databases the engine's account can open are listed. For another database, grant that account access or use SQL Server authentication."
+                                        : "Lists the databases this login can open.")
+                                </span>
+                            </div>
+                        </fieldset>
+                        @* Review WEB-02: a remote server's certificate is validated unless the user says otherwise, for this
+                           connection only. Spec 043 (FR-026, FR-028): kept with the saved connection; a server on the engine's own
+                           computer is never validated, so there the choice is disabled and says why. *@
+                        <fieldset class="akml-connmgr-group" data-testid="conn-group-security">
+                            <legend>Security</legend>
+                            <label class="akml-connmgr-radio" for="conn-trust-cert">
+                                @* Review, round 3: a change asks the engine again whether it holds a password for this connection (the
+                                   answer follows the certificate checking) and decides whether another tab's password can be copied. *@
+                                <input id="conn-trust-cert" type="checkbox" checked="@_trustServerCertificate" @onchange="OnTrustChanged"
+                                       disabled="@TrustIsMoot" data-testid="conn-trust-cert" />
+                                Trust the server certificate without validating it
+                            </label>
+                            <span class="akml-connmgr-hint" data-testid="conn-trust-cert-help">
+                                @(TrustIsMoot
+                                    ? "This server is on the engine's own computer, so its certificate is never validated and this choice makes no difference."
+                                    : "The connection is always encrypted. Tick this only for a remote server with a self-signed certificate you trust: without validation, anyone on the network path could pose as the server. A server on the engine's own computer is never validated.")
+                            </span>
+                        </fieldset>
                     }
-                    @* Review WEB-02: a remote server's certificate is validated unless the user says otherwise, for this connection only. *@
-                    <div class="akml-field akml-connmgr-field">
-                        <label class="akml-connmgr-radio" for="conn-trust-cert">
-                            <input id="conn-trust-cert" type="checkbox" @bind="_trustServerCertificate" data-testid="conn-trust-cert" />
-                            Trust the server certificate without validating it
-                        </label>
-                        <span class="akml-connmgr-hint" data-testid="conn-trust-cert-help">
-                            The connection is always encrypted. Tick this only for a remote server with a self-signed certificate you
-                            trust: without validation, anyone on the network path could pose as the server. A SQL Server on the
-                            engine's own computer is never validated.
-                        </span>
-                    </div>
-                    }
-
                 </div>
             </div>
 
@@ -305,10 +391,11 @@
        from here (Delete…) shows above it. */
     .akml-scrim.akml-connmgr-scrim { z-index: 1000; }
 
-    /* A shell dialog (.akml-dialog in shell.css) sized for the list and the form side by side. */
+    /* A shell dialog (.akml-dialog in shell.css) sized for the list and the form side by side. Spec 043 (R16): tall
+       enough for the whole SQL Server form in a 1280x720 window, never taller than the window. */
     .akml-connmgr-panel {
         width: 720px;
-        height: 500px;
+        height: min(600px, calc(100vh - 48px));
         overflow: hidden;
     }
 
@@ -321,7 +408,7 @@
         border-bottom: 1px solid var(--akml-border-default);
         background-color: var(--akml-surface-sidebar);
     }
-    .akml-connmgr-title { font-weight: 600; }
+    .akml-connmgr-title { font-weight: 600; font-size: inherit; margin: 0; }
     .akml-connmgr-close {
         background: none; border: none; color: var(--akml-text-secondary);
         font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: var(--akml-scalar-radius-xs);
@@ -371,14 +458,20 @@
         overflow-y: auto; min-height: 0; flex: 1 1 auto;
     }
     .akml-connmgr-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        grid-template-areas: "name badge" "sub badge";
-        column-gap: var(--akml-scalar-spacing-xs);
-        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
         cursor: pointer;
         border-bottom: 1px solid var(--akml-border-subtle);
     }
+    .akml-connmgr-rowbtn {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas: "name badge" "sub badge";
+        column-gap: var(--akml-scalar-spacing-xs);
+        width: 100%;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        background: none; border: 0; border-radius: 0;
+        color: inherit; font: inherit; text-align: left; cursor: pointer;
+    }
+    .akml-connmgr-rowbtn:focus-visible { outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
     .akml-connmgr-row:hover { background-color: var(--akml-surface-hover); }
     .akml-connmgr-row.selected {
         background-color: var(--akml-surface-selection);
@@ -393,19 +486,54 @@
     .akml-connmgr-row-badge {
         grid-area: badge; align-self: center;
         font-size: 10px; padding: 0 4px; border-radius: var(--akml-scalar-radius-xs);
-        background-color: var(--akml-surface-hover); color: var(--akml-text-secondary);
+        /* Spec 043 (FR-032): the neutral badge tokens (4.5:1 in every theme; this read 4.0:1 in dark). */
+        background-color: var(--akml-badge-neutral); color: var(--akml-badge-neutraltext);
     }
 
     .akml-connmgr-form-pane {
         display: flex;
         flex-direction: column;
-        gap: var(--akml-scalar-spacing-s);
-        padding: var(--akml-scalar-spacing-l);
+        gap: var(--akml-scalar-spacing-m);
+        padding: var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-l);
         overflow-y: auto;
         min-height: 0;
         background-color: var(--akml-surface-panel);
     }
     .akml-connmgr-field { margin-bottom: 0; }
+
+    /* Spec 043 (R16): the four groups. A fieldset with its legend styled like the list heading; fields inside a group
+       sit two to a row (three for PostgreSQL's name, host and port). */
+    .akml-connmgr-group {
+        display: flex;
+        flex-direction: column;
+        gap: var(--akml-scalar-spacing-xs);
+        margin: 0;
+        padding: 0;
+        border: none;
+        min-width: 0;
+    }
+    .akml-connmgr-group > legend {
+        padding: 0;
+        margin-bottom: var(--akml-scalar-spacing-xs);
+        color: var(--akml-text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .akml-connmgr-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+    }
+    .akml-connmgr-grid--hostport { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 88px; }
+    .akml-connmgr-auth { display: flex; flex-wrap: wrap; column-gap: var(--akml-scalar-spacing-l); }
+    .akml-connmgr-auth .akml-connmgr-radio { margin-top: 0; }
+    .akml-connmgr-forget { align-self: flex-start; }
+    /* The SQL Server remember option: checkbox, its note and Forget on one wrapping row (the form must fit 1280x720). */
+    .akml-connmgr-remember { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--akml-scalar-spacing-xs); }
+    .akml-connmgr-remember .akml-connmgr-radio { display: inline; margin-top: 0; }
+    .akml-connmgr-radio input:disabled { cursor: not-allowed; }
     /* Database dropdown + its inline refresh button share one row. */
     .akml-connmgr-db-row { display: flex; gap: var(--akml-scalar-spacing-xs); align-items: stretch; }
     .akml-connmgr-select { flex: 1 1 auto; min-width: 0; cursor: pointer; }
@@ -452,6 +580,13 @@
 
 @code {
     private bool _open;
+
+    // Spec 043 (T056): the query tab session this opening connects (the tab whose run asked, else the active tab's), and
+    // whether it did — the run that opened the dialog goes on only after a successful connect.
+    private SqlSessionState? _target;
+    private bool _connected;
+
+    private SqlSessionState? TargetSession => _target ?? SqlConn.ActiveSession;
     private bool _busy;
     private bool _focusOnNextRender;
 
@@ -486,6 +621,139 @@
     private string _login = string.Empty;
     private string _password = string.Empty;
     private bool _trustServerCertificate;
+    private bool _sqlRemember;                    // spec 043 follow-up: keep the SQL login's password on the engine machine
+    private bool _sqlHasRememberedFlag;           // the engine holds a password for _sqlRememberedFor
+    private string? _sqlRememberedFor;            // the server and login that answer was about
+
+    // Review, round 3: the effective certificate choice is part of it — the engine answers for the password it would fill into a
+    // connection with that choice (a server on the engine's machine is always trusted, so the checkbox changes nothing there).
+    private string SqlIdentityKey => (_server ?? string.Empty).Trim().ToLowerInvariant() + "|" + (_login ?? string.Empty).Trim().ToLowerInvariant()
+        + "|" + (ConnectionBinding.EffectiveTrust(_server, _trustServerCertificate) ? "trust" : "validate");
+
+    // The engine's answer counts only for the server, login and certificate choice it was asked about: one edited since has none yet.
+    private bool _sqlHasRemembered
+    {
+        get => _sqlHasRememberedFlag && _sqlRememberedFor == SqlIdentityKey;
+        set { _sqlHasRememberedFlag = value; _sqlRememberedFor = value ? SqlIdentityKey : null; }
+    }
+
+    // Review, round 2: the user's change to the Remember checkbox stands against a later answer about a remembered password.
+    // Review, round 4: any change since the form was loaded (SelectSaved, NewConnection, the kind switch; the prefill goes through
+    // the first two), not only one made while the engine was being asked — an untick before the question (then the trust choice
+    // or the login changed, and back) is the user's choice too, so the box is never ticked for them again. A load resets it.
+    private bool _sqlRememberChosen;
+
+    // SQL authentication can go without a typed password when the engine remembers one and Remember is on (review: unticked,
+    // the password is typed — the engine's copy is not used, and a connect then forgets it), or when the tab was opened from a
+    // connected tab whose password the engine can copy.
+    private bool SqlPasswordMissing => !_windowsAuth && string.IsNullOrEmpty(_password) && !UsesRememberedSqlPassword && !CanCopySqlPassword;
+
+    // The engine holds a password for this server and login, and the form uses it — unless the tab being connected is missing its
+    // password for this sign-in (review, round 2; round 3: PasswordMissingForForm).
+    private bool UsesRememberedSqlPassword => _sqlHasRemembered && _sqlRemember && !PasswordMissingForForm;
+
+    // The connection the form names, without the password (compared with a tab's binding; never sent). Review, round 3: with its
+    // certificate choices, which decide whether another tab's password may be copied into it.
+    private ConnectionTarget SqlIdentity() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth, User: _login,
+        TrustServerCertificate: _trustServerCertificate);
+
+    private ConnectionTarget PgIdentity() => new(DatabaseKind.PostgreSql, _pgHost, _pgDatabase, User: _pgUser, Port: _pgPort,
+        SslMode: _pgSslMode, RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert);
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 3): the sign-in the tab being connected is missing its password for — the one its mark
+    /// names (<see cref="SqlSessionState.PasswordMissingFor"/>), else its binding. A tab with no binding yet has only the mark: the
+    /// Status bar's restore of a remembered login on a fresh page, refused by the server, leaves the tab with no connection.
+    /// </summary>
+    private ConnectionBinding? MissingPasswordSignIn =>
+        TargetSession is { PasswordMissing: true } session ? session.PasswordMissingFor ?? session.Binding : null;
+
+    /// <summary>
+    /// Spec 043 follow-up (review, round 2): the tab being connected is missing its password — the server refused the one the
+    /// engine supplied (remembered or copied), or the engine had none — and the form still names that sign-in (SQL Server:
+    /// server and login; PostgreSQL: host, port and user). The engine's remembered password is then not used: no list, test or
+    /// connect goes out without a typed password, so opening the dialog never costs one more refused login (each counts towards
+    /// a lockout). Remember stays as it is, so the password typed now replaces the stored one. Another server or login follows
+    /// the normal rules. Such a tab has no copy source (the mark drops it). Review, round 3: compared with the mark's own record of
+    /// the sign-in (<see cref="MissingPasswordSignIn"/>), so a tab with no binding is covered too.
+    /// </summary>
+    private bool PasswordMissingForForm =>
+        MissingPasswordSignIn is { } signIn
+        && signIn.SameSignInAs(_kind == DatabaseKind.PostgreSql ? PgIdentity() : SqlIdentity());
+
+    // Review, round 3: the server refused the password the engine supplied, rather than the engine having none (said differently).
+    private bool MissingPasswordRefused => TargetSession?.PasswordRefused == true;
+
+    // Remember is named only where the form offers it (PostgreSQL always; SQL Server with credentials.sqlserver.v1).
+    private string MissingPasswordHint
+    {
+        get
+        {
+            bool remember = _kind == DatabaseKind.PostgreSql || SqlConn.EngineRemembersSqlServerPasswords;
+            return MissingPasswordRefused
+                ? "The password the engine had for this login was not accepted. Type the current one" + (remember ? "; with Remember on, it replaces the old one." : ".")
+                : "The engine has no password it can use for this login. Type it" + (remember ? "; with Remember on, the engine keeps it." : ".");
+        }
+    }
+
+    /// <summary>
+    /// Spec 043 follow-up (review): a New query tab's dialog tests, lists and connects with the password of the tab it was opened
+    /// from (nothing typed). Review, round 2: only on an engine with <c>session.copy.v2</c> (<see cref="ISqlConnectionService.EngineCopiesSessionPasswords"/>),
+    /// only while the form names that tab's server and login (the engine would refuse the copy, and then use a password it
+    /// remembers instead), and not while the engine remembers a password for the form's login with Remember unticked — the user
+    /// has said not to use that one, and a refused copy would fall back to it. Otherwise the password is typed. Review, round 3:
+    /// and only with that tab's certificate checking (<see cref="ConnectionBinding.CopiesPasswordTo"/>: the effective "Trust server
+    /// certificate"), which the engine's copy requires too — and never for a sign-in whose password is missing.
+    /// </summary>
+    private bool CanCopySqlPassword =>
+        !_windowsAuth && SqlConn.EngineCopiesSessionPasswords && !PasswordMissingForForm
+        && CopySourceBinding is { } source && source.CopiesPasswordTo(SqlIdentity())
+        && !(_sqlHasRemembered && !_sqlRemember);
+
+    // PostgreSQL's form: the same source, for the same host, port and user (its case too), TLS mode and root certificate.
+    private bool CanCopyPgPassword =>
+        SqlConn.EngineCopiesSessionPasswords && !PasswordMissingForForm
+        && CopySourceBinding is { } source && source.CopiesPasswordTo(PgIdentity());
+
+    // The connection of the tab the one being connected was opened from (New query), while that tab is open. Review, round 4:
+    // and connected — the engine copies only from a session that holds a connection, and a tab whose connection was lost keeps
+    // its binding (MarkConnectionLost), so the binding alone would offer a password the engine then refuses to copy.
+    private ConnectionBinding? CopySourceBinding =>
+        TargetSession?.CopyPasswordFrom is { } sourceId && SqlConn.FindSession(sourceId) is { IsConnected: true } source ? source.Binding : null;
+
+    private string? SqlPasswordPlaceholder =>
+        UsesRememberedSqlPassword ? "Remembered on the engine machine"
+        : CanCopySqlPassword ? "The same as the query tab this one was opened from"
+        : null;
+
+    private void OnSqlRememberChanged(ChangeEventArgs e)
+    {
+        _sqlRemember = e.Value is bool on ? on : bool.TryParse(e.Value?.ToString(), out var parsed) && parsed;
+        _sqlRememberChosen = true;
+    }
+
+    // Review, round 3: the certificate choice changed. The engine is asked again about a SQL login (its answer follows the
+    // certificate checking), and whether another tab's password can be copied follows it (CanCopySqlPassword).
+    private async Task OnTrustChanged(ChangeEventArgs e)
+    {
+        _trustServerCertificate = e.Value is bool on ? on : bool.TryParse(e.Value?.ToString(), out var parsed) && parsed;
+        if (_kind == DatabaseKind.SqlServer && !_windowsAuth) await RefreshRememberedAsync();
+    }
+
+    // ── PostgreSQL's remembered password (spec 042, FR-105), with the same round 2 rule as SQL Server's ──
+    private bool UsesRememberedPgPassword => _pgHasRemembered && !PasswordMissingForForm;
+
+    // Nothing typed for the sign-in whose password is missing: the engine would send the refused one again, or none at all.
+    private bool PgPasswordNeeded => PasswordMissingForForm && string.IsNullOrEmpty(_pgPassword);
+
+    private const string PgPasswordNeededText = "Enter the current password for this user (it is not stored in the browser).";
+
+    // Notices that outlive the dialog (it closes on a successful connect). Optional: a host without the service shows none.
+    private INotificationService? Notifications => Services.GetService(typeof(INotificationService)) as INotificationService;
+
+    // Spec 043 (FR-028): a SQL Server on the engine's own computer is never validated (SqlConnectionService trusts loopback
+    // whatever the flag says), so for such a server the checkbox is disabled and its help says why. The saved value is kept.
+    private bool TrustIsMoot => SqlConnectionService.IsLoopbackServer(_server);
 
     // Database dropdown (spec 030). _databases is the list fetched from the server; the current
     // _database is always kept selectable even when absent from (or ahead of) the fetched list.
@@ -507,17 +775,30 @@
     {
         // Re-entrant guard: opening while already open must not reset the form.
         if (_open) return;
+        _target = Controller.TargetSession;
+        _connected = false;
+        var prefill = Controller.Prefill;
         _message = null;
         await ReloadAsync();
         // Pre-fill from the active (most-recently-used) saved row, if any.
         var activeId = await Store.GetActiveIdAsync();
         var active = string.IsNullOrEmpty(activeId) ? null : _saved.FirstOrDefault(c => c.Id == activeId);
 
-        // Spec 042 (T064): "Connect to PostgreSQL…" asks for the PostgreSQL form; otherwise the active row decides.
+        // Spec 042 (T064) / spec 043 (contracts/web-ui.md §5; review of US1, findings 28 and 34): a kind asked for decides the
+        // form; otherwise the tab being connected does: its connection when it has one (filled in, the password still to type),
+        // else SQL Server. The most recently used saved row is shown when it is of that kind.
         var requested = Controller.RequestedKind;
-        if (requested.HasValue && (active == null || active.Kind != requested.Value)) NewConnection(requested.Value);
-        else if (active != null) SelectSaved(active);
-        else NewConnection();
+        // A restored tab whose connection needs a password (a run asked): the form reconnects it to exactly where it was.
+        bool exact = prefill != null;
+        if (prefill == null && requested == null && (_target ?? SqlConn.ActiveSession)?.Binding is { } current) prefill = current.Clone();
+        // Spec 043 follow-up (review, round 3): a tab with no connection whose sign-in is missing its password (the Status bar's
+        // restore of a remembered login, refused) opens on that sign-in — of either kind — so the form names it and asks for it.
+        if (prefill == null && requested == null && TargetSession is { Binding: null, PasswordMissing: true, PasswordMissingFor: { } missing })
+            prefill = missing.Clone();
+        var kind = requested ?? DatabaseKind.SqlServer;
+        if (active != null && active.Kind == kind) SelectSaved(active);
+        else NewConnection(kind);
+        if (prefill != null) ApplyPrefill(prefill, exact);
         _open = true;
         _focusOnNextRender = true;
         StateHasChanged();
@@ -527,7 +808,7 @@
         // password and click refresh. Failures land in _dbMessage, never blocking the dialog.
         if (_kind == DatabaseKind.SqlServer && _windowsAuth)
             await LoadDatabasesAsync();
-        else if (_kind == DatabaseKind.PostgreSql)
+        else
             await RefreshRememberedAsync();
     });
 
@@ -551,6 +832,9 @@
         _login = string.Empty;
         _password = string.Empty;
         _trustServerCertificate = false;
+        _sqlRemember = false;
+        _sqlRememberChosen = false;
+        _sqlHasRemembered = false;
         ResetPostgresFields();
         _message = null;
         ClearDatabaseList();
@@ -558,6 +842,7 @@
 
     private void ResetPostgresFields()
     {
+        _rememberedAsk++;   // a remembered-password answer still on its way is about the form before this reset
         _pgHost = "localhost";
         _pgPort = SavedSqlConnection.DefaultPostgresPort;
         _pgDatabase = "postgres";
@@ -575,6 +860,7 @@
     {
         if (_kind == kind) return;
         if (kind == DatabaseKind.PostgreSql && !SqlConn.EngineSupportsPostgres) return;
+        _rememberedAsk++;   // a remembered-password answer still on its way belongs to the other kind's form
         _kind = kind;
         _message = null;
         if (_selectedId != null) _name = string.Empty;
@@ -589,12 +875,21 @@
             _login = string.Empty;
             _password = string.Empty;
             _trustServerCertificate = false;
+            _sqlRemember = false;
+            _sqlRememberChosen = false;
+            _sqlHasRemembered = false;
             await LoadDatabasesAsync();   // Windows authentication needs no password: the list fills as it did on open
         }
     }
 
     private async Task LoadPgDatabasesAsync()
     {
+        // Review, round 2: the password the server refused for this tab is not sent again (see PasswordMissingForForm).
+        if (PgPasswordNeeded)
+        {
+            _dbMessage = "Enter the password, then refresh the database list.";
+            return;
+        }
         _dbLoading = true;
         _dbMessage = null;
         StateHasChanged();
@@ -626,6 +921,59 @@
         if (c.Kind == DatabaseKind.SqlServer && c.WindowsAuth) await LoadDatabasesAsync();
     }
 
+    /// <summary>
+    /// Spec 043: fill the form from a tab's connection. When it is still the saved connection it came from (the same server,
+    /// sign-in and security; review of US1, findings 25 and 33), that row is selected: shown as saved when the dialog was simply
+    /// opened, so Save never writes the tab's state into it; with the tab's database when a run needs the tab reconnected
+    /// (<paramref name="exact"/>). Otherwise the form holds the tab's own values as a new connection — its server, sign-in and
+    /// security choices may differ from the row's, and the form must reconnect the tab to the same place — and Save adds a row
+    /// instead of changing another.
+    /// </summary>
+    private void ApplyPrefill(ConnectionBinding b, bool exact)
+    {
+        var saved = string.IsNullOrEmpty(b.SavedConnectionId) ? null : _saved.FirstOrDefault(c => c.Id == b.SavedConnectionId && c.Kind == b.Kind);
+        // A run that reconnects the tab needs its database too: when that is not the row's, the row is not shown as the form's
+        // (Save would write the tab's database into it), and the form is the tab's own connection.
+        bool sameDatabase = saved != null && string.Equals(
+            saved.Database, b.Database, saved.Kind == DatabaseKind.PostgreSql ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+        if (saved != null && b.SameConnectionAs(saved) && (!exact || sameDatabase))
+        {
+            SelectSaved(saved);
+            if (!exact || _kind != b.Kind) return;
+            if (b.Kind == DatabaseKind.PostgreSql)
+            {
+                _pgDatabase = b.Database;
+                _pgRemember = b.RememberPassword;
+                return;
+            }
+            _database = b.Database;
+            _sqlRemember = b.RememberPassword && !b.WindowsAuth;
+            if (!string.IsNullOrWhiteSpace(b.Database) && !_databases.Contains(b.Database)) _databases.Add(b.Database);
+            return;
+        }
+        NewConnection(b.Kind);
+        if (_kind != b.Kind) return;   // a PostgreSQL connection on an engine that no longer offers PostgreSQL: the empty form
+        if (b.Kind == DatabaseKind.PostgreSql)
+        {
+            _pgHost = b.Server;
+            _pgPort = b.Port ?? SavedSqlConnection.DefaultPostgresPort;
+            _pgUser = b.Login ?? string.Empty;
+            _pgSslMode = b.SslMode ?? "prefer";
+            _pgRootCert = b.RootCertificatePath ?? string.Empty;
+            _pgRemember = b.RememberPassword;
+            _pgDatabase = b.Database;
+            return;
+        }
+        if (_windowsAuth != b.WindowsAuth) ClearDatabaseList();   // the list belongs to the row's sign-in, not the tab's
+        _server = b.Server;
+        _windowsAuth = b.WindowsAuth;
+        _login = b.Login ?? string.Empty;
+        _trustServerCertificate = b.TrustServerCertificate;
+        _sqlRemember = b.RememberPassword && !b.WindowsAuth;
+        _database = b.Database;
+        if (!string.IsNullOrWhiteSpace(b.Database) && !_databases.Contains(b.Database)) _databases.Add(b.Database);
+    }
+
     private void SelectSaved(SavedSqlConnection c)
     {
         _selectedId = c.Id;
@@ -652,10 +1000,14 @@
         _database = c.Database;
         _windowsAuth = c.WindowsAuth;
         _login = c.Login ?? string.Empty;
-        _password = string.Empty;   // never stored — re-prompt for SQL auth
+        _password = string.Empty;   // never stored in the browser — typed, or remembered on the engine machine
         _trustServerCertificate = c.TrustServerCertificate;
+        _sqlRemember = c.RememberPassword && !c.WindowsAuth;
+        _sqlRememberChosen = false; // a new form: the user has not chosen for it yet
+        _sqlHasRemembered = false;  // asked of the engine once the row is shown
         _message = null;
         ClearDatabaseList();
+        if (!c.WindowsAuth) _ = InvokeAsync(RefreshRememberedAsync);
 
         // Spec 032 FR-033 (campaign finding 6): SEED the option list with the saved
         // database so the dropdown deterministically DISPLAYS it. Relying only on the
@@ -679,10 +1031,15 @@
         if (_windowsAuth == windows) return;
         _windowsAuth = windows;
         ClearDatabaseList();   // accessible-database set depends on the identity/login
+        if (!windows) _ = InvokeAsync(RefreshRememberedAsync);
     }
 
     // Server edited (on blur/change) — the previous list belongs to a different host, so drop it.
-    private void OnServerChanged() => ClearDatabaseList();
+    private async Task OnServerChanged()
+    {
+        ClearDatabaseList();
+        await RefreshRememberedAsync();
+    }
 
     /// <summary>
     /// Fetches the server's databases into the dropdown. SQL auth needs the password first (same as
@@ -690,7 +1047,7 @@
     /// </summary>
     private async Task LoadDatabasesAsync()
     {
-        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        if (SqlPasswordMissing)
         {
             _dbMessage = "Enter the SQL password, then refresh the database list.";
             return;
@@ -721,28 +1078,154 @@
     }
 
     /// <summary>The SQL Server form as a target; the certificate choice travels with it (review WEB-02).</summary>
+    // Spec 043 (T056): the saved row the form came from goes with the target, so the tab's binding remembers it.
     private ConnectionTarget SqlServerTarget() => new(DatabaseKind.SqlServer, _server, _database, WindowsAuth: _windowsAuth,
-        User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate);
+        User: _windowsAuth ? null : _login, Password: _windowsAuth ? null : _password, TrustServerCertificate: _trustServerCertificate,
+        RememberPassword: !_windowsAuth && _sqlRemember && SqlConn.EngineRemembersSqlServerPasswords, SavedConnectionId: _selectedId,
+        CopyPasswordFrom: string.IsNullOrEmpty(_password) && CanCopySqlPassword ? TargetSession?.CopyPasswordFrom : null);
 
     // ── PostgreSQL (spec 042) ────────────────────────────────────────────────────────────────────────────
 
     private ConnectionTarget PgTarget() => new(DatabaseKind.PostgreSql, _pgHost, _pgDatabase, WindowsAuth: false,
         User: _pgUser, Password: _pgPassword, Port: _pgPort, SslMode: _pgSslMode,
-        RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert, RememberPassword: _pgRemember);
+        RootCertificatePath: string.IsNullOrWhiteSpace(_pgRootCert) ? null : _pgRootCert, RememberPassword: _pgRemember,
+        SavedConnectionId: _selectedId,
+        CopyPasswordFrom: string.IsNullOrEmpty(_pgPassword) && CanCopyPgPassword ? TargetSession?.CopyPasswordFrom : null);
+
+    // Spec 043 (T056): the connect goes to the tab that opened the dialog.
+    private Task<ConnectResult> ConnectTargetAsync(ConnectionTarget target) =>
+        TargetSession is { } session
+            ? SqlConn.ConnectAsync(target, session, CancellationToken.None)
+            : SqlConn.ConnectAsync(target, CancellationToken.None);
 
     // Asks the engine whether it holds a password for this host, port and user. Never fetches the password itself.
+    // Each question about a remembered password gets a number: a reply to an older one (the host or user changed meanwhile, or
+    // a saved row was shown before the tab's own values replaced it) is not the form's answer any more.
+    private int _rememberedAsk;
+
     private async Task RefreshRememberedAsync()
     {
-        if (_kind != DatabaseKind.PostgreSql) return;
+        if (_kind == DatabaseKind.SqlServer) { await RefreshSqlRememberedAsync(); return; }
+        int ask = ++_rememberedAsk;
         var (host, port, _) = SqlConnectionService.ParseHostAndPort(_pgHost, _pgPort);
-        _pgHasRemembered = host != null && !string.IsNullOrWhiteSpace(_pgUser)
-            && await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
-        // With a remembered password the list needs nothing more from the user, so it fills as SQL Server's does on open.
-        if (_pgHasRemembered && _databases.Count == 0 && !_dbLoading) await LoadPgDatabasesAsync();
+        var user = _pgUser;
+        bool remembered = host != null && !string.IsNullOrWhiteSpace(user)
+            && await SqlConn.HasRememberedPasswordAsync(host, port, user, CancellationToken.None);
+        if (ask != _rememberedAsk || _kind != DatabaseKind.PostgreSql) return;
+        _pgHasRemembered = remembered;
+        // With a remembered password the list needs nothing more from the user, so it fills as SQL Server's does on open — not
+        // with one the server refused for this tab (review, round 2).
+        if (UsesRememberedPgPassword && _databases.Count == 0 && !_dbLoading) await LoadPgDatabasesAsync();
         await InvokeAsync(StateHasChanged);
     }
 
     private Task OnPgIdentityChanged() => RefreshRememberedAsync();
+
+    // Spec 043 follow-up: the same question for a SQL Server login. With a remembered password the database list fills on its
+    // own, as it does for Windows authentication.
+    private async Task RefreshSqlRememberedAsync()
+    {
+        int ask = ++_rememberedAsk;
+        var server = _server;
+        var login = _login;
+        var trust = _trustServerCertificate;   // review, round 3: the answer is for this certificate choice (part of the key)
+        var key = SqlIdentityKey;
+        bool remembered = !_windowsAuth && SqlConn.EngineRemembersSqlServerPasswords
+            && !string.IsNullOrWhiteSpace(server) && !string.IsNullOrWhiteSpace(login)
+            && await SqlConn.HasRememberedSqlServerPasswordAsync(server, login, trust, CancellationToken.None);
+        if (ask != _rememberedAsk || _kind != DatabaseKind.SqlServer || key != SqlIdentityKey) return;
+        _sqlHasRemembered = remembered;
+        // Review: the checkbox shows the engine's state — with a password remembered it is on, so unticking it is a choice (the
+        // password is then typed, and a connect forgets the remembered one). Review, round 2: a choice made while the engine was
+        // being asked stands. Round 4: so does one made before it was asked, for as long as the form is the one it was made on.
+        if (remembered && !_sqlRememberChosen) _sqlRemember = true;
+        // Review, round 2: not with a password the server refused for this tab (UsesRememberedSqlPassword says no then; round 3:
+        // nor for a tab with no binding whose mark names this sign-in, nor when the engine had none).
+        if ((UsesRememberedSqlPassword || CanCopySqlPassword) && _databases.Count <= 1 && !_dbLoading) await LoadDatabasesAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task OnSqlLoginChanged() => RefreshRememberedAsync();
+
+    // Said when a Forget got no confirmed answer — no reply, none in time, or the engine said it could not (its store could not
+    // be written; review, round 2): nothing is known to have changed on the engine, so nothing changes here either.
+    private const string ForgetUnanswered =
+        "The engine did not confirm that it forgot the password; it may still be remembered on the engine machine.";
+
+    private async Task ForgetSqlPasswordAsync()
+    {
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            // Review: only the engine's answer counts. No answer (not paired, no reply in time) is not "forgotten".
+            var forgotten = SqlIdentity();   // review, round 4: the login asked about, as it was when asked
+            var answer = await SqlConn.ForgetRememberedSqlServerPasswordAsync(forgotten.Server, forgotten.User ?? string.Empty, CancellationToken.None);
+            if (answer == null)
+            {
+                SetMessage(ForgetUnanswered, isError: true);
+                return;
+            }
+            _sqlHasRemembered = false;
+            _sqlRemember = false;
+            // The saved row stops asking for it too, so it is not turned back on when the row is shown again — when it is the
+            // row of the login just forgotten (review, round 4).
+            await ClearSavedRememberAsync(forgotten);
+            SetMessage("The remembered password was forgotten.", isError: false);
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    // The selected saved row no longer asks the engine to remember its password. Review, round 4: only when the row is for the
+    // login whose password was forgotten (RowNamesLogin) — the form may have been edited to another login since the row was shown.
+    private async Task ClearSavedRememberAsync(ConnectionTarget forgotten)
+    {
+        if (_selectedId != null && await Store.GetAsync(_selectedId) is { RememberPassword: true } row && RowNamesLogin(row, forgotten))
+        {
+            row.RememberPassword = false;
+            await Store.UpdateAsync(row);
+            await ReloadAsync();
+        }
+    }
+
+    // Review, round 3: the saved row is for the login the form connected (its server and login, as Settings › Connections forgets
+    // them), not one the form was edited away from.
+    private static bool RowNamesLogin(SavedSqlConnection row, ConnectionTarget target) =>
+        row.Kind == DatabaseKind.SqlServer && !row.WindowsAuth && !target.WindowsAuth
+        && string.Equals((row.Server ?? string.Empty).Trim(), (target.Server ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase)
+        && string.Equals((row.Login ?? string.Empty).Trim(), (target.User ?? string.Empty).Trim(), StringComparison.OrdinalIgnoreCase);
+
+    // Review, round 4: the engine keeps a password under the key for the connect's certificate checking, and a trusting connection
+    // to a remote server is given only a password kept on a trusting one (SqlServerCredentialResolver.FillKeys). So a row that
+    // trusts is not marked remembered for a password kept on a validating connect: its own connect would be asked for it.
+    private static bool RowIsGivenPasswordOf(SavedSqlConnection row, ConnectionTarget target) =>
+        EffectiveTrust(target.Server, target.TrustServerCertificate) || !EffectiveTrust(row.Server, row.TrustServerCertificate);
+
+    // A SQL Server on the engine's own computer is always trusted (SqlConnectionService.BuildConnectionString).
+    private static bool EffectiveTrust(string? server, bool trustServerCertificate) =>
+        trustServerCertificate || SqlConnectionService.IsLoopbackServer(server ?? string.Empty);
+
+    // What a failed SQL Server test or connect says, from the engine's error code (not the server's words, which are localised):
+    // a missing password is a prompt; a remembered password the server refused says how to replace it.
+    // Review, round 4: whether the remembered password was used is taken before the call (UsedRememberedSqlPassword) — a refused
+    // connect marks the tab (SqlSessionState.PasswordMissing) before this runs, and the mark turns UsesRememberedSqlPassword off.
+    private string SqlFailureText(ConnectResult result, string fallback, bool usedRemembered)
+    {
+        if (result.PasswordRequired)
+            return "Enter the password for this login" + (SqlConn.EngineRemembersSqlServerPasswords ? "; turn on Remember to keep it on the engine machine." : ".");
+        if (usedRemembered && result.ErrorCode == AkmlSql.Core.Ipc.Messages.DialectErrors.LoginFailed)
+            return "The remembered password was not accepted by the server. Enter the current password and keep Remember password on to replace it.";
+        return result.Error ?? fallback;
+    }
+
+    // The test or connect about to go out uses the engine's remembered password: nothing typed, and the form uses it.
+    private bool UsedRememberedSqlPassword => !_windowsAuth && string.IsNullOrEmpty(_password) && UsesRememberedSqlPassword;
+
+    private bool UsedRememberedPgPassword => UsesRememberedPgPassword && string.IsNullOrEmpty(_pgPassword);
 
     private async Task ForgetPasswordAsync()
     {
@@ -752,10 +1235,16 @@
         StateHasChanged();
         try
         {
-            await SqlConn.ForgetRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
-            _pgHasRemembered = await SqlConn.HasRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
-            if (!_pgHasRemembered) _pgRemember = false;
-            SetMessage(_pgHasRemembered ? "The engine could not forget the password." : "The remembered password was forgotten.", isError: _pgHasRemembered);
+            // Review: as for SQL Server, no answer from the engine leaves everything as it was.
+            var answer = await SqlConn.ForgetRememberedPasswordAsync(host, port, _pgUser, CancellationToken.None);
+            if (answer == null)
+            {
+                SetMessage(ForgetUnanswered, isError: true);
+                return;
+            }
+            _pgHasRemembered = false;
+            _pgRemember = false;
+            SetMessage("The remembered password was forgotten.", isError: false);
         }
         finally
         {
@@ -767,15 +1256,16 @@
     // What a failed PostgreSQL test or connect says. A missing password is a prompt, not a failure, and it offers to remember the
     // one typed. A password the engine remembered that the server no longer accepts says so and how to replace it (FR-105): the
     // Remember option stays on, so connecting with the new password overwrites the old one.
-    private string PgFailureText(ConnectResult result, string fallback)
+    private string PgFailureText(ConnectResult result, string fallback, bool usedRemembered)
     {
         if (result.PasswordRequired)
             return "The server asked for a password. Enter the password and try again; turn on Remember password to keep it on the engine machine.";
 
-        var rejected = result.Error != null
-            && (result.Error.Contains("28P01", StringComparison.Ordinal)
-                || result.Error.Contains("password authentication failed", StringComparison.OrdinalIgnoreCase));
-        if (_pgHasRemembered && rejected)
+        // Review: the engine's code says the password was refused (SQLSTATE 28P01); the server's words are the fallback for an
+        // engine from before the code. Round 2: it was the remembered one only when none was typed. Round 4: taken before the
+        // call (UsedRememberedPgPassword), as for SQL Server — the refusal has marked the tab by now.
+        var rejected = SqlConnectionService.IsPgPasswordRefused(result);
+        if (usedRemembered && rejected)
             return "The remembered password was not accepted by the server. Enter the current password and keep Remember password on to replace it.";
 
         return result.Error ?? fallback;
@@ -784,11 +1274,13 @@
     // "PostgreSQL 18.1 on db1:5432" (FR-002), or the engine's own words; a missing password is a prompt, not a failure.
     private async Task TestPostgresAsync()
     {
+        if (PgPasswordNeeded) { SetMessage(PgPasswordNeededText, isError: true); return; }
         _busy = true;
         _message = null;
         StateHasChanged();
         try
         {
+            bool usedRemembered = UsedRememberedPgPassword;   // review, round 4: before the call (see PgFailureText)
             var result = await SqlConn.TestAsync(PgTarget(), CancellationToken.None);
             if (result.Ok)
             {
@@ -797,7 +1289,7 @@
             }
             else
             {
-                SetMessage(PgFailureText(result, "Connection test failed."), isError: true);
+                SetMessage(PgFailureText(result, "Connection test failed.", usedRemembered), isError: true);
             }
         }
         finally
@@ -852,8 +1344,12 @@
     // back; it never commits. Ask first, naming what is lost.
     private async Task<bool> ConfirmLeaveTransactionAsync()
     {
-        if (!SqlConn.IsConnected || SqlConn.TransactionState == TransactionState.None) return true;
-        var aborted = SqlConn.TransactionState == TransactionState.Aborted;
+        // Spec 043: the transaction of the tab being connected, not of whichever tab is active.
+        var session = TargetSession;
+        bool connected = session?.IsConnected ?? SqlConn.IsConnected;
+        var state = session?.TransactionState ?? SqlConn.TransactionState;
+        if (!connected || state == TransactionState.None) return true;
+        var aborted = state == TransactionState.Aborted;
         return await Dialogs.ConfirmAsync(new DialogRequest
         {
             Title = aborted ? "Aborted transaction" : "Open transaction",
@@ -866,17 +1362,29 @@
         });
     }
 
+    // Spec 043 (T049): a tab's connection does not change under its own run.
+    private bool RefuseWhileBusy()
+    {
+        if (TargetSession?.IsBusy != true) return false;
+        SetMessage("Wait for the current run to finish.", isError: true);
+        return true;
+    }
+
     private async Task ConnectPostgresAsync()
     {
+        if (PgPasswordNeeded) { SetMessage(PgPasswordNeededText, isError: true); return; }
+        if (RefuseWhileBusy()) return;
         if (!await ConfirmLeaveTransactionAsync()) return;
         _busy = true;
         _message = null;
         StateHasChanged();
         try
         {
-            var result = await SqlConn.ConnectAsync(PgTarget(), CancellationToken.None);
+            bool usedRemembered = UsedRememberedPgPassword;   // review, round 4: before the connect marks the tab (see PgFailureText)
+            var result = await ConnectTargetAsync(PgTarget());
             if (result.Ok)
             {
+                _connected = true;
                 if (!string.IsNullOrEmpty(_selectedId))
                 {
                     try
@@ -894,7 +1402,7 @@
                 Close();
                 return;
             }
-            SetMessage(PgFailureText(result, "Connect failed."), isError: true);
+            SetMessage(PgFailureText(result, "Connect failed.", usedRemembered), isError: true);
         }
         finally
         {
@@ -907,11 +1415,11 @@
     {
         if (_kind == DatabaseKind.PostgreSql) { await TestPostgresAsync(); return; }
 
-        // Passwords are never stored, so a saved SQL-auth connection loads with an empty password.
-        // Require one rather than silently testing with "" (which always fails confusingly).
-        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        // Passwords are never stored in the browser, so a saved SQL-auth connection loads with an empty password. Require one
+        // (unless the engine remembers it) rather than silently testing with "" (which always fails confusingly).
+        if (SqlPasswordMissing)
         {
-            SetMessage("Enter the SQL password to test this connection (passwords are never stored).", isError: true);
+            SetMessage("Enter the SQL password to test this connection (it is not stored in the browser).", isError: true);
             return;
         }
         _busy = true;
@@ -919,8 +1427,9 @@
         StateHasChanged();
         try
         {
+            bool usedRemembered = UsedRememberedSqlPassword;   // review, round 4: before the call (see SqlFailureText)
             var result = await SqlConn.TestAsync(SqlServerTarget(), CancellationToken.None);
-            SetMessage(result.Ok ? "Connection test succeeded." : (result.Error ?? "Connection test failed."), isError: !result.Ok);
+            SetMessage(result.Ok ? "Connection test succeeded." : SqlFailureText(result, "Connection test failed.", usedRemembered), isError: !result.Ok);
         }
         finally
         {
@@ -949,6 +1458,7 @@
                     WindowsAuth = _windowsAuth,
                     Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
                     TrustServerCertificate = _trustServerCertificate,
+                    RememberPassword = !_windowsAuth && _sqlRemember,
                 };
                 await Store.AddAsync(record);
                 _selectedId = record.Id;
@@ -964,6 +1474,7 @@
                     WindowsAuth = _windowsAuth,
                     Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
                     TrustServerCertificate = _trustServerCertificate,
+                    RememberPassword = !_windowsAuth && _sqlRemember,
                 };
                 await Store.UpdateAsync(record);
             }
@@ -1014,11 +1525,12 @@
     {
         if (_kind == DatabaseKind.PostgreSql) { await ConnectPostgresAsync(); return; }
 
-        if (!_windowsAuth && string.IsNullOrEmpty(_password))
+        if (SqlPasswordMissing)
         {
-            SetMessage("Enter the SQL password to connect (passwords are never stored).", isError: true);
+            SetMessage("Enter the SQL password to connect (it is not stored in the browser).", isError: true);
             return;
         }
+        if (RefuseWhileBusy()) return;
         if (!await ConfirmLeaveTransactionAsync()) return;
         _busy = true;
         _message = null;
@@ -1027,10 +1539,45 @@
         {
             // Review WEB-19: the engine opens the connection before the session switches; a refusal keeps the dialog open
             // with what was typed, so it can be corrected.
-            var result = await SqlConn.ConnectAsync(SqlServerTarget(), CancellationToken.None);
+            var target = SqlServerTarget();
+            // Taken before the connect: what the form asked of the engine's password store.
+            bool askedToRemember = target.RememberPassword && !string.IsNullOrEmpty(target.Password);
+            bool hadRemembered = !_windowsAuth && _sqlHasRemembered;
+            bool forgetRemembered = hadRemembered && !_sqlRemember && SqlConn.EngineRemembersSqlServerPasswords;
+            bool usedRemembered = UsedRememberedSqlPassword;   // review, round 4: a refused connect marks the tab (see SqlFailureText)
+            var result = await ConnectTargetAsync(target);
             if (result.Ok)
             {
+                _connected = true;
+                // Review: the engine could not keep the password Remember asked it to keep. The connect stands; the user is
+                // told, and the saved row is not left saying the password is remembered. Review, round 2: when the engine held a
+                // password for this login before, that one is still there and may still be used (another tab, another client):
+                // said, with where to forget it, and the saved row keeps offering Forget in Settings › Connections.
+                bool notRemembered = askedToRemember && !result.Remembered;
+                bool olderStillKept = notRemembered && hadRemembered;
+                // Review: Remember unticked while the engine held a password for this login is the choice to forget it — after the
+                // connect, which used the password typed now.
+                bool forgotten = false;
+                if (forgetRemembered)
+                {
+                    var answer = await SqlConn.ForgetRememberedSqlServerPasswordAsync(target.Server, target.User ?? string.Empty, CancellationToken.None);
+                    forgotten = answer != null;
+                    if (answer == null)
+                    {
+                        Notifications?.Notify(
+                            $"Connected. The engine did not confirm that it forgot the password for {target.User} on {target.Server}; it may still be remembered on the engine machine. Use Forget it in Connect to database to try again.",
+                            NotificationKind.Warning);
+                    }
+                }
                 // Persist LastConnectedAt + remember this as the active saved row when it maps to one.
+                // Review, round 3: Settings › Connections offers Forget password only on a row that says its password is
+                // remembered, so a row for this login that the warning below points to is made to say so.
+                // Review, round 4: a password the engine kept (v2's Remembered; a v1 engine kept what it was asked to keep, which
+                // ConnectResult.Remembered already says) makes the row say so too — the Status bar's restore of the row and its
+                // Forget password in Settings › Connections read it. Every change to the flag is for the row's own login only: a
+                // form edited to another login says nothing about the password of the row's.
+                bool kept = askedToRemember && result.Remembered;
+                bool rowOffersForget = false;
                 if (!string.IsNullOrEmpty(_selectedId))
                 {
                     try
@@ -1039,16 +1586,31 @@
                         if (existing != null)
                         {
                             existing.LastConnectedAt = DateTimeOffset.UtcNow;
+                            bool namesLogin = RowNamesLogin(existing, target);
+                            if (namesLogin && ((notRemembered && !hadRemembered) || forgotten)) existing.RememberPassword = false;
+                            bool pointTo = olderStillKept && namesLogin;
+                            if (pointTo || (namesLogin && kept && RowIsGivenPasswordOf(existing, target))) existing.RememberPassword = true;
                             await Store.UpdateAsync(existing);
+                            rowOffersForget = pointTo;
                             await Store.SetActiveIdAsync(existing.Id);
                         }
                     }
                     catch { /* best-effort metadata update — connect already succeeded */ }
                 }
+                if (notRemembered)
+                {
+                    // Review, round 3: Settings › Connections is named only when its row offers Forget password; otherwise only
+                    // Connect to database's Forget it (shown once the engine says it holds a password for the form's login).
+                    Notifications?.Notify(!olderStillKept
+                        ? $"Connected, but the engine could not keep the password for {target.User} on {target.Server}. It is asked for again next time."
+                        : $"Connected, but the engine could not keep the new password for {target.User} on {target.Server}. The password it remembered before may still be used; forget it with Forget it in Connect to database"
+                          + (rowOffersForget ? ", or Forget password in Settings › Connections." : "."),
+                        NotificationKind.Warning);
+                }
                 Close();   // MainLayout's StateChanged owner starts SchemaSync on SqlConn.SessionId.
                 return;
             }
-            SetMessage(result.Error ?? "Connect failed.", isError: true);
+            SetMessage(SqlFailureText(result, "Connect failed.", usedRemembered), isError: true);
         }
         finally
         {
@@ -1073,6 +1635,10 @@
     {
         if (!_open) return;
         _open = false;
+        bool connected = _connected;
+        _target = null;
+        _connected = false;
+        Controller.NotifyClosed(connected);   // spec 043: a run waiting on this dialog goes on, or stops
         StateHasChanged();
         if (_module != null)
         {

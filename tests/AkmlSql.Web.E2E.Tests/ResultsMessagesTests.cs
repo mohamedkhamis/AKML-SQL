@@ -125,16 +125,39 @@ public sealed class ResultsMessagesTests
         await s.Page.ClickAsync("[data-testid='execute-button']");
 
         await Assertions.Expect(s.Page.Locator("[data-testid='execute-running']")).ToHaveCountAsync(1);
-        await Assertions.Expect(s.Page.Locator("[data-testid='results-running']")).ToContainTextAsync("A running statement can't be interrupted.");
+        await Assertions.Expect(s.Page.Locator("[data-testid='results-running']")).ToContainTextAsync("Cancel stops the running statement.");
         await Assertions.Expect(s.Page.Locator("[data-testid='status-outcome']")).ToContainTextAsync("Executing query…");
         await Assertions.Expect(s.Page.Locator("[data-testid='execute-button']")).ToBeDisabledAsync();
         await Assertions.Expect(s.Page.Locator("[data-testid='execute-cancel']")).ToHaveTextAsync("Cancel");
-        await Assertions.Expect(s.Page.Locator("[data-testid='execute-cancel']")).ToHaveAttributeAsync("aria-label", "Cancel if not started");
+        await Assertions.Expect(s.Page.Locator("[data-testid='execute-cancel']")).ToHaveAttributeAsync("aria-label", "Cancel");
 
         await s.WaitForExecuteAfterAsync(before);
         Assert.Equal("3", await s.Page.Locator("[data-testid='execute-complete']").GetAttributeAsync("data-status"));   // TimedOut
         await Assertions.Expect(s.Page.Locator("[data-testid='execute-button']")).ToBeEnabledAsync();
         await Assertions.Expect(s.Page.Locator("[data-testid^='results-set-header-']")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Spec 043 (review of US1): the engine answers a page's requests side by side (R3), so Cancel reaches a statement
+    /// that is running: it stops at once, and the batches after it do not run.</summary>
+    [SkippableFact]
+    public async Task Cancel_stops_a_running_statement_and_the_batches_after_it()
+    {
+        await using var s = await WebAppFixture.WithSqlOrSkipAsync(_output);
+        await s.SetEditorTextAsync("WAITFOR DELAY '00:00:20';\nGO\nSELECT 1 AS never;");
+        var before = await s.ExecuteVersionAsync();
+        await s.Page.ClickAsync("[data-testid='execute-button']");
+        await Assertions.Expect(s.Page.Locator("[data-testid='execute-running']")).ToHaveCountAsync(1);
+        await s.Page.WaitForTimeoutAsync(1_500);   // the WAITFOR is running on the server
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await s.Page.ClickAsync("[data-testid='execute-cancel']");
+        await s.WaitForExecuteAfterAsync(before, timeoutMs: 15_000);
+        _output.WriteLine($"Cancel ended the run {watch.ElapsedMilliseconds} ms after the click.");
+
+        Assert.True(watch.ElapsedMilliseconds < 10_000, $"the run ended {watch.ElapsedMilliseconds} ms after Cancel");
+        Assert.Equal("2", await s.Page.Locator("[data-testid='execute-complete']").GetAttributeAsync("data-status"));   // Cancelled
+        await Assertions.Expect(s.Page.Locator("[data-testid^='results-set-header-']")).ToHaveCountAsync(0);   // SELECT 1 never ran
+        await Assertions.Expect(s.Page.Locator("[data-testid='execute-button']")).ToBeEnabledAsync();
     }
 
     [SkippableFact]

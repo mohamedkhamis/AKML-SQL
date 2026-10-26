@@ -1,6 +1,7 @@
 using AkmlSql.Core.Models.Analysis;
 using AkmlSql.Engine.Analysis;
 using AkmlSql.PostgreSql.Completion;
+using AkmlSql.PostgreSql.Reference;
 using Google.Protobuf;
 
 namespace AkmlSql.PostgreSql.Analysis;
@@ -12,7 +13,7 @@ namespace AkmlSql.PostgreSql.Analysis;
 /// </summary>
 public abstract class PgRuleBase : IPgAnalysisRule
 {
-    private const string ManualRoot = "https://www.postgresql.org/docs/18/";
+    private const string ManualVersion = "18";
 
     /// <summary>Where a rule that rests on a product convention, not on the manual, points.</summary>
     public const string ProductDocs = "https://akml.khamis.work/docs/analysis-rules";
@@ -27,7 +28,8 @@ public abstract class PgRuleBase : IPgAnalysisRule
         Description = description;
         RequiresSchema = requiresSchema;
         AutoFixable = autoFixable;
-        ReferenceUrl = manualSection.StartsWith("http", StringComparison.Ordinal) ? manualSection : ManualRoot + manualSection + ".html";
+        // "page", or "page#section" for a section nested on that page (see PgManual).
+        ReferenceUrl = manualSection.StartsWith("http", StringComparison.Ordinal) ? manualSection : PgManual.Url(ManualVersion, manualSection);
         CategoryCode = ruleId.TrimEnd('0', '1', '2', '3', '4', '5', '6', '7', '8', '9');
     }
 

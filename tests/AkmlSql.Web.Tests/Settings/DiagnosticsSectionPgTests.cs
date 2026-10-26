@@ -94,6 +94,6 @@ public sealed class DiagnosticsSectionPgTests : IDisposable
 
         _host.Sql.IsConnected = false;
         var idle = _host.Open("diagnostics").WaitForElement("[data-testid=diag-active-connection]");
-        Assert.Contains("No SQL connection", idle.TextContent);
+        Assert.Contains("No database connection", idle.TextContent);   // spec 043 FR-025
     }
 }

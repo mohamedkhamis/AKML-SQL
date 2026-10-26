@@ -22,6 +22,14 @@ public sealed class DatabaseSelectorComponentTests : IDisposable
         public string? Database { get; set; } = "Sales";
         public event Action? StateChanged;
         public bool CanChangeDatabase { get; set; } = true;
+        public SqlSessionState? ActiveSession { get; set; }
+
+        /// <summary>Another query tab is shown: the facade now speaks for it and says so.</summary>
+        public void Show(SqlSessionState session)
+        {
+            ActiveSession = session;
+            StateChanged?.Invoke();
+        }
         public int ListCalls { get; private set; }
         public List<string> Switches { get; } = new();
         public (bool, IReadOnlyList<string>, string?) ListReply { get; set; } = (true, new[] { "master", "tempdb" }, null);
@@ -121,6 +129,57 @@ public sealed class DatabaseSelectorComponentTests : IDisposable
         var button = cut.Find("[data-testid=db-selector]");
         Assert.True(button.HasAttribute("disabled"));
         Assert.False(string.IsNullOrEmpty(button.GetAttribute("title")));
+    }
+
+    // Review of US1 (finding 35): the menu lists one tab's databases, and a pick never lands on another tab or under a run.
+
+    private IRenderedComponent<DatabaseSelectorComponent> OpenMenu()
+    {
+        var cut = Render();
+        cut.Find("[data-testid=db-selector]").Click();
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("[data-testid=db-selector-list]")));
+        return cut;
+    }
+
+    [Fact]
+    public void Showing_another_tab_closes_the_open_menu()
+    {
+        _sql.ActiveSession = new SqlSessionState("tab-a");
+        var cut = OpenMenu();
+
+        cut.InvokeAsync(() => _sql.Show(new SqlSessionState("tab-b")));
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=db-selector-list]")));
+        Assert.Empty(_sql.Switches);
+    }
+
+    [Fact]
+    public void A_list_that_arrives_after_another_tab_was_shown_opens_no_menu()
+    {
+        _sql.ActiveSession = new SqlSessionState("tab-a");
+        _sql.ListGate = new TaskCompletionSource();
+        var cut = Render();
+        cut.Find("[data-testid=db-selector]").Click();
+
+        cut.InvokeAsync(() => _sql.Show(new SqlSessionState("tab-b")));
+        _sql.ListGate.SetResult();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=db-selector-busy]")));
+        Assert.Empty(cut.FindAll("[data-testid=db-selector-list]"));
+    }
+
+    [Fact]
+    public void A_pick_after_the_tab_started_a_run_is_refused_and_says_why()
+    {
+        var tab = new SqlSessionState("tab-a");
+        _sql.ActiveSession = tab;
+        var cut = OpenMenu();
+
+        tab.IsBusy = true;   // F5 while the menu was open
+        cut.FindAll("[data-testid=db-selector-list] [role=menuitemcheckbox]").First(i => i.TextContent.Trim() == "master").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("Wait for the current run to finish.", cut.Find("[data-testid=db-selector-error]").TextContent.Trim()));
+        Assert.Empty(_sql.Switches);
     }
 
     [Fact]

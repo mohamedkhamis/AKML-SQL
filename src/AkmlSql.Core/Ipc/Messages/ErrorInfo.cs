@@ -22,8 +22,17 @@ namespace AkmlSql.Core.Ipc.Messages
         /// <summary>The surface does not exist for the session's database kind (refactorings and Find invalid objects on PostgreSQL).</summary>
         public const string Unsupported = "dialect.unsupported";
 
-        /// <summary>A PostgreSQL connection needs a password the engine does not hold; the client should prompt.</summary>
+        /// <summary>A connection needs a password the engine does not hold (PostgreSQL, and since the spec 043 follow-up a web SQL
+        /// Server login); the client should prompt.</summary>
         public const string PasswordRequired = "dialect.password-required";
+
+        /// <summary>Spec 043 follow-up: SQL Server refused the login (error 18456) — a wrong or out-of-date password.</summary>
+        public const string LoginFailed = "sqlserver.login-failed";
+
+        /// <summary>Spec 043 follow-up (review): PostgreSQL refused the password (SQLSTATE 28P01) — a wrong or out-of-date password.
+        /// Not sent by the engines released before it (1.26.1022.0927, 1.26.1022.1042, which advertise only the v1 ids): their
+        /// message carries the server's words and 28P01, with no id.</summary>
+        public const string PgLoginFailed = "postgresql.login-failed";
 
         /// <summary>A bridge client sent a PostgreSQL connection the engine refuses (no user name, integrated authentication, relative certificate path).</summary>
         public const string CredentialsRequired = "dialect.credentials-required";

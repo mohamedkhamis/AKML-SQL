@@ -1,0 +1,7 @@
+{
+  "captured": "2026-10-22",
+  "source": "http://localhost:59416/",
+  "sql": "Actual editor, illustrative Northwind query; formatted but not executed.",
+  "postgresql": "Actual connection dialog, illustrative values, no connection attempted.",
+  "version": "Web 1.26.1022.0701"
+}

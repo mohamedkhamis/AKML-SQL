@@ -216,7 +216,7 @@ public sealed class PgReference
             if (!seen.Add(e.Kind + "\u0001" + e.Name.ToLowerInvariant())) problems.Add(label + ": the name is not unique for its kind");
             if (e.Summary.Trim().Length == 0) problems.Add(label + ": no summary");
             if (e.SectionId.Length == 0) problems.Add(label + ": no section");
-            if (e.Url != $"https://www.postgresql.org/docs/{version}/{e.SectionId}.html") problems.Add(label + ": the url does not follow docs/" + version + "/<section>.html");
+            if (!PgManual.IsLinkFor(e.Url, version, e.SectionId)) problems.Add(label + ": the url does not follow docs/" + version + "/<section>.html or <page>.html#<SECTION>");
             if (majors.Count > 0 && (e.MinVersion < majors[0] || e.MinVersion > majors[^1])) problems.Add(label + ": minVersion " + e.MinVersion + " is not a supported release");
         }
         return problems;

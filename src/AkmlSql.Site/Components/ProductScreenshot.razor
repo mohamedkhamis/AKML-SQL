@@ -38,6 +38,9 @@
     [Parameter, EditorRequired] public int Height { get; set; }
     [Parameter] public string? Class { get; set; }
     [Parameter] public bool Priority { get; set; }
+    [Parameter] public string? DarkPath { get; set; }
+    [Parameter] public string? LightPath { get; set; }
 
-    private string ImagePath(string theme) => $"img/screenshots/{theme}/{Name}-crop.png";
+    private string ImagePath(string theme) =>
+        (theme == "light" ? LightPath : DarkPath) ?? $"img/screenshots/{theme}/{Name}-crop.png";
 }

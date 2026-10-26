@@ -58,14 +58,14 @@ internal sealed class EditorSettingsSection : ISettingsSection
     public string ExportKey => "editor";
 
     public Task<IReadOnlyList<string>> DescribeResetAsync() =>
-        Task.FromResult<IReadOnlyList<string>>(new[] { "Editor font size, word wrap and tab size go back to 13 px, off and 4." });
+        Task.FromResult<IReadOnlyList<string>>(new[] { "Editor font, font size, word wrap and tab size go back to the default font, 13 px, off and 4." });
 
     public Task ResetAsync() => _store.ResetAsync();
 
     public async Task<object> ExportAsync()
     {
         var s = await _store.GetAsync().ConfigureAwait(false);
-        return new EditorDto { FontSize = s.FontSize, WordWrap = s.WordWrap, TabSize = s.TabSize };
+        return new EditorDto { FontSize = s.FontSize, WordWrap = s.WordWrap, TabSize = s.TabSize, FontFamily = s.FontFamily };
     }
 
     public async Task<int> ImportAsync(JsonElement section)
@@ -78,6 +78,7 @@ internal sealed class EditorSettingsSection : ISettingsSection
             FontSize = dto.FontSize ?? current.FontSize,
             WordWrap = dto.WordWrap ?? current.WordWrap,
             TabSize = dto.TabSize ?? current.TabSize,
+            FontFamily = dto.FontFamily ?? current.FontFamily,
         }).ConfigureAwait(false);
         return SettingsJson.CountUnknown(dto);
     }
@@ -87,6 +88,9 @@ internal sealed class EditorSettingsSection : ISettingsSection
         public int? FontSize { get; set; }
         public bool? WordWrap { get; set; }
         public int? TabSize { get; set; }
+
+        /// <summary>Spec 043: by name (<c>cascadiaMono</c>); absent in an older export, which keeps the current font.</summary>
+        public EditorFontFamily? FontFamily { get; set; }
     }
 }
 

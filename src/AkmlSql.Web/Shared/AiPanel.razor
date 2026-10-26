@@ -106,8 +106,9 @@
         border-radius: var(--akml-scalar-radius-xs);
     }
     .akml-ai-result pre {
-        font-family: var(--akml-type-editor-family);
-        font-size: var(--akml-type-editor-size);
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));
+        line-height: var(--akml-type-editor-line-height);
         white-space: pre-wrap;
         margin: 0;
     }

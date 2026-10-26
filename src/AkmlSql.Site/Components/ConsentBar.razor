@@ -70,7 +70,7 @@
         // Returning the visitor to where they were keeps the bar from being a navigation event.
         // ConsentEndpoints re-validates this as a local path regardless — an open redirect on a
         // form rendered on every page would be a real vulnerability.
-        var path = HttpContext.Request.Path.Value;
-        ReturnUrl = string.IsNullOrEmpty(path) ? "/" : path + HttpContext.Request.QueryString.Value;
+        // On a "page not found" response that is the URL the visitor asked for, not "/not-found".
+        ReturnUrl = PageAddress.PathAndQuery(HttpContext);
     }
 }

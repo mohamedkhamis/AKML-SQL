@@ -38,14 +38,18 @@ beforeEach(() => {
     };
 });
 
-test('version 4 creates the workspaceLayout store', async () => {
-    assert.equal(DB_VERSION, 4);
+// Spec 043 (T004, research R8): version 5 adds the editorTabs store (one record per query tab plus the tab set).
+test('version 5 creates the editorTabs store and keeps every earlier one', async () => {
+    assert.equal(DB_VERSION, 5);
+    assert.ok(STORES.includes('editorTabs'));
     assert.ok(STORES.includes('workspaceLayout'));
 
     await openDb();
 
-    assert.deepEqual(opens[0].args, ['AkmlSqlWeb', 4]);
+    assert.deepEqual(opens[0].args, ['AkmlSqlWeb', 5]);
+    assert.ok(created.includes('editorTabs'));
     assert.ok(created.includes('workspaceLayout'));
+    assert.ok(created.includes('editorSession'), 'the legacy single-document store stays for the one-time migration');
     assert.ok(created.includes('savedSqlConnections'), 'existing stores are kept');
 });
 

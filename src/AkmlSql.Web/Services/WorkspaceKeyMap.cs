@@ -42,6 +42,11 @@ public static class WorkspaceKeyMap
         // Ctrl+N and Ctrl+O are browser-reserved (FR-049(b)): SSMS's keys gain Alt.
         Key("KeyN", ctrl: true, shift: false, alt: true, "editor:new"),
         Key("KeyO", ctrl: true, shift: false, alt: true, "editor:open"),
+        // Spec 043 (R9): the query tabs. Ctrl+Tab, Ctrl+PageDown/PageUp, Ctrl+W and Ctrl+F4 are the browser's own tab keys;
+        // Visual Studio's next and previous document are Ctrl+Alt+PageDown / PageUp, and close pairs with New's Ctrl+Alt.
+        Key("PageDown", ctrl: true, shift: false, alt: true, "editor:next-tab"),
+        Key("PageUp", ctrl: true, shift: false, alt: true, "editor:previous-tab"),
+        Key("KeyW", ctrl: true, shift: false, alt: true, "editor:close-tab"),
     };
 
     /// <summary>The key text for a command, or null when it has no key.</summary>

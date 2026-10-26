@@ -68,6 +68,13 @@ namespace AkmlSql.Engine.Handlers.Control
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = refused };
             }
 
+            // Spec 043 follow-up (review): the password comes from where ConnectionChanged and TestSqlConnection take it — the
+            // tab a new one was opened from (key 3), else the engine's remembered logins — and an empty one never goes to the server.
+            var supplied = BridgeSqlPassword.Supply(request.ConnectionString, request.CopyPasswordFromSessionId, ctx);
+            request.ConnectionString = supplied.ConnectionString;
+            if (supplied.Missing)
+                return new ListDatabasesResponse { Ok = false, ErrorMessage = "Enter the password for this login, then refresh the list.", ErrorCode = DialectErrors.PasswordRequired };
+
             try
             {
                 await using var conn = new SqlConnection(request.ConnectionString);
@@ -100,8 +107,9 @@ namespace AkmlSql.Engine.Handlers.Control
         /// <summary>
         /// Spec 042 (FR-030): the databases of a PostgreSQL server the role may connect to, templates left out. With a session the
         /// engine's own connection string is used (the browser never resends a password); without one the request's string is,
-        /// after the same guard as every bridge request, with a remembered password filled in. A failure is the server's words
-        /// and a hint, never the connection string.
+        /// after the same guard as every bridge request, with the password of the tab a new one was opened from or a remembered
+        /// one filled in. A failure is the server's words and a hint (a refused password carries <c>postgresql.login-failed</c>),
+        /// never the connection string.
         /// </summary>
         private static async Task<ListDatabasesResponse> ListPostgresAsync(ListDatabasesRequest request, RpcContext? ctx, CancellationToken ct)
         {
@@ -121,6 +129,10 @@ namespace AkmlSql.Engine.Handlers.Control
                 Log.Warning("ListDatabases (PostgreSQL) refused for a bridge request - {ConnDesc}", PgConnectionString.Describe(connectionString));
                 return new ListDatabasesResponse { Ok = false, ErrorMessage = refusal.Message, ErrorCode = refusal.Code };
             }
+
+            // Spec 043 follow-up (review): a new tab's dialog lists with the password of the tab it was opened from, as its
+            // test and its connect do; a remembered password is filled in below when there is still none.
+            connectionString = ConnectionChangedHandler.CopyPassword(connectionString, (int)DatabaseKind.PostgreSql, request.CopyPasswordFromSessionId, ctx);
 
             string host = string.Empty;
             int port = 0;

@@ -98,7 +98,7 @@ public sealed class HistoryRaceAndKeyboardTests : BunitContext
         Services.AddSingleton<IDialogService>(new FakeDialogService());
         Services.AddSingleton<INotificationService>(new FakeNotificationService());
         Services.AddSingleton<IFileDownloader>(new NoDownloads());
-        Services.AddSingleton<EditorDocumentFlow>();
+        Services.AddSingleton<IQueryTabs, QueryTabs>();   // spec 043: History opens queries in tabs
     }
 
     private static AngleSharp.Dom.IElement Row(IRenderedComponent<HistoryPage> page, string title) =>

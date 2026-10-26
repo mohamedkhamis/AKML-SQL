@@ -421,8 +421,12 @@ public sealed class ResultsGridTests
         Assert.True(await grid.EvaluateAsync<bool>("el => el === document.activeElement"));
 
         // Arrow to the cut cell: its tooltip shows; Escape dismisses it.
+        // Spec 043 (contracts/web-ui.md §3): a query tab's grid ids are akml-grid-{tabId}-{set}, so the first cell of set 0
+        // is akml-grid-{tabId}-0-0-0.
+        var tabId = await s.Page.Locator("[data-testid='doc-tab'][data-active='true']").GetAttributeAsync("data-tab-id");
+        Assert.False(string.IsNullOrEmpty(tabId), "The active query tab has no data-tab-id.");
         await s.Page.Keyboard.PressAsync("ArrowDown");
-        await Assertions.Expect(grid).ToHaveAttributeAsync("aria-activedescendant", "akml-grid-0-0-0");
+        await Assertions.Expect(grid).ToHaveAttributeAsync("aria-activedescendant", $"akml-grid-{tabId}-0-0-0");
         var tooltip = s.Page.Locator("[data-testid='results-cell-tooltip']");
         await Assertions.Expect(tooltip).ToBeVisibleAsync();
         await s.Page.Keyboard.PressAsync("Escape");

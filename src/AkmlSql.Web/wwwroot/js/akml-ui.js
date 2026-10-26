@@ -30,7 +30,8 @@ export function installHelpTooltips() {
     };
     const focus = e => {
         close();
-        const el = e.target.closest?.('.akml-editor-toolbar [title], .cm-lint-marker[title]');
+        // Spec 043 (FR-012): a query tab's help names the keys that move between tabs and close one.
+        const el = e.target.closest?.('.akml-editor-toolbar [title], .cm-lint-marker[title], .akml-doctabs [role="tab"][title]');
         if (!el || !el.title) return;
         owner = el;
         previousDescription = el.getAttribute('aria-describedby');
@@ -163,13 +164,37 @@ const TAB_STRIP_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Home', 'End']);
 
 /** Cancel the browser's default for the keys a tab strip owns (Arrow scrolling the page, Home/End
  *  jumping it). Only these: an unconditional preventDefault would also cancel Tab and trap focus.
- *  TabStrip's own @onkeydown still runs and moves the selection. Idempotent per element. */
-export function trapTabStripKeys(el) {
+ *  TabStrip's own @onkeydown still runs and moves the selection. Idempotent per element.
+ *  Spec 043: a closable strip's tabs are divs, so Space (which would scroll the page) is theirs too; a strip of
+ *  button tabs keeps Space for the button's own click. A closable strip also cancels the middle-button press. */
+export function trapTabStripKeys(el, closable) {
     if (!el || el.dataset.akmlTabTrapped === '1') return;
     el.dataset.akmlTabTrapped = '1';
     el.addEventListener('keydown', (e) => {
-        if (TAB_STRIP_KEYS.has(e.key)) e.preventDefault();
+        if (TAB_STRIP_KEYS.has(e.key) || (closable && e.key === ' ' && e.target?.getAttribute?.('role') === 'tab')) e.preventDefault();
     });
+    // A closable strip closes a tab on a middle-button release; cancelling the press stops the browser's autoscroll.
+    if (closable) el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+}
+
+/**
+ * Spec 043 (review of US1): after a query tab was closed, give focus to the tab now active (element id `tabId`) when the closed
+ * tab had it — its element is gone, so focus fell to the page body. Focus anywhere else (the editor, a dialog) stays put.
+ */
+export function refocusTabStrip(list, tabId, doc = (typeof document === 'undefined' ? null : document)) {
+    if (!list || !doc) return false;
+    const active = doc.activeElement;
+    if (active && active !== doc.body) return false;
+    const tab = doc.getElementById(tabId);
+    if (!tab || !list.contains(tab) || typeof tab.focus !== 'function') return false;
+    tab.focus();
+    return true;
+}
+
+/** Spec 043: scroll the tab with element id `tabId` into view inside the strip `list` (the active query tab). */
+export function revealTab(list, tabId) {
+    const tab = list && document.getElementById(tabId);
+    if (tab && typeof tab.scrollIntoView === 'function') tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 // ── Keyboard lists (Pages/History.razor, Pages/Snippets.razor) ──────────────────────────────────────

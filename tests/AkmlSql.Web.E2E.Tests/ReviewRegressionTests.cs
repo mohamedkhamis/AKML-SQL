@@ -32,10 +32,13 @@ public sealed class ReviewRegressionTests(ITestOutputHelper output)
         }
     }
 
+    // Spec 043 (R11, contracts/web-ui.md §6): History opens and re-runs a past query in a new tab. The saved, modified work stays in
+    // its own tab with its text and * mark, and nothing is asked (as SSMS opens a new window). The entry ran in a default-named tab,
+    // so History names it query-NN; the new tab takes the next default name (data-model §1). Only Re-execute runs it.
     [SkippableTheory]
     [InlineData("history-open")]
     [InlineData("history-reexecute")]
-    public async Task History_cancel_preserves_work_and_confirm_opens_a_new_document(string action)
+    public async Task History_opens_the_query_in_a_new_tab_and_leaves_the_modified_work_alone(string action)
     {
         await using var s = await WebAppFixture.WithSqlOrSkipAsync(output);
         var page = s.Page;
@@ -52,20 +55,35 @@ public sealed class ReviewRegressionTests(ITestOutputHelper output)
         await row.WaitForAsync(new() { Timeout = 30_000 });
         await row.ClickAsync();
         await page.GetByTestId(action).ClickAsync();
-        await Assertions.Expect(page.GetByTestId("dialog-message")).ToContainTextAsync("audit.v2.255");
-        await page.GetByTestId("dialog-cancel").ClickAsync();
-        await page.GetByTestId("nav-editor").ClickAsync();
-        await Assertions.Expect(page.Locator(".cm-content")).ToHaveTextAsync("SELECT 'unsaved review work';");
-        await Assertions.Expect(page.GetByTestId("doc-name")).ToHaveTextAsync("audit.v2.255");
-        await page.GetByTestId("nav-history").ClickAsync();
-        await row.ClickAsync();
-        await page.GetByTestId(action).ClickAsync();
-        await page.GetByTestId("dialog-confirm").ClickAsync();
+
+        // A new tab, active, with the next default name, and nothing asked.
+        var tabs = page.GetByTestId("doc-tab");
+        await Assertions.Expect(tabs).ToHaveCountAsync(2);
+        await Assertions.Expect(page.GetByTestId("dialog")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid='doc-tab'][data-active='true']")).ToContainTextAsync("SQLQuery2");
         await Assertions.Expect(page.GetByTestId("doc-name")).ToHaveTextAsync("SQLQuery2");
         await Assertions.Expect(page.Locator(".cm-content")).ToHaveTextAsync("SELECT 255 AS review_history;");
         await Assertions.Expect(page.GetByTestId("doc-modified")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.GetByTestId("status-connection")).ToContainTextAsync("localhost/tempdb", new() { Timeout = 30_000 });
+        // Both tabs keep a results pane (the work tab's still holds its run): look in the active one only.
+        var pane = page.GetByTestId("results-pane");
         if (action == "history-reexecute")
-            await Assertions.Expect(page.GetByTestId("results-cell-0-0")).ToHaveTextAsync("255");
+            await Assertions.Expect(pane.GetByTestId("results-cell-0-0")).ToHaveTextAsync("255", new() { Timeout = 30_000 });
+        else
+        {
+            // Open never runs it: no finished run and none in flight.
+            await Assertions.Expect(page.GetByTestId("execute-complete")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.GetByTestId("execute-running")).ToHaveCountAsync(0);
+            await Assertions.Expect(pane.GetByTestId("results-cell-0-0")).ToHaveCountAsync(0);
+        }
+
+        // The work is kept in its own tab: its name, its * mark and its text.
+        await Assertions.Expect(tabs.First).ToContainTextAsync("audit.v2.255");
+        await Assertions.Expect(tabs.First).ToHaveAttributeAsync("data-modified", "true");
+        await tabs.First.ClickAsync();
+        await Assertions.Expect(page.GetByTestId("doc-name")).ToHaveTextAsync("audit.v2.255");
+        await Assertions.Expect(page.GetByTestId("doc-modified")).ToHaveCountAsync(1);
+        await Assertions.Expect(page.Locator(".cm-content")).ToHaveTextAsync("SELECT 'unsaved review work';");
     }
 
     [SkippableFact]

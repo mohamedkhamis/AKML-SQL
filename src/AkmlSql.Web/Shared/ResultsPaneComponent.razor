@@ -8,6 +8,11 @@
     The page owns the result and which tab shows (ActiveTab is two-way): Results after a run with sets and no
     error, else Messages (FR-020); Problems after an Analyse with findings (FR-034). All three panels stay
     mounted — hiding one keeps its grids' pending edits. Styles: components/results-grid.css.
+
+    Spec 043 (contracts/web-ui.md §3): the page renders one pane per query tab, every one mounted, the inactive ones
+    hidden. IdPrefix keeps their element ids apart (akml-results-{tab}, grids akml-grid-{tab}-{set}); only the active
+    pane carries the test ids browser tests share; the running clock counts from the tab's own start (RunStartedAt);
+    Apply goes through the tab's own session.
 *@
 @using AkmlSql.Core.Ipc.Messages
 @using AkmlSql.Web.Services
@@ -16,7 +21,7 @@
 @inject IServiceProvider Services
 @inject IJSRuntime JS
 
-<div class="akml-results-pane" data-testid="results-pane" aria-busy="@(IsRunning ? "true" : null)">
+<div class="akml-results-pane" data-testid="@(IsActive ? "results-pane" : "results-pane-inactive")" aria-busy="@(IsRunning ? "true" : null)">
     <TabStrip Tabs="Tabs" ActiveId="@ActiveTab" ActiveIdChanged="OnTabChanged" AriaLabel="Results pane"
               IdPrefix="@IdPrefix" Name="results">
         <Trailing>
@@ -25,7 +30,8 @@
                 <span class="akml-results-running" data-testid="results-running" role="status">
                     <Icon Name="loader-circle" Size="14" Class="akml-spin" />
                     <span>Executing @ElapsedText</span>
-                    <span class="akml-results-running-note">A running statement can't be interrupted.</span>
+                    @* Spec 043 (review of US1): the engine answers a page's requests side by side (R3), so Cancel reaches a running statement. *@
+                    <span class="akml-results-running-note">Cancel stops the running statement.</span>
                 </span>
             }
             else if (Result != null)
@@ -94,6 +100,7 @@
                             }
                             <ResultSetGrid @ref="_grids[n]" Set="set" SetIndex="n" OnApplied="OnApplied"
                                            FrozenReason="@(IsRunning ? RunningReason : FrozenReason)" ConnectionStamp="@Result?.ConnectionStamp"
+                                           IdPrefix="@GridIdPrefix(n)" Session="Session"
                                            OnPendingEditsChanged="OnGridPendingEditsChanged"
                                            DocumentName="@DocumentName" FallbackCatalog="@Result?.CurrentDatabase" ShowColumnTypes="ShowColumnTypes"
                                            RetainLineBreaksOnCopy="RetainLineBreaksOnCopy"
@@ -135,8 +142,26 @@
     public const string MessagesTab = "messages";
     public const string ProblemsTab = "problems";
 
-    private const string IdPrefix = "akml-results";
+    private const string DefaultIdPrefix = "akml-results";
     private const int JumpThreshold = 5;
+
+    /// <summary>Spec 043: prefix of the pane's element ids; a query tab's pane is <c>akml-results-{tabId}</c>.</summary>
+    [Parameter] public string IdPrefix { get; set; } = DefaultIdPrefix;
+
+    /// <summary>Spec 043: this pane is the active query tab's. Only it carries the shared test ids (<c>results-pane</c>,
+    /// <c>results-tab-*</c>); an inactive one is <c>results-pane-inactive</c>.</summary>
+    [Parameter] public bool IsActive { get; set; } = true;
+
+    /// <summary>Spec 043: when this tab's run began; the running clock counts from it. Null: the app-wide status's clock.</summary>
+    [Parameter] public DateTimeOffset? RunStartedAt { get; set; }
+
+    /// <summary>Spec 043: the query tab's connection; a grid's Apply is sent through it. Null: the active tab's.</summary>
+    [Parameter] public SqlSessionState? Session { get; set; }
+
+    // akml-results → akml-grid-{n}; akml-results-{tab} → akml-grid-{tab}-{n}.
+    private string GridIdPrefix(int n) => IdPrefix.StartsWith(DefaultIdPrefix, StringComparison.Ordinal)
+        ? "akml-grid" + IdPrefix.Substring(DefaultIdPrefix.Length) + "-" + n.ToString(Inv)
+        : IdPrefix + "-grid-" + n.ToString(Inv);
     private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
 
     /// <summary>The last execute (or parse); null before the first.</summary>
@@ -232,18 +257,25 @@
 
     private IReadOnlyList<TabItem> Tabs => new[]
     {
-        new TabItem(ResultsTab, "Results", TestId: "results-tab-results"),
-        new TabItem(MessagesTab, "Messages", TestId: "results-tab-messages",
+        new TabItem(ResultsTab, "Results", TestId: TabTestId(ResultsTab)),
+        new TabItem(MessagesTab, "Messages", TestId: TabTestId(MessagesTab),
             BadgeKind: ErrorCount > 0 ? "error" : null, Badge: ErrorCount > 0 ? ErrorCount.ToString(Inv) : null),
-        new TabItem(ProblemsTab, "Problems", TestId: "results-tab-problems",
+        new TabItem(ProblemsTab, "Problems", TestId: TabTestId(ProblemsTab),
             Badge: AnalysisEnabled && _problemsCount > 0 ? _problemsCount.ToString(Inv) : null,
-            BadgeTestId: "results-problems-badge"),
+            BadgeTestId: IsActive ? "results-problems-badge" : null),
     };
+
+    private string TabTestId(string tab) => IsActive ? "results-tab-" + tab : "results-inactive-tab-" + tab;
 
     private int ErrorCount => Result?.MessageDetails?.Count(m => m.Kind == ExecuteMessageKind.Error) ?? 0;
 
-    private string ElapsedText =>
-        TimeSpan.FromMilliseconds(_workspace?.ElapsedMs ?? 0).ToString(@"hh\:mm\:ss", Inv);
+    private string ElapsedText => TimeSpan.FromMilliseconds(ElapsedMs).ToString(@"hh\:mm\:ss", Inv);
+
+    // The tab's own start when the page gives one; otherwise (one pane, a run started from a key before the page rendered)
+    // the app-wide status, which then describes this pane's run.
+    private long ElapsedMs => RunStartedAt is { } start
+        ? (long)Math.Max(0, ((_workspace?.Now ?? DateTimeOffset.UtcNow) - start).TotalMilliseconds)
+        : _workspace?.ElapsedMs ?? 0;
 
     private static string SetHeader(int n, ExecuteResultSet set)
     {
@@ -268,13 +300,15 @@
         int n = Sets.Length;
         if (_grids.Length != n) _grids = new ResultSetGrid?[n];
         if (_sections.Length != n) _sections = new ElementReference[n];
-        _elapsedTimer?.Change(IsRunning ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
+        // A hidden pane does not tick; it shows the right time again when its tab becomes active.
+        _elapsedTimer?.Change(IsRunning && IsActive ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
     }
 
     // The running clock follows the workspace's phase as well as IsRunning: a run started from a key (no render of the page yet)
     // still ticks from its first second.
     private void OnWorkspaceChanged() => _ = InvokeAsync(() =>
     {
+        if (!IsActive) return;   // the app-wide status is the active tab's
         bool running = IsRunning || _workspace?.Phase == ExecutionPhase.Running;
         _elapsedTimer?.Change(running ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
         StateHasChanged();

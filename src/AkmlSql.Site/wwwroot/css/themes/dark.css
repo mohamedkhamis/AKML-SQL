@@ -4,6 +4,15 @@
   Do not edit by hand. Run the script to regenerate after editing the JSON.
 */
 :root {
+    /* Marketing */
+    --akml-marketing-canvas: #101c2a;
+    --akml-marketing-panel: #1c2c3e;
+    --akml-marketing-soft: #172637;
+    --akml-marketing-primary: #edf2f7;
+    --akml-marketing-secondary: #b0bfcd;
+    --akml-marketing-border: #415368;
+    --akml-marketing-accent: #f2a17f;
+    --akml-marketing-onaccent: #15263a;
     /* Surface */
     --akml-surface-canvas: #0f172a;
     --akml-surface-panel: #1e293b;
@@ -45,6 +54,10 @@
     --akml-editor-spinnerstroke: #60a5fa;
     --akml-editor-popupbackground: #1e293b;
     --akml-editor-popupborder: rgba(255, 255, 255, 0.078);
+    --akml-editor-selection: #264f78;
+    --akml-editor-activeline: #21304a;
+    --akml-editor-matchingbracket: #60a5fa;
+    --akml-editor-searchmatch: #5c4813;
     /* Chat */
     --akml-chat-userbubble: #1e3a5f;
     --akml-chat-assistantbubble: #334155;
@@ -53,7 +66,7 @@
     --akml-syntax-keyword: #60a5fa;
     --akml-syntax-string: #4ade80;
     --akml-syntax-number: #fb923c;
-    --akml-syntax-comment: #64748b;
+    --akml-syntax-comment: #8a99af;
     --akml-syntax-function: #c084fc;
     --akml-syntax-tablecolumn: #22d3ee;
     /* IconBadge */
@@ -114,6 +127,7 @@
     --akml-type-editor-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
     --akml-type-editor-size: 13px;
     --akml-type-editor-weight: 400;
+    --akml-type-editor-line-height: 1.25;
     --akml-type-editorgrid-family: Consolas, 'Cascadia Mono', 'Courier New', monospace;
     --akml-type-editorgrid-size: 12px;
     --akml-type-editorgrid-weight: 400;

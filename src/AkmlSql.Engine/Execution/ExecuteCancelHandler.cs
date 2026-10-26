@@ -10,12 +10,12 @@ namespace AkmlSql.Engine.Execution
     /// Spec 030 — Phase 5. NOTIFICATION handler (registered via RegisterRaw returning a null frame,
     /// like AiStreamCancel=78). Signals the per-session CancellationTokenSource for a QueryId.
     ///
-    /// <para>HONEST SCOPE: on the single serial browser socket this reliably cancels a QUEUED execute
-    /// (one still waiting on the per-session semaphore) and is the CTS-registry hook. It cannot
-    /// interrupt a command that is actively block-awaiting on the same socket — the ExecuteCancel
-    /// frame can't be read until the active command returns. The real bound on a runaway active query
-    /// is commandTimeout + the row/byte cap. Kept so queued-cancel works now and as the wiring point
-    /// for a future control-channel.</para>
+    /// <para>Spec 043 (research R3): the WebSocket transport answers a browser's requests side by side and reads notifications
+    /// while a request runs, so this cancel reaches an execute that is RUNNING, not only one still queued on the session gate:
+    /// the CTS is linked into the command, SqlClient (or Npgsql) asks the server to stop the statement, and the batches after it
+    /// are skipped (RunningStatementCancelIntegrationTests). The execute registers its CTS as soon as it is read, so a cancel
+    /// also stops one still queued behind another run on the session or still waiting for its connection to open. The
+    /// execute's time limit and the row/byte caps still bound a runaway script.</para>
     /// </summary>
     public sealed class ExecuteCancelHandler
     {

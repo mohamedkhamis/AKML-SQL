@@ -1,13 +1,13 @@
 {
-    "generatedAt":  "2026-10-19T21:17:28Z",
+    "generatedAt":  "2026-10-25T06:46:57Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
-                                           "updated":  "2026-10-15"
+                                           "updated":  "2026-10-24"
                                        },
                  "configuration.md":  {
                                           "added":  "2026-03-24",
-                                          "updated":  "2026-10-15"
+                                          "updated":  "2026-10-22"
                                       },
                  "formatting.md":  {
                                        "added":  "2026-03-24",
@@ -15,11 +15,15 @@
                                    },
                  "postgresql-reference.md":  {
                                                  "added":  "2026-10-14",
-                                                 "updated":  "2026-10-14"
+                                                 "updated":  "2026-10-24"
                                              },
                  "topics/ai-assistance.md":  {
                                                  "added":  "2026-08-29",
                                                  "updated":  "2026-10-07"
+                                             },
+                 "topics/browser-setup.md":  {
+                                                 "added":  "2026-10-22",
+                                                 "updated":  "2026-10-22"
                                              },
                  "topics/connecting.md":  {
                                               "added":  "2026-08-29",
