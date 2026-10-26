@@ -102,3 +102,4 @@ src/AkmlSql.Site/wwwroot/update-manifest.json
 src/AkmlSql.Site/wwwroot/docs-metadata.json
 /.review-artifacts/*
 .review-artifacts/*
+reports/linkedin-carousel-2026-10-25/*
