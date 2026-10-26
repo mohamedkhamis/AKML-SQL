@@ -9,6 +9,18 @@
 
 ## At a glance
 
+**Hosting update (spec 045).** The historical M4 IIS-first design below is
+superseded by **Standalone Windows service (recommended)**, **IIS**, and **Don't
+host (files only)**. Standalone serves pages and engine on one port, normally
+`http://localhost:47291/`; LAN uses `https://COMPUTERNAME:<port>/` and one engine
+firewall rule. IIS requires its HTTP features, services and management probe to be
+ready; setup does not enable Windows features. `/WEB_HOST=SERVICE|IIS|NONE` selects
+the host; `/WEB_PORT` and `/WEB_HTTPS_PORT` are IIS-only. Switching addresses changes
+browser storage origin, so export settings first; engine history is kept. On shared
+Windows sessions, another local user can occupy a localhost origin while the
+service is stopped. Follow [current setup](quickstart-m4.md) and
+[pairing](quickstart-m3.md) for operation.
+
 Seven milestones take AKML SQL from "SSMS/VS plugin only" to "browser-based local web edition installable to IIS, usable on localhost or LAN, fully independent from the IDE plugins."
 
 | # | Milestone | Effort | Ship value |

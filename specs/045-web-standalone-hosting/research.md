@@ -879,7 +879,43 @@ Inno docs advise against it.
 | S6 | Whether `sc config start= auto` clears `DelayedAutostart`. The plan writes 0 explicitly either way. | `sc qc` on VM A after each step. | n/a (the explicit write covers it). |
 | S7 | A custom `{app}` created by an older, elevated setup is owned by Administrators, so R22's ownership refusal does not block its upgrade. | Install an earlier release to `D:\AKML` on VM A, check the owner with `(Get-Acl).GetOwner([System.Security.Principal.SecurityIdentifier])`, then upgrade with 045 setup. | Refuse only reparse points; otherwise take ownership and reset the ACL (R22). |
 
+## Local implementation evidence (2026-10-26)
+
+S5 passed through the real .NET 10 transport with raw TCP request lines; exact
+scope/results are in baseline.md. The manifest additionally excludes known state
+filenames even if copied into the public tree. HTTP.SYS preempts an IPv6 Host
+header on the unchanged IPv4 loopback registration (400 Invalid Hostname); the
+application allowlist itself accepts `[::1]`. This does not add a listener or
+registration. S1–S4, S6 and S7 remain unrun because disposable VMs are unavailable.
+
+The pure exposure function is named `InferPreviousExposure`, avoiding the
+Pascal function/global name collision in the original task wording. The IIS
+ToolsUnavailable reason remains generic until S4 provides the exact feature.
+
 ## Found, not fixed (recorded in `doc/progress.md` › 045 deferred)
+
+### Owner-authorized continuation without VMs (2026-10-26)
+
+After the T034 failure, the owner explicitly deferred that task to Claude Code
+and requested the remaining implementation. The VM experiments are still unrun.
+Source integration proceeds with these provisional choices:
+
+- S1: keep legacy component names hidden. ISCC rejects literal `Check: False` in
+  the planned fallback; `Check: WebLegacyComponent` calls an always-false function
+  and compiles. This is compiler evidence, not an upgrade-migration result.
+- S2: a shortened list and wrapped TNewStaticText readiness/move notice. DPI and
+  keyboard behavior remain unverified; no screenshot result is invented.
+- S4: retain the generic management-tools recovery text until the exact feature
+  and cold probe time are measured on the prescribed matrix.
+- S7: retain the strict custom-folder owner refusal. Also refuse reparse entries
+  before recursive ownership changes. Compatibility with old custom-folder owners
+  remains unverified; the permissive ownership fallback has not been assumed.
+
+S3/S6 and all quickstart disposable-machine rows remain pending. Source changes
+now implement all host paths, repair and uninstall; those tests do not substitute
+for machine acceptance. T034's strict test and failure evidence are retained.
+
+### Remaining recorded findings
 
 - `CurPageChanged` compares page IDs with `>`, so the Options-page capture fires on the wrong
   pages (I3).

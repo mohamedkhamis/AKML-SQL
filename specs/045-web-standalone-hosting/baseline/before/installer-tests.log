@@ -1,0 +1,5 @@
+Test run for D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: D:\Repo\01-Khamis-Projects\AKML-SQL\specs\045-web-standalone-hosting\baseline\before\installer.trx
+
+Passed!  - Failed:     0, Passed:    64, Skipped:     0, Total:    64, Duration: 22 s - AkmlSql.Installer.Tests.dll (net10.0)

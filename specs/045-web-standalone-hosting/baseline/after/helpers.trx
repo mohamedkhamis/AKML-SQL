@@ -1,0 +1,271 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c8ccb2fc-8627-42c1-9375-9115a1cb3010" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 14:23:25" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T14:23:25.4533023+03:00" queuing="2026-10-26T14:23:25.4533029+03:00" start="2026-10-26T14:23:23.0386506+03:00" finish="2026-10-26T14:23:57.2318922+03:00" />
+  <TestSettings name="default" id="dd211f07-a9bf-4884-ad8a-d28b4b2c4352">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_14_23_25" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="6452b16e-9ba2-4b2f-b146-c61fec864ff0" testId="8e020437-69ec-f5dc-0111-976949c04517" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.8695081" startTime="2026-10-26T14:23:31.8094425+03:00" endTime="2026-10-26T14:23:32.6790257+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6452b16e-9ba2-4b2f-b146-c61fec864ff0" />
+    <UnitTestResult executionId="63447d52-fda4-4ac0-b87d-469d5f961150" testId="b07c7d25-3ec8-6717-8507-fb5028376878" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Add&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:01.0279490" startTime="2026-10-26T14:23:33.4789416+03:00" endTime="2026-10-26T14:23:34.5068413+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="63447d52-fda4-4ac0-b87d-469d5f961150" />
+    <UnitTestResult executionId="a18b410a-7896-445e-8a8e-83c4184ef328" testId="fabb2899-edac-a083-b288-93ae75edec27" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.8997765" startTime="2026-10-26T14:23:34.5070725+03:00" endTime="2026-10-26T14:23:35.4068002+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a18b410a-7896-445e-8a8e-83c4184ef328" />
+    <UnitTestResult executionId="a86ff015-0875-4710-aed1-707f81326a8c" testId="6b30d58c-b4e6-7e45-ee4f-3b7003039849" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part" computerName="MOHAMED-KHAMIS" duration="00:00:00.3008241" startTime="2026-10-26T14:23:24.8989271+03:00" endTime="2026-10-26T14:23:25.1754783+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a86ff015-0875-4710-aed1-707f81326a8c">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 77&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="88045711-d9a7-43e1-aeac-ba07a4dc212d" testId="02e88b5a-bc15-7d56-01d5-b714fd981e26" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;IIS welcome&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 2)" computerName="MOHAMED-KHAMIS" duration="00:00:04.1639177" startTime="2026-10-26T14:23:36.9587725+03:00" endTime="2026-10-26T14:23:41.1258230+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="88045711-d9a7-43e1-aeac-ba07a4dc212d" />
+    <UnitTestResult executionId="0d2a2f42-9de1-4ab9-9c6c-65d0be2bec3d" testId="81c61d57-2b44-17af-b8ba-25eb41ddacd0" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;AKML SQL engine: reachable&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" computerName="MOHAMED-KHAMIS" duration="00:00:03.9620115" startTime="2026-10-26T14:23:41.1270464+03:00" endTime="2026-10-26T14:23:45.0895216+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0d2a2f42-9de1-4ab9-9c6c-65d0be2bec3d" />
+    <UnitTestResult executionId="5daec156-c4da-40e0-ab88-bcae5321b80d" testId="078bdfbc-46c0-dc97-5bec-efb4532485c9" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.9199087" startTime="2026-10-26T14:23:35.4084334+03:00" endTime="2026-10-26T14:23:36.3268267+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5daec156-c4da-40e0-ab88-bcae5321b80d" />
+    <UnitTestResult executionId="db977f1f-484e-4686-911d-19fee5c2a9a3" testId="a1d694d4-e782-556f-b5fe-ea9c28ea1aa9" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh" computerName="MOHAMED-KHAMIS" duration="00:00:00.6313927" startTime="2026-10-26T14:23:36.3270569+03:00" endTime="2026-10-26T14:23:36.9583715+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="db977f1f-484e-4686-911d-19fee5c2a9a3" />
+    <UnitTestResult executionId="3700a2d5-5690-4ec3-a4f9-7d8480d0fa5c" testId="38c57fa8-6a1b-148b-7550-ae50d7db8a27" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason" computerName="MOHAMED-KHAMIS" duration="00:00:05.1046469" startTime="2026-10-26T14:23:52.0506363+03:00" endTime="2026-10-26T14:23:57.1551416+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3700a2d5-5690-4ec3-a4f9-7d8480d0fa5c" />
+    <UnitTestResult executionId="95866719-07f3-4e80-9d83-9dc469df5061" testId="e2fecfc5-6e35-64cb-9d4c-22cc82cb49fd" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.9036890" startTime="2026-10-26T14:23:30.9054809+03:00" endTime="2026-10-26T14:23:31.8092581+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="95866719-07f3-4e80-9d83-9dc469df5061" />
+    <UnitTestResult executionId="f3411856-2b4d-4684-8cac-28c5f09e4751" testId="71e90983-9994-0731-a31e-feb1f8ec3026" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Localhost&quot;, expected: &quot;127.0.0.1&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:01.4896536" startTime="2026-10-26T14:23:25.1783349+03:00" endTime="2026-10-26T14:23:26.6656027+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f3411856-2b4d-4684-8cac-28c5f09e4751">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 106&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="63fa3194-0040-44f2-94da-453bc43aebd3" testId="ca167fee-f15d-0f3f-67c3-a7724b1eac7f" testName="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Lan&quot;, bind: &quot;0.0.0.0&quot;, webRoot: &quot;&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:01.1677264" startTime="2026-10-26T14:23:28.1224941+03:00" endTime="2026-10-26T14:23:29.2891440+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="63fa3194-0040-44f2-94da-453bc43aebd3" />
+    <UnitTestResult executionId="a4aded4f-b055-43df-8e6d-fb5ddd089e07" testId="e3b86658-3c38-4fe5-cc03-523fabf0fdfe" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: True, expectation: &quot;ExpectEngine&quot;, expectedExit: 0)" computerName="MOHAMED-KHAMIS" duration="00:00:01.5630144" startTime="2026-10-26T14:23:45.0910683+03:00" endTime="2026-10-26T14:23:46.6530656+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a4aded4f-b055-43df-8e6d-fb5ddd089e07" />
+    <UnitTestResult executionId="cecff925-60c0-4d99-bd15-ffecdc96b571" testId="2eefc5c6-93c1-1b72-ea03-d99ee24bec12" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Lan&quot;, expected: &quot;0.0.0.0&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:01.1794768" startTime="2026-10-26T14:23:26.6674928+03:00" endTime="2026-10-26T14:23:27.8455871+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cecff925-60c0-4d99-bd15-ffecdc96b571">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 106&#xD;
+   at InvokeStub_WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f8bc2c4f-d745-4f5e-b97e-35c262946d12" testId="71f12f1b-d5a9-51f8-1d1c-c78a3ae02357" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7995763" startTime="2026-10-26T14:23:32.6791900+03:00" endTime="2026-10-26T14:23:33.4787238+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f8bc2c4f-d745-4f5e-b97e-35c262946d12" />
+    <UnitTestResult executionId="f5559dad-40ed-493a-9555-600ce2de9ab6" testId="9d35f90a-174e-0365-f8e2-caf80b6da476" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" computerName="MOHAMED-KHAMIS" duration="00:00:03.9039196" startTime="2026-10-26T14:23:48.1442889+03:00" endTime="2026-10-26T14:23:52.0487539+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f5559dad-40ed-493a-9555-600ce2de9ab6" />
+    <UnitTestResult executionId="a1c8d73f-e24c-4ce2-9986-18cacbb77b58" testId="e29683b1-7f40-9903-6b7e-8813903d1faa" testName="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Localhost&quot;, bind: &quot;127.0.0.1&quot;, webRoot: &quot;C:\\Program Files\\AKML SQL\\Web&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.8805780" startTime="2026-10-26T14:23:29.2905648+03:00" endTime="2026-10-26T14:23:30.1694541+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a1c8d73f-e24c-4ce2-9986-18cacbb77b58" />
+    <UnitTestResult executionId="0628e7da-2244-49c4-9032-adc1d5bb0d32" testId="20c61a97-b20e-42f8-474c-910476308b8a" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure" computerName="MOHAMED-KHAMIS" duration="00:00:00.4035249" startTime="2026-10-26T14:23:24.4477359+03:00" endTime="2026-10-26T14:23:24.8742081+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0628e7da-2244-49c4-9032-adc1d5bb0d32">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 52&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f4441733-0e9b-4070-ad81-52fa982c03ae" testId="9fd45b87-63e2-1521-a150-88c634972066" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs" computerName="MOHAMED-KHAMIS" duration="00:00:00.2707581" startTime="2026-10-26T14:23:27.8470255+03:00" endTime="2026-10-26T14:23:28.1168025+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f4441733-0e9b-4070-ad81-52fa982c03ae">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 86&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ec789c5a-31c2-451b-8f6f-20e9be3462e9" testId="9f4c2ef2-804d-1905-3ba4-f44b1048b91a" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;script src=\&quot;_framework/blazor.webassembly.js\&quot;&gt;&lt;&quot;···, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 0)" computerName="MOHAMED-KHAMIS" duration="00:00:01.4905042" startTime="2026-10-26T14:23:46.6536015+03:00" endTime="2026-10-26T14:23:48.1441213+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ec789c5a-31c2-451b-8f6f-20e9be3462e9" />
+    <UnitTestResult executionId="c95c9e8e-e9cd-4d67-a5b3-5d623d631cd5" testId="3d311460-a29d-4049-3d5a-1dd58a3fda6b" testName="AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log" computerName="MOHAMED-KHAMIS" duration="00:00:00.7352713" startTime="2026-10-26T14:23:30.1697069+03:00" endTime="2026-10-26T14:23:30.9049473+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c95c9e8e-e9cd-4d67-a5b3-5d623d631cd5" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="e2fecfc5-6e35-64cb-9d4c-22cc82cb49fd">
+      <Execution id="95866719-07f3-4e80-9d83-9dc469df5061" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9d35f90a-174e-0365-f8e2-caf80b6da476">
+      <Execution id="f5559dad-40ed-493a-9555-600ce2de9ab6" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: True, expectation: &quot;ExpectEngine&quot;, expectedExit: 0)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="e3b86658-3c38-4fe5-cc03-523fabf0fdfe">
+      <Execution id="a4aded4f-b055-43df-8e6d-fb5ddd089e07" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Add&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="b07c7d25-3ec8-6717-8507-fb5028376878">
+      <Execution id="63447d52-fda4-4ac0-b87d-469d5f961150" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="078bdfbc-46c0-dc97-5bec-efb4532485c9">
+      <Execution id="5daec156-c4da-40e0-ab88-bcae5321b80d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Lan&quot;, expected: &quot;0.0.0.0&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="2eefc5c6-93c1-1b72-ea03-d99ee24bec12">
+      <Execution id="cecff925-60c0-4d99-bd15-ffecdc96b571" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Config_reader_understands_real_PS51_config_output" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="3d311460-a29d-4049-3d5a-1dd58a3fda6b">
+      <Execution id="c95c9e8e-e9cd-4d67-a5b3-5d623d631cd5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebConfigBridgeTests" name="Dot_sourcing_creates_no_config_or_log" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="20c61a97-b20e-42f8-474c-910476308b8a">
+      <Execution id="0628e7da-2244-49c4-9032-adc1d5bb0d32" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Hosting_addresses_cover_every_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="a1d694d4-e782-556f-b5fe-ea9c28ea1aa9">
+      <Execution id="db977f1f-484e-4686-911d-19fee5c2a9a3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Dot_sourcing_never_runs_netsh" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9fd45b87-63e2-1521-a150-88c634972066">
+      <Execution id="f4441733-0e9b-4070-ad81-52fa982c03ae" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="71f12f1b-d5a9-51f8-1d1c-c78a3ae02357">
+      <Execution id="f8bc2c4f-d745-4f5e-b97e-35c262946d12" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;script src=\&quot;_framework/blazor.webassembly.js\&quot;&gt;&lt;&quot;···, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 0)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9f4c2ef2-804d-1905-3ba4-f44b1048b91a">
+      <Execution id="ec789c5a-31c2-451b-8f6f-20e9be3462e9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;IIS welcome&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 2)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="02e88b5a-bc15-7d56-01d5-b714fd981e26">
+      <Execution id="88045711-d9a7-43e1-aeac-ba07a4dc212d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Lan&quot;, bind: &quot;0.0.0.0&quot;, webRoot: &quot;&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="ca167fee-f15d-0f3f-67c3-a7724b1eac7f">
+      <Execution id="63fa3194-0040-44f2-94da-453bc43aebd3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebConfigBridgeTests" name="Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Localhost&quot;, expected: &quot;127.0.0.1&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="71e90983-9994-0731-a31e-feb1f8ec3026">
+      <Execution id="f3411856-2b4d-4684-8cac-28c5f09e4751" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Config_reader_understands_real_PS51_config_output" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="38c57fa8-6a1b-148b-7550-ae50d7db8a27">
+      <Execution id="3700a2d5-5690-4ec3-a4f9-7d8480d0fa5c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Closed_port_times_out_and_records_the_reason" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="6b30d58c-b4e6-7e45-ee4f-3b7003039849">
+      <Execution id="a86ff015-0875-4710-aed1-707f81326a8c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Readiness_uses_first_failure_and_names_each_missing_part" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;AKML SQL engine: reachable&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="81c61d57-2b44-17af-b8ba-25eb41ddacd0">
+      <Execution id="0d2a2f42-9de1-4ab9-9c6c-65d0be2bec3d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Localhost&quot;, bind: &quot;127.0.0.1&quot;, webRoot: &quot;C:\\Program Files\\AKML SQL\\Web&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="e29683b1-7f40-9903-6b7e-8813903d1faa">
+      <Execution id="a1c8d73f-e24c-4ce2-9986-18cacbb77b58" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebConfigBridgeTests" name="Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="fabb2899-edac-a083-b288-93ae75edec27">
+      <Execution id="a18b410a-7896-445e-8a8e-83c4184ef328" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="8e020437-69ec-f5dc-0111-976949c04517">
+      <Execution id="6452b16e-9ba2-4b2f-b146-c61fec864ff0" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="8e020437-69ec-f5dc-0111-976949c04517" executionId="6452b16e-9ba2-4b2f-b146-c61fec864ff0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b07c7d25-3ec8-6717-8507-fb5028376878" executionId="63447d52-fda4-4ac0-b87d-469d5f961150" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fabb2899-edac-a083-b288-93ae75edec27" executionId="a18b410a-7896-445e-8a8e-83c4184ef328" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6b30d58c-b4e6-7e45-ee4f-3b7003039849" executionId="a86ff015-0875-4710-aed1-707f81326a8c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="02e88b5a-bc15-7d56-01d5-b714fd981e26" executionId="88045711-d9a7-43e1-aeac-ba07a4dc212d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="81c61d57-2b44-17af-b8ba-25eb41ddacd0" executionId="0d2a2f42-9de1-4ab9-9c6c-65d0be2bec3d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="078bdfbc-46c0-dc97-5bec-efb4532485c9" executionId="5daec156-c4da-40e0-ab88-bcae5321b80d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a1d694d4-e782-556f-b5fe-ea9c28ea1aa9" executionId="db977f1f-484e-4686-911d-19fee5c2a9a3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="38c57fa8-6a1b-148b-7550-ae50d7db8a27" executionId="3700a2d5-5690-4ec3-a4f9-7d8480d0fa5c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e2fecfc5-6e35-64cb-9d4c-22cc82cb49fd" executionId="95866719-07f3-4e80-9d83-9dc469df5061" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="71e90983-9994-0731-a31e-feb1f8ec3026" executionId="f3411856-2b4d-4684-8cac-28c5f09e4751" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ca167fee-f15d-0f3f-67c3-a7724b1eac7f" executionId="63fa3194-0040-44f2-94da-453bc43aebd3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e3b86658-3c38-4fe5-cc03-523fabf0fdfe" executionId="a4aded4f-b055-43df-8e6d-fb5ddd089e07" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2eefc5c6-93c1-1b72-ea03-d99ee24bec12" executionId="cecff925-60c0-4d99-bd15-ffecdc96b571" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="71f12f1b-d5a9-51f8-1d1c-c78a3ae02357" executionId="f8bc2c4f-d745-4f5e-b97e-35c262946d12" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9d35f90a-174e-0365-f8e2-caf80b6da476" executionId="f5559dad-40ed-493a-9555-600ce2de9ab6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e29683b1-7f40-9903-6b7e-8813903d1faa" executionId="a1c8d73f-e24c-4ce2-9986-18cacbb77b58" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="20c61a97-b20e-42f8-474c-910476308b8a" executionId="0628e7da-2244-49c4-9032-adc1d5bb0d32" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9fd45b87-63e2-1521-a150-88c634972066" executionId="f4441733-0e9b-4070-ad81-52fa982c03ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9f4c2ef2-804d-1905-3ba4-f44b1048b91a" executionId="ec789c5a-31c2-451b-8f6f-20e9be3462e9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3d311460-a29d-4049-3d5a-1dd58a3fda6b" executionId="c95c9e8e-e9cd-4d67-a5b3-5d623d631cd5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="21" executed="21" passed="16" failed="5" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.20]   Discovering: AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.33]   Discovered:  AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.41]   Starting:    AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.88]       Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+[xUnit.net 00:00:00.88]       Compile aborted.&#xD;
+[xUnit.net 00:00:00.88]       &#xD;
+[xUnit.net 00:00:00.88]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.88]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:00.88]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(52,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure()&#xD;
+[xUnit.net 00:00:00.88]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.88]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:01.17]       Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+[xUnit.net 00:00:01.17]       Compile aborted.&#xD;
+[xUnit.net 00:00:01.17]       &#xD;
+[xUnit.net 00:00:01.17]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.17]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:01.17]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(77,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part()&#xD;
+[xUnit.net 00:00:01.17]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:01.17]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:02.66]       Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+[xUnit.net 00:00:02.66]       Compile aborted.&#xD;
+[xUnit.net 00:00:02.66]       &#xD;
+[xUnit.net 00:00:02.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:02.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(106,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected)&#xD;
+[xUnit.net 00:00:02.66]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:02.66]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:03.84]       Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+[xUnit.net 00:00:03.84]       Compile aborted.&#xD;
+[xUnit.net 00:00:03.84]       &#xD;
+[xUnit.net 00:00:03.84]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.84]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:03.84]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(106,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected)&#xD;
+[xUnit.net 00:00:03.84]            at InvokeStub_WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(Object, Span`1)&#xD;
+[xUnit.net 00:00:03.84]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.11]       Error on line 78 in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss: Unknown preprocessor directive.&#xD;
+[xUnit.net 00:00:04.11]       Compile aborted.&#xD;
+[xUnit.net 00:00:04.11]       &#xD;
+[xUnit.net 00:00:04.11]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.11]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:04.11]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(86,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs()&#xD;
+[xUnit.net 00:00:04.12]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.12]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:33.16]   Finished:    AkmlSql.Installer.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:23:24.8779797+03:00">
+        <Text>[xUnit.net 00:00:00.87]     AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:23:25.1762128+03:00">
+        <Text>[xUnit.net 00:00:01.17]     AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:23:26.6666375+03:00">
+        <Text>[xUnit.net 00:00:02.66]     AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: "Localhost", expected: "127.0.0.1") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:23:27.8462170+03:00">
+        <Text>[xUnit.net 00:00:03.84]     AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: "Lan", expected: "0.0.0.0") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:23:28.1172918+03:00">
+        <Text>[xUnit.net 00:00:04.11]     AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

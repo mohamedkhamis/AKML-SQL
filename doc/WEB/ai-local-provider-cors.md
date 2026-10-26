@@ -8,6 +8,12 @@ from the AKML SQL web origin, makes a cross-origin request to `http://localhost:
 (Ollama) or `http://localhost:1234` (LM Studio). The local server must be told to allow that
 origin, or the browser blocks the request.
 
+For standalone hosting (spec 045), allow the **page origin**, normally
+`http://localhost:47291` or `https://COMPUTERNAME:47291` for LAN, using the actual
+port from setup. If you open a different hostname such as `127.0.0.1`, that is a
+different origin and needs its own CORS entry. IIS continues to use its site origin.
+Update the local provider's allowed origins after switching host or port.
+
 ## Which providers work browser-direct
 
 | Provider | Browser-direct | Notes |

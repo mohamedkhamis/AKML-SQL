@@ -1,0 +1,17 @@
+Test run for D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Core.Tests\bin\Release\net10.0\AkmlSql.Core.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:02.37]     AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only [FAIL]
+  Failed AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only [7 ms]
+  Error Message:
+   Assert.Equal() Failure: Values differ
+Expected: 7
+Actual:   9
+  Stack Trace:
+     at AkmlSql.Core.Tests.Ipc.ProfileGetMessageTests.Response_key_layout_is_positional_and_append_only() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Core.Tests\Ipc\ProfileGetMessageTests.cs:line 88
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)
+[xUnit.net 00:00:02.60]     AkmlSql.Core.Tests.Theme.HardcodedHexScannerTests.NoHardcodedChromeHex [SKIP]
+  Skipped AkmlSql.Core.Tests.Theme.HardcodedHexScannerTests.NoHardcodedChromeHex [1 ms]
+Results File: D:\Repo\01-Khamis-Projects\AKML-SQL\specs\045-web-standalone-hosting\baseline\before\core.trx
+
+Failed!  - Failed:     1, Passed:  1470, Skipped:     1, Total:  1472, Duration: 4 s - AkmlSql.Core.Tests.dll (net10.0)

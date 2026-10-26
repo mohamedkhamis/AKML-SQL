@@ -11,6 +11,14 @@ description: "Task list for 045-web-standalone-hosting"
 automated checks, and the plan names the test classes (quickstart §1). In every phase, write the
 test tasks first, see them fail, then implement.
 
+**Owner continuation (2026-10-26).** The owner explicitly deferred T034 to Claude Code and
+asked to continue all remaining tasks. Keep T034 unchecked and its strict test unchanged.
+No disposable VMs are available: implement the remaining source/tests/docs locally, using
+the documented S1 compatibility fallback (retain hidden legacy component names), a wrapped
+readiness notice, the existing generic ToolsUnavailable guidance pending S4, and the strict
+custom-folder owner check pending S7. These are provisional choices, not passed spikes.
+VM experiments/acceptance and owner upgrades remain unchecked; do not run them on this host.
+
 **Spikes and machine rows are recording tasks, not TDD.** A spike (S1–S7, research.md § Spikes)
 ends when its outcome and the chosen branch are recorded in research.md. A disposable-machine row
 (quickstart §3) ends when its result is recorded in `baseline.md`. The task is done when the
@@ -94,14 +102,14 @@ the answer check. Then there is one phase per user story, in spec priority order
 
 **Purpose**: no installer test can touch a real install, and there is a recorded "before".
 
-- [ ] T001 Add the `AKML_INSTALLER_SMOKE=1` opt-in to `tests/AkmlSql.Installer.Tests/InstallerSmokeEnv.cs`.
+- [X] T001 Add the `AKML_INSTALLER_SMOKE=1` opt-in to `tests/AkmlSql.Installer.Tests/InstallerSmokeEnv.cs`.
   - Without the variable, `CanRun` is false, with the skip reason "installer smoke tests run the
     real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM".
   - Confirm that `IisProvisioningTests`, `LanTlsTests`, `ServiceHealthTests` and
     `ReRunAndUninstallTests` all gate on it.
   - Confirm that `dotnet test tests/AkmlSql.Installer.Tests --filter Category=InstallerSmoke` on
     this machine skips every test.
-- [ ] T002 Create `specs/045-web-standalone-hosting/baseline.md` with the results from before the feature.
+- [X] T002 Create `specs/045-web-standalone-hosting/baseline.md` with the results from before the feature.
   - Run:
     - the full Release solution build;
     - `dotnet test` for `tests/AkmlSql.Engine.Tests`, `tests/AkmlSql.Core.Tests`,
@@ -126,7 +134,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
 
 ### Tests for Phase 2 (write first; they must fail)
 
-- [ ] T003 [P] Create `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` in the `ProcessDetectionTests` style. ISCC compiles a probe `.iss` that `#include`s `src/AkmlSql.Installer/web-hosting.iss`, calls the functions in `InitializeSetup`, writes the results to a file and aborts. Cases:
+- [X] T003 [P] Create `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` in the `ProcessDetectionTests` style. ISCC compiles a probe `.iss` that `#include`s `src/AkmlSql.Installer/web-hosting.iss`, calls the functions in `InitializeSetup`, writes the results to a file and aborts. Cases:
   - **`ReadConfigString`**, over the real `config.json` that `web-config-bridge.ps1` writes under
     `powershell.exe` 5.1 (UTF-8 BOM, two spaces after each colon): `bindAddress` `127.0.0.1` and
     `0.0.0.0`; a missing key returns False.
@@ -136,7 +144,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
     - the first-match order (for example, NotEnabled wins over Disabled);
     - each reason text;
     - `Ready`.
-- [ ] T004 Extend `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` with `InferPreviousHost` and `PreviousExposure` (data-model §3).
+- [X] T004 Extend `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` with `InferPreviousHost` and `InferPreviousExposure` (data-model §3).
   - **Previous host.** A present `Host` wins. With no `Host`, no `BridgePort` and no service, the
     result is none. An `applicationHost.config` text that holds `<site name="AkmlSqlWeb"` gives
     IIS; without it, Service.
@@ -147,14 +155,14 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
     - Otherwise it is Localhost.
   - **Named cases**: the pre-045 IIS + LAN case, Lan only in `IisMode`, and Lan only in
     `config.json`.
-- [ ] T005 [P] Create `tests/AkmlSql.Installer.Tests/WebConfigBridgeTests.cs`. It dot-sources `src/AkmlSql.Installer/web-config-bridge.ps1` in `powershell.exe` 5.1. `Get-BridgeConfigJson`:
+- [X] T005 [P] Create `tests/AkmlSql.Installer.Tests/WebConfigBridgeTests.cs`. It dot-sources `src/AkmlSql.Installer/web-config-bridge.ps1` in `powershell.exe` 5.1. `Get-BridgeConfigJson`:
   - writes `bridge.webRoot`, both as a `…\Web` path and as "";
   - rewrites the whole `bridge` object with the data-model §6 keys;
   - keeps the other top-level keys of an existing file;
   - writes `0.0.0.0` for Lan and `127.0.0.1` for Localhost.
 
   Dot-sourcing the script writes no file.
-- [ ] T006 [P] Create `tests/AkmlSql.Installer.Tests/FirewallPlanTests.cs`. It dot-sources `src/AkmlSql.Installer/web-firewall.ps1`. `Get-FirewallPlan -WebHost -Exposure -EnginePort -HttpsPort` returns every data-model §5 row, with the ports:
+- [X] T006 [P] Create `tests/AkmlSql.Installer.Tests/FirewallPlanTests.cs`. It dot-sources `src/AkmlSql.Installer/web-firewall.ps1`. `Get-FirewallPlan -WebHost -Exposure -EnginePort -HttpsPort` returns every data-model §5 row, with the ports:
 
   | Host / exposure | `AKML SQL Web Engine` | `AKML SQL Web Site (HTTPS)` |
   | --- | --- | --- |
@@ -164,14 +172,14 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
   | any / Localhost | remove | remove |
 
   Dot-sourcing the script runs no `netsh`.
-- [ ] T007 [P] Create `tests/AkmlSql.Installer.Tests/WebHostingCheckTests.cs`. It runs `src/AkmlSql.Installer/web-hosting-check.ps1` as a `powershell.exe` 5.1 process against an in-test `HttpListener` on a free port (contract installer §5):
+- [X] T007 [P] Create `tests/AkmlSql.Installer.Tests/WebHostingCheckTests.cs`. It runs `src/AkmlSql.Installer/web-hosting-check.ps1` as a `powershell.exe` 5.1 process against an in-test `HttpListener` on a free port (contract installer §5):
   - 200 `text/html` with `X-AKML-Host: engine`, with `-ExpectEngine`: exit 0;
   - the plain page, or no header: exit 2;
   - `-ExpectBundle` with a body that contains `_framework/blazor.webassembly.js`: exit 0, and
     without it: exit 2;
   - a closed port: exit 1 within `-TimeoutSeconds 3`;
   - on a failure, the `-ReasonPath` file holds the reason.
-- [ ] T008 [P] Create `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`, with source-text facts over `src/AkmlSql.Installer/*.iss`.
+- [X] T008 [P] Create `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`, with source-text facts over `src/AkmlSql.Installer/*.iss`.
   - **Absent**:
     - `Components: web\iis` and `Components: web\service`;
     - `dism` and `IsIisInstalled`;
@@ -196,7 +204,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
   - Record in `specs/045-web-standalone-hosting/research.md` § Spikes whether Inno accepts the
     previous names it no longer knows, with no error and no stray component state.
   - Record the form chosen for T017: the entries removed, or kept with `Check: False`.
-- [ ] T010 [P] Create `src/AkmlSql.Installer/web-hosting.iss`. It is `[Code]` only and pure:
+- [X] T010 [P] Create `src/AkmlSql.Installer/web-hosting.iss`. It is `[Code]` only and pure:
   - `ReadConfigString(const Json, Key: String; var Value: String): Boolean`, modelled on
     `ReadConfigBool`: find `"Key"`, skip whitespace and `:`, then read the quoted value. It
     tolerates a BOM (I27).
@@ -208,8 +216,8 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
     missing.
 
   Make T003 pass.
-- [ ] T011 Add `InferPreviousHost` and `PreviousExposure` to `src/AkmlSql.Installer/web-hosting.iss`, per data-model §3. Their inputs are the values the readers collect, including the texts of `applicationHost.config` and `config.json`. Make T004 pass.
-- [ ] T012 [P] Restructure `src/AkmlSql.Installer/web-config-bridge.ps1` (R8, R21).
+- [X] T011 Add `InferPreviousHost` and `InferPreviousExposure` to `src/AkmlSql.Installer/web-hosting.iss`, per data-model §3. Their inputs are the values the readers collect, including the texts of `applicationHost.config` and `config.json`. Make T004 pass.
+- [X] T012 [P] Restructure `src/AkmlSql.Installer/web-config-bridge.ps1` (R8, R21).
   - Add a pure `Get-BridgeConfigJson`: it takes the existing JSON text, the port, the mode and the
     web root, and returns the new JSON text.
   - Add a `-WebRoot` parameter (default ""). `webRoot` is always written.
@@ -218,14 +226,14 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
   - Drop `#Requires`.
 
   Make T005 pass.
-- [ ] T013 [P] Restructure `src/AkmlSql.Installer/web-firewall.ps1` (R15, R17).
+- [X] T013 [P] Restructure `src/AkmlSql.Installer/web-firewall.ps1` (R15, R17).
   - Add a pure `Get-FirewallPlan` (data-model §5).
   - Add an entry point, `-Apply -WebHost -Exposure -EnginePort -HttpsPort`, that runs the plan
     with today's netsh delete-then-add by name. `profile=any` is unchanged.
   - The entry point is guarded and checks for administrator rights. No `#Requires`.
 
   Make T006 pass.
-- [ ] T014 [P] Create `src/AkmlSql.Installer/web-hosting-check.ps1` (contract installer §5, R16).
+- [X] T014 [P] Create `src/AkmlSql.Installer/web-hosting-check.ps1` (contract installer §5, R16).
   - **Parameters**: `-Url`, `-ExpectEngine` | `-ExpectBundle`, `-TimeoutSeconds 30` and
     `-ReasonPath`.
   - **Requests**: GET once a second until the timeout. TLS validation is off for this script's own
@@ -238,8 +246,8 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
     - Write the reason to `-ReasonPath`.
 
   Make T007 pass.
-- [ ] T015 In `src/AkmlSql.Installer/AkmlSqlSetup.iss`, add `#include "web-hosting.iss"` immediately before `#include "web-installer.iss"`.
-- [ ] T016 Add the thin readers to `src/AkmlSql.Installer/web-installer.iss`.
+- [X] T015 In `src/AkmlSql.Installer/AkmlSqlSetup.iss`, add `#include "web-hosting.iss"` immediately before `#include "web-installer.iss"`.
+- [X] T016 Add the thin readers to `src/AkmlSql.Installer/web-installer.iss`.
   - **`ReadIisReadiness(RunProbe: Boolean; var Reason: String): Integer`**:
     1. Read HKLM64:
        - `SOFTWARE\Microsoft\InetStp` `MajorVersion`;
@@ -256,7 +264,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
     3. Read `{sys}\inetsrv\config\applicationHost.config` and
        `{commonappdata}\AKML SQL Web\config.json` as files.
     4. Set the globals `PreviousHost` and `PreviousExposure` with T011's functions.
-- [ ] T017 Replace the two sub-components with one hosting choice in `src/AkmlSql.Installer/web-installer.iss` and `src/AkmlSql.Installer/AkmlSqlSetup.iss` (R9; contract installer §1 and §3).
+- [X] T017 Replace the two sub-components with one hosting choice in `src/AkmlSql.Installer/web-installer.iss` and `src/AkmlSql.Installer/AkmlSqlSetup.iss` (R9; contract installer §1 and §3).
   - **Components.** `[Components]` keeps only `web`, or uses T009's fallback.
   - **The choice.** Add the `WebHost` global (`Service`/`IIS`/`None`) and the Check functions
     `WebHostIsService`, `WebHostIsIis` and `WebHostHasHost`.
@@ -278,7 +286,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
     - `/WEB_HOST=IIS` gives IIS. Setup stops when `ReadIisReadiness(True)` is not Ready; this
       replaces `IsIisInstalled`.
     - otherwise `PreviousHost`, or Service on a new install.
-- [ ] T018 Rebuild `WebHostPage` in `src/AkmlSql.Installer/web-installer.iss` (contract installer §2).
+- [X] T018 Rebuild `WebHostPage` in `src/AkmlSql.Installer/web-installer.iss` (contract installer §2).
   - **Items**:
 
     | Constant | Index | Caption |
@@ -301,7 +309,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
   - **Removed**: the dism "Enable IIS now" dialog and `IsIisInstalled` (FR-006).
 
   Make T008 pass.
-- [ ] T019 Rework the start of `Web_PostInstall` in `src/AkmlSql.Installer/web-installer.iss` (contract installer §4, steps 1, 3 and 4).
+- [X] T019 Rework the start of `Web_PostInstall` in `src/AkmlSql.Installer/web-installer.iss` (contract installer §4, steps 1, 3 and 4).
   1. **Registry** (data-model §3): write `Host`, `Exposure`, `BridgePort` and `WebRoot` on every
      web install. Write `IisPort`, `HttpsPort` and `IisMode` for IIS only.
   2. **Log** `Web hosting: {h} (from page|/WEB_HOST|previous host)`.
@@ -317,7 +325,7 @@ web tasks (T022–T034, T036–T046) need only Phase 1, and can run in parallel 
   - Record the outcome in `specs/045-web-standalone-hosting/research.md` § Spikes.
   - If the check fails, move the reason into an `AddGroup` row after the options, in
     `src/AkmlSql.Installer/web-installer.iss`.
-- [ ] T021 Run `dotnet test tests/AkmlSql.Installer.Tests --filter "Category!=InstallerSmoke"` and an ISCC compile of `src/AkmlSql.Installer/AkmlSqlSetup.iss`. Record the results in `specs/045-web-standalone-hosting/baseline.md`.
+- [X] T021 Run `dotnet test tests/AkmlSql.Installer.Tests --filter "Category!=InstallerSmoke"` and an ISCC compile of `src/AkmlSql.Installer/AkmlSqlSetup.iss`. Record the results in `specs/045-web-standalone-hosting/baseline.md`.
 
 **Checkpoint**: what works at the end of Phase 2.
 
@@ -350,8 +358,8 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
 
 ### Tests for User Story 1 (write first; they must fail)
 
-- [ ] T022 [P] [US1] Add a `bridge.webRoot` round-trip to `tests/AkmlSql.Core.Tests/Config/ConfigManagerTests.cs`: the exact camelCase key `"webRoot"`; the default `""`; a file without the key reads `""`.
-- [ ] T023 [P] [US1] Create `tests/AkmlSql.Engine.Tests/Transports/StaticWebResponderTests.cs`.
+- [X] T022 [P] [US1] Add a `bridge.webRoot` round-trip to `tests/AkmlSql.Core.Tests/Config/ConfigManagerTests.cs`: the exact camelCase key `"webRoot"`; the default `""`; a file without the key reads `""`.
+- [X] T023 [P] [US1] Create `tests/AkmlSql.Engine.Tests/Transports/StaticWebResponderTests.cs`.
   - **Fixture**: a temp web root holding `index.html`, `_framework/dotnet.js`, a `.wasm`, a `.css`
     and a `.sql`, behind a real transport started as `BridgeAccessTests.StartLocalhostAsync` does.
   - **Routing**: contract engine-static-host §2, rows 2–10 and the 503.
@@ -369,7 +377,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - a Range request gives the full 200, with no `Accept-Ranges`.
   - **The localhost Host allowlist**: `localhost`, `127.0.0.1` and `[::1]` pass on any port; the
     machine name and `evil.example` get 400.
-- [ ] T024 [US1] Extend `tests/AkmlSql.Engine.Tests/Transports/StaticWebResponderTests.cs`.
+- [X] T024 [US1] Extend `tests/AkmlSql.Engine.Tests/Transports/StaticWebResponderTests.cs`.
   - **The SC-013 table** (contract §8, rows 1–18). This is also spike S5.
     - Send each row as a raw `TcpClient` request line.
     - Place a `web.config`, an `index.html.br` and a secret file where the rows need them, and
@@ -385,7 +393,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - 32 slow readers do not stop a 33rd request from completing, or from getting 503 within the
       wait;
     - a failing response does not leak a slot: after 33 failures, a request still succeeds.
-- [ ] T025 [P] [US1] Create `tests/AkmlSql.Engine.Tests/Transports/StaticWebResponderCspTests.cs`.
+- [X] T025 [P] [US1] Create `tests/AkmlSql.Engine.Tests/Transports/StaticWebResponderCspTests.cs`.
   - **CSP drift**: a `powershell.exe` 5.1 process parses `src/AkmlSql.Installer/web-iis-setup.ps1`
     with `[System.Management.Automation.Language.Parser]::ParseFile`, evaluates only the
     `$bridgeConnectSrc` and `$csp` assignments, and prints `$csp`. It must equal
@@ -394,32 +402,32 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     `.config`. Check the composed Debug layout (`src/AkmlSql.Web/wwwroot` plus
     `src/AkmlSql.Web/bin/Debug/net10.0/wwwroot/_framework`) and, when it exists, the Release publish
     `wwwroot`.
-- [ ] T026 [P] [US1] Extend `tests/AkmlSql.Engine.Tests/Transports/BridgeAccessTests.cs`.
+- [X] T026 [P] [US1] Extend `tests/AkmlSql.Engine.Tests/Transports/BridgeAccessTests.cs`.
   - With no web root, the plain page comes back byte for byte on `/`, `/editor`, `/index.html` and
     `/_framework/dotnet.js`.
   - With a web root, `/akmlsql` and `/akmlsql/` keep the plain page, plus `X-AKML-Host: engine`.
   - An upgrade on `/` and on `/akmlsql` with a same-origin `Origin` works.
   - A foreign `Origin` still gets 403.
   - A foreign Host gets 400 in localhost mode.
-- [ ] T027 [P] [US1] Extend `tests/AkmlSql.Engine.Tests/EngineHostTests.cs`.
+- [X] T027 [P] [US1] Extend `tests/AkmlSql.Engine.Tests/EngineHostTests.cs`.
   - `BuildWebSocketTransport` maps `webRoot` only when `serveWebEdition` is true, and never on the
     `RunAsync` path.
   - A second listener holding the port makes the transport throw
     `port {p} is held by another process`, and `RunWebAsync` logs that message.
-- [ ] T028 [P] [US1] Extend `tests/AkmlSql.Web.Tests/Services/EngineEndpointTests.cs` with `EngineEndpoint.FromPage`. Cover every row of the contract web-default-engine §2 table, and the bridge URL each gives:
+- [X] T028 [P] [US1] Extend `tests/AkmlSql.Web.Tests/Services/EngineEndpointTests.cs` with `EngineEndpoint.FromPage`. Cover every row of the contract web-default-engine §2 table, and the bridge URL each gives:
   - http on localhost;
   - `127.0.0.1:59417`;
   - https on a host with a port;
   - https on a host on 443;
   - `[::1]`.
-- [ ] T029 [P] [US1] Create `tests/AkmlSql.Web.Tests/Services/PageEngineTests.cs`, with a fake `HttpMessageHandler` and an injected clock.
+- [X] T029 [P] [US1] Create `tests/AkmlSql.Web.Tests/Services/PageEngineTests.cs`, with a fake `HttpMessageHandler` and an injected clock.
   - The header present gives `Engine`, cached.
   - The header absent gives `Static`, cached.
   - A request that throws gives `Unknown`, not cached, and the next call tries again.
   - A later response with the header gives `Engine`.
   - 3 failures, or 60 s after the first failure, give `Static`, cached.
   - The request is a `HEAD /` with no-cache.
-- [ ] T030 [P] [US1] Create `tests/AkmlSql.Web.Tests/Bridge/EngineAutoConnectPrecedenceTests.cs`.
+- [X] T030 [P] [US1] Create `tests/AkmlSql.Web.Tests/Bridge/EngineAutoConnectPrecedenceTests.cs`.
   - **Fakes**: `FakeBridgeWebSocket`, `FakeConnectionStore` and `FakePairingTokenVault` (see
     `ReconnectLoopTests.cs`), and a fake `IPageEngine`.
   - **Cases**:
@@ -431,13 +439,13 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - `Static` gives `NotPaired` "No engine paired yet." and dials nothing.
     - `Unknown` gives `Unreachable` "Checking this page's engine…".
     - A socket failure gives `Unreachable`, and nothing is stored.
-- [ ] T031 [P] [US1] Extend `tests/AkmlSql.Web.Tests/Shell/StatusBarSegmentsTests.cs` and `tests/AkmlSql.Web.Tests/Bridge/StatusIndicatorTests.cs`.
+- [X] T031 [P] [US1] Extend `tests/AkmlSql.Web.Tests/Shell/StatusBarSegmentsTests.cs` and `tests/AkmlSql.Web.Tests/Bridge/StatusIndicatorTests.cs`.
   - On an `Engine` page, the "Use this computer's engine" title reads
     `This computer's engine ({host}:{port})`.
   - On an `Engine` page, `PairLocalEngineAsync` dials the page engine's host, port and scheme.
   - On any other page, both stay as today.
-- [ ] T032 [P] [US1] Extend `tests/AkmlSql.Web.Tests/Bridge/ConnectionStoreTests.cs`: `EngineConnection.StrictScheme` round-trips, and a stored record without it reads false.
-- [ ] T033 [P] [US1] Add the E2E harness in `tests/AkmlSql.Web.E2E.Tests/Harness/`.
+- [X] T032 [P] [US1] Extend `tests/AkmlSql.Web.Tests/Bridge/ConnectionStoreTests.cs`: `EngineConnection.StrictScheme` round-trips, and a stored record without it reads false.
+- [X] T033 [P] [US1] Add the E2E harness in `tests/AkmlSql.Web.E2E.Tests/Harness/`.
   - **`tests/AkmlSql.Web.E2E.Tests/Harness/EngineServedBundle.cs`**:
     - It composes a temp folder from `src/AkmlSql.Web/wwwroot` and
       `src/AkmlSql.Web/bin/Debug/net10.0/wwwroot/_framework` (W15).
@@ -454,7 +462,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
   - The responses carry the contract §4 headers.
   - The §8 rows return no content (SC-013).
   - `/spike` gets its `.sql` files as `text/plain`, and formats SQL, not HTML.
-- [ ] T035 [P] [US1] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
+- [X] T035 [P] [US1] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
   - `if WizardSilent then Exit;` is the first statement of the ports page's `OnActivate`.
   - `Web_PostInstall` writes `DelayedAutostart` for Service.
   - `web-hosting-check.ps1` is called with `-ExpectEngine`.
@@ -464,12 +472,12 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
 
 ### Implementation for User Story 1 — engine
 
-- [ ] T036 [P] [US1] Add `[JsonPropertyName("webRoot")] public string WebRoot { get; set; } = string.Empty;` to `BridgeOptions` in `src/AkmlSql.Core/Config/AppSettings.cs`. It is netstandard2.0-safe, and empty means off. Make T022 pass.
-- [ ] T037 [P] [US1] Add two properties to `src/AkmlSql.Engine/Transports/WebSocketTransportOptions.cs`:
+- [X] T036 [P] [US1] Add `[JsonPropertyName("webRoot")] public string WebRoot { get; set; } = string.Empty;` to `BridgeOptions` in `src/AkmlSql.Core/Config/AppSettings.cs`. It is netstandard2.0-safe, and empty means off. Make T022 pass.
+- [X] T037 [P] [US1] Add two properties to `src/AkmlSql.Engine/Transports/WebSocketTransportOptions.cs`:
   - `WebRoot` (`string?`);
   - `ConfigFilePath` (`string?`), used only for the §1a overlap refusal. The plan names only
     `WebRoot`, but the check needs the config file's folder.
-- [ ] T038 [US1] Create `src/AkmlSql.Engine/Transports/StaticWebResponder.cs`, part 1 (R3, R4, R8, data-model §7).
+- [X] T038 [US1] Create `src/AkmlSql.Engine/Transports/StaticWebResponder.cs`, part 1 (R3, R4, R8, data-model §7).
   - **Web-root validation** (§1a). A refusal logs one Warning:
     `WebSocketTransport: not serving the web edition from {WebRoot}: {Reason}`.
   - **The manifest walk**:
@@ -483,7 +491,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
   - **`public const string ContentSecurityPolicy`**, equal to the ps1's `$csp`.
   - **One Information line** when serving starts:
     `WebSocketTransport: serving the web edition from {WebRoot} ({Count} files)`.
-- [ ] T039 [US1] Complete `src/AkmlSql.Engine/Transports/StaticWebResponder.cs`, part 2 (contract §2–§4 and §6).
+- [X] T039 [US1] Complete `src/AkmlSql.Engine/Transports/StaticWebResponder.cs`, part 2 (contract §2–§4 and §6).
   - **Outcomes**: the request outcomes, in data-model §7 order.
   - **Path rules**:
     1. Unescape once.
@@ -508,7 +516,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - a 503 Warning at most once a minute.
 
   Make T023, T024 and T025 pass.
-- [ ] T040 [US1] Route requests in `src/AkmlSql.Engine/Transports/WebSocketTransport.cs` (R2, contract §2).
+- [X] T040 [US1] Route requests in `src/AkmlSql.Engine/Transports/WebSocketTransport.cs` (R2, contract §2).
   - Keep only the `IsWebSocketRequest` test inline on the accept loop.
   - Dispatch every other request with `Task.Run`, in this order:
     1. A null `Url` gets 400.
@@ -520,7 +528,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
   - When `HttpListener.Start` fails with 183 or 32, throw `port {p} is held by another process`.
 
   Make T026 pass.
-- [ ] T041 [US1] In `src/AkmlSql.Engine/EngineHost.cs`:
+- [X] T041 [US1] In `src/AkmlSql.Engine/EngineHost.cs`:
   - Give `BuildWebSocketTransport` `bool serveWebEdition = false`, plus the config path for the
     overlap check.
   - Map `WebRoot` only when `serveWebEdition` is true. Only `RunWebAsync` passes true.
@@ -530,9 +538,9 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
 
 ### Implementation for User Story 1 — web
 
-- [ ] T042 [P] [US1] Add `EngineEndpoint.FromPage(Uri pageBase)` to `src/AkmlSql.Web/Services/EngineEndpoint.cs`. It gives the host without IPv6 brackets, the explicit or scheme-default port, and the scheme (`http` gives `ws`, `https` gives `wss`). Make T028 pass.
-- [ ] T043 [P] [US1] Add `StrictScheme` (bool, default false) to `EngineConnection` in `src/AkmlSql.Web/Services/IConnectionStore.cs`. Make T032 pass.
-- [ ] T044 [P] [US1] Create `src/AkmlSql.Web/Services/PageEngine.cs`, and register it in `src/AkmlSql.Web/Program.cs`.
+- [X] T042 [P] [US1] Add `EngineEndpoint.FromPage(Uri pageBase)` to `src/AkmlSql.Web/Services/EngineEndpoint.cs`. It gives the host without IPv6 brackets, the explicit or scheme-default port, and the scheme (`http` gives `ws`, `https` gives `wss`). Make T028 pass.
+- [X] T043 [P] [US1] Add `StrictScheme` (bool, default false) to `EngineConnection` in `src/AkmlSql.Web/Services/IConnectionStore.cs`. Make T032 pass.
+- [X] T044 [P] [US1] Create `src/AkmlSql.Web/Services/PageEngine.cs`, and register it in `src/AkmlSql.Web/Program.cs`.
   - The types: `IPageEngine`, `PageEngine`, `PageEngineInfo`, and the `Engine`/`Static`/`Unknown`
     answer.
   - The request: `HEAD /` through the registered `HttpClient`, with
@@ -540,7 +548,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
   - Caching follows contract web-default-engine §1. Nothing goes into browser storage.
 
   Make T029 pass.
-- [ ] T045 [US1] Add the page-engine branch to `EngineAutoConnect.TryOnceAsync` in `src/AkmlSql.Web/Services/IEngineAutoConnect.cs` (contract web-default-engine §3–§4).
+- [X] T045 [US1] Add the page-engine branch to `EngineAutoConnect.TryOnceAsync` in `src/AkmlSql.Web/Services/IEngineAutoConnect.cs` (contract web-default-engine §3–§4).
   - `IPageEngine` is optional. It is used only where `TryOnceAsync` would otherwise return
     `NotPaired`.
   - Clear a dangling active id first.
@@ -550,7 +558,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
   - On an `Engine` page, `PairLocalEngineAsync` uses the page engine's address.
 
   Make T030 pass.
-- [ ] T046 [US1] In `src/AkmlSql.Web/Shared/StatusBar.razor`, take the "Use this computer's engine" title from the page engine: `This computer's engine ({host}:{port})` on an `Engine` page, unchanged otherwise. Make T031 pass.
+- [X] T046 [US1] In `src/AkmlSql.Web/Shared/StatusBar.razor`, take the "Use this computer's engine" title from the page engine: `This computer's engine ({host}:{port})` on an `Engine` page, unchanged otherwise. Make T031 pass.
 
 ### Implementation for User Story 1 — setup
 
@@ -560,7 +568,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     `(Get-Acl).GetOwner([System.Security.Principal.SecurityIdentifier])`.
   - Record the owner in `specs/045-web-standalone-hosting/research.md` § Spikes.
   - Choose R22's ownership refusal or its fallback for T051.
-- [ ] T048 [US1] Rework `WebPortsPage` in `src/AkmlSql.Installer/web-installer.iss` (R13, contract installer §2).
+- [X] T048 [US1] Rework `WebPortsPage` in `src/AkmlSql.Installer/web-installer.iss` (R13, contract installer §2).
   - **`OnActivate`** starts with the silent guard, then shows the fields for the host:
 
     | Host | Fields |
@@ -578,7 +586,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
   - **None and IIS** keep today's warning.
   - **"The site and engine ports must differ"** applies to IIS only.
   - Put the check in a function that T084 can reuse for silent installs.
-- [ ] T049 [US1] Finish `Web_PostInstall` for the standalone host in `src/AkmlSql.Installer/web-installer.iss` (contract installer §4, steps 5–9 and 11; R16, R20).
+- [X] T049 [US1] Finish `Web_PostInstall` for the standalone host in `src/AkmlSql.Installer/web-installer.iss` (contract installer §4, steps 5–9 and 11; R16, R20).
   1. **ACL.** Replace today's lockdown step, which sets no owner and runs after the config write,
      with a re-apply that sets the owner, before `sc start`.
   2. **Start type.** For Service, write `DelayedAutostart = 0` under
@@ -594,13 +602,13 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
        and the repair shortcut;
      - the warning "the service is not running", with how to start it;
      - no IIS text for Service.
-- [ ] T050 [US1] In `src/AkmlSql.Installer/AkmlSqlSetup.iss`:
+- [X] T050 [US1] In `src/AkmlSql.Installer/AkmlSqlSetup.iss`:
   - `IsWebSiteHosted` = `WebHostHasHost`.
   - `WebSiteUrl` = `HostingAddress(WebHost, Exposure, computer name, BridgePort, IisPort)`.
   - Add `UpdateReadyMemo`, which returns the whole memo: the six parts in order, each non-empty one
     followed by two new lines. When `IsWebSelected`, it adds "Web edition:" and the host line:
     "Standalone Windows service at …", "IIS at …" or "Files only, not hosted".
-- [ ] T051 [US1] Harden the folders at the start of `PrepareToInstall` in `src/AkmlSql.Installer/AkmlSqlSetup.iss` (R22, data-model §12). This runs before SSMS is closed and before `TerminateAkmlBackgroundProcesses`.
+- [X] T051 [US1] Harden the folders at the start of `PrepareToInstall` in `src/AkmlSql.Installer/AkmlSqlSetup.iss` (R22, data-model §12). This runs before SSMS is closed and before `TerminateAkmlBackgroundProcesses`.
   - **The state folder**, when the web edition is ticked:
     1. `ForceDirectories`.
     2. `icacls … /setowner *S-1-5-32-544 /T /C`.
@@ -611,7 +619,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - refuse a reparse point and, depending on T047, a non-empty folder with a foreign owner;
     - otherwise set the owner and grant Administrators F, SYSTEM F, Users RX and IIS_IUSRS RX;
     - if that fails, return an error.
-- [ ] T052 [P] [US1] In `tests/AkmlSql.Web.E2E.Tests/Harness/InstalledEngine.cs`, make `InstalledEngine.SiteUrl` take the first whitespace-delimited token after `URL:`. The LAN summary line (US4), `https://PC:47291/  (every computer, this one included)`, then parses.
+- [X] T052 [P] [US1] In `tests/AkmlSql.Web.E2E.Tests/Harness/InstalledEngine.cs`, make `InstalledEngine.SiteUrl` take the first whitespace-delimited token after `URL:`. The LAN summary line (US4), `https://PC:47291/  (every computer, this one included)`, then parses.
 - [ ] T053 [US1] Spike S6 on VM A: run `sc qc AkmlSqlWebEngine` after each `sc config` and after T049's write. Record whether `start= auto` clears `DelayedAutostart` in `specs/045-web-standalone-hosting/research.md` § Spikes.
 - [ ] T054 [US1] Run quickstart gates 1.1, 1.2, 1.3 and 1.5 (Debug builds first, E2E serially), plus T035 and an ISCC compile. Record the results in `specs/045-web-standalone-hosting/baseline.md`.
 - [ ] T055 [US1] On VM A and VM C snapshot 1, run quickstart rows 3.1, 3.2, 3.3, 3.4, 3.5, 3.12 and 3.13. Record each result in `specs/045-web-standalone-hosting/baseline.md`; S2's visual result goes with 3.1.
@@ -639,7 +647,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
 
 ### Tests for User Story 2 (write first; they must fail)
 
-- [ ] T056 [P] [US2] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
+- [X] T056 [P] [US2] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
   - `$mimes` in `web-iis-setup.ps1` maps `.sql` to `text/plain`.
   - No "32-bit" comment is left in `web-iis-setup.ps1`.
   - `Web_PostInstall` calls `web-hosting-check.ps1` with `-ExpectBundle` for IIS.
@@ -655,8 +663,8 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - the cold probe time, which must be under 5 s.
   - Put that feature's name in the `ToolsUnavailable` reason in
     `src/AkmlSql.Installer/web-hosting.iss`, in data-model.md §2, and in T003's expectations.
-- [ ] T058 [P] [US2] In `src/AkmlSql.Installer/web-iis-setup.ps1`, add `.sql` = `text/plain` to `$mimes` (FR-021 as amended), and drop the stale 32-bit comments.
-- [ ] T059 [US2] Finish the IIS branch of `Web_PostInstall` in `src/AkmlSql.Installer/web-installer.iss`.
+- [X] T058 [P] [US2] In `src/AkmlSql.Installer/web-iis-setup.ps1`, add `.sql` = `text/plain` to `$mimes` (FR-021 as amended), and drop the stale 32-bit comments.
+- [X] T059 [US2] Finish the IIS branch of `Web_PostInstall` in `src/AkmlSql.Installer/web-installer.iss`.
   - Run `web-hosting-check.ps1 -Url http://localhost:{IisPort}/ -ExpectBundle`. Exit 2 becomes
     "answered but is not serving the web edition"; one example is IIS's welcome page on port 80.
   - The IIS failure text gives the reason and the repair shortcut, and no longer blames the
@@ -691,7 +699,7 @@ behind.
 
 ### Tests for User Story 3 (write first; they must fail)
 
-- [ ] T061 [P] [US3] Create `tests/AkmlSql.Installer.Tests/IisRemovalPlanTests.cs`. It dot-sources `src/AkmlSql.Installer/web-iis-remove.ps1`. Cases for `Get-IisRemovalPlan`:
+- [X] T061 [P] [US3] Create `tests/AkmlSql.Installer.Tests/IisRemovalPlanTests.cs`. It dot-sources `src/AkmlSql.Installer/web-iis-remove.ps1`. Cases for `Get-IisRemovalPlan`:
   - with WebAdministration: the site, the unused app pool, the owned binding, `web.config` and the
     markers;
   - with `appcmd.exe` only;
@@ -701,18 +709,18 @@ behind.
     manual command.
 
   Dot-sourcing the script changes nothing.
-- [ ] T062 [P] [US3] Extend `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` with `AddressChangeNotice(Old, New)` (R14).
+- [X] T062 [P] [US3] Extend `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` with `AddressChangeNotice(Old, New)` (R14).
   - A host switch, a port change, and a Service switch between localhost and LAN each give the
     move text exactly: "The web edition will move from {old} to {new}. …".
   - The same address, or an empty one on either side (None), gives "".
-- [ ] T063 [P] [US3] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
+- [X] T063 [P] [US3] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
   - `[InstallDelete]` holds `Type: filesandordirs; Name: "{app}\Web\_framework"; Components: web`.
   - `web-iis-remove.ps1` is installed to `{app}\Support`.
   - The hosting page and `UpdateReadyMemo` both call `AddressChangeNotice`.
 
 ### Implementation for User Story 3
 
-- [ ] T064 [P] [US3] Create `src/AkmlSql.Installer/web-iis-remove.ps1` (R18, contract installer §6).
+- [X] T064 [P] [US3] Create `src/AkmlSql.Installer/web-iis-remove.ps1` (R18, contract installer §6).
   - **Parameter**: `-AppDir`.
   - **The plan**: a pure `Get-IisRemovalPlan`.
   - **The entry point**, in order:
@@ -726,8 +734,8 @@ behind.
   - **Always**: log to `install.log`, exit 0, and never touch other sites or IIS settings.
 
   Make T061 pass.
-- [ ] T065 [P] [US3] Add `AddressChangeNotice(Old, New: String): String` to `src/AkmlSql.Installer/web-hosting.iss`. Make T062 pass.
-- [ ] T066 [US3] Finish the upgrade path of the wizard in `src/AkmlSql.Installer/web-installer.iss` (FR-030, FR-031, FR-033, FR-035).
+- [X] T065 [P] [US3] Add `AddressChangeNotice(Old, New: String): String` to `src/AkmlSql.Installer/web-hosting.iss`. Make T062 pass.
+- [X] T066 [US3] Finish the upgrade path of the wizard in `src/AkmlSql.Installer/web-installer.iss` (FR-030, FR-031, FR-033, FR-035).
   - **The hosting page notice** adds:
     - the FR-031 line, when `PreviousHost` = IIS and IIS is not Ready;
     - `AddressChangeNotice(HostingAddress(previous), HostingAddress(selected))`.
@@ -735,7 +743,7 @@ behind.
   - **The Service port check** blocks with "Port {p} belongs to the AKML SQL site in IIS, which
     this change removes. Choose a different port for the standalone service." when
     `PreviousHost` = IIS, `IisPort` = p and the site exists.
-- [ ] T067 [US3] Add the switching steps to `src/AkmlSql.Installer/web-installer.iss` (data-model §9; contract installer §4, step 2).
+- [X] T067 [US3] Add the switching steps to `src/AkmlSql.Installer/web-installer.iss` (data-model §9; contract installer §4, step 2).
   - **`[Files]`**: `web-iis-remove.ps1` goes to `{app}\Support`, with `Components: web`.
   - **`Web_PostInstall`**:
     - when `PreviousHost` = IIS and `WebHost` is not IIS, run
@@ -747,7 +755,7 @@ behind.
   - **`[InstallDelete]`**: add `Type: filesandordirs; Name: "{app}\Web\_framework"; Components: web`.
 
   Make T063 pass.
-- [ ] T068 [US3] Add the move text to `UpdateReadyMemo` in `src/AkmlSql.Installer/AkmlSqlSetup.iss`, as the second line under "Web edition:", only when `AddressChangeNotice` is non-empty.
+- [X] T068 [US3] Add the move text to `UpdateReadyMemo` in `src/AkmlSql.Installer/AkmlSqlSetup.iss`, as the second line under "Web edition:", only when `AddressChangeNotice` is non-empty.
 - [ ] T069 [US3] On VMs A, B and C, run quickstart rows 3.6, 3.9 (the host preselection is kept; the shortcut part waits for US6), 3.14, the switching part of 3.15, and 3.18. Record the results in `specs/045-web-standalone-hosting/baseline.md`.
 
 **Checkpoint**: upgrades keep the host, and switches are announced and clean. Ask "Ready to
@@ -767,33 +775,33 @@ VM D gets no app. Quickstart rows 3.7 and 3.8, plus spike S3.
 
 ### Tests for User Story 4 (write first; they must fail)
 
-- [ ] T070 [P] [US4] Extend `tests/AkmlSql.Web.Tests/Services/EngineEndpointTests.cs`.
+- [X] T070 [P] [US4] Extend `tests/AkmlSql.Web.Tests/Services/EngineEndpointTests.cs`.
   - `CandidateUrls(host, port, remembered, strictScheme: true)` returns only the remembered scheme
     for a loopback host.
   - Without `strictScheme`, a loopback host still gets `ws` and `wss`.
-- [ ] T071 [P] [US4] Extend `tests/AkmlSql.Web.Tests/Bridge/EngineAutoConnectPrecedenceTests.cs`.
+- [X] T071 [P] [US4] Extend `tests/AkmlSql.Web.Tests/Bridge/EngineAutoConnectPrecedenceTests.cs`.
   - On an https page, `Ok` stores the record with `StrictScheme` true and `wss`.
   - `Engine` + `PinRequired` stores nothing, returns `PairingRequired` with "This engine needs its
     pairing PIN. Pair it in Settings › Connections.", and sets `IPageEngine.PairingPrefill`.
   - An https loopback page engine whose `wss` fails is never dialled with `ws`.
-- [ ] T072 [P] [US4] Extend `tests/AkmlSql.Web.Tests/Bridge/ConnectionPickerPinTests.cs`.
+- [X] T072 [P] [US4] Extend `tests/AkmlSql.Web.Tests/Bridge/ConnectionPickerPinTests.cs`.
   - On an `Engine` page, the Add form starts with the page engine's host and port.
   - With `PairingPrefill` set, the PIN field shows at once, including for
     `https://localhost:{port}/`.
 
 ### Implementation for User Story 4
 
-- [ ] T073 [P] [US4] Add `strictScheme` to `EngineEndpoint.CandidateUrls` in `src/AkmlSql.Web/Services/EngineEndpoint.cs`, and pass `connection.StrictScheme` from `EngineBridge.ConnectAsync` in `src/AkmlSql.Web/Services/IEngineBridge.cs`. Make T070 pass.
-- [ ] T074 [P] [US4] Add `PairingPrefill` to `IPageEngine` and `PageEngine` in `src/AkmlSql.Web/Services/PageEngine.cs`.
-- [ ] T075 [US4] In `src/AkmlSql.Web/Services/IEngineAutoConnect.cs`:
+- [X] T073 [P] [US4] Add `strictScheme` to `EngineEndpoint.CandidateUrls` in `src/AkmlSql.Web/Services/EngineEndpoint.cs`, and pass `connection.StrictScheme` from `EngineBridge.ConnectAsync` in `src/AkmlSql.Web/Services/IEngineBridge.cs`. Make T070 pass.
+- [X] T074 [P] [US4] Add `PairingPrefill` to `IPageEngine` and `PageEngine` in `src/AkmlSql.Web/Services/PageEngine.cs`.
+- [X] T075 [US4] In `src/AkmlSql.Web/Services/IEngineAutoConnect.cs`:
   - set `StrictScheme` on an https page's record, both in auto-connect and in
     `PairLocalEngineAsync`;
   - map `PinRequired` from the page engine to `PairingRequired`, with the message and
     `PairingPrefill`.
 
   Make T071 pass.
-- [ ] T076 [US4] In `src/AkmlSql.Web/Shared/ConnectionPickerComponent.razor`, start the Add form from the page engine, and show the PIN field at once when `PairingPrefill` is set. Make T072 pass.
-- [ ] T077 [US4] Finish Service + LAN in `Web_PostInstall` in `src/AkmlSql.Installer/web-installer.iss` (R16, data-model §10).
+- [X] T076 [US4] In `src/AkmlSql.Web/Shared/ConnectionPickerComponent.razor`, start the Add form from the page engine, and show the PIN field at once when `PairingPrefill` is set. Make T072 pass.
+- [X] T077 [US4] Finish Service + LAN in `Web_PostInstall` in `src/AkmlSql.Installer/web-installer.iss` (R16, data-model §10).
   - The answer check probes `https://localhost:{port}/ -ExpectEngine`.
   - The summary reads `URL: https://{COMPUTERNAME}:{port}/  (every computer, this one included)`.
   - The PIN, thumbprint and `bridge.cer` trust steps are presented as the recommended step.
@@ -819,7 +827,7 @@ certificate. Ask "Ready to commit?".
 
 ### Tests for User Story 5 (write first; they must fail)
 
-- [ ] T079 [P] [US5] Extend `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` with `ResolveSilentHost` and `SilentNeedsIisProbe`.
+- [X] T079 [P] [US5] Extend `tests/AkmlSql.Installer.Tests/WebHostingProbeTests.cs` with `ResolveSilentHost` and `SilentNeedsIisProbe`.
   - **`ResolveSilentHost`**, data-model §4 rows 1–12, including:
     - an unknown value;
     - `NONE` with `LAN` on the command line stops;
@@ -829,12 +837,12 @@ certificate. Ask "Ready to commit?".
       new address.
   - **`SilentNeedsIisProbe`** is true for `/WEB_HOST=IIS`, and for no flag with previous host IIS.
     It is false for `SERVICE`, for `NONE`, and for no flag otherwise.
-- [ ] T080 [P] [US5] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
+- [X] T080 [P] [US5] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
   - `Web_ValidateSilentFlags` has no early exit when no web flag is given, and it calls
     `ResolveSilentHost`.
   - The Phase 2 interim silent mapping and `WebSilentDontHost` are gone.
   - In silent mode, `IsLanExposed` reads the resolved exposure.
-- [ ] T081 [P] [US5] Update the smoke harness in `tests/AkmlSql.Installer.Tests/InstallerSmokeEnv.cs`, `tests/AkmlSql.Installer.Tests/InstallerSmokeFixture.cs`, `tests/AkmlSql.Installer.Tests/IisProvisioningTests.cs`, `tests/AkmlSql.Installer.Tests/LanTlsTests.cs` and `tests/AkmlSql.Installer.Tests/ServiceHealthTests.cs`.
+- [X] T081 [P] [US5] Update the smoke harness in `tests/AkmlSql.Installer.Tests/InstallerSmokeEnv.cs`, `tests/AkmlSql.Installer.Tests/InstallerSmokeFixture.cs`, `tests/AkmlSql.Installer.Tests/IisProvisioningTests.cs`, `tests/AkmlSql.Installer.Tests/LanTlsTests.cs` and `tests/AkmlSql.Installer.Tests/ServiceHealthTests.cs`.
   - **Gates.** Split `CanRun` into:
     - `CanRunService`: an administrator;
     - `CanRunIis`: an administrator with IIS Ready, by the data-model §2 registry checks plus the
@@ -844,7 +852,7 @@ certificate. Ask "Ready to commit?".
   - **The uninstaller path** comes from the uninstall key.
   - **Cleanup** removes both firewall rules, the `AkmlSqlWeb` app pool, the test sslcert, the
     `CN=AKML SQL Web Engine` certificate, and `Software\AKML SQL\Web`.
-- [ ] T082 [US5] Create `tests/AkmlSql.Installer.Tests/StandaloneSmokeFixture.cs` and `tests/AkmlSql.Installer.Tests/StandaloneSmokeTests.cs`, with the trait `InstallerSmoke` (VM only).
+- [X] T082 [US5] Create `tests/AkmlSql.Installer.Tests/StandaloneSmokeFixture.cs` and `tests/AkmlSql.Installer.Tests/StandaloneSmokeTests.cs`, with the trait `InstallerSmoke` (VM only).
   - **Cases**:
 
     | Case | Command line | Gate |
@@ -861,12 +869,12 @@ certificate. Ask "Ready to commit?".
 
 ### Implementation for User Story 5
 
-- [ ] T083 [P] [US5] Add `ResolveSilentHost` and `SilentNeedsIisProbe` to `src/AkmlSql.Installer/web-hosting.iss` (data-model §4, rows checked in order).
+- [X] T083 [P] [US5] Add `ResolveSilentHost` and `SilentNeedsIisProbe` to `src/AkmlSql.Installer/web-hosting.iss` (data-model §4, rows checked in order).
   - The signature: `ResolveSilentHost(FlagHost, FlagExposure, PreviousHost: String; IisReady, IisOnlyPortsGiven: Boolean; IisReason, NewAddress: String; var LogLine: String): String`.
   - A stop returns `Stop:` followed by the reason.
 
   Make T079 pass.
-- [ ] T084 [US5] Rewrite `Web_ValidateSilentFlags` in `src/AkmlSql.Installer/web-installer.iss` (R12, contract installer §10).
+- [X] T084 [US5] Rewrite `Web_ValidateSilentFlags` in `src/AkmlSql.Installer/web-installer.iss` (R12, contract installer §10).
   - **Parsing.** Always resolve. Accept `SERVICE`, `IIS` and `NONE` in any case.
   - **The candidate host** is the flag's value, or `PreviousHost`.
   - **Readiness.** Run `ReadIisReadiness(SilentNeedsIisProbe(…))` and log it for every silent web
@@ -899,7 +907,7 @@ remains. Quickstart rows 3.10, 3.11, 3.17 and 3.21, and the shortcut part of 3.9
 
 ### Tests for User Story 6 (write first; they must fail)
 
-- [ ] T086 [P] [US6] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
+- [X] T086 [P] [US6] Extend `tests/AkmlSql.Installer.Tests/WebInstallerSourceTests.cs`.
   - The "Repair AKML SQL Web hosting" `[Icons]` entry keeps its name, has `Check: WebHostHasHost`,
     and runs `{app}\Support\web-hosting-repair.ps1`.
   - No `[UninstallRun]` entry is left for `AkmlSqlWebEngine` or for the firewall.
@@ -908,14 +916,14 @@ remains. Quickstart rows 3.10, 3.11, 3.17 and 3.21, and the shortcut part of 3.9
     prompt.
   - `[UninstallDelete]` has `{app}\Web`.
   - `web-iis-repair.ps1` holds the `Host` guard text.
-- [ ] T087 [P] [US6] Create `tests/AkmlSql.Installer.Tests/HostingRepairGuardTests.cs`. It dot-sources `src/AkmlSql.Installer/web-hosting-repair.ps1`. This class is an addition to the plan's list, for the security check in contract installer §7. The pure write-ACE classifier:
+- [X] T087 [P] [US6] Create `tests/AkmlSql.Installer.Tests/HostingRepairGuardTests.cs`. It dot-sources `src/AkmlSql.Installer/web-hosting-repair.ps1`. This class is an addition to the plan's list, for the security check in contract installer §7. The pure write-ACE classifier:
   - flags Authenticated Users Modify and Users Write;
   - allows Administrators, SYSTEM and TrustedInstaller;
   - ignores inherit-only CREATOR OWNER, and read or execute ACEs (Users RX, ALL APPLICATION
     PACKAGES RX).
 
   A default Program Files ACL passes.
-- [ ] T088 [P] [US6] Extend `tests/AkmlSql.Installer.Tests/ReRunAndUninstallTests.cs` (smoke, VM only).
+- [X] T088 [P] [US6] Extend `tests/AkmlSql.Installer.Tests/ReRunAndUninstallTests.cs` (smoke, VM only).
   - **After an upgrade**, the current `unins*.dat` contains no `\is-`…`.tmp\` path (R23).
   - **After uninstall**, none of these remain:
     - any `AKML SQL Web*` firewall rule;
@@ -928,7 +936,7 @@ remains. Quickstart rows 3.10, 3.11, 3.17 and 3.21, and the shortcut part of 3.9
 
 ### Implementation for User Story 6
 
-- [ ] T089 [P] [US6] Create `src/AkmlSql.Installer/web-hosting-repair.ps1` (contract installer §7, R17).
+- [X] T089 [P] [US6] Create `src/AkmlSql.Installer/web-hosting-repair.ps1` (contract installer §7, R17).
   - **Elevation and location.** It self-elevates. It reads `{app}` from the uninstall key's
     `InstallLocation`.
   - **Refusal.** Both before and after elevating, it refuses to run when either holds:
@@ -956,13 +964,13 @@ remains. Quickstart rows 3.10, 3.11, 3.17 and 3.21, and the shortcut part of 3.9
   - **At the end**, print the result and wait for Enter.
 
   Make T087 pass.
-- [ ] T090 [P] [US6] Add a guard to `src/AkmlSql.Installer/web-iis-repair.ps1`: when the registry `Host` value exists and is not `IIS`, print "This computer does not host the web edition on IIS." and stop.
-- [ ] T091 [US6] In `src/AkmlSql.Installer/web-installer.iss`:
+- [X] T090 [P] [US6] Add a guard to `src/AkmlSql.Installer/web-iis-repair.ps1`: when the registry `Host` value exists and is not `IIS`, print "This computer does not host the web edition on IIS." and stop.
+- [X] T091 [US6] In `src/AkmlSql.Installer/web-installer.iss`:
   - install `web-hosting-repair.ps1` to `{app}\Support`;
   - point the "Repair AKML SQL Web hosting" shortcut at it, with `Check: WebHostHasHost`;
   - for None, delete `{group}\Repair AKML SQL Web hosting.lnk` in `Web_PostInstall` (contract
     installer §4, step 10).
-- [ ] T092 [US6] Rewrite `Web_Uninstall` in `src/AkmlSql.Installer/web-installer.iss` (R19, contract installer §8). It runs at `usUninstall`.
+- [X] T092 [US6] Rewrite `Web_Uninstall` in `src/AkmlSql.Installer/web-installer.iss` (R19, contract installer §8). It runs at `usUninstall`.
   1. Stop `AkmlSqlWebEngine`, wait up to 10 s, then delete it.
   2. Delete both firewall rules with direct `netsh advfirewall firewall delete rule name=…` Execs.
   3. Remove the bridge sslcert, and run `web-https-binding.ps1 -RemoveOwned`.
@@ -976,8 +984,8 @@ remains. Quickstart rows 3.10, 3.11, 3.17 and 3.21, and the shortcut part of 3.9
 
   Also remove the web `[UninstallRun]` entries, and add
   `[UninstallDelete] Type: filesandordirs; Name: "{app}\Web"`.
-- [ ] T093 [US6] In `src/AkmlSql.Installer/AkmlSqlSetup.iss`, guard the `usPostUninstall` desktop-settings prompt with `UninstallSilent`: a silent uninstall keeps the settings and logs that (FR-071 as amended).
-- [ ] T094 [US6] Add the fresh uninstall log to `src/AkmlSql.Installer/AkmlSqlSetup.iss` (R23, contract installer §9), following the `MigrateLegacy32BitInstall` pattern.
+- [X] T093 [US6] In `src/AkmlSql.Installer/AkmlSqlSetup.iss`, guard the `usPostUninstall` desktop-settings prompt with `UninstallSilent`: a silent uninstall keeps the settings and logs that (FR-071 as amended).
+- [X] T094 [US6] Add the fresh uninstall log to `src/AkmlSql.Installer/AkmlSqlSetup.iss` (R23, contract installer §9), following the `MigrateLegacy32BitInstall` pattern.
   1. In `PrepareToInstall`, find `unins???.dat` from the uninstall key's `UninstallString`.
   2. When that file holds the UTF-16 bytes of `\is-` followed by `.tmp\`, rename the `.dat` and the
      `.exe` aside.
@@ -1002,20 +1010,20 @@ Each document covers these points:
 - that switching host changes the address;
 - the multi-session limit, wherever the page lists the security notes.
 
-- [ ] T096 [P] Update `doc/deployment.md` with the points above.
-- [ ] T097 [P] Add a `bridge` section to `doc/configuration.md`, including `webRoot`, and the registry values `Host`, `Exposure` and `WebRoot`.
-- [ ] T098 [P] Describe the static responder on the bridge listener in `doc/architecture.md` §9d.
-- [ ] T099 [P] Update the transport table in `doc/ipc-api.md`: what is served on non-upgrade requests, and that no message type changed.
-- [ ] T100 [P] Update `doc/m3-security.md`: the static surface; the manifest and containment rule; the refusal of a web root that overlaps the state folder; the localhost Host allowlist; the multi-session note.
-- [ ] T101 [P] Update `doc/WEB/00-INDEX.md` and `doc/WEB/M3-websocket-transport.md` with the points above.
-- [ ] T102 [P] Update `doc/WEB/quickstart-m3.md` and `doc/WEB/quickstart-m4.md` with the points above.
-- [ ] T103 [P] Add a note to `doc/WEB/M4-iis-installer.md` that this feature supersedes it. Add the standalone origin to `doc/WEB/ai-local-provider-cors.md`.
+- [X] T096 [P] Update `doc/deployment.md` with the points above.
+- [X] T097 [P] Add a `bridge` section to `doc/configuration.md`, including `webRoot`, and the registry values `Host`, `Exposure` and `WebRoot`.
+- [X] T098 [P] Describe the static responder on the bridge listener in `doc/architecture.md` §9d.
+- [X] T099 [P] Update the transport table in `doc/ipc-api.md`: what is served on non-upgrade requests, and that no message type changed.
+- [X] T100 [P] Update `doc/m3-security.md`: the static surface; the manifest and containment rule; the refusal of a web root that overlaps the state folder; the localhost Host allowlist; the multi-session note.
+- [X] T101 [P] Update `doc/WEB/00-INDEX.md` and `doc/WEB/M3-websocket-transport.md` with the points above.
+- [X] T102 [P] Update `doc/WEB/quickstart-m3.md` and `doc/WEB/quickstart-m4.md` with the points above.
+- [X] T103 [P] Add a note to `doc/WEB/M4-iis-installer.md` that this feature supersedes it. Add the standalone origin to `doc/WEB/ai-local-provider-cors.md`.
 - [ ] T104 [P] Update `doc/topics/browser-setup.md` (public docs) with the points above, then run `dotnet test tests/AkmlSql.Site.Tests` and keep it green.
-- [ ] T105 [P] Update `CLAUDE.md`.
+- [X] T105 [P] Update `CLAUDE.md`.
   - **Installer Details**: the hosting choices and the silent flags.
   - **Key Paths**: the registry values.
   - **The latest-work list**: a spec 045 entry.
-- [ ] T106 [P] Add the 045 entry to `doc/progress.md`: the per-phase table and the spike outcomes, and the 045 deferred list taken from research.md § Found, not fixed.
+- [X] T106 [P] Add the 045 entry to `doc/progress.md`: the per-phase table and the spike outcomes, and the 045 deferred list taken from research.md § Found, not fixed.
 - [ ] T107 Run the full gate, quickstart 1.6 and 1.7, and record it in `specs/045-web-standalone-hosting/baseline.md`.
   - Builds: the solution restore and Release build, then the Debug builds.
   - Suites: the full engine, web, Core and installer (`Category!=InstallerSmoke`) suites; the E2E

@@ -15,6 +15,17 @@ namespace AkmlSql.Web.Tests.Shell;
 /// </summary>
 public sealed class StatusBarSegmentsTests : BunitContext
 {
+    [Fact]
+    public void The_local_engine_button_names_the_engine_that_served_the_page()
+    {
+        Services.AddSingleton<IEngineAutoConnect>(new StaleFailureAutoConnect());
+        Services.AddSingleton<IPageEngine>(new FakePageEngine
+            { Result = new(PageEngineKind.Engine, new("127.0.0.1", 59417, "ws")) });
+        var cut = Render<StatusBar>();
+        cut.WaitForAssertion(() => Assert.Equal("This computer's engine (127.0.0.1:59417)",
+            cut.Find("[data-testid=engine-use-local]").GetAttribute("title")));
+    }
+
     private readonly FakeEngineBridge _bridge = new();
     private DateTimeOffset _now = new(2026, 10, 8, 12, 0, 0, TimeSpan.Zero);
     private readonly WorkspaceStatus _status;

@@ -1,0 +1,190 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="2fe58276-a1d0-45ce-89a4-bed27bdc7a26" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 13:44:20" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T13:44:20.2268881+03:00" queuing="2026-10-26T13:44:20.2268887+03:00" start="2026-10-26T13:44:18.5339099+03:00" finish="2026-10-26T13:44:20.2486563+03:00" />
+  <TestSettings name="default" id="806c5d75-53c3-48c1-9618-f02796113281">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_13_44_20" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="9b007fda-ccf0-4d78-a0ca-9a01a19cf81b" testId="84c6f712-5ed3-cdd0-f473-c8d53bbc5c03" testName="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: null)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000602" startTime="2026-10-26T13:44:20.1101115+03:00" endTime="2026-10-26T13:44:20.1102108+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9b007fda-ccf0-4d78-a0ca-9a01a19cf81b" />
+    <UnitTestResult executionId="03b77d9c-099e-44cf-ad04-4ec15220da68" testId="19918b1b-a24e-1833-0337-2c47474e9584" testName="AkmlSql.Installer.Tests.IisProvisioningTests.Five_mime_types_are_registered" computerName="MOHAMED-KHAMIS" duration="00:00:00.0006232" startTime="2026-10-26T13:44:20.1446920+03:00" endTime="2026-10-26T13:44:20.1447766+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="03b77d9c-099e-44cf-ad04-4ec15220da68">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5ce01481-277d-4a5a-b40f-9960127541ce" testId="b787243d-6e06-9d40-e298-29fe18272ce6" testName="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: &quot;true&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0084444" startTime="2026-10-26T13:44:20.0681240+03:00" endTime="2026-10-26T13:44:20.0909003+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5ce01481-277d-4a5a-b40f-9960127541ce" />
+    <UnitTestResult executionId="e3fbe21e-dc4c-45a2-839f-d1e091666ce5" testId="80e416ba-cb1d-1802-a827-1374b558fe16" testName="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: &quot;&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000827" startTime="2026-10-26T13:44:20.1098374+03:00" endTime="2026-10-26T13:44:20.1099052+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e3fbe21e-dc4c-45a2-839f-d1e091666ce5" />
+    <UnitTestResult executionId="9fcdbbe3-aebb-48f7-a957-c3e792e201f1" testId="143519ac-8d4e-44d3-2d19-b77d7a2fd5d9" testName="AkmlSql.Installer.Tests.ReRunAndUninstallTests.Plugin_state_preserved_across_install_uninstall_reinstall" computerName="MOHAMED-KHAMIS" duration="00:00:00.0015530" startTime="2026-10-26T13:44:20.1152154+03:00" endTime="2026-10-26T13:44:20.1158432+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9fcdbbe3-aebb-48f7-a957-c3e792e201f1">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c95e96db-7e75-4484-a544-cd6950e9176a" testId="189e1063-b0a1-b85c-a0e2-19d6c037a598" testName="AkmlSql.Installer.Tests.IisProvisioningTests.Csp_header_is_served" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004524" startTime="2026-10-26T13:44:20.1440186+03:00" endTime="2026-10-26T13:44:20.1441308+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c95e96db-7e75-4484-a544-cd6950e9176a">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="44ce8907-f0ce-43ad-a914-8054f47b78ae" testId="2e44b6cc-3b1d-b81b-6e82-7df23cd0c73d" testName="AkmlSql.Installer.Tests.ReRunAndUninstallTests.Install_summary_is_well_formed" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004401" startTime="2026-10-26T13:44:20.1200538+03:00" endTime="2026-10-26T13:44:20.1203350+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="44ce8907-f0ce-43ad-a914-8054f47b78ae">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7c2f94c7-a479-4b08-9c15-3d867d6e8f7b" testId="310182e2-bfb4-8fc0-7734-30419ee6a253" testName="AkmlSql.Installer.Tests.LanTlsTests.Sslcert_binding_thumbprint_matches_install_summary" computerName="MOHAMED-KHAMIS" duration="00:00:00.0008900" startTime="2026-10-26T13:44:20.1225778+03:00" endTime="2026-10-26T13:44:20.1226832+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7c2f94c7-a479-4b08-9c15-3d867d6e8f7b">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="deb2ee3f-2189-4818-bf4f-20d864246206" testId="b580c33f-f0e7-5999-7705-ac1fda9b7f72" testName="AkmlSql.Installer.Tests.LanTlsTests.Firewall_rule_exists" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004212" startTime="2026-10-26T13:44:20.1218995+03:00" endTime="2026-10-26T13:44:20.1220029+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="deb2ee3f-2189-4818-bf4f-20d864246206">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="3fe91ffe-601f-4556-b3c7-b37d0ad8d854" testId="89390162-a161-2bf3-d021-fa84f6472f99" testName="AkmlSql.Installer.Tests.ServiceHealthTests.AkmlSqlWebEngine_service_reaches_running_after_install" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004892" startTime="2026-10-26T13:44:20.1211800+03:00" endTime="2026-10-26T13:44:20.1212447+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3fe91ffe-601f-4556-b3c7-b37d0ad8d854">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="44a5256c-d669-42b8-8678-dd610d91b7d5" testId="f77a0d64-a311-51e2-259d-94414214f6f9" testName="AkmlSql.Installer.Tests.IisProvisioningTests.AkmlSqlWeb_site_is_bound_on_the_iis_port" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004256" startTime="2026-10-26T13:44:20.1452232+03:00" endTime="2026-10-26T13:44:20.1453020+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="44a5256c-d669-42b8-8678-dd610d91b7d5">
+      <Output>
+        <ErrorInfo>
+          <Message>installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM</Message>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b1965d86-b15c-4a71-8b61-06eeed14ca6c" testId="a4e8ee19-b3bc-fa72-0323-4d8a01ac1bae" testName="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: &quot;0&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004009" startTime="2026-10-26T13:44:20.1089573+03:00" endTime="2026-10-26T13:44:20.1090639+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b1965d86-b15c-4a71-8b61-06eeed14ca6c" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: &quot;true&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="b787243d-6e06-9d40-e298-29fe18272ce6">
+      <Execution id="5ce01481-277d-4a5a-b40f-9960127541ce" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.InstallerSmokeGateTests" name="Smoke_tests_require_explicit_opt_in" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: &quot;0&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="a4e8ee19-b3bc-fa72-0323-4d8a01ac1bae">
+      <Execution id="b1965d86-b15c-4a71-8b61-06eeed14ca6c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.InstallerSmokeGateTests" name="Smoke_tests_require_explicit_opt_in" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.ServiceHealthTests.AkmlSqlWebEngine_service_reaches_running_after_install" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="89390162-a161-2bf3-d021-fa84f6472f99">
+      <Execution id="3fe91ffe-601f-4556-b3c7-b37d0ad8d854" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.ServiceHealthTests" name="AkmlSqlWebEngine_service_reaches_running_after_install" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.LanTlsTests.Firewall_rule_exists" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="b580c33f-f0e7-5999-7705-ac1fda9b7f72">
+      <Execution id="deb2ee3f-2189-4818-bf4f-20d864246206" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.LanTlsTests" name="Firewall_rule_exists" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: &quot;&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="80e416ba-cb1d-1802-a827-1374b558fe16">
+      <Execution id="e3fbe21e-dc4c-45a2-839f-d1e091666ce5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.InstallerSmokeGateTests" name="Smoke_tests_require_explicit_opt_in" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.ReRunAndUninstallTests.Install_summary_is_well_formed" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="2e44b6cc-3b1d-b81b-6e82-7df23cd0c73d">
+      <Execution id="44ce8907-f0ce-43ad-a914-8054f47b78ae" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.ReRunAndUninstallTests" name="Install_summary_is_well_formed" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisProvisioningTests.AkmlSqlWeb_site_is_bound_on_the_iis_port" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="f77a0d64-a311-51e2-259d-94414214f6f9">
+      <Execution id="44a5256c-d669-42b8-8678-dd610d91b7d5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisProvisioningTests" name="AkmlSqlWeb_site_is_bound_on_the_iis_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.LanTlsTests.Sslcert_binding_thumbprint_matches_install_summary" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="310182e2-bfb4-8fc0-7734-30419ee6a253">
+      <Execution id="7c2f94c7-a479-4b08-9c15-3d867d6e8f7b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.LanTlsTests" name="Sslcert_binding_thumbprint_matches_install_summary" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.InstallerSmokeGateTests.Smoke_tests_require_explicit_opt_in(value: null)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="84c6f712-5ed3-cdd0-f473-c8d53bbc5c03">
+      <Execution id="9b007fda-ccf0-4d78-a0ca-9a01a19cf81b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.InstallerSmokeGateTests" name="Smoke_tests_require_explicit_opt_in" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.ReRunAndUninstallTests.Plugin_state_preserved_across_install_uninstall_reinstall" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="143519ac-8d4e-44d3-2d19-b77d7a2fd5d9">
+      <Execution id="9fcdbbe3-aebb-48f7-a957-c3e792e201f1" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.ReRunAndUninstallTests" name="Plugin_state_preserved_across_install_uninstall_reinstall" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisProvisioningTests.Csp_header_is_served" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="189e1063-b0a1-b85c-a0e2-19d6c037a598">
+      <Execution id="c95e96db-7e75-4484-a544-cd6950e9176a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisProvisioningTests" name="Csp_header_is_served" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisProvisioningTests.Five_mime_types_are_registered" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="19918b1b-a24e-1833-0337-2c47474e9584">
+      <Execution id="03b77d9c-099e-44cf-ad04-4ec15220da68" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisProvisioningTests" name="Five_mime_types_are_registered" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="84c6f712-5ed3-cdd0-f473-c8d53bbc5c03" executionId="9b007fda-ccf0-4d78-a0ca-9a01a19cf81b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="19918b1b-a24e-1833-0337-2c47474e9584" executionId="03b77d9c-099e-44cf-ad04-4ec15220da68" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b787243d-6e06-9d40-e298-29fe18272ce6" executionId="5ce01481-277d-4a5a-b40f-9960127541ce" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="80e416ba-cb1d-1802-a827-1374b558fe16" executionId="e3fbe21e-dc4c-45a2-839f-d1e091666ce5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="143519ac-8d4e-44d3-2d19-b77d7a2fd5d9" executionId="9fcdbbe3-aebb-48f7-a957-c3e792e201f1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="189e1063-b0a1-b85c-a0e2-19d6c037a598" executionId="c95e96db-7e75-4484-a544-cd6950e9176a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2e44b6cc-3b1d-b81b-6e82-7df23cd0c73d" executionId="44ce8907-f0ce-43ad-a914-8054f47b78ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="310182e2-bfb4-8fc0-7734-30419ee6a253" executionId="7c2f94c7-a479-4b08-9c15-3d867d6e8f7b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b580c33f-f0e7-5999-7705-ac1fda9b7f72" executionId="deb2ee3f-2189-4818-bf4f-20d864246206" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="89390162-a161-2bf3-d021-fa84f6472f99" executionId="3fe91ffe-601f-4556-b3c7-b37d0ad8d854" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f77a0d64-a311-51e2-259d-94414214f6f9" executionId="44a5256c-d669-42b8-8678-dd610d91b7d5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a4e8ee19-b3bc-fa72-0323-4d8a01ac1bae" executionId="b1965d86-b15c-4a71-8b61-06eeed14ca6c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="12" executed="4" passed="4" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.23]   Discovering: AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.36]   Discovered:  AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.43]   Starting:    AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.53]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.53]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.53]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.53]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.53]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+Test 'AkmlSql.Installer.Tests.ReRunAndUninstallTests.Plugin_state_preserved_across_install_uninstall_reinstall' was skipped in the test run.&#xD;
+Test 'AkmlSql.Installer.Tests.ReRunAndUninstallTests.Install_summary_is_well_formed' was skipped in the test run.&#xD;
+Test 'AkmlSql.Installer.Tests.ServiceHealthTests.AkmlSqlWebEngine_service_reaches_running_after_install' was skipped in the test run.&#xD;
+Test 'AkmlSql.Installer.Tests.LanTlsTests.Firewall_rule_exists' was skipped in the test run.&#xD;
+Test 'AkmlSql.Installer.Tests.LanTlsTests.Sslcert_binding_thumbprint_matches_install_summary' was skipped in the test run.&#xD;
+[xUnit.net 00:00:00.55]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.55]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.55]       installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM&#xD;
+[xUnit.net 00:00:00.56]   Finished:    AkmlSql.Installer.Tests&#xD;
+Test 'AkmlSql.Installer.Tests.IisProvisioningTests.Csp_header_is_served' was skipped in the test run.&#xD;
+Test 'AkmlSql.Installer.Tests.IisProvisioningTests.Five_mime_types_are_registered' was skipped in the test run.&#xD;
+Test 'AkmlSql.Installer.Tests.IisProvisioningTests.AkmlSqlWeb_site_is_bound_on_the_iis_port' was skipped in the test run.&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.1179922+03:00">
+        <Text>[xUnit.net 00:00:00.53]     AkmlSql.Installer.Tests.ReRunAndUninstallTests.Plugin_state_preserved_across_install_uninstall_reinstall [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.1207564+03:00">
+        <Text>[xUnit.net 00:00:00.53]     AkmlSql.Installer.Tests.ReRunAndUninstallTests.Install_summary_is_well_formed [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.1216657+03:00">
+        <Text>[xUnit.net 00:00:00.53]     AkmlSql.Installer.Tests.ServiceHealthTests.AkmlSqlWebEngine_service_reaches_running_after_install [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.1222137+03:00">
+        <Text>[xUnit.net 00:00:00.53]     AkmlSql.Installer.Tests.LanTlsTests.Firewall_rule_exists [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.1229102+03:00">
+        <Text>[xUnit.net 00:00:00.53]     AkmlSql.Installer.Tests.LanTlsTests.Sslcert_binding_thumbprint_matches_install_summary [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.2341687+03:00">
+        <Text>[xUnit.net 00:00:00.55]     AkmlSql.Installer.Tests.IisProvisioningTests.Csp_header_is_served [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.2342358+03:00">
+        <Text>[xUnit.net 00:00:00.55]     AkmlSql.Installer.Tests.IisProvisioningTests.Five_mime_types_are_registered [SKIP]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Warning" timestamp="2026-10-26T13:44:20.2342850+03:00">
+        <Text>[xUnit.net 00:00:00.55]     AkmlSql.Installer.Tests.IisProvisioningTests.AkmlSqlWeb_site_is_bound_on_the_iis_port [SKIP]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

@@ -2652,3 +2652,81 @@ browser/editor and PostgreSQL connection screenshots use illustrative values. Fu
 database compatibility, a reader study and a cross-browser accessibility campaign are
 not claimed. Planning artifacts and all 13 implementation/verification tasks live in
 `specs/044-site-product-studio/`.
+
+## Spec 045 — standalone web hosting (2026-10-26, implementation in progress)
+
+T001 is implemented: the real-installer smoke suite requires `AKML_INSTALLER_SMOKE=1`
+as well as admin/IIS eligibility. With the opt-in absent, four gate regressions pass
+and all eight smoke cases skip. A further positive opt-in/host-eligibility regression
+is included in the full baseline run. No installer has been launched.
+
+T002 baseline collection is complete; exact results and limits are recorded in
+`specs/045-web-standalone-hosting/baseline.md`. Release solution restore/build and
+both theme drift checks passed. The existing Core key-count failure and Engine
+performance-baseline failure reproduced; neither baseline was changed. Debug
+Engine/Web/browser-harness builds and the isolated browser spike passed.
+
+The local engine chain now serves a configured public bundle only in `--web` mode
+on the existing listener, with a manifest, path gate, validators, matching CSP and
+bounded file streams. Desktop mode and the plain bridge page retain their behavior.
+Static/bridge/host checks: 122 passed. The browser detects the serving engine,
+preserves active saved choices, uses the actual page port, keeps HTTPS records on
+`wss`, and prefills PIN pairing. Full Web suite: 2,015 passed. Pure installer
+helpers: 87 passed; the installer compiles with the new thin readers. This does
+not yet change the installer's hosting choices or default. Real engine-served
+browser verification and subsequent validation are tracked in baseline.md.
+The broad Engine regression run passes 2,703 tests (133 environment skips),
+excluding only the already-recorded performance baseline. The new browser group
+has 7 passed and 1 failed: all routes reach Live and the SQL corpus runs, but
+Chromium reports the WASM HEAD detection fetches as aborted. The strict network
+assertion remains enabled and T034 stays unchecked; SC-006 is not claimed.
+
+The owner confirmed that disposable VMs A–D are unavailable and requested
+independent local work. VM spikes and acceptance rows remain pending, including
+the installer decisions gated by S1, S2, S4 and S7. No deployment, owner-install
+upgrade or Git mutation has been performed by this implementation agent.
+
+Deferred findings from research.md remain open: page-ID ordering, localized LAN
+sslcert parsing, certificate-binding ownership/cleanup, interactive bad-flag
+messages, the unadvertised `refactoring.heavy` check, HTTP-driver readiness, IIS's
+all-interface HTTP binding, `profile=any`, and localhost origin squatting.
+
+### Owner continuation: remaining source work
+
+The owner explicitly deferred T034 to Claude Code and requested the rest of the
+implementation. Source now includes the three-choice wizard, persisted settings,
+shared-port standalone, IIS readiness, switching and origin notices, LAN summaries,
+the silent host matrix, protected install/state folders, guarded Support repair,
+silent-safe uninstall and a fresh-log migration for old temporary-script actions.
+No owner installation was upgraded and no product installer was executed locally.
+
+| Phase | Source/local status | Remaining acceptance |
+| --- | --- | --- |
+| 1 — safety/baseline | Complete | Existing baseline failures retained |
+| 2 — hosting model | Integrated; pure/source tests and ISCC | S1 component upgrade; S2 DPI/keyboard |
+| US1 — standalone | Engine, Web and installer source integrated | T034 deferred; S6/S7; VM rows |
+| US2 — IIS | Readiness, MIME and answer check integrated | S4 exact feature/cold timing; IIS VM rows |
+| US3 — switching | Cleanup, notices and upgrade persistence integrated | Upgrade/switch VM rows |
+| US4 — LAN | Source, firewall plan and summaries integrated | S3 LAN HTTPS/IPv6 VM pair |
+| US5 — silent | Resolution tests and both smoke gates/cases implemented | Opted-in VM install matrix |
+| US6 — repair/uninstall | Guard, cleanup, log migration and smoke assertions implemented | VM repair/upgrade/uninstall |
+| Polish | Docs and handoff updated; local regression checks recorded | Existing red gates; full machine acceptance; owner approval |
+
+Provisional spike choices are explicit: hidden legacy names use an always-false
+function (literal `Check: False` fails this Inno compiler); the readiness notice
+wraps below the list; ToolsUnavailable text stays generic; custom-folder ownership
+remains strict. None is recorded as a successful VM spike. Site F1 anchors fail
+30 versus 27 both before and after the public-doc changes. See the feature baseline
+and `CLAUDE_HANDOFF.md` for final test counts, commands, limitations and next steps.
+
+The 045 deferred list remains:
+
+- Existing CurPageChanged page-ID ordering comparisons (I3).
+- English-label parsing in the engine's LAN sslcert startup check.
+- The TLS setup script's binding ownership and leaving-LAN cleanup (I9).
+- Interactive invalid web flags reporting through the log only (I14).
+- Web checking the unadvertised `refactoring.heavy` capability.
+- No preflight for a disabled HTTP driver.
+- IIS's unchanged all-interface HTTP site binding (I25/SC-009 exception).
+- Firewall profile `any`; choosing a profile remains deferred.
+- Localhost page-origin squatting on multi-session Windows hosts (R6).

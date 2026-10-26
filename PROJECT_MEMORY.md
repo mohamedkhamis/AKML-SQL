@@ -357,8 +357,9 @@ Important test pitfalls:
 3. UiTests needs an interactive desktop and tests **installed extension DLLs**,
    not just the checkout. Screenshot tours use Northwind sample data. Minimized or
    disconnected desktop sessions can produce empty/black captures.
-4. Installer smoke tests can run the real installer on admin/IIS machines. Keep
-   routine runs to the intended unit tests unless installation is the actual task.
+4. Installer smoke tests run the real installer. Since the 2026-10-26 spec 045 safety
+   gate they require `AKML_INSTALLER_SMOKE=1` as well as admin/IIS eligibility. Set
+   that opt-in only on disposable VMs; routine runs exclude `Category=InstallerSmoke`.
 5. Never silently rebaseline golden/corpus output. Existing documents report about
    977 formatter goldens and a roughly 97.5% completion ratchet; current fixtures
    and gate code determine exact counts (some README counts disagree).
@@ -826,5 +827,69 @@ Verification: full Release MSBuild restore/build and both theme drift checks pas
 Site tests 909 passed with one existing duplicate Options-help-anchor failure; 15
 Chromium theme/viewport combinations and the tour/no-JS/navigation checks passed.
 See `specs/044-site-product-studio/baseline.md` for exact limits and screenshots.
+
+## 2026-10-26 — Standalone web hosting, partial local implementation (spec 045)
+
+`BridgeOptions.WebRoot` is optional and empty by default. `EngineHost.RunWebAsync`
+alone maps it to the existing `WebSocketTransport`; desktop `RunAsync` never serves
+the bundle. `StaticWebResponder` validates the root against private config/token
+folders, builds a public extension manifest excluding hidden/system/reparse entries
+and known state names, serves GET/HEAD with validators and the IIS CSP, and bounds
+file streams to 32 slots with deadlines. `/akmlsql` keeps the plain bridge page;
+an absent/refused root keeps plain-page behavior everywhere. No IPC change.
+
+Web `PageEngine` detects `X-AKML-Host: engine` using same-origin `HEAD /`. With no
+active saved connection, auto-connect derives the page host/port/scheme, reuses a
+matching record or saves it after an OK handshake. HTTPS page records persist
+`StrictScheme=true` and try only `wss`; port 443 is permitted for those records.
+Saved active choices still win. PIN-required answers prefill Settings › Connections.
+The local-engine action also reuses a saved bearer for a matching page engine.
+
+Installer scripts now expose pure config/firewall/readiness/answer-check helpers;
+the thin installer readers compile. The existing IIS/default wizard remains until
+its migration and UI spikes are verified. Real installer smoke tests require
+`AKML_INSTALLER_SMOKE=1` plus admin/IIS eligibility and must run on disposable VMs.
+The owner reported no VMs and authorized independent local work. S1–S4/S6/S7,
+installer integration and installed-machine acceptance remain pending. No owner
+installation or deployment has been changed. See `specs/045-web-standalone-hosting/`
+tasks and baseline for current counts, browser evidence and known baseline failures.
+
+The new engine-served browser group has 7 passed and 1 failed: direct loads of all
+ten routes reach Live and `/spike` formats/runs its SQL corpus, but the strict
+network assertion sees Chromium `net::ERR_ABORTED` on WASM `HEAD /` detection.
+Native JavaScript HEAD succeeds. T034 remains unchecked and SC-006 compliance is
+not claimed. Attempts at response buffering/lifetime changes did not solve it and
+were removed; the strict test remains enabled for the next implementation pass.
+
+### Owner-authorized continuation — remaining installer source
+
+The owner then explicitly deferred T034 to Claude Code and asked to implement the
+rest. `web-installer.iss` now owns Service/IIS/None choices, ports/exposure,
+pre-install protection and post-install configuration/check/summary. Setup keeps
+hidden legacy component names through `WebLegacyComponent`; a literal `Check:
+False` fallback is rejected by the local compiler. Readiness and custom ownership
+use provisional conservative choices pending the unrun VM spikes.
+
+Permanent Support helpers now include `web-iis-remove.ps1` (owned site/pool/binding
+cleanup with conservative unknown-state handling) and `web-hosting-repair.ps1`
+(location/ACL checks before and after elevation, either host). State DACLs are set
+exactly, including removal of old explicit grants. Custom install trees reject
+foreign owners and reparse points. Repair uses Windows PowerShell 5.1 filesystem
+ACL APIs directly, avoiding a security-module autoload dependency observed in
+the isolated test environment.
+
+`PrepareToInstall` hardens before stopping applications and retires old uninstall
+logs containing UTF-16 temporary script paths. The detector builds markers at
+runtime so it does not match its own compiled constants. Failure restores old
+uninstall files, preserving partial files and logging I/O failures. Silent uninstall
+keeps data/settings without prompts. Real service/IIS/LAN/silent-uninstall smoke
+cases are implemented but stay behind `AKML_INSTALLER_SMOKE=1` on disposable VMs;
+none was run on the owner's computer. Engine/Web were freshly published for a
+review installer under `.review-artifacts/045-final-iscc`, never installed.
+
+Current docs describe the new source behavior. `specs/045-web-standalone-hosting/`
+baseline and `CLAUDE_HANDOFF.md` distinguish passing local checks from T034,
+existing Core/performance/Site failures, unrun VM rows and owner upgrades. No Git
+mutation was performed; preserve the existing staged and unstaged work.
 This is source work, not a deployment or PostgreSQL execution verification. Site E2E's
 default fixture targets deployed IIS; use an isolated published preview for source QA.

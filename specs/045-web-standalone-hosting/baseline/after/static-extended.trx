@@ -1,0 +1,706 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="8a7bf285-b2ff-4333-b5f0-97cc4309ffe6" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 14:39:18" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T14:39:18.5934932+03:00" queuing="2026-10-26T14:39:18.5934938+03:00" start="2026-10-26T14:39:16.2590443+03:00" finish="2026-10-26T14:39:33.9513365+03:00" />
+  <TestSettings name="default" id="fb44d603-5038-4c85-8c4f-f971e36dd330">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_14_39_18" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="0cfb97da-b0fc-4cfb-bf93-a14731ab9d41" testId="366093c2-0dc1-b399-2f6a-a273e92b3205" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html%20&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0849754" startTime="2026-10-26T14:39:20.9067829+03:00" endTime="2026-10-26T14:39:20.9923024+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0cfb97da-b0fc-4cfb-bf93-a14731ab9d41" />
+    <UnitTestResult executionId="c65aed7b-b9d5-4784-b242-9b9fe05ceaa5" testId="4afbfd59-d63f-c5ad-7a6d-78e7054a6843" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.svg&quot;, type: &quot;image/svg+xml&quot;, body: &quot;SVG&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0655194" startTime="2026-10-26T14:39:18.8870312+03:00" endTime="2026-10-26T14:39:18.9529708+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c65aed7b-b9d5-4784-b242-9b9fe05ceaa5" />
+    <UnitTestResult executionId="ef25b1d6-d1d4-4a85-86ae-108b2028124c" testId="6d1c00af-4fb5-870e-afdc-b32b0a4a76c7" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;[::1]:59417&quot;, allowed: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0022878" startTime="2026-10-26T14:39:22.1354672+03:00" endTime="2026-10-26T14:39:22.1363476+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ef25b1d6-d1d4-4a85-86ae-108b2028124c" />
+    <UnitTestResult executionId="8b1b2228-7211-434e-b0dc-5679aa52b3d6" testId="d00c9838-b585-7f09-2639-374cd3136d77" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/C:/Windows/win.ini&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0574081" startTime="2026-10-26T14:39:21.3753854+03:00" endTime="2026-10-26T14:39:21.4332121+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8b1b2228-7211-434e-b0dc-5679aa52b3d6" />
+    <UnitTestResult executionId="3e657820-7cbf-4743-89fa-d47e1c70ac84" testId="5bee9eca-c822-6a05-7cba-a7aa11c3a7f9" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;token-child&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0415160" startTime="2026-10-26T14:39:20.4900578+03:00" endTime="2026-10-26T14:39:20.5307159+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3e657820-7cbf-4743-89fa-d47e1c70ac84">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The web root overlaps private engine state.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 59&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f09be135-49b7-41df-a097-4e881e11a4e6" testId="77303fb2-2a48-ae2e-d840-b3f6d16303d2" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/editor?autorun=1&quot;, type: &quot;text/html&quot;, body: &quot;INDEX&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0706227" startTime="2026-10-26T14:39:18.2704863+03:00" endTime="2026-10-26T14:39:18.3275867+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f09be135-49b7-41df-a097-4e881e11a4e6" />
+    <UnitTestResult executionId="b9c7ea3e-1108-4f04-8204-f17b9474fc04" testId="f96243d8-a517-3a4c-cc82-ab807e21f97c" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: null, allowed: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0005209" startTime="2026-10-26T14:39:22.1330286+03:00" endTime="2026-10-26T14:39:22.1334291+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b9c7ea3e-1108-4f04-8204-f17b9474fc04" />
+    <UnitTestResult executionId="39b07384-25c7-4a59-b2af-b78f92b881f3" testId="131ab796-84a6-f737-cbc6-b501d426f38e" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/WEB~1.CON&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0628193" startTime="2026-10-26T14:39:21.9768810+03:00" endTime="2026-10-26T14:39:22.0401336+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="39b07384-25c7-4a59-b2af-b78f92b881f3" />
+    <UnitTestResult executionId="7d49b954-f17b-4fca-b9e2-d5b392237600" testId="df3ee6aa-d181-2bcf-a004-98a0d5c64713" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/_framework/dotnet.js&quot;, type: &quot;text/javascript&quot;, body: &quot;SCRIPT&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0621932" startTime="2026-10-26T14:39:18.6857470+03:00" endTime="2026-10-26T14:39:18.7485130+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7d49b954-f17b-4fca-b9e2-d5b392237600" />
+    <UnitTestResult executionId="a9bef8b8-90d1-47e1-b04b-dff0b4ea81ff" testId="f4dfba4d-7a41-6481-54ad-38fb2f1e49cf" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/certs/bridge.cer&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0511736" startTime="2026-10-26T14:39:20.7957317+03:00" endTime="2026-10-26T14:39:20.8474754+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9bef8b8-90d1-47e1-b04b-dff0b4ea81ff" />
+    <UnitTestResult executionId="7eab5bd1-cbe9-4cdf-bcb0-830043d2c751" testId="6c258713-9bde-9c50-2759-e7cd390df101" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.json&quot;, type: &quot;application/json&quot;, body: &quot;JSON&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0695828" startTime="2026-10-26T14:39:18.7488623+03:00" endTime="2026-10-26T14:39:18.8188505+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7eab5bd1-cbe9-4cdf-bcb0-830043d2c751" />
+    <UnitTestResult executionId="94fcfa5f-8960-45bf-a35e-197e37bd8d6e" testId="95566890-3034-5a59-b18b-2c6c722742f2" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.txt&quot;, type: &quot;text/plain&quot;, body: &quot;TXT&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0555141" startTime="2026-10-26T14:39:18.3288693+03:00" endTime="2026-10-26T14:39:18.3837057+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="94fcfa5f-8960-45bf-a35e-197e37bd8d6e" />
+    <UnitTestResult executionId="8c6ed129-816f-4317-a9a9-3a64926ca278" testId="0f7396d7-06db-a2fc-e0d9-193de813bd2b" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;token-equal&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0632280" startTime="2026-10-26T14:39:19.0588984+03:00" endTime="2026-10-26T14:39:19.1096497+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8c6ed129-816f-4317-a9a9-3a64926ca278">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The web root overlaps private engine state.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 59&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5aa18f64-7c35-40e0-8073-72d43a24d7aa" testId="c6bdc034-1fe8-e099-a445-cf72f17cb7b2" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/INSTALL-SUMMARY.txt&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0599936" startTime="2026-10-26T14:39:21.9162474+03:00" endTime="2026-10-26T14:39:21.9766325+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5aa18f64-7c35-40e0-8073-72d43a24d7aa" />
+    <UnitTestResult executionId="b27ebe98-362b-4355-b6ba-e4782c370b0f" testId="8cba3f94-25eb-f3b3-1dc1-9b3c91b94a17" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;token-parent&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0463691" startTime="2026-10-26T14:39:20.5779851+03:00" endTime="2026-10-26T14:39:20.6231176+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b27ebe98-362b-4355-b6ba-e4782c370b0f">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The web root overlaps private engine state.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 59&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="12800a9f-5417-4e2b-87bb-504eefce0df3" testId="c8508742-831e-74c6-3237-7b4c71011ec7" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/pairing-pin.txt&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0534976" startTime="2026-10-26T14:39:21.8019259+03:00" endTime="2026-10-26T14:39:21.8548688+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="12800a9f-5417-4e2b-87bb-504eefce0df3" />
+    <UnitTestResult executionId="aaabab25-4cd8-490b-81c6-a374a2f937ba" testId="d0cc0d75-03b6-a002-640d-6e40cb5e4083" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;localhost:80&quot;, allowed: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000203" startTime="2026-10-26T14:39:22.1338331+03:00" endTime="2026-10-26T14:39:22.1338988+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aaabab25-4cd8-490b-81c6-a374a2f937ba" />
+    <UnitTestResult executionId="3034305f-eb6a-42b0-9dee-1d71b15fbb0a" testId="43e6c09e-5481-95fa-5a19-e5e426a55faa" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/&quot;, type: &quot;text/html&quot;, body: &quot;INDEX&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.2359942" startTime="2026-10-26T14:39:18.0042923+03:00" endTime="2026-10-26T14:39:18.2551108+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3034305f-eb6a-42b0-9dee-1d71b15fbb0a" />
+    <UnitTestResult executionId="8f3757a3-21dc-4b5d-b7d7-aa53891184b9" testId="03391552-cb6b-6fe1-61a8-8f2ab052f7d0" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html.br&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0606673" startTime="2026-10-26T14:39:21.6241048+03:00" endTime="2026-10-26T14:39:21.6852145+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8f3757a3-21dc-4b5d-b7d7-aa53891184b9" />
+    <UnitTestResult executionId="b3361176-4222-4edc-b055-705c8713c45d" testId="4138a2bd-2ae7-f636-7e96-fc18e28ffc77" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.pdb&quot;, type: &quot;application/octet-stream&quot;, body: &quot;PDB&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0636594" startTime="2026-10-26T14:39:18.5589133+03:00" endTime="2026-10-26T14:39:18.6226735+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b3361176-4222-4edc-b055-705c8713c45d" />
+    <UnitTestResult executionId="8eb103d8-4b16-4435-b780-38d1894f325e" testId="b1d7ba04-c384-e463-3f43-7fe68fd66036" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html.&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0585279" startTime="2026-10-26T14:39:20.8476702+03:00" endTime="2026-10-26T14:39:20.9065803+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8eb103d8-4b16-4435-b780-38d1894f325e" />
+    <UnitTestResult executionId="08f8f0e1-d8d5-44aa-b00b-09ece427ea6f" testId="00627e9d-51b3-121c-c714-c6cafbb672e9" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;evil@localhost:59417&quot;, allowed: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000036" startTime="2026-10-26T14:39:22.1348632+03:00" endTime="2026-10-26T14:39:22.1349387+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="08f8f0e1-d8d5-44aa-b00b-09ece427ea6f" />
+    <UnitTestResult executionId="edd42f42-abc9-4938-8984-b679c8fdac0e" testId="36b4dd0b-15ca-d559-a071-2f0207bb0980" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html::$DATA&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0604682" startTime="2026-10-26T14:39:21.8551070+03:00" endTime="2026-10-26T14:39:21.9160034+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="edd42f42-abc9-4938-8984-b679c8fdac0e" />
+    <UnitTestResult executionId="80209551-8859-4214-9974-3499fb375b87" testId="92509e2e-7ddf-49c5-7701-fcf0a08ac28a" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;config-equal&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0415542" startTime="2026-10-26T14:39:19.2755270+03:00" endTime="2026-10-26T14:39:19.3161461+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="80209551-8859-4214-9974-3499fb375b87">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The web root overlaps private engine state.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 59&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c9998bba-4ace-45f8-8459-0429d347218a" testId="ff559bc0-1efb-131f-d61d-b9b0bae08fb5" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/_framework/&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0927265" startTime="2026-10-26T14:39:20.6262013+03:00" endTime="2026-10-26T14:39:20.7164506+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c9998bba-4ace-45f8-8459-0429d347218a" />
+    <UnitTestResult executionId="ac5a0255-c81e-43c7-a3ed-d5bcf35e61f6" testId="420ef3b7-9476-94cb-69e5-eefb5136833a" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.map&quot;, type: &quot;application/json&quot;, body: &quot;MAP&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0670722" startTime="2026-10-26T14:39:18.8192882+03:00" endTime="2026-10-26T14:39:18.8866372+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ac5a0255-c81e-43c7-a3ed-d5bcf35e61f6" />
+    <UnitTestResult executionId="76efb61f-3cbc-439e-a906-c47dedbbe8f0" testId="ac2ce663-026f-8560-9f14-b0ab29cdbe92" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.wasm&quot;, type: &quot;application/wasm&quot;, body: &quot;WASM&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0619460" startTime="2026-10-26T14:39:18.6229064+03:00" endTime="2026-10-26T14:39:18.6855016+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="76efb61f-3cbc-439e-a906-c47dedbbe8f0" />
+    <UnitTestResult executionId="51463143-020a-4a3a-93c5-2a911d29a0b8" testId="5f9db065-7fdc-83ad-55f3-4db970c6bce0" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/..%2F..%2FProgramData/AKML%20SQL%20Web/pairing-pi&quot;···)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0784020" startTime="2026-10-26T14:39:20.7167004+03:00" endTime="2026-10-26T14:39:20.7954932+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="51463143-020a-4a3a-93c5-2a911d29a0b8" />
+    <UnitTestResult executionId="5b8fdde0-aad1-442d-a0e3-cc0ef82d43e3" testId="0690f798-1748-8920-53fc-02d9340255fe" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Head_and_validators_use_whole_second_timestamps_and_ETag_precedence" computerName="MOHAMED-KHAMIS" duration="00:00:00.0843136" startTime="2026-10-26T14:39:33.7593460+03:00" endTime="2026-10-26T14:39:33.8430400+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5b8fdde0-aad1-442d-a0e3-cc0ef82d43e3" />
+    <UnitTestResult executionId="8bcdb56c-0fbd-47b9-867e-4a9963d7adab" testId="b863d284-0c23-b8bc-1b11-8b2f39b36fec" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/con.txt&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0613700" startTime="2026-10-26T14:39:21.2518962+03:00" endTime="2026-10-26T14:39:21.3125881+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8bcdb56c-0fbd-47b9-867e-4a9963d7adab" />
+    <UnitTestResult executionId="222e30af-9367-49c7-acd9-85e9a0de9842" testId="102434d1-ada6-26c9-62c7-b5c370a0a6bd" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/settings/connections&quot;, type: &quot;text/html&quot;, body: &quot;INDEX&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0620626" startTime="2026-10-26T14:39:18.4957007+03:00" endTime="2026-10-26T14:39:18.5583303+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="222e30af-9367-49c7-acd9-85e9a0de9842" />
+    <UnitTestResult executionId="4f754f70-345c-4e51-9606-4549b20f8013" testId="7b24dea9-56c9-63d4-8937-63296898673d" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Slow_readers_are_bounded_and_failed_writes_release_their_slots" computerName="MOHAMED-KHAMIS" duration="00:00:10.5316688" startTime="2026-10-26T14:39:22.1365582+03:00" endTime="2026-10-26T14:39:32.6686160+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4f754f70-345c-4e51-9606-4549b20f8013" />
+    <UnitTestResult executionId="9c0d525e-c40e-4d86-b525-6918a4e4fa18" testId="e3401ba5-6c3d-53cf-7d4a-f7d9f0ea756a" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;config-parent&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0879270" startTime="2026-10-26T14:39:20.4018347+03:00" endTime="2026-10-26T14:39:20.4886090+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9c0d525e-c40e-4d86-b525-6918a4e4fa18">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The web root overlaps private engine state.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 59&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="448fe9c0-6f70-4f7b-8cc9-d7971bbdaaa7" testId="4991c24c-4d17-6c08-27db-1f562f3bd2d2" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/_framework/dotnet.js/&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0572842" startTime="2026-10-26T14:39:21.6854634+03:00" endTime="2026-10-26T14:39:21.7431130+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="448fe9c0-6f70-4f7b-8cc9-d7971bbdaaa7" />
+    <UnitTestResult executionId="b53d35b1-8d8a-4054-899b-3dd2e6d4623d" testId="c2bc1616-f19a-bbcf-ec86-b9654493ed1c" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/tokens.json&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0595029" startTime="2026-10-26T14:39:21.5637633+03:00" endTime="2026-10-26T14:39:21.6237941+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b53d35b1-8d8a-4054-899b-3dd2e6d4623d" />
+    <UnitTestResult executionId="c48f75c1-06e3-4cf8-9657-eb95a41f3b9f" testId="a3128490-b34f-bafe-fad5-76ecf882645c" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;localhost:59417/other&quot;, allowed: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0056352" startTime="2026-10-26T14:39:22.1271926+03:00" endTime="2026-10-26T14:39:22.1328098+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c48f75c1-06e3-4cf8-9657-eb95a41f3b9f" />
+    <UnitTestResult executionId="aff21a71-ebc6-4d3b-a643-54bc871a6d1d" testId="301b21da-1845-d5fe-4888-3b5521b4e1dd" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/%252e%252e/%252e%252e/Windows/win.ini&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0615452" startTime="2026-10-26T14:39:21.0536691+03:00" endTime="2026-10-26T14:39:21.1156102+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aff21a71-ebc6-4d3b-a643-54bc871a6d1d" />
+    <UnitTestResult executionId="5bede452-86fc-4269-8170-d610b21dc67b" testId="a71091f3-eda4-c3fb-af57-110756b2704b" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;//localhost/c$/Windows/win.ini&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0625542" startTime="2026-10-26T14:39:21.4334779+03:00" endTime="2026-10-26T14:39:21.4965304+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5bede452-86fc-4269-8170-d610b21dc67b" />
+    <UnitTestResult executionId="a9165a89-1d02-4d3b-bdc2-09262d2d5f76" testId="21c212e9-29f0-2515-7a9b-819ca9fd142e" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Manifest_skips_hidden_system_and_reparse_point_entries" computerName="MOHAMED-KHAMIS" duration="00:00:00.9637742" startTime="2026-10-26T14:39:32.6692351+03:00" endTime="2026-10-26T14:39:33.6336073+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9165a89-1d02-4d3b-bdc2-09262d2d5f76">
+      <Output>
+        <ErrorInfo>
+          <Message>System.UnauthorizedAccessException : Access to the path 'link' is denied.</Message>
+          <StackTrace>   at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA&amp; findData, Boolean topLevel)&#xD;
+   at System.IO.Directory.Delete(String path, Boolean recursive)&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.DisposeAsync() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 342&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Manifest_skips_hidden_system_and_reparse_point_entries() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 186&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="dfb0a105-36bc-416b-b1ca-5afbb9296d81" testId="a1e9de56-94b3-532d-5f50-620ad374d8e4" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;127.0.0.1:1234&quot;, allowed: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000464" startTime="2026-10-26T14:39:22.1336223+03:00" endTime="2026-10-26T14:39:22.1336951+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dfb0a105-36bc-416b-b1ca-5afbb9296d81" />
+    <UnitTestResult executionId="b15c23c6-0dc3-4ab3-b178-84f2dcfad326" testId="68f7b564-1ac4-7768-d6ef-ff2af8a687b4" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;volume&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0447499" startTime="2026-10-26T14:39:20.5318577+03:00" endTime="2026-10-26T14:39:20.5762239+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b15c23c6-0dc3-4ab3-b178-84f2dcfad326">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : A volume root cannot be served.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 54&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9b3ce0fd-a70a-4493-8d40-efaf4a278938" testId="076147f2-ba5d-5089-3668-0932561b4964" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/CON&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0663201" startTime="2026-10-26T14:39:21.4967683+03:00" endTime="2026-10-26T14:39:21.5635032+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9b3ce0fd-a70a-4493-8d40-efaf4a278938" />
+    <UnitTestResult executionId="ce78e053-4f9b-460f-8e3c-86732b6caba1" testId="566866dc-b506-3aa4-10ea-e84c80b7e89b" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;missing&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0518721" startTime="2026-10-26T14:39:19.1697673+03:00" endTime="2026-10-26T14:39:19.2206168+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ce78e053-4f9b-460f-8e3c-86732b6caba1">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The folder does not exist.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 61&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d25f5a99-fab1-48e2-a709-e9257b3ca026" testId="7fb6a831-c910-64ef-f776-02ea8690047e" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;no-index&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0576018" startTime="2026-10-26T14:39:19.1133958+03:00" endTime="2026-10-26T14:39:19.1679723+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d25f5a99-fab1-48e2-a709-e9257b3ca026">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : No public index.html in the web root.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder..ctor(String root) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 43&#xD;
+   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 63&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1a26996b-2eb9-4233-bfbd-ddb622343538" testId="6890b68b-22d9-9053-68e3-0ec88bac8823" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;relative&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0701142" startTime="2026-10-26T14:39:18.9562642+03:00" endTime="2026-10-26T14:39:19.0467589+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a26996b-2eb9-4233-bfbd-ddb622343538">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The path must be absolute.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 51&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c5fe249d-1756-49d7-826f-8c95f28371d5" testId="cf060715-cd06-9b61-aaf5-18dcb219c176" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.sql&quot;, type: &quot;text/plain&quot;, body: &quot;SQL&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0532351" startTime="2026-10-26T14:39:18.3839628+03:00" endTime="2026-10-26T14:39:18.4375684+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c5fe249d-1756-49d7-826f-8c95f28371d5" />
+    <UnitTestResult executionId="fe9523e0-61d9-440e-b871-fd654f6faed9" testId="6414faec-d99a-b603-794a-8884dd84c960" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes" computerName="MOHAMED-KHAMIS" duration="00:00:00.1225978" startTime="2026-10-26T14:39:33.6348030+03:00" endTime="2026-10-26T14:39:33.7580101+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fe9523e0-61d9-440e-b871-fd654f6faed9">
+      <Output>
+        <ErrorInfo>
+          <Message>[::1]: &lt;!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN""http://www.w3.org/TR/html4/strict.dtd"&gt;&#xD;
+&lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Bad Request&lt;/TITLE&gt;&#xD;
+&lt;META HTTP-EQUIV="Content-Type" Content="text/html; charset=us-ascii"&gt;&lt;/HEAD&gt;&#xD;
+&lt;BODY&gt;&lt;h2&gt;Bad Request - Invalid Hostname&lt;/h2&gt;&#xD;
+&lt;hr&gt;&lt;p&gt;HTTP Error 400. The request hostname is invalid.&lt;/p&gt;&#xD;
+&lt;/BODY&gt;&lt;/HTML&gt;&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 99&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="470a7d03-3051-4f00-96fe-a0decc0af91f" testId="1d86ac0e-be6c-dd13-7daa-5add19faca0d" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/a//b&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0619280" startTime="2026-10-26T14:39:21.3128058+03:00" endTime="2026-10-26T14:39:21.3751793+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="470a7d03-3051-4f00-96fe-a0decc0af91f" />
+    <UnitTestResult executionId="23321f6a-bf6a-4cc2-920d-16957319fa35" testId="e72c9b1e-ea17-d2bd-7f03-2f26f39683df" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;localhost.evil.example:59417&quot;, allowed: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0003053" startTime="2026-10-26T14:39:22.1350770+03:00" endTime="2026-10-26T14:39:22.1351365+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="23321f6a-bf6a-4cc2-920d-16957319fa35" />
+    <UnitTestResult executionId="bc5e35bc-2c08-4a00-aae1-3005819eb258" testId="b04c7120-1548-634d-a119-bda128290e7e" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.css&quot;, type: &quot;text/css&quot;, body: &quot;CSS&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0572949" startTime="2026-10-26T14:39:18.4377765+03:00" endTime="2026-10-26T14:39:18.4955159+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="bc5e35bc-2c08-4a00-aae1-3005819eb258" />
+    <UnitTestResult executionId="5d1ba33e-320d-452c-955e-301e1337083e" testId="4bd8ad55-ab33-85ae-8338-78a7e4a1cb8d" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/config.json&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0615857" startTime="2026-10-26T14:39:21.1159231+03:00" endTime="2026-10-26T14:39:21.1779612+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5d1ba33e-320d-452c-955e-301e1337083e" />
+    <UnitTestResult executionId="fb610f1e-0378-404f-a7c0-9ad382f0210d" testId="29b95062-3d5c-b94d-8728-5a2227b0fbf8" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/C%3A/Windows/win.ini&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0568370" startTime="2026-10-26T14:39:21.7453585+03:00" endTime="2026-10-26T14:39:21.8007519+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fb610f1e-0378-404f-a7c0-9ad382f0210d" />
+    <UnitTestResult executionId="d4215c76-1a72-46aa-a73e-d43ae1cb5ab0" testId="32e3ff40-644a-e5a8-fc6a-a34df57b8b8d" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/%5C..%5Cweb.config&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0857817" startTime="2026-10-26T14:39:22.0403811+03:00" endTime="2026-10-26T14:39:22.1268322+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d4215c76-1a72-46aa-a73e-d43ae1cb5ab0" />
+    <UnitTestResult executionId="c5b8b304-0409-4c61-9e39-1d5f6279de99" testId="003b25e2-fc43-d277-47f5-f35f696e6a78" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;config-child&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0526138" startTime="2026-10-26T14:39:19.2225498+03:00" endTime="2026-10-26T14:39:19.2739324+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c5b8b304-0409-4c61-9e39-1d5f6279de99">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.InvalidDataException : The web root overlaps private engine state.</Message>
+          <StackTrace>   at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs:line 59&#xD;
+   at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct) in D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs:line 97&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 332&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="533e5d9c-6841-4148-8f85-dd6af7ce3168" testId="7d37953d-b451-d898-b5db-880021b2cf77" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/%2e%2e/%2e%2e/Windows/win.ini&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0604471" startTime="2026-10-26T14:39:20.9925652+03:00" endTime="2026-10-26T14:39:21.0534454+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="533e5d9c-6841-4148-8f85-dd6af7ce3168" />
+    <UnitTestResult executionId="ff877397-e136-47c3-a09a-22d89ee7bc3c" testId="fda851e5-f6dd-6b5a-4e5c-3387de3f7aa2" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/web.config&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0716715" startTime="2026-10-26T14:39:21.1782161+03:00" endTime="2026-10-26T14:39:21.2505045+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ff877397-e136-47c3-a09a-22d89ee7bc3c" />
+    <UnitTestResult executionId="62875261-6d16-4684-b257-5cc279d2401a" testId="6412d09d-ef80-11f9-5cba-3d658d92a9f0" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;junction&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:01.0832805" startTime="2026-10-26T14:39:19.3180005+03:00" endTime="2026-10-26T14:39:20.4002766+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="62875261-6d16-4684-b257-5cc279d2401a">
+      <Output>
+        <ErrorInfo>
+          <Message>System.UnauthorizedAccessException : Access to the path 'link' is denied.</Message>
+          <StackTrace>   at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA&amp; findData, Boolean topLevel)&#xD;
+   at System.IO.FileSystem.RemoveDirectory(String fullPath, Boolean recursive)&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.DisposeAsync() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 342&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 333&#xD;
+   at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs:line 163&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8716d50a-371c-4f5d-acff-c1c27d5410a9" testId="9ade6d91-f8c4-0f82-ca67-d54d1fc67c85" testName="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;LOCALHOST:59417&quot;, allowed: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000213" startTime="2026-10-26T14:39:22.1352729+03:00" endTime="2026-10-26T14:39:22.1353360+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8716d50a-371c-4f5d-acff-c1c27d5410a9" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/C:/Windows/win.ini&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="d00c9838-b585-7f09-2639-374cd3136d77">
+      <Execution id="8b1b2228-7211-434e-b0dc-5679aa52b3d6" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.map&quot;, type: &quot;application/json&quot;, body: &quot;MAP&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="420ef3b7-9476-94cb-69e5-eefb5136833a">
+      <Execution id="ac5a0255-c81e-43c7-a3ed-d5bcf35e61f6" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/%252e%252e/%252e%252e/Windows/win.ini&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="301b21da-1845-d5fe-4888-3b5521b4e1dd">
+      <Execution id="aff21a71-ebc6-4d3b-a643-54bc871a6d1d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;token-parent&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="8cba3f94-25eb-f3b3-1dc1-9b3c91b94a17">
+      <Execution id="b27ebe98-362b-4355-b6ba-e4782c370b0f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Manifest_skips_hidden_system_and_reparse_point_entries" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="21c212e9-29f0-2515-7a9b-819ca9fd142e">
+      <Execution id="a9165a89-1d02-4d3b-bdc2-09262d2d5f76" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Manifest_skips_hidden_system_and_reparse_point_entries" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html.br&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="03391552-cb6b-6fe1-61a8-8f2ab052f7d0">
+      <Execution id="8f3757a3-21dc-4b5d-b7d7-aa53891184b9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.sql&quot;, type: &quot;text/plain&quot;, body: &quot;SQL&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="cf060715-cd06-9b61-aaf5-18dcb219c176">
+      <Execution id="c5fe249d-1756-49d7-826f-8c95f28371d5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;localhost:59417/other&quot;, allowed: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="a3128490-b34f-bafe-fad5-76ecf882645c">
+      <Execution id="c48f75c1-06e3-4cf8-9657-eb95a41f3b9f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;volume&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="68f7b564-1ac4-7768-d6ef-ff2af8a687b4">
+      <Execution id="b15c23c6-0dc3-4ab3-b178-84f2dcfad326" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/config.json&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="4bd8ad55-ab33-85ae-8338-78a7e4a1cb8d">
+      <Execution id="5d1ba33e-320d-452c-955e-301e1337083e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/settings/connections&quot;, type: &quot;text/html&quot;, body: &quot;INDEX&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="102434d1-ada6-26c9-62c7-b5c370a0a6bd">
+      <Execution id="222e30af-9367-49c7-acd9-85e9a0de9842" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/WEB~1.CON&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="131ab796-84a6-f737-cbc6-b501d426f38e">
+      <Execution id="39b07384-25c7-4a59-b2af-b78f92b881f3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/%2e%2e/%2e%2e/Windows/win.ini&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="7d37953d-b451-d898-b5db-880021b2cf77">
+      <Execution id="533e5d9c-6841-4148-8f85-dd6af7ce3168" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;[::1]:59417&quot;, allowed: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="6d1c00af-4fb5-870e-afdc-b32b0a4a76c7">
+      <Execution id="ef25b1d6-d1d4-4a85-86ae-108b2028124c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Slow_readers_are_bounded_and_failed_writes_release_their_slots" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="7b24dea9-56c9-63d4-8937-63296898673d">
+      <Execution id="4f754f70-345c-4e51-9606-4549b20f8013" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Slow_readers_are_bounded_and_failed_writes_release_their_slots" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Head_and_validators_use_whole_second_timestamps_and_ETag_precedence" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="0690f798-1748-8920-53fc-02d9340255fe">
+      <Execution id="5b8fdde0-aad1-442d-a0e3-cc0ef82d43e3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Head_and_validators_use_whole_second_timestamps_and_ETag_precedence" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/web.config&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="fda851e5-f6dd-6b5a-4e5c-3387de3f7aa2">
+      <Execution id="ff877397-e136-47c3-a09a-22d89ee7bc3c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;missing&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="566866dc-b506-3aa4-10ea-e84c80b7e89b">
+      <Execution id="ce78e053-4f9b-460f-8e3c-86732b6caba1" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/pairing-pin.txt&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="c8508742-831e-74c6-3237-7b4c71011ec7">
+      <Execution id="12800a9f-5417-4e2b-87bb-504eefce0df3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/con.txt&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="b863d284-0c23-b8bc-1b11-8b2f39b36fec">
+      <Execution id="8bcdb56c-0fbd-47b9-867e-4a9963d7adab" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html.&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="b1d7ba04-c384-e463-3f43-7fe68fd66036">
+      <Execution id="8eb103d8-4b16-4435-b780-38d1894f325e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;junction&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="6412d09d-ef80-11f9-5cba-3d658d92a9f0">
+      <Execution id="62875261-6d16-4684-b257-5cc279d2401a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;token-child&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="5bee9eca-c822-6a05-7cba-a7aa11c3a7f9">
+      <Execution id="3e657820-7cbf-4743-89fa-d47e1c70ac84" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="6414faec-d99a-b603-794a-8884dd84c960">
+      <Execution id="fe9523e0-61d9-440e-b871-fd654f6faed9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Missing_files_methods_hosts_and_ranges_have_explicit_outcomes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;token-equal&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="0f7396d7-06db-a2fc-e0d9-193de813bd2b">
+      <Execution id="8c6ed129-816f-4317-a9a9-3a64926ca278" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;//localhost/c$/Windows/win.ini&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="a71091f3-eda4-c3fb-af57-110756b2704b">
+      <Execution id="5bede452-86fc-4269-8170-d610b21dc67b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/_framework/dotnet.js&quot;, type: &quot;text/javascript&quot;, body: &quot;SCRIPT&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="df3ee6aa-d181-2bcf-a004-98a0d5c64713">
+      <Execution id="7d49b954-f17b-4fca-b9e2-d5b392237600" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.svg&quot;, type: &quot;image/svg+xml&quot;, body: &quot;SVG&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="4afbfd59-d63f-c5ad-7a6d-78e7054a6843">
+      <Execution id="c65aed7b-b9d5-4784-b242-9b9fe05ceaa5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;localhost.evil.example:59417&quot;, allowed: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="e72c9b1e-ea17-d2bd-7f03-2f26f39683df">
+      <Execution id="23321f6a-bf6a-4cc2-920d-16957319fa35" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/C%3A/Windows/win.ini&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="29b95062-3d5c-b94d-8728-5a2227b0fbf8">
+      <Execution id="fb610f1e-0378-404f-a7c0-9ad382f0210d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/_framework/&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="ff559bc0-1efb-131f-d61d-b9b0bae08fb5">
+      <Execution id="c9998bba-4ace-45f8-8459-0429d347218a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html%20&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="366093c2-0dc1-b399-2f6a-a273e92b3205">
+      <Execution id="0cfb97da-b0fc-4cfb-bf93-a14731ab9d41" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/a//b&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="1d86ac0e-be6c-dd13-7daa-5add19faca0d">
+      <Execution id="470a7d03-3051-4f00-96fe-a0decc0af91f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/CON&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="076147f2-ba5d-5089-3668-0932561b4964">
+      <Execution id="9b3ce0fd-a70a-4493-8d40-efaf4a278938" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;no-index&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="7fb6a831-c910-64ef-f776-02ea8690047e">
+      <Execution id="d25f5a99-fab1-48e2-a709-e9257b3ca026" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/&quot;, type: &quot;text/html&quot;, body: &quot;INDEX&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="43e6c09e-5481-95fa-5a19-e5e426a55faa">
+      <Execution id="3034305f-eb6a-42b0-9dee-1d71b15fbb0a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;config-equal&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="92509e2e-7ddf-49c5-7701-fcf0a08ac28a">
+      <Execution id="80209551-8859-4214-9974-3499fb375b87" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/_framework/dotnet.js/&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="4991c24c-4d17-6c08-27db-1f562f3bd2d2">
+      <Execution id="448fe9c0-6f70-4f7b-8cc9-d7971bbdaaa7" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.txt&quot;, type: &quot;text/plain&quot;, body: &quot;TXT&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="95566890-3034-5a59-b18b-2c6c722742f2">
+      <Execution id="94fcfa5f-8960-45bf-a35e-197e37bd8d6e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;evil@localhost:59417&quot;, allowed: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="00627e9d-51b3-121c-c714-c6cafbb672e9">
+      <Execution id="08f8f0e1-d8d5-44aa-b00b-09ece427ea6f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/tokens.json&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="c2bc1616-f19a-bbcf-ec86-b9654493ed1c">
+      <Execution id="b53d35b1-8d8a-4054-899b-3dd2e6d4623d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;config-child&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="003b25e2-fc43-d277-47f5-f35f696e6a78">
+      <Execution id="c5b8b304-0409-4c61-9e39-1d5f6279de99" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;config-parent&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="e3401ba5-6c3d-53cf-7d4a-f7d9f0ea756a">
+      <Execution id="9c0d525e-c40e-4d86-b525-6918a4e4fa18" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/INSTALL-SUMMARY.txt&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="c6bdc034-1fe8-e099-a445-cf72f17cb7b2">
+      <Execution id="5aa18f64-7c35-40e0-8073-72d43a24d7aa" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;127.0.0.1:1234&quot;, allowed: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="a1e9de56-94b3-532d-5f50-620ad374d8e4">
+      <Execution id="dfb0a105-36bc-416b-b1ca-5afbb9296d81" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/index.html::$DATA&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="36b4dd0b-15ca-d559-a071-2f0207bb0980">
+      <Execution id="edd42f42-abc9-4938-8984-b679c8fdac0e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/editor?autorun=1&quot;, type: &quot;text/html&quot;, body: &quot;INDEX&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="77303fb2-2a48-ae2e-d840-b3f6d16303d2">
+      <Execution id="f09be135-49b7-41df-a097-4e881e11a4e6" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: &quot;relative&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="6890b68b-22d9-9053-68e3-0ec88bac8823">
+      <Execution id="1a26996b-2eb9-4233-bfbd-ddb622343538" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Invalid_roots_fall_back_with_exactly_one_warning" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/..%2F..%2FProgramData/AKML%20SQL%20Web/pairing-pi&quot;···)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="5f9db065-7fdc-83ad-55f3-4db970c6bce0">
+      <Execution id="51463143-020a-4a3a-93c5-2a911d29a0b8" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;localhost:80&quot;, allowed: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="d0cc0d75-03b6-a002-640d-6e40cb5e4083">
+      <Execution id="aaabab25-4cd8-490b-81c6-a374a2f937ba" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/%5C..%5Cweb.config&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="32e3ff40-644a-e5a8-fc6a-a34df57b8b8d">
+      <Execution id="d4215c76-1a72-46aa-a73e-d43ae1cb5ab0" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.pdb&quot;, type: &quot;application/octet-stream&quot;, body: &quot;PDB&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="4138a2bd-2ae7-f636-7e96-fc18e28ffc77">
+      <Execution id="b3361176-4222-4edc-b055-705c8713c45d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.json&quot;, type: &quot;application/json&quot;, body: &quot;JSON&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="6c258713-9bde-9c50-2759-e7cd390df101">
+      <Execution id="7eab5bd1-cbe9-4cdf-bcb0-830043d2c751" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Raw_SC013_requests_never_disclose_files_or_list_directories(path: &quot;/certs/bridge.cer&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="f4dfba4d-7a41-6481-54ad-38fb2f1e49cf">
+      <Execution id="a9bef8b8-90d1-47e1-b04b-dff0b4ea81ff" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Raw_SC013_requests_never_disclose_files_or_list_directories" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: &quot;LOCALHOST:59417&quot;, allowed: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="9ade6d91-f8c4-0f82-ca67-d54d1fc67c85">
+      <Execution id="8716d50a-371c-4f5d-acff-c1c27d5410a9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Host_gate_accepts_only_the_loopback_names_on_any_port(value: null, allowed: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="f96243d8-a517-3a4c-cc82-ab807e21f97c">
+      <Execution id="b9c7ea3e-1108-4f04-8204-f17b9474fc04" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Host_gate_accepts_only_the_loopback_names_on_any_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.css&quot;, type: &quot;text/css&quot;, body: &quot;CSS&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="b04c7120-1548-634d-a119-bda128290e7e">
+      <Execution id="bc5e35bc-2c08-4a00-aae1-3005819eb258" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Files_and_routes_have_the_contract_headers_and_bytes(path: &quot;/file.wasm&quot;, type: &quot;application/wasm&quot;, body: &quot;WASM&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.engine.tests\bin\debug\net10.0\akmlsql.engine.tests.dll" id="ac2ce663-026f-8560-9f14-b0ab29cdbe92">
+      <Execution id="76efb61f-3cbc-439e-a906-c47dedbbe8f0" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\bin\Debug\net10.0\AkmlSql.Engine.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Engine.Tests.Transports.StaticWebResponderTests" name="Files_and_routes_have_the_contract_headers_and_bytes" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="366093c2-0dc1-b399-2f6a-a273e92b3205" executionId="0cfb97da-b0fc-4cfb-bf93-a14731ab9d41" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4afbfd59-d63f-c5ad-7a6d-78e7054a6843" executionId="c65aed7b-b9d5-4784-b242-9b9fe05ceaa5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6d1c00af-4fb5-870e-afdc-b32b0a4a76c7" executionId="ef25b1d6-d1d4-4a85-86ae-108b2028124c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d00c9838-b585-7f09-2639-374cd3136d77" executionId="8b1b2228-7211-434e-b0dc-5679aa52b3d6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5bee9eca-c822-6a05-7cba-a7aa11c3a7f9" executionId="3e657820-7cbf-4743-89fa-d47e1c70ac84" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="77303fb2-2a48-ae2e-d840-b3f6d16303d2" executionId="f09be135-49b7-41df-a097-4e881e11a4e6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f96243d8-a517-3a4c-cc82-ab807e21f97c" executionId="b9c7ea3e-1108-4f04-8204-f17b9474fc04" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="131ab796-84a6-f737-cbc6-b501d426f38e" executionId="39b07384-25c7-4a59-b2af-b78f92b881f3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="df3ee6aa-d181-2bcf-a004-98a0d5c64713" executionId="7d49b954-f17b-4fca-b9e2-d5b392237600" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f4dfba4d-7a41-6481-54ad-38fb2f1e49cf" executionId="a9bef8b8-90d1-47e1-b04b-dff0b4ea81ff" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6c258713-9bde-9c50-2759-e7cd390df101" executionId="7eab5bd1-cbe9-4cdf-bcb0-830043d2c751" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="95566890-3034-5a59-b18b-2c6c722742f2" executionId="94fcfa5f-8960-45bf-a35e-197e37bd8d6e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0f7396d7-06db-a2fc-e0d9-193de813bd2b" executionId="8c6ed129-816f-4317-a9a9-3a64926ca278" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c6bdc034-1fe8-e099-a445-cf72f17cb7b2" executionId="5aa18f64-7c35-40e0-8073-72d43a24d7aa" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8cba3f94-25eb-f3b3-1dc1-9b3c91b94a17" executionId="b27ebe98-362b-4355-b6ba-e4782c370b0f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c8508742-831e-74c6-3237-7b4c71011ec7" executionId="12800a9f-5417-4e2b-87bb-504eefce0df3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d0cc0d75-03b6-a002-640d-6e40cb5e4083" executionId="aaabab25-4cd8-490b-81c6-a374a2f937ba" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="43e6c09e-5481-95fa-5a19-e5e426a55faa" executionId="3034305f-eb6a-42b0-9dee-1d71b15fbb0a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="03391552-cb6b-6fe1-61a8-8f2ab052f7d0" executionId="8f3757a3-21dc-4b5d-b7d7-aa53891184b9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4138a2bd-2ae7-f636-7e96-fc18e28ffc77" executionId="b3361176-4222-4edc-b055-705c8713c45d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b1d7ba04-c384-e463-3f43-7fe68fd66036" executionId="8eb103d8-4b16-4435-b780-38d1894f325e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="00627e9d-51b3-121c-c714-c6cafbb672e9" executionId="08f8f0e1-d8d5-44aa-b00b-09ece427ea6f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="36b4dd0b-15ca-d559-a071-2f0207bb0980" executionId="edd42f42-abc9-4938-8984-b679c8fdac0e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="92509e2e-7ddf-49c5-7701-fcf0a08ac28a" executionId="80209551-8859-4214-9974-3499fb375b87" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ff559bc0-1efb-131f-d61d-b9b0bae08fb5" executionId="c9998bba-4ace-45f8-8459-0429d347218a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="420ef3b7-9476-94cb-69e5-eefb5136833a" executionId="ac5a0255-c81e-43c7-a3ed-d5bcf35e61f6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ac2ce663-026f-8560-9f14-b0ab29cdbe92" executionId="76efb61f-3cbc-439e-a906-c47dedbbe8f0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5f9db065-7fdc-83ad-55f3-4db970c6bce0" executionId="51463143-020a-4a3a-93c5-2a911d29a0b8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0690f798-1748-8920-53fc-02d9340255fe" executionId="5b8fdde0-aad1-442d-a0e3-cc0ef82d43e3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b863d284-0c23-b8bc-1b11-8b2f39b36fec" executionId="8bcdb56c-0fbd-47b9-867e-4a9963d7adab" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="102434d1-ada6-26c9-62c7-b5c370a0a6bd" executionId="222e30af-9367-49c7-acd9-85e9a0de9842" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7b24dea9-56c9-63d4-8937-63296898673d" executionId="4f754f70-345c-4e51-9606-4549b20f8013" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e3401ba5-6c3d-53cf-7d4a-f7d9f0ea756a" executionId="9c0d525e-c40e-4d86-b525-6918a4e4fa18" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4991c24c-4d17-6c08-27db-1f562f3bd2d2" executionId="448fe9c0-6f70-4f7b-8cc9-d7971bbdaaa7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c2bc1616-f19a-bbcf-ec86-b9654493ed1c" executionId="b53d35b1-8d8a-4054-899b-3dd2e6d4623d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a3128490-b34f-bafe-fad5-76ecf882645c" executionId="c48f75c1-06e3-4cf8-9657-eb95a41f3b9f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="301b21da-1845-d5fe-4888-3b5521b4e1dd" executionId="aff21a71-ebc6-4d3b-a643-54bc871a6d1d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a71091f3-eda4-c3fb-af57-110756b2704b" executionId="5bede452-86fc-4269-8170-d610b21dc67b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="21c212e9-29f0-2515-7a9b-819ca9fd142e" executionId="a9165a89-1d02-4d3b-bdc2-09262d2d5f76" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a1e9de56-94b3-532d-5f50-620ad374d8e4" executionId="dfb0a105-36bc-416b-b1ca-5afbb9296d81" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="68f7b564-1ac4-7768-d6ef-ff2af8a687b4" executionId="b15c23c6-0dc3-4ab3-b178-84f2dcfad326" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="076147f2-ba5d-5089-3668-0932561b4964" executionId="9b3ce0fd-a70a-4493-8d40-efaf4a278938" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="566866dc-b506-3aa4-10ea-e84c80b7e89b" executionId="ce78e053-4f9b-460f-8e3c-86732b6caba1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7fb6a831-c910-64ef-f776-02ea8690047e" executionId="d25f5a99-fab1-48e2-a709-e9257b3ca026" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6890b68b-22d9-9053-68e3-0ec88bac8823" executionId="1a26996b-2eb9-4233-bfbd-ddb622343538" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cf060715-cd06-9b61-aaf5-18dcb219c176" executionId="c5fe249d-1756-49d7-826f-8c95f28371d5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6414faec-d99a-b603-794a-8884dd84c960" executionId="fe9523e0-61d9-440e-b871-fd654f6faed9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d86ac0e-be6c-dd13-7daa-5add19faca0d" executionId="470a7d03-3051-4f00-96fe-a0decc0af91f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e72c9b1e-ea17-d2bd-7f03-2f26f39683df" executionId="23321f6a-bf6a-4cc2-920d-16957319fa35" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b04c7120-1548-634d-a119-bda128290e7e" executionId="bc5e35bc-2c08-4a00-aae1-3005819eb258" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4bd8ad55-ab33-85ae-8338-78a7e4a1cb8d" executionId="5d1ba33e-320d-452c-955e-301e1337083e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="29b95062-3d5c-b94d-8728-5a2227b0fbf8" executionId="fb610f1e-0378-404f-a7c0-9ad382f0210d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="32e3ff40-644a-e5a8-fc6a-a34df57b8b8d" executionId="d4215c76-1a72-46aa-a73e-d43ae1cb5ab0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="003b25e2-fc43-d277-47f5-f35f696e6a78" executionId="c5b8b304-0409-4c61-9e39-1d5f6279de99" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7d37953d-b451-d898-b5db-880021b2cf77" executionId="533e5d9c-6841-4148-8f85-dd6af7ce3168" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fda851e5-f6dd-6b5a-4e5c-3387de3f7aa2" executionId="ff877397-e136-47c3-a09a-22d89ee7bc3c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6412d09d-ef80-11f9-5cba-3d658d92a9f0" executionId="62875261-6d16-4684-b257-5cc279d2401a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9ade6d91-f8c4-0f82-ca67-d54d1fc67c85" executionId="8716d50a-371c-4f5d-acff-c1c27d5410a9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="58" executed="58" passed="45" failed="13" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.24]   Discovering: AkmlSql.Engine.Tests&#xD;
+[xUnit.net 00:00:00.74]   Discovered:  AkmlSql.Engine.Tests&#xD;
+[xUnit.net 00:00:00.83]   Starting:    AkmlSql.Engine.Tests&#xD;
+[xUnit.net 00:00:01.91]       System.IO.InvalidDataException : The path must be absolute.&#xD;
+[xUnit.net 00:00:01.91]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.91]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(51,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:01.91]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:01.91]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:01.91]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:01.91]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:01.91]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.97]       System.IO.InvalidDataException : The web root overlaps private engine state.&#xD;
+[xUnit.net 00:00:01.97]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(59,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:01.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:01.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:01.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:01.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:01.97]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.03]       System.IO.InvalidDataException : No public index.html in the web root.&#xD;
+[xUnit.net 00:00:02.03]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.03]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(43,0): at AkmlSql.Engine.Transports.StaticWebResponder..ctor(String root)&#xD;
+[xUnit.net 00:00:02.03]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(63,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:02.03]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:02.03]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.03]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.03]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:02.03]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.08]       System.IO.InvalidDataException : The folder does not exist.&#xD;
+[xUnit.net 00:00:02.08]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.08]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(61,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:02.08]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:02.08]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.08]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.08]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:02.08]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.13]       System.IO.InvalidDataException : The web root overlaps private engine state.&#xD;
+[xUnit.net 00:00:02.13]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.13]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(59,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:02.13]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:02.13]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.13]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.13]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:02.13]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.17]       System.IO.InvalidDataException : The web root overlaps private engine state.&#xD;
+[xUnit.net 00:00:02.17]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.17]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(59,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:02.17]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:02.18]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.18]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:02.18]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:02.18]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.26]       System.UnauthorizedAccessException : Access to the path 'link' is denied.&#xD;
+[xUnit.net 00:00:03.26]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.26]            at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA&amp; findData, Boolean topLevel)&#xD;
+[xUnit.net 00:00:03.26]            at System.IO.FileSystem.RemoveDirectory(String fullPath, Boolean recursive)&#xD;
+[xUnit.net 00:00:03.26]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(342,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.DisposeAsync()&#xD;
+[xUnit.net 00:00:03.26]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.26]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:03.26]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.35]       System.IO.InvalidDataException : The web root overlaps private engine state.&#xD;
+[xUnit.net 00:00:03.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(59,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:03.35]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.39]       System.IO.InvalidDataException : The web root overlaps private engine state.&#xD;
+[xUnit.net 00:00:03.39]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.39]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(59,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:03.39]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:03.39]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.39]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.39]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:03.39]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.43]       System.IO.InvalidDataException : A volume root cannot be served.&#xD;
+[xUnit.net 00:00:03.43]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(54,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:03.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:03.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:03.44]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.48]       System.IO.InvalidDataException : The web root overlaps private engine state.&#xD;
+[xUnit.net 00:00:03.48]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.48]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\StaticWebResponder.cs(59,0): at AkmlSql.Engine.Transports.StaticWebResponder.Create(WebSocketTransportOptions options)&#xD;
+[xUnit.net 00:00:03.48]         D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Engine\Transports\WebSocketTransport.cs(97,0): at AkmlSql.Engine.Transports.WebSocketTransport.StartAsync(CancellationToken ct)&#xD;
+[xUnit.net 00:00:03.48]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(332,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.48]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(333,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync(Func`2 root, Func`2 config, Func`2 tokens)&#xD;
+[xUnit.net 00:00:03.48]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(163,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(String kind)&#xD;
+[xUnit.net 00:00:03.48]         --- End of stack trace from previous location ---&#xD;
+SC-013 /_framework/: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /..%2F..%2FProgramData/AKML%20SQL%20Web/pairing-pin.txt: HTTP/1.1 403 Forbidden&#xD;
+SC-013 /certs/bridge.cer: HTTP/1.1 404 Not Found&#xD;
+SC-013 /index.html.: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /index.html%20: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /%2e%2e/%2e%2e/Windows/win.ini: HTTP/1.1 403 Forbidden&#xD;
+SC-013 /%252e%252e/%252e%252e/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /config.json: HTTP/1.1 404 Not Found&#xD;
+SC-013 /web.config: HTTP/1.1 404 Not Found&#xD;
+SC-013 /con.txt: HTTP/1.1 404 Not Found&#xD;
+SC-013 /a//b: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /C:/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+SC-013 //localhost/c$/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /CON: HTTP/1.1 200 OK&#xD;
+SC-013 /tokens.json: HTTP/1.1 404 Not Found&#xD;
+SC-013 /index.html.br: HTTP/1.1 404 Not Found&#xD;
+SC-013 /_framework/dotnet.js/: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /C%3A/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /pairing-pin.txt: HTTP/1.1 404 Not Found&#xD;
+SC-013 /index.html::$DATA: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /INSTALL-SUMMARY.txt: HTTP/1.1 404 Not Found&#xD;
+SC-013 /WEB~1.CON: HTTP/1.1 400 Bad Request&#xD;
+SC-013 /%5C..%5Cweb.config: HTTP/1.1 403 Forbidden&#xD;
+[xUnit.net 00:00:16.49]       System.UnauthorizedAccessException : Access to the path 'link' is denied.&#xD;
+[xUnit.net 00:00:16.49]       Stack Trace:&#xD;
+[xUnit.net 00:00:16.49]            at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA&amp; findData, Boolean topLevel)&#xD;
+[xUnit.net 00:00:16.49]            at System.IO.Directory.Delete(String path, Boolean recursive)&#xD;
+[xUnit.net 00:00:16.49]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(342,0): at AkmlSql.Engine.Tests.Transports.StaticWebTestHost.DisposeAsync()&#xD;
+[xUnit.net 00:00:16.49]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(186,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Manifest_skips_hidden_system_and_reparse_point_entries()&#xD;
+[xUnit.net 00:00:16.49]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:16.62]       [::1]: &lt;!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN""http://www.w3.org/TR/html4/strict.dtd"&gt;&#xD;
+[xUnit.net 00:00:16.62]       &lt;HTML&gt;&lt;HEAD&gt;&lt;TITLE&gt;Bad Request&lt;/TITLE&gt;&#xD;
+[xUnit.net 00:00:16.62]       &lt;META HTTP-EQUIV="Content-Type" Content="text/html; charset=us-ascii"&gt;&lt;/HEAD&gt;&#xD;
+[xUnit.net 00:00:16.62]       &lt;BODY&gt;&lt;h2&gt;Bad Request - Invalid Hostname&lt;/h2&gt;&#xD;
+[xUnit.net 00:00:16.62]       &lt;hr&gt;&lt;p&gt;HTTP Error 400. The request hostname is invalid.&lt;/p&gt;&#xD;
+[xUnit.net 00:00:16.62]       &lt;/BODY&gt;&lt;/HTML&gt;&#xD;
+[xUnit.net 00:00:16.62]       &#xD;
+[xUnit.net 00:00:16.62]       Stack Trace:&#xD;
+[xUnit.net 00:00:16.62]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(97,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes()&#xD;
+[xUnit.net 00:00:16.62]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Engine.Tests\Transports\StaticWebResponderTests.cs(99,0): at AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes()&#xD;
+[xUnit.net 00:00:16.62]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:16.71]   Finished:    AkmlSql.Engine.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:19.0529228+03:00">
+        <Text>[xUnit.net 00:00:01.91]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "relative") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:19.1103538+03:00">
+        <Text>[xUnit.net 00:00:01.97]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "token-equal") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:19.1686005+03:00">
+        <Text>[xUnit.net 00:00:02.03]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "no-index") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:19.2213517+03:00">
+        <Text>[xUnit.net 00:00:02.08]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "missing") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:19.2745494+03:00">
+        <Text>[xUnit.net 00:00:02.13]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "config-child") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:19.3167634+03:00">
+        <Text>[xUnit.net 00:00:02.17]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "config-equal") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:20.4014751+03:00">
+        <Text>[xUnit.net 00:00:03.26]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "junction") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:20.4890340+03:00">
+        <Text>[xUnit.net 00:00:03.35]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "config-parent") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:20.5311153+03:00">
+        <Text>[xUnit.net 00:00:03.39]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "token-child") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:20.5767584+03:00">
+        <Text>[xUnit.net 00:00:03.43]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "volume") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:20.6235409+03:00">
+        <Text>[xUnit.net 00:00:03.48]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Invalid_roots_fall_back_with_exactly_one_warning(kind: "token-parent") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:33.6340919+03:00">
+        <Text>[xUnit.net 00:00:16.49]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Manifest_skips_hidden_system_and_reparse_point_entries [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:39:33.7584553+03:00">
+        <Text>[xUnit.net 00:00:16.62]     AkmlSql.Engine.Tests.Transports.StaticWebResponderTests.Missing_files_methods_hosts_and_ranges_have_explicit_outcomes [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

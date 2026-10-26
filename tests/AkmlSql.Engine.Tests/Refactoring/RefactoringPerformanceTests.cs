@@ -10,6 +10,7 @@ namespace AkmlSql.Engine.Tests.Refactoring;
 /// <summary>
 /// T070 — Performance benchmark tests validating SC-001 and SC-002 constraints.
 /// </summary>
+[Collection("Refactoring performance")]
 public sealed class RefactoringPerformanceTests
 {
     // ─── SC-001: Lightweight ops &lt; 100ms on 2,000-line document ─────────────
@@ -178,3 +179,7 @@ public sealed class RefactoringPerformanceTests
             $"ExtractToCte preview took {sw.ElapsedMilliseconds}ms, expected < 500ms (SC-004)");
     }
 }
+
+// Timing gates must not share the CPU with unrelated parallel test collections.
+[CollectionDefinition("Refactoring performance", DisableParallelization = true)]
+public sealed class RefactoringPerformanceCollection;

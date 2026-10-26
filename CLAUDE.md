@@ -197,6 +197,8 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 - Logs: `%AppData%/AKML SQL/logs/akmlsql-*.log`
 - Update result: `%AppData%/AKML SQL/update-available.json`; downloaded installers: `%LocalAppData%/AKML SQL/cache/`
 - Program files: `C:\Program Files\AKML SQL\` (64-bit installer); installs from before it stay in `C:\Program Files (x86)\AKML SQL\` — the installer takes them over in place (`MigrateLegacy32BitInstall`)
+- Web machine state: `%ProgramData%\AKML SQL Web\` (config, PIN, tokens, certs, summary); public bundle: `{app}\Web`; scripts: `{app}\Support`.
+- Hosting registry: `HKLM64\Software\AKML SQL\Web` (`Host`, `Exposure`, `BridgePort`, `WebRoot`; IIS-only `IisPort`, `HttpsPort`, `IisMode`), read with 32-bit fallback. Repair obtains `{app}` from the product uninstall key's `InstallLocation`.
 
 ### Extension Install Paths
 
@@ -216,7 +218,10 @@ See [docs/analysis-rules.md](docs/analysis-rules.md) for all rules.
 - **Detection**: Registry + vswhere.exe + filesystem fallback (see `environment-scanner.iss`)
 - **Post-install**: Clears MEF caches, writes config.json (only if absent)
 - **Silent mode**: `/VERYSILENT /ACCEPTEULA /TARGETS=ssms22 /NOUPDATE /NOTELEMETRY` (`vs2026` from older scripts is accepted and ignored) (error reports and automatic updates are ON by default; a silent upgrade keeps the user's existing choices unless a flag is given)
-- **Installer tests**: `AkmlSql.Installer.Tests` smoke classes RUN THE REAL INSTALLER on any admin machine with IIS — filter to the unit classes (`ScheduledUpdateTests`, `UpdateDownloaderTests`) unless you mean to install
+- **Web hosting**: code-owned `Service` (default, automatic), `IIS` (only when ready), or `None` (files only); the engine service is installed for every choice. IIS/None use delayed automatic start. Legacy component names remain hidden behind `WebLegacyComponent` for compatibility pending S1.
+- **Web flags**: `/WEB_HOST=SERVICE|IIS|NONE /WEB_EXPOSURE=LOCALHOST|LAN /BRIDGE_PORT=<p>`; `/WEB_PORT` and `/WEB_HTTPS_PORT` are IIS-only. No host flag preserves the previous host; unavailable previous IIS falls back to Service with a logged reason. Changing origin is announced before setup and in the summary.
+- **Repair/uninstall**: permanent guarded Support helpers repair either host; setup hardens state/custom folders and retires legacy uninstall logs containing elevated temporary script actions. Silent uninstall keeps machine data and desktop settings without dialogs.
+- **Installer tests**: real-installer smoke requires `AKML_INSTALLER_SMOKE=1` plus admin for Service or admin and IIS Ready for IIS. Set the opt-in only on disposable VMs. Routine checks use `--filter "Category!=InstallerSmoke"`.
 
 ## Key Design Decisions
 
@@ -369,6 +374,24 @@ during execution. The baseline distinguishes these automated checks from pending
 - Spec 032 pending live items: web deploy + keystroke E2E (T013), campaign re-run (T057/T058), desktop smoke (T059), final perf gate (T060), sandbox cleanup (T062). Known pre-existing red, NOT spec-032: `FormatterServiceTests`/`AnalyserServiceTests` sp031-* pending golden baselines; `PerformanceBaselineTests` environmental drift.
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.
 - Spec 037: Phase-9 polish items T103–T108 open (perf budgets, golden/corpus ratchets, key-leak grep, full quickstart, one-pass build); GUI-only quickstart scenarios 62/69a/70 stay manual.
+
+## Standalone web hosting (spec 045, implementation in progress)
+
+`EngineHost.RunWebAsync` serves an explicitly configured `bridge.webRoot` through
+`StaticWebResponder` on the existing bridge listener. Desktop `RunAsync` ignores
+the root. Keep the bundle separate from config/token state; invalid roots warn
+and keep the plain page. The responder owns manifest/path validation, GET/HEAD,
+ETag/Last-Modified, matching IIS CSP and bounded streams. `/akmlsql` stays plain.
+
+Web `IPageEngine` detects the serving engine via `HEAD /`; an existing active
+record wins. Page-derived HTTPS records persist `StrictScheme` and only use `wss`.
+PIN pairing is prefilled from the page engine. No IndexedDB version or IPC change.
+Installer source now implements the hosting wizard, persisted choices, switching,
+silent matrix, state/custom-folder protection, repair and uninstall. Hidden legacy
+component names and strict custom ownership checks are provisional pending VM
+spikes. T034 is explicitly deferred by the owner for Claude Code; retain its strict
+test and failure evidence. No disposable VM or owner-upgrade acceptance is claimed.
+Use `specs/045-web-standalone-hosting/baseline.md` and tasks.md for verified scope.
 
 ## Public site design (spec 044)
 
