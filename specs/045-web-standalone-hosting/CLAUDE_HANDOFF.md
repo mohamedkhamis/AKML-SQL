@@ -1,5 +1,15 @@
 # Spec 045 continuation for Claude Code
 
+**Update, 2026-10-27:** the owner's later request resumed the missing tasks, including
+T034. Its strict browser gate now passes using native HEAD detection; the old deferral
+and unresolved-failure notes below are historical. See the latest section of baseline.md
+for current unit, browser, isolated Windows-service and installed SSMS evidence. Disposable
+VM installer acceptance and owner upgrades must still be tracked separately.
+Current local status: **95/108 checked**. Runtime web/service/SSMS checks and the
+existing timed performance gate pass. T107 remains open only for the strict comparison's
+two inactive visual-reference checks (the ignored SQL-PROMPT pack is missing here);
+the twelve VM/owner tasks remain unrun. Final source/build evidence is in baseline.md.
+
 The owner explicitly asked Codex to defer T034 and implement the remaining source
 work. No disposable VMs are available. No owner installation, service, IIS site,
 firewall or certificate was changed, and no Git mutation was performed by Codex.

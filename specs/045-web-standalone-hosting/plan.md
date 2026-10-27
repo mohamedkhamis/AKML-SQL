@@ -257,6 +257,15 @@ can be tested. Everything else is an edit in place.
 
 ## Design notes (how the pieces fit)
 
+Implementation amendment (2026-10-26): T034 reproduced aborted WASM HttpClient HEAD
+requests despite successful connection. Detection now uses the small native fetch helper
+`wwwroot/js/akml-page-engine.js` through JS interop, retaining the same header, no-cache,
+five-second deadline and PageEngine outcomes. The strict browser assertion is unchanged.
+See research R6 and baseline.md for the before/after evidence.
+The browser follow-up also publishes the editor's applied query-tab id in its DOM,
+after JS has attached that state. The active-style test waits for it before entering
+SQL; a held-interop unit test protects that ordering. This adds no IPC or setting.
+
 ### Fresh install on a machine without IIS (US1)
 
 1. The hosting page shows IIS as `NotEnabled` and preselects Standalone. The ports page asks

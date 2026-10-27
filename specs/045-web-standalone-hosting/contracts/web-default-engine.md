@@ -7,8 +7,11 @@ or by the dev server behaves exactly as it does today.
 
 ## 1. Detection (`IPageEngine.GetAsync()`)
 
-At startup the app sends one `HEAD /`, using the registered `HttpClient`
-(`BaseAddress = HostEnvironment.BaseAddress`) with `SetBrowserRequestCache(NoCache)`. The result
+At startup the app sends one same-origin `HEAD /`, with fetch cache `no-cache` and
+`Cache-Control: no-cache`, through `js/akml-page-engine.js`. The probe has a five-second
+abort deadline; success consumes the empty response and clears the timer without aborting.
+This replaces the planned HttpClient transport because its WASM response disposal caused
+Chromium `net::ERR_ABORTED` in the strict T034 gate. The result
 is one of three answers:
 
 | Answer | When | Cached for the page session |

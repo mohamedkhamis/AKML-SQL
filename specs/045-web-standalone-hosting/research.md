@@ -206,7 +206,14 @@ returns 200 only because of a hand-added rewrite rule (I16).
 ## R6. How a page knows the engine served it: the `X-AKML-Host` response header
 
 **Decision**: Every responder response carries `X-AKML-Host: engine`. At startup the web app
-sends one `HEAD /` (no-cache) through the HttpClient that is already registered (W5). It treats
+sends one `HEAD /` (no-cache). The initial implementation used the registered HttpClient
+(W5); the owner's continuation request on 2026-10-26 resumed the deferred T034 gate.
+The strict browser test reproduced ten aborted WASM HEAD fetches, while native fetch
+completed. Combining explicit content reads and non-streaming HttpClient responses still
+failed. `js/akml-page-engine.js` now performs the same request with a five-second timeout,
+consumes its empty response, and clears its timer without aborting a successful fetch.
+The unchanged strict route/network test passes. PageEngine retains its three outcomes,
+retry budget, precedence and strict HTTPS behavior; only its I/O uses JS interop. It treats
 the page as **engine-hosted** when that header is present, and as **static** when a response
 arrives without it. IIS and the Blazor dev server never send the header, and an engine without
 a web root never serves the page.

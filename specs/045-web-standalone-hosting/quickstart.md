@@ -78,6 +78,26 @@ installs on disposable machines, then the owner's two installs.
   - a closed port → 1 within `-TimeoutSeconds 3`;
   - the reason file is written.
 
+### Additional local runtime checks (no product installer)
+
+`StandaloneQueryCycleTests.Engine_served_editor_executes_preserves_session_and_reloads`
+serves the composed Debug bundle and checks automatic connection, real SQL Server
+temp-table session state, persisted query/connection reload, and a further SELECT.
+It waits for the actual IndexedDB save before reload, rather than assuming the 500 ms
+debounce has elapsed. Debug Engine/Web must be current.
+
+The other method in that class runs only with an explicit
+`AKML_STANDALONE_VERIFY_URL=http://127.0.0.1:<temporary-service-port>/`. Point it at a
+dedicated test SCM service with a fresh published engine/web bundle and private state.
+Configure recovery for that temporary service, verify the cycle, kill only its verified
+process, then verify recovery and the cycle again. Stop/delete the temporary service
+afterward. This does not substitute for any installer, boot-time or LAN VM row below.
+
+`dotnet test tests/AkmlSql.UiTests --filter FullyQualifiedName~InstalledSsmsCycleTests`
+launches its own SSMS instance and runs a read-only tempdb script through Format Document
+and Execute. It needs an idle interactive desktop. It reports the installed extension,
+checks its private pipe and records a screenshot; it does not deploy the working tree.
+
 ## 2. Spikes (before the work that depends on them is trusted)
 
 | Spike | Where | Pass |

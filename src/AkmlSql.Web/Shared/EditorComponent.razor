@@ -23,7 +23,7 @@
 @inject IGotoDefinitionService GotoDefinition
 @inject IWildcardExpansionService Wildcard
 
-<div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor"></div>
+<div @ref="_host" id="@HostId" class="akml-editor" data-testid="sql-editor" data-tab-id="@_appliedTabId"></div>
 
 <style>
     .akml-editor {
@@ -213,6 +213,8 @@
 
     // Spec 043 (R6): the query tab the one CodeMirror view shows; other tabs' states wait in akml-editor.js.
     private string? _currentTabId;
+    // Published only after JS applied the tab's state; the view can exist before its first tab is attached.
+    private string? _appliedTabId;
     // A switch asked for before CodeMirror existed: the view is created showing this tab and text.
     private (string Text, AkmlSql.Core.DatabaseKind Kind)? _pendingSeed;
 
@@ -260,6 +262,7 @@
         var seed = pending?.Text ?? InitialText;
         var kindAtCreate = pending?.Kind ?? Kind;
         var tabAtCreate = _currentTabId;
+        var appliedTab = tabAtCreate;
         await module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate, tabAtCreate));
         _module = module;
         _appliedKind = kindAtCreate;
@@ -277,9 +280,11 @@
         if (later is { } shown && _currentTabId != null && _currentTabId != tabAtCreate)
         {
             // Another tab was shown while CodeMirror was being created.
+            var shownTabId = _currentTabId;
             _appliedKind = shown.Kind;
-            _jsTabs.Add(_currentTabId);
-            await _module.InvokeVoidAsync("switchTab", HostId, _currentTabId, shown.Text, AkmlSql.Core.DatabaseKindNames.ToName(shown.Kind));
+            _jsTabs.Add(shownTabId);
+            await _module.InvokeVoidAsync("switchTab", HostId, shownTabId, shown.Text, AkmlSql.Core.DatabaseKindNames.ToName(shown.Kind));
+            appliedTab = shownTabId;
         }
         else if (later is { } same && pending != null && !string.Equals(same.Text, seed, StringComparison.Ordinal))
         {
@@ -321,6 +326,11 @@
         {
             _appliedKind = Kind;
             await _module.InvokeVoidAsync("setDialect", HostId, AkmlSql.Core.DatabaseKindNames.ToName(Kind));
+        }
+        if (!_disposed)
+        {
+            _appliedTabId ??= appliedTab;
+            StateHasChanged();
         }
     }
 
@@ -381,13 +391,18 @@
         // A tab the editor already holds comes back from its kept state: its text is not sent again.
         string? seed = _jsTabs.Add(tabId) ? seedText ?? string.Empty : null;
         await _module.InvokeVoidAsync("switchTab", HostId, tabId, seed, AkmlSql.Core.DatabaseKindNames.ToName(kind));
+        if (!_disposed && tabId == _currentTabId)
+        {
+            _appliedTabId = tabId;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     /// <summary>Spec 043: forget a closed query tab's kept state. The page shows another tab first.</summary>
     public async Task CloseTabAsync(string tabId)
     {
         if (string.IsNullOrEmpty(tabId)) return;
-        if (tabId == _currentTabId) _currentTabId = null;
+        if (tabId == _currentTabId) { _currentTabId = null; _appliedTabId = null; }
         _jsTabs.Remove(tabId);
         if (_module == null || _disposed) return;
         await _module.InvokeVoidAsync("closeTab", HostId, tabId);

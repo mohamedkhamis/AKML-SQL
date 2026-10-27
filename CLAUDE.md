@@ -389,8 +389,9 @@ PIN pairing is prefilled from the page engine. No IndexedDB version or IPC chang
 Installer source now implements the hosting wizard, persisted choices, switching,
 silent matrix, state/custom-folder protection, repair and uninstall. Hidden legacy
 component names and strict custom ownership checks are provisional pending VM
-spikes. T034 is explicitly deferred by the owner for Claude Code; retain its strict
-test and failure evidence. No disposable VM or owner-upgrade acceptance is claimed.
+spikes. The owner's later continuation resumed T034: detection now uses native HEAD fetch
+through `js/akml-page-engine.js`, avoiding WASM HttpClient's aborted HEAD disposal. Keep
+the strict test and before/after evidence. No disposable VM or owner-upgrade acceptance is claimed.
 Use `specs/045-web-standalone-hosting/baseline.md` and tasks.md for verified scope.
 
 ## Public site design (spec 044)

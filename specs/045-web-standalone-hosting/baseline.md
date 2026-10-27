@@ -258,3 +258,109 @@ Review artifact: `.review-artifacts/045-final-iscc/AKMLSQLSetup.exe`, 58,405,291
 SHA-256 `900092A51D7B2C03F07C7A64505405FAC3BAC65AE379A9A2152DBF2E1F211062`.
 Do not deploy it until the remaining acceptance gates are resolved. The handoff is
 `CLAUDE_HANDOFF.md`. Extension hooks were checked again; extensions.yml is absent.
+
+## Server continuation — 2026-10-26 to 2026-10-27
+
+The owner's new request resumed missing tasks and asked for full-cycle checks of SSMS,
+web and the Windows service. This supersedes the earlier T034-only deferral. Work started
+from clean `11827eb4` on `045-web-standalone-hosting`, in `C:\Repos\AKML\AKML-SQL`.
+No Git mutation or product installer execution was performed. The requirements checklist
+remains read-only and passes 16/16. `.specify/extensions.yml` is absent.
+
+### Source and test corrections
+
+- **T034:** the original strict test reproduced the aborted HEAD requests. Explicit
+  consumption plus non-streaming HttpClient still failed. PageEngine now uses native
+  `js/akml-page-engine.js` through JS interop: same-origin HEAD, no-cache, five-second
+  deadline, header detection and unchanged three-outcome cache/precedence. The helper
+  clears its timer on success instead of aborting that successful fetch. The strict
+  route/network assertion was not changed. See `engine-served-before.trx`,
+  `engine-served-head-completion.trx`, `engine-served-after.trx` and `browser-confirmed.trx`.
+- **Core/Site gates:** ProfileGet's positional test now checks the existing nine keys,
+  including SQL Prompt JSON/source, and loads an old seven-key payload. Options help
+  tests pin the exact intentional General/History combined-page aliases; accidental
+  aliases still fail. No production IPC or Options implementation changed.
+- **Browser formatting follow-up:** the full behavior run exposed one test entering text
+  before the first query tab was attached. The editor now publishes `data-tab-id` only
+  after its JS state is applied; a held-interop unit test fails before and passes after.
+  The test waits for this state, types through the visible editor, and retains its casing,
+  comma-placement and active-style assertions. `browser-confirmed.trx` passes all ten
+  formatting/engine-hosted/query-cycle cases after fresh Debug builds. The earlier
+  `browser-ready-final.trx` intentionally caught a stale bundle after a source edit;
+  it is superseded by that rebuilt final run, and its freshness guard remains enabled.
+- **Runtime coverage:** `StandaloneQueryCycleTests` checks auto-connect, SQL results 42/43
+  on one temp-table session, persisted query/connection reload, then result 44. Its
+  IndexedDB wait polls the resolved value through EvaluateAsync (an async predicate is
+  not a repeated boolean poll in Playwright WaitForFunction). The first harness attempts
+  and their failures are retained; no session-store implementation was changed.
+
+Raw logs, TRXs, replay scripts, the screenshot and build artifacts are in
+`.review-artifacts/045-continuation-20261026/` (ignored local evidence).
+
+### Verification results
+
+| Check | Terminal result / evidence |
+| --- | --- |
+| Full Release solution restore/build | Passed again after the final changes using full VS 18 Insiders MSBuild (`solution-final-restore.log`, `solution-final-build.log`) |
+| Debug Engine/Web builds | Passed; final browser bundle rebuilt after the tab-state marker |
+| Web unit suite | **2,017 passed**, no failures/skips (`Web-confirmed.trx`) |
+| Core | **1,473 passed, 3 skipped**, no failures (`Core-final.trx`) |
+| Site | **917 passed**, no failures/skips (`Site-final.trx`) |
+| Installer, no InstallerSmoke | **127 passed**, no failures/skips (`Installer-full.trx`) |
+| Shell unit suite, serial | **987 passed**, no failures/skips (`Shell.Shared-serial.trx`) |
+| JavaScript | **298 passed**, no failures/skips (`js-full.log`) |
+| Engine functional suite | **2,706 passed, 132 skipped**, no failures; excludes only the separate historical timed case (`Engine-functional.trx`) |
+| Historical timed case | **1 passed** against the existing baseline; no rebaseline or threshold change, **21 m 50 s** (`Engine-performance.trx`); combined Engine result: **2,707 passed, 132 skipped, 0 failed** |
+| Full browser behavior run | **154 passed, 1 failed, 63 skipped**; the one formatting failure is resolved by the final 10/10 rerun (`browser-full.trx`, `browser-confirmed.trx`) |
+| Final distinct browser outcomes | **158 passed, 62 skipped, 0 failed**, combining the full run, rebuilt follow-up, explicit service/corpus and post-recovery runs; **not** a second full-suite run (`browser-final-outcomes.csv`) |
+| Real isolated SCM service | **3/3** browser/query/corpus checks; **1/1** query cycle after actual SCM crash recovery; repeated successfully against the final publish (`service-final-query-cycle.trx`, `service-final-after-recovery.trx`) |
+| Installed SSMS 22 | **1/1** format/execute/pipe/screenshot cycle (`ssms-cycle-verified.trx`) |
+| Web/Site theme drift | Both passed |
+| ISCC with fresh payloads | Passed again after final Web publish; installer compiled without executing it (`iscc-final.log`) |
+
+The shell suite's initial parallel run had one active-profile isolation failure; the
+complete serial run passes. SSMS initially needed the owner to reconnect RDP. This host's
+UIA TextPattern includes rendered line numbers, and the success status is located by a
+Name condition rather than traversing unrelated accessibility elements. The installed
+extension is **1.26.1022.701** with Khamis Style. Its formatting response and private
+pipe were verified; the inspected screenshot shows `SELECT 42 AS AKML_CYCLE_RESULT_045`,
+a grid value of **42**, and **Query executed successfully**. Only the test's own SSMS
+instance/scratch file was closed; installed extension files were not replaced.
+
+The real test service used a separate name, private configuration/state, fresh publish,
+free loopback port and LocalSystem account. SCM recovered it after only its verified
+process was killed (final run PID **12888 → 10472**); HTTP, browser auto-connect and SQL worked again.
+The service was stopped/deleted in finally. The installed service remained Running with
+PID **21776** during that isolated acceptance. The broader existing reconnect browser
+tests intentionally stop/start the installed service; its original PID before those
+tests was 5552. No installed binary, hosting registry value, firewall or certificate
+configuration was changed.
+
+### Comparison and remaining gates
+
+`comparison-final.log` uses unmodified suite-named before/after TRXs and no allow-list.
+It reports **0 missing tests** and **no newly failing previously passing cases**.
+It exits **1** because two Core visual-reference checks that passed on the earlier
+checkout now skip: the gitignored `doc/SQL-PROMPT/` reference pack is absent here.
+Core's third existing skip is unchanged. No replacement reference material was invented,
+no skip condition was changed and no skip was allowed away. One prior Engine LAN handshake skip
+now passes. The comparison directories are under `comparison/`; Site uses the original
+pre-docs baseline and the corpus uses the successful original Spike retry.
+
+**95/108 tasks are checked**: T034, T054 and T104 are newly complete. The twelve VM/owner
+tasks remain T009/T020/T047/T053/T055/T057/T060/T069/T078/T085/T095/T108. T107 remains open
+for the strict before/after comparison's missing local reference pack. The timed
+performance case passed. Installer smoke tests were not opted in or run; none of
+the VM install/repair/uninstall/LAN/boot rows or owner interactive upgrades is claimed
+from the isolated runtime checks. The task ledger's prohibition remains in force:
+"Never run the installer smoke classes, or any quickstart §3 row, on the owner's machines."
+
+Final review installer: `.review-artifacts/045-continuation-20261026/installer-final/AKMLSQLSetup.exe`,
+**58,421,457 bytes**, SHA-256
+`1957975AF0B61CF7BDE7738D5A8B7591DEE86450F63C7C2DB64D12AA33BA8038`.
+The refreshed Web bundle is `publish/web-final/wwwroot` under the same evidence root.
+The final SCM acceptance used that bundle and passed all four checks, then removed its
+temporary service. The SSMS screenshot is `ssms-installed-read-only-cycle.png` there.
+Final theme drift and `git diff --check` pass. Before/after extension hooks were checked;
+none is registered. All source edits remain uncommitted; installer acceptance/owner
+upgrade gates are not implied by a successful compile or isolated runtime test.
