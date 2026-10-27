@@ -925,3 +925,26 @@ The browser formatting test now waits for EditorComponent's applied `data-tab-id
 typing; that marker is set after JS applies the state, with an interop-ordering unit test.
 Remaining VM spikes, real installer matrices and owner upgrades remain unchecked. Use the
 latest section of spec 045's baseline.md for final counts and any release-gate limitation.
+
+### Installed standalone service repair — 2026-10-27
+
+The owner installed 1.26.1027.1312 and reported that http://localhost:59417/ failed.
+The service was Running, and the registry selected Service/Localhost, but config.json
+still contained the old LAN/TLS bridge without webRoot. The installer log showed
+File.Replace failing with "The path is not of a legal form." Windows PowerShell 5.1
+converts a plain `$null` string argument to an empty string; the configuration writer
+now passes `[System.Management.Automation.Language.NullString]::Value` for the backup
+path. This preserves atomic replacement and makes upgrades/repeated configuration work.
+
+New tests invoke the real script in Windows PowerShell with isolated ProgramData and
+temporary config files, for both a fresh file followed by a rerun and an existing LAN
+config. Both reproduced the failure before the fix and pass afterward. Earlier tests
+covered JSON generation but missed this disk-write path.
+
+The installed Support script was updated, the selected Localhost/WebRoot configuration
+was written, and AkmlSqlWebEngine restarted. Original files are preserved under
+`C:\ProgramData\AKML SQL Web\repair-backup-20261027-142657` with the private state ACL.
+The installed URL returns HTTP 200 and the engine marker. Chromium verified automatic
+connection, SELECT 42 in tempdb, query/connection reload and no failed requests or page
+errors. See spec 045 baseline.md for verification evidence. This repairs the owner's
+reported installation; it does not complete the remaining disposable-VM matrices.

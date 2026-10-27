@@ -2755,3 +2755,20 @@ The source unit/build/installer checks and final release gate are recorded separ
 `specs/045-web-standalone-hosting/baseline.md`. VM-only installer/upgrade/uninstall/LAN rows
 and the two owner upgrades remain unrun; the existing prohibition on running product
 installer smoke tests on the owner's server still applies. No Git mutation was performed.
+
+### Spec 045 installed configuration replacement fix — 2026-10-27
+
+The owner's new standalone install left its previous LAN config active: Windows
+PowerShell 5.1 converted File.Replace's `$null` backup path to an empty string and
+rejected the write. Setup had already recorded Service/Localhost, so the summary's
+HTTP URL disagreed with the running HTTPS bridge, which also lacked webRoot.
+The writer now uses NullString.Value. Two real-script regression cases cover fresh
+creation followed by a rerun and replacement of an existing config, preserving other
+settings; both failed before and pass after. Installer helper suite: 129 passed.
+
+After backing up the owner's config and Support script, the fixed helper was applied
+to the installed copy, its selected settings written and its service restarted.
+http://localhost:59417/ now serves the installed 1.26.1027.1312 app. A fresh Chromium
+context auto-connected, executed SELECT 42, restored query/connection after reload,
+and reported no page/request errors. No product installer was run by this repair.
+Full evidence is in spec 045 baseline.md; remaining VM acceptance stays open.

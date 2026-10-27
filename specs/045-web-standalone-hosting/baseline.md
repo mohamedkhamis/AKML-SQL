@@ -364,3 +364,40 @@ temporary service. The SSMS screenshot is `ssms-installed-read-only-cycle.png` t
 Final theme drift and `git diff --check` pass. Before/after extension hooks were checked;
 none is registered. All source edits remain uncommitted; installer acceptance/owner
 upgrade gates are not implied by a successful compile or isolated runtime test.
+
+## Installed standalone configuration repair — 2026-10-27
+
+The owner installed version **1.26.1027.1312** and reported that
+`http://localhost:59417/` failed. SCM reported Running (PID 17068), and the registry
+selected Service/Localhost, but config.json retained the old `0.0.0.0` TLS bridge
+without webRoot. The October 27 installation log recorded:
+`Exception calling "Replace" with "3" argument(s): "The path is not of a legal form."`
+The proposed config remained in config.json.tmp. This was a real upgrade defect
+missed by the earlier JSON-only helper coverage and source review.
+
+Windows PowerShell 5.1 converts the `$null` backup-path argument to an empty string.
+`web-config-bridge.ps1` now supplies
+`[System.Management.Automation.Language.NullString]::Value`, preserving atomic
+replacement. The new `Windows_PowerShell_entry_point_creates_and_replaces_config`
+theory invokes the actual script with private temporary ProgramData/config paths:
+both fresh-create-then-rerun and pre-existing-config cases failed before the fix
+and passed afterward. Other settings survive and the temporary file is consumed.
+
+Evidence root: `.review-artifacts/045-config-repair-20261027/` (ignored local files).
+
+- `config-write-before.trx`: **2 failed**, reproducing the installed error.
+- `config-write-after.trx`: **5 passed**, including both disk-write regressions.
+- `installer-repaired.trx`: **129 passed**, no failures/skips, excluding InstallerSmoke.
+- Full solution Release restore/build passed with VS 18 Insiders MSBuild
+  (`solution-restore.log`, `solution-build.log`); `git diff --check` passed.
+- `verify-installed.cjs` and `installed-service-sql.png`: installed localhost URL
+  returns 200, goes Live, executes SELECT 42 in tempdb, restores text/connection
+  after reload, and has no page/request failures. The screenshot was inspected.
+
+The original installed config, pending config, summary/failure reason and Support
+script were backed up under the private ProgramData folder
+`repair-backup-20261027-142657`. The fixed Support script was copied into the installed
+application, its selected Localhost settings and WebRoot written, and only
+AkmlSqlWebEngine restarted. HTTP 200, the engine header and actual WASM bundle were
+verified at the reported URL. No product installer was run and no engine/web binary
+was replaced by this repair. The remaining VM and strict-comparison gates remain open.
