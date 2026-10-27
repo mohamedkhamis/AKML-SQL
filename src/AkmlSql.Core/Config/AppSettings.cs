@@ -222,6 +222,10 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("tokenTtlDays")]
         public int TokenTtlDays { get; set; } = 90;
 
+        /// <summary>Public web bundle. Empty disables page serving; only web mode honours it.</summary>
+        [JsonPropertyName("webRoot")]
+        public string WebRoot { get; set; } = string.Empty;
+
         /// <summary>True if the bind address is a loopback IP.</summary>
         [JsonIgnore]
         public bool IsLoopback =>

@@ -7,17 +7,47 @@ the separate desktop experience for SQL Server.
 ## Choose and install your workspace
 
 1. Download the current AKML installer from [Download](/download).
-2. Use the installer’s web-edition setup options to install the browser application
-   and its engine service. Use the address provided by setup, or the address supplied
-   by the person who manages your AKML installation.
-3. Open the browser application. Under **Settings → Connections**, add your engine
-   using its host and port. If pairing requests a PIN, use the current PIN supplied
-   by that engine's administrator or installation. Do not share pairing credentials.
+2. Select **Web edition → Standalone Windows service (recommended)**. It needs no
+   IIS installation. Localhost uses one address, normally `http://localhost:47291/`;
+   use the actual URL provided by setup or your installation's administrator.
+3. Open that address. A fresh browser connects automatically to the engine serving
+   its page. An already active saved engine remains your choice. If pairing requests
+   a PIN, Settings → Connections prefills this engine's address. Use the current PIN
+   supplied by the administrator; do not share pairing credentials.
 4. Wait for the engine connection to report that it is live. Then open **Connect to
    database** from the editor's connection status or schema panel.
 
 The public AKML product website is documentation and downloads; it is not itself a
 connection to your databases. Database addresses are resolved from the engine machine.
+
+## Hosting and network choices
+
+**IIS** is optional. Setup enables its choice only when IIS and its required HTTP
+features, services and management tools are ready. It explains a disabled choice
+and does not enable Windows features for you. **Don't host (files only)** installs
+the files and engine service for a static host managed separately. With IIS or a
+separately hosted app, add the engine under Settings → Connections when needed.
+
+For **LAN standalone**, use the summary's `https://COMPUTERNAME:<port>/` address on
+every computer, including the engine host. Follow its recommended `bridge.cer`
+trust steps before pairing. The page uses secure `wss` connections. Standalone LAN
+adds one engine firewall rule; IIS LAN also has a secure-site rule. Rules apply to
+every profile, including Public; use a Private or Domain network.
+
+Changing host, port or standalone network exposure can change the browser address.
+Setup shows both addresses. Connections and query tabs at the old address do not
+appear at the new one. Export settings before switching and import at the new
+address; query history is kept by the engine. **Repair AKML SQL Web hosting** in the
+Start menu repairs the selected host if its address does not answer.
+
+For managed installation, `/WEB_HOST=SERVICE|IIS|NONE` selects the host;
+`/BRIDGE_PORT` sets the engine port. `/WEB_PORT` and `/WEB_HTTPS_PORT` are IIS-only.
+An unattended install also requires `/VERYSILENT /ACCEPTEULA`. Without a host flag,
+a new install uses standalone and an upgrade preserves its previous host, with
+standalone fallback if the previous IIS host is unavailable.
+
+On a machine shared by multiple Windows sessions, another local user can occupy
+the localhost page address while the engine is stopped. Use a trusted machine/session.
 
 ## SQL Server
 

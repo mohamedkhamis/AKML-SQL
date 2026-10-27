@@ -1,5 +1,10 @@
 # M4 — Installer: IIS Deployment Option
 
+> Historical milestone design. Spec 045 supersedes this IIS-first hosting flow:
+> standalone Windows service is the default, IIS is optional when ready, and files
+> only remains available. Use [current installer instructions](quickstart-m4.md).
+> Source implementation and disposable-machine acceptance are tracked separately.
+
 **Status**: Draft
 **Phase**: M4 (deployment)
 **Estimated effort**: 1 week

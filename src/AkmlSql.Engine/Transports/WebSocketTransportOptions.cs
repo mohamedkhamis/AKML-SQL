@@ -55,6 +55,12 @@ namespace AkmlSql.Engine.Transports
         /// </summary>
         public string? TlsCertPasswordRef { get; init; }
 
+        /// <summary>Public bundle folder. Only the web-mode host enables page serving.</summary>
+        public string? WebRoot { get; init; }
+
+        /// <summary>Config location, used to refuse a web root that overlaps private state.</summary>
+        public string? ConfigFilePath { get; init; }
+
         /// <summary>True if the bind address is a loopback IP.</summary>
         public bool IsLoopback =>
             BindAddress == "127.0.0.1" || BindAddress == "::1" || BindAddress == "localhost";

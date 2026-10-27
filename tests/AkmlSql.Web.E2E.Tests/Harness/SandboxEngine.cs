@@ -38,23 +38,24 @@ public sealed class SandboxEngine : IAsyncDisposable
     /// Spec 042 (FR-093): false writes <c>"postgreSql": { "enabled": false }</c> into the engine's own config.json first, so the engine
     /// neither advertises <c>dialect.postgresql.v1</c> nor registers a PostgreSQL handler - an engine as it was before the feature.
     /// </param>
-    public static async Task<SandboxEngine> StartAsync(bool postgreSqlEnabled = true)
+    public static async Task<SandboxEngine> StartAsync(bool postgreSqlEnabled = true, string? webRoot = null)
     {
         var exe = Path.Combine(RepoRoot(), "src", "AkmlSql.Engine", "bin", "Debug", "net10.0", "win-x64", "AkmlSql.Engine.exe");
         if (!File.Exists(exe)) throw new Xunit.SkipException($"Build the engine first (Debug): {exe}");
 
         var root = Directory.CreateTempSubdirectory("akml-e2e-engine-").FullName;
-        if (!postgreSqlEnabled)
+        var appData = Directory.CreateDirectory(Path.Combine(root, "AKML SQL")).FullName;
+        File.WriteAllText(Path.Combine(appData, "config.json"), JsonSerializer.Serialize(new
         {
-            var appData = Directory.CreateDirectory(Path.Combine(root, "AKML SQL")).FullName;
-            File.WriteAllText(Path.Combine(appData, "config.json"), JsonSerializer.Serialize(new { postgreSql = new { enabled = false } }));
-        }
+            telemetryEnabled = false,
+            postgreSql = new { enabled = postgreSqlEnabled },
+        }));
         var port = FreePort();
         var config = Path.Combine(root, "engine-config.json");
         File.WriteAllText(config, JsonSerializer.Serialize(new
         {
             configVersion = 1,
-            bridge = new { enabled = true, bindAddress = "127.0.0.1", port, tokenStorePath = Path.Combine(root, "tokens.json"), tokenTtlDays = 1 },
+            bridge = new { enabled = true, bindAddress = "127.0.0.1", port, webRoot = webRoot ?? "", tokenStorePath = Path.Combine(root, "tokens.json"), tokenTtlDays = 1 },
         }));
 
         var engine = new SandboxEngine(Launch(exe, config, root), root, port, exe, config);

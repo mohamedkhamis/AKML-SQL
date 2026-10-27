@@ -205,7 +205,7 @@ namespace AkmlSql.Engine
                 var settings = ConfigManager.Load(configPath!);
 
                 // FR-013a guard (LAN without cert) throws here and is caught below -> exit 2.
-                wsTransport = BuildWebSocketTransport(settings.Bridge);
+                wsTransport = BuildWebSocketTransport(settings.Bridge, serveWebEdition: true, configPath: configPath);
                 if (wsTransport == null)
                 {
                     Log.Fatal(
@@ -262,7 +262,7 @@ namespace AkmlSql.Engine
             }
             catch (Exception ex)
             {
-                Log.Fatal(ex, "Engine (web mode) crashed.");
+                Log.Fatal(ex, "Engine (web mode) crashed: {Reason}", ex.Message);
                 return 2;
             }
             finally
@@ -283,7 +283,7 @@ namespace AkmlSql.Engine
         /// or the config section is absent — preserving IDE-plugin-only behaviour. Exposed
         /// <c>internal</c> for <c>EngineHostTests</c>.
         /// </summary>
-        internal static WebSocketTransport? BuildWebSocketTransport(BridgeOptions bridge)
+        internal static WebSocketTransport? BuildWebSocketTransport(BridgeOptions bridge, bool serveWebEdition = false, string? configPath = null)
         {
             if (bridge == null || !bridge.Enabled)
             {
@@ -299,6 +299,8 @@ namespace AkmlSql.Engine
                 TokenStorePath = bridge.TokenStorePath,
                 TokenTtl = TimeSpan.FromDays(bridge.TokenTtlDays),
                 RequirePairingToken = !bridge.IsLoopback,
+                WebRoot = serveWebEdition ? bridge.WebRoot : null,
+                ConfigFilePath = serveWebEdition ? configPath : null,
             };
             return new WebSocketTransport(options);
         }

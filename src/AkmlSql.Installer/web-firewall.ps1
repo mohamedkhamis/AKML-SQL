@@ -1,62 +1,69 @@
-#Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Spec 021 (web edition) -- M4 task T089. Adds or removes a Windows Firewall
-    inbound rule for the engine bridge port.
-
-.PARAMETER Port
-    The TCP port to allow / remove.
-
-.PARAMETER Action
-    "Add" (install) or "Remove" (uninstall).
-
-.NOTES
-    Idempotent. Re-run safely replaces an existing rule.
+    Applies the web hosting firewall plan. Dot-source for Get-FirewallPlan only.
 #>
 param(
-    [Parameter(Mandatory = $true)] [int] $Port,
-    [Parameter(Mandatory = $true)] [ValidateSet('Add', 'Remove')] [string] $Action,
-    # Review WEB-03: the same script opens the site's HTTPS port under its own rule name.
+    [switch] $Apply,
+    [ValidateSet('Service', 'IIS', 'None')] [string] $WebHost = 'Service',
+    [ValidateSet('Localhost', 'Lan')] [string] $Exposure = 'Localhost',
+    [int] $EnginePort = 47291,
+    [int] $HttpsPort = 443,
+    # Retained while the existing installer and uninstall logs still call this interface.
+    [int] $Port,
+    [ValidateSet('Add', 'Remove')] [string] $Action,
     [string] $RuleName = 'AKML SQL Web Engine'
 )
 
-$ErrorActionPreference = 'Stop'
-$logRoot = Join-Path $env:ProgramData 'AKML SQL Web'
-$logFile = Join-Path $logRoot 'install.log'
-New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
-
-function Log {
-    param([string] $msg)
-    $line = '[{0}] [firewall] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $msg
-    Add-Content -Path $logFile -Value $line -Encoding UTF8
+function Get-FirewallPlan {
+    param(
+        [ValidateSet('Service', 'IIS', 'None')] [string] $WebHost,
+        [ValidateSet('Localhost', 'Lan')] [string] $Exposure,
+        [int] $EnginePort,
+        [int] $HttpsPort
+    )
+    [pscustomobject]@{
+        Name = 'AKML SQL Web Engine'
+        Port = $EnginePort
+        Action = if ($Exposure -eq 'Lan') { 'Add' } else { 'Remove' }
+    }
+    [pscustomobject]@{
+        Name = 'AKML SQL Web Site (HTTPS)'
+        Port = $HttpsPort
+        Action = if ($Exposure -eq 'Lan' -and $WebHost -eq 'IIS') { 'Add' } else { 'Remove' }
+    }
 }
 
-$ruleName = $RuleName
-
-try {
-    if ($Action -eq 'Add') {
-        # Drop any existing rule with the same name first (re-run case).
-        & netsh advfirewall firewall delete rule "name=$ruleName" 2>$null | Out-Null
-
-        $result = & netsh advfirewall firewall add rule `
-            "name=$ruleName" `
-            "dir=in" `
-            "action=allow" `
-            "protocol=TCP" `
-            "localport=$Port" `
-            "profile=any" `
-            "description=Allow inbound connections to $ruleName" 2>&1
-        Log "Added firewall rule. Result: $result"
+if ($MyInvocation.InvocationName -ne '.') {
+    $ErrorActionPreference = 'Stop'
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Error 'Firewall configuration requires administrator rights.'
+        exit 1
     }
-    else {
-        # Action = Remove
-        $result = & netsh advfirewall firewall delete rule "name=$ruleName" 2>&1
-        Log "Removed firewall rule. Result: $result"
+    $logRoot = Join-Path $env:ProgramData 'AKML SQL Web'
+    New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+    $logFile = Join-Path $logRoot 'install.log'
+    try {
+        $plan = if ($Apply) {
+            Get-FirewallPlan -WebHost $WebHost -Exposure $Exposure -EnginePort $EnginePort -HttpsPort $HttpsPort
+        } elseif ($Action) {
+            [pscustomobject]@{ Name = $RuleName; Port = $Port; Action = $Action }
+        } else { throw 'Specify -Apply with the hosting settings.' }
+        foreach ($rule in $plan) {
+            if ($rule.Action -eq 'Add' -and ($rule.Port -lt 1 -or $rule.Port -gt 65535)) { throw 'Port must be between 1 and 65535.' }
+            $result = & netsh advfirewall firewall delete rule "name=$($rule.Name)" 2>&1
+            if ($rule.Action -eq 'Add') {
+                $result = & netsh advfirewall firewall add rule "name=$($rule.Name)" dir=in action=allow protocol=TCP "localport=$($rule.Port)" profile=any "description=Allow inbound connections to $($rule.Name)" 2>&1
+                if ($LASTEXITCODE -ne 0) { throw "Could not add $($rule.Name): $result" }
+            }
+            Add-Content -LiteralPath $logFile -Encoding UTF8 -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [firewall] $($rule.Action) $($rule.Name): $result"
+        }
+        exit 0
     }
-    exit 0
-}
-catch {
-    Log "ERROR: $_"
-    Write-Host "Firewall setup failed: $_"
-    exit 1
+    catch {
+        Add-Content -LiteralPath $logFile -Encoding UTF8 -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [firewall] ERROR: $_"
+        Write-Host "Firewall setup failed: $_"
+        exit 1
+    }
 }

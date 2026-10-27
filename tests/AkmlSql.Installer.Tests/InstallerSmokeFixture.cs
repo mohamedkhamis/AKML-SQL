@@ -10,7 +10,7 @@ using Xunit;
 namespace AkmlSql.Installer.Tests;
 
 /// <summary>
-/// Spec 026 (M4 closure) US5 / FR-029 / FR-032. Shared fixture: on an admin + IIS host it runs one
+/// Spec 026 (M4 closure) US5 / FR-029 / FR-032. Shared fixture: on an opted-in admin + IIS VM it runs one
 /// silent LAN install (capturing the IIS/bridge ports, the install summary, and the pre-install
 /// plugin-config hash) and silent-uninstalls on dispose (capturing the post-uninstall hash). On a
 /// host that cannot run (non-admin / no IIS), <see cref="InitializeAsync"/> is a no-op and every
@@ -39,7 +39,7 @@ public sealed class InstallerSmokeFixture : IAsyncLifetime
 
     public Task InitializeAsync()
     {
-        if (!InstallerSmokeEnv.CanRun) return Task.CompletedTask;   // tests Skip.IfNot; no install attempted
+        if (!InstallerSmokeEnv.CanRunIis) return Task.CompletedTask;
 
         var exe = InstallerSmokeEnv.InstallerExe;
         if (exe == null)
@@ -75,7 +75,7 @@ public sealed class InstallerSmokeFixture : IAsyncLifetime
         // M5: even if the uninstaller was absent or the install half-failed, never leak the service /
         // IIS site to the next run.
         if (InstallerSmokeEnv.CanRun)
-            InstallerSmokeEnv.BestEffortCleanup();
+            InstallerSmokeEnv.BestEffortCleanup(BridgePort);
         PostUninstallPluginHash = InstallerSmokeEnv.HashFileOrNull(InstallerSmokeEnv.PluginConfig);
         return Task.CompletedTask;
     }

@@ -19,9 +19,18 @@
     characters would corrupt string parsing.
 #>
 [CmdletBinding()]
-param()
+param([switch] $NoPrompt)
 
 $ErrorActionPreference = 'Stop'
+
+$recordedHost = $null
+foreach ($key in 'HKLM:\Software\AKML SQL\Web', 'HKLM:\Software\WOW6432Node\AKML SQL\Web') {
+    try { $recordedHost = (Get-ItemProperty -Path $key -Name Host -ErrorAction Stop).Host; if ($recordedHost) { break } } catch { }
+}
+if ($recordedHost -and $recordedHost -ne 'IIS') {
+    Write-Host 'This computer does not host the web edition on IIS.'
+    return
+}
 
 # --- Self-elevate ---------------------------------------------------------------------------
 # Creating an IIS site needs admin. If we aren't elevated, relaunch this same script via UAC and
@@ -78,7 +87,7 @@ Write-Host ''
 # --- Preconditions --------------------------------------------------------------------------
 if (-not (Test-Path $setup)) {
     Write-Host "  ERROR: web-iis-setup.ps1 not found next to this script. Reinstall AKML SQL Web." -ForegroundColor Red
-    Read-Host '  Press Enter to close'
+    if (-not $NoPrompt) { Read-Host '  Press Enter to close' | Out-Null }
     return
 }
 if (-not (Test-Path (Join-Path $root 'index.html'))) {
@@ -91,7 +100,7 @@ if (-not (Get-Module -ListAvailable -Name WebAdministration)) {
     Write-Host "  Enable 'Internet Information Services' (incl. Management Tools) via Windows Features," -ForegroundColor Yellow
     Write-Host "  then run this repair again." -ForegroundColor Yellow
     Write-Host ''
-    Read-Host '  Press Enter to close'
+    if (-not $NoPrompt) { Read-Host '  Press Enter to close' | Out-Null }
     return
 }
 
@@ -119,4 +128,4 @@ if (Test-Path $marker) {
     Write-Host "  $log" -ForegroundColor Red
 }
 Write-Host ''
-Read-Host '  Press Enter to close'
+if (-not $NoPrompt) { Read-Host '  Press Enter to close' | Out-Null }

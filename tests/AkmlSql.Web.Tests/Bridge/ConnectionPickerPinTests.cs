@@ -18,6 +18,34 @@ namespace AkmlSql.Web.Tests.Bridge;
 /// </summary>
 public sealed class ConnectionPickerPinTests : BunitContext
 {
+    [Fact]
+    public void Add_starts_with_the_page_engines_host_and_port()
+    {
+        Services.AddSingleton<IPageEngine>(new FakePageEngine
+            { Result = new(PageEngineKind.Engine, new("127.0.0.1", 59417, "ws")) });
+        var cut = Render<ConnectionPickerComponent>();
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Add").Click();
+        Assert.Equal("127.0.0.1", cut.Find("[data-testid=engine-add-host]").GetAttribute("value"));
+        Assert.Equal("59417", cut.Find("[data-testid=engine-add-port]").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved()
+    {
+        var info = new PageEngineInfo("localhost", 59417, "wss");
+        Services.AddSingleton<IPageEngine>(new FakePageEngine { Result = new(PageEngineKind.Engine, info), PairingPrefill = info });
+        _bridge.Answer = (_, _) => new() { Status = HandshakeStatus.Ok, NewBearerToken = "minted-token" };
+        var cut = Render<ConnectionPickerComponent>();
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=engine-add-pin]")));
+        Assert.Equal("localhost", cut.Find("[data-testid=engine-add-host]").GetAttribute("value"));
+        cut.Find("[data-testid=engine-add-pin]").Change(Pin);
+        cut.Find("[data-testid=engine-add-pair]").Click();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=engine-add-pair]")));
+        var saved = Assert.Single(await _store.ListAsync());
+        Assert.True(saved.StrictScheme);
+        Assert.Equal("wss", saved.ResolvedScheme);
+    }
+
     private const string Pin = "948201";
     private readonly FakeEngineBridge _bridge = new();
     private readonly IConnectionStore _store = new ConnectionStore(new InMemoryIndexedDbAdapter());

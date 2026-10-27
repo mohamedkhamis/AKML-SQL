@@ -1,0 +1,609 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="50d30d48-3e41-4806-b5a5-59788836e6de" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 15:06:26" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T15:06:26.3099653+03:00" queuing="2026-10-26T15:06:26.3099659+03:00" start="2026-10-26T15:06:24.8077414+03:00" finish="2026-10-26T15:06:28.0633219+03:00" />
+  <TestSettings name="default" id="7257546a-c3f0-4230-abdb-17a9b61bd6c2">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_15_06_26" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="aa74308c-29cc-4dea-8d14-4ce92787743e" testId="fb3bc38a-f264-8c0c-af56-dcab8f2d9189" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.Strict_scheme_round_trips_and_is_false_for_older_records" computerName="MOHAMED-KHAMIS" duration="00:00:00.0019049" startTime="2026-10-26T15:06:26.2759260+03:00" endTime="2026-10-26T15:06:26.2759671+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="aa74308c-29cc-4dea-8d14-4ce92787743e" />
+    <UnitTestResult executionId="649bdb3b-7359-478f-b8e0-1ecab51b3a2e" testId="c620982a-33da-6c14-6b9c-36f0a270ba23" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_with_sql_session_shows_Live" computerName="MOHAMED-KHAMIS" duration="00:00:00.0052986" startTime="2026-10-26T15:06:27.2686818+03:00" endTime="2026-10-26T15:06:27.2738450+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="649bdb3b-7359-478f-b8e0-1ecab51b3a2e" />
+    <UnitTestResult executionId="463fb53e-b2a6-4027-92ae-370840c384ef" testId="04361f5c-310d-77d1-8f7b-e2298b8e42ef" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_duplicate_id" computerName="MOHAMED-KHAMIS" duration="00:00:00.0010194" startTime="2026-10-26T15:06:26.2820757+03:00" endTime="2026-10-26T15:06:26.2823032+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="463fb53e-b2a6-4027-92ae-370840c384ef" />
+    <UnitTestResult executionId="896ac54a-ec39-4a79-a7d3-cd6fbc249c36" testId="cea67dd9-8eda-0c52-cae9-4467d8310ab3" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.ListAsync_returns_empty_on_a_fresh_store" computerName="MOHAMED-KHAMIS" duration="00:00:00.0007547" startTime="2026-10-26T15:06:26.2760743+03:00" endTime="2026-10-26T15:06:26.2761146+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="896ac54a-ec39-4a79-a7d3-cd6fbc249c36" />
+    <UnitTestResult executionId="78530165-1fc8-4983-945e-35a9b8f8b415" testId="bc812897-85c3-7d81-cd68-fd39ae650f70" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.Matching_versions_carry_no_mismatch_marker" computerName="MOHAMED-KHAMIS" duration="00:00:00.0032732" startTime="2026-10-26T15:06:26.9251421+03:00" endTime="2026-10-26T15:06:26.9283388+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="78530165-1fc8-4983-945e-35a9b8f8b415" />
+    <UnitTestResult executionId="b49c4f57-2ab2-4313-9fb9-c7a0c1f645b8" testId="1fc202c9-7c56-062f-956e-3b6ca220fcb2" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.A_successful_run_shows_its_rows_and_time" computerName="MOHAMED-KHAMIS" duration="00:00:00.0098657" startTime="2026-10-26T15:06:26.9285396+03:00" endTime="2026-10-26T15:06:26.9383560+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b49c4f57-2ab2-4313-9fb9-c7a0c1f645b8" />
+    <UnitTestResult executionId="42124774-fbff-441e-a8de-d2e37038fa53" testId="c5bfd99e-dc68-ada2-497e-e4bfab4ab835" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.While_running_it_says_so_and_counts_the_elapsed_time" computerName="MOHAMED-KHAMIS" duration="00:00:00.0081198" startTime="2026-10-26T15:06:26.9126959+03:00" endTime="2026-10-26T15:06:26.9195505+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="42124774-fbff-441e-a8de-d2e37038fa53" />
+    <UnitTestResult executionId="6dcce9b6-fae0-4562-a6d4-5e19a9cc0b9f" testId="d5b3537a-4e45-5d69-6a12-1a721f5c022f" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_reconnects_a_restored_tab_to_its_own_connection_and_not_to_the_saved_one" computerName="MOHAMED-KHAMIS" duration="00:00:00.0286193" startTime="2026-10-26T15:06:26.8685188+03:00" endTime="2026-10-26T15:06:26.8969565+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6dcce9b6-fae0-4562-a6d4-5e19a9cc0b9f" />
+    <UnitTestResult executionId="4fb49080-cb7f-4371-b5f7-4506f3543e96" testId="623838cc-81ab-b6d7-4909-48d37d3f2301" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched" computerName="MOHAMED-KHAMIS" duration="00:00:00.0035258" startTime="2026-10-26T15:06:26.2762077+03:00" endTime="2026-10-26T15:06:26.2762522+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4fb49080-cb7f-4371-b5f7-4506f3543e96" />
+    <UnitTestResult executionId="d35f1616-ddce-45ad-b9a1-c33552293ffb" testId="63e4e76a-c366-6fa6-fe45-8a8731da8035" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.Add_starts_with_the_page_engines_host_and_port" computerName="MOHAMED-KHAMIS" duration="00:00:00.0054688" startTime="2026-10-26T15:06:26.9500440+03:00" endTime="2026-10-26T15:06:26.9678288+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d35f1616-ddce-45ad-b9a1-c33552293ffb">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Strings differ&#xD;
+           ↓ (pos 0)&#xD;
+Expected: "59417"&#xD;
+Actual:   "47291"&#xD;
+           ↑ (pos 0)</Message>
+          <StackTrace>   at AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.Add_starts_with_the_page_engines_host_and_port() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Bridge\ConnectionPickerPinTests.cs:line 29&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="705ef299-f103-4b9c-bade-c044be829f07" testId="e38db290-371c-6aa6-c67e-46230cc3ee66" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_leaves_a_tab_the_user_disconnected_without_a_connection" computerName="MOHAMED-KHAMIS" duration="00:00:00.3165131" startTime="2026-10-26T15:06:26.9450851+03:00" endTime="2026-10-26T15:06:27.2617920+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="705ef299-f103-4b9c-bade-c044be829f07" />
+    <UnitTestResult executionId="a994a82b-94ef-4844-a6b7-96ee61b8dc68" testId="55e21c91-0e35-539d-4ba3-2b0d8a86a20e" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_without_sql_session_shows_BridgeOnly" computerName="MOHAMED-KHAMIS" duration="00:00:00.0052963" startTime="2026-10-26T15:06:26.9397968+03:00" endTime="2026-10-26T15:06:26.9449042+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a994a82b-94ef-4844-a6b7-96ee61b8dc68" />
+    <UnitTestResult executionId="62f52913-0f23-40f6-899b-a76eb28dfae2" testId="f6ec459c-d021-ab3f-1cbf-978702848f54" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect(remember: False, engineRemembers: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.2151617" startTime="2026-10-26T15:06:27.4955962+03:00" endTime="2026-10-26T15:06:27.7111916+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="62f52913-0f23-40f6-899b-a76eb28dfae2" />
+    <UnitTestResult executionId="ebebb161-86dd-4a8b-95fb-2e92038d3cef" testId="a4d7aa47-c112-5050-8ac2-fd4d690c4515" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.A_live_bridge_hides_a_stale_startup_pairing_failure" computerName="MOHAMED-KHAMIS" duration="00:00:00.0149468" startTime="2026-10-26T15:06:26.8611665+03:00" endTime="2026-10-26T15:06:26.8891894+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ebebb161-86dd-4a8b-95fb-2e92038d3cef" />
+    <UnitTestResult executionId="1a19db01-593e-4103-8c59-ffa9fac44751" testId="1c692dbf-a514-c2c0-4260-1b93b073e183" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_socket_failure_does_not_save_a_connection" computerName="MOHAMED-KHAMIS" duration="00:00:00.0103876" startTime="2026-10-26T15:06:26.2747934+03:00" endTime="2026-10-26T15:06:26.2776824+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a19db01-593e-4103-8c59-ffa9fac44751" />
+    <UnitTestResult executionId="b915ff10-3690-43d6-a1ee-e304f6994a19" testId="352ab579-1e51-c4e6-f156-2586c01c9fc2" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_matching_saved_record_is_reused_and_an_HTTPS_page_keeps_its_scheme" computerName="MOHAMED-KHAMIS" duration="00:00:00.0016700" startTime="2026-10-26T15:06:26.3020774+03:00" endTime="2026-10-26T15:06:26.3035791+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b915ff10-3690-43d6-a1ee-e304f6994a19" />
+    <UnitTestResult executionId="9d7f019f-4449-4bc9-a95d-e33351ce178a" testId="872628cc-e12b-5216-56a9-ac7ba2cff0f7" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_duplicate_id" computerName="MOHAMED-KHAMIS" duration="00:00:00.0239725" startTime="2026-10-26T15:06:26.2152160+03:00" endTime="2026-10-26T15:06:26.2530631+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9d7f019f-4449-4bc9-a95d-e33351ce178a" />
+    <UnitTestResult executionId="97a0b136-a95d-45d4-951e-8bfc21abc6e9" testId="c8045c82-0a54-d118-f11e-604756b43eef" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_outcome_is_a_polite_status_region" computerName="MOHAMED-KHAMIS" duration="00:00:00.0067315" startTime="2026-10-26T15:06:27.9648794+03:00" endTime="2026-10-26T15:06:27.9671723+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="97a0b136-a95d-45d4-951e-8bfc21abc6e9" />
+    <UnitTestResult executionId="f4ddcc09-528d-45a7-b2ca-896bb8a0f71d" testId="375b4691-b73a-5eb0-a956-e1f9a68f4206" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_network_mode_engine_on_this_computer_asks_for_the_PIN_and_then_pairs(host: &quot;127.0.0.1&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0242914" startTime="2026-10-26T15:06:26.9256166+03:00" endTime="2026-10-26T15:06:26.9498675+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f4ddcc09-528d-45a7-b2ca-896bb8a0f71d" />
+    <UnitTestResult executionId="b2db3c20-2b2a-41fd-bd60-a7a5e91def56" testId="0ec90a3a-290f-656d-2fd1-ef8f31031e45" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.The_HTTPS_default_port_is_allowed_only_for_a_strict_TLS_record" computerName="MOHAMED-KHAMIS" duration="00:00:00.0050541" startTime="2026-10-26T15:06:26.2766655+03:00" endTime="2026-10-26T15:06:26.2777347+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b2db3c20-2b2a-41fd-bd60-a7a5e91def56" />
+    <UnitTestResult executionId="c9e8809d-e79b-46bb-b48b-b9b35209ce59" testId="51acbaf3-847d-f511-18d7-9aa6771528ea" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_autorestores_saved_windows_auth_connection" computerName="MOHAMED-KHAMIS" duration="00:00:00.0064034" startTime="2026-10-26T15:06:27.2620044+03:00" endTime="2026-10-26T15:06:27.2684098+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c9e8809d-e79b-46bb-b48b-b9b35209ce59" />
+    <UnitTestResult executionId="589367b2-4b94-484d-a6a2-5bac68a49d49" testId="3edae3f3-02ae-7f01-6454-c38d8f78e5a6" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_skips_a_corrupt_row" computerName="MOHAMED-KHAMIS" duration="00:00:00.0020288" startTime="2026-10-26T15:06:26.2837360+03:00" endTime="2026-10-26T15:06:26.2838202+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="589367b2-4b94-484d-a6a2-5bac68a49d49" />
+    <UnitTestResult executionId="26c23292-83ac-49f2-b54a-da838cef9986" testId="42684ea7-b22b-12cb-c553-917db6d44ea0" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_network_mode_engine_on_this_computer_asks_for_the_PIN_and_then_pairs(host: &quot;localhost&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0256985" startTime="2026-10-26T15:06:26.8998930+03:00" endTime="2026-10-26T15:06:26.9254811+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="26c23292-83ac-49f2-b54a-da838cef9986" />
+    <UnitTestResult executionId="ec5d28fd-5dd5-4572-b3c7-863e91c17d7b" testId="817a6dfc-f02b-6e03-dd99-b25e523669d3" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.RemoveAsync_keeps_active_pointer_when_a_different_row_is_removed" computerName="MOHAMED-KHAMIS" duration="00:00:00.0009533" startTime="2026-10-26T15:06:26.2863989+03:00" endTime="2026-10-26T15:06:26.2872036+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ec5d28fd-5dd5-4572-b3c7-863e91c17d7b" />
+    <UnitTestResult executionId="45c8d987-52c2-472d-8c23-01d4504175be" testId="63da22cf-d499-c93f-e751-cd042f956d0c" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.UpdateAsync_replaces_existing_record" computerName="MOHAMED-KHAMIS" duration="00:00:00.0013759" startTime="2026-10-26T15:06:26.2778502+03:00" endTime="2026-10-26T15:06:26.2779074+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="45c8d987-52c2-472d-8c23-01d4504175be" />
+    <UnitTestResult executionId="323669f3-4c9a-4158-8f49-d6805b0928d4" testId="037f60f8-0dea-41dc-664f-d2ae0502d73d" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_versions_are_short_with_the_full_string_on_hover_and_a_mismatch_is_marked" computerName="MOHAMED-KHAMIS" duration="00:00:00.0053524" startTime="2026-10-26T15:06:26.9196881+03:00" endTime="2026-10-26T15:06:26.9249834+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="323669f3-4c9a-4158-8f49-d6805b0928d4" />
+    <UnitTestResult executionId="17dbdc71-7222-4df6-80c0-02e7e792725c" testId="8423cb5e-5903-2042-207b-960829eea14c" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_sorts_by_name_and_excludes_active_pointer_sentinel" computerName="MOHAMED-KHAMIS" duration="00:00:00.0126719" startTime="2026-10-26T15:06:26.2776327+03:00" endTime="2026-10-26T15:06:26.2815713+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="17dbdc71-7222-4df6-80c0-02e7e792725c" />
+    <UnitTestResult executionId="b0ecd0b5-a0ab-42f0-9c55-11dcb97f2e68" testId="bd5e5a3c-d95c-1116-5eaa-215427e6df94" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.GetActiveId_is_null_until_set" computerName="MOHAMED-KHAMIS" duration="00:00:00.0009593" startTime="2026-10-26T15:06:26.2882295+03:00" endTime="2026-10-26T15:06:26.2893069+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b0ecd0b5-a0ab-42f0-9c55-11dcb97f2e68" />
+    <UnitTestResult executionId="d126667a-2d28-4b24-8f3d-a0f27a3aa1e4" testId="5e589a3b-e004-e719-6de8-c9e63b4205d2" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Drift_after_cache_seeded_flips_Offline_to_Cached_in_place" computerName="MOHAMED-KHAMIS" duration="00:00:00.0182298" startTime="2026-10-26T15:06:26.8971765+03:00" endTime="2026-10-26T15:06:26.9152982+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d126667a-2d28-4b24-8f3d-a0f27a3aa1e4" />
+    <UnitTestResult executionId="d4e9b0db-5fef-4ea3-9286-385daa67bee9" testId="4a85d5af-be75-a4c9-a2dc-3709f2e53880" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.UpdateAsync_throws_on_unknown_id" computerName="MOHAMED-KHAMIS" duration="00:00:00.0008651" startTime="2026-10-26T15:06:26.2840551+03:00" endTime="2026-10-26T15:06:26.2841376+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d4e9b0db-5fef-4ea3-9286-385daa67bee9" />
+    <UnitTestResult executionId="35138cf6-5433-4d3b-b44e-93ff59145efc" testId="e49321a7-a39d-f1ed-c71c-26db2302efba" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Reconnecting_with_cache_holds_Cached_no_flicker" computerName="MOHAMED-KHAMIS" duration="00:00:00.0057232" startTime="2026-10-26T15:06:26.9155199+03:00" endTime="2026-10-26T15:06:26.9210656+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="35138cf6-5433-4d3b-b44e-93ff59145efc" />
+    <UnitTestResult executionId="1a7ee817-6f77-4234-ae4c-22412bc86856" testId="5f579de7-50db-0452-18ce-da3dff7f0804" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect(remember: True, engineRemembers: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.2161401" startTime="2026-10-26T15:06:27.2791378+03:00" endTime="2026-10-26T15:06:27.4954477+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1a7ee817-6f77-4234-ae4c-22412bc86856" />
+    <UnitTestResult executionId="01e50c73-c4e5-47aa-a2b7-fa2eba6b81c2" testId="72be7ba5-34da-ba0f-e3f6-edb4b1b10d9c" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.Serialized_record_never_contains_a_password_field" computerName="MOHAMED-KHAMIS" duration="00:00:00.0017511" startTime="2026-10-26T15:06:26.2894370+03:00" endTime="2026-10-26T15:06:26.2909848+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="01e50c73-c4e5-47aa-a2b7-fa2eba6b81c2" />
+    <UnitTestResult executionId="e9b233e2-c349-4f6c-b8ab-7defc1bb079e" testId="7c70d999-dcef-7a75-851b-bc040e997af6" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.The_page_engine_is_saved_only_after_OK_with_its_address_and_metadata(host: &quot;localhost&quot;, scheme: &quot;ws&quot;, local: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0087930" startTime="2026-10-26T15:06:26.2822383+03:00" endTime="2026-10-26T15:06:26.2883007+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e9b233e2-c349-4f6c-b8ab-7defc1bb079e" />
+    <UnitTestResult executionId="8c35a77c-62ed-4ed1-a1ac-c1d2414ae95b" testId="e134779b-16c7-73b2-ae7d-659d909f40c3" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Disconnected_without_cache_shows_Offline" computerName="MOHAMED-KHAMIS" duration="00:00:00.0155023" startTime="2026-10-26T15:06:27.7189437+03:00" endTime="2026-10-26T15:06:27.7343870+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8c35a77c-62ed-4ed1-a1ac-c1d2414ae95b" />
+    <UnitTestResult executionId="c1e8b214-88e1-4145-b1b8-e880717a7134" testId="9f24b414-b945-f6fd-9e5f-fde16bcdf771" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.ListAsync_excludes_internal_active_id_pointer" computerName="MOHAMED-KHAMIS" duration="00:00:00.0032101" startTime="2026-10-26T15:06:26.2757295+03:00" endTime="2026-10-26T15:06:26.2757752+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1e8b214-88e1-4145-b1b8-e880717a7134" />
+    <UnitTestResult executionId="fe04cf0e-fa86-4657-92f8-5d9f1ef93657" testId="7a13c1ac-96a8-9cdb-676b-eff1db955589" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_with_a_remembered_SQL_password_the_server_refuses_leaves_the_tab_asking_on_its_next_run" computerName="MOHAMED-KHAMIS" duration="00:00:00.0183014" startTime="2026-10-26T15:06:26.9212183+03:00" endTime="2026-10-26T15:06:26.9396144+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fe04cf0e-fa86-4657-92f8-5d9f1ef93657" />
+    <UnitTestResult executionId="1fa6e6c5-9203-4e3c-a511-7f842aa95c8f" testId="d4786542-509e-e604-6572-53b90b6bef08" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_wrong_PIN_is_reported_as_the_engine_said_it" computerName="MOHAMED-KHAMIS" duration="00:00:00.0142898" startTime="2026-10-26T15:06:26.9740674+03:00" endTime="2026-10-26T15:06:26.9814521+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1fa6e6c5-9203-4e3c-a511-7f842aa95c8f" />
+    <UnitTestResult executionId="7e812f37-73b6-4924-8c38-40a28565f227" testId="6984f1f1-21fe-f132-ce1b-17d20e2df6f4" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_login_shows_beside_the_connection_and_the_server_opens_the_connection_manager" computerName="MOHAMED-KHAMIS" duration="00:00:00.0192252" startTime="2026-10-26T15:06:27.9750286+03:00" endTime="2026-10-26T15:06:27.9928525+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7e812f37-73b6-4924-8c38-40a28565f227" />
+    <UnitTestResult executionId="cf5f189f-b3f2-413b-b972-e3c080d578eb" testId="46b40fe4-2348-4166-2cb6-b632a25bbf03" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_caret_reads_Ln_Col" computerName="MOHAMED-KHAMIS" duration="00:00:00.0054123" startTime="2026-10-26T15:06:26.9060451+03:00" endTime="2026-10-26T15:06:26.9113585+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cf5f189f-b3f2-413b-b972-e3c080d578eb" />
+    <UnitTestResult executionId="66f58487-0174-4fbd-ac73-c9d29ef230dc" testId="acd92e29-9e43-84b7-408d-877d0cc2f7a5" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_restores_the_saved_connection_into_the_active_tab_only_when_it_has_none" computerName="MOHAMED-KHAMIS" duration="00:00:00.6517506" startTime="2026-10-26T15:06:26.2151534+03:00" endTime="2026-10-26T15:06:26.8682391+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="66f58487-0174-4fbd-ac73-c9d29ef230dc" />
+    <UnitTestResult executionId="6dbd48c4-861c-463a-8e50-772639b27443" testId="24d85232-9f8a-dd02-a089-c735a4d6e8f5" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.Other_page_answers_do_not_dial(kind: Static, failure: NotPaired, message: &quot;No engine paired yet.&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0038803" startTime="2026-10-26T15:06:26.2798168+03:00" endTime="2026-10-26T15:06:26.2813071+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6dbd48c4-861c-463a-8e50-772639b27443" />
+    <UnitTestResult executionId="03221f5b-dd6c-40b8-af80-8dac19ed0261" testId="80252f60-2df9-3619-175d-0b421d83085f" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_name" computerName="MOHAMED-KHAMIS" duration="00:00:00.0010102" startTime="2026-10-26T15:06:26.2846082+03:00" endTime="2026-10-26T15:06:26.2852056+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="03221f5b-dd6c-40b8-af80-8dac19ed0261" />
+    <UnitTestResult executionId="7a4cf60c-469c-4261-9b45-405cd7266fd3" testId="1042dc71-01ea-e20a-af9e-94128258cca9" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_server" computerName="MOHAMED-KHAMIS" duration="00:00:00.0007466" startTime="2026-10-26T15:06:26.2874178+03:00" endTime="2026-10-26T15:06:26.2880097+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7a4cf60c-469c-4261-9b45-405cd7266fd3" />
+    <UnitTestResult executionId="e36d9452-9b56-4da7-81b9-8ccc50e3fd01" testId="02605a20-4f8a-ef57-6f22-78786b6862f9" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_then_GetAsync_returns_the_record" computerName="MOHAMED-KHAMIS" duration="00:00:00.0051651" startTime="2026-10-26T15:06:26.2532490+03:00" endTime="2026-10-26T15:06:26.2749924+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e36d9452-9b56-4da7-81b9-8ccc50e3fd01" />
+    <UnitTestResult executionId="55542e12-cd19-4c7b-b835-fddb8b3b8044" testId="6084e4ca-54c8-ac2f-9520-e7b9ddcc49ee" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_local_engine_button_names_the_engine_that_served_the_page" computerName="MOHAMED-KHAMIS" duration="00:00:01.0181569" startTime="2026-10-26T15:06:26.9394816+03:00" endTime="2026-10-26T15:06:27.9603631+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="55542e12-cd19-4c7b-b835-fddb8b3b8044">
+      <Output>
+        <ErrorInfo>
+          <Message>Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.
+
+If this test does not fail consistently, the reason may be that
+the wait timeout is too short, and the runtime did not have enough
+time to complete the necessary number of renders of the component under test.
+This can happen on highly utilized or slower hardware, for example.
+
+To determine if this is the cause, compare the check and render count(s) below
+and see if they match what is expected. If they do not,
+consider increasing the timeout, either at the individual
+method call level, e.g. WaitForElement("div", TimeSpan.FromSeconds(15)),
+or via the static TestContext.DefaultWaitTimeout property.
+
+Check count: 1.
+Component render count: 1.
+Total render count across all components: 0.&#xD;
+---- Assert.Equal() Failure: Strings differ&#xD;
+           ↓ (pos 0)&#xD;
+Expected: "This computer's engine (127.0.0.1:59417)"&#xD;
+Actual:   "Pair with the engine on this computer (lo"···&#xD;
+           ↑ (pos 0)</Message>
+          <StackTrace>   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 102&#xD;
+   at AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_local_engine_button_names_the_engine_that_served_the_page() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Shell\StatusBarSegmentsTests.cs:line 25&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+----- Inner Stack Trace -----&#xD;
+   at AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.&lt;&gt;c__DisplayClass0_0.&lt;The_local_engine_button_names_the_engine_that_served_the_page&gt;b__0() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Shell\StatusBarSegmentsTests.cs:line 25&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.&lt;&gt;c__DisplayClass6_0.&lt;.ctor&gt;b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.&lt;&gt;c__DisplayClass32_0.&lt;WrapSynchronousChecker&gt;b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="848e6a2d-65ed-4460-9252-d892c3194a65" testId="f3894f03-172f-33ba-576a-bb8fb41ce0aa" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved" computerName="MOHAMED-KHAMIS" duration="00:00:01.0045809" startTime="2026-10-26T15:06:26.9816449+03:00" endTime="2026-10-26T15:06:27.9873276+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="848e6a2d-65ed-4460-9252-d892c3194a65">
+      <Output>
+        <ErrorInfo>
+          <Message>Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.
+
+If this test does not fail consistently, the reason may be that
+the wait timeout is too short, and the runtime did not have enough
+time to complete the necessary number of renders of the component under test.
+This can happen on highly utilized or slower hardware, for example.
+
+To determine if this is the cause, compare the check and render count(s) below
+and see if they match what is expected. If they do not,
+consider increasing the timeout, either at the individual
+method call level, e.g. WaitForElement("div", TimeSpan.FromSeconds(15)),
+or via the static TestContext.DefaultWaitTimeout property.
+
+Check count: 1.
+Component render count: 1.
+Total render count across all components: 0.&#xD;
+---- Assert.Single() Failure: The collection was empty</Message>
+          <StackTrace>   at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout) in /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs:line 102&#xD;
+   at AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Bridge\ConnectionPickerPinTests.cs:line 39&#xD;
+--- End of stack trace from previous location ---&#xD;
+----- Inner Stack Trace -----&#xD;
+   at AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.&lt;&gt;c__DisplayClass1_0.&lt;A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved&gt;b__1() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Bridge\ConnectionPickerPinTests.cs:line 39&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.&lt;&gt;c__DisplayClass6_0.&lt;.ctor&gt;b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs:line 35&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.&lt;&gt;c__DisplayClass32_0.&lt;WrapSynchronousChecker&gt;b__0() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 297&#xD;
+   at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync() in /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs:line 226</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a66082ad-ed8d-436e-9b0e-7869f58a4124" testId="423f40af-d9b8-1270-c81e-1474966fe7a0" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_autorestores_a_saved_SQL_login_whose_password_the_engine_remembers_without_sending_one" computerName="MOHAMED-KHAMIS" duration="00:00:00.0096629" startTime="2026-10-26T15:06:27.7346817+03:00" endTime="2026-10-26T15:06:27.7518264+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a66082ad-ed8d-436e-9b0e-7869f58a4124" />
+    <UnitTestResult executionId="d92103b6-c435-40b0-9e8f-d98f0fc34376" testId="0b8497ef-a4d6-867e-c998-7b8376d704f5" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.PIN_required_prefills_pairing_and_stores_nothing" computerName="MOHAMED-KHAMIS" duration="00:00:00.0229246" startTime="2026-10-26T15:06:26.2152655+03:00" endTime="2026-10-26T15:06:26.2517058+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d92103b6-c435-40b0-9e8f-d98f0fc34376" />
+    <UnitTestResult executionId="54131e64-7b13-4546-9427-04055a1c4d5a" testId="6f01db45-00fa-ddd6-c09a-cee8f225477f" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_PIN_field_that_appeared_must_be_filled_before_the_next_try" computerName="MOHAMED-KHAMIS" duration="00:00:00.0292795" startTime="2026-10-26T15:06:26.8705820+03:00" endTime="2026-10-26T15:06:26.8997143+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="54131e64-7b13-4546-9427-04055a1c4d5a" />
+    <UnitTestResult executionId="90ca39ae-2ad9-483c-9845-a2893c3e4048" testId="f724b22a-215f-94f9-26e2-36eb5416ad3c" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.UpdateAsync_throws_on_unknown_id" computerName="MOHAMED-KHAMIS" duration="00:00:00.0021077" startTime="2026-10-26T15:06:26.2754941+03:00" endTime="2026-10-26T15:06:26.2755629+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="90ca39ae-2ad9-483c-9845-a2893c3e4048" />
+    <UnitTestResult executionId="f2356440-e5b9-42ff-9a0a-82e53af47430" testId="920e99d6-8c74-7f01-43f0-d590c95feed5" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Disconnected_with_cache_shows_Cached" computerName="MOHAMED-KHAMIS" duration="00:00:00.0049935" startTime="2026-10-26T15:06:27.2749977+03:00" endTime="2026-10-26T15:06:27.2789120+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f2356440-e5b9-42ff-9a0a-82e53af47430" />
+    <UnitTestResult executionId="80a3ac87-a18e-42b9-a71a-0e33b03b9abc" testId="16dec925-934a-a7dd-9388-7ccd344366f0" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.UpdateAsync_replaces_existing_record" computerName="MOHAMED-KHAMIS" duration="00:00:00.0288750" startTime="2026-10-26T15:06:26.2512438+03:00" endTime="2026-10-26T15:06:26.2767167+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="80a3ac87-a18e-42b9-a71a-0e33b03b9abc" />
+    <UnitTestResult executionId="1f74c910-8ee3-4e71-97b8-0985d184f9a8" testId="a073a611-7c1b-3210-d782-b7f9ce36dea1" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.An_HTTPS_page_engine_failure_never_dials_ws" computerName="MOHAMED-KHAMIS" duration="00:00:00.0121615" startTime="2026-10-26T15:06:26.2892643+03:00" endTime="2026-10-26T15:06:26.3017994+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1f74c910-8ee3-4e71-97b8-0985d184f9a8" />
+    <UnitTestResult executionId="084b6113-7d11-4db3-a5d1-d5a505963691" testId="ebb1882c-63e9-3d6a-0388-cfe0577bbfb1" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_assigns_a_guid_when_id_is_empty" computerName="MOHAMED-KHAMIS" duration="00:00:00.0008038" startTime="2026-10-26T15:06:26.2843410+03:00" endTime="2026-10-26T15:06:26.2844133+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="084b6113-7d11-4db3-a5d1-d5a505963691" />
+    <UnitTestResult executionId="faa432f9-a5eb-4a7e-b1c6-ab3320b6d0e8" testId="7750acd6-75d3-2196-9e3f-f9188e59f873" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_database" computerName="MOHAMED-KHAMIS" duration="00:00:00.0010203" startTime="2026-10-26T15:06:26.2911719+03:00" endTime="2026-10-26T15:06:26.2919490+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="faa432f9-a5eb-4a7e-b1c6-ab3320b6d0e8" />
+    <UnitTestResult executionId="a526b3df-0cd6-4f5a-b386-136c1cc2a33e" testId="08732735-8cc7-e832-47a9-4d4380162a29" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_returns_empty_on_a_fresh_store" computerName="MOHAMED-KHAMIS" duration="00:00:00.0114299" startTime="2026-10-26T15:06:26.2152879+03:00" endTime="2026-10-26T15:06:26.2344076+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a526b3df-0cd6-4f5a-b386-136c1cc2a33e" />
+    <UnitTestResult executionId="1641de04-9e4f-4fb7-854c-513e65cdf250" testId="8a7dca04-4ab4-7b23-ce83-2e2dd90b1ff3" testName="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_localhost_mode_engine_still_pairs_without_a_PIN" computerName="MOHAMED-KHAMIS" duration="00:00:00.6539291" startTime="2026-10-26T15:06:26.2131734+03:00" endTime="2026-10-26T15:06:26.8703301+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1641de04-9e4f-4fb7-854c-513e65cdf250" />
+    <UnitTestResult executionId="839f7c04-cc41-4e97-8f2a-fc3c57be018e" testId="40c5ae6a-cb8b-d0af-86d4-c500f2beba48" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched" computerName="MOHAMED-KHAMIS" duration="00:00:00.0025469" startTime="2026-10-26T15:06:26.2817533+03:00" endTime="2026-10-26T15:06:26.2819146+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="839f7c04-cc41-4e97-8f2a-fc3c57be018e" />
+    <UnitTestResult executionId="f91307b4-317b-460c-a732-e82a0d1474f8" testId="b08ead73-2f7a-8739-5bd8-0df9765aae0a" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_LAN_connection_without_bearer_token" computerName="MOHAMED-KHAMIS" duration="00:00:00.0010278" startTime="2026-10-26T15:06:26.2764934+03:00" endTime="2026-10-26T15:06:26.2765603+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f91307b4-317b-460c-a732-e82a0d1474f8" />
+    <UnitTestResult executionId="7ab9a698-9914-409f-a9e1-a96935587d32" testId="df688f3b-5b28-d57f-a506-55d952db84b0" testName="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_then_GetAsync_returns_the_record" computerName="MOHAMED-KHAMIS" duration="00:00:00.0008984" startTime="2026-10-26T15:06:26.2854260+03:00" endTime="2026-10-26T15:06:26.2861673+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ab9a698-9914-409f-a9e1-a96935587d32" />
+    <UnitTestResult executionId="13cbf497-15b2-4bdb-8a0d-56aac4a8a0a2" testId="f8625dc2-9f0c-8d06-4bb0-ef2ae24737d9" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.A_run_with_errors_says_so" computerName="MOHAMED-KHAMIS" duration="00:00:00.0309717" startTime="2026-10-26T15:06:26.8894712+03:00" endTime="2026-10-26T15:06:26.9058973+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="13cbf497-15b2-4bdb-8a0d-56aac4a8a0a2" />
+    <UnitTestResult executionId="c1e1f338-df32-4db8-9dc7-70036882ac8d" testId="84866e20-6ea4-bd50-6893-75fd5e9981ac" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.Before_any_execute_there_is_no_outcome" computerName="MOHAMED-KHAMIS" duration="00:00:00.0060360" startTime="2026-10-26T15:06:27.9674119+03:00" endTime="2026-10-26T15:06:27.9734114+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c1e1f338-df32-4db8-9dc7-70036882ac8d" />
+    <UnitTestResult executionId="1cb2fc2e-ff50-439a-8e73-eed0dde40323" testId="729c28bf-e79d-9ecd-c236-c5a612fd2017" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_saved_active_record_wins_even_when_down" computerName="MOHAMED-KHAMIS" duration="00:00:00.0027922" startTime="2026-10-26T15:06:26.3077921+03:00" endTime="2026-10-26T15:06:26.3108494+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1cb2fc2e-ff50-439a-8e73-eed0dde40323" />
+    <UnitTestResult executionId="c4a26a03-becb-4313-af8d-d46409df4362" testId="6bb59f21-a955-6ea8-88e9-fb464bf71efd" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.The_page_engine_is_saved_only_after_OK_with_its_address_and_metadata(host: &quot;sql-box&quot;, scheme: &quot;wss&quot;, local: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0007347" startTime="2026-10-26T15:06:26.2890883+03:00" endTime="2026-10-26T15:06:26.2891382+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c4a26a03-becb-4313-af8d-d46409df4362" />
+    <UnitTestResult executionId="da73f79d-f451-4072-8984-84c096b10d3b" testId="1c615a41-7d5f-0d66-e124-353a58c5b6a0" testName="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.A_static_page_keeps_the_default_local_engine_button_title" computerName="MOHAMED-KHAMIS" duration="00:00:00.0072870" startTime="2026-10-26T15:06:27.7115626+03:00" endTime="2026-10-26T15:06:27.7186491+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="da73f79d-f451-4072-8984-84c096b10d3b" />
+    <UnitTestResult executionId="6f73303b-230f-4362-90a2-3bbe55d387f6" testId="624fbaba-1c03-da23-1dd9-aa8b81c0e8e7" testName="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_connection_chip_keeps_its_server_slash_database_format_or_says_connect" computerName="MOHAMED-KHAMIS" duration="00:00:00.6431071" startTime="2026-10-26T15:06:26.2152433+03:00" endTime="2026-10-26T15:06:26.8601654+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6f73303b-230f-4362-90a2-3bbe55d387f6" />
+    <UnitTestResult executionId="0e2ab47e-8add-4573-a75f-752d6084dd67" testId="76ff905d-7c16-74f7-4bda-f331f0ab5cea" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.Other_page_answers_do_not_dial(kind: Unknown, failure: Unreachable, message: &quot;Checking this page's engine…&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0016555" startTime="2026-10-26T15:06:26.2814926+03:00" endTime="2026-10-26T15:06:26.2818239+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0e2ab47e-8add-4573-a75f-752d6084dd67" />
+    <UnitTestResult executionId="456f6064-8621-43f2-9eed-29dadffe931d" testId="5742b0d2-a16e-f2e3-56f1-bff9ca895729" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.Pair_local_uses_the_page_engine_address" computerName="MOHAMED-KHAMIS" duration="00:00:00.0038964" startTime="2026-10-26T15:06:26.3038278+03:00" endTime="2026-10-26T15:06:26.3075586+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="456f6064-8621-43f2-9eed-29dadffe931d" />
+    <UnitTestResult executionId="5aa4fdef-d633-47f6-9717-323c842f011b" testId="cfd1dd18-c5d6-1ccf-3ea7-6d2679e51176" testName="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_port_outside_range" computerName="MOHAMED-KHAMIS" duration="00:00:00.0011761" startTime="2026-10-26T15:06:26.2763546+03:00" endTime="2026-10-26T15:06:26.2763938+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5aa4fdef-d633-47f6-9717-323c842f011b" />
+    <UnitTestResult executionId="43f7d51e-4e70-4138-8aff-568c0b389fa7" testId="a64e866f-f67a-750a-e02c-a8685d467347" testName="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_dangling_active_id_is_cleared_before_using_the_page" computerName="MOHAMED-KHAMIS" duration="00:00:00.0055184" startTime="2026-10-26T15:06:26.2529915+03:00" endTime="2026-10-26T15:06:26.2533874+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="43f7d51e-4e70-4138-8aff-568c0b389fa7" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_network_mode_engine_on_this_computer_asks_for_the_PIN_and_then_pairs(host: &quot;127.0.0.1&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="375b4691-b73a-5eb0-a956-e1f9a68f4206">
+      <Execution id="f4ddcc09-528d-45a7-b2ca-896bb8a0f71d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="A_network_mode_engine_on_this_computer_asks_for_the_PIN_and_then_pairs" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_matching_saved_record_is_reused_and_an_HTTPS_page_keeps_its_scheme" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="352ab579-1e51-c4e6-f156-2586c01c9fc2">
+      <Execution id="b915ff10-3690-43d6-a1ee-e304f6994a19" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="A_matching_saved_record_is_reused_and_an_HTTPS_page_keeps_its_scheme" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_LAN_connection_without_bearer_token" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="b08ead73-2f7a-8739-5bd8-0df9765aae0a">
+      <Execution id="f91307b4-317b-460c-a732-e82a0d1474f8" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="AddAsync_rejects_LAN_connection_without_bearer_token" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_then_GetAsync_returns_the_record" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="02605a20-4f8a-ef57-6f22-78786b6862f9">
+      <Execution id="e36d9452-9b56-4da7-81b9-8ccc50e3fd01" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="AddAsync_then_GetAsync_returns_the_record" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.UpdateAsync_throws_on_unknown_id" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="4a85d5af-be75-a4c9-a2dc-3709f2e53880">
+      <Execution id="d4e9b0db-5fef-4ea3-9286-385daa67bee9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="UpdateAsync_throws_on_unknown_id" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_duplicate_id" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="04361f5c-310d-77d1-8f7b-e2298b8e42ef">
+      <Execution id="463fb53e-b2a6-4027-92ae-370840c384ef" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="AddAsync_rejects_duplicate_id" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.Before_any_execute_there_is_no_outcome" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="84866e20-6ea4-bd50-6893-75fd5e9981ac">
+      <Execution id="c1e1f338-df32-4db8-9dc7-70036882ac8d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="Before_any_execute_there_is_no_outcome" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_port_outside_range" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="cfd1dd18-c5d6-1ccf-3ea7-6d2679e51176">
+      <Execution id="5aa4fdef-d633-47f6-9717-323c842f011b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="AddAsync_rejects_port_outside_range" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_with_a_remembered_SQL_password_the_server_refuses_leaves_the_tab_asking_on_its_next_run" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="7a13c1ac-96a8-9cdb-676b-eff1db955589">
+      <Execution id="fe04cf0e-fa86-4657-92f8-5d9f1ef93657" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_with_a_remembered_SQL_password_the_server_refuses_leaves_the_tab_asking_on_its_next_run" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_database" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="7750acd6-75d3-2196-9e3f-f9188e59f873">
+      <Execution id="faa432f9-a5eb-4a7e-b1c6-ab3320b6d0e8" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="AddAsync_rejects_empty_database" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.The_HTTPS_default_port_is_allowed_only_for_a_strict_TLS_record" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="0ec90a3a-290f-656d-2fd1-ef8f31031e45">
+      <Execution id="b2db3c20-2b2a-41fd-bd60-a7a5e91def56" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="The_HTTPS_default_port_is_allowed_only_for_a_strict_TLS_record" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_autorestores_a_saved_SQL_login_whose_password_the_engine_remembers_without_sending_one" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="423f40af-d9b8-1270-c81e-1474966fe7a0">
+      <Execution id="a66082ad-ed8d-436e-9b0e-7869f58a4124" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_autorestores_a_saved_SQL_login_whose_password_the_engine_remembers_without_sending_one" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.RemoveAsync_keeps_active_pointer_when_a_different_row_is_removed" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="817a6dfc-f02b-6e03-dd99-b25e523669d3">
+      <Execution id="ec5d28fd-5dd5-4572-b3c7-863e91c17d7b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="RemoveAsync_keeps_active_pointer_when_a_different_row_is_removed" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_connection_chip_keeps_its_server_slash_database_format_or_says_connect" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="624fbaba-1c03-da23-1dd9-aa8b81c0e8e7">
+      <Execution id="6f73303b-230f-4362-90a2-3bbe55d387f6" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="The_connection_chip_keeps_its_server_slash_database_format_or_says_connect" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.Other_page_answers_do_not_dial(kind: Static, failure: NotPaired, message: &quot;No engine paired yet.&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="24d85232-9f8a-dd02-a089-c735a4d6e8f5">
+      <Execution id="6dbd48c4-861c-463a-8e50-772639b27443" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="Other_page_answers_do_not_dial" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.A_live_bridge_hides_a_stale_startup_pairing_failure" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="a4d7aa47-c112-5050-8ac2-fd4d690c4515">
+      <Execution id="ebebb161-86dd-4a8b-95fb-2e92038d3cef" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="A_live_bridge_hides_a_stale_startup_pairing_failure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.Strict_scheme_round_trips_and_is_false_for_older_records" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="fb3bc38a-f264-8c0c-af56-dcab8f2d9189">
+      <Execution id="aa74308c-29cc-4dea-8d14-4ce92787743e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="Strict_scheme_round_trips_and_is_false_for_older_records" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_returns_empty_on_a_fresh_store" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="08732735-8cc7-e832-47a9-4d4380162a29">
+      <Execution id="a526b3df-0cd6-4f5a-b386-136c1cc2a33e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="ListAsync_returns_empty_on_a_fresh_store" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_socket_failure_does_not_save_a_connection" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="1c692dbf-a514-c2c0-4260-1b93b073e183">
+      <Execution id="1a19db01-593e-4103-8c59-ffa9fac44751" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="A_socket_failure_does_not_save_a_connection" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.Serialized_record_never_contains_a_password_field" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="72be7ba5-34da-ba0f-e3f6-edb4b1b10d9c">
+      <Execution id="01e50c73-c4e5-47aa-a2b7-fa2eba6b81c2" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="Serialized_record_never_contains_a_password_field" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_then_GetAsync_returns_the_record" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="df688f3b-5b28-d57f-a506-55d952db84b0">
+      <Execution id="7ab9a698-9914-409f-a9e1-a96935587d32" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="AddAsync_then_GetAsync_returns_the_record" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Disconnected_with_cache_shows_Cached" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="920e99d6-8c74-7f01-43f0-d590c95feed5">
+      <Execution id="f2356440-e5b9-42ff-9a0a-82e53af47430" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Disconnected_with_cache_shows_Cached" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Reconnecting_with_cache_holds_Cached_no_flicker" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="e49321a7-a39d-f1ed-c71c-26db2302efba">
+      <Execution id="35138cf6-5433-4d3b-b44e-93ff59145efc" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Reconnecting_with_cache_holds_Cached_no_flicker" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.AddAsync_rejects_duplicate_id" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="872628cc-e12b-5216-56a9-ac7ba2cff0f7">
+      <Execution id="9d7f019f-4449-4bc9-a95d-e33351ce178a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="AddAsync_rejects_duplicate_id" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_autorestores_saved_windows_auth_connection" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="51acbaf3-847d-f511-18d7-9aa6771528ea">
+      <Execution id="c9e8809d-e79b-46bb-b48b-b9b35209ce59" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_autorestores_saved_windows_auth_connection" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.ListAsync_returns_empty_on_a_fresh_store" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="cea67dd9-8eda-0c52-cae9-4467d8310ab3">
+      <Execution id="896ac54a-ec39-4a79-a7d3-cd6fbc249c36" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="ListAsync_returns_empty_on_a_fresh_store" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_with_sql_session_shows_Live" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="c620982a-33da-6c14-6b9c-36f0a270ba23">
+      <Execution id="649bdb3b-7359-478f-b8e0-1ecab51b3a2e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_with_sql_session_shows_Live" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_skips_a_corrupt_row" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="3edae3f3-02ae-7f01-6454-c38d8f78e5a6">
+      <Execution id="589367b2-4b94-484d-a6a2-5bac68a49d49" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="ListAsync_skips_a_corrupt_row" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.The_page_engine_is_saved_only_after_OK_with_its_address_and_metadata(host: &quot;sql-box&quot;, scheme: &quot;wss&quot;, local: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="6bb59f21-a955-6ea8-88e9-fb464bf71efd">
+      <Execution id="c4a26a03-becb-4313-af8d-d46409df4362" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="The_page_engine_is_saved_only_after_OK_with_its_address_and_metadata" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.UpdateAsync_replaces_existing_record" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="63da22cf-d499-c93f-e751-cd042f956d0c">
+      <Execution id="45c8d987-52c2-472d-8c23-01d4504175be" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="UpdateAsync_replaces_existing_record" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_network_mode_engine_on_this_computer_asks_for_the_PIN_and_then_pairs(host: &quot;localhost&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="42684ea7-b22b-12cb-c553-917db6d44ea0">
+      <Execution id="26c23292-83ac-49f2-b54a-da838cef9986" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="A_network_mode_engine_on_this_computer_asks_for_the_PIN_and_then_pairs" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_PIN_field_that_appeared_must_be_filled_before_the_next_try" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="6f01db45-00fa-ddd6-c09a-cee8f225477f">
+      <Execution id="54131e64-7b13-4546-9427-04055a1c4d5a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="A_PIN_field_that_appeared_must_be_filled_before_the_next_try" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.An_HTTPS_page_engine_failure_never_dials_ws" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="a073a611-7c1b-3210-d782-b7f9ce36dea1">
+      <Execution id="1f74c910-8ee3-4e71-97b8-0985d184f9a8" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="An_HTTPS_page_engine_failure_never_dials_ws" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.The_page_engine_is_saved_only_after_OK_with_its_address_and_metadata(host: &quot;localhost&quot;, scheme: &quot;ws&quot;, local: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="7c70d999-dcef-7a75-851b-bc040e997af6">
+      <Execution id="e9b233e2-c349-4f6c-b8ab-7defc1bb079e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="The_page_engine_is_saved_only_after_OK_with_its_address_and_metadata" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.A_successful_run_shows_its_rows_and_time" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="1fc202c9-7c56-062f-956e-3b6ca220fcb2">
+      <Execution id="b49c4f57-2ab2-4313-9fb9-c7a0c1f645b8" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="A_successful_run_shows_its_rows_and_time" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="40c5ae6a-cb8b-d0af-86d4-c500f2beba48">
+      <Execution id="839f7c04-cc41-4e97-8f2a-fc3c57be018e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Drift_after_cache_seeded_flips_Offline_to_Cached_in_place" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="5e589a3b-e004-e719-6de8-c9e63b4205d2">
+      <Execution id="d126667a-2d28-4b24-8f3d-a0f27a3aa1e4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Drift_after_cache_seeded_flips_Offline_to_Cached_in_place" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_assigns_a_guid_when_id_is_empty" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="ebb1882c-63e9-3d6a-0388-cfe0577bbfb1">
+      <Execution id="084b6113-7d11-4db3-a5d1-d5a505963691" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="AddAsync_assigns_a_guid_when_id_is_empty" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_without_sql_session_shows_BridgeOnly" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="55e21c91-0e35-539d-4ba3-2b0d8a86a20e">
+      <Execution id="a994a82b-94ef-4844-a6b7-96ee61b8dc68" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_without_sql_session_shows_BridgeOnly" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_dangling_active_id_is_cleared_before_using_the_page" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="a64e866f-f67a-750a-e02c-a8685d467347">
+      <Execution id="43f7d51e-4e70-4138-8aff-568c0b389fa7" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="A_dangling_active_id_is_cleared_before_using_the_page" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_login_shows_beside_the_connection_and_the_server_opens_the_connection_manager" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="6984f1f1-21fe-f132-ce1b-17d20e2df6f4">
+      <Execution id="7e812f37-73b6-4924-8c38-40a28565f227" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="The_login_shows_beside_the_connection_and_the_server_opens_the_connection_manager" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_caret_reads_Ln_Col" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="46b40fe4-2348-4166-2cb6-b632a25bbf03">
+      <Execution id="cf5f189f-b3f2-413b-b972-e3c080d578eb" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="The_caret_reads_Ln_Col" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.Add_starts_with_the_page_engines_host_and_port" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="63e4e76a-c366-6fa6-fe45-8a8731da8035">
+      <Execution id="d35f1616-ddce-45ad-b9a1-c33552293ffb" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="Add_starts_with_the_page_engines_host_and_port" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.ListAsync_sorts_by_name_and_excludes_active_pointer_sentinel" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="8423cb5e-5903-2042-207b-960829eea14c">
+      <Execution id="17dbdc71-7222-4df6-80c0-02e7e792725c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="ListAsync_sorts_by_name_and_excludes_active_pointer_sentinel" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect(remember: True, engineRemembers: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="5f579de7-50db-0452-18ce-da3dff7f0804">
+      <Execution id="1a7ee817-6f77-4234-ae4c-22412bc86856" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.ListAsync_excludes_internal_active_id_pointer" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="9f24b414-b945-f6fd-9e5f-fde16bcdf771">
+      <Execution id="c1e8b214-88e1-4145-b1b8-e880717a7134" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="ListAsync_excludes_internal_active_id_pointer" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_wrong_PIN_is_reported_as_the_engine_said_it" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="d4786542-509e-e604-6572-53b90b6bef08">
+      <Execution id="1fa6e6c5-9203-4e3c-a511-7f842aa95c8f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="A_wrong_PIN_is_reported_as_the_engine_said_it" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="f3894f03-172f-33ba-576a-bb8fb41ce0aa">
+      <Execution id="848e6a2d-65ed-4460-9252-d892c3194a65" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_restores_the_saved_connection_into_the_active_tab_only_when_it_has_none" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="acd92e29-9e43-84b7-408d-877d0cc2f7a5">
+      <Execution id="66f58487-0174-4fbd-ac73-c9d29ef230dc" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_restores_the_saved_connection_into_the_active_tab_only_when_it_has_none" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.A_saved_active_record_wins_even_when_down" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="729c28bf-e79d-9ecd-c236-c5a612fd2017">
+      <Execution id="1cb2fc2e-ff50-439a-8e73-eed0dde40323" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="A_saved_active_record_wins_even_when_down" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_outcome_is_a_polite_status_region" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="c8045c82-0a54-d118-f11e-604756b43eef">
+      <Execution id="97a0b136-a95d-45d4-951e-8bfc21abc6e9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="The_outcome_is_a_polite_status_region" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_leaves_a_tab_the_user_disconnected_without_a_connection" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="e38db290-371c-6aa6-c67e-46230cc3ee66">
+      <Execution id="705ef299-f103-4b9c-bade-c044be829f07" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_leaves_a_tab_the_user_disconnected_without_a_connection" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.GetActiveId_is_null_until_set" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="bd5e5a3c-d95c-1116-5eaa-215427e6df94">
+      <Execution id="b0ecd0b5-a0ab-42f0-9c55-11dcb97f2e68" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="GetActiveId_is_null_until_set" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_server" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="1042dc71-01ea-e20a-af9e-94128258cca9">
+      <Execution id="7a4cf60c-469c-4261-9b45-405cd7266fd3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="AddAsync_rejects_empty_server" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect(remember: False, engineRemembers: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="f6ec459c-d021-ab3f-1cbf-978702848f54">
+      <Execution id="62f52913-0f23-40f6-899b-a76eb28dfae2" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_leaves_a_saved_SQL_login_the_engine_holds_no_password_for_to_a_one_click_connect" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_localhost_mode_engine_still_pairs_without_a_PIN" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="8a7dca04-4ab4-7b23-ce83-2e2dd90b1ff3">
+      <Execution id="1641de04-9e4f-4fb7-854c-513e65cdf250" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests" name="A_localhost_mode_engine_still_pairs_without_a_PIN" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Disconnected_without_cache_shows_Offline" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="e134779b-16c7-73b2-ae7d-659d909f40c3">
+      <Execution id="8c35a77c-62ed-4ed1-a1ac-c1d2414ae95b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Disconnected_without_cache_shows_Offline" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.A_static_page_keeps_the_default_local_engine_button_title" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="1c615a41-7d5f-0d66-e124-353a58c5b6a0">
+      <Execution id="da73f79d-f451-4072-8984-84c096b10d3b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="A_static_page_keeps_the_default_local_engine_button_title" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.PIN_required_prefills_pairing_and_stores_nothing" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="0b8497ef-a4d6-867e-c998-7b8376d704f5">
+      <Execution id="d92103b6-c435-40b0-9e8f-d98f0fc34376" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="PIN_required_prefills_pairing_and_stores_nothing" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.UpdateAsync_throws_on_unknown_id" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="f724b22a-215f-94f9-26e2-36eb5416ad3c">
+      <Execution id="90ca39ae-2ad9-483c-9845-a2893c3e4048" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="UpdateAsync_throws_on_unknown_id" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests.Open_reconnects_a_restored_tab_to_its_own_connection_and_not_to_the_saved_one" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="d5b3537a-4e45-5d69-6a12-1a721f5c022f">
+      <Execution id="6dcce9b6-fae0-4562-a6d4-5e19a9cc0b9f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.StatusIndicatorTests" name="Open_reconnects_a_restored_tab_to_its_own_connection_and_not_to_the_saved_one" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_versions_are_short_with_the_full_string_on_hover_and_a_mismatch_is_marked" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="037f60f8-0dea-41dc-664f-d2ae0502d73d">
+      <Execution id="323669f3-4c9a-4158-8f49-d6805b0928d4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="The_versions_are_short_with_the_full_string_on_hover_and_a_mismatch_is_marked" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.While_running_it_says_so_and_counts_the_elapsed_time" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="c5bfd99e-dc68-ada2-497e-e4bfab4ab835">
+      <Execution id="42124774-fbff-441e-a8de-d2e37038fa53" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="While_running_it_says_so_and_counts_the_elapsed_time" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.A_run_with_errors_says_so" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="f8625dc2-9f0c-8d06-4bb0-ef2ae24737d9">
+      <Execution id="13cbf497-15b2-4bdb-8a0d-56aac4a8a0a2" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="A_run_with_errors_says_so" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.Other_page_answers_do_not_dial(kind: Unknown, failure: Unreachable, message: &quot;Checking this page's engine…&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="76ff905d-7c16-74f7-4bda-f331f0ab5cea">
+      <Execution id="0e2ab47e-8add-4573-a75f-752d6084dd67" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="Other_page_answers_do_not_dial" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.UpdateAsync_replaces_existing_record" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="16dec925-934a-a7dd-9388-7ccd344366f0">
+      <Execution id="80a3ac87-a18e-42b9-a71a-0e33b03b9abc" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="UpdateAsync_replaces_existing_record" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.Matching_versions_carry_no_mismatch_marker" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="bc812897-85c3-7d81-cd68-fd39ae650f70">
+      <Execution id="78530165-1fc8-4983-945e-35a9b8f8b415" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="Matching_versions_carry_no_mismatch_marker" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests.Pair_local_uses_the_page_engine_address" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="5742b0d2-a16e-f2e3-56f1-bff9ca895729">
+      <Execution id="456f6064-8621-43f2-9eed-29dadffe931d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.EngineAutoConnectPrecedenceTests" name="Pair_local_uses_the_page_engine_address" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_local_engine_button_names_the_engine_that_served_the_page" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="6084e4ca-54c8-ac2f-9520-e7b9ddcc49ee">
+      <Execution id="55542e12-cd19-4c7b-b835-fddb8b3b8044" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests" name="The_local_engine_button_names_the_engine_that_served_the_page" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests.RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="623838cc-81ab-b6d7-4909-48d37d3f2301">
+      <Execution id="4fb49080-cb7f-4371-b5f7-4506f3543e96" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.ConnectionStoreTests" name="RemoveAsync_drops_record_and_clears_active_pointer_when_it_matched" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests.AddAsync_rejects_empty_name" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.tests\bin\debug\net10.0\akmlsql.web.tests.dll" id="80252f60-2df9-3619-175d-0b421d83085f">
+      <Execution id="03221f5b-dd6c-40b8-af80-8dac19ed0261" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\bin\Debug\net10.0\AkmlSql.Web.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.Tests.Bridge.SavedSqlConnectionStoreTests" name="AddAsync_rejects_empty_name" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="fb3bc38a-f264-8c0c-af56-dcab8f2d9189" executionId="aa74308c-29cc-4dea-8d14-4ce92787743e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c620982a-33da-6c14-6b9c-36f0a270ba23" executionId="649bdb3b-7359-478f-b8e0-1ecab51b3a2e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="04361f5c-310d-77d1-8f7b-e2298b8e42ef" executionId="463fb53e-b2a6-4027-92ae-370840c384ef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cea67dd9-8eda-0c52-cae9-4467d8310ab3" executionId="896ac54a-ec39-4a79-a7d3-cd6fbc249c36" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bc812897-85c3-7d81-cd68-fd39ae650f70" executionId="78530165-1fc8-4983-945e-35a9b8f8b415" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1fc202c9-7c56-062f-956e-3b6ca220fcb2" executionId="b49c4f57-2ab2-4313-9fb9-c7a0c1f645b8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c5bfd99e-dc68-ada2-497e-e4bfab4ab835" executionId="42124774-fbff-441e-a8de-d2e37038fa53" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d5b3537a-4e45-5d69-6a12-1a721f5c022f" executionId="6dcce9b6-fae0-4562-a6d4-5e19a9cc0b9f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="623838cc-81ab-b6d7-4909-48d37d3f2301" executionId="4fb49080-cb7f-4371-b5f7-4506f3543e96" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="63e4e76a-c366-6fa6-fe45-8a8731da8035" executionId="d35f1616-ddce-45ad-b9a1-c33552293ffb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e38db290-371c-6aa6-c67e-46230cc3ee66" executionId="705ef299-f103-4b9c-bade-c044be829f07" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="55e21c91-0e35-539d-4ba3-2b0d8a86a20e" executionId="a994a82b-94ef-4844-a6b7-96ee61b8dc68" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f6ec459c-d021-ab3f-1cbf-978702848f54" executionId="62f52913-0f23-40f6-899b-a76eb28dfae2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a4d7aa47-c112-5050-8ac2-fd4d690c4515" executionId="ebebb161-86dd-4a8b-95fb-2e92038d3cef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1c692dbf-a514-c2c0-4260-1b93b073e183" executionId="1a19db01-593e-4103-8c59-ffa9fac44751" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="352ab579-1e51-c4e6-f156-2586c01c9fc2" executionId="b915ff10-3690-43d6-a1ee-e304f6994a19" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="872628cc-e12b-5216-56a9-ac7ba2cff0f7" executionId="9d7f019f-4449-4bc9-a95d-e33351ce178a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c8045c82-0a54-d118-f11e-604756b43eef" executionId="97a0b136-a95d-45d4-951e-8bfc21abc6e9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="375b4691-b73a-5eb0-a956-e1f9a68f4206" executionId="f4ddcc09-528d-45a7-b2ca-896bb8a0f71d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0ec90a3a-290f-656d-2fd1-ef8f31031e45" executionId="b2db3c20-2b2a-41fd-bd60-a7a5e91def56" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="51acbaf3-847d-f511-18d7-9aa6771528ea" executionId="c9e8809d-e79b-46bb-b48b-b9b35209ce59" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3edae3f3-02ae-7f01-6454-c38d8f78e5a6" executionId="589367b2-4b94-484d-a6a2-5bac68a49d49" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="42684ea7-b22b-12cb-c553-917db6d44ea0" executionId="26c23292-83ac-49f2-b54a-da838cef9986" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="817a6dfc-f02b-6e03-dd99-b25e523669d3" executionId="ec5d28fd-5dd5-4572-b3c7-863e91c17d7b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="63da22cf-d499-c93f-e751-cd042f956d0c" executionId="45c8d987-52c2-472d-8c23-01d4504175be" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="037f60f8-0dea-41dc-664f-d2ae0502d73d" executionId="323669f3-4c9a-4158-8f49-d6805b0928d4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8423cb5e-5903-2042-207b-960829eea14c" executionId="17dbdc71-7222-4df6-80c0-02e7e792725c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bd5e5a3c-d95c-1116-5eaa-215427e6df94" executionId="b0ecd0b5-a0ab-42f0-9c55-11dcb97f2e68" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5e589a3b-e004-e719-6de8-c9e63b4205d2" executionId="d126667a-2d28-4b24-8f3d-a0f27a3aa1e4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4a85d5af-be75-a4c9-a2dc-3709f2e53880" executionId="d4e9b0db-5fef-4ea3-9286-385daa67bee9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e49321a7-a39d-f1ed-c71c-26db2302efba" executionId="35138cf6-5433-4d3b-b44e-93ff59145efc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5f579de7-50db-0452-18ce-da3dff7f0804" executionId="1a7ee817-6f77-4234-ae4c-22412bc86856" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="72be7ba5-34da-ba0f-e3f6-edb4b1b10d9c" executionId="01e50c73-c4e5-47aa-a2b7-fa2eba6b81c2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7c70d999-dcef-7a75-851b-bc040e997af6" executionId="e9b233e2-c349-4f6c-b8ab-7defc1bb079e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e134779b-16c7-73b2-ae7d-659d909f40c3" executionId="8c35a77c-62ed-4ed1-a1ac-c1d2414ae95b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9f24b414-b945-f6fd-9e5f-fde16bcdf771" executionId="c1e8b214-88e1-4145-b1b8-e880717a7134" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7a13c1ac-96a8-9cdb-676b-eff1db955589" executionId="fe04cf0e-fa86-4657-92f8-5d9f1ef93657" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d4786542-509e-e604-6572-53b90b6bef08" executionId="1fa6e6c5-9203-4e3c-a511-7f842aa95c8f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6984f1f1-21fe-f132-ce1b-17d20e2df6f4" executionId="7e812f37-73b6-4924-8c38-40a28565f227" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="46b40fe4-2348-4166-2cb6-b632a25bbf03" executionId="cf5f189f-b3f2-413b-b972-e3c080d578eb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="acd92e29-9e43-84b7-408d-877d0cc2f7a5" executionId="66f58487-0174-4fbd-ac73-c9d29ef230dc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="24d85232-9f8a-dd02-a089-c735a4d6e8f5" executionId="6dbd48c4-861c-463a-8e50-772639b27443" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="80252f60-2df9-3619-175d-0b421d83085f" executionId="03221f5b-dd6c-40b8-af80-8dac19ed0261" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1042dc71-01ea-e20a-af9e-94128258cca9" executionId="7a4cf60c-469c-4261-9b45-405cd7266fd3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="02605a20-4f8a-ef57-6f22-78786b6862f9" executionId="e36d9452-9b56-4da7-81b9-8ccc50e3fd01" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6084e4ca-54c8-ac2f-9520-e7b9ddcc49ee" executionId="55542e12-cd19-4c7b-b835-fddb8b3b8044" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f3894f03-172f-33ba-576a-bb8fb41ce0aa" executionId="848e6a2d-65ed-4460-9252-d892c3194a65" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="423f40af-d9b8-1270-c81e-1474966fe7a0" executionId="a66082ad-ed8d-436e-9b0e-7869f58a4124" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0b8497ef-a4d6-867e-c998-7b8376d704f5" executionId="d92103b6-c435-40b0-9e8f-d98f0fc34376" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6f01db45-00fa-ddd6-c09a-cee8f225477f" executionId="54131e64-7b13-4546-9427-04055a1c4d5a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f724b22a-215f-94f9-26e2-36eb5416ad3c" executionId="90ca39ae-2ad9-483c-9845-a2893c3e4048" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="920e99d6-8c74-7f01-43f0-d590c95feed5" executionId="f2356440-e5b9-42ff-9a0a-82e53af47430" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="16dec925-934a-a7dd-9388-7ccd344366f0" executionId="80a3ac87-a18e-42b9-a71a-0e33b03b9abc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a073a611-7c1b-3210-d782-b7f9ce36dea1" executionId="1f74c910-8ee3-4e71-97b8-0985d184f9a8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ebb1882c-63e9-3d6a-0388-cfe0577bbfb1" executionId="084b6113-7d11-4db3-a5d1-d5a505963691" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7750acd6-75d3-2196-9e3f-f9188e59f873" executionId="faa432f9-a5eb-4a7e-b1c6-ab3320b6d0e8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="08732735-8cc7-e832-47a9-4d4380162a29" executionId="a526b3df-0cd6-4f5a-b386-136c1cc2a33e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="8a7dca04-4ab4-7b23-ce83-2e2dd90b1ff3" executionId="1641de04-9e4f-4fb7-854c-513e65cdf250" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="40c5ae6a-cb8b-d0af-86d4-c500f2beba48" executionId="839f7c04-cc41-4e97-8f2a-fc3c57be018e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b08ead73-2f7a-8739-5bd8-0df9765aae0a" executionId="f91307b4-317b-460c-a732-e82a0d1474f8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="df688f3b-5b28-d57f-a506-55d952db84b0" executionId="7ab9a698-9914-409f-a9e1-a96935587d32" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f8625dc2-9f0c-8d06-4bb0-ef2ae24737d9" executionId="13cbf497-15b2-4bdb-8a0d-56aac4a8a0a2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="84866e20-6ea4-bd50-6893-75fd5e9981ac" executionId="c1e1f338-df32-4db8-9dc7-70036882ac8d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="729c28bf-e79d-9ecd-c236-c5a612fd2017" executionId="1cb2fc2e-ff50-439a-8e73-eed0dde40323" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6bb59f21-a955-6ea8-88e9-fb464bf71efd" executionId="c4a26a03-becb-4313-af8d-d46409df4362" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1c615a41-7d5f-0d66-e124-353a58c5b6a0" executionId="da73f79d-f451-4072-8984-84c096b10d3b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="624fbaba-1c03-da23-1dd9-aa8b81c0e8e7" executionId="6f73303b-230f-4362-90a2-3bbe55d387f6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="76ff905d-7c16-74f7-4bda-f331f0ab5cea" executionId="0e2ab47e-8add-4573-a75f-752d6084dd67" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5742b0d2-a16e-f2e3-56f1-bff9ca895729" executionId="456f6064-8621-43f2-9eed-29dadffe931d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cfd1dd18-c5d6-1ccf-3ea7-6d2679e51176" executionId="5aa4fdef-d633-47f6-9717-323c842f011b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a64e866f-f67a-750a-e02c-a8685d467347" executionId="43f7d51e-4e70-4138-8aff-568c0b389fa7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="71" executed="71" passed="68" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.21]   Discovering: AkmlSql.Web.Tests&#xD;
+[xUnit.net 00:00:00.60]   Discovered:  AkmlSql.Web.Tests&#xD;
+[xUnit.net 00:00:00.65]   Starting:    AkmlSql.Web.Tests&#xD;
+[xUnit.net 00:00:01.44]       Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:01.44]                  ↓ (pos 0)&#xD;
+[xUnit.net 00:00:01.44]       Expected: "59417"&#xD;
+[xUnit.net 00:00:01.44]       Actual:   "47291"&#xD;
+[xUnit.net 00:00:01.44]                  ↑ (pos 0)&#xD;
+[xUnit.net 00:00:01.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Bridge\ConnectionPickerPinTests.cs(29,0): at AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.Add_starts_with_the_page_engines_host_and_port()&#xD;
+[xUnit.net 00:00:01.44]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:01.44]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:02.43]       Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.
+
+If this test does not fail consistently, the reason may be that
+the wait timeout is too short, and the runtime did not have enough
+time to complete the necessary number of renders of the component under test.
+This can happen on highly utilized or slower hardware, for example.
+
+To determine if this is the cause, compare the check and render count(s) below
+and see if they match what is expected. If they do not,
+consider increasing the timeout, either at the individual
+method call level, e.g. WaitForElement("div", TimeSpan.FromSeconds(15)),
+or via the static TestContext.DefaultWaitTimeout property.
+
+Check count: 1.
+Component render count: 1.
+Total render count across all components: 0.&#xD;
+[xUnit.net 00:00:02.43]       ---- Assert.Equal() Failure: Strings differ&#xD;
+[xUnit.net 00:00:02.43]                  ↓ (pos 0)&#xD;
+[xUnit.net 00:00:02.43]       Expected: "This computer's engine (127.0.0.1:59417)"&#xD;
+[xUnit.net 00:00:02.43]       Actual:   "Pair with the engine on this computer (lo"···&#xD;
+[xUnit.net 00:00:02.43]                  ↑ (pos 0)&#xD;
+[xUnit.net 00:00:02.43]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.43]         /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs(102,0): at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout)&#xD;
+[xUnit.net 00:00:02.43]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Shell\StatusBarSegmentsTests.cs(25,0): at AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_local_engine_button_names_the_engine_that_served_the_page()&#xD;
+[xUnit.net 00:00:02.43]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:02.43]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:02.43]         ----- Inner Stack Trace -----&#xD;
+[xUnit.net 00:00:02.43]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Shell\StatusBarSegmentsTests.cs(25,0): at AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.&lt;&gt;c__DisplayClass0_0.&lt;The_local_engine_button_names_the_engine_that_served_the_page&gt;b__0()&#xD;
+[xUnit.net 00:00:02.43]         /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs(35,0): at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.&lt;&gt;c__DisplayClass6_0.&lt;.ctor&gt;b__0()&#xD;
+[xUnit.net 00:00:02.43]         /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs(297,0): at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.&lt;&gt;c__DisplayClass32_0.&lt;WrapSynchronousChecker&gt;b__0()&#xD;
+[xUnit.net 00:00:02.43]         /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs(226,0): at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync()&#xD;
+[xUnit.net 00:00:02.45]       Bunit.Extensions.WaitForHelpers.WaitForFailedException : The assertion did not pass within the timeout period.
+
+If this test does not fail consistently, the reason may be that
+the wait timeout is too short, and the runtime did not have enough
+time to complete the necessary number of renders of the component under test.
+This can happen on highly utilized or slower hardware, for example.
+
+To determine if this is the cause, compare the check and render count(s) below
+and see if they match what is expected. If they do not,
+consider increasing the timeout, either at the individual
+method call level, e.g. WaitForElement("div", TimeSpan.FromSeconds(15)),
+or via the static TestContext.DefaultWaitTimeout property.
+
+Check count: 1.
+Component render count: 1.
+Total render count across all components: 0.&#xD;
+[xUnit.net 00:00:02.45]       ---- Assert.Single() Failure: The collection was empty&#xD;
+[xUnit.net 00:00:02.45]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.45]         /_/src/bunit/Extensions/WaitForHelpers/RenderedComponentWaitForHelperExtensions.WaitForState.cs(102,0): at Bunit.RenderedComponentWaitForHelperExtensions.WaitForAssertion[TComponent](IRenderedComponent`1 renderedComponent, Action assertion, Nullable`1 timeout)&#xD;
+[xUnit.net 00:00:02.45]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Bridge\ConnectionPickerPinTests.cs(39,0): at AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved()&#xD;
+[xUnit.net 00:00:02.45]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.45]         ----- Inner Stack Trace -----&#xD;
+[xUnit.net 00:00:02.45]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.Tests\Bridge\ConnectionPickerPinTests.cs(39,0): at AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.&lt;&gt;c__DisplayClass1_0.&lt;A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved&gt;b__1()&#xD;
+[xUnit.net 00:00:02.45]         /_/src/bunit/Extensions/WaitForHelpers/WaitForAssertionHelper.cs(35,0): at Bunit.Extensions.WaitForHelpers.WaitForAssertionHelper`1.&lt;&gt;c__DisplayClass6_0.&lt;.ctor&gt;b__0()&#xD;
+[xUnit.net 00:00:02.45]         /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs(297,0): at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.&lt;&gt;c__DisplayClass32_0.&lt;WrapSynchronousChecker&gt;b__0()&#xD;
+[xUnit.net 00:00:02.45]         /_/src/bunit/Extensions/WaitForHelpers/WaitForHelper.cs(226,0): at Bunit.Extensions.WaitForHelpers.WaitForHelper`2.RunCheckAsync()&#xD;
+[xUnit.net 00:00:02.46]   Finished:    AkmlSql.Web.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T15:06:26.9706646+03:00">
+        <Text>[xUnit.net 00:00:01.44]     AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.Add_starts_with_the_page_engines_host_and_port [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T15:06:27.9612096+03:00">
+        <Text>[xUnit.net 00:00:02.43]     AkmlSql.Web.Tests.Shell.StatusBarSegmentsTests.The_local_engine_button_names_the_engine_that_served_the_page [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T15:06:27.9877683+03:00">
+        <Text>[xUnit.net 00:00:02.45]     AkmlSql.Web.Tests.Bridge.ConnectionPickerPinTests.A_page_engine_PIN_prefill_opens_pairing_and_keeps_HTTPS_when_saved [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

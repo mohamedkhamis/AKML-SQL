@@ -56,6 +56,28 @@ namespace AkmlSql.Core.Tests.Config
             catch (UnauthorizedAccessException) { }
         }
 
+        [Theory]
+        [InlineData("")]
+        [InlineData(@"C:\Program Files\AKML SQL\Web")]
+        public void Bridge_web_root_round_trips_with_its_exact_key(string root)
+        {
+            var settings = new AppSettings();
+            settings.Bridge.WebRoot = root;
+            ConfigManager.Save(settings);
+            using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(_configPath));
+            Assert.Equal(root, json.RootElement.GetProperty("bridge").GetProperty("webRoot").GetString());
+            Assert.Equal(root, ConfigManager.Load(_configPath).Bridge.WebRoot);
+        }
+
+        [Fact]
+        public void Missing_bridge_web_root_keeps_page_serving_disabled()
+        {
+            Assert.Equal(string.Empty, new BridgeOptions().WebRoot);
+            Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
+            File.WriteAllText(_configPath, "{\"bridge\":{\"enabled\":true}}");
+            Assert.Equal(string.Empty, ConfigManager.Load(_configPath).Bridge.WebRoot);
+        }
+
         // ── Load ──────────────────────────────────────────────────────────────
 
         [Fact]

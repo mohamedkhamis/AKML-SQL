@@ -99,16 +99,31 @@ public sealed class F1SlugTests
             "F1 anchors with no matching heading (the page would open at the top): " + string.Join(" | ", broken));
     }
 
-    /// <summary>The Options topic doc has one section per page, so each page's F1 lands on its own heading.</summary>
+    /// <summary>Combined pages and their sections share a heading; other pages have their own.</summary>
     [Fact]
     public void EveryOptionsPageHasItsOwnAnchor()
     {
         var pageTopics = PageFiles()
-            .SelectMany(file => PageTopic.Matches(File.ReadAllText(file)).Select(m => m.Groups["topic"].Value))
+            .SelectMany(file => PageTopic.Matches(File.ReadAllText(file)).Select(m =>
+                (Topic: m.Groups["topic"].Value, Source: Path.GetFileName(file))))
             .ToList();
 
-        Assert.All(pageTopics, topic => Assert.NotNull(Split(topic).Anchor));
-        Assert.Equal(pageTopics.Count, pageTopics.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(pageTopics, page => Assert.NotNull(Split(page.Topic).Anchor));
+        // The Options redesign deliberately sends these section pages to the containing page.
+        // Pin the exact aliases so an unrelated duplicate still fails this gate.
+        var shared = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["topics/options#general"] = ["CombinedPages.cs", "GeneralPage.cs"],
+            ["topics/options#queries-history"] = ["CombinedPages.cs", "HistoryPage.cs", "HistoryRestorePage.cs"],
+        };
+        foreach (var group in pageTopics.GroupBy(page => page.Topic, StringComparer.Ordinal))
+        {
+            if (shared.TryGetValue(group.Key, out var sources))
+                Assert.Equal(sources, group.Select(page => page.Source).OrderBy(source => source, StringComparer.Ordinal));
+            else
+                Assert.Single(group);
+        }
+        Assert.All(shared.Keys, topic => Assert.Contains(pageTopics, page => page.Topic == topic));
     }
 
     private static (string Slug, string? Anchor) Split(string topic)

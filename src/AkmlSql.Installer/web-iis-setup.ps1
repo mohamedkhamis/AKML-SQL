@@ -59,14 +59,14 @@ function Log {
 }
 
 # The IIS config COM classes behind WebAdministration (AppHostAdminManager, CLSID {688EEEE5-...})
-# are registered for 64-bit only: in a 32-bit PowerShell every IIS: drive touch dies with
-# 0x80040154 REGDB_E_CLASSNOTREG even when IIS is fully installed. That is exactly what a 32-bit
+# are registered for 64-bit only: in a redirected PowerShell every IIS: drive touch dies with
+# 0x80040154 REGDB_E_CLASSNOTREG even when IIS is fully installed. That is exactly what a redirected
 # installer gets when it launches a bare 'powershell.exe' (file-system redirection hands it the
 # SysWOW64 host), so every install "failed" here while a manually-run 64-bit console succeeded.
 # Relaunch ourselves in the native host and mirror its exit code; 'sysnative' is only visible
-# from 32-bit processes, which is precisely when it is needed.
+# from redirected processes, which is precisely when it is needed.
 if (-not [Environment]::Is64BitProcess -and [Environment]::Is64BitOperatingSystem) {
-    Log '32-bit PowerShell detected -- relaunching in the 64-bit host (IIS config COM classes are 64-bit only).'
+    Log 'redirected PowerShell detected -- relaunching in the 64-bit host (IIS config COM classes are 64-bit only).'
     & (Join-Path $env:WINDIR 'sysnative\WindowsPowerShell\v1.0\powershell.exe') `
         -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath `
         -Port $Port -PhysicalPath $PhysicalPath -Mode $Mode -HttpsPort $HttpsPort
@@ -168,6 +168,7 @@ try {
 
     # MIME types -- IIS doesn't know about .wasm / .blat / .br by default.
     $mimes = @{
+        '.sql'  = 'text/plain'
         '.wasm' = 'application/wasm'
         '.dat'  = 'application/octet-stream'
         '.blat' = 'application/octet-stream'

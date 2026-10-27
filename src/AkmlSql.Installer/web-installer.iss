@@ -1,234 +1,59 @@
-; Spec 021 (web edition) -- M4 installer additions.  Spec 026 (M4 closure) -- two-port split.
-;
-; Included by AkmlSqlSetup.iss (via `#include "web-installer.iss"` placed BEFORE the main
-; [Code] section so the Web_* hook procedures are declared ahead of the event handlers that
-; call them). Adds the Web-edition component group, the install steps (engine binary, web
-; bundle, AppData config, IIS site, TLS cert, firewall rule, Windows service for the engine),
-; and the Web_* hook procedures the main installer invokes.
-;
-; Cross-references: contracts/installer-integration-contract.md + spec.md FR-001..FR-007 + FR-003a.
-;
-; ─── Status ─────────────────────────────────────────────────────────────────
-; Spec 026: the integration (#include + hook calls + ShouldSkipPage) is wired into AkmlSqlSetup.iss,
-; and the single port input is split into an IIS port (default 80) and a bridge port (default 47291)
-; -- they must differ (HTTP.SYS cannot share one port between IIS and the engine's HttpListener).
-; COMPILE-VERIFIED: ISCC compiles AkmlSqlSetup.iss (with this include) cleanly. The first interactive
-; install on a Windows host with IIS + Inno Setup 7 + admin is the RUNTIME acceptance test (spec 026
-; T041) and the verification gate for SC-001..SC-003.
-;
-; IMPLEMENTED (spec 026 US2-installer / US3 / US4): the IIS-not-installed three-path dialog
-; (FR-014..FR-020), the silent-install flags (FR-021..FR-026), the Administrators+SYSTEM ACL on the
-; CommonAppData dir + the 30 s pairing-pin.txt poll + the service-start check (FR-007a, FR-010,
-; FR-011), plus uninstall cleanup of the sslcert binding / web-state dir / registry marker.
-; GENUINELY REMAINING: full FR-025 rollback verification on a real elevated install.
-;
-; ─── Files this script depends on ──────────────────────────────────────────
-;   web-iis-setup.ps1     -- IIS site provisioning + MIME + CSP   (receives the IIS port)
-;   web-tls-setup.ps1     -- self-signed cert + netsh sslcert      (receives the bridge port)
-;   web-firewall.ps1      -- firewall inbound rule                 (receives the bridge port)
-;   web-config-bridge.ps1 -- writes the engine config bridge section (receives the bridge port)
-
-[Types]
-; Spec 026 (M4 closure) L7: no explicit types are defined here OR in AkmlSqlSetup.iss, so ISCC
-; auto-generates the default Full / Compact / Custom. The web components below carry `Types: full`,
-; so the Web edition is SELECTED BY DEFAULT (opt-out) under the default Full type. A user who wants
-; the IDE plugins only must untick it -- Web_Skip and Web_PostInstall both gate on IsWebSelected, so
-; unticking is fully honoured (no IIS site / service / firewall changes). To make it opt-IN instead
-; (matching US1's "tick the Web edition" wording), define an explicit [Types] with a Custom default
-; and drop `Types: full` from the web components.
-
+; Spec 045. The WebHost choice owns provisioning; legacy components are retained only
+; for upgrade compatibility pending the disposable-VM component migration spike.
 [Components]
-; FR-001 -- web-edition component group, independent of the plugin group.
 Name: "web"; Description: "Web edition (browser-based AKML SQL)"; Types: full; Flags: disablenouninstallwarning
-Name: "web\iis"; Description: "Host on local IIS (recommended)"; Types: full
-Name: "web\service"; Description: "Install Windows service for the engine"; Types: full
+Name: "web\iis"; Description: "Legacy IIS selection"; Check: WebLegacyComponent
+Name: "web\service"; Description: "Legacy service selection"; Check: WebLegacyComponent
+
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\Web\_framework"; Components: web
 
 [Files]
-; FR-007 -- copy the web bundle to ProgramFiles. Built by
-; `dotnet publish src/AkmlSql.Web -c Release`; lands under
-; src/AkmlSql.Web/bin/Release/net10.0/publish/wwwroot/. Recursive copy preserves _framework/.
-; The build scripts empty that folder before publishing: publish never deletes, so every old
-; fingerprinted bundle stayed behind and was packed too (215 MB instead of ~43 MB).
-; *.br / *.gz are the publish's pre-compressed copies. Only ASP.NET Core's static-assets
-; middleware serves them; the IIS site set up here has no rule that maps a request to them and
-; always serves the plain files, so they were ~16 MB of the download that is never read.
-Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; \
-    Excludes: "*.br,*.gz"; \
-    DestDir: "{app}\Web"; \
-    Flags: ignoreversion recursesubdirs createallsubdirs; \
-    Components: web
-
-; PowerShell helpers. web-iis-setup.ps1 + web-iis-repair.ps1 are installed PERMANENTLY under
-; {app}\Support so the "Repair AKML SQL Web hosting" Start-menu shortcut can re-provision the IIS
-; site after a first install where IIS was not yet functional (web-iis-setup.ps1 exits 0 even on
-; failure, so such installs silently leave no site). web-tls-setup.ps1 is kept there too, so an
-; operator can re-issue the bridge certificate with names the machine does not own (a public IP or
-; DNS name behind NAT: -ExtraNames ... -RestartEngine). The other helpers are bundled to {tmp} and
-; removed after install.
-Source: "web-iis-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
-; Re-review REV-03: decides and records the site's HTTPS binding (dot-sourced by web-iis-setup.ps1; run
-; with -RemoveOwned at uninstall). Kept in Support so repair and uninstall find it.
-Source: "web-https-binding.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
-Source: "web-iis-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web\iis
+Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; Excludes: "*.br,*.gz"; DestDir: "{app}\Web"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web
+Source: "web-iis-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-https-binding.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-iis-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 Source: "web-tls-setup.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
-Source: "web-firewall.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
-Source: "web-config-bridge.ps1"; DestDir: "{tmp}"; Flags: deleteafterinstall; Components: web
+Source: "web-firewall.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-config-bridge.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-hosting-check.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-iis-remove.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-hosting-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 
 [Run]
-; FR-004 -- web-iis-setup.ps1 receives the IIS port (the static-bundle site).
-; Skipped when "Don't host" was selected (only runs for the web\iis component).
-; {sysnative}: this setup is a 32-bit process, so a bare "powershell.exe" resolves to the SysWOW64
-; host, where WebAdministration's IIS config COM classes are unregistered -- provisioning then dies
-; with 0x80040154 REGDB_E_CLASSNOTREG on EVERY install, even with IIS fully present. The script now
-; also self-relaunches 64-bit, but launching the native host directly keeps the log single-run.
-; FR-004 -- web-tls-setup.ps1 receives the BRIDGE port (the cert is bound to the engine's
-; WebSocket listener). LAN mode only. Review WEB-03: it runs BEFORE the IIS setup below, which binds
-; the same certificate to the site's HTTPS port -- the page that handles pairing tokens and API keys
-; must itself arrive over TLS (and Web Crypto, which wraps them, exists only in a secure context).
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; \
-    StatusMsg: "Generating self-signed TLS certificate..."; \
-    Check: IsLanExposed; \
-    Components: web; \
-    Flags: runhidden
-
-Filename: "{sysnative}\WindowsPowerShell\v1.0\powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode} -HttpsPort {code:GetHttpsPortArg}"; \
-    StatusMsg: "Provisioning IIS site for AKML SQL Web..."; \
-    Components: web\iis; \
-    Flags: runhidden
-
-; Review WEB-03: other computers reach the site on its HTTPS port. LAN mode with IIS hosting only.
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetHttpsPortArg} -Action Add -RuleName ""AKML SQL Web Site (HTTPS)"""; \
-    StatusMsg: "Adding Windows Firewall rule..."; \
-    Check: IsLanExposed; \
-    Components: web\iis; \
-    Flags: runhidden
-
-; FR-004 -- web-firewall.ps1 receives the BRIDGE port. LAN mode only.
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetBridgePort} -Action Add"; \
-    StatusMsg: "Adding Windows Firewall rule..."; \
-    Check: IsLanExposed; \
-    Components: web; \
-    Flags: runhidden
-
-; Windows service for the engine. Uses sc.exe to create AkmlSqlWebEngine.
-; Spec 026 (M4 closure) C2/C3: launch in web mode (--web; the engine's web host reports
-; SERVICE_RUNNING to the SCM) and read the web-edition config under {commonappdata} (machine-wide,
-; readable by the LocalSystem service account) -- NOT {userappdata}\...\AKML SQL\config.json (the
-; per-user IDE-plugin config). web-config-bridge.ps1 writes the bridge section to this same path.
-Filename: "sc.exe"; \
-    Parameters: "create AkmlSqlWebEngine binPath= ""\""{app}\Engine\AkmlSql.Engine.exe\"" --web --config \""{commonappdata}\AKML SQL Web\config.json\"""" start= auto DisplayName= ""AKML SQL Web Engine"""; \
-    StatusMsg: "Installing AKML SQL Web Engine service..."; \
-    Components: web\service; \
-    Flags: runhidden
-
-; Keep the engine running. These three run on EVERY install, not only when the service is first
-; created -- `sc create` above fails harmlessly on an existing service, so anything configured only at
-; creation time is lost the next time the service is deleted and recreated. That is exactly what
-; happened in practice: recovery had been set by hand on one machine, it restarted the engine after a
-; crash, and a later reinstall recreated the service without it. The machine then went back to
-; leaving the engine stopped until someone started it by hand.
-;
-; Gated on the service EXISTING rather than on web\service being ticked, so an upgrade that unticks
-; the component still fixes a service that an earlier install left running.
-;
-; 1. Delayed automatic start: the engine starts shortly after the boot-critical services instead of
-;    racing them. The web page reconnects on its own, so the short delay is invisible in practice.
-Filename: "sc.exe"; \
-    Parameters: "config AkmlSqlWebEngine start= delayed-auto"; \
-    StatusMsg: "Configuring AKML SQL Web Engine service..."; \
-    Check: AkmlWebServiceExists; \
-    Flags: runhidden
-
-; 2. Restart on failure: after 5 s, then 10 s, then every 60 s for as long as it keeps failing. The
-;    SCM repeats the LAST action for every failure after the third, so this never gives up -- which
-;    is the point: a stopped engine is never a state the web edition wants to stay in. The failure
-;    count resets after a day without one.
-Filename: "sc.exe"; \
-    Parameters: "failure AkmlSqlWebEngine reset= 86400 actions= restart/5000/restart/10000/restart/60000"; \
-    Check: AkmlWebServiceExists; \
-    Flags: runhidden
-
-; 3. Apply those actions to non-crash failures as well. Without this flag the SCM only acts when the
-;    process dies without reporting a status; an engine that shuts down and REPORTS a failure exit
-;    code is ignored. The engine now exits non-zero on failure (Program.cs, WebEngineBackgroundService)
-;    precisely so this flag has something to act on.
-Filename: "sc.exe"; \
-    Parameters: "failureflag AkmlSqlWebEngine 1"; \
-    Check: AkmlWebServiceExists; \
-    Flags: runhidden
-
-; Spec 026 (M4 closure) C2/C3 ordering fix: the service is NOT started here. Starting it from
-; [Run] would launch the engine BEFORE web-config-bridge.ps1 writes config.json (that runs later in
-; Web_PostInstall / ssPostInstall) -- the engine would find no enabled bridge and exit, so the
-; bridge never came up on first install. `sc start` now runs in Web_PostInstall, after the config is
-; written AND the shared-state dir is ACL-locked (so pairing-pin.txt is never world-readable). The
-; service is still created with start= auto above, so it also auto-starts on subsequent boots.
-
-[UninstallRun]
-; Reverse the install order: stop service, remove firewall rule, delete netsh sslcert binding,
-; remove IIS site, delete files. %AppData%/AKML SQL/ (IDE-plugin state) is NEVER touched (SC-007).
-Filename: "sc.exe"; Parameters: "stop AkmlSqlWebEngine"; Flags: runhidden; Components: web\service
-Filename: "sc.exe"; Parameters: "delete AkmlSqlWebEngine"; Flags: runhidden; Components: web\service
-
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port {code:GetBridgePort} -Action Remove"; \
-    Flags: runhidden; Components: web
-Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{tmp}\web-firewall.ps1"" -Port 0 -Action Remove -RuleName ""AKML SQL Web Site (HTTPS)"""; \
-    Flags: runhidden; Components: web\iis
-
-; Note: cert + IIS site removal is done in Web_Uninstall (CurUninstallStepChanged / usUninstall)
-; so we can inspect the install-summary file for the cert thumbprint.
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\Support\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; Check: IsLanExposed; Components: web; Flags: runhidden
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-setup.ps1"" -Port {code:GetIisPort} -PhysicalPath ""{app}\Web"" -Mode {code:GetBridgeMode} -HttpsPort {code:GetHttpsPortArg}"; Check: WebHostIsIis; Components: web; Flags: runhidden
+Filename: "sc.exe"; Parameters: "create AkmlSqlWebEngine binPath= ""\""{app}\Engine\AkmlSql.Engine.exe\"" --web --config \""{commonappdata}\AKML SQL Web\config.json\"""" start= auto DisplayName= ""AKML SQL Web Engine"""; Check: IsWebSelected; Components: web; Flags: runhidden
+Filename: "sc.exe"; Parameters: "config AkmlSqlWebEngine start= auto"; Check: AkmlWebServiceExists and WebHostIsService; Flags: runhidden
+Filename: "sc.exe"; Parameters: "config AkmlSqlWebEngine start= delayed-auto"; Check: AkmlWebServiceExists and not WebHostIsService; Flags: runhidden
+Filename: "sc.exe"; Parameters: "failure AkmlSqlWebEngine reset= 86400 actions= restart/5000/restart/10000/restart/60000"; Check: AkmlWebServiceExists; Flags: runhidden
+Filename: "sc.exe"; Parameters: "failureflag AkmlSqlWebEngine 1"; Check: AkmlWebServiceExists; Flags: runhidden
 
 [Icons]
-; Closure follow-up: a Start-menu shortcut to re-provision the IIS site if it is missing (e.g. the
-; first install ran before IIS was fully enabled). web-iis-repair.ps1 self-elevates and reads the
-; port / mode / web-root persisted at install, so no arguments are needed. Only for IIS installs.
-Name: "{group}\Repair AKML SQL Web hosting"; \
-    Filename: "powershell.exe"; \
-    Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-iis-repair.ps1"""; \
-    WorkingDir: "{app}\Support"; \
-    Comment: "Recreate the AKML SQL Web IIS site if it is missing"; \
-    Components: web\iis
+Name: "{group}\Repair AKML SQL Web hosting"; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\Support\web-hosting-repair.ps1"""; WorkingDir: "{app}\Support"; Check: WebHostHasHost; Components: web
 
 [UninstallDelete]
-; Remove the Support helpers dir (scripts installed there) on uninstall.
 Type: filesandordirs; Name: "{app}\Support"
+Type: filesandordirs; Name: "{app}\Web"
 
 [Code]
-{ ─── Integration ───────────────────────────────────────────────────────────
-  AkmlSqlSetup.iss includes this file BEFORE its main [Code] section and calls the named hooks
-  from its event handlers: Web_Init() in InitializeWizard; Web_NextButton(CurPageID) in
-  NextButtonClick; Web_Skip(PageID) in the (newly created) ShouldSkipPage; Web_PostInstall() in
-  CurStepChanged(ssPostInstall); Web_Uninstall() in CurUninstallStepChanged(usUninstall).
-  Pascal Script forbids declaring a procedure twice, so this file owns NONE of those event
-  procedures -- only the Web_* hooks. }
-
-{ ─── State carried across pages ───────────────────────────────────────────── }
-
+const
+  WebHostServiceIdx = 0;
+  WebHostIisIdx = 1;
+  WebHostNoneIdx = 2;
 var
-    WebHostPage: TInputOptionWizardPage;
-    WebNetworkPage: TInputOptionWizardPage;
-    { FR-003: both ports on one page -- Values[0] = IIS site port (default 80),
-      Values[1] = engine bridge port (default 47291). Two pages of one field each was one page too many. }
-    WebPortsPage: TInputQueryWizardPage;
-    InstallSummaryPage: TOutputMsgWizardPage;
-    WebIisPort: Integer;
-    WebBridgePort: Integer;
-    WebHttpsPort: Integer;        { Review WEB-03: the site's HTTPS port in LAN mode (default 443) }
-    PairingPin: String;
-    TlsThumbprint: String;
-    WebSilentActive: Boolean;     { US4: a /WEB_HOST / /WEB_EXPOSURE / /WEB_PORT / /BRIDGE_PORT flag was passed }
-    WebSilentLan: Boolean;        { US4: /WEB_EXPOSURE=LAN }
-    WebSilentDontHost: Boolean;   { US4: /WEB_HOST=NONE }
+  WebHostPage, WebNetworkPage: TInputOptionWizardPage;
+  WebPortsPage: TInputQueryWizardPage;
+  InstallSummaryPage: TOutputMsgWizardPage;
+  WebHostNotice: TNewStaticText;
+  WebHost, Exposure, PreviousHost, PreviousExposure, WebHostingSource: String;
+  WebIisPort, WebBridgePort, WebHttpsPort, PreviousIisPort, PreviousBridgePort: Integer;
+  WebSilentActive, WebHostShown, WebStateAclOk: Boolean;
+  WebReadiness: Integer;
+  WebReadinessReason: String;
+  WebFieldTop: Integer;
+  PairingPin, TlsThumbprint: String;
 
-{ The web edition's persisted settings (HKLM\Software\AKML SQL\Web). The 64-bit installer
-  writes the 64-bit view; installs made by the earlier 32-bit installer wrote the 32-bit view
-  (WOW6432Node). Read the 64-bit view first and fall back, so an upgrade keeps its ports and mode. }
 function WebRegQueryDWord(const Name: String; var Value: Cardinal): Boolean;
 begin
     Result := RegQueryDWordValue(HKLM64, 'Software\AKML SQL\Web', Name, Value)
@@ -241,223 +66,7 @@ begin
               or RegQueryStringValue(HKLM32, 'Software\AKML SQL\Web', Name, Value);
 end;
 
-procedure Web_Init();
-var
-    prevPort: Cardinal;
-    prevMode: String;
-begin
-    { Hosting choice }
-    WebHostPage := CreateInputOptionPage(
-        wpSelectComponents,
-        'Web edition hosting',
-        'Choose how to serve the web bundle.',
-        'Pick how the web edition will be reachable. You can change this by re-running the installer.',
-        True, False);
-    WebHostPage.Add('Host on local IIS (recommended)');
-    WebHostPage.Add('Don''t host -- I''ll serve the files myself');
-    WebHostPage.SelectedValueIndex := 0;
-
-    { Network-exposure choice }
-    WebNetworkPage := CreateInputOptionPage(
-        WebHostPage.ID,
-        'Network exposure',
-        'Decide who can reach the engine bridge.',
-        'Localhost-only keeps the web edition reachable from your machine only. LAN-exposed lets other machines on your network pair via the printed PIN.',
-        True, False);
-    WebNetworkPage.Add('Localhost only -- only my machine can browse');
-    WebNetworkPage.Add('LAN exposed -- other machines on my network can browse');
-    WebNetworkPage.SelectedValueIndex := 0;
-
-    { FR-003: both ports on one page. The IIS port is what the browser opens; the bridge port is
-      the engine's WebSocket listener. They must differ. }
-    WebPortsPage := CreateInputQueryPage(
-        WebNetworkPage.ID,
-        'Ports',
-        'Choose the ports the web edition uses.',
-        'The site port is the address you open in the browser (80 means http://localhost/). ' +
-        'The engine port is where the browser talks to the AKML SQL engine; other computers pairing ' +
-        'with this one need it. In LAN mode other computers open the site over HTTPS on the secure site port. ' +
-        'The ports must all differ. Keep the defaults unless something else uses them.');
-    WebPortsPage.Add('Site port (IIS) -- 80, or 1024 to 65535:', False);
-    WebPortsPage.Add('Engine port -- 1024 to 65535:', False);
-    { Review WEB-03: in LAN mode other computers open the site over HTTPS on this port (with the
-      engine's certificate); http:// stays for this computer. Ignored for a localhost install. }
-    WebPortsPage.Add('Secure site port for other computers (HTTPS, LAN only) -- 443, or 1024 to 65535:', False);
-    WebPortsPage.Values[0] := '80';
-    WebPortsPage.Values[1] := '47291';
-    WebPortsPage.Values[2] := '443';
-
-    { Install-summary page (shown on the post-install success path). Web_PostInstall always
-      replaces this placeholder with the real summary text -- including on a partial-failure
-      path -- so the page can never appear with a heading and an empty body. }
-    InstallSummaryPage := CreateOutputMsgPage(
-        wpInstalling,
-        'Install summary',
-        'AKML SQL Web is ready.',
-        'Writing the install summary... (also saved to "%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt")');
-    { The summary is long multi-line text: give the label the full page surface with word wrap
-      so long lines (URLs, warnings) render instead of overflowing off the page. }
-    InstallSummaryPage.MsgLabel.AutoSize := False;
-    InstallSummaryPage.MsgLabel.WordWrap := True;
-    InstallSummaryPage.MsgLabel.Width := InstallSummaryPage.SurfaceWidth;
-    InstallSummaryPage.MsgLabel.Height := InstallSummaryPage.SurfaceHeight - InstallSummaryPage.MsgLabel.Top;
-
-    { Seed the port globals with the page defaults UNLESS the silent flags already set them
-      (Web_ValidateSilentFlags runs in InitializeSetup, before this). On a REINSTALL, prefer the
-      values persisted by the previous install (Web_PostInstall writes them to HKLM): otherwise a
-      Next-Next upgrade would default back to port 80 and web-iis-setup.ps1 -- which removes and
-      recreates the site -- would silently rebind a working site (e.g. :8083) to :80. }
-    if not WebSilentActive then
-    begin
-        WebIisPort := 80;
-        WebBridgePort := 47291;
-        WebHttpsPort := 443;
-        if WebRegQueryDWord('IisPort', prevPort) and (prevPort > 0) then
-            WebIisPort := prevPort;
-        if WebRegQueryDWord('BridgePort', prevPort) and (prevPort > 0) then
-            WebBridgePort := prevPort;
-        if WebRegQueryDWord('HttpsPort', prevPort) and (prevPort > 0) then
-            WebHttpsPort := prevPort;
-        WebPortsPage.Values[0] := IntToStr(WebIisPort);
-        WebPortsPage.Values[1] := IntToStr(WebBridgePort);
-        WebPortsPage.Values[2] := IntToStr(WebHttpsPort);
-        if WebRegQueryString('IisMode', prevMode) and (prevMode = 'Lan') then
-            WebNetworkPage.SelectedValueIndex := 1;
-    end;
-end;
-
-function GetIisPort(Param: String): String;
-begin
-    Result := IntToStr(WebIisPort);
-end;
-
-function GetBridgePort(Param: String): String;
-begin
-    Result := IntToStr(WebBridgePort);
-end;
-
-function IsWebSelected(): Boolean;
-begin
-    Result := WizardIsComponentSelected('web');
-end;
-
-{ US3 / FR-014: canonical IIS-installed check (PRD §4.2). Stronger than the PowerShell-side
-  Get-Module check -- the registry key + appcmd.exe presence is the definitive signal. }
-function IsIisInstalled(): Boolean;
-begin
-    Result := RegKeyExists(HKLM, 'SOFTWARE\Microsoft\InetStp')
-          and FileExists(ExpandConstant('{sys}\inetsrv\appcmd.exe'));
-end;
-
-{ US4 / FR-021..FR-024 + US3 silent / FR-019. Parse the web silent-install flags into the module
-  globals and validate. Returns False (abort the install) on an invalid combination. No-op
-  (returns True, leaves WebSilentActive false) when no web flags are present -- interactive and
-  plugin-only installs are unaffected. Called from AkmlSqlSetup.iss InitializeSetup. }
-function Web_ValidateSilentFlags(): Boolean;
-var
-    host, exposure, portStr, bridgeStr, httpsStr: String;
-    iisPort, bridgePort, httpsPort: Integer;
-begin
-    Result := True;
-    host := Uppercase(Trim(ExpandConstant('{param:WEB_HOST|}')));
-    exposure := Uppercase(Trim(ExpandConstant('{param:WEB_EXPOSURE|}')));
-    portStr := Trim(ExpandConstant('{param:WEB_PORT|}'));
-    bridgeStr := Trim(ExpandConstant('{param:BRIDGE_PORT|}'));
-    httpsStr := Trim(ExpandConstant('{param:WEB_HTTPS_PORT|}'));
-    WebHttpsPort := 443;
-
-    if (host = '') and (exposure = '') and (portStr = '') and (bridgeStr = '') and (httpsStr = '') then
-        Exit;   { no web flags -> nothing to do }
-
-    WebSilentActive := True;
-    WebSilentLan := (exposure = 'LAN');
-    WebSilentDontHost := (host = 'NONE');
-
-    { FR-023: NONE + LAN is invalid -- LAN exposure needs a hosting endpoint. }
-    if WebSilentDontHost and WebSilentLan then
-    begin
-        Log('ERROR: /WEB_HOST=NONE with /WEB_EXPOSURE=LAN is invalid -- LAN exposure requires a hosting mode (use /WEB_HOST=IIS).');
-        Result := False; Exit;
-    end;
-
-    if portStr = '' then iisPort := 80 else iisPort := StrToIntDef(portStr, -1);
-    if bridgeStr = '' then bridgePort := 47291 else bridgePort := StrToIntDef(bridgeStr, -1);
-    if httpsStr = '' then httpsPort := 443 else httpsPort := StrToIntDef(httpsStr, -1);
-
-    if (iisPort <> 80) and ((iisPort < 1024) or (iisPort > 65535)) then
-    begin
-        Log('ERROR: /WEB_PORT must be 80 or in the range 1024..65535.');
-        Result := False; Exit;
-    end;
-    if (bridgePort < 1024) or (bridgePort > 65535) then
-    begin
-        Log('ERROR: /BRIDGE_PORT must be in the range 1024..65535.');
-        Result := False; Exit;
-    end;
-    { FR-024: ports must differ. }
-    if iisPort = bridgePort then
-    begin
-        Log('ERROR: IIS port and Bridge port must differ.');
-        Result := False; Exit;
-    end;
-    { Review WEB-03: the site's HTTPS port (LAN mode). }
-    if (httpsPort <> 443) and ((httpsPort < 1024) or (httpsPort > 65535)) then
-    begin
-        Log('ERROR: /WEB_HTTPS_PORT must be 443 or in the range 1024..65535.');
-        Result := False; Exit;
-    end;
-    if (httpsPort = iisPort) or (httpsPort = bridgePort) then
-    begin
-        Log('ERROR: /WEB_HTTPS_PORT must differ from the IIS port and the bridge port.');
-        Result := False; Exit;
-    end;
-    WebIisPort := iisPort;
-    WebBridgePort := bridgePort;
-    WebHttpsPort := httpsPort;
-
-    { FR-019: silent + Host on IIS + IIS missing -> abort (no dialog in silent mode). }
-    if WizardSilent and (not WebSilentDontHost) and (not IsIisInstalled()) then
-    begin
-        Log('ERROR: IIS not installed -- pass /WEB_HOST=NONE to skip IIS provisioning.');
-        Result := False; Exit;
-    end;
-end;
-
-function IsLanExposed(): Boolean;
-begin
-    { Spec 026 (M4 closure) L4: only let the flag-derived exposure win in a genuinely silent install
-      (WizardSilent). Previously any single web flag (e.g. /WEB_PORT) set WebSilentActive and made an
-      otherwise-interactive run ignore the LAN/localhost choice on WebNetworkPage. }
-    if WizardSilent then
-        Result := WebSilentLan
-    else
-        Result := IsWebSelected() and (WebNetworkPage.SelectedValueIndex = 1);
-end;
-
-{ Spec 026 (M4 closure) M6: the bridge exposure mode as a string, passed to web-iis-setup.ps1 so it
-  can widen the CSP connect-src for LAN installs. Declared after IsLanExposed (Inno Pascal has no
-  forward references). }
-function GetBridgeMode(Param: String): String;
-begin
-    if IsLanExposed() then
-        Result := 'Lan'
-    else
-        Result := 'Localhost';
-end;
-
-{ Review WEB-03: the HTTPS port handed to web-iis-setup.ps1 -- 0 (no HTTPS binding) for a
-  localhost install, where the browser runs on the site's own computer and http://localhost is
-  already a secure context. }
-function GetHttpsPortArg(Param: String): String;
-begin
-    if IsLanExposed() then
-        Result := IntToStr(WebHttpsPort)
-    else
-        Result := '0';
-end;
-
-{ True when the AkmlSqlWebEngine Windows service exists (any state). Locale-safe: sc.exe query
-  exits 0 when the service is present and 1060 when it is not -- no localized output parsing. }
+{ Locale-safe service presence check, also used while inferring a pre-045 install. }
 function AkmlWebServiceExists(): Boolean;
 var
     resultCode: Integer;
@@ -466,501 +75,586 @@ begin
               and (resultCode = 0);
 end;
 
-{ True when portInt is the bridge port persisted by a PREVIOUS install and that install's
-  AkmlSqlWebEngine service still exists. On a re-install the old engine service is still running
-  while the wizard is up, so it holds the previous bridge port -- that is not a conflict
-  (PrepareToInstall stops the service before files copy, and the new engine rebinds the same
-  port), so the in-use warning must not fire. Every install over an existing web edition hit
-  this false positive. }
-function IsOwnPreviousBridgePort(portInt: Integer): Boolean;
+function ReadHostingText(const Path: String): String;
 var
-    prevPort: Cardinal;
+    Raw: AnsiString;
 begin
-    Result := WebRegQueryDWord('BridgePort', prevPort)
-              and (prevPort > 0)
-              and (Integer(prevPort) = portInt)
-              and AkmlWebServiceExists();
+    Result := '';
+    if LoadStringFromFile(Path, Raw) then Result := Utf8Decode(Raw);
+    StringChangeEx(Result, #65279, '', True);
 end;
 
-{ FR-003 + FR-003a: validate the IIS and bridge ports as the user leaves their pages. Returns
-  False to block Next (range / equal-port errors); a bridge-port-in-use hit only WARNS. }
+procedure ReadPreviousHosting();
+var
+    Host, Exposure, IisMode, AppHost, Config: String;
+    Port: Cardinal;
+    HasPort, ServiceExists: Boolean;
+begin
+    Host := ''; Exposure := ''; IisMode := '';
+    WebRegQueryString('Host', Host);
+    WebRegQueryString('Exposure', Exposure);
+    WebRegQueryString('IisMode', IisMode);
+    HasPort := WebRegQueryDWord('BridgePort', Port);
+    ServiceExists := AkmlWebServiceExists();
+    AppHost := ReadHostingText(ExpandConstant('{sys}\inetsrv\config\applicationHost.config'));
+    Config := ReadHostingText(ExpandConstant('{commonappdata}\AKML SQL Web\config.json'));
+    PreviousHost := InferPreviousHost(Host, HasPort, ServiceExists, AppHost);
+    PreviousExposure := InferPreviousExposure(Exposure, Config, IisMode);
+end;
+
+function ReadIisReadiness(RunProbe: Boolean; var Reason: String): Integer;
+var
+    Present: Boolean;
+    MajorVersion, W3svc, StaticContent, DefaultDocument, HttpErrors, W3svcStart, WasStart: Cardinal;
+    Probe, StateName, PresentText: String;
+    Code: Integer;
+begin
+    Present := RegKeyExists(HKLM64, 'SOFTWARE\Microsoft\InetStp');
+    MajorVersion := 0; W3svc := 0; StaticContent := 0; DefaultDocument := 0; HttpErrors := 0;
+    W3svcStart := 4; WasStart := 4;
+    RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\InetStp', 'MajorVersion', MajorVersion);
+    RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\InetStp\Components', 'W3SVC', W3svc);
+    RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\InetStp\Components', 'StaticContent', StaticContent);
+    RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\InetStp\Components', 'DefaultDocument', DefaultDocument);
+    RegQueryDWordValue(HKLM64, 'SOFTWARE\Microsoft\InetStp\Components', 'HttpErrors', HttpErrors);
+    RegQueryDWordValue(HKLM64, 'SYSTEM\CurrentControlSet\Services\W3SVC', 'Start', W3svcStart);
+    RegQueryDWordValue(HKLM64, 'SYSTEM\CurrentControlSet\Services\WAS', 'Start', WasStart);
+    Probe := 'skipped';
+    Result := IisReadinessFrom(Present, MajorVersion, W3svc, StaticContent, DefaultDocument, HttpErrors, W3svcStart, WasStart, Probe, Reason);
+    if RunProbe and (Result = IisReady) then
+    begin
+        Code := -1;
+        if Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+            '-NoProfile -NonInteractive -Command "Import-Module WebAdministration -ErrorAction Stop; $null = Get-ChildItem IIS:\Sites -ErrorAction Stop"',
+            '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0) then Probe := 'ok'
+        else Probe := 'failed';
+        Result := IisReadinessFrom(Present, MajorVersion, W3svc, StaticContent, DefaultDocument, HttpErrors, W3svcStart, WasStart, Probe, Reason);
+    end;
+    case Result of
+        IisNotEnabled: StateName := 'NotEnabled';
+        IisPartMissing: StateName := 'PartMissing';
+        IisDisabled: StateName := 'Disabled';
+        IisToolsUnavailable: StateName := 'ToolsUnavailable';
+    else StateName := 'Ready';
+    end;
+    if Present then PresentText := 'yes' else PresentText := 'no';
+    Log('IIS readiness: ' + StateName + ' (InetStp=' + PresentText + ', W3SVC=' + IntToStr(W3svc) +
+        ', Parts=' + IntToStr(StaticContent) + '/' + IntToStr(DefaultDocument) + '/' + IntToStr(HttpErrors) +
+        ', W3svcStart=' + IntToStr(W3svcStart) + ', WasStart=' + IntToStr(WasStart) + ', Probe=' + Probe + ') ' + Reason);
+end;
+
+function IsWebSelected(): Boolean;
+begin Result := WizardIsComponentSelected('web'); end;
+
+function WebLegacyComponent(): Boolean;
+begin Result := False; end;
+
+function Web_PsLiteral(Value: String): String;
+begin
+  StringChangeEx(Value, '''', '''''', True);
+  Result := '''' + Value + '''';
+end;
+
+function Web_PowerShell(Code: String; var ExitCode: Integer): Boolean;
+begin
+  ExitCode := -1;
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "' + Code + '"',
+    '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+end;
+
+function Web_Support(Name, Args: String; var ExitCode: Integer): Boolean;
+begin
+  ExitCode := -1;
+  Result := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\Support\') +
+    Name + '" ' + Args, '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
+end;
+
+function WebHostIsService(): Boolean;
+begin Result := WebHost = 'Service'; end;
+
+function WebHostIsIis(): Boolean;
+begin Result := IsWebSelected() and (WebHost = 'IIS'); end;
+
+function WebHostHasHost(): Boolean;
+begin Result := IsWebSelected() and ((WebHost = 'Service') or (WebHost = 'IIS')); end;
+
+function Web_ServiceActive(): Boolean;
+var Code: Integer;
+begin
+  Result := Web_PowerShell('$s=Get-Service AkmlSqlWebEngine -ErrorAction SilentlyContinue; ' +
+    'if ($s -and $s.Status -in @(''Running'',''StartPending'')) {exit 0}; exit 1', Code) and (Code = 0);
+end;
+
+function IsOwnPreviousBridgePort(Port: Integer): Boolean;
+var Previous: Cardinal;
+begin
+  Result := WebRegQueryDWord('BridgePort', Previous) and (Integer(Previous) = Port) and Web_ServiceActive();
+end;
+
+function Web_PortInUse(Port: Integer): Boolean;
+var Code: Integer;
+begin
+  { An unavailable probe is a blocking uncertainty for standalone, not permission to overwrite a listener. }
+  Result := not Web_PowerShell('foreach($h in @(''127.0.0.1'',''::1'')) {' +
+    '$c=New-Object Net.Sockets.TcpClient; try {$t=$c.ConnectAsync($h,' + IntToStr(Port) +
+    '); if($t.Wait(500) -and $c.Connected){exit 9}} catch {} finally {$c.Dispose()}}; exit 0', Code);
+  Result := Result or (Code <> 0);
+end;
+
+function Web_ServicePortError(Port: Integer; Silent: Boolean): String;
+begin
+  Result := '';
+  if (PreviousHost = 'IIS') and (PreviousIisPort = Port) and
+    (Pos('<site name="akmlsqlweb"', Lowercase(ReadHostingText(ExpandConstant('{sys}\inetsrv\config\applicationHost.config')))) > 0) then
+    Result := 'Port ' + IntToStr(Port) + ' belongs to the AKML SQL site in IIS, which this change removes. Choose a different port for the standalone service.'
+  else if (not IsOwnPreviousBridgePort(Port)) and Web_PortInUse(Port) then
+  begin
+    Result := 'Port ' + IntToStr(Port) + ' is already used by another program.';
+    if not Silent then Result := Result + ' Choose another port.';
+  end;
+end;
+
+procedure Web_LoadPorts();
+var P: Cardinal;
+begin
+  WebIisPort := 80; WebBridgePort := 47291; WebHttpsPort := 443;
+  if WebRegQueryDWord('IisPort', P) and (P > 0) then WebIisPort := P;
+  if WebRegQueryDWord('BridgePort', P) and (P > 0) then WebBridgePort := P;
+  if WebRegQueryDWord('HttpsPort', P) and (P > 0) then WebHttpsPort := P;
+  PreviousIisPort := WebIisPort; PreviousBridgePort := WebBridgePort;
+end;
+
+function Web_ValidateSilentFlags(): Boolean;
+var Flag, FlagExposure, Iis, Bridge, Https, Reason, Line, PortError: String;
+  RequestedComponents: String; Ready: Integer; CheckStandalonePort: Boolean;
+begin
+  Result := False;
+  ReadPreviousHosting();
+  Web_LoadPorts();
+  Exposure := PreviousExposure;
+  WebHost := PreviousHost;
+  if WebHost = '' then WebHost := 'Service';
+  Flag := Uppercase(Trim(ExpandConstant('{param:WEB_HOST|}')));
+  FlagExposure := Uppercase(Trim(ExpandConstant('{param:WEB_EXPOSURE|}')));
+  Iis := Trim(ExpandConstant('{param:WEB_PORT|}'));
+  Bridge := Trim(ExpandConstant('{param:BRIDGE_PORT|}'));
+  Https := Trim(ExpandConstant('{param:WEB_HTTPS_PORT|}'));
+  WebSilentActive := WizardSilent or (Flag <> '') or (FlagExposure <> '') or (Iis <> '') or (Bridge <> '') or (Https <> '');
+  if (FlagExposure <> '') and (FlagExposure <> 'LOCALHOST') and (FlagExposure <> 'LAN') then
+  begin Log('ERROR: Unknown /WEB_EXPOSURE value: ' + FlagExposure); Exit; end;
+  if FlagExposure = 'LAN' then Exposure := 'Lan';
+  if FlagExposure = 'LOCALHOST' then Exposure := 'Localhost';
+  if Bridge <> '' then WebBridgePort := StrToIntDef(Bridge, -1);
+  if (WebBridgePort < 1024) or (WebBridgePort > 65535) then
+  begin Log('ERROR: /BRIDGE_PORT must be in the range 1024..65535.'); Exit; end;
+  if WebSilentActive then
+  begin
+    Ready := ReadIisReadiness(SilentNeedsIisProbe(Flag, PreviousHost), Reason);
+    WebHost := ResolveSilentHost(Flag, FlagExposure, PreviousHost, Ready = IisReady,
+      (Iis <> '') or (Https <> ''), Reason,
+      HostingAddress('Service', Exposure, GetComputerNameString(), WebBridgePort, WebIisPort), Line);
+    if Copy(WebHost, 1, 5) = 'Stop:' then begin Log('ERROR: ' + Copy(WebHost, 6, MaxInt)); Exit; end;
+    Log(Line);
+    WebHostingSource := 'previous host';
+    if Flag <> '' then WebHostingSource := '/WEB_HOST';
+    if (Flag = '') and (PreviousHost = 'IIS') and (Ready <> IisReady) then WebHostingSource := 'IIS fallback: ' + Reason;
+  end;
+  if WebHost = 'IIS' then
+  begin
+    if Iis <> '' then WebIisPort := StrToIntDef(Iis, -1);
+    if Https <> '' then WebHttpsPort := StrToIntDef(Https, -1);
+    if ((WebIisPort <> 80) and ((WebIisPort < 1024) or (WebIisPort > 65535))) or
+      ((WebHttpsPort <> 443) and ((WebHttpsPort < 1024) or (WebHttpsPort > 65535))) then
+    begin Log('ERROR: invalid IIS port.'); Exit; end;
+    if (WebIisPort = WebBridgePort) or ((Exposure = 'Lan') and
+      ((WebHttpsPort = WebIisPort) or (WebHttpsPort = WebBridgePort))) then
+    begin Log('ERROR: IIS site and engine ports must differ.'); Exit; end;
+  end;
+  RequestedComponents := Lowercase(ExpandConstant('{param:COMPONENTS|}'));
+  CheckStandalonePort := (RequestedComponents = '') or
+    (Pos(',web,', ',' + RequestedComponents + ',') > 0) or (Pos('web\', RequestedComponents) > 0);
+  if WizardSilent and CheckStandalonePort and (WebHost = 'Service') then
+  begin
+    PortError := Web_ServicePortError(WebBridgePort, True);
+    if PortError <> '' then begin Log('ERROR: ' + PortError); Exit; end;
+  end;
+  Result := True;
+end;
+
+function IsLanExposed(): Boolean;
+begin
+  Result := Exposure = 'Lan';
+  if not WizardSilent then Result := Result and IsWebSelected();
+end;
+
+function GetIisPort(Param: String): String;
+begin Result := IntToStr(WebIisPort); end;
+function GetBridgePort(Param: String): String;
+begin Result := IntToStr(WebBridgePort); end;
+function GetBridgeMode(Param: String): String;
+begin Result := Exposure; end;
+function GetHttpsPortArg(Param: String): String;
+begin if Exposure = 'Lan' then Result := IntToStr(WebHttpsPort) else Result := '0'; end;
+
+function Web_PreviousAddress(): String;
+begin Result := HostingAddress(PreviousHost, PreviousExposure, GetComputerNameString(), PreviousBridgePort, PreviousIisPort); end;
+function Web_CurrentAddress(): String;
+begin Result := HostingAddress(WebHost, Exposure, GetComputerNameString(), WebBridgePort, WebIisPort); end;
+
+function Web_HostAtIndex(Index: Integer): String;
+begin
+  case Index of
+    WebHostIisIdx: Result := 'IIS';
+    WebHostNoneIdx: Result := 'None';
+  else Result := 'Service'; end;
+end;
+
+procedure Web_RefreshNotice();
+var Text, MoveText: String;
+begin
+  Text := WebReadinessReason;
+  if (PreviousHost = 'IIS') and (WebReadiness <> IisReady) then
+    Text := Text + #13#10 + 'IIS is no longer available on this computer, so the web edition will move to the standalone service.';
+  MoveText := AddressChangeNotice(Web_PreviousAddress(),
+    HostingAddress(Web_HostAtIndex(WebHostPage.SelectedValueIndex), Exposure, GetComputerNameString(), WebBridgePort, WebIisPort));
+  if MoveText <> '' then Text := Text + #13#10 + MoveText;
+  WebHostNotice.Caption := Trim(Text);
+end;
+
+procedure WebHostActivate(Page: TWizardPage);
+begin
+  if WizardSilent then Exit;
+  WebReadiness := ReadIisReadiness(True, WebReadinessReason);
+  WebHostPage.CheckListBox.ItemEnabled[WebHostIisIdx] := WebReadiness = IisReady;
+  if not WebHostShown then
+  begin
+    WebHostPage.SelectedValueIndex := WebHostServiceIdx;
+    if PreviousHost = 'IIS' then WebHostPage.SelectedValueIndex := WebHostIisIdx;
+    if PreviousHost = 'None' then WebHostPage.SelectedValueIndex := WebHostNoneIdx;
+    WebHostShown := True;
+  end;
+  if (WebHostPage.SelectedValueIndex = WebHostIisIdx) and (WebReadiness <> IisReady) then
+    WebHostPage.SelectedValueIndex := WebHostServiceIdx;
+  Web_RefreshNotice();
+end;
+
+procedure WebHostClick(Sender: TObject);
+begin
+  if WizardSilent then Exit;
+  Web_RefreshNotice();
+end;
+
+procedure WebPortsActivate(Page: TWizardPage);
+var ShowIis, ShowHttps: Boolean;
+begin
+  if WizardSilent then Exit;
+  ShowIis := WebHost = 'IIS'; ShowHttps := ShowIis and (Exposure = 'Lan');
+  WebPortsPage.Edits[0].Visible := ShowIis;
+  WebPortsPage.PromptLabels[0].Visible := ShowIis;
+  WebPortsPage.Edits[2].Visible := ShowHttps;
+  WebPortsPage.PromptLabels[2].Visible := ShowHttps;
+  if ShowIis then
+  begin
+    WebPortsPage.PromptLabels[1].Caption := 'Engine port -- 1024 to 65535:';
+    WebPortsPage.PromptLabels[1].Top := WebFieldTop + ScaleY(60);
+    WebPortsPage.Edits[1].Top := WebPortsPage.Edits[0].Top + ScaleY(60);
+  end
+  else
+  begin
+    WebPortsPage.PromptLabels[1].Top := WebFieldTop;
+    WebPortsPage.Edits[1].Top := WebPortsPage.Edits[0].Top;
+    if WebHost = 'Service' then
+      WebPortsPage.PromptLabels[1].Caption := 'Web edition port -- 1024 to 65535. The web edition and its engine share this address:'
+    else WebPortsPage.PromptLabels[1].Caption := 'Engine port -- 1024 to 65535:';
+  end;
+end;
+
+procedure Web_Init();
+begin
+  { InitializeSetup already resolved silent state; do not overwrite it with page defaults. }
+  WebStateAclOk := True;
+  WebHostPage := CreateInputOptionPage(wpSelectComponents, 'Web edition hosting',
+    'The standalone service needs nothing else on this computer. Choose IIS if you manage your sites in IIS.',
+    'Choose how to host the web edition:', True, False);
+  WebHostPage.Add('Standalone Windows service (recommended)');
+  WebHostPage.Add('IIS');
+  WebHostPage.Add('Don''t host (files only)');
+  WebHostPage.CheckListBox.Height := ScaleY(82);
+  WebHostNotice := TNewStaticText.Create(WebHostPage);
+  WebHostNotice.Parent := WebHostPage.Surface;
+  WebHostNotice.AutoSize := False; WebHostNotice.WordWrap := True;
+  WebHostNotice.SetBounds(0, WebHostPage.CheckListBox.Top + WebHostPage.CheckListBox.Height + ScaleY(10), WebHostPage.SurfaceWidth, WebHostPage.SurfaceHeight - ScaleY(104));
+  WebHostPage.OnActivate := @WebHostActivate;
+  WebHostPage.CheckListBox.OnClickCheck := @WebHostClick;
+  WebNetworkPage := CreateInputOptionPage(WebHostPage.ID, 'Network exposure', 'Decide who can reach the engine bridge.',
+    'Localhost is limited to this computer. LAN uses HTTPS and a pairing PIN.', True, False);
+  WebNetworkPage.Add('Localhost only -- only my machine can browse');
+  WebNetworkPage.Add('LAN exposed -- other machines on my network can browse');
+  WebNetworkPage.SelectedValueIndex := 0;
+  if Exposure = 'Lan' then WebNetworkPage.SelectedValueIndex := 1;
+  WebPortsPage := CreateInputQueryPage(WebNetworkPage.ID, 'Ports', 'Choose the ports the web edition uses.', 'Keep the previous ports unless another program uses them.');
+  WebPortsPage.Add('Site port (IIS) -- 80, or 1024 to 65535:', False);
+  WebPortsPage.Add('Engine port -- 1024 to 65535:', False);
+  WebPortsPage.Add('Secure site port (IIS LAN only) -- 443, or 1024 to 65535:', False);
+  WebPortsPage.Values[0] := IntToStr(WebIisPort); WebPortsPage.Values[1] := IntToStr(WebBridgePort); WebPortsPage.Values[2] := IntToStr(WebHttpsPort);
+  WebFieldTop := WebPortsPage.PromptLabels[0].Top;
+  WebPortsPage.OnActivate := @WebPortsActivate;
+  InstallSummaryPage := CreateOutputMsgPage(wpInstalling, 'Install summary', 'Review the web hosting result.', 'Writing the install summary...');
+  InstallSummaryPage.MsgLabel.AutoSize := False; InstallSummaryPage.MsgLabel.WordWrap := True;
+  InstallSummaryPage.MsgLabel.Width := InstallSummaryPage.SurfaceWidth;
+  InstallSummaryPage.MsgLabel.Height := InstallSummaryPage.SurfaceHeight - InstallSummaryPage.MsgLabel.Top;
+end;
+
 function Web_NextButton(CurPageID: Integer): Boolean;
-var
-    portStr: String;
-    portInt: Integer;
-    resultCode: Integer;
-    dismResult: Integer;
+var Error: String;
 begin
-    Result := True;
-
-    { Inno (7.x) fires NextButtonClick for custom pages even in /VERYSILENT installs -- the
-      never-shown page Values are still their creation defaults, so the copy-back below
-      (WebIisPort := page value) silently clobbered /WEB_PORT and /BRIDGE_PORT on EVERY silent
-      web install, rebinding the site/bridge to 80/47291 no matter what was passed. Silent
-      validation is Web_ValidateSilentFlags' job (InitializeSetup, FR-019..FR-026); with no
-      pages shown there is nothing to validate or copy here. }
-    if WizardSilent then Exit;
-
-    { US3 / FR-015..FR-018: when leaving the Hosting page with "Host on IIS" selected and IIS is
-      absent, offer the three-path dialog. Yes = enable IIS now (dism); No = switch to Don't host;
-      Cancel = cancel the installer. }
-    if (CurPageID = WebHostPage.ID) and (WebHostPage.SelectedValueIndex = 0) and not IsIisInstalled() then
+  Result := True;
+  if WizardSilent then Exit;
+  if not IsWebSelected() then begin WebHost := PreviousHost; Exit; end;
+  if CurPageID = WebHostPage.ID then
+  begin WebHost := Web_HostAtIndex(WebHostPage.SelectedValueIndex); WebHostingSource := 'page'; end;
+  if CurPageID = WebNetworkPage.ID then
+  begin
+    if WebNetworkPage.SelectedValueIndex = 1 then Exposure := 'Lan' else Exposure := 'Localhost';
+  end;
+  if CurPageID <> WebPortsPage.ID then Exit;
+  WebBridgePort := StrToIntDef(Trim(WebPortsPage.Values[1]), -1);
+  Error := '';
+  if (WebBridgePort < 1024) or (WebBridgePort > 65535) then Error := 'The engine port must be between 1024 and 65535.';
+  if (Error = '') and (WebHost = 'IIS') then
+  begin
+    WebIisPort := StrToIntDef(Trim(WebPortsPage.Values[0]), -1);
+    WebHttpsPort := StrToIntDef(Trim(WebPortsPage.Values[2]), -1);
+    if (WebIisPort <> 80) and ((WebIisPort < 1024) or (WebIisPort > 65535)) then Error := 'The site port must be 80 or between 1024 and 65535.'
+    else if WebIisPort = WebBridgePort then Error := 'The site port and the engine port must be different.'
+    else if Exposure = 'Lan' then
     begin
-        case MsgBox(
-            'IIS is required to host the web edition, but it is not installed on this machine.' + #13#10 + #13#10 +
-            'Yes' + #9 + '= Enable IIS now (runs dism; may take up to a minute)' + #13#10 +
-            'No' + #9 + '= Switch to "Don''t host" (lay the files down; serve them yourself)' + #13#10 +
-            'Cancel' + #9 + '= Cancel the installation',
-            mbConfirmation, MB_YESNOCANCEL) of
-          IDYES:
-            begin
-                { FR-016: best-effort wait notice, then the synchronous dism call. }
-                WizardForm.StatusLabel.Caption := 'Enabling IIS... this can take up to a minute.';
-                WizardForm.Repaint;
-                Exec('dism.exe',
-                    '/online /enable-feature /featurename:IIS-WebServerRole /All /Quiet /NoRestart',
-                    '', SW_HIDE, ewWaitUntilTerminated, dismResult);
-                if not IsIisInstalled() then
-                begin
-                    MsgBox('IIS could not be enabled automatically (dism exit ' + IntToStr(dismResult) + ').' + #13#10 +
-                           'Enable "Internet Information Services" via Windows Features, then re-run -- ' +
-                           'or go Back and choose "Don''t host".', mbError, MB_OK);
-                    Result := False;   { stay on the page }
-                    Exit;
-                end;
-            end;
-          IDNO:
-            WebHostPage.SelectedValueIndex := 1;   { FR-017: switch to "Don't host" }
-          IDCANCEL:
-            begin
-                WizardForm.Close();   { FR-018: cancel the installer }
-                Result := False;
-                Exit;
-            end;
-        end;
+      if (WebHttpsPort <> 443) and ((WebHttpsPort < 1024) or (WebHttpsPort > 65535)) then Error := 'The secure site port must be 443 or between 1024 and 65535.'
+      else if (WebHttpsPort = WebIisPort) or (WebHttpsPort = WebBridgePort) then Error := 'The secure site port must differ from the site port and the engine port.';
     end;
-
-    { Both ports are validated when leaving the ports page: IIS 80 or 1024..65535, engine
-      1024..65535, and they MUST differ (FR-003). }
-    if CurPageID = WebPortsPage.ID then
-    begin
-        portStr := Trim(WebPortsPage.Values[0]);
-        portInt := StrToIntDef(portStr, -1);
-        if (portInt <> 80) and ((portInt < 1024) or (portInt > 65535)) then
-        begin
-            MsgBox('The site port must be 80 or between 1024 and 65535.', mbError, MB_OK);
-            Result := False;
-            Exit;
-        end;
-        WebIisPort := portInt;
-
-        portStr := Trim(WebPortsPage.Values[1]);
-        portInt := StrToIntDef(portStr, -1);
-        if (portInt < 1024) or (portInt > 65535) then
-        begin
-            MsgBox('The engine port must be between 1024 and 65535.', mbError, MB_OK);
-            Result := False;
-            Exit;
-        end;
-        if portInt = WebIisPort then
-        begin
-            MsgBox('The site port and the engine port must be different.' + #13#10 +
-                   'IIS serves the web files; the engine serves WebSocket frames -- ' +
-                   'they cannot share one TCP port.', mbError, MB_OK);
-            Result := False;
-            Exit;
-        end;
-        WebBridgePort := portInt;
-
-        { Review WEB-03: the HTTPS port other computers use in LAN mode. }
-        portStr := Trim(WebPortsPage.Values[2]);
-        portInt := StrToIntDef(portStr, -1);
-        if (portInt <> 443) and ((portInt < 1024) or (portInt > 65535)) then
-        begin
-            MsgBox('The secure site port must be 443 or between 1024 and 65535.', mbError, MB_OK);
-            Result := False;
-            Exit;
-        end;
-        if (portInt = WebIisPort) or (portInt = WebBridgePort) then
-        begin
-            MsgBox('The secure site port must differ from the site port and the engine port.', mbError, MB_OK);
-            Result := False;
-            Exit;
-        end;
-        WebHttpsPort := portInt;
-        portInt := WebBridgePort;   { the in-use check below is for the engine port }
-
-        { FR-003a: non-blocking warning if the bridge port is already in use. Degrades to
-          no-warning when PowerShell / Test-NetConnection is unavailable. Skipped entirely when
-          the port is held by our OWN previous install (IsOwnPreviousBridgePort) -- that case is
-          a normal upgrade, not a conflict. }
-        if not IsOwnPreviousBridgePort(portInt) then
-        begin
-            if Exec('powershell.exe',
-                '-NoProfile -ExecutionPolicy Bypass -Command "if ((Test-NetConnection -ComputerName 127.0.0.1 -Port ' +
-                IntToStr(portInt) + ' -InformationLevel Quiet -WarningAction SilentlyContinue)) { exit 9 } else { exit 0 }"',
-                '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
-            begin
-                if resultCode = 9 then
-                    MsgBox('Port ' + IntToStr(portInt) + ' appears to be in use already.' + #13#10 +
-                           'You can continue (the engine will report a bind error if it really is taken) ' +
-                           'or go back and pick another port.', mbInformation, MB_OK);
-            end;
-        end;
-    end;
+  end;
+  if (Error = '') and (WebHost = 'Service') then Error := Web_ServicePortError(WebBridgePort, False);
+  if Error <> '' then begin MsgBox(Error, mbError, MB_OK); Result := False; Exit; end;
+  if (WebHost <> 'Service') and (not IsOwnPreviousBridgePort(WebBridgePort)) and Web_PortInUse(WebBridgePort) then
+    MsgBox('Port ' + IntToStr(WebBridgePort) + ' appears to be in use already. You can continue or choose another engine port.', mbInformation, MB_OK);
 end;
 
-{ FR-006: hide the web-edition pages when the web component is unticked. Also skip the hosting
-  page when only web\service was selected (no web\iis). }
 function Web_Skip(PageID: Integer): Boolean;
 begin
-    Result := False;
+  Result := (not IsWebSelected()) and ((PageID = WebHostPage.ID) or (PageID = WebNetworkPage.ID) or
+    (PageID = WebPortsPage.ID) or (PageID = InstallSummaryPage.ID));
+  if not IsWebSelected() then WebHost := PreviousHost;
+end;
 
-    if not IsWebSelected() then
-    begin
-        { Spec 026 (M4 closure) M4 / FR-006: also skip the install-summary page for plugin-only
-          installs -- otherwise a user who unticked the Web edition still sees an "AKML SQL Web is
-          ready" page describing a PIN / URL / thumbprint that were never produced. }
-        if (PageID = WebHostPage.ID) or (PageID = WebNetworkPage.ID) or
-           (PageID = WebPortsPage.ID) or (PageID = InstallSummaryPage.ID) then
-            Result := True;
-        Exit;
-    end;
+{ Set an exact protected DACL, including existing explicit entries. Never walk a reparse point. }
+function Web_ExactAclCode(Path: String; PublicTree: Boolean): String;
+begin
+  Result := '$ErrorActionPreference=''Stop''; $root=' + Web_PsLiteral(Path) +
+    '; $todo=New-Object ''Collections.Generic.Stack[string]''; $todo.Push($root); while($todo.Count){' +
+    '$p=$todo.Pop(); $i=Get-Item -LiteralPath $p -Force; if($i.Attributes -band [IO.FileAttributes]::ReparsePoint){throw ''Reparse point refused''}; ' +
+    '$a=$i.GetAccessControl(); $a.SetAccessRuleProtection($true,$false); ' +
+    'foreach($r in @($a.GetAccessRules($true,$false,[Security.Principal.SecurityIdentifier]))){$a.RemoveAccessRuleSpecific($r)}; ' +
+    '$a.SetOwner((New-Object Security.Principal.SecurityIdentifier(''S-1-5-32-544''))); ' +
+    '$f=[Security.AccessControl.InheritanceFlags]::None; if($i.PSIsContainer){$f=[Security.AccessControl.InheritanceFlags]''ContainerInherit,ObjectInherit''}; ' +
+    'foreach($s in @(''S-1-5-32-544'',''S-1-5-18'')){$a.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($s)),''FullControl'',$f,''None'',''Allow'')))}; ';
+  if PublicTree then Result := Result +
+    'foreach($s in @(''S-1-5-32-545'',''S-1-5-32-568'')){$a.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule((New-Object Security.Principal.SecurityIdentifier($s)),''ReadAndExecute'',$f,''None'',''Allow'')))}; ';
+  Result := Result + '$i.SetAccessControl($a); if($i.PSIsContainer){Get-ChildItem -LiteralPath $p -Force | ForEach-Object {$todo.Push($_.FullName)}}}; exit 0';
+end;
 
-    { Web selected but IIS hosting not chosen -> the hosting page is moot. }
-    if (PageID = WebHostPage.ID) and not WizardIsComponentSelected('web\iis') then
-        Result := True;
+function Web_NoReparseTree(Path: String): Boolean;
+var Code: Integer;
+begin
+  Result := Web_PowerShell('$ErrorActionPreference=''Stop''; $todo=New-Object ''Collections.Generic.Stack[string]''; $todo.Push(' +
+    Web_PsLiteral(Path) + '); while($todo.Count){$p=$todo.Pop();$i=Get-Item -LiteralPath $p -Force;' +
+    'if($i.Attributes -band [IO.FileAttributes]::ReparsePoint){exit 1};' +
+    'if($i.PSIsContainer){Get-ChildItem -LiteralPath $p -Force | ForEach-Object {$todo.Push($_.FullName)}}};exit 0', Code) and (Code = 0);
+end;
+
+function Web_LockState(): Boolean;
+var State: String; Code: Integer;
+begin
+  State := ExpandConstant('{commonappdata}\AKML SQL Web');
+  Result := ForceDirectories(State);
+  if Result then Result := Web_NoReparseTree(State);
+  if Result then Result := Exec('icacls.exe', '"' + State + '" /setowner *S-1-5-32-544 /T /C', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+  if Result then Result := Web_PowerShell(Web_ExactAclCode(State, False), Code) and (Code = 0);
+end;
+
+function Web_PrepareFolders(): String;
+var App, Pf64, Pf32, CodeText: String; Code: Integer;
+begin
+  Result := '';
+  if not IsWebSelected() then begin WebHost := PreviousHost; Exit; end;
+  if WebHost = 'Service' then
+  begin
+    Result := Web_ServicePortError(WebBridgePort, WizardSilent);
+    if Result <> '' then Exit;
+  end;
+  App := RemoveBackslashUnlessRoot(ExpandFileName(ExpandConstant('{app}')));
+  Pf64 := AddBackslash(ExpandConstant('{commonpf64}')); Pf32 := AddBackslash(ExpandConstant('{commonpf32}'));
+  if (CompareText(Copy(AddBackslash(App), 1, Length(Pf64)), Pf64) <> 0) and
+    (CompareText(Copy(AddBackslash(App), 1, Length(Pf32)), Pf32) <> 0) then
+  begin
+    CodeText := '$ErrorActionPreference=''Stop''; $p=' + Web_PsLiteral(App) +
+      '; if([IO.Path]::GetPathRoot($p).TrimEnd(''\'') -eq $p.TrimEnd(''\'')){exit 1}; ' +
+      '$i=Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; if($i){' +
+      'if($i.Attributes -band [IO.FileAttributes]::ReparsePoint){exit 1}; ' +
+      'if(@(Get-ChildItem -LiteralPath $p -Force).Count -gt 0){$o=$i.GetAccessControl().GetOwner([Security.Principal.SecurityIdentifier]).Value; ' +
+      'if($o -notin @(''S-1-5-32-544'',''S-1-5-18'',''S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464'')){exit 1}}}; exit 0';
+    if not (Web_PowerShell(CodeText, Code) and (Code = 0)) then
+    begin Result := 'The custom install folder is a reparse point, a volume root, or a non-empty folder with a foreign owner. Choose an administrator-owned folder.'; Exit; end;
+    if not ForceDirectories(App) then begin Result := 'Could not create the custom install folder.'; Exit; end;
+    if not Web_NoReparseTree(App) then begin Result := 'Reparse points in the custom install tree are refused.'; Exit; end;
+    if not (Exec('icacls.exe', '"' + App + '" /setowner *S-1-5-32-544 /T /C', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0)) or
+      not (Web_PowerShell(Web_ExactAclCode(App, True), Code) and (Code = 0)) then
+    begin Result := 'Could not protect the custom install folder. Setup stopped before closing applications.'; Exit; end;
+  end;
+  WebStateAclOk := Web_LockState();
+  if not WebStateAclOk then Log('WARNING: could not protect the AKML SQL Web state folder.');
 end;
 
 procedure Web_PostInstall();
-var
-    summaryPath: String;
-    summary: TStringList;
-    appdata: String;
-    bridgeMode: String;
-    bridgeArgs: String;
-    bridgeResult: Integer;
-    iisPortSuffix: String;
-    httpsPortSuffix: String;
-    pollTries: Integer;
-    svcTries: Integer;
-    aclResult: Integer;
-    aclOk: Boolean;
-    resultCode: Integer;
-    serviceRunning: Boolean;
-    configError: String;
-    rawText: AnsiString;   { LoadStringFromFile requires a var AnsiString in Unicode Inno Setup }
+var State, Args, Root, Url, Reason, Failure, Move, Heading: String;
+  Summary: TStringList; Code, I: Integer; Running, Answered: Boolean;
 begin
-    if not IsWebSelected() then Exit;
-
-    { Resolve the shared-state dir FIRST: the summary-file write on the exception path below
-      needs it, so appdata must be set before any statement that can fail. }
-    appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
-    configError := '';
-    { Honest defaults for the summary on the exception path: no "service failed" / "ACL failed"
-      warnings for steps the guarded block never reached. }
-    serviceRunning := True;
-    aclOk := True;
-
+  if not IsWebSelected() then Exit;
+  State := ExpandConstant('{commonappdata}\AKML SQL Web');
+  ForceDirectories(State);
+  Summary := TStringList.Create;
+  Running := False; Answered := True; Failure := ''; Reason := '';
+  try
     try
-
-    { Spec 026 (M4 closure) M3: persist the bridge port machine-wide so Web_Uninstall (a separate
-      process that never runs the setup wizard) can delete the netsh sslcert binding on the REAL
-      port. Without this WebBridgePort is 0 at uninstall and the binding leaks. }
-    RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'BridgePort', WebBridgePort);
-
-    { Closure follow-up: persist the IIS hosting settings so "Repair AKML SQL Web hosting"
-      (web-iis-repair.ps1) can recreate the site with no arguments after a first install where IIS
-      was not yet functional. Only meaningful when IIS hosting was chosen. }
-    if WizardIsComponentSelected('web\iis') then
+      RegWriteStringValue(HKLM64, 'Software\AKML SQL\Web', 'Host', WebHost);
+      RegWriteStringValue(HKLM64, 'Software\AKML SQL\Web', 'Exposure', Exposure);
+      RegWriteDWordValue(HKLM64, 'Software\AKML SQL\Web', 'BridgePort', WebBridgePort);
+      RegWriteStringValue(HKLM64, 'Software\AKML SQL\Web', 'WebRoot', ExpandConstant('{app}\Web'));
+      if WebHost = 'IIS' then
+      begin
+        RegWriteDWordValue(HKLM64, 'Software\AKML SQL\Web', 'IisPort', WebIisPort);
+        RegWriteDWordValue(HKLM64, 'Software\AKML SQL\Web', 'HttpsPort', WebHttpsPort);
+        RegWriteStringValue(HKLM64, 'Software\AKML SQL\Web', 'IisMode', Exposure);
+      end;
+      Log('Web hosting: ' + WebHost + ' (from ' + WebHostingSource + ')');
+      if (PreviousHost = 'IIS') and (WebHost <> 'IIS') then
+      begin
+        Web_Support('web-iis-remove.ps1', '-AppDir "' + ExpandConstant('{app}') + '"', Code);
+        if FileExists(State + '\iis-remove.failed') then Failure := ReadHostingText(State + '\iis-remove.failed');
+      end;
+      Root := ''; if WebHost = 'Service' then Root := ExpandConstant('{app}\Web');
+      Args := '-Port ' + IntToStr(WebBridgePort) + ' -Mode ' + Exposure + ' -ConfigPath "' + State + '\config.json"';
+      if Root <> '' then Args := Args + ' -WebRoot "' + Root + '"';
+      if not (Web_Support('web-config-bridge.ps1', Args, Code) and (Code = 0)) then Failure := Failure + #13#10 + 'Bridge configuration failed; see install.log.';
+      Args := '-Apply -WebHost ' + WebHost + ' -Exposure ' + Exposure + ' -EnginePort ' + IntToStr(WebBridgePort) + ' -HttpsPort ' + IntToStr(WebHttpsPort);
+      if not (Web_Support('web-firewall.ps1', Args, Code) and (Code = 0)) then Failure := Failure + #13#10 + 'Firewall configuration failed; see install.log.';
+      WebStateAclOk := Web_LockState() and WebStateAclOk;
+      if WebHost = 'Service' then RegWriteDWordValue(HKLM64, 'SYSTEM\CurrentControlSet\Services\AkmlSqlWebEngine', 'DelayedAutostart', 0);
+      Exec('sc.exe', 'start AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, Code);
+      Running := Web_PowerShell('$s=Get-Service AkmlSqlWebEngine -ErrorAction SilentlyContinue; if(!$s){exit 1}; try {$s.WaitForStatus(''Running'',[TimeSpan]::FromSeconds(10)); exit 0} catch {exit 1}', Code) and (Code = 0);
+      PairingPin := ''; TlsThumbprint := '';
+      if Exposure = 'Lan' then
+      begin
+        for I := 1 to 30 do
+        begin
+          PairingPin := Trim(ReadHostingText(State + '\pairing-pin.txt'));
+          if PairingPin <> '' then Break;
+          Sleep(1000);
+        end;
+        TlsThumbprint := Trim(ReadHostingText(State + '\certs\thumbprint.txt'));
+      end;
+      Url := ''; Args := '';
+      if WebHost = 'Service' then
+      begin
+        if Exposure = 'Lan' then Url := 'https://localhost:' + IntToStr(WebBridgePort) + '/'
+        else Url := 'http://127.0.0.1:' + IntToStr(WebBridgePort) + '/';
+        Args := '-ExpectEngine';
+      end
+      else if WebHost = 'IIS' then
+      begin Url := 'http://localhost:' + IntToStr(WebIisPort) + '/'; Args := '-ExpectBundle'; end;
+      if Url <> '' then
+      begin
+        DeleteFile(State + '\hosting-reason.txt');
+        Answered := Web_Support('web-hosting-check.ps1', '-Url "' + Url + '" ' + Args + ' -ReasonPath "' + State + '\hosting-reason.txt"', Code) and (Code = 0);
+        if not Answered then
+        begin
+          Reason := Trim(ReadHostingText(State + '\hosting-reason.txt'));
+          if Code = 2 then Reason := 'answered but is not serving the web edition. ' + Reason;
+        end;
+      end;
+      if WebHost = 'None' then DeleteFile(ExpandConstant('{group}\Repair AKML SQL Web hosting.lnk'));
+    except Failure := Failure + #13#10 + GetExceptionMessage; end;
+    Summary.Add('AKML SQL Web -- install summary'); Summary.Add('================================='); Summary.Add('');
+    Heading := WebHost;
+    if WebHost = 'Service' then Heading := 'Standalone Windows service';
+    if WebHost = 'None' then Heading := 'Not hosted';
+    Summary.Add('Hosting:     ' + Heading);
+    Url := Web_CurrentAddress();
+    if (WebHost = 'Service') and (Exposure = 'Lan') then Url := Url + '  (every computer, this one included)';
+    if (WebHost = 'IIS') and (Exposure = 'Lan') and FileExists(State + '\https-site.ok') then
     begin
-        RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'IisPort', WebIisPort);
-        RegWriteDWordValue(HKLM, 'Software\AKML SQL\Web', 'HttpsPort', WebHttpsPort);
-        RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'WebRoot', ExpandConstant('{app}\Web'));
-        if IsLanExposed() then
-            RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', 'Lan')
-        else
-            RegWriteStringValue(HKLM, 'Software\AKML SQL\Web', 'IisMode', 'Localhost');
-    end;
-
-    { Spec 025 (M3 bridge closure) T008 / FR-027 -- write the Bridge section into the engine
-      config.json so EngineHost.RunAsync starts a WebSocketTransport alongside the named pipe.
-      Receives the BRIDGE port (not the IIS port). Idempotent on re-run. }
-    if IsLanExposed() then
-        bridgeMode := 'Lan'
-    else
-        bridgeMode := 'Localhost';
-    { Spec 026 (M4 closure) C3: write the bridge section to the WEB-edition config under
-      CommonAppData\AKML SQL Web\config.json -- the exact file the AkmlSqlWebEngine service
-      reads (see the sc.exe binPath above). Passing -ConfigPath explicitly keeps the per-user
-      IDE-plugin config (AppData\AKML SQL\config.json) byte-for-byte untouched (FR-006/SC-007). }
-    bridgeArgs := '-NoProfile -ExecutionPolicy Bypass -File "' +
-        ExpandConstant('{tmp}\web-config-bridge.ps1') +
-        '" -Port ' + IntToStr(WebBridgePort) +
-        ' -Mode ' + bridgeMode +
-        ' -ConfigPath "' + ExpandConstant('{commonappdata}\AKML SQL Web\config.json') + '"';
-    Exec('powershell.exe', bridgeArgs, '', SW_HIDE, ewWaitUntilTerminated, bridgeResult);
-
-    { Capture the engine-generated pairing PIN. The engine writes it to
-      %CommonAppData%\AKML SQL Web\pairing-pin.txt on first start (spec 026 FR-008).
-      (appdata was resolved at the top of this procedure.) }
-
-    { T021 / FR-010: lock the shared-state dir to Administrators + SYSTEM only (no standard-user
-      read -- a leaked PIN allows local operator impersonation). SIDs (not names) keep this
-      locale-independent: S-1-5-32-544 = Administrators, S-1-5-18 = SYSTEM. Best-effort. }
-    ForceDirectories(appdata);
-    aclOk := Exec('icacls.exe',
-        '"' + appdata + '" /inheritance:r /grant:r "*S-1-5-32-544:(OI)(CI)F" /grant:r "*S-1-5-18:(OI)(CI)F"',
-        '', SW_HIDE, ewWaitUntilTerminated, aclResult) and (aclResult = 0);
-
-    { Spec 026 (M4 closure) C2/C3 ordering fix: start the service ONLY NOW -- after the config
-      (web-config-bridge.ps1 above) is written and the shared-state dir is locked down. The engine
-      then reads an enabled bridge config and writes pairing-pin.txt into the already-hardened dir.
-      (Moved here from [Run]; the service was created with start= auto so boots still auto-start it.) }
-    if WizardIsComponentSelected('web\service') then
-        Exec('sc.exe', 'start AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, resultCode);
-
-    { T022 / FR-011: poll for the engine-written pairing PIN (LAN mode only) for up to 30 s. }
-    PairingPin := '';
-    if IsLanExposed() then
+      Url := 'https://' + GetComputerNameString() + ':' + IntToStr(WebHttpsPort) + '/';
+      Summary.Add('URL:         ' + Url);
+      Summary.Add('             (on this computer also ' + Web_CurrentAddress() + ')');
+    end
+    else Summary.Add('URL:         ' + Url);
+    if WebHost = 'Service' then Summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (the same address serves the pages)')
+    else Summary.Add('Bridge port: ' + IntToStr(WebBridgePort));
+    if WebHost = 'None' then Summary.Add('Files only: ' + ExpandConstant('{app}\Web'));
+    if Exposure = 'Lan' then
     begin
-        pollTries := 0;
-        while (pollTries < 30) and (PairingPin = '') do
-        begin
-            if FileExists(appdata + '\pairing-pin.txt') then
-                if LoadStringFromFile(appdata + '\pairing-pin.txt', rawText) then
-                    PairingPin := Trim(String(rawText));
-            if PairingPin = '' then
-            begin
-                Sleep(1000);
-                pollTries := pollTries + 1;
-            end;
-        end;
+      Summary.Add('Pairing PIN: ' + PairingPin); Summary.Add('TLS thumb:   ' + TlsThumbprint);
+      Summary.Add('Recommended: trust ' + State + '\certs\bridge.cer on each computer:');
+      Summary.Add('  Install certificate -> Local Machine -> Trusted Root Certification Authorities.');
+      Summary.Add('The firewall rule applies to every network profile, including Public. Use a Private or Domain network.');
+      if PairingPin = '' then Summary.Add('WARNING: no pairing PIN was read. Start the service and re-read pairing-pin.txt.');
+      if (WebHost = 'IIS') and not FileExists(State + '\https-site.ok') then
+        Summary.Add('WARNING: IIS has no verified HTTPS address. ' + ReadHostingText(State + '\https-site.failed'));
     end;
-
-    { Read the cert thumbprint web-tls-setup.ps1 wrote. }
-    if FileExists(appdata + '\certs\thumbprint.txt') then
-    begin
-        if LoadStringFromFile(appdata + '\certs\thumbprint.txt', rawText) then
-            TlsThumbprint := Trim(String(rawText));
-    end;
-
-    { FR-007a: confirm the engine service reached Running within ~10 s (when the service
-      component was installed). The summary flags a non-running service; the install is not failed. }
-    serviceRunning := True;
-    if WizardIsComponentSelected('web\service') then
-    begin
-        serviceRunning := False;
-        svcTries := 0;
-        while (svcTries < 10) and (not serviceRunning) do
-        begin
-            if Exec('powershell.exe',
-                '-NoProfile -ExecutionPolicy Bypass -Command "if ((Get-Service AkmlSqlWebEngine -ErrorAction SilentlyContinue).Status -eq ''Running'') { exit 0 } else { exit 1 }"',
-                '', SW_HIDE, ewWaitUntilTerminated, resultCode) then
-            begin
-                if resultCode = 0 then serviceRunning := True;
-            end;
-            if not serviceRunning then
-            begin
-                Sleep(1000);
-                svcTries := svcTries + 1;
-            end;
-        end;
-    end;
-
-    { The URL line shows the IIS port, omitting ':80'. The separate 'Bridge port' line notes wss/TLS.
-      Review WEB-03 (replacing spec 026 Out-of-scope #3): in LAN mode other computers use the HTTPS
-      address (omitting ':443'). Over plain HTTP anyone on the path could replace the script that
-      handles the pairing token and API keys, and the browser would refuse to store them anyway. }
-    if WebIisPort = 80 then
-        iisPortSuffix := ''
-    else
-        iisPortSuffix := ':' + IntToStr(WebIisPort);
-    if WebHttpsPort = 443 then
-        httpsPortSuffix := ''
-    else
-        httpsPortSuffix := ':' + IntToStr(WebHttpsPort);
-
-    except
-        { A post-install failure must never leave the wizard summary page empty: record it and
-          fall through -- the summary file write + wizard page population below run in EVERY
-          outcome, so the page can no longer show its placeholder as an "empty" summary. }
-        configError := GetExceptionMessage;
-        Log('Web post-install error: ' + configError);
-    end;
-
-    summary := TStringList.Create;
-    try
-        summary.Add('AKML SQL Web -- install summary');
-        summary.Add('=================================');
-        summary.Add('');
-        if IsLanExposed() then
-        begin
-            { Re-review REV-03: an https:// address only when the binding was actually made. }
-            if FileExists(appdata + '\https-site.ok') then
-            begin
-                summary.Add('URL:         https://' + GetComputerNameString() + httpsPortSuffix + '/');
-                summary.Add('             (on this computer also http://localhost' + iisPortSuffix + '/)');
-            end
-            else
-            begin
-                summary.Add('URL:         http://localhost' + iisPortSuffix + '/  (this computer only)');
-                summary.Add('WARNING: other computers have no HTTPS address, so they cannot pair or store AI keys.');
-                if LoadStringFromFile(appdata + '\https-site.failed', rawText) then
-                    summary.Add('  ' + Trim(String(rawText)));
-                summary.Add('  Re-run the installer with another secure site port (or free the port), or run');
-                summary.Add('  "Repair AKML SQL Web hosting" once the certificate exists.');
-            end;
-            summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (wss, TLS)');
-            if PairingPin <> '' then
-                summary.Add('Pairing PIN: ' + PairingPin)
-            else
-                summary.Add('Pairing PIN: not yet generated -- start the AkmlSqlWebEngine service, then re-read this file.');
-            summary.Add('TLS thumb:   ' + TlsThumbprint);
-            summary.Add('');
-            summary.Add('To trust the certificate (it serves the site and the bridge) on a different machine:');
-            summary.Add('  1. Open ' + appdata + '\certs\bridge.cer');
-            summary.Add('  2. Install certificate -> Local Machine -> Trusted Root Certification Authorities');
-        end
-        else
-        begin
-            summary.Add('URL:         http://localhost' + iisPortSuffix + '/');
-            summary.Add('Bridge port: ' + IntToStr(WebBridgePort) + ' (localhost only)');
-            summary.Add('Localhost only -- no LAN access. No pairing PIN required.');
-        end;
-        { FR-007a: flag a service that did not start. }
-        if not serviceRunning then
-        begin
-            summary.Add('');
-            summary.Add('WARNING: the AkmlSqlWebEngine service did not reach Running within 10s.');
-            summary.Add('  Check Event Viewer + ' + appdata + '\install.log, then run: sc start AkmlSqlWebEngine');
-        end;
-        { Spec 026 (M4 closure) M1: flag a failed ACL lockdown -- the PIN / token store may be
-          standard-user readable until the operator hardens the directory manually. }
-        if not aclOk then
-        begin
-            summary.Add('');
-            summary.Add('WARNING: could not lock down ' + appdata + ' (icacls exit ' + IntToStr(aclResult) + ').');
-            summary.Add('  The pairing PIN / token store may be readable by standard users on this host. Re-run:');
-            summary.Add('  icacls "' + appdata + '" /inheritance:r /grant:r *S-1-5-32-544:(OI)(CI)F /grant:r *S-1-5-18:(OI)(CI)F');
-        end;
-        { Spec 026 (M4 closure) follow-up: IIS hosting was selected but web-iis-setup.ps1 did NOT
-          create the site (it exits 0 even on failure -- e.g. the "IIS Management Scripting Tools"
-          Windows feature is missing, so the WebAdministration cmdlets fail with 0x80040154). Without
-          this the summary would claim a browsable URL that doesn't exist. Surface it honestly; the
-          install is still not failed (the bundle is on disk and can be self-hosted). }
-        if WizardIsComponentSelected('web\iis') and (not FileExists(appdata + '\iis-site.ok')) then
-        begin
-            summary.Add('');
-            summary.Add('WARNING: IIS hosting was selected but the AkmlSqlWeb site was NOT created.');
-            summary.Add('  IIS provisioning failed -- see ' + appdata + '\install.log (often the missing');
-            summary.Add('  "IIS Management Scripting Tools" Windows feature). The URL above will not work yet.');
-            summary.Add('  The web bundle is at ' + ExpandConstant('{app}\Web') + ' -- host it yourself');
-            summary.Add('  (e.g. python -m http.server) or enable IIS scripting + re-run the installer.');
-        end;
-        if not WizardIsComponentSelected('web\iis') then
-        begin
-            summary.Add('');
-            summary.Add('Host it yourself: the web files are at  ' + ExpandConstant('{app}\Web'));
-            summary.Add('  Quick local server:  cd "' + ExpandConstant('{app}\Web') + '" && python -m http.server 8080');
-            summary.Add('  Then browse to:      http://localhost:8080/');
-        end;
-        { Exception path: say what failed, in the same file/page the operator will read. }
-        if configError <> '' then
-        begin
-            summary.Add('');
-            summary.Add('WARNING: web post-install configuration failed:');
-            summary.Add('  ' + configError);
-            summary.Add('  The product files are installed; re-run setup to repair the web configuration.');
-        end;
-
-        summaryPath := appdata + '\INSTALL-SUMMARY.txt';
-        { A file-write failure (locked/readonly INSTALL-SUMMARY.txt, missing dir) is logged,
-          never raised -- the wizard page below carries the same text either way. }
-        try
-            summary.SaveToFile(summaryPath);
-        except
-            Log('INSTALL-SUMMARY.txt write failed: ' + GetExceptionMessage);
-        end;
-
-        { Spec 026 (M4 closure) M4 / FR-005: mirror the summary onto the wizard success page.
-          This assignment now runs on EVERY web-selected install (success or partial failure),
-          so the page always shows real content. }
-        InstallSummaryPage.MsgLabel.Caption := summary.Text;
-    finally
-        summary.Free;
-    end;
-
-    { Closure follow-up: beyond the summary file + wizard page, pop a VISIBLE dialog in interactive
-      installs when IIS hosting was requested but the site was not created (IIS not fully ready at
-      install). The summary text is easy to miss; this points the user straight at the repair
-      shortcut instead of leaving them to discover the missing site themselves. Silent installs are
-      unaffected (the summary file still records it). }
-    if (not WizardSilent) and WizardIsComponentSelected('web\iis')
-       and (not FileExists(appdata + '\iis-site.ok')) then
-        MsgBox('AKML SQL Web hosting could not be set up automatically.' + #13#10 + #13#10 +
-               'IIS hosting was selected, but the "AkmlSqlWeb" site could not be created -- usually ' +
-               'because IIS was not fully installed at the time. The web files are in place and the ' +
-               'rest of setup completed.' + #13#10 + #13#10 +
-               'To finish: make sure IIS (with Management Tools) is enabled, then run ' +
-               '"Repair AKML SQL Web hosting" from the Start menu.' + #13#10 + #13#10 +
-               'Details: ' + appdata + '\install.log',
-               mbInformation, MB_OK);
+    if not WebStateAclOk then Summary.Add('WARNING: state-folder owner/ACL protection failed. Re-run setup elevated.');
+    if not Running then Summary.Add('WARNING: the service is not running. Run: sc start AkmlSqlWebEngine');
+    if not Answered then Summary.Add('WARNING: the address did not answer as expected: ' + Reason + ' Run "Repair AKML SQL Web hosting" from the Start menu.');
+    if Trim(Failure) <> '' then Summary.Add('WARNING: ' + Trim(Failure));
+    Move := AddressChangeNotice(Web_PreviousAddress(), Web_CurrentAddress());
+    if Move <> '' then Summary.Add(Move);
+    SaveStringToFile(State + '\INSTALL-SUMMARY.txt', Utf8Encode(Summary.Text), False);
+    InstallSummaryPage.MsgLabel.Caption := Summary.Text;
+  finally Summary.Free; end;
 end;
 
 procedure Web_Uninstall();
-var
-    appdata: String;
-    resultCode: Integer;
-    bridgePort: Cardinal;
+var State, CodeText: String; Port: Cardinal; Code: Integer;
 begin
-    appdata := ExpandConstant('{commonappdata}\AKML SQL Web');
-
-    { Spec 026 (M4 closure) M3: read the bridge port persisted at install. The uninstaller never
-      runs the wizard, so the WebBridgePort global is 0 here -- using it would delete the sslcert
-      binding on port 0 and leak the real one. Fall back to the default if the value is missing. }
-    if not WebRegQueryDWord('BridgePort', bridgePort) then
-        bridgePort := 47291;
-
-    { Remove the netsh sslcert binding on the REAL bridge port (LAN installs only). Done before the
-      DelTree below so certs\thumbprint.txt still exists as the LAN-install marker. }
-    if FileExists(appdata + '\certs\thumbprint.txt') then
-        Exec('netsh.exe', 'http delete sslcert ipport=0.0.0.0:' + IntToStr(bridgePort),
-             '', SW_HIDE, ewWaitUntilTerminated, resultCode);
-
-    { Review WEB-03 / re-review REV-03: the site's HTTPS binding put the certificate on its port, and
-      removing the site does not remove it. Only the binding AKML recorded creating is removed, and only
-      while the port still carries that certificate -- never by port number alone, which could delete
-      another application's binding (it may have held the port all along, or taken it since). }
-    if FileExists(ExpandConstant('{app}\Support\web-https-binding.ps1')) then
-        Exec(ExpandConstant('{sysnative}\WindowsPowerShell\v1.0\powershell.exe'),
-             '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\Support\web-https-binding.ps1') + '" -RemoveOwned',
-             '', SW_HIDE, ewWaitUntilTerminated, resultCode);
-
-    { Remove the IIS site if installed. sysnative: the 32-bit uninstaller must use the native
-      64-bit PowerShell -- WebAdministration's COM classes are unregistered in SysWOW64, so a bare
-      'powershell.exe' here silently failed (0x80040154) and leaked the site on uninstall. }
-    Exec(ExpandConstant('{sysnative}\WindowsPowerShell\v1.0\powershell.exe'),
-         '-NoProfile -ExecutionPolicy Bypass -Command "Import-Module WebAdministration; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue"',
-         '', SW_HIDE, ewWaitUntilTerminated, resultCode);
-
-    { Spec 026 (M4 closure) M3: the web-edition state (PIN, tokens, certs, config, summary) lives
-      under CommonAppData\AKML SQL Web -- the previous code deleted UserAppData\AKML SQL Web, which
-      is empty, leaving the real secrets (incl. pairing-pin.txt + tokens.json) on disk. Ask, then
-      delete the CORRECT directory. }
-    if MsgBox('Delete AKML SQL Web data at "' + appdata + '"?' + #13#10 +
-              '(This includes the pairing PIN, bearer tokens, TLS cert, and config.)',
-              mbConfirmation, MB_YESNO) = IDYES then
-        DelTree(appdata, True, True, True);
-
-    { Clean up the persisted bridge-port marker. }
-    RegDeleteKeyIncludingSubkeys(HKLM64, 'Software\AKML SQL\Web');
-    { Installs made before the 64-bit installer kept their settings in the 32-bit view. }
-    RegDeleteKeyIncludingSubkeys(HKLM32, 'Software\AKML SQL\Web');
-
-    { Never touch %AppData%/AKML SQL/ -- that's IDE plugin state (SC-007). }
+  State := ExpandConstant('{commonappdata}\AKML SQL Web');
+  Exec('sc.exe', 'stop AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Web_PowerShell('$s=Get-Service AkmlSqlWebEngine -ErrorAction SilentlyContinue; if($s){try{$s.WaitForStatus(''Stopped'',[TimeSpan]::FromSeconds(10))}catch{}}', Code);
+  Exec('sc.exe', 'delete AkmlSqlWebEngine', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec('netsh.exe', 'advfirewall firewall delete rule name="AKML SQL Web Engine"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  Exec('netsh.exe', 'advfirewall firewall delete rule name="AKML SQL Web Site (HTTPS)"', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  if not WebRegQueryDWord('BridgePort', Port) then Port := 47291;
+  { Keep a replacement application's certificate binding. }
+  if FileExists(ExpandConstant('{app}\Support\web-https-binding.ps1')) then
+  begin
+    CodeText := '. ' + Web_PsLiteral(ExpandConstant('{app}\Support\web-https-binding.ps1')) +
+      '; $t=(Get-Content -LiteralPath ' + Web_PsLiteral(State + '\certs\thumbprint.txt') + ' -ErrorAction SilentlyContinue | Out-String).Trim(); ' +
+      'if($t -and (Read-BoundHash ' + IntToStr(Port) + ') -eq $t){& netsh http delete sslcert ipport=0.0.0.0:' + IntToStr(Port) + ' | Out-Null}; Remove-OwnedHttpsBinding | Out-Null';
+    Web_PowerShell(CodeText, Code);
+  end;
+  if FileExists(ExpandConstant('{app}\Support\web-iis-remove.ps1')) then
+    Web_Support('web-iis-remove.ps1', '-AppDir "' + ExpandConstant('{app}') + '"', Code)
+  else Web_PowerShell('Import-Module WebAdministration -ErrorAction SilentlyContinue; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue', Code);
+  CodeText := '$t=(Get-Content -LiteralPath ' + Web_PsLiteral(State + '\certs\thumbprint.txt') +
+    ' -ErrorAction SilentlyContinue | Out-String).Trim(); $bindings=& netsh http show sslcert | Out-String; if($LASTEXITCODE -ne 0){exit 0}; ' +
+    'Get-ChildItem Cert:\LocalMachine\My | Where-Object {if($t){$_.Thumbprint -eq $t}else{$_.Subject -eq ''CN=AKML SQL Web Engine''}} | ' +
+    'ForEach-Object {if($bindings -notmatch [regex]::Escape($_.Thumbprint)){Remove-Item -LiteralPath $_.PSPath -Force}}';
+  Web_PowerShell(CodeText, Code);
+  if UninstallSilent then Log('keeping AKML SQL Web data')
+  else if MsgBox('Delete AKML SQL Web data at "' + State + '"? This includes PIN, tokens, certificate and config.', mbConfirmation, MB_YESNO) = IDYES then
+  begin
+    if Web_PowerShell('if((Get-Item -LiteralPath ' + Web_PsLiteral(State) + ' -Force -ErrorAction SilentlyContinue).Attributes -band [IO.FileAttributes]::ReparsePoint){exit 1}; exit 0', Code) and (Code = 0) then
+      DelTree(State, True, True, True);
+  end;
+  RegDeleteKeyIncludingSubkeys(HKLM64, 'Software\AKML SQL\Web');
+  RegDeleteKeyIncludingSubkeys(HKLM32, 'Software\AKML SQL\Web');
 end;
-
-{ Note: the LAN URL uses Inno Setup's built-in GetComputerNameString (no custom helper -- a
-  custom GetComputerNameString would collide with the built-in, and Inno Pascal Script has no
-  forward references, so a differently-named helper would have to precede Web_PostInstall). }
