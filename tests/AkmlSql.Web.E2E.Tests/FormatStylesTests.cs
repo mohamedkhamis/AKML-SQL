@@ -107,11 +107,16 @@ public sealed class FormatStylesTests
         await page.Locator("[data-testid=style-set-active]").ClickAsync();
         await Assertions.Expect(page.Locator("[data-testid=styles-status]")).ToContainTextAsync("now uses");
 
-        await page.GotoAsync(web.Url);
-        await page.WaitForSelectorAsync(".cm-content", new() { Timeout = 60_000 });
+        await page.GotoAsync(web.Url, new() { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.WaitForSelectorAsync("[data-testid='sql-editor'][data-tab-id] .cm-content", new() { Timeout = 60_000 });
         await SetEditorTextAsync(page, "select a, b from t where x = 1;");
         await page.GetByRole(AriaRole.Button, new() { Name = "Format", Exact = true }).ClickAsync();
-        await page.WaitForSelectorAsync("[data-testid='format-complete']", new() { State = WaitForSelectorState.Attached });
+        try { await page.WaitForSelectorAsync("[data-testid='format-complete']", new() { State = WaitForSelectorState.Attached }); }
+        catch (TimeoutException ex)
+        {
+            throw new InvalidOperationException("Format status: " + string.Join("; ", await page.Locator(".akml-editor-status").AllInnerTextsAsync())
+                + "; editor: " + await GetEditorTextAsync(page), ex);
+        }
 
         var formatted = (await GetEditorTextAsync(page)).Replace("\r\n", "\n");
         Assert.Contains("SELECT a\n", formatted);
@@ -253,21 +258,17 @@ public sealed class FormatStylesTests
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static Task SetEditorTextAsync(IPage page, string sql) =>
-        page.EvaluateAsync(
-            @"async (sql) => {
-                const host = document.querySelector('[data-testid=""sql-editor""]');
-                const mod = await import('/js/akml-editor.js');
-                mod.setText(host.id, sql);
-              }", sql);
+    private static async Task SetEditorTextAsync(IPage page, string sql)
+    {
+        var editor = page.Locator("[data-testid='sql-editor'] .cm-content");
+        await editor.ClickAsync();
+        await page.Keyboard.PressAsync("Control+A");
+        await page.Keyboard.InsertTextAsync(sql);
+        await Assertions.Expect(editor).ToHaveTextAsync(sql);
+    }
 
     private static Task<string> GetEditorTextAsync(IPage page) =>
-        page.EvaluateAsync<string>(
-            @"async () => {
-                const host = document.querySelector('[data-testid=""sql-editor""]');
-                const mod = await import('/js/akml-editor.js');
-                return mod.getText(host.id);
-              }");
+        page.Locator("[data-testid='sql-editor'] .cm-content").InnerTextAsync();
 
     private static string RepoRoot()
     {

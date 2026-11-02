@@ -83,9 +83,12 @@ namespace AkmlSql.Core.Tests.Ipc
                 IsBuiltIn = true,
                 HasBuiltIn = true,
                 IsCustomizedBuiltIn = true,
+                SqlPromptJson = "{\"sqlPrompt\":{}}",
+                IsSqlPromptStyle = true,
             };
             var dynamicModel = MessagePackSerializer.Deserialize<object[]>(MessagePackSerializer.Serialize(m));
-            Assert.Equal(7, dynamicModel.Length);
+            // Spec 039 appended SQL Prompt's document and its source flag at keys 7 and 8.
+            Assert.Equal(9, dynamicModel.Length);
             Assert.Equal(true, dynamicModel[0]);
             Assert.Equal("e", dynamicModel[1]);
             Assert.Equal("n", dynamicModel[2]);
@@ -93,6 +96,20 @@ namespace AkmlSql.Core.Tests.Ipc
             Assert.Equal(true, dynamicModel[4]);
             Assert.Equal(true, dynamicModel[5]);
             Assert.Equal(true, dynamicModel[6]);
+            Assert.Equal(m.SqlPromptJson, dynamicModel[7]);
+            Assert.Equal(true, dynamicModel[8]);
+        }
+
+        [Fact]
+        public void A_response_before_SQL_Prompt_keys_keeps_their_defaults()
+        {
+            var legacy = MessagePackSerializer.Serialize(new object[] { true, "e", "n", "{}", true, true, true });
+            var back = MessagePackSerializer.Deserialize<ProfileGetResponse>(legacy);
+            Assert.True(back.Success);
+            Assert.Equal("{}", back.ProfileJson);
+            Assert.True(back.IsCustomizedBuiltIn);
+            Assert.Null(back.SqlPromptJson);
+            Assert.False(back.IsSqlPromptStyle);
         }
     }
 }

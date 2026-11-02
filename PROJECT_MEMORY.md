@@ -893,3 +893,58 @@ existing Core/performance/Site failures, unrun VM rows and owner upgrades. No Gi
 mutation was performed; preserve the existing staged and unstaged work.
 This is source work, not a deployment or PostgreSQL execution verification. Site E2E's
 default fixture targets deployed IIS; use an isolated published preview for source QA.
+
+### Server continuation and runtime verification — 2026-10-27
+
+The owner resumed missing spec 045 tasks and requested SSMS, browser and Windows-service
+testing. T034's strict browser failure is resolved: PageEngine now calls the small native
+`js/akml-page-engine.js` HEAD probe through JS interop. It keeps the existing root/header,
+no-cache, five-second timeout, three-outcome cache and engine precedence. WASM HttpClient
+response disposal produced aborted HEAD requests; the original strict ten-route/network
+test passes with native fetch. No static-responder workaround or relaxed assertion was kept.
+
+`StandaloneQueryCycleTests` covers engine-served auto-connect, SQL Server temp-table state,
+persisted text/connection reload and another query. Its explicit
+`AKML_STANDALONE_VERIFY_URL` branch targets an isolated loopback service. A fresh published
+engine ran as a temporary LocalSystem SCM service: query/reload and real crash recovery
+both passed, and the test service was deleted. Existing installed-service reconnect tests
+also stop/start AkmlSqlWebEngine; it was left Running, with its binary and hosting config
+unchanged. This is runtime verification, not an installer upgrade or LAN/second-PC acceptance.
+
+SSMS 22 is installed here. After the owner reconnected RDP, the installed extension
+(`1.26.1022.701`, active Khamis Style) formatted and executed the read-only tempdb query
+`SELECT 42 AS AKML_CYCLE_RESULT_045`. The result grid and success status were inspected.
+`InstalledSsmsCycleTests` records the pipe, UIA and screenshot evidence. This host's UIA
+editor text includes line numbers; matching its success status by a Name condition avoids
+unrelated accessibility elements. The shell source and installed payload were not changed.
+
+The old Core/Site red assertions were stale: ProfileGet now tests all nine existing keys
+and a legacy seven-key payload; Options help tests pin the exact General/History combined
+page aliases while retaining uniqueness for every other topic. Both full suites pass.
+The browser formatting test now waits for EditorComponent's applied `data-tab-id` before
+typing; that marker is set after JS applies the state, with an interop-ordering unit test.
+Remaining VM spikes, real installer matrices and owner upgrades remain unchecked. Use the
+latest section of spec 045's baseline.md for final counts and any release-gate limitation.
+
+### Installed standalone service repair — 2026-10-27
+
+The owner installed 1.26.1027.1312 and reported that http://localhost:59417/ failed.
+The service was Running, and the registry selected Service/Localhost, but config.json
+still contained the old LAN/TLS bridge without webRoot. The installer log showed
+File.Replace failing with "The path is not of a legal form." Windows PowerShell 5.1
+converts a plain `$null` string argument to an empty string; the configuration writer
+now passes `[System.Management.Automation.Language.NullString]::Value` for the backup
+path. This preserves atomic replacement and makes upgrades/repeated configuration work.
+
+New tests invoke the real script in Windows PowerShell with isolated ProgramData and
+temporary config files, for both a fresh file followed by a rerun and an existing LAN
+config. Both reproduced the failure before the fix and pass afterward. Earlier tests
+covered JSON generation but missed this disk-write path.
+
+The installed Support script was updated, the selected Localhost/WebRoot configuration
+was written, and AkmlSqlWebEngine restarted. Original files are preserved under
+`C:\ProgramData\AKML SQL Web\repair-backup-20261027-142657` with the private state ACL.
+The installed URL returns HTTP 200 and the engine marker. Chromium verified automatic
+connection, SELECT 42 in tempdb, query/connection reload and no failed requests or page
+errors. See spec 045 baseline.md for verification evidence. This repairs the owner's
+reported installation; it does not complete the remaining disposable-VM matrices.

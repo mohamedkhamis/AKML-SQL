@@ -57,7 +57,9 @@ if ($MyInvocation.InvocationName -ne '.') {
         $json = Get-BridgeConfigJson -ExistingJson $raw -Port $Port -Mode $Mode -WebRoot $WebRoot -TlsCertPath $TlsCertPath
         $tempPath = "$ConfigPath.tmp"
         Set-Content -LiteralPath $tempPath -Value $json -Encoding UTF8 -Force
-        if (Test-Path -LiteralPath $ConfigPath) { [IO.File]::Replace($tempPath, $ConfigPath, $null) }
+        # Windows PowerShell converts $null to an empty string for this .NET string argument.
+        # NullString passes an actual null backup path and keeps replacement atomic on upgrades.
+        if (Test-Path -LiteralPath $ConfigPath) { [IO.File]::Replace($tempPath, $ConfigPath, [System.Management.Automation.Language.NullString]::Value) }
         else { [IO.File]::Move($tempPath, $ConfigPath) }
         Add-Content -LiteralPath $logFile -Encoding UTF8 -Value "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [config-bridge] Wrote bridge section (Mode=$Mode, Port=$Port)."
         exit 0

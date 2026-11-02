@@ -122,6 +122,21 @@ public sealed class EditorComponentTabTests : IDisposable
         });
 
     [Fact]
+    public async Task The_DOM_names_a_tab_only_after_its_editor_state_has_been_applied()
+    {
+        var cut = RenderEditor();
+        cut.WaitForAssertion(() => _module.VerifyInvoke("create"));
+        Assert.Null(cut.Find("[data-testid='sql-editor']").GetAttribute("data-tab-id"));
+        var apply = _module.SetupVoid("switchTab", _ => true);
+        var switching = cut.InvokeAsync(() => cut.Instance.SwitchTabAsync("q2", "SELECT 2;", DatabaseKind.SqlServer));
+        cut.WaitForAssertion(() => _module.VerifyInvoke("switchTab"));
+        Assert.Null(cut.Find("[data-testid='sql-editor']").GetAttribute("data-tab-id"));
+        apply.SetVoidResult();
+        await switching;
+        cut.WaitForAssertion(() => Assert.Equal("q2", cut.Find("[data-testid='sql-editor']").GetAttribute("data-tab-id")));
+    }
+
+    [Fact]
     public async Task Switching_hands_the_module_the_tab_its_seed_and_its_language_once()
     {
         var cut = RenderEditor();

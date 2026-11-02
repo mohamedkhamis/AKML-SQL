@@ -2730,3 +2730,45 @@ The 045 deferred list remains:
 - IIS's unchanged all-interface HTTP site binding (I25/SC-009 exception).
 - Firewall profile `any`; choosing a profile remains deferred.
 - Localhost page-origin squatting on multi-session Windows hosts (R6).
+
+### Spec 045 server continuation — 2026-10-27
+
+The owner's later request resumed T034 and requested a full web/service/SSMS cycle.
+The unchanged strict ten-route browser gate now passes. PageEngine's HEAD I/O uses
+`js/akml-page-engine.js` rather than WASM HttpClient, preserving the timeout, header,
+cache and connection rules. T034, its local story gate T054, and public-doc gate T104
+are checked. The Core positional-key and Site combined-help-page assertions were brought
+up to date with their existing contracts; neither production IPC nor shell source changed.
+
+The fresh engine/web publish passed a real temporary LocalSystem service cycle: automatic
+connection, SQL Server queries with persistent temp-table state, saved-tab reload, SCM
+restart after killing only that service's process, and SQL after recovery. The temporary
+service was removed. Installed-service reconnect tests performed ordinary stop/start;
+the installed service remains Running and its payload/configuration were not replaced.
+
+The owner reconnected RDP for SSMS acceptance. The installed extension formatted a scratch
+query through its private engine/pipe and SSMS executed SELECT 42 in tempdb. The screenshot's
+grid and success status were inspected. No application data or database objects were changed
+beyond session-local temp tables and ordinary query-history records.
+
+The source unit/build/installer checks and final release gate are recorded separately in
+`specs/045-web-standalone-hosting/baseline.md`. VM-only installer/upgrade/uninstall/LAN rows
+and the two owner upgrades remain unrun; the existing prohibition on running product
+installer smoke tests on the owner's server still applies. No Git mutation was performed.
+
+### Spec 045 installed configuration replacement fix — 2026-10-27
+
+The owner's new standalone install left its previous LAN config active: Windows
+PowerShell 5.1 converted File.Replace's `$null` backup path to an empty string and
+rejected the write. Setup had already recorded Service/Localhost, so the summary's
+HTTP URL disagreed with the running HTTPS bridge, which also lacked webRoot.
+The writer now uses NullString.Value. Two real-script regression cases cover fresh
+creation followed by a rerun and replacement of an existing config, preserving other
+settings; both failed before and pass after. Installer helper suite: 129 passed.
+
+After backing up the owner's config and Support script, the fixed helper was applied
+to the installed copy, its selected settings written and its service restarted.
+http://localhost:59417/ now serves the installed 1.26.1027.1312 app. A fresh Chromium
+context auto-connected, executed SELECT 42, restored query/connection after reload,
+and reported no page/request errors. No product installer was run by this repair.
+Full evidence is in spec 045 baseline.md; remaining VM acceptance stays open.

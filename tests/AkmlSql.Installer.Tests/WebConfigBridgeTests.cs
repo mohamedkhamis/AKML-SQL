@@ -5,6 +5,45 @@ namespace AkmlSql.Installer.Tests;
 
 public sealed class WebConfigBridgeTests
 {
+    [SkippableTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Windows_PowerShell_entry_point_creates_and_replaces_config(bool existingConfig)
+    {
+        Skip.IfNot(Environment.IsPrivilegedProcess, "The configuration script requires administrator rights; all test state is isolated.");
+        var directory = Path.Combine(Path.GetTempPath(), "akml-config-write-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        var configPath = Path.Combine(directory, "config.json");
+        var webRoot = Path.Combine(directory, "Public Web");
+        try
+        {
+            if (existingConfig)
+                File.WriteAllText(configPath, "{\"custom\":{\"keep\":17},\"bridge\":{\"bindAddress\":\"0.0.0.0\",\"port\":47291}}");
+
+            // Exercise the real disk write under the host used by setup, including a second run.
+            // HostingTestTools isolates ProgramData; this never runs the product installer.
+            foreach (var port in new[] { 59417, 59419 })
+            {
+                var result = HostingTestTools.Run(
+                    Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
+                    "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
+                    HostingTestTools.Script("web-config-bridge.ps1"), "-Port", port.ToString(),
+                    "-Mode", "Localhost", "-WebRoot", webRoot, "-ConfigPath", configPath);
+                Assert.True(result.ExitCode == 0, result.Output);
+                using var document = JsonDocument.Parse(File.ReadAllText(configPath));
+                var bridge = document.RootElement.GetProperty("bridge");
+                Assert.Equal(port, bridge.GetProperty("port").GetInt32());
+                Assert.Equal("127.0.0.1", bridge.GetProperty("bindAddress").GetString());
+                Assert.Equal(webRoot, bridge.GetProperty("webRoot").GetString());
+                Assert.Equal("", bridge.GetProperty("tlsCertPath").GetString());
+                if (existingConfig)
+                    Assert.Equal(17, document.RootElement.GetProperty("custom").GetProperty("keep").GetInt32());
+                Assert.False(File.Exists(configPath + ".tmp"));
+            }
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
     [Theory]
     [InlineData("Localhost", "127.0.0.1", @"C:\Program Files\AKML SQL\Web")]
     [InlineData("Lan", "0.0.0.0", "")]

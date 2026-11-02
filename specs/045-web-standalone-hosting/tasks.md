@@ -19,6 +19,12 @@ readiness notice, the existing generic ToolsUnavailable guidance pending S4, and
 custom-folder owner check pending S7. These are provisional choices, not passed spikes.
 VM experiments/acceptance and owner upgrades remain unchecked; do not run them on this host.
 
+**Latest owner continuation (2026-10-26).** The owner asked to resume missing tasks and test
+SSMS, web and the Windows service on this server. T034 has now been resumed and fixed;
+the earlier Claude-only deferral above is historical. Installer smoke tests and destructive
+machine rows still require disposable VMs. Local runtime tests use an isolated temporary
+service and leave the installed service and IIS configuration in place.
+
 **Spikes and machine rows are recording tasks, not TDD.** A spike (S1–S7, research.md § Spikes)
 ends when its outcome and the chosen branch are recorded in research.md. A disposable-machine row
 (quickstart §3) ends when its result is recorded in `baseline.md`. The task is done when the
@@ -454,7 +460,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
       `src/AkmlSql.Web`, bin and obj excluded.
   - **`tests/AkmlSql.Web.E2E.Tests/Harness/SandboxEngine.cs`** gains a `webRoot` option, written
     into its `config.json`.
-- [ ] T034 [US1] Create `tests/AkmlSql.Web.E2E.Tests/EngineServedWebTests.cs`. It runs serially, on Debug engine and web builds.
+- [X] T034 [US1] Create `tests/AkmlSql.Web.E2E.Tests/EngineServedWebTests.cs`. It runs serially, on Debug engine and web builds.
   - A fresh browser context at the sandbox engine's address goes Live with no pairing and no
     typing (US1-4).
   - Every route of quickstart 3.4 reloads (SC-005).
@@ -621,7 +627,7 @@ answers again. Quickstart rows 3.1–3.5, 3.12 and 3.13, plus gates 1.1, 1.2, 1.
     - if that fails, return an error.
 - [X] T052 [P] [US1] In `tests/AkmlSql.Web.E2E.Tests/Harness/InstalledEngine.cs`, make `InstalledEngine.SiteUrl` take the first whitespace-delimited token after `URL:`. The LAN summary line (US4), `https://PC:47291/  (every computer, this one included)`, then parses.
 - [ ] T053 [US1] Spike S6 on VM A: run `sc qc AkmlSqlWebEngine` after each `sc config` and after T049's write. Record whether `start= auto` clears `DelayedAutostart` in `specs/045-web-standalone-hosting/research.md` § Spikes.
-- [ ] T054 [US1] Run quickstart gates 1.1, 1.2, 1.3 and 1.5 (Debug builds first, E2E serially), plus T035 and an ISCC compile. Record the results in `specs/045-web-standalone-hosting/baseline.md`.
+- [X] T054 [US1] Run quickstart gates 1.1, 1.2, 1.3 and 1.5 (Debug builds first, E2E serially), plus T035 and an ISCC compile. Record the results in `specs/045-web-standalone-hosting/baseline.md`.
 - [ ] T055 [US1] On VM A and VM C snapshot 1, run quickstart rows 3.1, 3.2, 3.3, 3.4, 3.5, 3.12 and 3.13. Record each result in `specs/045-web-standalone-hosting/baseline.md`; S2's visual result goes with 3.1.
 
 **Checkpoint**: the MVP works.
@@ -1018,13 +1024,17 @@ Each document covers these points:
 - [X] T101 [P] Update `doc/WEB/00-INDEX.md` and `doc/WEB/M3-websocket-transport.md` with the points above.
 - [X] T102 [P] Update `doc/WEB/quickstart-m3.md` and `doc/WEB/quickstart-m4.md` with the points above.
 - [X] T103 [P] Add a note to `doc/WEB/M4-iis-installer.md` that this feature supersedes it. Add the standalone origin to `doc/WEB/ai-local-provider-cors.md`.
-- [ ] T104 [P] Update `doc/topics/browser-setup.md` (public docs) with the points above, then run `dotnet test tests/AkmlSql.Site.Tests` and keep it green.
+- [X] T104 [P] Update `doc/topics/browser-setup.md` (public docs) with the points above, then run `dotnet test tests/AkmlSql.Site.Tests` and keep it green.
 - [X] T105 [P] Update `CLAUDE.md`.
   - **Installer Details**: the hosting choices and the silent flags.
   - **Key Paths**: the registry values.
   - **The latest-work list**: a spec 045 entry.
 - [X] T106 [P] Add the 045 entry to `doc/progress.md`: the per-phase table and the spike outcomes, and the 045 deferred list taken from research.md § Found, not fixed.
 - [ ] T107 Run the full gate, quickstart 1.6 and 1.7, and record it in `specs/045-web-standalone-hosting/baseline.md`.
+  - 2026-10-27: all commands executed, including the passing historical timed case,
+    final full build/ISCC, browser follow-up and actual service/SSMS cycles. Left open:
+    the strict comparison exits 1 for two visual-reference cases whose local ignored
+    pack is absent. No newly failing cases or missing cases; no allow-list was used.
   - Builds: the solution restore and Release build, then the Debug builds.
   - Suites: the full engine, web, Core and installer (`Category!=InstallerSmoke`) suites; the E2E
     suite, serially; and ISCC.
