@@ -127,6 +127,9 @@
     {
         var filtering = _filter.Length > 0;
         <ul class="akml-schema-tree-list" data-testid="schema-tree-root">
+            @* The folders' open state is not yet exposed to assistive technology: aria-expanded is not allowed on a list item, and
+               the tree roles it needs (tree / treeitem, keyboard navigation) are a change of their own — review of the 2026-11-03
+               scan, W7. *@
             <li class="akml-schema-tree-node akml-schema-tree-db akml-schema-tree-folder" @onclick="@(() => Toggle(DbPath))">
                 <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(DbPath))" Size="12" Class="akml-schema-chevron" /></span>
                 <Icon Name="database" Size="14" Class="akml-schema-icon akml-schema-icon--database" />
@@ -739,6 +742,9 @@
         var qualifier = Kind == DatabaseKind.PostgreSql
             ? AkmlSql.Core.Text.PgIdentifierQuoting.QualifiedName(schemaName, obj.ObjectName)
             : $"[{schemaName}].[{obj.ObjectName}]";
+        // UI scan 2026-11-03 (W7): the row reads "dbo.Customers" as SSMS's Object Explorer does; the bracketed form stays
+        // the qualifier that Insert name / Copy name produce. PostgreSQL's qualified name is already written plainly.
+        var label = Kind == DatabaseKind.PostgreSql ? qualifier : $"{schemaName}.{obj.ObjectName}";
         var hasColumns = obj.Columns is { Length: > 0 };
         builder.OpenElement(0, "li");
         var selected = _selectedPath == objPath;
@@ -776,7 +782,7 @@
 
         builder.OpenElement(16, "span");
         builder.AddAttribute(17, "class", "akml-schema-tree-label");
-        builder.AddContent(18, qualifier);
+        builder.AddContent(18, label);
         builder.CloseElement();
         builder.CloseElement();
 

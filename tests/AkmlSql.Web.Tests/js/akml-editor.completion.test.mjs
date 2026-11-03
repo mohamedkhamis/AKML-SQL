@@ -13,6 +13,7 @@ import {
     typedTriggerCharacters,
     documentationLink,
     quotedReplaceSpan,
+    completionWanted,
 } from '../../../src/AkmlSql.Web/wwwroot/js/akml-editor.js';
 
 test('only the postgresql kind is PostgreSQL, whatever its case', () => {
@@ -149,4 +150,37 @@ test('a plain insert, or a replaced word that did not open with a quote, is neve
     assert.deepEqual(quotedReplaceSpan('SELECT * FROM aud"', 14, 17, '"Audit Log"'), { from: 14, to: 17 }, 'the typed word has no opening quote');
     assert.deepEqual(quotedReplaceSpan(undefined, 0, 0, '"x"'), { from: 0, to: 0 });
     assert.deepEqual(quotedReplaceSpan('"a"', 0, 2, undefined), { from: 0, to: 2 });
+});
+
+// UI scan 2026-11-03, T1: a popup the editor opened itself (after `WHERE `, `AND `, a dot) is an explicit CodeMirror
+// session, and CodeMirror hands that explicit flag to every re-query while the user keeps typing. The source must not
+// read it as "answer anyway": after `)` it listed the table's columns with the first one selected, and Enter, meant to
+// start the next line, inserted `(o.CustomerID = 1)OrderID`.
+test('a typed word, a clause word or a dot wants a completion, whatever the explicit flag says', () => {
+    assert.equal(completionWanted('sqlserver', 'select * from dbo.Cus', { hasWord: true, explicit: false, explicitAt: -1, pos: 21 }), true);
+    assert.equal(completionWanted('sqlserver', 'select * from ', { hasWord: false, explicit: false, explicitAt: -1, pos: 14 }), true);
+    assert.equal(completionWanted('sqlserver', 'where c.', { hasWord: false, explicit: true, explicitAt: 0, pos: 8 }), true);
+    assert.equal(completionWanted('postgresql', 'select n.amount::', { hasWord: false, explicit: true, explicitAt: 0, pos: 17 }), true);
+});
+
+test('an inherited explicit flag does not open the list after a closing parenthesis', () => {
+    const line = 'select count(*) from dbo.Orders o where (o.CustomerID = 1)';
+    assert.equal(completionWanted('sqlserver', line, { hasWord: false, explicit: true, explicitAt: 40, pos: line.length }), false);
+    const pg = 'select * from akml n where n.flag = true and (n.amount > 1)';
+    assert.equal(completionWanted('postgresql', pg, { hasWord: false, explicit: true, explicitAt: 45, pos: pg.length }), false);
+});
+
+test('an inherited explicit flag does not open the list after a space that follows a plain identifier', () => {
+    const line = 'select * from dbo.Customers c where c.Country ';
+    assert.equal(completionWanted('sqlserver', line, { hasWord: false, explicit: true, explicitAt: 36, pos: line.length }), false);
+});
+
+test('an explicit request made at this very position is answered (Ctrl+Space after a parenthesis)', () => {
+    const line = 'select count(*) from dbo.Orders o where (o.CustomerID = 1)';
+    assert.equal(completionWanted('sqlserver', line, { hasWord: false, explicit: true, explicitAt: line.length, pos: line.length }), true);
+});
+
+test('a semicolon ends the statement for every kind of request', () => {
+    assert.equal(completionWanted('sqlserver', 'select 1;', { hasWord: false, explicit: true, explicitAt: 9, pos: 9 }), false);
+    assert.equal(completionWanted('postgresql', 'select 1;', { hasWord: false, explicit: false, explicitAt: -1, pos: 9 }), false);
 });

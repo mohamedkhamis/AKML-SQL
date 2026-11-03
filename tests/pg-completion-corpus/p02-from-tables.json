@@ -9,16 +9,16 @@
         "orders",
         "products",
         "vw_customer_orders",
-        "mv_product_sales",
-        "orders_order_id_seq"
+        "mv_product_sales"
       ],
       "mustNotContain": [
         "archive_orders",
-        "customer_id"
+        "customer_id",
+        "orders_order_id_seq"
       ],
       "minCount": 10
     },
-    "note": "Tables, views, materialized views and sequences; no columns, no procedures"
+    "note": "Tables, views, materialized views and sequences; no columns, no procedures A sequence is not offered after FROM (UI scan 2026-11-03, W9)."
   },
   {
     "id": "PGFRM-002",

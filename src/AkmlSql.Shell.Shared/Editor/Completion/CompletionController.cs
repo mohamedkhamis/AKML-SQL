@@ -1133,6 +1133,17 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
                 // Replace word before dot with the selected item
                 var span = new Span(start, dotPos - start);
+
+                // UI scan 2026-11-03 (S1): when the word before the dot is the highlighted item's OWNER
+                // ("dbo" with dbo.Orders highlighted — e.g. no schema item in the list), the user is
+                // qualifying, not choosing: leave "dbo." as typed instead of making it "dbo.Orders.".
+                // The "." re-trigger that follows lists the schema's objects as usual.
+                if (!item.ShouldCommitBeforeDot(snapshot.GetText(span)))
+                {
+                    _adornment.Hide();
+                    return;
+                }
+
                 _textView.TextBuffer.Replace(span, item.InsertText);
 
                 _adornment.Hide();

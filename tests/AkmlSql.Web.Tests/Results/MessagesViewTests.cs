@@ -142,4 +142,78 @@ public sealed class MessagesViewTests : IDisposable
         Assert.Contains("No result was received", cut.Find("[data-testid=messages-line-0]").TextContent);
         Assert.DoesNotContain(SqlMessageText.CommandsCompleted, cut.Markup);
     }
+
+    // ── UI scan 2026-11-03 (W2): a run the user cancelled says so, as SSMS does, instead of a bare completion time ──
+
+    private static string[] Lines(IRenderedComponent<MessagesView> cut) =>
+        cut.FindAll("[data-testid^='messages-line-']").Select(e => e.TextContent.Trim()).ToArray();
+
+    private static ExecuteMessageDto SystemLine(string text) => new() { Kind = ExecuteMessageKind.System, Text = text };
+
+    [Fact]
+    public void A_cancelled_run_says_it_was_cancelled_by_the_user()
+    {
+        // The engine's reply to a Cancel that reached the running statement: no message, no error, just the status.
+        var cancelled = new ExecuteQueryResult { Status = ExecuteStatus.Cancelled, CompletedAtUnixMs = Completed.ToUnixTimeMilliseconds() };
+
+        var cut = Render(cancelled);
+
+        Assert.Equal(new[] { "Query was cancelled by user." }, Lines(cut));
+        Assert.Empty(cut.FindAll("[data-testid^='messages-error-']"));   // not an error of the script
+        Assert.NotNull(cut.Find("[data-testid=messages-completion]"));
+    }
+
+    [Fact]
+    public void On_SQL_Server_the_cancelled_line_comes_after_everything_that_ran_before_the_cancel()
+    {
+        // A GO n batch cancelled during its first run: the loop's opening line is the last thing the server-side run said.
+        var cancelled = new ExecuteQueryResult { Status = ExecuteStatus.Cancelled, MessageDetails = new[] { SystemLine("Beginning execution loop") } };
+
+        var cut = Render(cancelled);
+
+        Assert.Equal(new[] { "Beginning execution loop", "Query was cancelled by user." }, Lines(cut));
+    }
+
+    [Fact]
+    public void On_PostgreSQL_the_cancelled_line_comes_before_the_engines_closing_summary()
+    {
+        // select pg_sleep(6); select 1; cancelled during the sleep: the engine closes the run with how many statements ran.
+        var cancelled = new ExecuteQueryResult { Status = ExecuteStatus.Cancelled, MessageDetails = new[] { SystemLine("0 of 2 statements ran.") } };
+
+        var cut = _ctx.Render<MessagesView>(p => p.Add(x => x.Result, cancelled).Add(x => x.Kind, AkmlSql.Core.DatabaseKind.PostgreSql));
+
+        Assert.Equal(new[] { "Query was cancelled by user.", "0 of 2 statements ran." }, Lines(cut));
+    }
+
+    [Fact]
+    public void On_PostgreSQL_what_ran_before_the_cancel_stays_before_the_cancelled_line()
+    {
+        var cancelled = new ExecuteQueryResult
+        {
+            Status = ExecuteStatus.Cancelled,
+            MessageDetails = new[]
+            {
+                new ExecuteMessageDto { Kind = ExecuteMessageKind.RowCount, RowCount = 1, Text = "SELECT 1" },
+                SystemLine("1 of 2 statements ran."),
+                SystemLine("Earlier statements stay applied unless they ran inside an explicit transaction."),
+            },
+        };
+
+        var cut = _ctx.Render<MessagesView>(p => p.Add(x => x.Result, cancelled).Add(x => x.Kind, AkmlSql.Core.DatabaseKind.PostgreSql));
+
+        Assert.Equal(
+            new[] { "SELECT 1", "Query was cancelled by user.", "1 of 2 statements ran.", "Earlier statements stay applied unless they ran inside an explicit transaction." },
+            Lines(cut));
+    }
+
+    [Fact]
+    public void A_cancel_that_came_before_the_query_ran_says_cancelled_once()
+    {
+        // The engine's reply to a Cancel of a query still queued behind another run (ErrorMessage "Query cancelled.").
+        var queued = new ExecuteQueryResult { Status = ExecuteStatus.Cancelled, ErrorMessage = "Query cancelled." };
+
+        var cut = Render(queued);
+
+        Assert.Equal(new[] { "Query was cancelled by user." }, Lines(cut));
+    }
 }

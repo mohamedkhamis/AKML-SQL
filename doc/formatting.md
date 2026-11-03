@@ -44,6 +44,13 @@ Output FormattedSQL
 **Stage 6 failure**: returns original SQL unchanged.
 **Stage 7 failure**: returns the (possibly non-idempotent) formatted SQL with a diagnostic warning appended.
 
+**Parse errors**: a script that parses to nothing is returned unchanged with a `Failed to parse SQL` error. When only some
+statements fail, ScriptDom leaves them out of the tree; `UnparsedText` finds their tokens (text no statement owns, other than
+`GO` and stray `;`) and both layouts keep each such statement exactly as written — text, casing and line breaks — on its own
+lines, with the style's empty lines between statements before and after it, while the statements around it are formatted as
+usual. The parser's messages are returned as warnings. The batch after a `GO n` (which ScriptDom also reports as an error and
+drops from the tree) is not treated as unread text: it is laid out from its tokens as before.
+
 ---
 
 ## SQL Prompt Styles (spec 039)

@@ -5,6 +5,7 @@ WHERE  c.customerid IN (
 	FROM   dbo.orders o
 );
 
+
 SELECT c.companyname, (
 		SELECT COUNT ( * )
 	FROM   dbo.orders o

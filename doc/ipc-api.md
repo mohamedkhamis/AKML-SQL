@@ -1229,13 +1229,22 @@ while that browser's requests run (R3), and the execute registers its cancel han
 Writes a result set's pending edits (parameterized UPDATE / INSERT / DELETE, each keyed by the fetched key
 values) in one transaction on the same persistent connection. Any failed edit rolls the whole batch back; the
 failed edit carries the error and every other edit the note "Rolled back — edit N failed.". `Status`,
-`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity, Row }`) and
+`ErrorMessage`, `Results` (`CrudEditResult { Index, Ok, Error, RowsAffected, NewIdentity, Row, Column }`) and
 `ConnectionWasReset`.
 
 Spec 042 adds, append-only, for a PostgreSQL session: `ApplyChangesRequest.ReturnColumns` (key 5, the set's
 base columns in result order) and `CrudCellDto.TypeName` (key 6, the column's type as the server prints it, which the write casts
 to), and `CrudEditResult.Row` (key 5, the written row as the server stored it, in `ReturnColumns` order, from `RETURNING`; null for
 a delete).
+
+`CrudEditResult.Column` (key 6; UI scan 2026-11-03, W3) names the base column of the cell the failed edit stumbled on, when the
+engine knows it: on SQL Server the cell whose text could not be converted to its column's type (`SqlScalarEncoder.Decode` threw a
+`FormatException` or `OverflowException` — `CrudCellException`), on PostgreSQL the column the server named (`PostgresException.ColumnName`,
+set for a NOT NULL violation; an invalid-input-syntax error names none). Null otherwise, and from older engines. The grid composes
+"Row 3, amount: message" from the failed edit's `Index` (its row, numbered as displayed; "New row 2" for an insert) and this column —
+or, when it is null, the one cell the edit set — and shows that cell as invalid without blocking a second Apply; with no column to
+name it says "Row 3: message". Values the browser can judge itself (numbers, bit / boolean, the date and time kinds, uniqueidentifier /
+uuid, binary) never reach the engine: the grid marks them invalid on commit (`SqlValueDisplay.InvalidReason`) and blocks Apply.
 
 `ApplyChangesRequest.ConnectionStamp` (key 6) is the `ExecuteQueryResult.ConnectionStamp` of the run the rows came from. When it is
 set and is not the stamp of the session's current connection — another server, login, database or kind, or another engine process —

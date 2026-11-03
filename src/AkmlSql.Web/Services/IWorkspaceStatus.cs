@@ -11,6 +11,9 @@ public enum ExecutionPhase
     Running,
     Succeeded,
     Failed,
+
+    /// <summary>The user cancelled the run (<see cref="ExecuteStatus.Cancelled"/>): not a failure of the script.</summary>
+    Cancelled,
 }
 
 /// <summary>
@@ -36,8 +39,8 @@ public interface IWorkspaceStatus
     /// <summary>Rows returned across every result set, or rows affected when there was no set.</summary>
     long RowCount { get; }
 
-    /// <summary>The status-bar outcome text: "Executing query…", "Query executed successfully." or
-    /// "Query completed with errors."; null before the first execution.</summary>
+    /// <summary>The status-bar outcome text: "Executing query…", "Query executed successfully.",
+    /// "Query completed with errors." or "Query was cancelled by user."; null before the first execution.</summary>
     string? Outcome { get; }
 
     string? ErrorMessage { get; }
@@ -103,8 +106,14 @@ public sealed record RunSnapshot(ExecutionPhase Phase, DateTimeOffset? StartedAt
         if (result == null) throw new ArgumentNullException(nameof(result));
         var sets = result.ResultSets ?? Array.Empty<ExecuteResultSet>();
         long rows = sets.Length > 0 ? sets.Sum(s => (long)(s.Rows?.Length ?? 0)) : Math.Max(0, result.TotalRowsAffected);
-        bool ok = result.Status == ExecuteStatus.Ok;
-        return new(ok ? ExecutionPhase.Succeeded : ExecutionPhase.Failed, startedAt, result.ElapsedMs, rows, ok ? null : result.ErrorMessage);
+        // A cancel is the user's doing, not an error of the script (UI scan 2026-11-03, W2): it is reported as such.
+        var phase = result.Status switch
+        {
+            ExecuteStatus.Ok => ExecutionPhase.Succeeded,
+            ExecuteStatus.Cancelled => ExecutionPhase.Cancelled,
+            _ => ExecutionPhase.Failed,
+        };
+        return new(phase, startedAt, result.ElapsedMs, rows, phase == ExecutionPhase.Succeeded ? null : result.ErrorMessage);
     }
 }
 
@@ -118,6 +127,9 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
     public const string RunningText = "Executing query…";
     public const string SucceededText = "Query executed successfully.";
     public const string FailedText = "Query completed with errors.";
+
+    /// <summary>SSMS's words for a run the user cancelled; the Messages tab says the same (MessagesView).</summary>
+    public const string CancelledText = "Query was cancelled by user.";
 
     private readonly Func<DateTimeOffset> _clock;
     private long _elapsedMs;
@@ -147,6 +159,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         ExecutionPhase.Running => RunningText,
         ExecutionPhase.Succeeded => SucceededText,
         ExecutionPhase.Failed => FailedText,
+        ExecutionPhase.Cancelled => CancelledText,
         _ => null,
     };
 

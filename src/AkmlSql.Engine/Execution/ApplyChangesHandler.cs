@@ -192,7 +192,8 @@ namespace AkmlSql.Engine.Execution
                         for (int j = 0; j < results.Length; j++)
                         {
                             results[j] = (j == i)
-                                ? new CrudEditResult { Index = j, Ok = false, Error = ex.Message }
+                                // W3: a cell whose text could not be converted names its column, so the grid can point at it.
+                                ? new CrudEditResult { Index = j, Ok = false, Error = ex.Message, Column = (ex as CrudCellException)?.ColumnName }
                                 : new CrudEditResult { Index = j, Ok = false, Error = $"Rolled back — edit {i} failed." };
                         }
                         return new ApplyChangesResult

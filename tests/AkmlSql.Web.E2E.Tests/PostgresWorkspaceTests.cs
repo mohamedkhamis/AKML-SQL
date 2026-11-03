@@ -811,14 +811,30 @@ public sealed class PostgresWorkspaceTests
             $"INSERT INTO {table} VALUES (1, 'one', 1), (2, 'two', 2);");
         try
         {
-            // Invalid text: the server's own message, the edit stays pending, nothing is written.
+            // Text the column cannot read is refused on commit (UI scan 2026-11-03, W3): the cell is marked with why, keeps the typed
+            // text, and Apply is blocked until it is corrected.
             await s.ExecuteAsync($"SELECT id, name, price FROM {table} ORDER BY id;");
             await EditCellAsync(s.Page, 0, 1, "uno");
             await EditCellAsync(s.Page, 1, 2, "abc");
+            var glyph = s.Page.Locator("[data-testid='results-cell-invalid-1-2']");
+            await Assertions.Expect(glyph).ToBeVisibleAsync();
+            await Assertions.Expect(glyph).ToHaveAttributeAsync("title", "Not a valid numeric value (a number such as 12.50)");
+            await Assertions.Expect(GridCell(s.Page, 1, 2)).ToHaveTextAsync("abc");
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-apply-blocked']")).ToBeVisibleAsync();
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-apply']")).ToBeDisabledAsync();
+
+            // A value only the server can refuse (numeric(10,2) overflow): the server's own message names the row and column, the
+            // cell is marked with it, the edits stay pending, nothing is written.
+            await EditCellAsync(s.Page, 1, 2, "123456789.12");
+            await Assertions.Expect(glyph).ToHaveCountAsync(0);
             await ApplyAndWaitAsync(s.Page);
             var message = s.Page.Locator("[data-testid='results-apply-message']");
-            await Assertions.Expect(message).ToContainTextAsync("invalid input syntax for type numeric");
+            await Assertions.Expect(message).ToContainTextAsync("Row 2, price: ");
+            await Assertions.Expect(message).ToContainTextAsync("numeric field overflow");
+            await Assertions.Expect(glyph).ToBeVisibleAsync();
+            await Assertions.Expect(glyph).ToHaveAttributeAsync("title", new System.Text.RegularExpressions.Regex("numeric field overflow"));
             await Assertions.Expect(s.Page.Locator("[data-testid='results-applybar']")).ToBeVisibleAsync();
+            await Assertions.Expect(s.Page.Locator("[data-testid='results-apply']")).ToBeEnabledAsync();
             await DiscardPendingAsync(s.Page);
             await s.ExecuteAsync($"SELECT name FROM {table} WHERE id = 1;");
             await Assertions.Expect(GridCell(s.Page, 0, 0)).ToHaveTextAsync("one");

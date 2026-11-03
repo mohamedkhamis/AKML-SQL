@@ -174,14 +174,14 @@
         @if (invalid > 0)
         {
             <span class="akml-results-blocked" role="status" data-testid="results-apply-blocked">
-                <Icon Name="circle-alert" Size="12" /> @Plural(invalid, "cell") @(invalid == 1 ? "needs" : "need") a value: enter one or set NULL.
+                <Icon Name="circle-alert" Size="12" /> @BlockedText(invalid)
             </span>
         }
         <span class="akml-results-spacer"></span>
         <button type="button" class="akml-btn" data-testid="@($"results-discard{ApplyTestIdSuffix}")"
                 @onclick="DiscardEditsAsync" disabled="@_applying" title="@(_applying ? "Wait for changes to finish applying" : null)">Discard</button>
         <button type="button" class="akml-btn akml-btn--primary" data-testid="@($"results-apply{ApplyTestIdSuffix}")"
-                title="@(_applying ? "Wait for changes to finish applying" : FrozenReason ?? (invalid > 0 ? "Some cells need a value before the changes can be applied." : null))"
+                title="@(_applying ? "Wait for changes to finish applying" : FrozenReason ?? (invalid > 0 ? "Some cells need a valid value before the changes can be applied." : null))"
                 @onclick="ApplyEditsAsync" disabled="@(_applying || FrozenReason != null || invalid > 0)">@(_applying ? "Applying…" : "Apply")</button>
     </div>
 }
@@ -294,9 +294,44 @@
     private bool _sortDesc;
 
     // ── Edit tracking, keyed by FETCHED row index ─────────────────────────────────────────────────
-    private readonly Dictionary<int, Dictionary<int, string?>> _edits = new();   // rowIndex -> (colIndex -> new value)
-    private readonly HashSet<int> _deletes = new();                              // deleted fetched rows
-    private readonly List<Dictionary<int, string?>> _inserts = new();            // new rows (colIndex -> value)
+    private readonly Dictionary<int, PendingRow> _edits = new();   // rowIndex -> the row's pending cells
+    private readonly HashSet<int> _deletes = new();                // deleted fetched rows
+    private readonly List<PendingRow> _inserts = new();            // new rows
+
+    /// <summary>
+    /// A row's pending cells: each edited column's value in wire form, and — judged once, when the value was committed, from
+    /// the text as typed (review of the 2026-11-03 scan, W3) — why its column cannot take it. Rendering, the apply bar and
+    /// Apply read the stored verdict instead of parsing every pending value again on every render; and only the typed text
+    /// can tell a binary value (0x1F) from a Base64-shaped word (test), since both travel as Base64.
+    /// </summary>
+    private sealed class PendingRow
+    {
+        public readonly Dictionary<int, string?> Cells = new();     // colIndex -> wire value (null = SQL NULL)
+        public readonly Dictionary<int, string> Invalid = new();    // colIndex -> why the column cannot take the value
+
+        public int Count => Cells.Count;
+
+        public void Set(int col, string? wire, string? reason)
+        {
+            Cells[col] = wire;
+            if (reason == null) Invalid.Remove(col);
+            else Invalid[col] = reason;
+        }
+
+        public void Remove(int col)
+        {
+            Cells.Remove(col);
+            Invalid.Remove(col);
+        }
+    }
+
+    /// <summary>
+    /// UI scan 2026-11-03 (W3): the cells the last Apply's failed edit was traced to — (<see cref="CrudOp"/>, fetched row or new-row
+    /// index, column) → the server's message. Each shows as invalid with that message but does not block Apply: the cause may be
+    /// fixed elsewhere, or the same values may be accepted on a second try. A mark goes when its cell is edited, its row is deleted
+    /// or removed, the pending edits are reset, or the next Apply starts.
+    /// </summary>
+    private readonly Dictionary<(int Op, int Index, int Col), string> _rejected = new();
 
     // The inline editor: a fetched cell (_editInsert < 0) or a new row's cell (_editInsert = its index).
     private int _editRow = -1;
@@ -357,7 +392,7 @@
             foreach (var (row, cells) in _edits)
             {
                 if (_deletes.Contains(row)) continue;
-                foreach (var (c, v) in cells) if (IsInvalidValue(c, v)) n++;
+                n += cells.Invalid.Count;
             }
             for (int i = 0; i < _inserts.Count; i++)
                 for (int c = 0; c < ColumnCount; c++)
@@ -418,6 +453,7 @@
         _edits.Clear();
         _deletes.Clear();
         _inserts.Clear();
+        _rejected.Clear();
         EndEdit();
         _applyMessage = null;
     }
@@ -437,7 +473,7 @@
 
     private string? CurrentWire(int row, int col)
     {
-        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.TryGetValue(col, out var edited)) return edited;
+        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.Cells.TryGetValue(col, out var edited)) return edited;
         var cells = Set.Rows[row];
         return col < cells.Length ? cells[col] : null;
     }
@@ -457,10 +493,17 @@
     /// <summary>What a cell shows (a large binary value as a preview). Fetched values are formatted once.</summary>
     private DisplayValue CellDisplay(int row, int col)
     {
-        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.TryGetValue(col, out var edited)) return Format(edited, col, false);
+        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.Cells.TryGetValue(col, out var edited))
+            return FormatEdited(edited, col, rowEdits.Invalid.ContainsKey(col), false);
         var cache = _displayCache[row] ??= new DisplayValue?[ColumnCount];
         return cache[col] ??= Format(Set.Rows[row].ElementAtOrDefault(col), col, false);
     }
+
+    /// <summary>A pending value as the cell shows it: one the column cannot take (<paramref name="invalid"/>, judged when it was
+    /// committed) stays as typed (W3) — reformatting it would make a loose date such as 01/02/2025 read as a valid one — so it
+    /// can be seen and corrected.</summary>
+    private DisplayValue FormatEdited(string? wire, int col, bool invalid, bool fullText) =>
+        invalid && wire is { Length: > 0 } ? new DisplayValue(wire) : Format(wire, col, fullText);
 
     /// <summary>
     /// The text the grid shows for a cell, at full length: the single accessor copy, Save results and View
@@ -469,7 +512,9 @@
     /// </summary>
     public string? DisplayText(int row, int col)
     {
-        var wire = CurrentWire(row, col);
+        if (_edits.TryGetValue(row, out var rowEdits) && rowEdits.Cells.TryGetValue(col, out var edited))
+            return edited == null ? null : FormatEdited(edited, col, rowEdits.Invalid.ContainsKey(col), true).Text;
+        var wire = Set.Rows[row].ElementAtOrDefault(col);
         return wire == null ? null : Format(wire, col, true).Text;
     }
 
@@ -523,23 +568,66 @@
     }
 
     private bool IsBinaryColumn(int c) =>
-        Set.ClrTypeHints.ElementAtOrDefault(c) == ClrTypeHint.Binary
-        || (c < _types.Length && _types[c].BaseName is "binary" or "varbinary" or "image" or "timestamp" or "rowversion");
+        Set.ClrTypeHints.ElementAtOrDefault(c) == ClrTypeHint.Binary || (c < _types.Length && _types[c].IsBinary);
 
-    private bool IsInvalidValue(int c, string? value) => value != null && value.Length == 0 && !IsCharacterColumn(c);
-
-    private bool IsInvalidEdit(int row, int c) =>
-        !_deletes.Contains(row) && _edits.TryGetValue(row, out var cells) && cells.TryGetValue(c, out var v) && IsInvalidValue(c, v);
-
-    /// <summary>A new row's cell is invalid when it is blank on a non-character type, or left unset on a NOT
-    /// NULL, non-identity column the user must supply — one without a default the server fills in (review WEB-20).</summary>
-    private bool IsInvalidInsert(int insIdx, int c)
+    /// <summary>Why the text typed into a cell cannot be applied, or null — judged once, when the cell is committed
+    /// (<see cref="PendingRow"/>): blank on a non-character type (FR-014), or text that is not a value of the column's type —
+    /// "Not a valid money value (a number such as 12.50)" (UI scan 2026-11-03, W3; <see cref="SqlValueDisplay.InvalidReason"/>,
+    /// which judges only the types the client can and leaves the rest to the server). The text as typed, not its wire form.</summary>
+    private string? Judge(int c, string? typed)
     {
-        if (!IsColumnInsertable(c)) return false;
-        if (_inserts[insIdx].TryGetValue(c, out var v)) return IsInvalidValue(c, v);
+        if (typed == null) return null;
+        if (typed.Length == 0) return IsCharacterColumn(c) ? null : InvalidTitle;
+        return SqlValueDisplay.InvalidReason(typed, TypeOf(c), Set.ClrTypeHints.ElementAtOrDefault(c));
+    }
+
+    /// <summary>The pending edit's own reason — the one that blocks Apply; null when the cell is valid or not edited.</summary>
+    private string? EditInvalidReason(int row, int c) =>
+        !_deletes.Contains(row) && _edits.TryGetValue(row, out var cells) && cells.Invalid.TryGetValue(c, out var reason) ? reason : null;
+
+    /// <summary>The reason the cell shows: its own, else the message of the Apply the server refused it in (<see cref="_rejected"/>).</summary>
+    private string? ShownEditReason(int row, int c) =>
+        EditInvalidReason(row, c) ?? (_rejected.TryGetValue((CrudOp.Update, row, c), out var server) ? server : null);
+
+    /// <summary>A new row's cell is invalid when it is blank or not a value of its type, or left unset on a NOT
+    /// NULL, non-identity column the user must supply — one without a default the server fills in (review WEB-20).</summary>
+    private bool IsInvalidInsert(int insIdx, int c) => InsertInvalidReason(insIdx, c) != null;
+
+    private string? InsertInvalidReason(int insIdx, int c)
+    {
+        if (!IsColumnInsertable(c)) return null;
+        var ins = _inserts[insIdx];
+        if (ins.Invalid.TryGetValue(c, out var reason)) return reason;
+        if (ins.Cells.ContainsKey(c)) return null;
         var p = Provenance(c);
         // Re-review REV-06: only a column known to have no default must be typed; with unknown defaults the server decides.
-        return p != null && !p.AllowDBNull && !p.IsAutoIncrement && !p.HasDefault && Set.DefaultsKnown;
+        return p != null && !p.AllowDBNull && !p.IsAutoIncrement && !p.HasDefault && Set.DefaultsKnown ? InvalidTitle : null;
+    }
+
+    private string? ShownInsertReason(int insIdx, int c) =>
+        InsertInvalidReason(insIdx, c) ?? (_rejected.TryGetValue((CrudOp.Insert, insIdx, c), out var server) ? server : null);
+
+    /// <summary>The apply bar's reason for <paramref name="n"/> invalid cells: FR-014's wording while every one is blank, else one
+    /// that covers a typed value the column cannot take.</summary>
+    private string BlockedText(int n)
+    {
+        bool typed = false;
+        foreach (var (row, cells) in _edits)
+        {
+            if (_deletes.Contains(row)) continue;
+            foreach (var c in cells.Invalid.Keys) if (cells.Cells[c] is { Length: > 0 }) typed = true;
+        }
+        for (int i = 0; i < _inserts.Count && !typed; i++)
+            foreach (var c in _inserts[i].Invalid.Keys) if (IsColumnInsertable(c) && _inserts[i].Cells[c] is { Length: > 0 }) typed = true;
+        return typed
+            ? $"{Plural(n, "cell")} {(n == 1 ? "needs" : "need")} a valid value: correct {(n == 1 ? "it" : "them")} or set NULL."
+            : $"{Plural(n, "cell")} {(n == 1 ? "needs" : "need")} a value: enter one or set NULL.";
+    }
+
+    /// <summary>Drops the server marks of one row or new row (<paramref name="index"/>), or of every row of that kind (-1).</summary>
+    private void ForgetRejected(int op, int index)
+    {
+        foreach (var key in _rejected.Keys.Where(k => k.Op == op && (index < 0 || k.Index == index)).ToList()) _rejected.Remove(key);
     }
 
     /// <summary>An unset NOT NULL cell whose default is not known: the server fills it in or refuses the row.</summary>
@@ -600,9 +688,9 @@
     private bool IsCutByWidth(string text, int c) =>
         text.Length > 0 && GridColumnLayout.EstimatePx(text) + GridColumnLayout.CellPaddingPx + GridColumnLayout.CellBorderPx > _layout.WidthPx(c);
 
-    private string? CellTitle(DisplayValue v, int c, bool invalid)
+    private string? CellTitle(DisplayValue v, int c, string? invalidReason)
     {
-        if (invalid) return InvalidTitle;
+        if (invalidReason != null) return invalidReason;
         if (v.IsEngineCut) return GridCellText.EngineCutTitle;
         if (v.IsEmptyString) return "(empty string)";
         return v.IsPreview || IsCutByWidth(v.Text, c) ? GridCellText.Tooltip(v.Text) : null;
@@ -715,7 +803,8 @@
                     continue;
                 }
                 var v = CellDisplay(r, col);
-                bool invalid = IsInvalidEdit(r, col);
+                string? reason = ShownEditReason(r, col);
+                bool invalid = reason != null;
                 string cellClass = "akml-results-cell"
                     + (editable ? " akml-cell-editable" : string.Empty)
                     + (v.IsNull ? " akml-cell-null" : string.Empty)
@@ -728,11 +817,11 @@
                 {
                     <div id="@CellId(d, col)" class="@cellClass" role="gridcell" aria-selected="@(selected ? "true" : "false")"
                          aria-invalid="@(invalid ? "true" : null)" aria-describedby="@(focus && tooltip != null ? TooltipId : null)"
-                         title="@CellTitle(v, col, invalid)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col"
+                         title="@CellTitle(v, col, reason)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col"
                          @ondblclick="() => OnCellDoubleClick(d, col)">
                         @if (invalid)
                         {
-                            <span class="akml-cell-invalid-glyph" title="@InvalidTitle" data-testid="@($"results-cell-invalid-{r}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
+                            <span class="akml-cell-invalid-glyph" title="@reason" data-testid="@($"results-cell-invalid-{r}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
                         }
                         @v.Text
                     </div>
@@ -741,7 +830,7 @@
                 {
                     <div id="@CellId(d, col)" class="@cellClass" role="gridcell" aria-selected="@(selected ? "true" : "false")"
                          aria-describedby="@(focus && tooltip != null ? TooltipId : null)"
-                         title="@CellTitle(v, col, false)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col">@v.Text</div>
+                         title="@CellTitle(v, col, null)" data-testid="@($"results-cell-{r}-{col}")" data-r="@d" data-c="@col">@v.Text</div>
                 }
             }
         </div>
@@ -773,12 +862,13 @@
                     </div>
                     continue;
                 }
-                bool has = ins.TryGetValue(col, out var value);
-                bool invalid = IsInvalidInsert(i, col);
+                bool has = ins.Cells.TryGetValue(col, out var value);
+                string? reason = ShownInsertReason(i, col);
+                bool invalid = reason != null;
                 bool auto = IsAutoIncrement(col);
                 // An unset cell is left out of the INSERT: the column's default applies (shown so), else NULL — unless the
                 // column must be supplied (invalid, blank). Review WEB-20.
-                string text = auto ? "(auto)" : has ? Format(value, col, false).Text : invalid ? string.Empty
+                string text = auto ? "(auto)" : has ? FormatEdited(value, col, ins.Invalid.ContainsKey(col), false).Text : invalid ? string.Empty
                     : HasDefault(col) ? "(default)" : DefaultUnknown(col) ? "(not set)" : GridTextFormats.NullText;
                 bool muted = auto || (has ? value == null : !invalid);
                 string cellClass = "akml-results-cell"
@@ -787,12 +877,12 @@
                     + (invalid ? " akml-cell-invalid" : string.Empty);
                 if (insertable)
                 {
-                    <div class="@cellClass" role="gridcell" aria-invalid="@(invalid ? "true" : null)" title="@(invalid ? InvalidTitle : null)"
+                    <div class="@cellClass" role="gridcell" aria-invalid="@(invalid ? "true" : null)" title="@reason"
                          data-testid="@($"results-insert-cell-{i}-{col}")"
                          @onclick="() => BeginInsertEdit(i, col)" @ondblclick="() => BeginInsertEdit(i, col)">
                         @if (invalid)
                         {
-                            <span class="akml-cell-invalid-glyph" title="@InvalidTitle" data-testid="@($"results-insert-invalid-{i}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
+                            <span class="akml-cell-invalid-glyph" title="@reason" data-testid="@($"results-insert-invalid-{i}-{col}")"><Icon Name="circle-alert" Size="12" /></span>
                         }
                         @text
                     </div>
@@ -1542,7 +1632,7 @@
         _editCol = col;
         _editInsert = insIdx;
         _editReplaced = false;
-        _editInitial = EditText(_inserts[insIdx].TryGetValue(col, out var v) ? v : null, col) ?? string.Empty;
+        _editInitial = EditText(_inserts[insIdx].Cells.TryGetValue(col, out var v) ? v : null, col) ?? string.Empty;
     }
 
     private void EndEdit()
@@ -1631,22 +1721,25 @@
         // The cell value is stored in wire form: a date, time or binary value typed the way the grid shows it is
         // converted (ToWire); anything else verbatim (a blank input is kept as an empty string — invalid on a
         // non-character type until a value or NULL is set). The write path binds it through
-        // SqlScalarEncoder.Decode for the column's type. null = SQL NULL.
+        // SqlScalarEncoder.Decode for the column's type. null = SQL NULL. Whether the column can take it is judged here, from
+        // the text as typed, and kept with the value (review of W3).
+        var reason = Judge(col, value);
         value = ToWire(value, col);
+        _rejected.Remove((CrudOp.Update, row, col));   // a new value: the server has not seen it
         var original = Set.Rows[row].ElementAtOrDefault(col);
         if (!string.Equals(original, value, StringComparison.Ordinal))
         {
             if (!_edits.TryGetValue(row, out var rowEdits))
             {
-                rowEdits = new Dictionary<int, string?>();
+                rowEdits = new PendingRow();
                 _edits[row] = rowEdits;
             }
-            rowEdits[col] = value;
+            rowEdits.Set(col, value, reason);
             // A value longer than its column widens it, so the edit is not shown cut short ("beta ed…"). A width the user
             // set stays: WidthPx keeps returning it.
             if (value != null)
             {
-                int px = GridColumnLayout.Fit(GridColumnLayout.EstimatePx(ColumnLabel(col)), GridColumnLayout.EstimatePx(Format(value, col, false).Text));
+                int px = GridColumnLayout.Fit(GridColumnLayout.EstimatePx(ColumnLabel(col)), GridColumnLayout.EstimatePx(FormatEdited(value, col, reason != null, false).Text));
                 if (px > _layout.WidthPx(col)) _layout.ApplyFit(col, px);
             }
         }
@@ -1661,7 +1754,9 @@
     private void CommitInsert(int insIdx, int col, string? value)
     {
         if (RefuseWhileLocked()) return;
-        if (insIdx >= 0 && insIdx < _inserts.Count) _inserts[insIdx][col] = ToWire(value, col);
+        if (insIdx < 0 || insIdx >= _inserts.Count) return;
+        _inserts[insIdx].Set(col, ToWire(value, col), Judge(col, value));
+        _rejected.Remove((CrudOp.Insert, insIdx, col));
     }
 
     private void ToggleDelete(int row)
@@ -1669,19 +1764,24 @@
         if (RefuseWhileLocked() || IsUnconfirmed(row)) return;
         if (!_deletes.Remove(row)) _deletes.Add(row);
         // A deleted row's pending edits are moot.
-        if (_deletes.Contains(row)) _edits.Remove(row);
+        if (_deletes.Contains(row))
+        {
+            _edits.Remove(row);
+            ForgetRejected(CrudOp.Update, row);
+        }
     }
 
     private void AddNewRow()
     {
         if (RefuseWhileLocked()) return;
-        _inserts.Add(new Dictionary<int, string?>());
+        _inserts.Add(new PendingRow());
     }
 
     private void RemoveInsert(int insIdx)
     {
         if (RefuseWhileLocked()) return;
         if (insIdx >= 0 && insIdx < _inserts.Count) _inserts.RemoveAt(insIdx);
+        ForgetRejected(CrudOp.Insert, -1);   // the new rows after it move up: their marks would point at the wrong row
         if (_editInsert >= 0) EndEdit();
     }
 
@@ -1731,7 +1831,7 @@
             var row = set.Rows[r];
             if (_edits.TryGetValue(r, out var rowEdits))         // committed edits → overwrite cells
             {
-                foreach (var (c, v) in rowEdits)
+                foreach (var (c, v) in rowEdits.Cells)
                     if (c >= 0 && c < row.Length) row[c] = v;
             }
             // Spec 042 (FR-133): a PostgreSQL write returns the row as the server stored it (defaults, a trigger's changes,
@@ -1742,14 +1842,14 @@
         for (int i = 0; i < _inserts.Count; i++)                 // committed inserts → append rows
         {
             var row = new string?[colCount];
-            foreach (var (c, v) in _inserts[i])
+            foreach (var (c, v) in _inserts[i].Cells)
                 if (c >= 0 && c < colCount) row[c] = v;
             if (storedInserts != null && storedInserts.TryGetValue(i, out var storedRow)) OverlayStored(row, storedRow);
             else
             {
                 // Review round 3 (REV-06): the server did not return the stored row. Show what is known — the typed cells and the
                 // returned identity — and mark the rest as not read back instead of presenting them as committed values.
-                var known = new HashSet<int>(_inserts[i].Keys);
+                var known = new HashSet<int>(_inserts[i].Cells.Keys);
                 if (identityCol >= 0 && identityCol < colCount && identities != null && identities.TryGetValue(i, out var id))
                 {
                     row[identityCol] = id;
@@ -1787,6 +1887,7 @@
 
         _applying = true;
         _applyMessage = null;
+        _rejected.Clear();
         StateHasChanged();
 
         try
@@ -1845,7 +1946,7 @@
                 var failed = (result.Results ?? System.Array.Empty<CrudEditResult>())
                     .FirstOrDefault(r => !r.Ok && !string.IsNullOrEmpty(r.Error)
                                          && !r.Error.StartsWith("Rolled back — edit ", StringComparison.Ordinal));
-                _applyMessage = failed?.Error ?? result.ErrorMessage ?? "Apply failed.";
+                _applyMessage = failed != null ? DescribeFailure(req, failed) : result.ErrorMessage ?? "Apply failed.";
                 if (result.ConnectionWasReset)
                     _applyMessage += " (connection was reset — #temp/SET state lost.)";
             }
@@ -1855,6 +1956,52 @@
             _applying = false;
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// UI scan 2026-11-03 (W3): the failed edit's message with the row as the grid numbers it and the column — the one the engine
+    /// named (<see cref="CrudEditResult.Column"/>), else the one cell the edit set — and that cell marked (<see cref="_rejected"/>):
+    /// "Row 3, amount: The input string 'abc' was not in a correct format.". With no column to name, "Row 3: …"; a new row is
+    /// "New row 2"; a delete "Row 3 (delete)".
+    /// </summary>
+    private string DescribeFailure(ApplyChangesRequest req, CrudEditResult failed)
+    {
+        string error = failed.Error ?? "Apply failed.";
+        if (failed.Index < 0 || failed.Index >= _applyTargets.Count || failed.Index >= req.Edits.Length) return error;
+        var (op, index) = _applyTargets[failed.Index];
+        var edit = req.Edits[failed.Index];
+        string where = op == CrudOp.Insert ? $"New row {index + 1}"
+            : $"Row {DisplayNumber(index)}" + (op == CrudOp.Delete ? " (delete)" : string.Empty);
+        int col = op == CrudOp.Delete ? -1
+            : ColumnOf(op, index, failed.Column ?? (edit.SetCells.Length == 1 ? edit.SetCells[0].BaseColumnName : null));
+        if (col < 0) return $"{where}: {error}";
+        _rejected[(op, index, col)] = error;
+        return $"{where}, {ColumnLabel(col)}: {error}";
+    }
+
+    /// <summary>A fetched row's number as the grid shows it: its display position, 1-based.</summary>
+    private int DisplayNumber(int row)
+    {
+        int d = Array.IndexOf(_rowIndexes, row);
+        return (d >= 0 ? d : row) + 1;
+    }
+
+    /// <summary>The result column a base column name stands for — among the cells the edit set, else any column read from that base
+    /// column (SELECT a, a AS b); -1 when none is.</summary>
+    private int ColumnOf(int op, int index, string? baseColumnName)
+    {
+        if (string.IsNullOrEmpty(baseColumnName)) return -1;
+        var cells = op == CrudOp.Insert
+            ? (index >= 0 && index < _inserts.Count ? _inserts[index].Cells : null)
+            : (_edits.TryGetValue(index, out var rowEdits) ? rowEdits.Cells : null);
+        int found = -1;
+        foreach (var p in Set.Provenance)
+        {
+            if (!string.Equals(p.BaseColumnName, baseColumnName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (cells != null && cells.ContainsKey(p.Ordinal)) return p.Ordinal;
+            if (found < 0) found = p.Ordinal;
+        }
+        return found;
     }
 
     private ApplyChangesRequest BuildApplyRequest(ExecuteResultSet set)
@@ -1891,7 +2038,7 @@
         foreach (var kv in _edits)
         {
             if (_deletes.Contains(kv.Key)) continue;
-            var setCells = kv.Value
+            var setCells = kv.Value.Cells
                 .Where(e => IsUpdatable(set.Provenance[e.Key]))
                 .Select(e => new CrudCellDto
                 {
@@ -1924,7 +2071,7 @@
             for (int c = 0; c < set.Provenance.Length; c++)
             {
                 var p = set.Provenance[c];
-                if (!IsInsertable(p) || !ins.TryGetValue(c, out var v)) continue;
+                if (!IsInsertable(p) || !ins.Cells.TryGetValue(c, out var v)) continue;
                 setCells.Add(new CrudCellDto
                 {
                     BaseColumnName = p.BaseColumnName!,

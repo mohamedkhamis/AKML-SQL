@@ -4,8 +4,20 @@ using Serilog;
 namespace AkmlSql.Shell.Shared.Formatting
 {
     /// <summary>
-    /// Intercepts clipboard paste operations, detects SQL content via keyword heuristic,
-    /// and optionally auto-formats the pasted text.
+    /// Intended to intercept clipboard paste operations, detect SQL content via keyword heuristic,
+    /// and auto-format the pasted text.
+    /// <para>
+    /// NOT WIRED (UI scan 2026-11-03, S3): format on paste never runs in SSMS 22. Nothing constructs
+    /// this handler, no editor command filter intercepts <c>Edit.Paste</c>, and
+    /// <see cref="TryFormatPastedText"/> has no caller — the engine round-trip built for it
+    /// (<see cref="FormatRequestDispatcher"/>, <c>FormatTrigger.Paste</c>) is not connected either.
+    /// The rule today is therefore: pasted text is always left exactly as pasted, whatever its size,
+    /// its batches (<c>GO</c>) or whether it parses, and <c>formatter.formatOnPaste</c> in config.json
+    /// is kept but has no effect. Options hides the row for that reason (spec 040 OPT-01,
+    /// <c>FormattingPage</c>). Wiring it means: intercept VSStd97 Paste in the editor command filter,
+    /// resolve the pasted span from the buffer version, dispatch through FormatRequestDispatcher and
+    /// replace the span only if the buffer is unchanged when the reply arrives.
+    /// </para>
     /// </summary>
     internal class FormatOnPasteHandler
     {
@@ -47,12 +59,9 @@ namespace AkmlSql.Shell.Shared.Formatting
                 if (!LooksLikeSql(sample))
                     return false;
 
-                // TODO: Wire to formatter pipeline via engine IPC when available.
-                // For now this is a stub — actual formatting will be routed through
-                // PipeRpcClient to the out-of-process engine.
-                Log.Debug("Format on paste: SQL detected ({Length} chars), formatting stub invoked", pastedText.Length);
-
-                // Stub: return unmodified until engine IPC wiring is complete
+                // Not wired (see the class summary): no caller reaches this point in SSMS 22 and the
+                // engine dispatch is not connected, so the text is always returned unchanged.
+                Log.Debug("Format on paste: SQL detected ({Length} chars) but the trigger is not wired; text left as pasted", pastedText.Length);
                 return false;
             }
             catch (Exception ex)

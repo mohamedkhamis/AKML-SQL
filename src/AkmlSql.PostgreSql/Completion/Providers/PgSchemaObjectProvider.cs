@@ -66,7 +66,10 @@ internal sealed class PgSchemaObjectProvider : IPgCompletionProvider
     {
         if (o.ObjectType is DbObjectType.Procedure or DbObjectType.ScalarFunction or DbObjectType.TableFunction or DbObjectType.InlineFunction or DbObjectType.Synonym)
             return false;
-        if (read || ddl) return true;
+        if (ddl) return true;
+        // A sequence is nothing to read FROM or JOIN: `SELECT * FROM a_sequence` is legal but never what the list is for, and it
+        // only pushed the tables apart (UI scan 2026-11-03, W9). DDL (ALTER / DROP SEQUENCE) still names it above.
+        if (read) return o.ObjectType is not DbObjectType.Sequence;
         // INSERT / UPDATE / DELETE / MERGE can write to tables and views; a sequence or a materialized view cannot be written to
         return write && o.ObjectType is DbObjectType.Table or DbObjectType.View;
     }

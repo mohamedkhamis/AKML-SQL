@@ -196,6 +196,8 @@ internal static class PgItems
     // Lower sorts first; the numbers follow the SQL Server engine's tiers so the two lists feel alike.
     public const int JoinCondition = 5;
     public const int RelatedTable = 10;
+    /// <summary>A primary key column: first among a table's columns, as the SQL Server list has it (UI scan 2026-11-03, W9).</summary>
+    public const int KeyColumn = 29;
     public const int Column = 30;
     public const int TypeName = 40;
     public const int AliasOrCte = 50;

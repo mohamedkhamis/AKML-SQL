@@ -284,10 +284,14 @@ namespace AkmlSql.Core.Text
             return "N'" + value.Replace("'", "''") + "'";
         }
 
-        /// <summary>The kind of a column's values from its declared type, else its CLR hint.</summary>
+        /// <summary>The kind of a column's values from its declared type, else its CLR hint. The name is matched with its
+        /// PostgreSQL suffix (<see cref="SqlTypeName.MatchName"/>): a <c>timestamp(3) without time zone</c> is text, not
+        /// SQL Server's binary timestamp (review of the 2026-11-03 scan, W3).</summary>
         public static GridValueKind KindOf(SqlTypeName? type, int clrHint)
         {
-            switch (type?.BaseName ?? string.Empty)
+            var name = type?.MatchName ?? string.Empty;
+            if (SqlTypeName.IsBinaryType(name)) return GridValueKind.Binary;
+            switch (name)
             {
                 case "bit":
                 case "tinyint":
@@ -301,12 +305,6 @@ namespace AkmlSql.Core.Text
                 case "float":
                 case "real":
                     return GridValueKind.Number;
-                case "binary":
-                case "varbinary":
-                case "image":
-                case "timestamp":
-                case "rowversion":
-                    return GridValueKind.Binary;
                 case "sql_variant":
                     return GridValueKind.Unknown;
                 case "":

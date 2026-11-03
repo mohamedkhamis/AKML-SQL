@@ -56,7 +56,7 @@ namespace AkmlSql.Core.Text
         {
             if (wire == null) return new DisplayValue(GridTextFormats.NullText, isNull: true);
 
-            var name = (type ?? SqlTypeName.Parse(null)).BaseName;
+            var name = (type ?? SqlTypeName.Parse(null)).MatchName;
             // An empty binary value is "0x" in SSMS, not an empty string.
             if (wire.Length == 0 && !IsBinary(name, clrHint)) return new DisplayValue(string.Empty, isEmptyString: true);
             if (EngineCutIndicator.IsIndicator(wire)) return new DisplayValue(wire, isEngineCut: true);
@@ -94,22 +94,9 @@ namespace AkmlSql.Core.Text
             }
         }
 
-        private static bool IsBinary(string name, int clrHint)
-        {
-            switch (name)
-            {
-                case "binary":
-                case "varbinary":
-                case "image":
-                case "timestamp":
-                case "rowversion":
-                    return true;
-                case "":
-                    return clrHint == ClrTypeHint.Binary;
-                default:
-                    return false;
-            }
-        }
+        /// <summary>A binary column by its declared name (<see cref="SqlTypeName.IsBinaryType"/>), else by the CLR hint.</summary>
+        private static bool IsBinary(string name, int clrHint) =>
+            name.Length == 0 ? clrHint == ClrTypeHint.Binary : SqlTypeName.IsBinaryType(name);
 
         private static string DateOnly(string wire)
         {
@@ -202,7 +189,7 @@ namespace AkmlSql.Core.Text
         public static string? ToWire(string? text, SqlTypeName type, int clrHint)
         {
             if (text == null) return null;
-            var name = (type ?? SqlTypeName.Parse(null)).BaseName;
+            var name = (type ?? SqlTypeName.Parse(null)).MatchName;
             string trimmed = text.Trim();
 
             if (IsBinary(name, clrHint)) return HexToBase64(trimmed) ?? text;
@@ -218,11 +205,14 @@ namespace AkmlSql.Core.Text
                     return OffsetToWire(trimmed) ?? text;
                 case "time":
                     return TimeToWire(trimmed) ?? text;
+                case "bit":
+                    // SQL Server's bit: true / false travel as 1 / 0, the form the grid shows (W3). A PostgreSQL bit string is
+                    // server text and stays as typed.
+                    return IsServerText(clrHint) ? text : BitToWire(trimmed) ?? text;
                 case "boolean":
                 case "bool":
-                    return string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase) ? "t"
-                        : string.Equals(trimmed, "false", StringComparison.OrdinalIgnoreCase) ? "f"
-                        : text;
+                    // PostgreSQL's boolean: every form the server reads (W3), stored as its text form t / f.
+                    return BooleanToWire(trimmed) ?? text;
                 case "":
                     break;
                 default:
@@ -233,8 +223,36 @@ namespace AkmlSql.Core.Text
             {
                 case ClrTypeHint.DateTime: return DateTimeToWire(trimmed) ?? text;
                 case ClrTypeHint.DateTimeOffset: return OffsetToWire(trimmed) ?? text;
+                case ClrTypeHint.Bool: return BitToWire(trimmed) ?? text;
                 default: return text;
             }
+        }
+
+        /// <summary>A PostgreSQL column (spec 042): the server prints and reads its text.</summary>
+        private static bool IsServerText(int clrHint) => clrHint == ClrTypeHint.ServerText || clrHint == ClrTypeHint.ServerNumber;
+
+        /// <summary>SQL Server's bit: 0 / 1, or true / false in any case (what <c>SqlScalarEncoder.Decode</c> reads) → "0" / "1".</summary>
+        private static string? BitToWire(string text)
+        {
+            if (text == "0" || text == "1") return text;
+            if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)) return "1";
+            if (string.Equals(text, "false", StringComparison.OrdinalIgnoreCase)) return "0";
+            return null;
+        }
+
+        /// <summary>PostgreSQL's boolean input (<c>boolin</c>): 1 / 0, any case-insensitive prefix of true / false / yes / no, and of
+        /// on / off from two letters ("o" alone is ambiguous and refused, as the server refuses it) → "t" / "f".</summary>
+        private static string? BooleanToWire(string text)
+        {
+            if (text.Length == 0) return null;
+            if (text == "1") return "t";
+            if (text == "0") return "f";
+            var lower = text.ToLowerInvariant();
+            if ("true".StartsWith(lower, StringComparison.Ordinal) || "yes".StartsWith(lower, StringComparison.Ordinal)) return "t";
+            if ("false".StartsWith(lower, StringComparison.Ordinal) || "no".StartsWith(lower, StringComparison.Ordinal)) return "f";
+            if (lower.Length >= 2 && "on".StartsWith(lower, StringComparison.Ordinal)) return "t";
+            if (lower.Length >= 2 && "off".StartsWith(lower, StringComparison.Ordinal)) return "f";
+            return null;
         }
 
         private static string? DateTimeToWire(string text)
@@ -257,6 +275,159 @@ namespace AkmlSql.Core.Text
         {
             if (!TimeSpan.TryParseExact(text, new[] { "c", @"hh\:mm", @"h\:mm" }, CultureInfo.InvariantCulture, out var ts)) return null;
             return ts >= TimeSpan.Zero && ts < TimeSpan.FromDays(1) ? ts.ToString("c", CultureInfo.InvariantCulture) : null;
+        }
+
+        // ── Validation ─────────────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// UI scan 2026-11-03 (W3) — why the text typed into a cell cannot be written to a column of this type, as the short
+        /// title the grid shows ("Not a valid money value (a number such as 12.50)"), or null when it can — or when only the
+        /// server can judge it: character types, a PostgreSQL date, timestamp, interval, array, json or bit string, a
+        /// user-defined type. Judged are the integer kinds (with their range), decimal / numeric, SQL Server's money
+        /// (PostgreSQL's reads lc_monetary forms), float / real / double precision, bit, boolean, the SQL Server date and time
+        /// kinds <see cref="ToWire"/> converts, uniqueidentifier / uuid and binary. <paramref name="typed"/> is the text as the
+        /// user typed it — what <see cref="ToWire"/> was given, not what it stored — judged once when the cell is committed:
+        /// a date or time counts only in the form the grid shows, binary only as <c>0x</c> and hex digits (a Base64-shaped word
+        /// such as <c>test</c> is not a value, though the wire form is Base64), numbers parse invariant with a sign, a decimal
+        /// point and an exponent and never a thousands separator (stricter than SqlClient's <c>NumberStyles.Number</c>, which
+        /// reads 1,5 as 15; the same as PostgreSQL, whose numeric is judged by shape alone, whatever its size), bit is 0 / 1 or
+        /// true / false and boolean any form the server reads. An empty value and an engine-cut indicator are the caller's to
+        /// judge (FR-014). Never throws.
+        /// </summary>
+        public static string? InvalidReason(string? typed, SqlTypeName type, int clrHint)
+        {
+            if (typed == null || typed.Length == 0 || EngineCutIndicator.IsIndicator(typed)) return null;
+            // A PostgreSQL array ("{1.5,2.5}" in numeric(10,2)[]) is the server's to judge, whatever its element type.
+            if (type != null && type.IsArray) return null;
+            var name = (type ?? SqlTypeName.Parse(null)).MatchName;
+            bool server = IsServerText(clrHint);
+            string text = typed.Trim();
+
+            if (IsBinary(name, clrHint)) return HexToBase64(text) != null ? null : "Not a valid binary value (0x and hex digits)";
+
+            switch (name)
+            {
+                case "tinyint": return WholeNumber(text, name, byte.MinValue, byte.MaxValue);
+                case "smallint":
+                case "int2": return WholeNumber(text, name, short.MinValue, short.MaxValue);
+                case "int":
+                case "integer":
+                case "int4": return WholeNumber(text, name, int.MinValue, int.MaxValue);
+                case "bigint":
+                case "int8": return WholeNumber(text, name, long.MinValue, long.MaxValue);
+                // PostgreSQL's numeric has no fixed size: judged by shape, where .NET's decimal would refuse 1e30 the server takes.
+                case "decimal": return server ? ServerNumber(text, "numeric") : DecimalNumber(text, "decimal");
+                case "money":
+                case "smallmoney": return server ? null : DecimalNumber(text, name);
+                case "float":
+                case "real":
+                case "double precision":
+                case "float4":
+                case "float8": return FloatingPoint(text, name, allowSpecial: server);
+                case "bit": return server || BitToWire(text) != null ? null : "Not a valid bit value (0/1/true/false)";
+                case "boolean":
+                case "bool": return BooleanToWire(text) != null ? null : "Not a valid boolean value (true/false)";
+                case "uniqueidentifier":
+                case "uuid": return Guid.TryParse(text, out _) ? null : "Not a valid " + name + " value (8-4-4-4-12 hex digits)";
+                // PostgreSQL's date reads what its timestamp does (today, epoch, infinity, 20260203): the server's to judge.
+                case "date": return server || DateTimeToWire(text) != null ? null : "Not a valid date value (yyyy-MM-dd)";
+                case "smalldatetime":
+                case "datetime":
+                case "datetime2": return DateTimeToWire(text) != null ? null : "Not a valid " + name + " value (yyyy-MM-dd HH:mm:ss)";
+                case "datetimeoffset": return OffsetToWire(text) != null ? null : "Not a valid datetimeoffset value (yyyy-MM-dd HH:mm:ss +HH:mm)";
+                case "time": return server || TimeToWire(text) != null ? null : "Not a valid time value (HH:mm:ss)";
+                case "":
+                    break;
+                default:
+                    return null;
+            }
+
+            // No declared type (an older engine): the CLR hint says what the engine will parse the text as.
+            switch (clrHint)
+            {
+                case ClrTypeHint.Int64: return WholeNumber(text, "integer", long.MinValue, long.MaxValue);
+                case ClrTypeHint.Decimal: return DecimalNumber(text, "decimal");
+                case ClrTypeHint.Double: return FloatingPoint(text, "floating point", allowSpecial: false);
+                case ClrTypeHint.Bool: return BitToWire(text) != null ? null : "Not a valid bit value (0/1/true/false)";
+                case ClrTypeHint.Guid: return Guid.TryParse(text, out _) ? null : "Not a valid uniqueidentifier value (8-4-4-4-12 hex digits)";
+                case ClrTypeHint.DateTime: return DateTimeToWire(text) != null ? null : "Not a valid date/time value (yyyy-MM-dd HH:mm:ss)";
+                case ClrTypeHint.DateTimeOffset: return OffsetToWire(text) != null ? null : "Not a valid datetimeoffset value (yyyy-MM-dd HH:mm:ss +HH:mm)";
+                default: return null;
+            }
+        }
+
+        private static string? WholeNumber(string text, string name, long min, long max)
+        {
+            if (!System.Numerics.BigInteger.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n))
+                return "Not a valid " + name + " value (a whole number)";
+            return n >= min && n <= max
+                ? null
+                : "Out of range for " + name + " (" + min.ToString(CultureInfo.InvariantCulture) + " to " + max.ToString(CultureInfo.InvariantCulture) + ")";
+        }
+
+        /// <summary>SQL Server's decimal and money: what .NET's decimal holds (the engine parses the text into one).</summary>
+        private static string? DecimalNumber(string text, string name) =>
+            decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out _)
+                ? null
+                : "Not a valid " + name + " value (a number such as 12.50)";
+
+        /// <summary>PostgreSQL's numeric: a number by shape, of any size, or NaN / Infinity.</summary>
+        private static string? ServerNumber(string text, string name) =>
+            IsNumberText(text) || IsSpecialNumber(text)
+                ? null
+                : "Not a valid " + name + " value (a number such as 12.50)";
+
+        /// <summary>A sign, digits with at most one decimal point (at least one digit in all), an optional exponent — the
+        /// shape PostgreSQL's numeric input reads, without .NET's decimal range (review of W3: an unbounded numeric takes 1e30).</summary>
+        private static bool IsNumberText(string text)
+        {
+            int i = 0, n = text.Length, digits = 0;
+            if (i < n && (text[i] == '+' || text[i] == '-')) i++;
+            while (i < n && IsAsciiDigit(text[i])) { i++; digits++; }
+            if (i < n && text[i] == '.')
+            {
+                i++;
+                while (i < n && IsAsciiDigit(text[i])) { i++; digits++; }
+            }
+            if (digits == 0) return false;
+            if (i < n && (text[i] == 'e' || text[i] == 'E'))
+            {
+                i++;
+                if (i < n && (text[i] == '+' || text[i] == '-')) i++;
+                int exponent = 0;
+                while (i < n && IsAsciiDigit(text[i])) { i++; exponent++; }
+                if (exponent == 0) return false;
+            }
+            return i == n;
+        }
+
+        private static bool IsAsciiDigit(char c) => c >= '0' && c <= '9';
+
+        private static string? FloatingPoint(string text, string name, bool allowSpecial)
+        {
+            if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)
+                && (allowSpecial || !(double.IsNaN(d) || double.IsInfinity(d))))
+                return null;
+            if (allowSpecial && IsSpecialNumber(text)) return null;
+            return "Not a valid " + name + " value (a number)";
+        }
+
+        /// <summary>PostgreSQL's numeric and floating-point types hold NaN, Infinity and -Infinity (any case; <c>inf</c> too).</summary>
+        private static bool IsSpecialNumber(string text)
+        {
+            switch (text.ToLowerInvariant())
+            {
+                case "nan":
+                case "infinity":
+                case "+infinity":
+                case "-infinity":
+                case "inf":
+                case "+inf":
+                case "-inf":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         /// <summary><c>0x</c> and hex digits (an odd count gets a leading zero, as SQL Server reads it) → Base64.</summary>

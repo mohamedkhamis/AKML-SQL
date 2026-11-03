@@ -117,6 +117,7 @@
             @if (Result != null)
             {
                 <MessagesView Result="Result" SelectionStartLine="SelectionStartLine" SelectionStartColumn="SelectionStartColumn" ReceivedAt="ReceivedAt"
+                              Kind="@(Session?.Kind ?? AkmlSql.Core.DatabaseKind.SqlServer)"
                               OnNavigate="OnNavigateToLine" OnNavigateToPosition="OnNavigateToPosition" />
             }
             else if (!IsRunning)

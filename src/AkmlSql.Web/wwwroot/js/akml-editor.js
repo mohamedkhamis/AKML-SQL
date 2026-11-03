@@ -211,6 +211,26 @@ export function typedTriggerCharacters(kind) {
     return isPostgresKind(kind) ? /[\s.,()=<>!+\-*/:]/ : /[\s.,()=<>!+\-*/]/;
 }
 
+/** Spec 032 FR-001: the caret is right after a member-access dot (`o.` / `dbo.` / `[Sales].` / `"dbo".`). The leading
+ *  char class requires an identifier START (letter/_/]/"), so numeric literals (`3.`) never trigger. */
+export const DOT_MEMBER_TRIGGER = /(?:[A-Za-z_\]"][\w$]*|\]|")\.$/;
+
+/**
+ * Whether the completion source answers at the caret. A word being typed, a clause word followed by a space and a
+ * member-access dot always want a list. CodeMirror's `explicit` flag does not: a popup the editor opened itself (after
+ * `WHERE `, a dot, Ctrl+Space) is an explicit session, and CodeMirror hands that flag to every re-query while the user
+ * keeps typing, so it only counts at the position the request was made (`explicitAt`). Read as "answer anyway", the
+ * flag listed the table's columns after a `)` and Enter, meant to start the next line, inserted the first of them
+ * (`(o.CustomerID = 1)OrderID`; UI scan 2026-11-03, T1).
+ */
+export function completionWanted(kind, lineUpToCaret, { hasWord, explicit, explicitAt, pos }) {
+    if (endsStatement(lineUpToCaret)) return false;
+    if (hasWord) return true;
+    if (postKeywordTrigger(kind).test(lineUpToCaret)) return true;
+    if (DOT_MEMBER_TRIGGER.test(lineUpToCaret)) return true;
+    return explicit === true && explicitAt === pos;
+}
+
 // ── Spec 030 — expand "SELECT *" on Tab (SQL Prompt parity) ──────────────────────────────────────────────
 
 // The syntax nodes a '*' inside of which is never a select-list wildcard. Brackets is T-SQL's [quoted name] (the editor's
@@ -598,7 +618,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     // more noise than help.
     // Spec 042: the trigger words and the word pattern follow the editor's current database kind.
     const currentKind = () => { const i = _instances.get(hostElementId); return i && i.kind ? i.kind : (options && options.dialect); };
-    const DOT_MEMBER_TRIGGER = /(?:[A-Za-z_\]"][\w$]*|\]|")\.$/;
+    // The caret position of the last explicit completion request (our own trigger below, or Ctrl+Space): the only
+    // position where CodeMirror's inherited `explicit` flag means the user asked for a list (see completionWanted).
+    let explicitAt = -1;
 
     // Spec 041 (R65, FR-083): the caret for the status bar ("Ln 1, Col 12"), throttled to one report per 100 ms.
     let caretTimer = 0;
@@ -654,6 +676,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
                 // Spec 032 FR-001: '.' is a non-word char, so activateOnTyping never fires
                 // for member access — this manual open is the ONLY dot-trigger path.
                 if (postKeywordTrigger(currentKind()).test(lineUpToCaret) || DOT_MEMBER_TRIGGER.test(lineUpToCaret)) {
+                    explicitAt = pos;
                     cm.autocomplete.startCompletion(update.view);
                 }
             }
@@ -677,25 +700,13 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
         // Spec 042 (FR-061, scenario US3-7): PostgreSQL has no @variables, #temp tables or [brackets]. A popup the editor opened
         // by itself (after `SELECT `) is an explicit session that CodeMirror re-queries on every keystroke, so the sigil
         // has to end it here, or the list would stay open over the character that makes no sense.
-        if (isPostgresKind(kind) && /[@#\[]$/.test(lineAtCaret.text.slice(0, context.pos - lineAtCaret.from))) return null;
-        // A `;` ends the statement: the popup never opens on it, and a session already open (after `SELECT `) ends with it
-        // instead of offering every statement keyword over the end of the line.
-        if (endsStatement(lineAtCaret.text.slice(0, context.pos - lineAtCaret.from))) return null;
-        const wordValid = word && (word.from !== word.to || context.explicit);
-
-        // Detect "after a trigger keyword + whitespace" or "after a member-access
-        // dot" (spec 032 FR-001) by looking at the line text leading up to the
-        // caret. Cheaper than scanning the whole document.
-        let postKeyword = false;
-        let dotMember = false;
-        if (!wordValid) {
-            const lineUpToCaret = context.state.doc.lineAt(context.pos)
-                .text.slice(0, context.pos - context.state.doc.lineAt(context.pos).from);
-            postKeyword = postKeywordTrigger(kind).test(lineUpToCaret);
-            dotMember = DOT_MEMBER_TRIGGER.test(lineUpToCaret);
-        }
-
-        if (!wordValid && !postKeyword && !dotMember && !context.explicit) return null;
+        const lineUpToCaret = lineAtCaret.text.slice(0, context.pos - lineAtCaret.from);
+        if (isPostgresKind(kind) && /[@#\[]$/.test(lineUpToCaret)) return null;
+        const wordValid = !!word;
+        // A `;` ends the statement (the popup never opens on it, and a session already open ends with it); otherwise a
+        // word, a clause word + space or a member dot wants the list, and the explicit flag only at the position it was
+        // requested — not inherited through `)`, a space after an identifier, or anything else typed since.
+        if (!completionWanted(kind, lineUpToCaret, { hasWord: wordValid, explicit: context.explicit, explicitAt, pos: context.pos })) return null;
 
         try {
             // Pass the LIVE document text so the offline smart GROUP BY action parses what the
@@ -969,6 +980,8 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     // earlier registration wins).
     const completionAcceptKeymap = cm.state.Prec.highest(cm.view.keymap.of([
         { key: 'Tab', run: cm.autocomplete.acceptCompletion },
+        // Ctrl+Space: remember where the user asked, so the source answers there even with nothing typed (completionWanted).
+        { key: 'Ctrl-Space', run: (view) => { explicitAt = view.state.selection.main.head; return cm.autocomplete.startCompletion(view); } },
     ]));
 
     // ── Spec 030 (web Phase 1) — Quick Info on hover ─────────────────────────────────────────
@@ -1242,7 +1255,9 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
 
     const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
     _instances.set(hostElementId, {
-        view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect,
+        hostElementId, view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect,
+        // UI scan 2026-11-03 (W4): a tab shown by showTab reports its own caret; setState raises no update.
+        reportCaret,
         // Spec 043 (R6): the query tabs. The view shows `currentTab`; every other tab's state waits in `tabs`.
         extensions, optionExt, tabs: new Map(), currentTab: (options && options.tabId) || null,
     });
@@ -1348,6 +1363,16 @@ function storedTab(inst, tabId, create = false) {
  */
 export function switchTab(hostElementId, tabId, seedText, kind) {
     const inst = _instances.get(hostElementId);
+    if (!inst) return;
+    showTab(inst, tabId, seedText, kind);
+}
+
+/**
+ * The work of switchTab on an editor instance (exported for the unit tests, which build the instance by hand).
+ * `view.setState` raises no update, so the status bar is told the shown tab's caret here: without that it kept the
+ * previous tab's "Ln 9, Col 26" over a one-line tab until the next keystroke (UI scan 2026-11-03, W4).
+ */
+export function showTab(inst, tabId, seedText, kind) {
     if (!inst || !tabId || inst.currentTab === tabId) return;
     const view = inst.view;
     const shown = inst.currentTab
@@ -1357,7 +1382,7 @@ export function switchTab(hostElementId, tabId, seedText, kind) {
         () => inst.cm.state.EditorState.create({ doc: seedText ?? '', extensions: inst.extensions }));
     inst.currentTab = tabId;
     inst.kind = kind;
-    removePeek(hostElementId);   // a definition peeked in one tab is not shown over another
+    removePeek(inst.hostElementId);   // a definition peeked in one tab is not shown over another
     view.setState(next.state);
     // A stored state keeps the compartments it was made with: bring them to today's options and this tab's kind.
     view.dispatch({ effects: [
@@ -1367,6 +1392,7 @@ export function switchTab(hostElementId, tabId, seedText, kind) {
     ] });
     view.scrollDOM.scrollTop = next.scrollTop;
     view.scrollDOM.scrollLeft = next.scrollLeft;
+    if (typeof inst.reportCaret === 'function') inst.reportCaret(view.state);
 }
 
 /** Forget a closed tab's stored state. The page shows another tab first; closing the shown one leaves none current. */

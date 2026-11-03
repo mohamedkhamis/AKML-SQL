@@ -135,6 +135,20 @@ public sealed class StatusBarSegmentsTests : BunitContext
         Assert.Equal("1 row · 1,250 ms", cut.Find("[data-testid=status-rows]").TextContent.Trim());
     }
 
+    // UI scan 2026-11-03 (W2): a run the user cancelled is reported as cancelled, in SSMS's words, not as "completed with errors".
+    [Fact]
+    public void A_cancelled_run_says_it_was_cancelled_by_the_user()
+    {
+        var cut = Render<StatusBar>();
+
+        cut.InvokeAsync(_status.Begin);
+        cut.InvokeAsync(() => _status.Complete(new ExecuteQueryResult { Status = ExecuteStatus.Cancelled, ElapsedMs = 2_040 }));
+
+        Assert.Equal("Query was cancelled by user.", cut.Find("[data-testid=status-outcome]").TextContent.Trim());
+        Assert.Contains("#akml-icon-circle-alert", cut.Find("[data-testid=status-outcome]").InnerHtml);
+        Assert.Equal("0 rows · 2,040 ms", cut.Find("[data-testid=status-rows]").TextContent.Trim());
+    }
+
     [Fact]
     public void The_connection_chip_keeps_its_server_slash_database_format_or_says_connect()
     {

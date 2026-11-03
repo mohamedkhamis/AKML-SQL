@@ -175,25 +175,29 @@ public sealed class ResultSetGridPgApplyTests : IDisposable
     [Fact]
     public void A_failed_apply_shows_the_failing_edits_message_keeps_the_pending_changes_and_marks_nothing_applied()
     {
+        // UI scan 2026-11-03 (W3): a value the browser can judge ("abc" in a numeric) never reaches the server now; a numeric
+        // overflow is the server's to refuse, and the message names the row and column (ResultsGridCommitValidationTests).
+        const string error = "numeric field overflow — A field with precision 10, scale 2 must round to an absolute value less than 10^8.";
         var cut = _host.Render(ItemsSet());
         Edit(cut, 0, 1, "Ada L");
-        Edit(cut, 1, 2, "abc");
+        Edit(cut, 1, 2, "123456789.12");
         _host.Exec.ApplyReply = new ApplyChangesResult
         {
             Status = ExecuteStatus.Error,
-            ErrorMessage = "Edit 1 failed: invalid input syntax for type numeric: \"abc\"",
+            ErrorMessage = "Edit 1 failed: " + error,
             Results = new[]
             {
                 new CrudEditResult { Index = 0, Ok = false, Error = "Rolled back — edit 1 failed." },
-                new CrudEditResult { Index = 1, Ok = false, Error = "invalid input syntax for type numeric: \"abc\"" },
+                new CrudEditResult { Index = 1, Ok = false, Error = error },
             },
         };
 
         cut.Find("[data-testid=results-apply]").Click();
 
-        Assert.Contains("invalid input syntax for type numeric", cut.Find("[data-testid=results-apply-message]").TextContent);
-        Assert.DoesNotContain("Rolled back", cut.Find("[data-testid=results-apply-message]").TextContent);
+        Assert.Equal("Row 2, price: " + error, cut.Find("[data-testid=results-apply-message]").TextContent.Trim());
+        Assert.Equal(error, cut.Find("[data-testid=results-cell-invalid-1-2]").GetAttribute("title"));
         Assert.NotEmpty(cut.FindAll("[data-testid=results-applybar]"));      // the edits are still pending: correct and apply again
+        Assert.False(cut.Find("[data-testid=results-apply]").HasAttribute("disabled"));
         Assert.Equal("Ada L", Cell(cut, 0, 1).TextContent.Trim());
     }
 

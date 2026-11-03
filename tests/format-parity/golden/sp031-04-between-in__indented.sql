@@ -9,6 +9,7 @@ AND o.shipcountry IN(
 )
 AND o.freight BETWEEN 10.5 AND 200.75;
 
+
 SELECT od.orderid
 FROM   dbo.[order details] od
 WHERE  od.productid IN(

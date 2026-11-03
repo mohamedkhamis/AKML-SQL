@@ -1,3 +1,4 @@
+using AkmlSql.Formatting.Pipeline;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace AkmlSql.Formatting.SqlPrompt.Layout;
@@ -16,12 +17,18 @@ internal sealed partial class SqlPromptPrinter
     private readonly IList<TSqlParserToken> T;
     private readonly Func<int, bool> _isNoFormat;
 
-    public SqlPromptPrinter(SqlWriter writer, SqlPromptStyle style, Func<int, bool> isNoFormatToken)
+    /// <summary>Text the parser could not read (<see cref="UnparsedText"/>), first token → last token.</summary>
+    private readonly Dictionary<int, int> _unparsed = [];
+
+    public SqlPromptPrinter(SqlWriter writer, SqlPromptStyle style, Func<int, bool> isNoFormatToken,
+        IReadOnlyList<TokenRange>? unparsed = null)
     {
         W = writer;
         S = style;
         T = writer.Tokens;
         _isNoFormat = isNoFormatToken;
+        if (unparsed != null)
+            foreach (var run in unparsed) _unparsed[run.First] = run.Last;
     }
 
     private int Tab => W.TabSize;
@@ -32,29 +39,18 @@ internal sealed partial class SqlPromptPrinter
     public void Script(TSqlScript script)
     {
         var previousLast = -1;
-        var afterGo = false;
         foreach (var batch in script.Batches)
         {
-            // Batch separators (GO) between batches: each on its own line at column 0.
-            if (previousLast >= 0)
-            {
-                afterGo = EmitBatchSeparators(previousLast, batch.FirstTokenIndex);
-            }
-
             foreach (var statement in batch.Statements)
             {
-                if (previousLast >= 0)
-                {
-                    var blank = afterGo
-                        ? BlankLines(S.Whitespace.PreserveEmptyLinesAfterBatchSeparator, S.Whitespace.EmptyLinesAfterBatchSeparator, W.OriginalBlankLinesAfter(LastSignificantBefore(statement.FirstTokenIndex)))
-                        : BlankLines(S.Whitespace.PreserveEmptyLinesBetweenStatements, S.Whitespace.EmptyLinesBetweenStatements, W.OriginalBlankLinesAfter(previousLast));
-                    W.NewLine(0, blank);
-                }
+                // Batch separators (GO) and text the parser could not read, before this statement.
+                var afterGo = Between(ref previousLast, statement.FirstTokenIndex);
+                if (afterGo)
+                    W.NewLine(0, BlankLines(S.Whitespace.PreserveEmptyLinesAfterBatchSeparator, S.Whitespace.EmptyLinesAfterBatchSeparator, W.OriginalBlankLinesAfter(LastSignificantBefore(statement.FirstTokenIndex))));
+                else if (previousLast >= 0)
+                    W.NewLine(0, BlankLines(S.Whitespace.PreserveEmptyLinesBetweenStatements, S.Whitespace.EmptyLinesBetweenStatements, W.OriginalBlankLinesAfter(previousLast)));
                 else
-                {
                     W.NewLine(0);
-                }
-                afterGo = false;
                 Statement(statement);
                 previousLast = statement.LastTokenIndex;
             }
@@ -62,32 +58,57 @@ internal sealed partial class SqlPromptPrinter
             if (batch.Statements.Count == 0) previousLast = Math.Max(previousLast, batch.LastTokenIndex);
         }
 
-        // Trailing GO / comments.
-        if (previousLast >= 0) EmitBatchSeparators(previousLast, T.Count);
+        // Trailing GO / unread text / comments.
+        Between(ref previousLast, T.Count);
         W.NewLine(0);
         W.Through(T.Count - 1);
     }
 
-    /// <summary>Emits the GO tokens between two batches; returns true when there was one.</summary>
-    private bool EmitBatchSeparators(int afterToken, int beforeToken)
+    /// <summary>
+    /// Emits what lies between two statements (before the first one, after the last one) that the
+    /// printers would otherwise flush with default spacing on their way to the next token: each GO
+    /// batch separator on its own line at column 0 (with its repeat count), and each run of text the
+    /// parser could not read (<see cref="UnparsedText"/>) exactly as written, starting its own line
+    /// like a statement. Returns true when a GO came last. <paramref name="previousLast"/> moves to
+    /// the end of a run emitted, so the statement after it gets the style's empty lines between
+    /// statements.
+    /// </summary>
+    private bool Between(ref int previousLast, int beforeToken)
     {
-        var any = false;
-        for (var i = afterToken + 1; i < beforeToken && i < T.Count; i++)
+        var afterGo = false;
+        var anchor = previousLast;   // the token the empty lines before a run count from
+        for (var i = previousLast + 1; i < beforeToken && i < T.Count; i++)
         {
-            if (T[i].TokenType != TSqlTokenType.Go) continue;
-            W.NewLine(0);
-            W.Through(i);
-            // "GO 5": the count belongs to the separator line
-            var j = NextSignificant(i + 1);
-            if (j >= 0 && j < beforeToken && T[j].TokenType == TSqlTokenType.Integer && !W.OriginalNewLineBetween(i, j))
+            if (T[i].TokenType == TSqlTokenType.Go)
             {
-                W.Space();
-                W.Through(j);
-                i = j;
+                W.NewLine(0);
+                W.Through(i);
+                // "GO 5": the count belongs to the separator line
+                var j = NextSignificant(i + 1);
+                if (j >= 0 && j < beforeToken && T[j].TokenType == TSqlTokenType.Integer && !W.OriginalNewLineBetween(i, j))
+                {
+                    W.Space();
+                    W.Through(j);
+                    i = j;
+                }
+                anchor = i;
+                afterGo = true;
             }
-            any = true;
+            else if (_unparsed.TryGetValue(i, out var last))
+            {
+                if (anchor < 0)
+                    W.NewLine(0);
+                else if (afterGo)
+                    W.NewLine(0, BlankLines(S.Whitespace.PreserveEmptyLinesAfterBatchSeparator, S.Whitespace.EmptyLinesAfterBatchSeparator, W.OriginalBlankLinesAfter(anchor)));
+                else
+                    W.NewLine(0, BlankLines(S.Whitespace.PreserveEmptyLinesBetweenStatements, S.Whitespace.EmptyLinesBetweenStatements, W.OriginalBlankLinesAfter(anchor)));
+                W.Verbatim(i, last);
+                previousLast = anchor = last;
+                afterGo = false;
+                i = last;
+            }
         }
-        return any;
+        return afterGo;
     }
 
     private static int BlankLines(bool preserve, int configured, int original) =>

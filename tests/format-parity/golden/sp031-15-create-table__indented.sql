@@ -7,12 +7,14 @@ CREATE TABLE dbo.orderaudit(
     changedby  nvarchar(128) NOT NULL
 );
 
+
 CREATE TABLE dbo.regionmap(
     regionid    int          NOT NULL,
     territoryid nvarchar(20) NOT NULL,
 
     constraint pk_regionmap primary key (regionid, territoryid)
 );
+
 
 CREATE TABLE dbo.tinylookup(
     code char(2) NOT NULL primary key
