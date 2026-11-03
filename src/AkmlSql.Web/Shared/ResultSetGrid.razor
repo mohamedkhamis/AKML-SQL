@@ -1617,9 +1617,18 @@
         _editCol = col;
         _editInsert = -1;
         _editReplaced = replaceWith != null;
-        _editInitial = replaceWith ?? EditText(CurrentWire(row, col), col) ?? string.Empty;
+        _editInitial = replaceWith ?? InitialEditText(_edits.TryGetValue(row, out var pending) ? pending : null, col, CurrentWire(row, col));
         _menu = null;
     }
+
+    /// <summary>What the editor starts with: a pending value the column cannot take, as the user typed it — the cell shows that
+    /// text, so the editor must too (a Base64-shaped word in a binary column decodes, and the editor used to reopen on the bytes
+    /// it stands for, 0x1F for "Hw==", where Enter changed nothing and the mark stayed — full-cycle check of PR #259); else the
+    /// cell's text where it converts back without loss (<see cref="EditText"/>), else the wire.</summary>
+    private string InitialEditText(PendingRow? pending, int col, string? wire) =>
+        pending != null && pending.Invalid.ContainsKey(col) && pending.Cells.TryGetValue(col, out var typed)
+            ? typed ?? string.Empty
+            : EditText(wire, col) ?? string.Empty;
 
     private void BeginInsertEdit(int insIdx, int col)
     {
@@ -1632,7 +1641,8 @@
         _editCol = col;
         _editInsert = insIdx;
         _editReplaced = false;
-        _editInitial = EditText(_inserts[insIdx].Cells.TryGetValue(col, out var v) ? v : null, col) ?? string.Empty;
+        var ins = _inserts[insIdx];
+        _editInitial = InitialEditText(ins, col, ins.Cells.TryGetValue(col, out var v) ? v : null);
     }
 
     private void EndEdit()

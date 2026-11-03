@@ -1,157 +1,183 @@
 # AKML SQL
 
-AI-powered SQL development assistance for SQL Server Management Studio 22. AKML SQL replicates and extends the Redgate SQL Prompt feature set, runs in SSMS 22 (Visual Studio 2026 is no longer supported), and ships a self-contained `.NET 10` engine for IntelliSense, formatting, refactoring, and static analysis.
+SQL Prompt-class assistance for SQL Server Management Studio 22 and the browser: IntelliSense, formatting, static analysis, refactoring, SQL history and AI help, backed by one self-contained .NET 10 engine. The web edition adds PostgreSQL.
 
-**Author**: Mohamed Khamis · **License**: MIT · **Version**: stamped per build as 1.YY.MMDD.HHmm (latest on the [download page](https://akml.khamis.work/download))
+**Author** Mohamed Khamis · **License** MIT ([LICENSE.txt](LICENSE.txt)) · **Latest release** 1.26.1027.1505 (2026-10-27) on the [download page](https://akml.khamis.work/download) · **Docs** [akml.khamis.work/docs](https://akml.khamis.work/docs)
 
 ---
 
-## At a glance
+## Contents
 
-| Area | Highlights |
-|---|---|
-| **IntelliSense** | 11 completion providers (Column / Alias / Object / Keyword / Snippet / Variable / Parameter / JOIN / JOIN ON foreign key / Database / Smart GROUP BY) plus Quick Info and signature help, fuzzy matching, dot-trigger, schema-aware ranking, custom SQL-Prompt-style popup with type-coded icon badges + Ctrl-held semi-transparency |
-| **Code formatting** | 7-stage pipeline (parse → annotate → layout → casing → emit → validate → idempotency), Format Document / Selection / Bulk Format / Unformat, `.akmlstyle` profile system, **SQL Prompt `.sqlpromptstylev2` XML round-trip** (import + export) |
-| **Format Styles editor** | Modal three-column WPF editor with style list / settings tree / live preview, type-driven controls, schema fetched via IPC, 100 ms debounced preview, FR-023 unsupported-setting affordance |
-| **Snippets** | Personal + team + built-in folders, context-aware filtering, surround-with chord |
-| **Static analysis** | 130+ rules across 8 categories (Performance / BestPractices / Security / Style / Design / Deprecated / Execution / Naming), inline suppressions, per-project `.casettings`, native VS Error List integration |
-| **Refactoring** | Smart Rename, Script as ALTER, Inline EXEC, Inline Stored Procedure, Convert INSERT to UPDATE, Find Invalid Objects + light-bulb fixes (Expand Wildcards, Qualify Object Names, Convert sp_executesql to Static SQL, Surround with BEGIN/END, Unformat). The engine also has Parameterize Values, Convert Temp Table and 12 lightweight operations not yet on the SSMS menu |
-| **SQL History** | Full crash-safe history with three-panel UI (queries / versions / preview), full-text search, star/open/closed filters, syntax-highlighted code preview |
-| **Tab Coloring** | Environment-based per-server colouring (tab background + status bar tint + floating window border), wildcard pattern rules, gradient toggle. See `specs/020-sqlprompt-visual-parity/tab-coloring-audit.md` for the parity audit vs SQL Prompt §5.1 |
-| **AI assistance** | Explain, Fix, Chat, Ghost Text (inline autocomplete), schema-aware prompting; Text-to-SQL, Optimize and Index Analysis in the web edition |
-| **Theme system** | Centralised `ThemeTokens` / `ThemeRegistry` / `HostThemeWatcher` (spec 016) with Light / Dark / HighContrast palettes — 25+ brush tokens across Surface / Text / Border / Accent / Status / Editor / Chat / IconBadge / TabColor / History families |
+- [What you get](#what-you-get)
+- [Editions](#editions)
+- [How it works](#how-it-works)
+- [Install](#install)
+- [Build from source](#build-from-source)
+- [Run the tests](#run-the-tests)
+- [Repository layout](#repository-layout)
+- [Documentation](#documentation)
+- [Status](#status)
 
-## Project structure
+## What you get
+
+| Area | In short |
+| --- | --- |
+| **IntelliSense** | Schema-aware completion for columns, aliases, objects, keywords, snippets, variables, parameters, JOIN and JOIN … ON foreign keys, databases and GROUP BY; Quick Info and signature help; fuzzy matching; a SQL Prompt-style popup with type icons. |
+| **Formatting** | A seven-stage pipeline (parse → annotate → layout → casing → emit → validate → idempotency) with `.akmlstyle` profiles, built-in styles, a style editor with live preview, and round-trip import/export of SQL Prompt `.sqlpromptstylev2` styles. Format Document / Selection / Bulk Format / Unformat and the SQL Prompt format actions (expand wildcards, qualify names, semicolons, aliases, old-style joins …). |
+| **Static analysis** | 130+ rules across Performance, Best Practices, Security, Style, Design, Deprecated, Execution and Naming; inline `-- akml-disable` suppressions, per-project `.casettings`, the SSMS Error List, and 52 rules for PostgreSQL. |
+| **Refactoring** | Smart Rename, Script as ALTER, Inline EXEC / stored procedure, Convert INSERT to UPDATE, Find Invalid Objects, light-bulb fixes. |
+| **SQL History** | Crash-safe history of every run, grouped by query session, with versions, compare, search syntax and restore on start. |
+| **Snippets** | Personal, team and built-in snippet folders, context-aware filtering, surround-with. |
+| **AI assistance** | Explain, Fix, Chat, inline ghost text, Text-to-SQL, Optimize and Index Analysis, with up to 20 named agents (OpenAI, Anthropic, Gemini, Azure, Ollama, LM Studio) and schema-aware prompting. Keys stay on your machine. |
+| **Tab colouring and themes** | Environment colours per server, and Light / Dark / High Contrast themes that follow the host. |
+
+## Editions
+
+| Edition | Where it runs | What it needs |
+| --- | --- | --- |
+| **SSMS 22 extension** | Inside SQL Server Management Studio 22 (.NET Framework 4.7.2, VS SDK 17.14) | The engine, installed next to it by the setup. |
+| **Web edition** | Any modern browser, as a Blazor WebAssembly app served by the engine, a Windows service or IIS | A paired engine on the machine or the LAN for live schema, query execution, history and styles. Formatting and analysis also work entirely in the browser. |
+| **Engine** | A separate `AkmlSql.Engine.exe` process (.NET 10, win-x64, self-contained) | Nothing else. SSMS talks to it over a named pipe; the browser over a WebSocket bridge. |
+| **Command line** | `akmlsql-format` and the static analyzer, single-file executables | Scripts and CI. |
+
+The web edition works with **SQL Server and PostgreSQL**: connect, complete, run scripts one statement at a time, edit results by key, format and analyse, with the dialect decided by the connection.
+
+## How it works
 
 ```text
-AKML-SQL.slnx                          # Solution file (.slnx format)
-src/
-  AkmlSql.Core/                        # Shared library (netstandard2.0 + net10.0)
-  AkmlSql.Engine/                      # Out-of-process IntelliSense / format / analysis engine (.NET 10, win-x64, self-contained, not trimmed)
-  AkmlSql.Formatting/                  # Formatter pipeline + profile system (.NET 10)
-  AkmlSql.Analyzer/                    # CLI SQL static analyzer (.NET 10)
-  AkmlSql.Shell.Shared/                # Shared project (.projitems) for the shell extensions
-  AkmlSql.Ssms22/                      # SSMS 22 extension (net472, x64, VS SDK 17.14.x)
-  AkmlSql.Updater/                     # Self-contained updater (.NET 10, win-x64, trimmed)
-  AkmlSql.Site/                        # Blazor static-SSR product site (.NET 10) — landing/features/download + docs auto-ingested from doc/
-  AkmlSql.Installer/                   # Inno Setup 7 installer scripts
-tests/
-  AkmlSql.Core.Tests/                  # xunit (net10.0) — Core + IPC + Tabs + Theme + Format
-  AkmlSql.Engine.Tests/                # xunit (net10.0) — engine handlers + parser + analysis rules + refactoring
-  AkmlSql.Formatting.Tests/            # xunit (net10.0) — pipeline + profile + SqlPrompt import/export
-  AkmlSql.Site.Tests/                  # xunit + bunit (net10.0) — site components, docs pipeline, releases manifest
-  format-parity/                       # SQL Prompt parity corpus + golden outputs (scaffold; population deferred to corpus PR)
-doc/                                   # All project documentation — architecture, ipc-api, configuration, formatting, analysis-rules, progress, deployment
-docs/                                  # WPF theming contributor guide
-specs/                                 # /speckit feature specifications
+ SSMS 22 ──named pipe (MessagePack)──┐
+                                     ├──► AkmlSql.Engine (.NET 10)
+ Browser ──WebSocket bridge──────────┘      parser · schema cache · completion
+                                            formatter · analysis · refactoring
+                                            history · AI · SQL Server + PostgreSQL
 ```
 
-## Architecture
+- The shell and the browser never parse or connect to a database themselves. The engine owns the parsers (ScriptDom for T-SQL, libpg_query for PostgreSQL), the schema cache (a fast phase for names, a background phase for columns and keys, change detection by checksum), execution and history.
+- The pipe is per user and per SSMS process with an owner-only ACL. The bridge is loopback by default; LAN exposure needs PIN pairing and uses bearer tokens.
+- Shared libraries (`AkmlSql.IntelliSense`, `AkmlSql.Formatting`, `AkmlSql.Analysis`, `AkmlSql.AI`) are compiled into both the engine and the web app, so the browser formats and analyses with the same code the IDE uses.
 
-AKML SQL runs as **two processes** communicating over a named pipe:
+[doc/architecture.md](doc/architecture.md) has the component map, startup sequence and data flows; [doc/ipc-api.md](doc/ipc-api.md) every message type.
 
-| Process | Target | Role |
-|---|---|---|
-| **Shell extension** | .NET Framework 4.7.2 inside SSMS / VS | UI, command handlers, editor integration |
-| **Engine** | .NET 10 self-contained, win-x64, trimmed | Parsing (TSql170Parser), schema cache, completion, formatting pipeline, analysis, refactoring |
+## Install
 
-Per-shell-process named pipe (`akmlsql-engine-{user-SID}-{shell-PID}`) with owner-only ACL; MessagePack frame format (`[4-byte length][4-byte XOR CRC][MessagePack(RpcMessage)]`); 16 MB max frame.
+1. Download `AKMLSQLSetup.exe` from the [download page](https://akml.khamis.work/download) and run it. It installs the SSMS 22 extension, the engine and the web edition, and clears SSMS's MEF cache for you.
+2. Choose how the web edition is hosted: the built-in **service** (default), **IIS** when it is ready on the machine, or **files only**.
+3. Open SSMS. The **AKML SQL** menu under *Tools* has Options, Format Styles, SQL History, Check for Updates and About. The web edition opens from the Start menu shortcut.
 
-See [doc/architecture.md](doc/architecture.md) for the full component map, startup sequence, and data flows.
+Silent install:
 
-## Building
+```text
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /TARGETS=ssms22 /WEB_HOST=SERVICE /WEB_EXPOSURE=LOCALHOST
+```
 
-Shell projects MUST be built individually with full MSBuild (not `dotnet build`) — VSSDK requires CodeTaskFactory:
+Updates are checked daily and at sign-in; nothing installs without your click. Settings live in `%AppData%\AKML SQL\config.json`, logs under `%AppData%\AKML SQL\logs`, web machine state under `%ProgramData%\AKML SQL Web`. See [doc/deployment.md](doc/deployment.md) and [doc/configuration.md](doc/configuration.md).
+
+## Build from source
+
+Prerequisites: Visual Studio 2026 with the .NET 10 SDK and the Visual Studio extension development workload (for the VSSDK build tools), Inno Setup 7 for the installer, and SQL Server plus a local PostgreSQL for the live tests.
 
 ```bash
-MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe"   # or: vswhere -latest -prerelease -find MSBuild\**\Bin\MSBuild.exe
+MSBUILD="/c/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe"
 
-# Engine first
+# Whole solution (restore first)
+"$MSBUILD" AKML-SQL.slnx -t:Restore -v:quiet
+"$MSBUILD" AKML-SQL.slnx -t:Build -p:Configuration=Release -m -v:minimal
+
+# Engine and updater publish (before the installer)
 dotnet publish src/AkmlSql.Engine/AkmlSql.Engine.csproj -c Release -r win-x64
-
-# Each shell project individually (avoid VSCT cross-contamination from solution-wide builds)
-"$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Restore -p:Configuration=Release -v:quiet
-"$MSBUILD" "src/AkmlSql.Ssms22/AkmlSql.Ssms22.csproj" -t:Build -p:Configuration=Release -v:minimal
-
-# Tests
-dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
-dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj
-dotnet test tests/AkmlSql.Formatting.Tests/AkmlSql.Formatting.Tests.csproj
+dotnet publish src/AkmlSql.Updater/AkmlSql.Updater.csproj -c Release
 
 # Installer
 "/c/Program Files/Inno Setup 7/ISCC.exe" src/AkmlSql.Installer/AkmlSqlSetup.iss
 ```
 
-Full build gotchas (VSPackage.resx, vsixmanifest schema differences, MEF cache clearing, etc.) live in [CLAUDE.md](CLAUDE.md#build-gotchas).
+Two rules worth knowing before the first build:
+
+- The SSMS extension (`src/AkmlSql.Ssms22`) builds only with full MSBuild, never `dotnet build`: the VSSDK targets need CodeTaskFactory.
+- The engine is published **without** single-file or trimming: its SQL client and the PostgreSQL parser carry native libraries.
+
+`build.ps1` runs the whole release sequence (version stamp, publish, installer). Every gotcha we have met is written down in [CLAUDE.md › Build Gotchas](CLAUDE.md#build-gotchas).
+
+## Run the tests
+
+```bash
+# One xunit project per library
+dotnet test tests/AkmlSql.Core.Tests/AkmlSql.Core.Tests.csproj
+dotnet test tests/AkmlSql.Formatting.Tests/AkmlSql.Formatting.Tests.csproj
+dotnet test tests/AkmlSql.PostgreSql.Tests/AkmlSql.PostgreSql.Tests.csproj
+dotnet test tests/AkmlSql.Web.Tests/AkmlSql.Web.Tests.csproj
+dotnet test tests/AkmlSql.Engine.Tests/AkmlSql.Engine.Tests.csproj       # live tests need SQL Server on localhost
+dotnet test tests/AkmlSql.Shell.Shared.Tests/AkmlSql.Shell.Shared.Tests.csproj
+
+# Web edition JavaScript (Node 24 needs the glob, not the folder)
+node --test "tests/AkmlSql.Web.Tests/js/*.test.mjs"
+
+# Browser suites (Playwright; builds the Debug prerequisites, runs serially)
+powershell -ExecutionPolicy Bypass -File scripts/run-playwright.ps1
+
+# A disposable PostgreSQL cluster for the live PostgreSQL tests (localhost:55432)
+powershell -ExecutionPolicy Bypass -File scripts/pg-test-server.ps1 -Action Start
+```
+
+Corpora keep the formatter and completion honest: `tests/format-parity` (SQL Prompt parity goldens, one per corpus script and style), `tests/completion-corpus` (1,376 autocomplete cases with a pass-rate gate), and their PostgreSQL counterparts `tests/pg-format-corpus` and `tests/pg-completion-corpus`. Regenerate goldens only on purpose: `AKML_UPDATE_PARITY_GOLDEN=1` for the formatter.
+
+## Repository layout
+
+```text
+AKML-SQL.slnx                 Solution (.slnx)
+src/
+  AkmlSql.Core/               Shared contracts, IPC messages, config, text helpers (netstandard2.0 + net10.0)
+  AkmlSql.Engine/             The out-of-process engine (net10.0, win-x64)
+  AkmlSql.IntelliSense/       Completion providers, shared by engine and web
+  AkmlSql.Formatting/         Formatter pipeline, .akmlstyle profiles, SQL Prompt layout and import/export
+  AkmlSql.Analysis/           Analysis rules, shared by engine and web
+  AkmlSql.PostgreSql/         PostgreSQL parser wrapper, completion, formatter, rules, reference (engine only)
+  AkmlSql.AI/                 AI providers, agents and prompts, shared by engine and web
+  AkmlSql.Shell.Shared/       Everything the SSMS extension does (shared project)
+  AkmlSql.Ssms22/             The SSMS 22 VSIX (net472)
+  AkmlSql.Web/                Blazor WebAssembly web edition
+  AkmlSql.Web.Shared/         Web contracts (netstandard2.0)
+  AkmlSql.Formatter/          akmlsql-format command line
+  AkmlSql.Analyzer/           Static analyzer command line
+  AkmlSql.Updater/            Self-contained updater
+  AkmlSql.Installer/          Inno Setup 7 scripts
+  AkmlSql.Site/               Product site: landing, download, docs ingested from doc/
+tests/                        One xunit project per library, browser suites (Web.E2E, UiTests, Site.E2E), installer tests, corpora
+doc/                          Architecture, IPC API, configuration, formatting, analysis rules, deployment, progress log, WEB/ milestone docs
+docs/                         WPF theming guide and the design tokens
+specs/                        Feature specifications 001–045 (Specify framework), each with its plan, tasks and evidence
+scripts/                      Build, release, Playwright, PostgreSQL test cluster and site helpers
+```
 
 ## Documentation
 
-| File | Content |
-|---|---|
-| [doc/architecture.md](doc/architecture.md) | Component map, startup sequence, data flows, design decisions |
-| [doc/ipc-api.md](doc/ipc-api.md) | Every IPC message type, request/response schemas, frame format |
-| [doc/configuration.md](doc/configuration.md) | `config.json` schema, `.casettings`, persistence markers, logging |
-| [doc/formatting.md](doc/formatting.md) | Pipeline stages, profile schema, SQL Prompt round-trip, format actions |
-| [doc/analysis-rules.md](doc/analysis-rules.md) | All 130+ analysis rules with descriptions and severities |
-| [doc/deployment.md](doc/deployment.md) | Install paths per host, MEF cache clearing, troubleshooting |
-| [doc/progress.md](doc/progress.md) | Per-spec development log with phase tables, clarifications, deferred follow-ups |
-| [docs/wpf-theming.md](docs/wpf-theming.md) | WPF theme token contributor guide |
-| [CLAUDE.md](CLAUDE.md) | Project conventions, build gotchas, WPF UI rules, code conventions |
-| [specs/](specs/) | `/speckit` feature specifications (one folder per spec) |
-| [doc/SQL-PROMPT/](doc/SQL-PROMPT/) | Canonical Redgate SQL Prompt visual contract — design tables, hex codes, SVG mockups |
-| [doc/WEB/](doc/WEB/) | Spec 021 web edition — milestone PRDs, quickstart guides per milestone, AI-key wrapping contract |
-
-## Web edition (spec 021)
-
-A Blazor WASM web edition that ships alongside the IDE plugins. Browse to a local
-URL, format / analyse SQL entirely in the browser, optionally pair with a local
-engine for live IntelliSense, optionally bring your own AI key for Text-to-SQL /
-Explain / Fix / Optimize.
-
-| Surface | Detail |
-|---------|--------|
-| Editor + format + analyse | CodeMirror 6 + the same `FormatterPipeline` + `AnalysisEngine` the IDE plugins run -- in-process inside the WASM. |
-| Bridge | WebSocket between browser and the local engine, MessagePack frames, capability-gated. PIN pairing on first LAN connect; bearer tokens wrapped at rest with Web Crypto. |
-| Schema cache | IndexedDB store keyed by `(serverCanonicalIdentity, database)`. LRU eviction. Two DNS aliases of the same SQL Server share one entry. |
-| AI | Direct fetch from the browser to OpenAI / Anthropic / Gemini / Azure / Ollama / LM Studio. Per-provider origin allow-list refuses non-listed fetches at the factory layer. API keys wrapped with non-extractable AES-GCM 256. |
-
-See [doc/WEB/00-INDEX.md](doc/WEB/00-INDEX.md) for the full spec 021 documentation set, including per-milestone quickstart guides at [quickstart-m2.md](doc/WEB/quickstart-m2.md), [quickstart-m4.md](doc/WEB/quickstart-m4.md), [quickstart-m5.md](doc/WEB/quickstart-m5.md), and [quickstart-m6.md](doc/WEB/quickstart-m6.md).
-
-## Product site (spec 034)
-
-The public product website in `src/AkmlSql.Site/` — a Blazor Web App (.NET 10, static
-SSR only, no interactive render modes) serving the landing, features, download, and
-documentation pages. Documentation is auto-ingested from `doc/` at build/publish time
-(no per-document registration): sidebar section tree, no-JS title filter, deferred
-MiniSearch full-text search, and server-rendered Markdown with syntax highlighting.
-Developer Dark theme by default with an optional persisted light/dark toggle.
-
-```bash
-dotnet run --project src/AkmlSql.Site   # http://localhost:5180
-```
-
-Releases shown on `/download` come from `src/AkmlSql.Site/wwwroot/releases.json`;
-SEO surface includes per-page titles/descriptions, Open Graph tags, `/sitemap.xml`,
-and `robots.txt` (canonical base URL via `Site:BaseUrl` in `appsettings.json`).
+| Read this | For |
+| --- | --- |
+| [doc/architecture.md](doc/architecture.md) | Components, startup, data flows, design decisions |
+| [doc/ipc-api.md](doc/ipc-api.md) | Every IPC and bridge message, frame format |
+| [doc/configuration.md](doc/configuration.md) | `config.json`, `.casettings`, logging |
+| [doc/formatting.md](doc/formatting.md) | Pipeline stages, profile options, SQL Prompt round-trip |
+| [doc/analysis-rules.md](doc/analysis-rules.md) | All analysis rules with severities |
+| [doc/postgresql-reference.md](doc/postgresql-reference.md) | How the PostgreSQL reference is generated and used |
+| [doc/deployment.md](doc/deployment.md) | Install paths, hosting modes, cache clearing, troubleshooting |
+| [doc/progress.md](doc/progress.md) | The development log, spec by spec |
+| [doc/WEB/00-INDEX.md](doc/WEB/00-INDEX.md) | Web edition milestones, quickstarts, release notes and UI test reports |
+| [docs/wpf-theming.md](docs/wpf-theming.md) | Theme tokens for new WPF UI |
+| [CLAUDE.md](CLAUDE.md) | Conventions, build gotchas and the current state for contributors and coding agents |
 
 ## Status
 
-| Spec | Status |
-|---|---|
-| 015 — Bug fixes & polish | Merged to master |
-| 016 — WPF theme refresh | Merged to master |
-| 017 / 018 — Options dialog phases 1 + 2 | Merged to master |
-| 019 — Phase 10 parity-closure design docs | Merged to master |
-| 020 — SQL Prompt visual parity | Merged to master (77 / 106 tasks; 29 deferred) |
-| 021 — Web edition | On `021-web-edition` branch (111 / 150 tasks; 39 deferred — Playwright, IIS integration, manual audits) |
+Specs 001–045 are merged to `master`. The most recent work:
 
-Deferred from spec 020 — see `specs/020-sqlprompt-visual-parity/tasks.md` for the full list:
+| Spec / change | What it brought |
+| --- | --- |
+| 041 · 043 | An SSMS-grade web workspace: results grid with editing, scripts run batch by batch, query tabs, one Connect to database dialog |
+| 042 | PostgreSQL in the engine and the web edition |
+| 044 · 045 | The product site redesign and standalone web hosting from the engine |
+| UI scan 2026-11-03 ([report](doc/WEB/ui-test-report-2026-11-03.md)) | Completion, formatter, grid validation and SSMS dot-commit fixes, reviewed and merged (PR #259) |
 
-- Formatter pipeline gap closures (T074–T084) — 11 layout rules
-- Parity corpus + tests (T071–T073) — needs Redgate install for golden generation
-- Format Styles editor menu wire + Options dialog re-skin (T044–T048, T059)
-- Manual product-running audits (T098–T100, T105) — DPI, a11y, screenshot review, end-to-end smoke
+Known open items are tracked in the spec `tasks.md` files and in [doc/progress.md](doc/progress.md): the SSMS `dbo.` completion fix still wants a live SSMS confirmation, the web explorer's folders are not yet exposed as a tree to assistive technology, and format-on-paste is not wired in SSMS 22.
 
 ## License
 
-MIT. See `LICENSE` (if present) for terms.
+MIT. See [LICENSE.txt](LICENSE.txt).

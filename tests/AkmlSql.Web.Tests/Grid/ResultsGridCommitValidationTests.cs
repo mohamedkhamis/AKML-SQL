@@ -282,6 +282,27 @@ public sealed class ResultsGridCommitValidationTests : IDisposable
         Assert.Equal("01/02/2025", cut.Find("[data-testid=results-cell-input]").GetAttribute("value"));
     }
 
+    /// <summary>Full-cycle check after the review of PR #259: a Base64-shaped word typed into a binary column is invalid, yet it
+    /// decodes — the editor reopened on the bytes it stands for (0x1F), Enter changed nothing, and the mark stayed. An invalid
+    /// pending value reopens as the text the cell shows, so correcting it is one edit.</summary>
+    [Fact]
+    public void Reopening_an_invalid_binary_cell_edits_the_typed_text_not_its_decoded_form()
+    {
+        var cut = _host.Render(SqlServerSet());
+        Edit(cut, 0, 12, "Hw==");
+        Assert.Equal("Hw==", Cell(cut, 0, 12).TextContent.Trim());
+
+        Cell(cut, 0, 12).DoubleClick();
+        var input = cut.Find("[data-testid=results-cell-input]");
+        Assert.Equal("Hw==", input.GetAttribute("value"));
+
+        input.Input("0x1F");
+        input.KeyDown(new KeyboardEventArgs { Key = "Enter" });
+        Assert.Empty(cut.FindAll("[data-testid=results-cell-invalid-0-12]"));
+        Assert.Equal("0x1F", Cell(cut, 0, 12).TextContent.Trim());
+        Assert.False(ApplyDisabled(cut));
+    }
+
     [Fact]
     public void The_apply_bar_counts_type_invalid_cells_with_emptied_ones()
     {
