@@ -59,12 +59,14 @@ public class LayoutEngine
             // --- Text the parser could not read: kept exactly as written, on its own lines ---
             if (unparsedByFirst.TryGetValue(i, out var unparsedLast))
             {
-                // Starts like a statement: the style's empty line between statements, the single line break after GO.
-                AddUnparsedRun(nodes, tokens, i, unparsedLast,
-                    isFirstSemanticToken ? BreakType.None
+                // Starts like a statement: the style's empty lines between statements (above the comments that introduce it,
+                // when there are any), the single line break after GO.
+                var start = isFirstSemanticToken ? BreakType.None
                     : !afterGo && profile.Whitespace.EmptyLineBetweenStatements > 0 ? BreakType.EmptyLine
-                    : BreakType.NewLine,
-                    profile.Whitespace.EmptyLineBetweenStatements);
+                    : BreakType.NewLine;
+                if (start == BreakType.EmptyLine && HoistGapToLeadingComments(nodes, profile.Whitespace.EmptyLineBetweenStatements))
+                    start = BreakType.NewLine;
+                AddUnparsedRun(nodes, tokens, i, unparsedLast, start, profile.Whitespace.EmptyLineBetweenStatements);
                 i = unparsedLast;
                 afterUnparsed = true;
                 afterGo = false;
@@ -257,7 +259,14 @@ public class LayoutEngine
                 IsInNoformatRegion = noformatRegions != null && NoformatScanner.IsInNoformatRegion(noformatRegions, t.Offset)
             };
             if (isFirstInStatement && decision.Break == BreakType.EmptyLine)
-                node.EmptyLineCount = Math.Max(1, profile.Whitespace.EmptyLineBetweenStatements);
+            {
+                // W6: the style's count of empty lines between statements — above the comments that introduce the
+                // statement when there are any (review of W6), else on the statement's first token.
+                if (HoistGapToLeadingComments(nodes, profile.Whitespace.EmptyLineBetweenStatements))
+                    node.PrecedingBreak = BreakType.NewLine;
+                else
+                    node.EmptyLineCount = Math.Max(1, profile.Whitespace.EmptyLineBetweenStatements);
+            }
 
             nodes.Add(node);
 
@@ -272,6 +281,33 @@ public class LayoutEngine
 
         return nodes;
     }
+
+    /// <summary>
+    /// The comments written directly above a statement introduce it (<see cref="AstAnnotator"/>: Leading — on their own
+    /// lines, no empty line between them and the statement). The style's empty lines between statements go above the
+    /// first of them, and the statement follows its comments on the next line; the first W6 fix put the count between the
+    /// comments and their statement, which pushed the comments onto the statement before (review of W6). A comment the
+    /// author set apart with empty lines on both sides (Standalone) is not a preamble and stops the search. Returns true
+    /// when a run of leading comments took the gap — the statement's own break is then a single new line.
+    /// </summary>
+    private static bool HoistGapToLeadingComments(List<LayoutNode> nodes, int emptyLines)
+    {
+        int first = nodes.Count;
+        while (first > 0 && IsLeadingComment(nodes[first - 1])) first--;
+        if (first == nodes.Count) return false;
+
+        var lead = nodes[first];
+        lead.PrecedingBreak = BreakType.EmptyLine;
+        lead.EmptyLineCount = Math.Max(1, emptyLines);
+        lead.LeadsStatement = true;
+        return true;
+    }
+
+    private static bool IsLeadingComment(LayoutNode node) =>
+        node.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment
+        && node.PrecedingBreak == BreakType.NewLine
+        && node.LeadingWhitespace == null
+        && !node.IsInNoformatRegion;
 
     /// <summary>
     /// Nodes for a run of text kept exactly as written (<see cref="UnparsedText"/>): every token
@@ -294,7 +330,9 @@ public class LayoutEngine
             var t = tokens[k];
             if (t.TokenType == TSqlTokenType.WhiteSpace)
             {
-                leading.Append(t.Text);
+                // The run's own line breaks, written like every other line break of the output (LF): an SSMS document has
+                // CRLF ones, and copying them would leave mixed line endings in the formatted text (review of S2).
+                leading.Append(t.Text.Replace("\r\n", "\n").Replace('\r', '\n'));
                 continue;
             }
             nodes.Add(new LayoutNode

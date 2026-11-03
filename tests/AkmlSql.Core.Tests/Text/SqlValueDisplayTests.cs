@@ -210,12 +210,21 @@ public class SqlValueDisplayTests
 
     // ── Validation (UI scan 2026-11-03, W3) ────────────────────────────────────────────────────────
 
-    private static string? Invalid(string wire, string declared, int hint) =>
-        SqlValueDisplay.InvalidReason(wire, SqlTypeName.Parse(declared), hint);
+    /// <summary>The text as typed — what <see cref="SqlValueDisplay.ToWire"/> was given, not what it stored.</summary>
+    private static string? Invalid(string typed, string declared, int hint) =>
+        SqlValueDisplay.InvalidReason(typed, SqlTypeName.Parse(declared), hint);
 
     [Theory]
     [InlineData("abc", "money", ClrTypeHint.Decimal, "Not a valid money value (a number such as 12.50)")]
     [InlineData("1,234.50", "decimal(10,2)", ClrTypeHint.Decimal, "Not a valid decimal value (a number such as 12.50)")]
+    [InlineData("1e30", "decimal(38,0)", ClrTypeHint.Decimal, "Not a valid decimal value (a number such as 12.50)")]   // the engine's decimal.Parse overflows on it too
+    [InlineData("1,234.50", "numeric(10,2)", ClrTypeHint.ServerNumber, "Not a valid numeric value (a number such as 12.50)")]   // PostgreSQL reads no thousands separator
+    [InlineData("1e", "numeric", ClrTypeHint.ServerNumber, "Not a valid numeric value (a number such as 12.50)")]
+    [InlineData(".", "numeric", ClrTypeHint.ServerNumber, "Not a valid numeric value (a number such as 12.50)")]
+    // Review of W3: binary only in the form the grid shows and documents. "test" and "Hw==" are Base64-shaped words the engine
+    // would store as unrelated bytes; the 0x form is the one typed value.
+    [InlineData("test", "varbinary(16)", ClrTypeHint.Binary, "Not a valid binary value (0x and hex digits)")]
+    [InlineData("Hw==", "varbinary(16)", ClrTypeHint.Binary, "Not a valid binary value (0x and hex digits)")]
     [InlineData("fast", "float", ClrTypeHint.Double, "Not a valid float value (a number)")]
     [InlineData("NaN", "real", ClrTypeHint.Double, "Not a valid real value (a number)")]       // SQL Server's float has no NaN
     [InlineData("12.5", "int", ClrTypeHint.Int64, "Not a valid int value (a whole number)")]
@@ -255,13 +264,23 @@ public class SqlValueDisplayTests
     [InlineData("23:57:23", "time(0)", ClrTypeHint.String)]
     [InlineData("2025-10-01T23:57:23.0000000+02:00", "datetimeoffset(7)", ClrTypeHint.DateTimeOffset)]
     [InlineData("0F8FAD5B-D9CB-469F-A165-70867728950E", "uniqueidentifier", ClrTypeHint.Guid)]
-    [InlineData("Hw==", "varbinary(16)", ClrTypeHint.Binary)]
+    [InlineData("0x1F", "varbinary(16)", ClrTypeHint.Binary)]
+    [InlineData("0x", "varbinary(16)", ClrTypeHint.Binary)]                                   // an empty binary value, as SSMS shows it
+    [InlineData("0x1f", "timestamp", ClrTypeHint.Binary)]
     [InlineData("anything", "nvarchar(50)", ClrTypeHint.String)]
     [InlineData("t", "boolean", ClrTypeHint.ServerText)]
     [InlineData("f", "boolean", ClrTypeHint.ServerText)]
     [InlineData("+42", "integer", ClrTypeHint.ServerNumber)]
     [InlineData("NaN", "numeric(10,2)", ClrTypeHint.ServerNumber)]                            // PostgreSQL's numeric holds NaN
+    [InlineData("1e30", "numeric", ClrTypeHint.ServerNumber)]                                 // review of W3: an unbounded numeric is judged by shape, not by .NET's decimal range
+    [InlineData("123456789012345678901234567890.5", "numeric(40,1)", ClrTypeHint.ServerNumber)]
+    [InlineData("-.5", "numeric", ClrTypeHint.ServerNumber)]
+    [InlineData("7.", "numeric", ClrTypeHint.ServerNumber)]
+    [InlineData("+1.5E-3", "numeric", ClrTypeHint.ServerNumber)]
     [InlineData("Infinity", "double precision", ClrTypeHint.ServerNumber)]
+    [InlineData("infinity", "date", ClrTypeHint.ServerText)]                                  // review of W3: PostgreSQL's date reads what its timestamp does
+    [InlineData("today", "date", ClrTypeHint.ServerText)]
+    [InlineData("20260203", "date", ClrTypeHint.ServerText)]
     [InlineData("$1,234.56", "money", ClrTypeHint.ServerText)]                                // PostgreSQL money reads lc_monetary forms
     [InlineData("tomorrow", "timestamp without time zone", ClrTypeHint.ServerText)]           // the server's many input forms are not judged
     [InlineData("1 day", "interval", ClrTypeHint.ServerText)]

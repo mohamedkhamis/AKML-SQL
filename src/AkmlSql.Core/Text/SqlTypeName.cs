@@ -72,6 +72,13 @@ namespace AkmlSql.Core.Text
         public bool IsCharacter => IsCharacterType(BaseName);
 
         /// <summary>
+        /// True for a binary type — <c>binary varbinary image timestamp rowversion</c> — matched on <see cref="MatchName"/>,
+        /// so PostgreSQL's <c>timestamp(3) without time zone</c> is not one. The one test every reader of a type name uses
+        /// (review of the 2026-11-03 scan, W3: three copies of the list had drifted apart).
+        /// </summary>
+        public bool IsBinary => IsBinaryType(MatchName);
+
+        /// <summary>
         /// Compose the declared type from column metadata. <paramref name="columnSize"/> is the
         /// length in characters (bytes for binary types), with <see cref="int.MaxValue"/> or -1
         /// meaning <c>(max)</c>.
@@ -148,7 +155,8 @@ namespace AkmlSql.Core.Text
         }
 
         /// <summary>True exactly for the types whose emptied cell is saved as an empty string:
-        /// <c>char nchar varchar nvarchar text ntext xml sql_variant</c>.</summary>
+        /// <c>char nchar varchar nvarchar text ntext xml sql_variant</c>, and PostgreSQL's
+        /// <c>character varying character bpchar</c> (spec 042).</summary>
         public static bool IsCharacterType(string? baseName)
         {
             switch (Normalise(baseName))
@@ -161,6 +169,26 @@ namespace AkmlSql.Core.Text
                 case "ntext":
                 case "xml":
                 case "sql_variant":
+                case "character varying":
+                case "character":
+                case "bpchar":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>True exactly for the binary types <c>binary varbinary image timestamp rowversion</c>, given the name
+        /// with any suffix (<see cref="MatchName"/>): a PostgreSQL timestamp with its time-zone words is none of them.</summary>
+        public static bool IsBinaryType(string? name)
+        {
+            switch (Normalise(name))
+            {
+                case "binary":
+                case "varbinary":
+                case "image":
+                case "timestamp":
+                case "rowversion":
                     return true;
                 default:
                     return false;

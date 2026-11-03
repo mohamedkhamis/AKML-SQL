@@ -80,6 +80,10 @@ public class WhitespaceRules : IRuleSet
         if (node.TokenType == TSqlTokenType.Go && ws.EmptyLineBeforeGo)
             return true;
 
+        // The statement's empty lines, carried by the first of the comments written above it (review of W6)
+        if (node.LeadsStatement && ws.EmptyLineBetweenStatements > 0)
+            return true;
+
         // Empty line after GO (previous token is GO). PreserveEmptyLinesAfterBatch keeps the
         // author's existing blank line here even when EmptyLineAfterGo would not force one.
         if (index > 0 && nodes[index - 1].TokenType == TSqlTokenType.Go

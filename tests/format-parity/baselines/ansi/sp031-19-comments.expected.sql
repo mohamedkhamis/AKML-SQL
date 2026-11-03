@@ -3,6 +3,7 @@
 select o.orderdate, SUM(o.freight) as freight
 from   dbo.orders o
 group by o.orderdate;
+
 /*******************************
  * legacy calculation block    *
  * kept for reference          *
@@ -10,5 +11,4 @@ group by o.orderdate;
 /* multi
    line
    note */
-
 select 1;

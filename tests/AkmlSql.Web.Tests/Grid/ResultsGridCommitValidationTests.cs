@@ -155,6 +155,8 @@ public sealed class ResultsGridCommitValidationTests : IDisposable
     [InlineData(10, "2025-01-01 08:00:00 +25:00", "Not a valid datetimeoffset value (yyyy-MM-dd HH:mm:ss +HH:mm)", "2025-01-01 08:00:00 +01:00")]
     [InlineData(11, "not-a-guid", "Not a valid uniqueidentifier value (8-4-4-4-12 hex digits)", "0F8FAD5B-D9CB-469F-A165-70867728950F")]
     [InlineData(12, "0xZZ", "Not a valid binary value (0x and hex digits)", "0x1F")]
+    [InlineData(12, "test", "Not a valid binary value (0x and hex digits)", "0x1F")]   // review of W3: a Base64-shaped word is not a value
+    [InlineData(12, "Hw==", "Not a valid binary value (0x and hex digits)", "0x1f")]
     public void SqlServer_a_value_the_column_cannot_take_is_invalid_until_corrected(int col, string typed, string title, string fix)
     {
         var cut = _host.Render(SqlServerSet());
@@ -206,7 +208,7 @@ public sealed class ResultsGridCommitValidationTests : IDisposable
     [InlineData(3, "9223372036854775808", "Out of range for bigint (-9223372036854775808 to 9223372036854775807)", "1")]
     [InlineData(4, "abc", "Not a valid numeric value (a number such as 12.50)", "1.25")]
     [InlineData(5, "fast", "Not a valid double precision value (a number)", "1.5")]
-    [InlineData(6, "not a date", "Not a valid date value (yyyy-MM-dd)", "2026-02-03")]
+    [InlineData(4, "1,234.50", "Not a valid numeric value (a number such as 12.50)", "1234.50")]   // no thousands separator on PostgreSQL either
     [InlineData(7, "xyz", "Not a valid uuid value (8-4-4-4-12 hex digits)", "0f8fad5b-d9cb-469f-a165-70867728950f")]
     public void Postgres_a_value_the_column_cannot_take_is_invalid_until_corrected(int col, string typed, string title, string fix)
     {
@@ -232,8 +234,11 @@ public sealed class ResultsGridCommitValidationTests : IDisposable
     [InlineData(2, "+42", "+42")]                                 // integer
     [InlineData(3, "-1", "-1")]                                   // bigint
     [InlineData(4, "NaN", "NaN")]                                 // numeric holds NaN on PostgreSQL
+    [InlineData(4, "1e30", "1e30")]                               // review of W3: numeric has no fixed size — judged by shape
     [InlineData(5, "Infinity", "Infinity")]                       // double precision too
     [InlineData(6, "2026-02-03", "2026-02-03T00:00:00.0000000")]
+    [InlineData(6, "today", "today")]                             // review of W3: date reads what timestamp does — the server judges it
+    [InlineData(6, "infinity", "infinity")]
     [InlineData(7, "0F8FAD5B-D9CB-469F-A165-70867728950E", "0F8FAD5B-D9CB-469F-A165-70867728950E")]
     [InlineData(8, "$1,234.56", "$1,234.56")]                     // money reads lc_monetary forms: the server judges it
     [InlineData(9, "tomorrow", "tomorrow")]                       // a timestamp has many input forms: the server judges it

@@ -61,6 +61,39 @@ public class ParseErrorStatementTests
         }
     }
 
+    /// <summary>Review of W6: a comment written directly above the broken statement introduces it — it stays above it, below
+    /// the style's empty lines, as it does for a statement the parser reads.</summary>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void A_comment_above_the_broken_statement_stays_above_it(string name)
+    {
+        var profile = Profile(name);
+
+        var result = new FormatterPipeline().Format("select 1;\n-- broken below\n" + Broken, profile);
+
+        Assert.True(result.Success);
+        var separator = new string('\n', LineBreaksBetweenStatements(profile));
+        Assert.True(result.FormattedText.Contains(separator + "-- broken below\n" + Broken),
+            $"expected {separator.Length} line breaks, the comment, then the statement as written, in:\n{result.FormattedText.Replace("\n", "<LF>\n")}");
+    }
+
+    /// <summary>Review of S2: the run's own line breaks are copied from the document. An SSMS document has CRLF ones and the
+    /// rest of the output is written with LF; the kept text must not bring mixed line endings into it. (The default
+    /// trailing-whitespace pass happens to strip a CR before each LF; the layout must not rely on it.)</summary>
+    [Theory]
+    [MemberData(nameof(Profiles))]
+    public void A_broken_statements_own_line_breaks_are_written_like_the_rest(string name)
+    {
+        var profile = Profile(name);
+        profile.Whitespace.TrailingWhitespace = "keep";
+
+        var result = new FormatterPipeline().Format(Script.Replace("\n", "\r\n"), profile);
+
+        Assert.True(result.Success);
+        Assert.DoesNotContain("\r", result.FormattedText);
+        Assert.Contains(Broken, result.FormattedText);
+    }
+
     [Theory]
     [MemberData(nameof(Profiles))]
     public void Statement_with_a_parse_error_stays_as_written_and_the_next_one_starts_its_own_line(string name)

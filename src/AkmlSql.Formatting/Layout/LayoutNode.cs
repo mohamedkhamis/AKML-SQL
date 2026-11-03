@@ -25,6 +25,13 @@ public class LayoutNode
     /// 2026-11-03, W6).
     /// </summary>
     public int EmptyLineCount { get; set; } = 1;
+
+    /// <summary>
+    /// Set on the first of the comments written directly above a statement: it carries the statement's empty lines
+    /// (<see cref="EmptyLineCount"/>) in the statement's place, so the comments stay with the statement they introduce
+    /// (review of W6). A structural empty line for the whitespace rules, like the statement's own would be.
+    /// </summary>
+    public bool LeadsStatement { get; set; }
     public int PrecedingSpaces { get; set; }
     public CommentAttachment? TrailingComment { get; set; }
     public bool IsInNoformatRegion { get; set; }

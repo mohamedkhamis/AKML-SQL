@@ -186,6 +186,10 @@ public class GridTextFormatsTests
     [InlineData("varchar(10)", ClrTypeHint.String, GridValueKind.Text)]
     [InlineData("date", ClrTypeHint.String, GridValueKind.Text)]
     [InlineData("varbinary(max)", ClrTypeHint.String, GridValueKind.Binary)]
+    [InlineData("timestamp", ClrTypeHint.Binary, GridValueKind.Binary)]
+    [InlineData("rowversion", ClrTypeHint.Binary, GridValueKind.Binary)]
+    [InlineData("timestamp(3) without time zone", ClrTypeHint.ServerText, GridValueKind.Text)]   // review of the 2026-11-03 scan (W3): not SQL Server's timestamp
+    [InlineData("timestamp without time zone", ClrTypeHint.ServerText, GridValueKind.Text)]
     [InlineData("sql_variant", ClrTypeHint.Variant, GridValueKind.Unknown)]
     [InlineData("", ClrTypeHint.Int64, GridValueKind.Number)]
     [InlineData("", ClrTypeHint.String, GridValueKind.Text)]

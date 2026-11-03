@@ -127,7 +127,10 @@
     {
         var filtering = _filter.Length > 0;
         <ul class="akml-schema-tree-list" data-testid="schema-tree-root">
-            <li class="akml-schema-tree-node akml-schema-tree-db akml-schema-tree-folder" aria-expanded="@(IsOpen(DbPath) ? "true" : "false")" @onclick="@(() => Toggle(DbPath))">
+            @* The folders' open state is not yet exposed to assistive technology: aria-expanded is not allowed on a list item, and
+               the tree roles it needs (tree / treeitem, keyboard navigation) are a change of their own — review of the 2026-11-03
+               scan, W7. *@
+            <li class="akml-schema-tree-node akml-schema-tree-db akml-schema-tree-folder" @onclick="@(() => Toggle(DbPath))">
                 <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(DbPath))" Size="12" Class="akml-schema-chevron" /></span>
                 <Icon Name="database" Size="14" Class="akml-schema-icon akml-schema-icon--database" />
                 <span class="akml-schema-tree-label">Database "@_databaseName"</span>
@@ -141,7 +144,7 @@
                     var schemaPath = DbPath + "/" + schema.Name;
                     var kinds = EnumerateKinds(schema, _filter, Kind).Where(k => !filtering || k.Objects.Count > 0).ToList();
                     if (filtering && (kinds.Count == 0 || inaccessible)) continue;
-                    <li class="akml-schema-tree-node akml-schema-tree-schema akml-schema-tree-folder" aria-expanded="@(IsOpen(schemaPath) ? "true" : "false")" @onclick="@(() => Toggle(schemaPath))">
+                    <li class="akml-schema-tree-node akml-schema-tree-schema akml-schema-tree-folder" @onclick="@(() => Toggle(schemaPath))">
                         <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(schemaPath))" Size="12" Class="akml-schema-chevron" /></span>
                         <Icon Name="folder-open" Size="14" Class="akml-schema-icon akml-schema-icon--schema" />
                         <span class="akml-schema-tree-label">Schema "@schema.Name"</span>
@@ -165,7 +168,6 @@
                             var kindPath = schemaPath + "/" + kind.Label;
                             var empty = kind.Objects.Count == 0;
                             <li class="@("akml-schema-tree-node akml-schema-tree-kind" + (empty ? null : " akml-schema-tree-folder"))"
-                                aria-expanded="@(empty ? null : IsOpen(kindPath) ? "true" : "false")"
                                 @onclick="@(() => { if (!empty) Toggle(kindPath); })">
                                 <span class="akml-schema-tree-expand">
                                     @if (!empty)

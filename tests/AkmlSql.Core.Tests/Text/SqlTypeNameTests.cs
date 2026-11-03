@@ -208,6 +208,9 @@ public class SqlTypeNameTests
     [InlineData("xml", true)]
     [InlineData("sql_variant", true)]
     [InlineData("NVARCHAR", true)]
+    [InlineData("character varying", true)]   // PostgreSQL's names (review of the 2026-11-03 scan, W3)
+    [InlineData("character", true)]
+    [InlineData("bpchar", true)]
     [InlineData("int", false)]
     [InlineData("bit", false)]
     [InlineData("varbinary", false)]
@@ -225,6 +228,34 @@ public class SqlTypeNameTests
     public void IsCharacter_reads_the_parsed_base_name()
     {
         Assert.True(SqlTypeName.Parse("nvarchar(max)").IsCharacter);
+        Assert.True(SqlTypeName.Parse("character varying(10)").IsCharacter);
         Assert.False(SqlTypeName.Parse("decimal(10,2)").IsCharacter);
+    }
+
+    // Review of the 2026-11-03 scan (W3): one binary test, keyed on the name with its PostgreSQL suffix, for every reader of
+    // a type name — a "timestamp(3) without time zone" is not SQL Server's binary timestamp.
+    [Theory]
+    [InlineData("varbinary(max)", true)]
+    [InlineData("binary(2)", true)]
+    [InlineData("image", true)]
+    [InlineData("timestamp", true)]
+    [InlineData("rowversion", true)]
+    [InlineData("timestamp(3) without time zone", false)]
+    [InlineData("timestamp without time zone", false)]
+    [InlineData("timestamp(3) with time zone", false)]
+    [InlineData("bytea", false)]
+    [InlineData("nvarchar(50)", false)]
+    [InlineData("", false)]
+    public void IsBinary_matches_the_name_with_its_suffix(string declared, bool expected)
+    {
+        Assert.Equal(expected, SqlTypeName.Parse(declared).IsBinary);
+    }
+
+    [Fact]
+    public void IsBinaryType_is_the_static_form()
+    {
+        Assert.True(SqlTypeName.IsBinaryType("VARBINARY"));
+        Assert.False(SqlTypeName.IsBinaryType("timestamp without time zone"));
+        Assert.False(SqlTypeName.IsBinaryType(null));
     }
 }
