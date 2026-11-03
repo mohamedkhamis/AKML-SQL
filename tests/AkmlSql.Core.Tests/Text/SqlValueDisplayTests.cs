@@ -207,4 +207,116 @@ public class SqlValueDisplayTests
         Assert.Equal("f", SqlValueDisplay.ToWire("FALSE", SqlTypeName.Parse("boolean"), ClrTypeHint.String));
         Assert.Equal("1", Show("1", "bit"));   // SQL Server's bit is unchanged
     }
+
+    // ── Validation (UI scan 2026-11-03, W3) ────────────────────────────────────────────────────────
+
+    private static string? Invalid(string wire, string declared, int hint) =>
+        SqlValueDisplay.InvalidReason(wire, SqlTypeName.Parse(declared), hint);
+
+    [Theory]
+    [InlineData("abc", "money", ClrTypeHint.Decimal, "Not a valid money value (a number such as 12.50)")]
+    [InlineData("1,234.50", "decimal(10,2)", ClrTypeHint.Decimal, "Not a valid decimal value (a number such as 12.50)")]
+    [InlineData("fast", "float", ClrTypeHint.Double, "Not a valid float value (a number)")]
+    [InlineData("NaN", "real", ClrTypeHint.Double, "Not a valid real value (a number)")]       // SQL Server's float has no NaN
+    [InlineData("12.5", "int", ClrTypeHint.Int64, "Not a valid int value (a whole number)")]
+    [InlineData("300", "tinyint", ClrTypeHint.Int64, "Out of range for tinyint (0 to 255)")]
+    [InlineData("40000", "smallint", ClrTypeHint.Int64, "Out of range for smallint (-32768 to 32767)")]
+    [InlineData("3000000000", "int", ClrTypeHint.Int64, "Out of range for int (-2147483648 to 2147483647)")]
+    [InlineData("maybe", "bit", ClrTypeHint.Bool, "Not a valid bit value (0/1/true/false)")]
+    [InlineData("yesterday", "date", ClrTypeHint.DateTime, "Not a valid date value (yyyy-MM-dd)")]
+    [InlineData("01/02/2025", "datetime2(3)", ClrTypeHint.DateTime, "Not a valid datetime2 value (yyyy-MM-dd HH:mm:ss)")]
+    [InlineData("25:00", "time(0)", ClrTypeHint.String, "Not a valid time value (HH:mm:ss)")]
+    [InlineData("2025-01-01 08:00:00 +25:00", "datetimeoffset(7)", ClrTypeHint.DateTimeOffset, "Not a valid datetimeoffset value (yyyy-MM-dd HH:mm:ss +HH:mm)")]
+    [InlineData("not-a-guid", "uniqueidentifier", ClrTypeHint.Guid, "Not a valid uniqueidentifier value (8-4-4-4-12 hex digits)")]
+    [InlineData("0xZZ", "varbinary(16)", ClrTypeHint.Binary, "Not a valid binary value (0x and hex digits)")]
+    [InlineData("maybe", "boolean", ClrTypeHint.ServerText, "Not a valid boolean value (true/false)")]
+    [InlineData("1.0", "integer", ClrTypeHint.ServerNumber, "Not a valid integer value (a whole number)")]
+    [InlineData("9223372036854775808", "bigint", ClrTypeHint.ServerNumber, "Out of range for bigint (-9223372036854775808 to 9223372036854775807)")]
+    [InlineData("abc", "numeric(10,2)", ClrTypeHint.ServerNumber, "Not a valid numeric value (a number such as 12.50)")]
+    [InlineData("fast", "double precision", ClrTypeHint.ServerNumber, "Not a valid double precision value (a number)")]
+    [InlineData("xyz", "uuid", ClrTypeHint.ServerText, "Not a valid uuid value (8-4-4-4-12 hex digits)")]
+    public void A_value_the_column_cannot_take_has_a_type_specific_reason(string wire, string declared, int hint, string reason)
+    {
+        Assert.Equal(reason, Invalid(wire, declared, hint));
+    }
+
+    [Theory]
+    [InlineData("12.5", "money", ClrTypeHint.Decimal)]
+    [InlineData("-3", "money", ClrTypeHint.Decimal)]
+    [InlineData("1e2", "decimal(10,2)", ClrTypeHint.Decimal)]
+    [InlineData(" 7 ", "int", ClrTypeHint.Int64)]
+    [InlineData("+5", "int", ClrTypeHint.Int64)]
+    [InlineData("255", "tinyint", ClrTypeHint.Int64)]
+    [InlineData("-1.5e3", "float", ClrTypeHint.Double)]
+    [InlineData("1", "bit", ClrTypeHint.Bool)]
+    [InlineData("0", "bit", ClrTypeHint.Bool)]
+    [InlineData("2025-10-02T00:00:00.0000000", "date", ClrTypeHint.DateTime)]                  // the wire ToWire makes of 2025-10-02
+    [InlineData("2025-10-01T23:57:23.8800000", "datetime2(3)", ClrTypeHint.DateTime)]
+    [InlineData("23:57:23", "time(0)", ClrTypeHint.String)]
+    [InlineData("2025-10-01T23:57:23.0000000+02:00", "datetimeoffset(7)", ClrTypeHint.DateTimeOffset)]
+    [InlineData("0F8FAD5B-D9CB-469F-A165-70867728950E", "uniqueidentifier", ClrTypeHint.Guid)]
+    [InlineData("Hw==", "varbinary(16)", ClrTypeHint.Binary)]
+    [InlineData("anything", "nvarchar(50)", ClrTypeHint.String)]
+    [InlineData("t", "boolean", ClrTypeHint.ServerText)]
+    [InlineData("f", "boolean", ClrTypeHint.ServerText)]
+    [InlineData("+42", "integer", ClrTypeHint.ServerNumber)]
+    [InlineData("NaN", "numeric(10,2)", ClrTypeHint.ServerNumber)]                            // PostgreSQL's numeric holds NaN
+    [InlineData("Infinity", "double precision", ClrTypeHint.ServerNumber)]
+    [InlineData("$1,234.56", "money", ClrTypeHint.ServerText)]                                // PostgreSQL money reads lc_monetary forms
+    [InlineData("tomorrow", "timestamp without time zone", ClrTypeHint.ServerText)]           // the server's many input forms are not judged
+    [InlineData("1 day", "interval", ClrTypeHint.ServerText)]
+    [InlineData("2026-01-02 08:00:00.123", "timestamp(3) without time zone", ClrTypeHint.ServerText)]   // review of W3: a precision is not SQL Server's timestamp
+    [InlineData("2026-01-02 08:00:00.123+02", "timestamp(3) with time zone", ClrTypeHint.ServerText)]
+    [InlineData("{1.5,2.5}", "numeric(10,2)[]", ClrTypeHint.ServerText)]                                 // an array of a faceted type is the server's to judge
+    [InlineData("{a,b}", "character varying(10)[]", ClrTypeHint.ServerText)]
+    [InlineData("{1,2}", "integer[]", ClrTypeHint.ServerText)]
+    [InlineData("101", "bit(3)", ClrTypeHint.ServerText)]                                     // a PostgreSQL bit string, not SQL Server's bit
+    [InlineData("", "int", ClrTypeHint.Int64)]                                                // an empty value is the caller's to judge (FR-014)
+    [InlineData("[text 70000 chars]", "nvarchar(max)", ClrTypeHint.String)]
+    public void A_value_the_server_accepts_or_alone_can_judge_has_no_reason(string wire, string declared, int hint)
+    {
+        Assert.Null(Invalid(wire, declared, hint));
+    }
+
+    [Fact]
+    public void Without_a_declared_type_the_CLR_hint_judges()
+    {
+        Assert.Equal("Not a valid integer value (a whole number)", Invalid("1.5", "", ClrTypeHint.Int64));
+        Assert.Equal("Not a valid bit value (0/1/true/false)", Invalid("maybe", "", ClrTypeHint.Bool));
+        Assert.Equal("Not a valid date/time value (yyyy-MM-dd HH:mm:ss)", Invalid("yesterday", "", ClrTypeHint.DateTime));
+        Assert.Null(Invalid("1.5", "", ClrTypeHint.String));
+    }
+
+    [Theory]
+    [InlineData("true", "1")]
+    [InlineData("FALSE", "0")]
+    [InlineData(" True ", "1")]
+    [InlineData("1", "1")]
+    [InlineData("maybe", "maybe")]
+    public void Bit_true_and_false_travel_as_1_and_0(string typed, string wire)
+    {
+        Assert.Equal(wire, ToWire(typed, "bit", ClrTypeHint.Bool));
+    }
+
+    [Theory]
+    [InlineData("yes", "t")]
+    [InlineData("Y", "t")]
+    [InlineData("on", "t")]
+    [InlineData("1", "t")]
+    [InlineData("TRUE", "t")]
+    [InlineData("t", "t")]
+    [InlineData("tr", "t")]
+    [InlineData("no", "f")]
+    [InlineData("N", "f")]
+    [InlineData("off", "f")]
+    [InlineData("0", "f")]
+    [InlineData("False", "f")]
+    [InlineData("f", "f")]
+    [InlineData("fal", "f")]
+    [InlineData("o", "o")]            // on or off? PostgreSQL refuses it too
+    [InlineData("maybe", "maybe")]
+    public void Boolean_accepts_what_PostgreSQL_accepts_and_travels_as_t_or_f(string typed, string wire)
+    {
+        Assert.Equal(wire, ToWire(typed, "boolean", ClrTypeHint.ServerText));
+    }
 }

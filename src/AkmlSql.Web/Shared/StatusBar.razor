@@ -249,6 +249,7 @@
     {
         ExecutionPhase.Succeeded => "akml-status-outcome--ok",
         ExecutionPhase.Failed => "akml-status-outcome--failed",
+        ExecutionPhase.Cancelled => "akml-status-outcome--failed",   // the run did not complete: drawn as SSMS draws it, with its own words
         _ => null,
     };
 

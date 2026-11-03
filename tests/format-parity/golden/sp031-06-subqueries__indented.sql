@@ -3,6 +3,7 @@ FROM   dbo.customers c
 WHERE  c.customerid IN(
     SELECT o.customerid FROM dbo.orders o);
 
+
 SELECT c.companyname, (
         SELECT COUNT(*)
     FROM   dbo.orders o

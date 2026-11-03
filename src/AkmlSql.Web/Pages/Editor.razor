@@ -2274,7 +2274,9 @@
                 Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
                 if (_autoAnalyseOnFormat && _analysisEnabled)   // a format never announces that analysis is off
                 {
-                    await AnalyseTabAsync(tab);
+                    // Quietly: the findings, the squiggles and the Problems badge refresh, but the results tab the user was
+                    // looking at stays where it is — only an explicit Analyse opens Problems (UI scan 2026-11-03, W1).
+                    await AnalyseTabAsync(tab, quiet: true);
                 }
             }
             else
@@ -2316,8 +2318,8 @@
         {
             tab.Findings = null;
             await ShowDiagnosticsAsync(tab);
-            // A quiet re-analysis (a tab shown, a connection changed) only drops the stale findings; it never switches the results
-            // tab, opens the panel or announces anything.
+            // A quiet re-analysis (a tab shown, a connection changed, a format) only drops the stale findings; it never switches the
+            // results tab, opens the panel or announces anything.
             if (quiet)
             {
                 StateHasChanged();

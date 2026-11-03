@@ -127,7 +127,8 @@ public class FormatterPipeline
     /// goes through the rule-based layout (annotate, layout, rules, casing, emit).
     /// </summary>
     private string Layout(string sql, TSqlScript script, IList<TSqlParserToken> tokens,
-        List<NoformatRegion> noformatRegions, FormattingProfile profile, FormatPipelineOptions options)
+        List<NoformatRegion> noformatRegions, IReadOnlyList<TokenRange> unparsed,
+        FormattingProfile profile, FormatPipelineOptions options)
     {
         // Spec 040 (STY-11): "Apply layout" off keeps the text exactly as written, cased or not.
         if (!options.ApplyLayout)
@@ -136,7 +137,7 @@ public class FormatterPipeline
         if (profile.SqlPrompt is { } document)
         {
             var style = new SqlPrompt.SqlPromptStyle(SqlPrompt.SqlPromptStyleDocument.FromNode(document));
-            var text = SqlPrompt.SqlPromptLayout.Layout(script, tokens, noformatRegions, style, options.ApplyCasing);
+            var text = SqlPrompt.SqlPromptLayout.Layout(script, tokens, noformatRegions, style, options.ApplyCasing, unparsed);
             // Keep the file's final line break (or its absence) as it was.
             if (sql.EndsWith('\n') && !text.EndsWith('\n')) text += "\n";
             return text;
@@ -146,7 +147,7 @@ public class FormatterPipeline
         var comments = annotator.AttachComments(tokens);
 
         var layoutEngine = new LayoutEngine();
-        var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions);
+        var layoutNodes = layoutEngine.BuildLayout(script, tokens, comments, profile, noformatRegions, unparsed);
 
         ApplyLayoutRules(layoutNodes, profile);
 
@@ -220,13 +221,14 @@ public class FormatterPipeline
 
             var parser = new TSql170Parser(initialQuotedIdentifiers: true);
             using var reader = new StringReader(preprocessedSql);
-            var script = parser.Parse(reader, out _) as TSqlScript;
+            var script = parser.Parse(reader, out var errors) as TSqlScript;
             var tokens = script?.ScriptTokenStream ?? (IList<TSqlParserToken>)[];
 
             if (script == null || script.Batches.Count == 0)
                 return null;
 
-            var formatted = Layout(sql, script, tokens, noformatRegions, profile, options);
+            var unparsed = errors.Count > 0 ? UnparsedText.Find(script, tokens) : [];
+            var formatted = Layout(sql, script, tokens, noformatRegions, unparsed, profile, options);
             return sqlcmdPreprocessor.Restore(formatted);
         }
         catch (Exception ex)
@@ -293,8 +295,12 @@ public class FormatterPipeline
                     });
             }
 
+            // A statement the parser could not read is left out of the tree; its text is kept
+            // exactly as written while the statements around it are formatted (UnparsedText).
+            var unparsed = errors.Count > 0 ? UnparsedText.Find(script, tokens) : [];
+
             // Stages 2-5: annotate, lay out, case, emit
-            var formatted = Layout(sql, script, tokens, noformatRegions, profile, options);
+            var formatted = Layout(sql, script, tokens, noformatRegions, unparsed, profile, options);
 
             // Stage 5b: Restore SQLCMD directives
             formatted = sqlcmdPreprocessor.Restore(formatted);

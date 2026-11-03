@@ -61,6 +61,9 @@
     /// <summary>Spec 042: a PostgreSQL error was clicked: its line and column. When nobody listens, <see cref="OnNavigate"/> gets the line.</summary>
     [Parameter] public EventCallback<DocumentPosition> OnNavigateToPosition { get; set; }
 
+    /// <summary>The kind of connection the run was on: it decides where a cancelled run's line goes (see <see cref="OnParametersSet"/>).</summary>
+    [Parameter] public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
+
     private sealed record Line(string Text, bool IsError, bool IsSystem, int? DocumentLine, int? DocumentColumn = null,
         bool IsNotice = false, bool IsWarning = false);
 
@@ -97,7 +100,19 @@
             foreach (var text in result.Messages ?? Array.Empty<string>()) lines.Add(new Line(text, false, false, null));
         }
 
-        if (lines.Count == 0)
+        if (result.Status == ExecuteStatus.Cancelled)
+        {
+            // UI scan 2026-11-03 (W2): a run the user cancelled says so, in SSMS's words. The engine reports the status and nothing
+            // else (a Cancel that reached the query while it was still queued says "Query cancelled." in ErrorMessage, which this
+            // line stands in for). SQL Server: after everything the run said before the cancel, where SSMS prints it. PostgreSQL:
+            // before the engine's closing summary — "n of m statements ran.", what stays applied, an aborted transaction — which
+            // are the only System lines its runner adds, all after the statements.
+            int at = lines.Count;
+            if (Kind == AkmlSql.Core.DatabaseKind.PostgreSql)
+                while (at > 0 && lines[at - 1].IsSystem) at--;
+            lines.Insert(at, new Line(WorkspaceStatus.CancelledText, false, true, null));
+        }
+        else if (lines.Count == 0)
         {
             if (result.Status == ExecuteStatus.Ok) lines.Add(new Line(SqlMessageText.CommandsCompleted, false, false, null));
             else if (!string.IsNullOrEmpty(result.ErrorMessage)) lines.Add(new Line(result.ErrorMessage!, true, false, null));

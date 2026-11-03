@@ -63,10 +63,13 @@ public sealed class PgApplyRunner
                     // others a note, so the grid never clears a row's mark for a write that did not persist.
                     await UndoAsync(connection, inUserTransaction).ConfigureAwait(false);
                     var message = ErrorText(ex);
+                    // W3: the column the server named (a NOT NULL violation does; an invalid-input-syntax error names none), so the grid
+                    // can point at the cell.
+                    var column = (ex as PostgresException)?.ColumnName;
                     for (var j = 0; j < results.Length; j++)
                     {
                         results[j] = j == i
-                            ? new CrudEditResult { Index = j, Ok = false, Error = message }
+                            ? new CrudEditResult { Index = j, Ok = false, Error = message, Column = string.IsNullOrEmpty(column) ? null : column }
                             : new CrudEditResult { Index = j, Ok = false, Error = $"Rolled back — edit {i} failed." };
                     }
                     return new ApplyChangesResult

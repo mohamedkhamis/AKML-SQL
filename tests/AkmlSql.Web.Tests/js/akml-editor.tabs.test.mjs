@@ -6,7 +6,7 @@
 // reports a text change. These pin the pure parts; the view swap itself is covered by the browser QueryTabsTests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stashAndPick, replaceDocIfUnchanged, replaceDoc, withDiagnostics } from '../../../src/AkmlSql.Web/wwwroot/js/akml-editor.js';
+import { stashAndPick, replaceDocIfUnchanged, replaceDoc, withDiagnostics, showTab, caretPosition } from '../../../src/AkmlSql.Web/wwwroot/js/akml-editor.js';
 
 const cm = await import('../../../src/AkmlSql.Web/wwwroot/lib/codemirror/akml-cm.js');
 
@@ -76,4 +76,42 @@ test('findings for a stored tab go into its state and come back with it', () => 
 
     assert.equal(cm.lint.diagnosticCount(shown), 1);
     assert.equal(cm.lint.diagnosticCount(withDiagnostics(cm, shown, [])), 0);
+});
+
+// UI scan 2026-11-03, W4: switching tabs replaces the view's state without a transaction, so the status bar kept the
+// previous tab's "Ln 9, Col 26" over a one-line tab until the next keystroke. Showing a tab must report its caret.
+function fakeInstance(reports) {
+    const view = {
+        state: make(''),
+        scrollDOM: { scrollTop: 0, scrollLeft: 0 },
+        setState(s) { this.state = s; },
+        dispatch() { /* compartment reconfiguration only */ },
+    };
+    return {
+        view, cm, extensions, tabs: new Map(), currentTab: null, kind: 'sqlserver',
+        dialectCompartment: new cm.state.Compartment(), wrapCompartment: new cm.state.Compartment(), tabCompartment: new cm.state.Compartment(),
+        optionExt: { wrap: [], tab: [] },
+        reportCaret: (state) => reports.push(caretPosition(state.doc, state.selection.main.head)),
+    };
+}
+
+test("showing a tab reports that tab's caret, so the status bar never keeps the previous tab's Ln/Col", () => {
+    const reports = [];
+    const inst = fakeInstance(reports);
+    showTab(inst, 'tab-a', 'SELECT 1\nSELECT 22', 'sqlserver');
+    assert.deepEqual(reports.at(-1), { line: 1, column: 1 }, 'a new tab starts at Ln 1, Col 1');
+    inst.view.state = inst.view.state.update({ selection: { anchor: inst.view.state.doc.length } }).state;
+    showTab(inst, 'tab-b', 'select 2', 'sqlserver');
+    assert.deepEqual(reports.at(-1), { line: 1, column: 1 }, "the second new tab starts at Ln 1, Col 1, not at tab-a's caret");
+    showTab(inst, 'tab-a', null, 'sqlserver');
+    assert.deepEqual(reports.at(-1), { line: 2, column: 10 }, 'back on tab-a the caret is where it was left');
+    assert.equal(reports.length, 3);
+});
+
+test('showing the tab that is already shown reports nothing', () => {
+    const reports = [];
+    const inst = fakeInstance(reports);
+    showTab(inst, 'tab-a', 'SELECT 1', 'sqlserver');
+    showTab(inst, 'tab-a', 'SELECT 1', 'sqlserver');
+    assert.equal(reports.length, 1);
 });

@@ -405,6 +405,23 @@ public sealed class SchemaTreeComponentTests : BunitContext
     private static string[] ObjectNames(IRenderedComponent<SchemaTreeComponent> cut) =>
         cut.FindAll("[data-testid='schema-tree-object']").Select(o => o.GetAttribute("data-qualifier")!).ToArray();
 
+    // UI scan 2026-11-03 (W7): under "Schema dbo" every row read "[dbo].[Customers]" — the schema repeated and bracketed,
+    // where SSMS shows "dbo.Customers". The row shows the name as SSMS does; the bracketed form stays what Insert name
+    // and Copy name produce (data-qualifier), and folders tell assistive technology whether they are open.
+    [Fact]
+    public async Task An_object_row_reads_schema_dot_name_while_the_qualifier_keeps_its_brackets()
+    {
+        var cut = await RenderSeededAsync(
+            new SchemaPhaseSchema { Name = "dbo", Objects = new[] { Obj("Customer", 0), Obj("vCustomerList", 1) } });
+        cut.Find("[data-testid=schema-filter]").Input("CUST");
+
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "[dbo].[Customer]", "[dbo].[vCustomerList]" }, ObjectNames(cut)));
+        var labels = cut.FindAll("[data-testid='schema-tree-object'] .akml-schema-tree-label").Select(l => l.TextContent.Trim()).ToArray();
+        Assert.Equal(new[] { "dbo.Customer", "dbo.vCustomerList" }, labels);
+        Assert.Equal("true", cut.Find(".akml-schema-tree-db").GetAttribute("aria-expanded"));
+        Assert.Equal("true", cut.Find(".akml-schema-tree-schema").GetAttribute("aria-expanded"));
+    }
+
     [Fact]
     public async Task The_header_names_the_server_and_the_database()
     {

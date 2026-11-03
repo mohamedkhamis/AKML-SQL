@@ -81,7 +81,10 @@
         text-decoration-line: underline;
         text-decoration-style: wavy;
         text-decoration-skip-ink: none;
-        text-underline-offset: 3px;
+        /* UI scan 2026-11-03 (T2): at the editor's 1.25 line height a 3px offset put the wave on the next line's
+           ascenders, so an info squiggle under "dbo.Customers c" read as underlining the WHERE line below it. */
+        text-underline-offset: 2px;
+        text-decoration-thickness: 1px;
         padding-bottom: 0;
     }
     .akml-editor .cm-editor .cm-lintRange-error { text-decoration-color: var(--akml-status-danger); }

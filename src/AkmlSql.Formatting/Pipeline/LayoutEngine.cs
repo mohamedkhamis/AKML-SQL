@@ -15,12 +15,21 @@ public class LayoutEngine
         IList<TSqlParserToken> tokens,
         List<CommentAttachment> comments,
         FormattingProfile profile,
-        List<NoformatRegion>? noformatRegions = null)
+        List<NoformatRegion>? noformatRegions = null,
+        IReadOnlyList<TokenRange>? unparsed = null)
     {
         var nodes = new List<LayoutNode>();
         var commentLookup = new Dictionary<int, CommentAttachment>();
         foreach (var c in comments)
             commentLookup[c.TokenIndex] = c;
+
+        // Text the parser could not read (UnparsedText), by first token: kept exactly as written.
+        var unparsedByFirst = new Dictionary<int, int>();
+        if (unparsed != null)
+            foreach (var run in unparsed)
+                unparsedByFirst[run.First] = run.Last;
+        // Set after such a run: the next token starts a statement on its own line.
+        bool afterUnparsed = false;
 
         var decider = new LineBreakDecider(profile);
         var tracker = new ClauseTracker();
@@ -46,6 +55,26 @@ public class LayoutEngine
                 break;
             if (t.TokenType == TSqlTokenType.WhiteSpace)
                 continue;
+
+            // --- Text the parser could not read: kept exactly as written, on its own lines ---
+            if (unparsedByFirst.TryGetValue(i, out var unparsedLast))
+            {
+                // Starts like a statement: the style's empty line between statements, the single line break after GO.
+                AddUnparsedRun(nodes, tokens, i, unparsedLast,
+                    isFirstSemanticToken ? BreakType.None
+                    : !afterGo && profile.Whitespace.EmptyLineBetweenStatements > 0 ? BreakType.EmptyLine
+                    : BreakType.NewLine,
+                    profile.Whitespace.EmptyLineBetweenStatements);
+                i = unparsedLast;
+                afterUnparsed = true;
+                afterGo = false;
+                isFirstSemanticToken = false;
+                // Nothing of the run may shape the spacing of the statement after it.
+                prevSemanticTokenType = null;
+                prevSemanticTokenText = null;
+                prevSemanticTokenEndOffset = -1;
+                continue;
+            }
 
             // --- Handle comments ---
             if (t.TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
@@ -97,7 +126,9 @@ public class LayoutEngine
             // The first statement of a batch after GO is a new statement too: the clause state of the batch before must not
             // leak into it. It is not "first in statement" for the decider, so it keeps the single line break after GO.
             bool isBatchStart = batchStarts.Contains(t.Offset) && !isFirstSemanticToken;
-            if ((statementStarts.Contains(t.Offset) || isBatchStart) && !isFirstSemanticToken)
+            // The statement after text kept as written starts a statement too — the tree may hold it as its first.
+            bool startsAfterUnparsed = afterUnparsed && t.TokenType != TSqlTokenType.Go;
+            if ((statementStarts.Contains(t.Offset) || isBatchStart || startsAfterUnparsed) && !isFirstSemanticToken)
             {
                 isFirstInStatement = !isBatchStart;
                 statementIndex++;
@@ -135,11 +166,12 @@ public class LayoutEngine
             // GO is a batch separator only alone on its line: a batch's first statement with no line rule of its own (PRINT,
             // EXEC, DECLARE …) used to follow it on the GO line ("GO PRINT 'x';"), and the script no longer split there.
             bool goCount = afterGo && prevSemanticTokenType == TSqlTokenType.Go && t.TokenType == TSqlTokenType.Integer;
-            if ((isBatchStart || (afterGo && !goCount)) && decision.Break == BreakType.None)
+            if ((isBatchStart || (afterGo && !goCount) || afterUnparsed) && decision.Break == BreakType.None)
             {
                 decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
             }
             afterGo = t.TokenType == TSqlTokenType.Go || goCount;
+            afterUnparsed = false;
 
             // Compute final indent level
             int indentLevel;
@@ -224,6 +256,8 @@ public class LayoutEngine
                 PrecedingSpaces = decision.PrecedingSpaces,
                 IsInNoformatRegion = noformatRegions != null && NoformatScanner.IsInNoformatRegion(noformatRegions, t.Offset)
             };
+            if (isFirstInStatement && decision.Break == BreakType.EmptyLine)
+                node.EmptyLineCount = Math.Max(1, profile.Whitespace.EmptyLineBetweenStatements);
 
             nodes.Add(node);
 
@@ -237,6 +271,46 @@ public class LayoutEngine
         }
 
         return nodes;
+    }
+
+    /// <summary>
+    /// Nodes for a run of text kept exactly as written (<see cref="UnparsedText"/>): every token
+    /// with its original whitespace in front of it — the first with the line breaks that start the
+    /// run like a statement — flagged like a noformat region so no rule, casing, alignment or
+    /// wrapping pass touches them. <see cref="TextEmitter"/> writes them from that whitespace alone.
+    /// </summary>
+    private static void AddUnparsedRun(List<LayoutNode> nodes, IList<TSqlParserToken> tokens, int first, int last, BreakType start, int emptyLines)
+    {
+        // The style's count of empty lines between statements (W6), as the emitter writes it for a parsed statement.
+        var startBreak = start switch
+        {
+            BreakType.EmptyLine => new string('\n', 1 + Math.Max(1, emptyLines)),
+            BreakType.NewLine => "\n",
+            _ => "",
+        };
+        var leading = new System.Text.StringBuilder();
+        for (int k = first; k <= last; k++)
+        {
+            var t = tokens[k];
+            if (t.TokenType == TSqlTokenType.WhiteSpace)
+            {
+                leading.Append(t.Text);
+                continue;
+            }
+            nodes.Add(new LayoutNode
+            {
+                TokenIndex = k,
+                TokenType = t.TokenType,
+                OriginalText = t.Text,
+                FormattedText = t.Text,
+                IndentLevel = 0,
+                PrecedingBreak = k == first ? start : BreakType.None,
+                PrecedingSpaces = 0,
+                IsInNoformatRegion = true,
+                LeadingWhitespace = k == first ? startBreak : leading.ToString(),
+            });
+            leading.Clear();
+        }
     }
 
     /// <summary>

@@ -69,12 +69,19 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
 
         /// <summary>
         /// Scoring for sort order during filtering. Lower = better match.
-        /// Prefix > CamelCase > Substring.
+        /// Exact > Prefix > CamelCase > Substring.
         /// </summary>
         public int FilterScore(string filter, bool prefixOnly = false)
         {
             if (string.IsNullOrEmpty(filter))
                 return SortPriority;
+
+            // UI scan 2026-11-03 (S1): the item that IS the typed word ranks first, whatever the
+            // engine's SortPriority says. Typing "dbo" used to score the schema (300) and every
+            // "dbo."-prefixed table (≤ 100) alike as prefix matches, so the tables led, TABLES became
+            // the first group and the dot that followed committed dbo.Orders instead of the schema.
+            if (IsExactMatch(filter))
+                return ExactMatchScore;
 
             if (prefixOnly)
                 return StartsWithFilter(filter) ? 0 : int.MaxValue;
@@ -94,6 +101,45 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private bool StartsWithFilter(string filter) =>
             (FilterText != null && FilterText.StartsWith(filter, StringComparison.OrdinalIgnoreCase))
             || DisplayText.StartsWith(filter, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Below the prefix tier (0); the 0 / 50 / 100 / MaxValue tiers are unchanged.</summary>
+        private const int ExactMatchScore = -1;
+
+        /// <summary>
+        /// True when the typed text IS this item's name (case-insensitive): the engine's matchable
+        /// text (<see cref="FilterText"/>, e.g. "Orders" for "dbo.Orders") or the display text.
+        /// </summary>
+        public bool IsExactMatch(string filter)
+        {
+            if (string.IsNullOrEmpty(filter)) return false;
+            return (FilterText != null && string.Equals(FilterText, filter, StringComparison.OrdinalIgnoreCase))
+                || string.Equals(DisplayText, filter, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// UI scan 2026-11-03 (S1) — whether a dot typed after <paramref name="typedWord"/> may commit
+        /// this item. False when the typed word is the OWNER part of this item's qualified name ("dbo"
+        /// for "dbo.Orders") and not the item's own name: the user is qualifying, not choosing, and a
+        /// commit would turn "dbo." into "dbo.Orders.". The owner is read from the engine's
+        /// <see cref="SourceObject"/> (unbracketed "schema.object"), falling back to the display text —
+        /// never from <see cref="InsertText"/>, which may be bracketed ("[dbo].[Orders]").
+        /// </summary>
+        public bool ShouldCommitBeforeDot(string typedWord)
+        {
+            if (string.IsNullOrEmpty(typedWord) || IsExactMatch(typedWord))
+                return true;
+
+            // Both owners count: the engine's source object ("dbo" of "dbo.Products") and the shown one ("p" of
+            // "p.UnitPrice" for an alias-qualified column) — the user may be qualifying by either.
+            return !IsOwnerOf(SourceObject, typedWord) && !IsOwnerOf(DisplayText, typedWord);
+        }
+
+        private static bool IsOwnerOf(string? qualified, string typedWord)
+        {
+            if (string.IsNullOrEmpty(qualified)) return false;
+            int dot = qualified.IndexOf('.');
+            return dot > 0 && string.Equals(qualified.Substring(0, dot), typedWord, StringComparison.OrdinalIgnoreCase);
+        }
 
         /// <summary>
         /// CamelCase / underscore boundary matching.

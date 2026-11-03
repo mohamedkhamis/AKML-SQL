@@ -95,7 +95,6 @@ public sealed class WorkspaceStatusTests
     [Theory]
     [InlineData(ExecuteStatus.Error)]
     [InlineData(ExecuteStatus.TimedOut)]
-    [InlineData(ExecuteStatus.Cancelled)]
     [InlineData(ExecuteStatus.NoConnection)]
     public void Any_other_status_fails_with_its_message(int status)
     {
@@ -188,5 +187,25 @@ public sealed class WorkspaceStatusTests
         _status.Begin();
         _status.ClearOutcome();
         Assert.Equal(ExecutionPhase.Running, _status.Phase);
+    }
+
+    // UI scan 2026-11-03 (W2): a run the user cancelled is not "completed with errors" — the status bar says what SSMS says.
+    [Fact]
+    public void A_cancelled_run_says_it_was_cancelled_by_the_user()
+    {
+        _status.Begin();
+        _status.Complete(new ExecuteQueryResult { Status = ExecuteStatus.Cancelled, ElapsedMs = 2_040 });
+
+        Assert.Equal(ExecutionPhase.Cancelled, _status.Phase);
+        Assert.Equal("Query was cancelled by user.", _status.Outcome);
+        Assert.Equal(2_040, _status.ElapsedMs);
+        Assert.Equal(0, _status.RowCount);
+        Assert.Null(_status.ErrorMessage);   // the engine's reply to a cancel carries no error
+
+        // A query tab keeps the run and shows it again on activation (spec 043): the cancel survives the round trip.
+        var kept = _status.Snapshot();
+        _status.Begin();
+        _status.Show(kept);
+        Assert.Equal("Query was cancelled by user.", _status.Outcome);
     }
 }

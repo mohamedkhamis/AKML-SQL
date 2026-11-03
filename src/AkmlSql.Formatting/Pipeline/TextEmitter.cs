@@ -38,6 +38,28 @@ public class TextEmitter
 
         foreach (var node in nodes)
         {
+            if (node.LeadingWhitespace is { } leading)
+            {
+                // Text kept exactly as written (a statement the parser could not read, see
+                // UnparsedText): its own whitespace, then its own text — except that nothing may
+                // follow a '--' comment on its line.
+                if (prevWasLineComment && !leading.Contains('\n'))
+                    sb.Append('\n');
+                sb.Append(leading);
+                sb.Append(node.OriginalText);
+                // A comment on the run's last line was attached to its last token like any other (review of S2): write it as
+                // the formatted path does, or the user loses text the validator never sees.
+                if (node.TrailingComment != null)
+                {
+                    sb.Append(' ');
+                    sb.Append(node.TrailingComment.Text.TrimEnd());
+                }
+                var lastKept = node.TrailingComment?.Text ?? node.OriginalText;
+                prevWasLineComment = node.TokenType == TSqlTokenType.SingleLineComment
+                    || lastKept.TrimStart().StartsWith("--", System.StringComparison.Ordinal);
+                continue;
+            }
+
             if (node.IsInNoformatRegion)
             {
                 sb.Append(node.OriginalText);
@@ -56,8 +78,9 @@ public class TextEmitter
                 switch (node.PrecedingBreak)
                 {
                     case BreakType.EmptyLine:
-                        sb.Append('\n');
-                        sb.Append('\n');
+                        // One line break ends the line above; EmptyLineCount more make the empty lines (W6: the
+                        // style's count between statements, one everywhere else).
+                        sb.Append('\n', 1 + Math.Max(1, node.EmptyLineCount));
                         AppendLineStart(sb, node, useTabs, allowAbsoluteSpaces, tabSize);
                         break;
 

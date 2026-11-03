@@ -142,7 +142,9 @@
     .akml-snippets { height: 100%; }
     .akml-snippets-header { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-xs); }
     .akml-snippets-status { padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-status-info); font-style: italic; margin: 0; }
-    .akml-snippets-body { flex: 1 1 auto; display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
+    /* UI scan 2026-11-03 (W10): the list takes a share of the page instead of a fixed 280px, so titles such as
+       "Common Table Expression" are read in full on a desktop window; the editor keeps the rest. */
+    .akml-snippets-body { flex: 1 1 auto; display: grid; grid-template-columns: minmax(280px, 32%) 1fr; min-height: 0; }
     .akml-snippets-list {
         margin: 0; padding: 0; list-style: none; overflow: auto;
         border-right: 1px solid var(--akml-border-default);

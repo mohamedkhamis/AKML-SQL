@@ -1,5 +1,6 @@
 IF @@rowcount = 0 PRINT 'none';
 
+
 IF EXISTS (
 	SELECT 1 FROM dbo.orders o
 	WHERE  o.shippeddate IS NULL AND o.requireddate < GETDATE ( )
@@ -14,6 +15,7 @@ ELSE
 BEGIN
 	PRINT 'no late orders';
 END
+
 
 WHILE (
 	SELECT COUNT ( * ) FROM dbo.products

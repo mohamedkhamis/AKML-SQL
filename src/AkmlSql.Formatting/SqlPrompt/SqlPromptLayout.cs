@@ -17,10 +17,17 @@ internal static class SqlPromptLayout
     /// <param name="applyCasing">
     /// Spec 040 (STY-11) — false keeps every token's case as written (Format SQL "Apply casing" off).
     /// </param>
+    /// <param name="unparsed">
+    /// Text the parser could not read (<see cref="UnparsedText"/>): kept exactly as written, casing
+    /// included, each run on its own lines.
+    /// </param>
     public static string Layout(TSqlScript script, IList<TSqlParserToken> tokens, List<NoformatRegion> noformat,
-        SqlPromptStyle style, bool applyCasing = true)
+        SqlPromptStyle style, bool applyCasing = true, IReadOnlyList<TokenRange>? unparsed = null)
     {
         var noFormatToken = new bool[tokens.Count];
+        if (unparsed != null)
+            foreach (var run in unparsed)
+                for (var i = run.First; i <= run.Last; i++) noFormatToken[i] = true;
         var cased = new string?[tokens.Count];
         var nodes = new List<LayoutNode>(tokens.Count);
         for (var i = 0; i < tokens.Count; i++)
@@ -42,7 +49,7 @@ internal static class SqlPromptLayout
         foreach (var node in nodes) cased[node.TokenIndex] = node.FormattedText;
 
         var writer = new SqlWriter(tokens, cased, style);
-        new SqlPromptPrinter(writer, style, i => noFormatToken[i]).Script(script);
+        new SqlPromptPrinter(writer, style, i => noFormatToken[i], unparsed).Script(script);
         return writer.ToText();
     }
 

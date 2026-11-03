@@ -489,6 +489,15 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(5)]
         public string?[]? Row { get; set; }
+
+        /// <summary>
+        /// UI scan 2026-11-03 (W3): the base column of the cell the failed edit stumbled on, when the engine knows it — on SQL Server
+        /// the cell whose text could not be converted to its column's type, on PostgreSQL the column the server named (a NOT NULL
+        /// violation; an invalid-input-syntax error names none). Null otherwise, and from older engines; the grid then names the one
+        /// cell the edit set, or the row alone.
+        /// </summary>
+        [Key(6)]
+        public string? Column { get; set; }
     }
 
     /// <summary>Engine → Browser: outcome of an ApplyChanges batch (NEVER null).</summary>

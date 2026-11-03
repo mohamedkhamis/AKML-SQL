@@ -241,10 +241,18 @@ namespace AkmlSql.Engine.Execution
                     $"Column '{cell.BaseColumnName}' carried an invalid SQL type code ({cell.ProviderType}).");
 
             var sqlDbType = (SqlDbType)cell.ProviderType;
-            var p = new SqlParameter(name, sqlDbType)
+            object value;
+            try
             {
-                Value = SqlScalarEncoder.Decode(cell.Value, sqlDbType),
-            };
+                value = SqlScalarEncoder.Decode(cell.Value, sqlDbType);
+            }
+            catch (Exception ex) when (ex is FormatException || ex is OverflowException)
+            {
+                // UI scan 2026-11-03 (W3): the text is not a value of the column's type. Name the column, so the apply result can
+                // point the grid at the cell (CrudEditResult.Column); the message stays the converter's own.
+                throw new CrudCellException(cell.BaseColumnName, ex.Message, ex);
+            }
+            var p = new SqlParameter(name, sqlDbType) { Value = value };
 
             // Do NOT pin Size for length-bearing types: Microsoft.Data.SqlClient SILENTLY TRUNCATES the
             // value to a client-echoed column width. Leaving Size unset sizes the parameter to the actual

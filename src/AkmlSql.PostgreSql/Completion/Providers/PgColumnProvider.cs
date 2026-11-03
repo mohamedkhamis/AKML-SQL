@@ -192,6 +192,6 @@ internal sealed class PgColumnProvider : IPgCompletionProvider
         if (input.Options.ShowNullability && col.Type.Length > 0 && !col.IsNullable) parts.Add("NOT NULL");
         var secondary = parts.Count > 0 ? string.Join(" · ", parts) : "column";
 
-        return PgItems.Make(display, insert, CompletionObjectType.Column, secondary, PgItems.Column, source, filter: col.Name);
+        return PgItems.Make(display, insert, CompletionObjectType.Column, secondary, col.IsPrimaryKey ? PgItems.KeyColumn : PgItems.Column, source, filter: col.Name);
     }
 }

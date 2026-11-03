@@ -127,7 +127,7 @@
     {
         var filtering = _filter.Length > 0;
         <ul class="akml-schema-tree-list" data-testid="schema-tree-root">
-            <li class="akml-schema-tree-node akml-schema-tree-db akml-schema-tree-folder" @onclick="@(() => Toggle(DbPath))">
+            <li class="akml-schema-tree-node akml-schema-tree-db akml-schema-tree-folder" aria-expanded="@(IsOpen(DbPath) ? "true" : "false")" @onclick="@(() => Toggle(DbPath))">
                 <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(DbPath))" Size="12" Class="akml-schema-chevron" /></span>
                 <Icon Name="database" Size="14" Class="akml-schema-icon akml-schema-icon--database" />
                 <span class="akml-schema-tree-label">Database "@_databaseName"</span>
@@ -141,7 +141,7 @@
                     var schemaPath = DbPath + "/" + schema.Name;
                     var kinds = EnumerateKinds(schema, _filter, Kind).Where(k => !filtering || k.Objects.Count > 0).ToList();
                     if (filtering && (kinds.Count == 0 || inaccessible)) continue;
-                    <li class="akml-schema-tree-node akml-schema-tree-schema akml-schema-tree-folder" @onclick="@(() => Toggle(schemaPath))">
+                    <li class="akml-schema-tree-node akml-schema-tree-schema akml-schema-tree-folder" aria-expanded="@(IsOpen(schemaPath) ? "true" : "false")" @onclick="@(() => Toggle(schemaPath))">
                         <span class="akml-schema-tree-expand"><Icon Name="@Chevron(IsOpen(schemaPath))" Size="12" Class="akml-schema-chevron" /></span>
                         <Icon Name="folder-open" Size="14" Class="akml-schema-icon akml-schema-icon--schema" />
                         <span class="akml-schema-tree-label">Schema "@schema.Name"</span>
@@ -165,6 +165,7 @@
                             var kindPath = schemaPath + "/" + kind.Label;
                             var empty = kind.Objects.Count == 0;
                             <li class="@("akml-schema-tree-node akml-schema-tree-kind" + (empty ? null : " akml-schema-tree-folder"))"
+                                aria-expanded="@(empty ? null : IsOpen(kindPath) ? "true" : "false")"
                                 @onclick="@(() => { if (!empty) Toggle(kindPath); })">
                                 <span class="akml-schema-tree-expand">
                                     @if (!empty)
@@ -739,6 +740,9 @@
         var qualifier = Kind == DatabaseKind.PostgreSql
             ? AkmlSql.Core.Text.PgIdentifierQuoting.QualifiedName(schemaName, obj.ObjectName)
             : $"[{schemaName}].[{obj.ObjectName}]";
+        // UI scan 2026-11-03 (W7): the row reads "dbo.Customers" as SSMS's Object Explorer does; the bracketed form stays
+        // the qualifier that Insert name / Copy name produce. PostgreSQL's qualified name is already written plainly.
+        var label = Kind == DatabaseKind.PostgreSql ? qualifier : $"{schemaName}.{obj.ObjectName}";
         var hasColumns = obj.Columns is { Length: > 0 };
         builder.OpenElement(0, "li");
         var selected = _selectedPath == objPath;
@@ -776,7 +780,7 @@
 
         builder.OpenElement(16, "span");
         builder.AddAttribute(17, "class", "akml-schema-tree-label");
-        builder.AddContent(18, qualifier);
+        builder.AddContent(18, label);
         builder.CloseElement();
         builder.CloseElement();
 

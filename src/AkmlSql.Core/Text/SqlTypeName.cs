@@ -24,9 +24,11 @@ namespace AkmlSql.Core.Text
         /// <summary>SqlClient's "not applicable" value for <c>NumericPrecision</c>/<c>NumericScale</c>.</summary>
         private const int NotApplicable = 255;
 
-        private SqlTypeName(string baseName, int? length, bool isMax, int? precision, int? scale)
+        private SqlTypeName(string baseName, int? length, bool isMax, int? precision, int? scale, string suffix = "", bool isArray = false)
         {
             BaseName = baseName;
+            Suffix = suffix;
+            IsArray = isArray;
             Length = length;
             IsMax = isMax;
             Precision = precision;
@@ -36,6 +38,20 @@ namespace AkmlSql.Core.Text
         /// <summary>The type name without arguments, lower-case for system types; a user-defined
         /// type keeps its spelling (<c>dbo.MyType</c>). Empty when unknown.</summary>
         public string BaseName { get; }
+
+        /// <summary>
+        /// The words PostgreSQL writes after the facets ("without time zone" in <c>timestamp(3) without time zone</c>),
+        /// empty for every other name. Review of the 2026-11-03 scan (W3): parsed as a bare <c>timestamp</c>, such a
+        /// column was taken for SQL Server's binary <c>timestamp</c> and every value typed into it was refused.
+        /// </summary>
+        public string Suffix { get; }
+
+        /// <summary>True for a PostgreSQL array type (<c>numeric(10,2)[]</c>, <c>text[]</c>): its text is the server's to judge.</summary>
+        public bool IsArray { get; }
+
+        /// <summary>The name to match a type by: the base name with its suffix ("timestamp without time zone"), so a
+        /// faceted PostgreSQL name reads as its bare form does and never as a different SQL Server type.</summary>
+        public string MatchName => Suffix.Length == 0 ? BaseName : BaseName + " " + Suffix;
 
         /// <summary>The declared length of a length type (<c>nvarchar(50)</c> → 50); null otherwise
         /// and for <c>(max)</c>.</summary>
@@ -95,33 +111,39 @@ namespace AkmlSql.Core.Text
             var trimmed = text.Trim();
             if (trimmed.Length == 0) return new SqlTypeName(string.Empty, null, false, null, null);
 
+            // PostgreSQL arrays: "integer[]", "numeric(10,2)[]". The element type is parsed; the array is remembered.
+            bool isArray = trimmed.EndsWith("[]", StringComparison.Ordinal);
+            if (isArray) trimmed = trimmed.Substring(0, trimmed.Length - 2).TrimEnd();
+
             int open = trimmed.IndexOf('(');
             var name = Normalise(open < 0 ? trimmed : trimmed.Substring(0, open));
-            if (open < 0) return new SqlTypeName(name, null, false, null, null);
+            if (open < 0) return new SqlTypeName(name, null, false, null, null, string.Empty, isArray);
 
             int close = trimmed.IndexOf(')', open + 1);
             var inner = close < 0 ? trimmed.Substring(open + 1) : trimmed.Substring(open + 1, close - open - 1);
             var args = inner.Split(',');
+            // PostgreSQL writes the time-zone words after the precision: "timestamp(3) without time zone".
+            var suffix = close < 0 ? string.Empty : trimmed.Substring(close + 1).Trim();
 
             switch (Kind(name))
             {
                 case TypeKind.Length:
                     var arg0 = args[0].Trim();
                     if (string.Equals(arg0, "max", StringComparison.OrdinalIgnoreCase))
-                        return new SqlTypeName(name, null, true, null, null);
-                    return new SqlTypeName(name, ParseInt(arg0), false, null, null);
+                        return new SqlTypeName(name, null, true, null, null, suffix, isArray);
+                    return new SqlTypeName(name, ParseInt(arg0), false, null, null, suffix, isArray);
 
                 case TypeKind.Decimal:
                     var p = ParseInt(args[0]);
                     var sc = args.Length > 1 ? ParseInt(args[1]) : (p == null ? null : (int?)0);
                     if (p == null) sc = null;
-                    return new SqlTypeName(name, null, false, p, sc);
+                    return new SqlTypeName(name, null, false, p, sc, suffix, isArray);
 
                 case TypeKind.FractionalSeconds:
-                    return new SqlTypeName(name, null, false, null, ParseInt(args[0]));
+                    return new SqlTypeName(name, null, false, null, ParseInt(args[0]), suffix, isArray);
 
                 default:
-                    return new SqlTypeName(name, null, false, null, null);
+                    return new SqlTypeName(name, null, false, null, null, suffix, isArray);
             }
         }
 
@@ -149,19 +171,20 @@ namespace AkmlSql.Core.Text
         public override string ToString()
         {
             if (BaseName.Length == 0) return string.Empty;
-            if (IsMax) return BaseName + "(max)";
+            var tail = (Suffix.Length == 0 ? string.Empty : " " + Suffix) + (IsArray ? "[]" : string.Empty);
+            if (IsMax) return BaseName + "(max)" + tail;
             switch (Kind(BaseName))
             {
                 case TypeKind.Length:
-                    return Length == null ? BaseName : BaseName + "(" + Length.Value.ToString(CultureInfo.InvariantCulture) + ")";
+                    return (Length == null ? BaseName : BaseName + "(" + Length.Value.ToString(CultureInfo.InvariantCulture) + ")") + tail;
                 case TypeKind.Decimal:
-                    return Precision == null ? BaseName
+                    return (Precision == null ? BaseName
                         : BaseName + "(" + Precision.Value.ToString(CultureInfo.InvariantCulture) + ","
-                          + (Scale ?? 0).ToString(CultureInfo.InvariantCulture) + ")";
+                          + (Scale ?? 0).ToString(CultureInfo.InvariantCulture) + ")") + tail;
                 case TypeKind.FractionalSeconds:
-                    return Scale == null ? BaseName : BaseName + "(" + Scale.Value.ToString(CultureInfo.InvariantCulture) + ")";
+                    return (Scale == null ? BaseName : BaseName + "(" + Scale.Value.ToString(CultureInfo.InvariantCulture) + ")") + tail;
                 default:
-                    return BaseName;
+                    return BaseName + tail;
             }
         }
 

@@ -10,4 +10,5 @@ GROUP BY o.orderdate;
 line
 note */
 
+
 SELECT 1;

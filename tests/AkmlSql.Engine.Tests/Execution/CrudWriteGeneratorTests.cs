@@ -365,4 +365,28 @@ public sealed class CrudWriteGeneratorTests
         Assert.DoesNotContain(" sys.", sql.Replace("[other]]db].sys.", string.Empty));
         Assert.Contains("FROM sys.triggers", InsertReadBack.MetadataSql(null));
     }
+
+    /// <summary>UI scan 2026-11-03 (W3): a cell whose text is not a value of its type names its column, so the grid can point at it.</summary>
+    [Theory]
+    [InlineData(SqlDbType.Int, "abc", typeof(FormatException))]
+    [InlineData(SqlDbType.TinyInt, "300", typeof(OverflowException))]
+    [InlineData(SqlDbType.Bit, "maybe", typeof(FormatException))]
+    [InlineData(SqlDbType.Money, "abc", typeof(FormatException))]
+    public void A_cell_that_cannot_be_converted_names_its_column(SqlDbType type, string value, Type inner)
+    {
+        var req = new ApplyChangesRequest { BaseSchema = "dbo", BaseTable = "Customers" };
+        var edit = new CrudEditDto
+        {
+            Op = CrudOp.Update,
+            SetCells = new[] { Cell("Name", SqlDbType.NVarChar, "Alice"), Cell("Age", type, value) },
+            KeyCells = new[] { Cell("Id", SqlDbType.Int, "7") },
+        };
+
+        using var conn = NewClosedConnection();
+        var ex = Assert.Throws<CrudCellException>(() => CrudWriteGenerator.BuildCommand(req, edit, conn, null));
+
+        Assert.Equal("Age", ex.ColumnName);
+        Assert.IsType(inner, ex.InnerException);
+        Assert.Equal(ex.InnerException!.Message, ex.Message);
+    }
 }

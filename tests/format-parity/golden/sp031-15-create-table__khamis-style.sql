@@ -13,6 +13,7 @@ CREATE TABLE dbo.orderaudit (
 		NOT NULL
 );
 
+
 CREATE TABLE dbo.regionmap (
 	regionid    INT
 		NOT NULL,
@@ -21,6 +22,7 @@ CREATE TABLE dbo.regionmap (
 
 		constraint pk_regionmap primary key ( regionid, territoryid )
 );
+
 
 CREATE TABLE dbo.tinylookup (
 	code CHAR ( 2 )
