@@ -948,3 +948,63 @@ The installed URL returns HTTP 200 and the engine marker. Chromium verified auto
 connection, SELECT 42 in tempdb, query/connection reload and no failed requests or page
 errors. See spec 045 baseline.md for verification evidence. This repairs the owner's
 reported installation; it does not complete the remaining disposable-VM matrices.
+
+### README source audit — 2026-10-27
+
+The owner requested a project scan and an accurate root README. The scan at e420f866
+checked the solution/project files, build and installer scripts, SSMS menu, browser
+services, analysis registries, AI factories, recent task ledgers and recorded TRXs.
+The current solution contains **14 source projects, 15 test projects and one reference
+generator**, including UiTests; section 1 above describes the earlier October 5 snapshot.
+There are **132 concrete T-SQL rule IDs** and **52 PostgreSQL rule IDs**. Browser-direct
+AI is limited by its own factory to Anthropic/Gemini/Ollama/LM Studio; the desktop factory
+has eight provider IDs. The browser's PostgreSQL language services require the engine.
+
+README.md now documents these facts, standalone/IIS/files-only hosting, default port
+47291 versus this server's selected 59417, full-solution MSBuild, real license location,
+dated verification results and open acceptance tasks. It removes stale branch status,
+trimmed-engine claims and the claim that solution builds must be avoided. Detailed
+task counts are explicitly ledger counts, and the browser results retain failed-first-run
+and rerun context. Recorded full-build results are not a fresh build for this docs edit.
+
+The documented MSBuild discovery needed an explicit-path fallback on this server:
+vswhere reports the VS 18 Insiders installation as incomplete and the normal component
+query returns nothing, but its MSBuild executable exists. build.ps1 has its own Enterprise
+path/vswhere discovery and is documented as needing that registration resolved here;
+no build tooling or installed Visual Studio state was changed by this audit.
+
+Fresh focused checks: Analysis ExtractionSmokeTests **5 passed** and PostgreSQL
+PgRuleRegistryTests **10 passed**, using existing Release outputs. Local README links,
+PowerShell snippet syntax, inventory/task counts and git diff whitespace were checked.
+Evidence: `.review-artifacts/readme-audit-20261027/` (ignored). No runtime code changed.
+
+### Deployed public site check and recovery — 2026-10-28
+
+The owner requested a check of akml.khamis.work. Normal public DNS/HTTPS requests
+and the local IIS binding returned 503.0 from AspNetCoreModuleV2 with 0x800704e7
+(Win32 1255, shutdown in progress). AkmlSqlSite and its pool were Started, but the
+application log recorded shutdown on October 27 with no subsequent AKML startup.
+There was no app_offline.htm, and the required .NET 10 runtimes were installed.
+Recycling only the AkmlSqlSite pool restored the application: worker 18312 was
+replaced by 24100, the module logged successful startup, and /health returned ok.
+The event initiating the earlier shutdown was not established; no deployment,
+configuration edit, IIS-wide restart or unrelated-site operation was performed.
+
+The deployed site assembly is 1.26.1027.1510 from e420f866; the advertised installer
+is 1.26.1027.1505. Its public download succeeded (58,439,530 bytes) and matched the
+manifest SHA-256 1496c0b0a6eb309c1d4285321337870b6f8ab28c810a8682b05c4d06aec556b6.
+The downloaded executable was not run. Thirteen public routes and 36 distinct internal
+link destinations returned 200; HTTP redirected to HTTPS. Chromium passed three
+themes at five widths, gallery interactions, images, theme-preserving navigation,
+mobile menu and no-JS fallback without console/page/request errors. Desktop and
+mobile captures were inspected. The separate AkmlSqlWebEngine remained Running and
+http://localhost:59417/ returned 200.
+
+An unresolved public UI defect was reproduced: a fresh Home -> Docs navigation hides
+full-text search, and Home -> Download hides the hash Copy button. Reloading each page
+restores its control. Docs search and keyboard result navigation then work. The scripts
+are emitted by DocsLayout.razor / Download.razor rather than the global App.razor,
+and the enhanced-navigation entry path does not initialize them. Source and deployed
+files were left unchanged during this check. Evidence and reproduction scripts are in
+`.review-artifacts/deployed-site-20261028/` (ignored); page-script-findings.json records
+both controls as hidden after navigation and visible after reload.

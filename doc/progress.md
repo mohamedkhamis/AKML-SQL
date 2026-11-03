@@ -2772,3 +2772,39 @@ http://localhost:59417/ now serves the installed 1.26.1027.1312 app. A fresh Chr
 context auto-connected, executed SELECT 42, restored query/connection after reload,
 and reported no page/request errors. No product installer was run by this repair.
 Full evidence is in spec 045 baseline.md; remaining VM acceptance stays open.
+
+### Root README source audit — 2026-10-27
+
+Updated README.md against the source at e420f866: current SSMS/web/PostgreSQL scope,
+Windows-service/IIS/files-only hosting, the actual default and configured ports,
+14 source/15 test/one generator solution inventory, 132 T-SQL/52 PostgreSQL rules,
+desktop-versus-browser AI availability, engine packaging and full-MSBuild commands.
+Replaced outdated feature-branch claims with dated task counts and verification results,
+preserving skips, failed-run/rerun context and open VM/owner acceptance. The MIT link
+now points to the existing installer license. PROJECT_MEMORY.md records the updated facts.
+
+Checked source registrations and manifests, local README links, PowerShell syntax and
+diff whitespace. Focused existing Release tests: Analysis 5/5 and PostgreSQL registry
+10/10. Full solution results in README are the prior recorded build, not a new build for
+this documentation edit. The server's incomplete Visual Studio registration prevents
+normal vswhere discovery; README includes the verified explicit MSBuild path and states
+the packaging-script discovery limitation. No application, installer or toolchain was changed.
+
+### Deployed public site check — 2026-10-28
+
+Found akml.khamis.work returning IIS 503.0 / AspNetCoreModuleV2 0x800704e7 after an
+earlier application shutdown. Recycling only AkmlSqlSite's app pool restored public
+GET requests and /health; the application logged a successful startup. No deployment
+or configuration change was made, and the earlier shutdown trigger remains unknown.
+
+Verified 13 public routes, 36 internal destinations, HTTPS redirect, three themes at
+five viewport widths, gallery interaction, images, mobile navigation and no-JS fallback.
+The advertised 1.26.1027.1505 installer downloaded and matched its manifest SHA-256;
+it was not executed. The SQL workspace service also remained healthy at localhost:59417.
+
+Remaining UI finding: from a fresh Home page, enhanced navigation to Docs does not
+initialize full-text search, and navigation to Download leaves the hash Copy button
+hidden. A reload restores both; docs search and keyboard navigation then pass. This
+check did not change the application source or deploy a fix. Reproduction scripts,
+browser reports, screenshots and download evidence are under the ignored
+`.review-artifacts/deployed-site-20261028/` folder. PROJECT_MEMORY.md records details.
