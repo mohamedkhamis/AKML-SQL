@@ -1,5 +1,5 @@
 {
-    "generatedAt":  "2026-10-27T13:10:03Z",
+    "generatedAt":  "2026-11-03T16:15:00Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
@@ -11,7 +11,7 @@
                                       },
                  "formatting.md":  {
                                        "added":  "2026-03-24",
-                                       "updated":  "2026-10-14"
+                                       "updated":  "2026-11-03"
                                    },
                  "postgresql-reference.md":  {
                                                  "added":  "2026-10-14",
