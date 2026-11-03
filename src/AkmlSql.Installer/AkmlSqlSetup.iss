@@ -295,6 +295,8 @@ Type: dirifempty; Name: "{app}"
 ; Inno Pascal has no forward references, so the hooks (Web_Init / Web_NextButton / Web_Skip /
 ; Web_PostInstall / Web_Uninstall / Web_ValidateSilentFlags) must be declared before the
 ; InitializeWizard / NextButtonClick / ShouldSkipPage / CurStepChanged / etc. that call them.
+#include "web-hosting.iss"
+[UninstallDelete]
 #include "web-installer.iss"
 
 [Code]
@@ -320,6 +322,8 @@ var
   // Declared here (not next to its writer) because CurStepChanged appears earlier in the file
   // and Inno Pascal has no forward references.
   GWebServiceWasRunning: Boolean;
+  UnsafeUninstallExe, UnsafeUninstallDat: String;
+  UnsafeUninstallRetired: Boolean;
 
 // --- SQL Prompt Detection (T033) ---
 
@@ -575,8 +579,70 @@ end;
 
 // Setup failed or was cancelled after the old uninstaller was set aside: put it back, so the
 // existing install can still be uninstalled.
+function RetireUnsafeUninstallLog(): String;
+var Command, ExePath, DatPath: String; Raw: AnsiString; P: Integer;
+begin
+  Result := '';
+  if UnsafeUninstallRetired then Exit;
+  Command := '';
+  if not RegQueryStringValue(HKLM64, UninstallKey, 'UninstallString', Command) then
+    RegQueryStringValue(HKLM32, UninstallKey, 'UninstallString', Command);
+  Command := Trim(Command);
+  if Command = '' then Exit;
+  if Copy(Command, 1, 1) = '"' then
+  begin
+    Delete(Command, 1, 1); P := Pos('"', Command);
+    if P = 0 then Exit;
+    ExePath := Copy(Command, 1, P - 1);
+  end
+  else ExePath := Command;
+  if (CompareText(ExtractFileDir(ExePath), RemoveBackslashUnlessRoot(ExpandConstant('{app}'))) <> 0) or
+    (CompareText(Copy(ExtractFileName(ExePath), 1, 5), 'unins') <> 0) or
+    (CompareText(ExtractFileExt(ExePath), '.exe') <> 0) then Exit;
+  DatPath := ChangeFileExt(ExePath, '.dat');
+  if not LoadStringFromFile(DatPath, Raw) then Exit;
+  if not HasLegacyTempScriptActions(Raw) then Exit;
+  if FileExists(DatPath + '.045-backup') or FileExists(ExePath + '.045-backup') then
+  begin Result := 'An earlier uninstall-log backup exists. Restore it before re-running setup.'; Exit; end;
+  if not RenameFile(DatPath, DatPath + '.045-backup') then
+  begin Result := 'Could not retire the legacy uninstall log. Setup has not replaced files.'; Exit; end;
+  if FileExists(ExePath) and not RenameFile(ExePath, ExePath + '.045-backup') then
+  begin
+    RenameFile(DatPath + '.045-backup', DatPath);
+    Result := 'Could not retire the legacy uninstaller. Setup has not replaced files.'; Exit;
+  end;
+  UnsafeUninstallExe := ExePath; UnsafeUninstallDat := DatPath;
+  UnsafeUninstallRetired := True;
+  Log('Starting a fresh uninstall log; legacy elevated temp-script entries retired.');
+end;
+
+procedure FinishUnsafeUninstallLog();
+var Suffix: String;
+begin
+  if not UnsafeUninstallRetired then Exit;
+  if InstallSucceeded then
+  begin
+    DeleteFile(UnsafeUninstallDat + '.045-backup');
+    DeleteFile(UnsafeUninstallExe + '.045-backup');
+  end
+  else
+  begin
+    Suffix := '.045-partial-' + GetDateTimeString('yyyymmdd-hhnnss', #0, #0);
+    while FileExists(UnsafeUninstallDat + Suffix) or FileExists(UnsafeUninstallExe + Suffix) do Suffix := Suffix + 'x';
+    if FileExists(UnsafeUninstallDat) and not RenameFile(UnsafeUninstallDat, UnsafeUninstallDat + Suffix) then
+    begin Log('ERROR: could not set aside the partial uninstall log; the previous .045-backup was preserved.'); Exit; end;
+    if FileExists(UnsafeUninstallExe) and not RenameFile(UnsafeUninstallExe, UnsafeUninstallExe + Suffix) then
+    begin Log('ERROR: could not set aside the partial uninstaller; the previous .045-backup was preserved.'); Exit; end;
+    if not RenameFile(UnsafeUninstallDat + '.045-backup', UnsafeUninstallDat) then
+      Log('ERROR: could not restore the previous uninstall log; its .045-backup was preserved.');
+    if FileExists(UnsafeUninstallExe + '.045-backup') and not RenameFile(UnsafeUninstallExe + '.045-backup', UnsafeUninstallExe) then
+      Log('ERROR: could not restore the previous uninstaller; its .045-backup was preserved.');
+  end;
+end;
+
 procedure DeinitializeSetup;
 begin
+  FinishUnsafeUninstallLog();
   if LegacyUninstallerRetired and not InstallSucceeded then
   begin
     RenameFile(AddBackslash(LegacyInstallDir) + 'unins000.dat.x86', AddBackslash(LegacyInstallDir) + 'unins000.dat');
@@ -638,15 +704,37 @@ end;
 // Finish page: the web edition's address, when this run hosts it on IIS.
 function IsWebSiteHosted: Boolean;
 begin
-  Result := IsWebSelected() and WizardIsComponentSelected('web\iis') and (WebHostPage.SelectedValueIndex = 0);
+  Result := WebHostHasHost();
 end;
 
 function WebSiteUrl(Param: String): String;
 begin
-  if WebIisPort = 80 then
-    Result := 'http://localhost/'
-  else
-    Result := 'http://localhost:' + IntToStr(WebIisPort) + '/';
+  Result := HostingAddress(WebHost, Exposure, GetComputerNameString(), WebBridgePort, WebIisPort);
+end;
+
+procedure AppendReadyPart(var Memo: String; Part: String);
+begin
+  if Part <> '' then Memo := Memo + Part + #13#10#13#10;
+end;
+
+function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
+  MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+var HostLine, MoveText: String;
+begin
+  Result := '';
+  AppendReadyPart(Result, MemoUserInfoInfo);
+  AppendReadyPart(Result, MemoDirInfo);
+  AppendReadyPart(Result, MemoTypeInfo);
+  AppendReadyPart(Result, MemoComponentsInfo);
+  AppendReadyPart(Result, MemoGroupInfo);
+  AppendReadyPart(Result, MemoTasksInfo);
+  if not IsWebSelected() then Exit;
+  if WebHost = 'Service' then HostLine := 'Standalone Windows service at ' + WebSiteUrl('')
+  else if WebHost = 'IIS' then HostLine := 'IIS at ' + WebSiteUrl('')
+  else HostLine := 'Files only, not hosted';
+  Result := Result + 'Web edition:' + NewLine + Space + HostLine;
+  MoveText := AddressChangeNotice(Web_PreviousAddress(), Web_CurrentAddress());
+  if MoveText <> '' then Result := Result + NewLine + Space + MoveText;
 end;
 
 // --- Wizard Initialization ---
@@ -1256,7 +1344,9 @@ begin
     // Ask about settings/log removal. SQL history, snippets and saved styles are ALWAYS kept —
     // see RemoveSettingsPreservingUserData (an upgrade's silent uninstall would otherwise default
     // to Yes and destroy the user's query history).
-    RemoveUserData := MsgBox('Do you want to remove your AKML SQL settings and log files?'#13#10#13#10
+    RemoveUserData := False;
+    if UninstallSilent then Log('keeping AKML SQL desktop settings')
+    else RemoveUserData := MsgBox('Do you want to remove your AKML SQL settings and log files?'#13#10#13#10
       + 'Your SQL query history, snippets and saved formatting styles will be KEPT.'#13#10
       + 'To remove those too, delete this folder manually after uninstalling:'#13#10
       + ExpandConstant('{userappdata}') + '\AKML SQL',
@@ -1350,6 +1440,10 @@ begin
   RunningList := '';
   KillSsms := False;
   KillDevenv := False;
+  Result := Web_PrepareFolders();
+  if Result <> '' then Exit;
+  Result := RetireUnsafeUninstallLog();
+  if Result <> '' then Exit;
   // Silent installs (the SSMS "Check for updates" flow runs the installer with its normal UI,
   // but unattended /VERYSILENT deploys have no one to answer either) cannot show the close-apps
   // prompt below — and skipping the close is fatal: a still-running SSMS RESPAWNS the

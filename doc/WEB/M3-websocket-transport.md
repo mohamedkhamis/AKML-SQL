@@ -10,6 +10,18 @@
 
 ## 1. Executive summary
 
+**Spec 045 hosting update:** the existing bridge listener also serves the public
+bundle in web mode. Standalone is the default; `http://localhost:<engine-port>/`
+and LAN `https://COMPUTERNAME:<engine-port>/` carry pages and bridge together.
+LAN standalone needs one engine firewall rule. IIS remains optional when its HTTP
+parts, services and native management probe are ready; files-only still installs
+the service. `/WEB_HOST=SERVICE|IIS|NONE` selects the host. `/WEB_PORT` and
+`/WEB_HTTPS_PORT` are IIS-only. Switching address changes browser origin; export
+settings first, while engine history stays. Localhost does not isolate users on a
+multi-session Windows host if another local user occupies the origin while the
+service is stopped. See [current quickstart](quickstart-m3.md); the milestone
+design below records the original M3 scope. No wire messages changed.
+
 M2 shipped a self-contained web edition that can format and analyse SQL but has no awareness of any real database. M3 connects the browser to a running `AkmlSql.Engine` process via WebSocket, unlocking live schema, IntelliSense from actual `sys.objects`, and the same Phase A / Phase B schema cache lifecycle the SSMS plugin uses.
 
 Two transports are added to the engine — both `WebSocketTransport` variants, distinguished by binding:

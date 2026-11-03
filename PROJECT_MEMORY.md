@@ -357,8 +357,9 @@ Important test pitfalls:
 3. UiTests needs an interactive desktop and tests **installed extension DLLs**,
    not just the checkout. Screenshot tours use Northwind sample data. Minimized or
    disconnected desktop sessions can produce empty/black captures.
-4. Installer smoke tests can run the real installer on admin/IIS machines. Keep
-   routine runs to the intended unit tests unless installation is the actual task.
+4. Installer smoke tests run the real installer. Since the 2026-10-26 spec 045 safety
+   gate they require `AKML_INSTALLER_SMOKE=1` as well as admin/IIS eligibility. Set
+   that opt-in only on disposable VMs; routine runs exclude `Category=InstallerSmoke`.
 5. Never silently rebaseline golden/corpus output. Existing documents report about
    977 formatter goldens and a roughly 97.5% completion ratchet; current fixtures
    and gate code determine exact counts (some README counts disagree).
@@ -826,5 +827,124 @@ Verification: full Release MSBuild restore/build and both theme drift checks pas
 Site tests 909 passed with one existing duplicate Options-help-anchor failure; 15
 Chromium theme/viewport combinations and the tour/no-JS/navigation checks passed.
 See `specs/044-site-product-studio/baseline.md` for exact limits and screenshots.
+
+## 2026-10-26 — Standalone web hosting, partial local implementation (spec 045)
+
+`BridgeOptions.WebRoot` is optional and empty by default. `EngineHost.RunWebAsync`
+alone maps it to the existing `WebSocketTransport`; desktop `RunAsync` never serves
+the bundle. `StaticWebResponder` validates the root against private config/token
+folders, builds a public extension manifest excluding hidden/system/reparse entries
+and known state names, serves GET/HEAD with validators and the IIS CSP, and bounds
+file streams to 32 slots with deadlines. `/akmlsql` keeps the plain bridge page;
+an absent/refused root keeps plain-page behavior everywhere. No IPC change.
+
+Web `PageEngine` detects `X-AKML-Host: engine` using same-origin `HEAD /`. With no
+active saved connection, auto-connect derives the page host/port/scheme, reuses a
+matching record or saves it after an OK handshake. HTTPS page records persist
+`StrictScheme=true` and try only `wss`; port 443 is permitted for those records.
+Saved active choices still win. PIN-required answers prefill Settings › Connections.
+The local-engine action also reuses a saved bearer for a matching page engine.
+
+Installer scripts now expose pure config/firewall/readiness/answer-check helpers;
+the thin installer readers compile. The existing IIS/default wizard remains until
+its migration and UI spikes are verified. Real installer smoke tests require
+`AKML_INSTALLER_SMOKE=1` plus admin/IIS eligibility and must run on disposable VMs.
+The owner reported no VMs and authorized independent local work. S1–S4/S6/S7,
+installer integration and installed-machine acceptance remain pending. No owner
+installation or deployment has been changed. See `specs/045-web-standalone-hosting/`
+tasks and baseline for current counts, browser evidence and known baseline failures.
+
+The new engine-served browser group has 7 passed and 1 failed: direct loads of all
+ten routes reach Live and `/spike` formats/runs its SQL corpus, but the strict
+network assertion sees Chromium `net::ERR_ABORTED` on WASM `HEAD /` detection.
+Native JavaScript HEAD succeeds. T034 remains unchecked and SC-006 compliance is
+not claimed. Attempts at response buffering/lifetime changes did not solve it and
+were removed; the strict test remains enabled for the next implementation pass.
+
+### Owner-authorized continuation — remaining installer source
+
+The owner then explicitly deferred T034 to Claude Code and asked to implement the
+rest. `web-installer.iss` now owns Service/IIS/None choices, ports/exposure,
+pre-install protection and post-install configuration/check/summary. Setup keeps
+hidden legacy component names through `WebLegacyComponent`; a literal `Check:
+False` fallback is rejected by the local compiler. Readiness and custom ownership
+use provisional conservative choices pending the unrun VM spikes.
+
+Permanent Support helpers now include `web-iis-remove.ps1` (owned site/pool/binding
+cleanup with conservative unknown-state handling) and `web-hosting-repair.ps1`
+(location/ACL checks before and after elevation, either host). State DACLs are set
+exactly, including removal of old explicit grants. Custom install trees reject
+foreign owners and reparse points. Repair uses Windows PowerShell 5.1 filesystem
+ACL APIs directly, avoiding a security-module autoload dependency observed in
+the isolated test environment.
+
+`PrepareToInstall` hardens before stopping applications and retires old uninstall
+logs containing UTF-16 temporary script paths. The detector builds markers at
+runtime so it does not match its own compiled constants. Failure restores old
+uninstall files, preserving partial files and logging I/O failures. Silent uninstall
+keeps data/settings without prompts. Real service/IIS/LAN/silent-uninstall smoke
+cases are implemented but stay behind `AKML_INSTALLER_SMOKE=1` on disposable VMs;
+none was run on the owner's computer. Engine/Web were freshly published for a
+review installer under `.review-artifacts/045-final-iscc`, never installed.
+
+Current docs describe the new source behavior. `specs/045-web-standalone-hosting/`
+baseline and `CLAUDE_HANDOFF.md` distinguish passing local checks from T034,
+existing Core/performance/Site failures, unrun VM rows and owner upgrades. No Git
+mutation was performed; preserve the existing staged and unstaged work.
 This is source work, not a deployment or PostgreSQL execution verification. Site E2E's
 default fixture targets deployed IIS; use an isolated published preview for source QA.
+
+### Server continuation and runtime verification — 2026-10-27
+
+The owner resumed missing spec 045 tasks and requested SSMS, browser and Windows-service
+testing. T034's strict browser failure is resolved: PageEngine now calls the small native
+`js/akml-page-engine.js` HEAD probe through JS interop. It keeps the existing root/header,
+no-cache, five-second timeout, three-outcome cache and engine precedence. WASM HttpClient
+response disposal produced aborted HEAD requests; the original strict ten-route/network
+test passes with native fetch. No static-responder workaround or relaxed assertion was kept.
+
+`StandaloneQueryCycleTests` covers engine-served auto-connect, SQL Server temp-table state,
+persisted text/connection reload and another query. Its explicit
+`AKML_STANDALONE_VERIFY_URL` branch targets an isolated loopback service. A fresh published
+engine ran as a temporary LocalSystem SCM service: query/reload and real crash recovery
+both passed, and the test service was deleted. Existing installed-service reconnect tests
+also stop/start AkmlSqlWebEngine; it was left Running, with its binary and hosting config
+unchanged. This is runtime verification, not an installer upgrade or LAN/second-PC acceptance.
+
+SSMS 22 is installed here. After the owner reconnected RDP, the installed extension
+(`1.26.1022.701`, active Khamis Style) formatted and executed the read-only tempdb query
+`SELECT 42 AS AKML_CYCLE_RESULT_045`. The result grid and success status were inspected.
+`InstalledSsmsCycleTests` records the pipe, UIA and screenshot evidence. This host's UIA
+editor text includes line numbers; matching its success status by a Name condition avoids
+unrelated accessibility elements. The shell source and installed payload were not changed.
+
+The old Core/Site red assertions were stale: ProfileGet now tests all nine existing keys
+and a legacy seven-key payload; Options help tests pin the exact General/History combined
+page aliases while retaining uniqueness for every other topic. Both full suites pass.
+The browser formatting test now waits for EditorComponent's applied `data-tab-id` before
+typing; that marker is set after JS applies the state, with an interop-ordering unit test.
+Remaining VM spikes, real installer matrices and owner upgrades remain unchecked. Use the
+latest section of spec 045's baseline.md for final counts and any release-gate limitation.
+
+### Installed standalone service repair — 2026-10-27
+
+The owner installed 1.26.1027.1312 and reported that http://localhost:59417/ failed.
+The service was Running, and the registry selected Service/Localhost, but config.json
+still contained the old LAN/TLS bridge without webRoot. The installer log showed
+File.Replace failing with "The path is not of a legal form." Windows PowerShell 5.1
+converts a plain `$null` string argument to an empty string; the configuration writer
+now passes `[System.Management.Automation.Language.NullString]::Value` for the backup
+path. This preserves atomic replacement and makes upgrades/repeated configuration work.
+
+New tests invoke the real script in Windows PowerShell with isolated ProgramData and
+temporary config files, for both a fresh file followed by a rerun and an existing LAN
+config. Both reproduced the failure before the fix and pass afterward. Earlier tests
+covered JSON generation but missed this disk-write path.
+
+The installed Support script was updated, the selected Localhost/WebRoot configuration
+was written, and AkmlSqlWebEngine restarted. Original files are preserved under
+`C:\ProgramData\AKML SQL Web\repair-backup-20261027-142657` with the private state ACL.
+The installed URL returns HTTP 200 and the engine marker. Chromium verified automatic
+connection, SELECT 42 in tempdb, query/connection reload and no failed requests or page
+errors. See spec 045 baseline.md for verification evidence. This repairs the owner's
+reported installation; it does not complete the remaining disposable-VM matrices.

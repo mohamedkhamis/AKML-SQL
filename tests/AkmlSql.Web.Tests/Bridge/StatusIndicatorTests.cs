@@ -18,6 +18,22 @@ namespace AkmlSql.Web.Tests.Bridge;
 /// </summary>
 public sealed class StatusIndicatorTests : BunitContext
 {
+    [Fact]
+    public void A_static_page_keeps_the_default_local_engine_button_title()
+    {
+        Services.AddSingleton<IEngineAutoConnect>(new PairingFailure());
+        var cut = Render<StatusBar>();
+        Assert.Contains("localhost:47291", cut.Find("[data-testid=engine-use-local]").GetAttribute("title"));
+    }
+
+    private sealed class PairingFailure : IEngineAutoConnect
+    {
+        public EngineConnectFailure? LastFailure => new(EngineConnectFailureKind.NotPaired, "No engine paired yet.", null);
+        public event Action? FailureChanged { add { } remove { } }
+        public Task StartAsync() => Task.CompletedTask;
+        public Task RetryNowAsync() => Task.CompletedTask;
+    }
+
     private const string Host = "127.0.0.1";
     private const int Portn = 5081;
     private const string Server = "127.0.0.1:5081";

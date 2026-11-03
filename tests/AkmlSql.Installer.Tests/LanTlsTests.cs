@@ -20,7 +20,7 @@ public sealed class LanTlsTests
     [SkippableFact]
     public void Sslcert_binding_thumbprint_matches_install_summary()
     {
-        Skip.IfNot(InstallerSmokeEnv.CanRun, "Requires admin + IIS");
+        Skip.IfNot(InstallerSmokeEnv.CanRunIis, InstallerSmokeEnv.SkipReason);
         Assert.True(_fx.Installed, $"Silent install failed (exit {_fx.InstallExitCode}).");
 
         var (_, netsh) = InstallerSmokeEnv.RunProcess(
@@ -37,7 +37,7 @@ public sealed class LanTlsTests
     [SkippableFact]
     public void Firewall_rule_exists()
     {
-        Skip.IfNot(InstallerSmokeEnv.CanRun, "Requires admin + IIS");
+        Skip.IfNot(InstallerSmokeEnv.CanRunIis, InstallerSmokeEnv.SkipReason);
         Assert.True(_fx.Installed, $"Silent install failed (exit {_fx.InstallExitCode}).");
 
         var (_, output) = InstallerSmokeEnv.RunPowerShell(

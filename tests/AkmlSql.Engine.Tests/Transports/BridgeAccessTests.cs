@@ -24,6 +24,47 @@ namespace AkmlSql.Engine.Tests.Transports;
 /// </summary>
 public sealed class BridgeAccessTests
 {
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/editor")]
+    [InlineData("/index.html")]
+    [InlineData("/_framework/dotnet.js")]
+    public async Task No_web_root_keeps_the_plain_page_byte_for_byte(string path)
+    {
+        await using var host = await StaticWebTestHost.StartAsync(_ => null);
+        using var response = await host.Http.GetAsync(path);
+        Assert.Equal(WebSocketTransport.PlainRequestPage, await response.Content.ReadAsStringAsync());
+        Assert.False(response.Headers.Contains("X-AKML-Host"));
+        Assert.True(response.Headers.CacheControl?.NoStore);
+    }
+
+    [Theory]
+    [InlineData("/akmlsql")]
+    [InlineData("/akmlsql/")]
+    public async Task A_configured_web_root_keeps_the_certificate_trust_page(string path)
+    {
+        await using var host = await StaticWebTestHost.StartAsync();
+        using var response = await host.Http.GetAsync(path);
+        Assert.Equal(WebSocketTransport.PlainRequestPage, await response.Content.ReadAsStringAsync());
+        Assert.Equal("engine", Assert.Single(response.Headers.GetValues("X-AKML-Host")));
+        Assert.True(response.Headers.CacheControl?.NoStore);
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/akmlsql")]
+    public async Task Static_hosting_keeps_the_same_origin_upgrade_gate_on_any_path(string path)
+    {
+        await using var host = await StaticWebTestHost.StartAsync();
+        using var local = new ClientWebSocket();
+        local.Options.SetRequestHeader("Origin", $"http://127.0.0.1:{host.Port}");
+        await local.ConnectAsync(new Uri($"ws://127.0.0.1:{host.Port}{path}"), CancellationToken.None);
+        Assert.Equal(WebSocketState.Open, local.State);
+        using var foreign = new ClientWebSocket();
+        foreign.Options.SetRequestHeader("Origin", "https://evil.example");
+        await Assert.ThrowsAsync<WebSocketException>(() => foreign.ConnectAsync(new Uri($"ws://127.0.0.1:{host.Port}{path}"), CancellationToken.None));
+    }
+
     // --- Origin (localhost mode) ------------------------------------------------------------
 
     [Theory]

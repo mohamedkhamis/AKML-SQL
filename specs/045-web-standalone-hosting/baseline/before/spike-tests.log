@@ -1,0 +1,23 @@
+Test run for D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+[xUnit.net 00:00:08.52]     AkmlSql.Web.E2E.Tests.SpikePageTests.Spike_page_runs_the_corpus_with_no_uncaught_exception [FAIL]
+  Failed AkmlSql.Web.E2E.Tests.SpikePageTests.Spike_page_runs_the_corpus_with_no_uncaught_exception [7 s]
+  Error Message:
+   Microsoft.Playwright.PlaywrightException : Executable doesn't exist at C:\Users\MohamedKhamis\AppData\Local\ms-playwright\chromium_headless_shell-1248\chrome-headless-shell-win64\chrome-headless-shell.exe
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     pwsh bin/Debug/netX/playwright.ps1 install             ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+  Stack Trace:
+     at Microsoft.Playwright.Transport.Connection.InnerSendMessageToServerAsync[T](ChannelOwner object, String method, Dictionary`2 dictionary, Boolean keepNulls, Nullable`1 timeout) in /_/src/Playwright/Transport/Connection.cs:line 231
+   at Microsoft.Playwright.Transport.Connection.WrapApiCallAsync[T](Func`1 action, Boolean isInternal, String title) in /_/src/Playwright/Transport/Connection.cs:line 553
+   at Microsoft.Playwright.Core.BrowserType.LaunchAsync(BrowserTypeLaunchOptions options) in /_/src/Playwright/Core/BrowserType.cs:line 56
+   at AkmlSql.Web.E2E.Tests.SpikePageTests.Spike_page_runs_the_corpus_with_no_uncaught_exception() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\SpikePageTests.cs:line 34
+--- End of stack trace from previous location ---
+Results File: D:\Repo\01-Khamis-Projects\AKML-SQL\specs\045-web-standalone-hosting\baseline\before\spike.trx
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 7 s - AkmlSql.Web.E2E.Tests.dll (net10.0)

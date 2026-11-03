@@ -41,6 +41,7 @@ namespace AkmlSql.Engine.Transports
         private HttpListener? _listener;
         private CancellationTokenSource? _acceptCts;
         private Task? _acceptLoop;
+        private StaticWebResponder? _webResponder;
         private volatile bool _disposed;
 
         public WebSocketTransport(WebSocketTransportOptions options)
@@ -82,7 +83,10 @@ namespace AkmlSql.Engine.Transports
             }
             catch (HttpListenerException ex)
             {
+                _listener.Close();
                 _listener = null;
+                if (ex.NativeErrorCode is 183 or 32)
+                    throw new InvalidOperationException($"port {_options.Port} is held by another process", ex);
                 throw new InvalidOperationException(
                     $"WebSocketTransport: failed to bind {prefix}. " +
                     "On Windows, non-localhost prefixes may need 'netsh http add urlacl' or admin rights. " +
@@ -90,6 +94,7 @@ namespace AkmlSql.Engine.Transports
                     ex);
             }
 
+            _webResponder = StaticWebResponder.Create(_options);
             _acceptCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _acceptLoop = Task.Run(() => AcceptLoopAsync(_acceptCts.Token));
 
@@ -168,7 +173,7 @@ namespace AkmlSql.Engine.Transports
 
                 if (!context.Request.IsWebSocketRequest)
                 {
-                    RespondToPlainRequest(context);
+                    _ = Task.Run(() => RespondToHttpAsync(context));
                     continue;
                 }
 
@@ -203,6 +208,51 @@ namespace AkmlSql.Engine.Transports
 
         private static bool IsLoopback(IPAddress? addr) =>
             addr != null && IPAddress.IsLoopback(addr);
+
+        private async Task RespondToHttpAsync(HttpListenerContext context)
+        {
+            try
+            {
+                if (context.Request.Url == null)
+                {
+                    if (_webResponder != null) await StaticWebResponder.RefuseAsync(context, 400, "Bad request.").ConfigureAwait(false);
+                    else { context.Response.StatusCode = 400; context.Response.Close(); }
+                    return;
+                }
+                if (_webResponder == null) { RespondToPlainRequest(context); return; }
+                if (context.Request.HttpMethod is not "GET" and not "HEAD")
+                {
+                    context.Response.Headers["Allow"] = "GET, HEAD";
+                    await StaticWebResponder.RefuseAsync(context, 405, "Method not allowed.").ConfigureAwait(false);
+                    return;
+                }
+                if (_options.IsLoopback && !IsAllowedLocalHost(context.Request.Headers["Host"]))
+                {
+                    await StaticWebResponder.RefuseAsync(context, 400, "Bad host.").ConfigureAwait(false);
+                    return;
+                }
+                var path = context.Request.Url.AbsolutePath;
+                if (path.Equals("/akmlsql", StringComparison.OrdinalIgnoreCase) || path.Equals("/akmlsql/", StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Response.Headers["X-AKML-Host"] = "engine";
+                    RespondToPlainRequest(context);
+                    return;
+                }
+                await _webResponder.RespondAsync(context).ConfigureAwait(false);
+            }
+            catch
+            {
+                try { context.Response.Abort(); } catch (Exception ex) when (ex is HttpListenerException or IOException or ObjectDisposedException) { }
+            }
+        }
+
+        internal static bool IsAllowedLocalHost(string? host)
+        {
+            if (string.IsNullOrEmpty(host) || host.IndexOfAny(new[] { '/', '\\', '?', '#', '@' }) >= 0 ||
+                !Uri.TryCreate("http://" + host, UriKind.Absolute, out var address)) return false;
+            var name = address.Host.Trim('[', ']');
+            return name.Equals("localhost", StringComparison.OrdinalIgnoreCase) || name == "127.0.0.1" || name == "::1";
+        }
 
         /// <summary>
         /// True when a localhost-mode WebSocket upgrade may proceed for this <c>Origin</c> header.

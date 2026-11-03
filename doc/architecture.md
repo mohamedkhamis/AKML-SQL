@@ -398,6 +398,19 @@ Wire details (request/response shapes, status strings, capability table) are in 
 
 **Engine-host composition (spec 025 FR-027)**: both `NamedPipeTransport` and `WebSocketTransport` are started concurrently when `config.Bridge.Enabled == true`; both share the same `RpcRouter` so the SSMS plugin and the web edition serve identical handler chains. When the bridge section is absent or disabled, only the named pipe runs — IDE-plugin-only deployments are byte-for-byte unchanged.
 
+**Standalone bundle hosting (spec 045, local implementation)**: only `RunWebAsync` maps
+`bridge.webRoot` into `StaticWebResponder` on the existing bridge listener. An empty or
+refused root keeps the plain bridge page. A valid root serves a manifest of public files,
+GET/HEAD with validators, and `index.html` for extensionless routes; `/akmlsql` keeps the
+plain page. Desktop `RunAsync` never maps the root. The browser detects the serving engine
+with `HEAD /` and `X-AKML-Host: engine`, using its page host/port when there is no active saved
+engine. HTTPS page records keep `wss` strictly. No IPC message or capability was added.
+Setup now defaults to Service and persists Host/Exposure/ports, with optional ready
+IIS or files-only hosting. It handles switching, protected Support repair and
+uninstall directly. Source integration is complete; disposable-machine acceptance
+and the deferred browser network gate are recorded separately in
+`specs/045-web-standalone-hosting/baseline.md`.
+
 **LAN-mode TLS plumbing (spec 025 FR-001..FR-006)**: non-loopback bindings switch to `https://` prefixes and consume the installer-bound cert (`netsh http add sslcert ipport=…`). The transport's startup-time `ValidateCertBindingOrThrow` asserts PFX existence + thumbprint match against the active netsh binding before opening the listener; mismatch throws with both thumbprints in the message. The validated thumbprint flows into every `HandshakeResponse.ServerTlsThumbprint` so the browser can pin it on first connect and log a `Warn` diagnostic on drift.
 
 **Threat model**: see [m3-security.md](m3-security.md) for the LAN-mode threat table, on-disk artefact audit, and the list of deferred follow-ups.

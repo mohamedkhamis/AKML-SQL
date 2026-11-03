@@ -1,0 +1,651 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="8b7bdacd-33fc-46cb-9143-a7e1cf258bec" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 14:18:12" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T14:18:12.7699457+03:00" queuing="2026-10-26T14:18:12.7699461+03:00" start="2026-10-26T14:18:10.3023499+03:00" finish="2026-10-26T14:18:16.0875061+03:00" />
+  <TestSettings name="default" id="cbc39e9a-cf47-4fef-825f-077c430185cc">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_14_18_12" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="42c1eb43-2850-4536-9c3a-537a14590fd5" testId="8e020437-69ec-f5dc-0111-976949c04517" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0015604" startTime="2026-10-26T14:18:15.9928315+03:00" endTime="2026-10-26T14:18:15.9935753+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="42c1eb43-2850-4536-9c3a-537a14590fd5">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 17&#xD;
+   at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a3c1c2d7-e473-46f5-9e4f-bec490607d3e" testId="e29683b1-7f40-9903-6b7e-8813903d1faa" testName="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Localhost&quot;, bind: &quot;127.0.0.1&quot;, webRoot: &quot;C:\\Program Files\\AKML SQL\\Web&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0013630" startTime="2026-10-26T14:18:11.9010121+03:00" endTime="2026-10-26T14:18:11.9012035+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a3c1c2d7-e473-46f5-9e4f-bec490607d3e">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(String mode, String bind, String webRoot) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebConfigBridgeTests.cs:line 14&#xD;
+   at InvokeStub_WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c016b6f5-ed05-4c53-a755-2cfb6b2a2ed5" testId="9d35f90a-174e-0365-f8e2-caf80b6da476" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" computerName="MOHAMED-KHAMIS" duration="00:00:00.5087518" startTime="2026-10-26T14:18:14.1565354+03:00" endTime="2026-10-26T14:18:14.6642307+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c016b6f5-ed05-4c53-a755-2cfb6b2a2ed5">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 2&#xD;
+Actual:   -196608</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 45&#xD;
+   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 53&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a90b3b51-611a-4580-a8e7-f3a6c5d1dee9" testId="078bdfbc-46c0-dc97-5bec-efb4532485c9" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004625" startTime="2026-10-26T14:18:15.9979782+03:00" endTime="2026-10-26T14:18:15.9980265+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a90b3b51-611a-4580-a8e7-f3a6c5d1dee9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 17&#xD;
+   at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="92f503bd-9881-4aeb-bbe3-10130bb95c48" testId="b07c7d25-3ec8-6717-8507-fb5028376878" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Add&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0005442" startTime="2026-10-26T14:18:15.9959670+03:00" endTime="2026-10-26T14:18:15.9960147+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="92f503bd-9881-4aeb-bbe3-10130bb95c48">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 17&#xD;
+   at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="264e5ee6-8dbc-48c8-8a02-f3668e8d8872" testId="71f12f1b-d5a9-51f8-1d1c-c78a3ae02357" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0005522" startTime="2026-10-26T14:18:15.9946628+03:00" endTime="2026-10-26T14:18:15.9947476+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="264e5ee6-8dbc-48c8-8a02-f3668e8d8872">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 17&#xD;
+   at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ec47c1d2-83bd-459a-9284-4ec134b67feb" testId="e3b86658-3c38-4fe5-cc03-523fabf0fdfe" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: True, expectation: &quot;ExpectEngine&quot;, expectedExit: 0)" computerName="MOHAMED-KHAMIS" duration="00:00:00.4996726" startTime="2026-10-26T14:18:13.1508757+03:00" endTime="2026-10-26T14:18:13.6498006+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ec47c1d2-83bd-459a-9284-4ec134b67feb">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 0&#xD;
+Actual:   -196608</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 45&#xD;
+   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 53&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f1903bed-223d-414f-afc1-9b03394844f4" testId="20c61a97-b20e-42f8-474c-910476308b8a" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure" computerName="MOHAMED-KHAMIS" duration="00:00:00.2922448" startTime="2026-10-26T14:18:15.1371404+03:00" endTime="2026-10-26T14:18:15.4298416+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f1903bed-223d-414f-afc1-9b03394844f4">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 10 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-dbad7beb8b7648ca8a130dd38b3af593\probe.iss: File not found: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 52&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="924a0859-7cd4-4aeb-b11a-58db5fdc07c5" testId="6b30d58c-b4e6-7e45-ee4f-3b7003039849" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part" computerName="MOHAMED-KHAMIS" duration="00:00:00.2670540" startTime="2026-10-26T14:18:15.4310425+03:00" endTime="2026-10-26T14:18:15.6972900+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="924a0859-7cd4-4aeb-b11a-58db5fdc07c5">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 10 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-111ac6cba0574136abb88567b8c2f270\probe.iss: File not found: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 77&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="8a2a9d64-7448-4306-a7d0-503a18c0f0b4" testId="9fd45b87-63e2-1521-a150-88c634972066" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs" computerName="MOHAMED-KHAMIS" duration="00:00:00.2883163" startTime="2026-10-26T14:18:15.7010280+03:00" endTime="2026-10-26T14:18:15.9886544+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8a2a9d64-7448-4306-a7d0-503a18c0f0b4">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 10 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-e66ab4fc18a5420fb293fc8a5e22565a\probe.iss: File not found: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss.&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 86&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="12f6e05f-6aac-43fb-89f0-3f243d28be57" testId="3d311460-a29d-4049-3d5a-1dd58a3fda6b" testName="AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log" computerName="MOHAMED-KHAMIS" duration="00:00:00.0016968" startTime="2026-10-26T14:18:11.9057330+03:00" endTime="2026-10-26T14:18:11.9058477+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="12f6e05f-6aac-43fb-89f0-3f243d28be57">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebConfigBridgeTests.cs:line 38&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="093cd730-1fda-4d69-b767-f11324255be9" testId="81c61d57-2b44-17af-b8ba-25eb41ddacd0" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;AKML SQL engine: reachable&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" computerName="MOHAMED-KHAMIS" duration="00:00:00.5749711" startTime="2026-10-26T14:18:12.5728686+03:00" endTime="2026-10-26T14:18:13.1490417+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="093cd730-1fda-4d69-b767-f11324255be9">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 2&#xD;
+Actual:   -196608</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 45&#xD;
+   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 53&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="c421614c-b0e0-4fd8-97c5-6e3d29c710e1" testId="02e88b5a-bc15-7d56-01d5-b714fd981e26" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;IIS welcome&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 2)" computerName="MOHAMED-KHAMIS" duration="00:00:00.6830017" startTime="2026-10-26T14:18:11.9104324+03:00" endTime="2026-10-26T14:18:12.5709962+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c421614c-b0e0-4fd8-97c5-6e3d29c710e1">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 2&#xD;
+Actual:   -196608</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 45&#xD;
+   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 53&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2fc941d0-b42d-4c7f-bd0d-c84fe769ff5a" testId="71e90983-9994-0731-a31e-feb1f8ec3026" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Localhost&quot;, expected: &quot;127.0.0.1&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0013454" startTime="2026-10-26T14:18:15.6986909+03:00" endTime="2026-10-26T14:18:15.6988451+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2fc941d0-b42d-4c7f-bd0d-c84fe769ff5a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 102&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b2ab5998-d770-4b83-b28d-b1074469b2fe" testId="fabb2899-edac-a083-b288-93ae75edec27" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0006592" startTime="2026-10-26T14:18:15.9969936+03:00" endTime="2026-10-26T14:18:15.9970487+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b2ab5998-d770-4b83-b28d-b1074469b2fe">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 17&#xD;
+   at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7c6c96b8-d5ed-4bb3-946a-e8669b5e50f5" testId="9f4c2ef2-804d-1905-3ba4-f44b1048b91a" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;script src=\&quot;_framework/blazor.webassembly.js\&quot;&gt;&lt;&quot;···, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 0)" computerName="MOHAMED-KHAMIS" duration="00:00:00.5035001" startTime="2026-10-26T14:18:13.6510367+03:00" endTime="2026-10-26T14:18:14.1544722+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7c6c96b8-d5ed-4bb3-946a-e8669b5e50f5">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 0&#xD;
+Actual:   -196608</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 45&#xD;
+   at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 53&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="fbd86b42-ce38-415c-86de-5d482809e24a" testId="2eefc5c6-93c1-1b72-ea03-d99ee24bec12" testName="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Lan&quot;, expected: &quot;0.0.0.0&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0009997" startTime="2026-10-26T14:18:15.6997984+03:00" endTime="2026-10-26T14:18:15.7000263+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fbd86b42-ce38-415c-86de-5d482809e24a">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 102&#xD;
+   at InvokeStub_WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1b3aeddd-b44f-41ae-b2b5-08a7645f8f59" testId="a1d694d4-e782-556f-b5fe-ea9c28ea1aa9" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh" computerName="MOHAMED-KHAMIS" duration="00:00:00.0007695" startTime="2026-10-26T14:18:15.9989302+03:00" endTime="2026-10-26T14:18:15.9989743+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1b3aeddd-b44f-41ae-b2b5-08a7645f8f59">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 33&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="6728ebf1-7320-4369-b23b-5aa089c90c73" testId="38c57fa8-6a1b-148b-7550-ae50d7db8a27" testName="AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason" computerName="MOHAMED-KHAMIS" duration="00:00:00.4681652" startTime="2026-10-26T14:18:14.6656426+03:00" endTime="2026-10-26T14:18:15.1341757+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6728ebf1-7320-4369-b23b-5aa089c90c73">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ&#xD;
+Expected: 1&#xD;
+Actual:   -196608</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs:line 66&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ea76cc7a-d63a-4b5a-9b08-34db35cc3a93" testId="e2fecfc5-6e35-64cb-9d4c-22cc82cb49fd" testName="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0022756" startTime="2026-10-26T14:18:15.9898566+03:00" endTime="2026-10-26T14:18:15.9917789+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ea76cc7a-d63a-4b5a-9b08-34db35cc3a93">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs:line 17&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e92ec8e0-1bdb-44df-976f-0615c5194964" testId="ca167fee-f15d-0f3f-67c3-a7724b1eac7f" testName="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Lan&quot;, bind: &quot;0.0.0.0&quot;, webRoot: &quot;&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0221542" startTime="2026-10-26T14:18:11.8189690+03:00" endTime="2026-10-26T14:18:11.8712031+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e92ec8e0-1bdb-44df-976f-0615c5194964">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+         ↓ (pos 0)&#xD;
+String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+Found:  "#Requires"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 53&#xD;
+   at AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(String mode, String bind, String webRoot) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebConfigBridgeTests.cs:line 14&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="e2fecfc5-6e35-64cb-9d4c-22cc82cb49fd">
+      <Execution id="ea76cc7a-d63a-4b5a-9b08-34db35cc3a93" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9d35f90a-174e-0365-f8e2-caf80b6da476">
+      <Execution id="c016b6f5-ed05-4c53-a755-2cfb6b2a2ed5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;app&lt;/html&gt;&quot;, marker: True, expectation: &quot;ExpectEngine&quot;, expectedExit: 0)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="e3b86658-3c38-4fe5-cc03-523fabf0fdfe">
+      <Execution id="ec47c1d2-83bd-459a-9284-4ec134b67feb" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Add&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="b07c7d25-3ec8-6717-8507-fb5028376878">
+      <Execution id="92f503bd-9881-4aeb-bbe3-10130bb95c48" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;Service&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="078bdfbc-46c0-dc97-5bec-efb4532485c9">
+      <Execution id="a90b3b51-611a-4580-a8e7-f3a6c5d1dee9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Lan&quot;, expected: &quot;0.0.0.0&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="2eefc5c6-93c1-1b72-ea03-d99ee24bec12">
+      <Execution id="fbd86b42-ce38-415c-86de-5d482809e24a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Config_reader_understands_real_PS51_config_output" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="3d311460-a29d-4049-3d5a-1dd58a3fda6b">
+      <Execution id="12f6e05f-6aac-43fb-89f0-3f243d28be57" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebConfigBridgeTests" name="Dot_sourcing_creates_no_config_or_log" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="20c61a97-b20e-42f8-474c-910476308b8a">
+      <Execution id="f1903bed-223d-414f-afc1-9b03394844f4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Hosting_addresses_cover_every_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="a1d694d4-e782-556f-b5fe-ea9c28ea1aa9">
+      <Execution id="1b3aeddd-b44f-41ae-b2b5-08a7645f8f59" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Dot_sourcing_never_runs_netsh" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9fd45b87-63e2-1521-a150-88c634972066">
+      <Execution id="8a2a9d64-7448-4306-a7d0-503a18c0f0b4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Lan&quot;, engine: &quot;Add&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="71f12f1b-d5a9-51f8-1d1c-c78a3ae02357">
+      <Execution id="264e5ee6-8dbc-48c8-8a02-f3668e8d8872" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;script src=\&quot;_framework/blazor.webassembly.js\&quot;&gt;&lt;&quot;···, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 0)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9f4c2ef2-804d-1905-3ba4-f44b1048b91a">
+      <Execution id="7c6c96b8-d5ed-4bb3-946a-e8669b5e50f5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;IIS welcome&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectBundle&quot;, expectedExit: 2)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="02e88b5a-bc15-7d56-01d5-b714fd981e26">
+      <Execution id="c421614c-b0e0-4fd8-97c5-6e3d29c710e1" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Lan&quot;, bind: &quot;0.0.0.0&quot;, webRoot: &quot;&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="ca167fee-f15d-0f3f-67c3-a7724b1eac7f">
+      <Execution id="e92ec8e0-1bdb-44df-976f-0615c5194964" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebConfigBridgeTests" name="Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: &quot;Localhost&quot;, expected: &quot;127.0.0.1&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="71e90983-9994-0731-a31e-feb1f8ec3026">
+      <Execution id="2fc941d0-b42d-4c7f-bd0d-c84fe769ff5a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Config_reader_understands_real_PS51_config_output" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="38c57fa8-6a1b-148b-7550-ae50d7db8a27">
+      <Execution id="6728ebf1-7320-4369-b23b-5aa089c90c73" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Closed_port_times_out_and_records_the_reason" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="6b30d58c-b4e6-7e45-ee4f-3b7003039849">
+      <Execution id="924a0859-7cd4-4aeb-b11a-58db5fdc07c5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingProbeTests" name="Readiness_uses_first_failure_and_names_each_missing_part" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: &quot;&lt;html&gt;AKML SQL engine: reachable&lt;/html&gt;&quot;, marker: False, expectation: &quot;ExpectEngine&quot;, expectedExit: 2)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="81c61d57-2b44-17af-b8ba-25eb41ddacd0">
+      <Execution id="093cd730-1fda-4d69-b767-f11324255be9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebHostingCheckTests" name="Check_recognises_the_expected_host" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: &quot;Localhost&quot;, bind: &quot;127.0.0.1&quot;, webRoot: &quot;C:\\Program Files\\AKML SQL\\Web&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="e29683b1-7f40-9903-6b7e-8813903d1faa">
+      <Execution id="a3c1c2d7-e473-46f5-9e4f-bec490607d3e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebConfigBridgeTests" name="Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;None&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="fabb2899-edac-a083-b288-93ae75edec27">
+      <Execution id="b2ab5998-d770-4b83-b28d-b1074469b2fe" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: &quot;IIS&quot;, exposure: &quot;Localhost&quot;, engine: &quot;Remove&quot;, site: &quot;Remove&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\debug\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="8e020437-69ec-f5dc-0111-976949c04517">
+      <Execution id="42c1eb43-2850-4536-9c3a-537a14590fd5" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Debug\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.FirewallPlanTests" name="Plan_matches_host_and_exposure" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="8e020437-69ec-f5dc-0111-976949c04517" executionId="42c1eb43-2850-4536-9c3a-537a14590fd5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e29683b1-7f40-9903-6b7e-8813903d1faa" executionId="a3c1c2d7-e473-46f5-9e4f-bec490607d3e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9d35f90a-174e-0365-f8e2-caf80b6da476" executionId="c016b6f5-ed05-4c53-a755-2cfb6b2a2ed5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="078bdfbc-46c0-dc97-5bec-efb4532485c9" executionId="a90b3b51-611a-4580-a8e7-f3a6c5d1dee9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b07c7d25-3ec8-6717-8507-fb5028376878" executionId="92f503bd-9881-4aeb-bbe3-10130bb95c48" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="71f12f1b-d5a9-51f8-1d1c-c78a3ae02357" executionId="264e5ee6-8dbc-48c8-8a02-f3668e8d8872" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e3b86658-3c38-4fe5-cc03-523fabf0fdfe" executionId="ec47c1d2-83bd-459a-9284-4ec134b67feb" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="20c61a97-b20e-42f8-474c-910476308b8a" executionId="f1903bed-223d-414f-afc1-9b03394844f4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6b30d58c-b4e6-7e45-ee4f-3b7003039849" executionId="924a0859-7cd4-4aeb-b11a-58db5fdc07c5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9fd45b87-63e2-1521-a150-88c634972066" executionId="8a2a9d64-7448-4306-a7d0-503a18c0f0b4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3d311460-a29d-4049-3d5a-1dd58a3fda6b" executionId="12f6e05f-6aac-43fb-89f0-3f243d28be57" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="81c61d57-2b44-17af-b8ba-25eb41ddacd0" executionId="093cd730-1fda-4d69-b767-f11324255be9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="02e88b5a-bc15-7d56-01d5-b714fd981e26" executionId="c421614c-b0e0-4fd8-97c5-6e3d29c710e1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="71e90983-9994-0731-a31e-feb1f8ec3026" executionId="2fc941d0-b42d-4c7f-bd0d-c84fe769ff5a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fabb2899-edac-a083-b288-93ae75edec27" executionId="b2ab5998-d770-4b83-b28d-b1074469b2fe" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9f4c2ef2-804d-1905-3ba4-f44b1048b91a" executionId="7c6c96b8-d5ed-4bb3-946a-e8669b5e50f5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2eefc5c6-93c1-1b72-ea03-d99ee24bec12" executionId="fbd86b42-ce38-415c-86de-5d482809e24a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a1d694d4-e782-556f-b5fe-ea9c28ea1aa9" executionId="1b3aeddd-b44f-41ae-b2b5-08a7645f8f59" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="38c57fa8-6a1b-148b-7550-ae50d7db8a27" executionId="6728ebf1-7320-4369-b23b-5aa089c90c73" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e2fecfc5-6e35-64cb-9d4c-22cc82cb49fd" executionId="ea76cc7a-d63a-4b5a-9b08-34db35cc3a93" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ca167fee-f15d-0f3f-67c3-a7724b1eac7f" executionId="e92ec8e0-1bdb-44df-976f-0615c5194964" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="21" executed="21" passed="0" failed="21" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.22]   Discovering: AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.37]   Discovered:  AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.44]   Starting:    AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.54]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:00.54]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:00.54]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:00.54]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:00.54]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.55]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:00.55]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebConfigBridgeTests.cs(14,0): at AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(String mode, String bind, String webRoot)&#xD;
+[xUnit.net 00:00:00.55]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.55]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.57]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:00.57]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:00.57]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:00.57]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:00.57]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebConfigBridgeTests.cs(14,0): at AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(String mode, String bind, String webRoot)&#xD;
+[xUnit.net 00:00:00.57]            at InvokeStub_WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.57]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.57]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:00.57]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:00.57]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:00.57]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:00.57]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.57]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:00.57]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebConfigBridgeTests.cs(38,0): at AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log()&#xD;
+[xUnit.net 00:00:00.57]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.57]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:01.24]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:01.24]       Expected: 2&#xD;
+[xUnit.net 00:00:01.24]       Actual:   -196608&#xD;
+[xUnit.net 00:00:01.24]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.24]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(45,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:01.24]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(53,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:01.24]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:01.81]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:01.81]       Expected: 2&#xD;
+[xUnit.net 00:00:01.81]       Actual:   -196608&#xD;
+[xUnit.net 00:00:01.81]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.81]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(45,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:01.81]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(53,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:01.81]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.31]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:02.31]       Expected: 0&#xD;
+[xUnit.net 00:00:02.31]       Actual:   -196608&#xD;
+[xUnit.net 00:00:02.31]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.31]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(45,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:02.31]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(53,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:02.31]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:02.82]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:02.82]       Expected: 0&#xD;
+[xUnit.net 00:00:02.82]       Actual:   -196608&#xD;
+[xUnit.net 00:00:02.82]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.82]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(45,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:02.82]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(53,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:02.82]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.33]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:03.33]       Expected: 2&#xD;
+[xUnit.net 00:00:03.33]       Actual:   -196608&#xD;
+[xUnit.net 00:00:03.33]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.33]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(45,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:03.33]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(53,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(String body, Boolean marker, String expectation, Int32 expectedExit)&#xD;
+[xUnit.net 00:00:03.33]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:03.80]       Assert.Equal() Failure: Values differ&#xD;
+[xUnit.net 00:00:03.80]       Expected: 1&#xD;
+[xUnit.net 00:00:03.80]       Actual:   -196608&#xD;
+[xUnit.net 00:00:03.80]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.80]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingCheckTests.cs(66,0): at AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason()&#xD;
+[xUnit.net 00:00:03.80]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:03.80]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.09]       Error on line 10 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-dbad7beb8b7648ca8a130dd38b3af593\probe.iss: File not found: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss.&#xD;
+[xUnit.net 00:00:04.09]       Compile aborted.&#xD;
+[xUnit.net 00:00:04.09]       &#xD;
+[xUnit.net 00:00:04.09]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.09]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:04.09]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(52,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure()&#xD;
+[xUnit.net 00:00:04.09]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.09]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.36]       Error on line 10 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-111ac6cba0574136abb88567b8c2f270\probe.iss: File not found: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss.&#xD;
+[xUnit.net 00:00:04.36]       Compile aborted.&#xD;
+[xUnit.net 00:00:04.36]       &#xD;
+[xUnit.net 00:00:04.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.36]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:04.36]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(77,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part()&#xD;
+[xUnit.net 00:00:04.36]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.36]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.36]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.36]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.36]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.36]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.36]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.36]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(102,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected)&#xD;
+[xUnit.net 00:00:04.36]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.36]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:04.36]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.36]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.36]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.36]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.36]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.36]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.36]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(102,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(String mode, String expected)&#xD;
+[xUnit.net 00:00:04.36]            at InvokeStub_WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.36]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.65]       Error on line 10 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-e66ab4fc18a5420fb293fc8a5e22565a\probe.iss: File not found: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss.&#xD;
+[xUnit.net 00:00:04.65]       Compile aborted.&#xD;
+[xUnit.net 00:00:04.65]       &#xD;
+[xUnit.net 00:00:04.65]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.65]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:04.65]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(86,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs()&#xD;
+[xUnit.net 00:00:04.65]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.65]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(17,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(17,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site)&#xD;
+[xUnit.net 00:00:04.66]            at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(17,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site)&#xD;
+[xUnit.net 00:00:04.66]            at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(17,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site)&#xD;
+[xUnit.net 00:00:04.66]            at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(17,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site)&#xD;
+[xUnit.net 00:00:04.66]            at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(17,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(String host, String exposure, String engine, String site)&#xD;
+[xUnit.net 00:00:04.66]            at InvokeStub_FirewallPlanTests.Plan_matches_host_and_exposure(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InvokeWithFewArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.66]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:04.66]                ↓ (pos 0)&#xD;
+[xUnit.net 00:00:04.66]       String: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOP"···&#xD;
+[xUnit.net 00:00:04.66]       Found:  "#Requires"&#xD;
+[xUnit.net 00:00:04.66]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(53,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:04.66]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\FirewallPlanTests.cs(33,0): at AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh()&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:04.66]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.67]   Finished:    AkmlSql.Installer.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:11.8777165+03:00">
+        <Text>[xUnit.net 00:00:00.54]     AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: "Lan", bind: "0.0.0.0", webRoot: "") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:11.9019336+03:00">
+        <Text>[xUnit.net 00:00:00.57]     AkmlSql.Installer.Tests.WebConfigBridgeTests.Bridge_is_replaced_other_settings_survive_and_web_root_is_always_written(mode: "Localhost", bind: "127.0.0.1", webRoot: "C:\\Program Files\\AKML SQL\\Web") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:11.9063496+03:00">
+        <Text>[xUnit.net 00:00:00.57]     AkmlSql.Installer.Tests.WebConfigBridgeTests.Dot_sourcing_creates_no_config_or_log [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:12.5718425+03:00">
+        <Text>[xUnit.net 00:00:01.24]     AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: "&lt;html&gt;IIS welcome&lt;/html&gt;", marker: False, expectation: "ExpectBundle", expectedExit: 2) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:13.1499894+03:00">
+        <Text>[xUnit.net 00:00:01.81]     AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: "&lt;html&gt;AKML SQL engine: reachable&lt;/html&gt;", marker: False, expectation: "ExpectEngine", expectedExit: 2) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:13.6502692+03:00">
+        <Text>[xUnit.net 00:00:02.31]     AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: "&lt;html&gt;app&lt;/html&gt;", marker: True, expectation: "ExpectEngine", expectedExit: 0) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:14.1552593+03:00">
+        <Text>[xUnit.net 00:00:02.82]     AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: "&lt;script src=\"_framework/blazor.webassembly.js\"&gt;&lt;"···, marker: False, expectation: "ExpectBundle", expectedExit: 0) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:14.6647291+03:00">
+        <Text>[xUnit.net 00:00:03.33]     AkmlSql.Installer.Tests.WebHostingCheckTests.Check_recognises_the_expected_host(body: "&lt;html&gt;app&lt;/html&gt;", marker: False, expectation: "ExpectEngine", expectedExit: 2) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.1345964+03:00">
+        <Text>[xUnit.net 00:00:03.80]     AkmlSql.Installer.Tests.WebHostingCheckTests.Closed_port_times_out_and_records_the_reason [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.4303382+03:00">
+        <Text>[xUnit.net 00:00:04.09]     AkmlSql.Installer.Tests.WebHostingProbeTests.Hosting_addresses_cover_every_host_and_exposure [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.6977805+03:00">
+        <Text>[xUnit.net 00:00:04.36]     AkmlSql.Installer.Tests.WebHostingProbeTests.Readiness_uses_first_failure_and_names_each_missing_part [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.6991269+03:00">
+        <Text>[xUnit.net 00:00:04.36]     AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: "Localhost", expected: "127.0.0.1") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.7002621+03:00">
+        <Text>[xUnit.net 00:00:04.36]     AkmlSql.Installer.Tests.WebHostingProbeTests.Config_reader_understands_real_PS51_config_output(mode: "Lan", expected: "0.0.0.0") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9890800+03:00">
+        <Text>[xUnit.net 00:00:04.65]     AkmlSql.Installer.Tests.WebHostingProbeTests.Previous_host_and_exposure_keep_deliberate_choices_and_infer_legacy_installs [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9921623+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: "Service", exposure: "Localhost", engine: "Remove", site: "Remove") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9939177+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: "IIS", exposure: "Localhost", engine: "Remove", site: "Remove") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9949643+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: "None", exposure: "Lan", engine: "Add", site: "Remove") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9962352+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: "IIS", exposure: "Lan", engine: "Add", site: "Add") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9973014+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: "None", exposure: "Localhost", engine: "Remove", site: "Remove") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9982224+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Plan_matches_host_and_exposure(host: "Service", exposure: "Lan", engine: "Add", site: "Remove") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T14:18:15.9991586+03:00">
+        <Text>[xUnit.net 00:00:04.66]     AkmlSql.Installer.Tests.FirewallPlanTests.Dot_sourcing_never_runs_netsh [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

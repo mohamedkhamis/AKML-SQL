@@ -24,8 +24,72 @@ namespace AkmlSql.Engine.Tests;
 /// pin the <see cref="EngineHost.BuildWebSocketTransport"/> mapping + the
 /// disabled/absent no-op contract.
 /// </summary>
+[Collection("Static web responder")]
 public sealed class EngineHostTests
 {
+    private static int FreeLoopbackPort()
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        try { return ((System.Net.IPEndPoint)listener.LocalEndpoint).Port; }
+        finally { listener.Stop(); }
+    }
+
+    [Fact]
+    public async Task Web_root_is_mapped_only_by_the_web_mode_host()
+    {
+        var bridge = new BridgeOptions { Enabled = true, WebRoot = @"C:\Public\Web" };
+        await using var desktop = EngineHost.BuildWebSocketTransport(bridge)!;
+        await using var service = EngineHost.BuildWebSocketTransport(bridge, serveWebEdition: true, configPath: @"C:\Private\config.json")!;
+        var field = typeof(WebSocketTransport).GetField("_options", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        Assert.Null(((WebSocketTransportOptions)field.GetValue(desktop)!).WebRoot);
+        var options = (WebSocketTransportOptions)field.GetValue(service)!;
+        Assert.Equal(bridge.WebRoot, options.WebRoot);
+        Assert.Equal(@"C:\Private\config.json", options.ConfigFilePath);
+    }
+
+    [Fact]
+    public async Task A_held_port_is_reported_by_the_transport_and_logged_by_web_mode()
+    {
+        await using var holder = await AkmlSql.Engine.Tests.Transports.StaticWebTestHost.StartAsync();
+        await using var blocked = new WebSocketTransport(new WebSocketTransportOptions { Port = holder.Port });
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => blocked.StartAsync(CancellationToken.None));
+        Assert.Equal($"port {holder.Port} is held by another process", error.Message);
+
+#if DEBUG
+        const string configuration = "Debug";
+#else
+        const string configuration = "Release";
+#endif
+        var exe = Path.Combine(TestPaths.RepoRoot, "src", "AkmlSql.Engine", "bin", configuration, "net10.0", "win-x64", "AkmlSql.Engine.exe");
+        var root = Directory.CreateTempSubdirectory("akml-bind-failure-").FullName;
+        try
+        {
+            var appData = Directory.CreateDirectory(Path.Combine(root, "AKML SQL")).FullName;
+            File.WriteAllText(Path.Combine(appData, "config.json"), "{\"telemetryEnabled\":false}");
+            var config = Path.Combine(root, "engine.json");
+            File.WriteAllText(config, System.Text.Json.JsonSerializer.Serialize(new
+                { bridge = new { enabled = true, bindAddress = "127.0.0.1", port = holder.Port } }));
+            var info = new System.Diagnostics.ProcessStartInfo(exe)
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            foreach (var arg in new[] { "--web", "--config", config }) info.ArgumentList.Add(arg);
+            info.Environment["AKML_APP_DATA_ROOT"] = root;
+            using var process = System.Diagnostics.Process.Start(info)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20)); }
+            finally
+            {
+                if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(); }
+            }
+            Assert.Equal(2, process.ExitCode);
+            var logs = string.Join("\n", Directory.EnumerateFiles(Path.Combine(appData, "logs"), "*.log").Select(File.ReadAllText));
+            Assert.Contains(error.Message, logs, StringComparison.Ordinal);
+            await Task.WhenAll(stdout, stderr);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     /// <summary>
     /// FR-027 / <c>BridgeDisabledFlagStartsPipeOnly</c>: when the bridge config exists
     /// but <see cref="BridgeOptions.Enabled"/> is <c>false</c>, no WebSocket transport
@@ -69,7 +133,7 @@ public sealed class EngineHostTests
         {
             Enabled = true,
             BindAddress = "127.0.0.1",
-            Port = 53000 + Random.Shared.Next(0, 1000),
+            Port = FreeLoopbackPort(),
             TlsCertPath = string.Empty,
             TokenStorePath = string.Empty,
             TokenTtlDays = 90,
@@ -117,7 +181,7 @@ public sealed class EngineHostTests
         {
             Enabled = true,
             BindAddress = "127.0.0.1",
-            Port = 53200 + Random.Shared.Next(0, 1000),
+            Port = FreeLoopbackPort(),
         };
 
         await using var ws = EngineHost.BuildWebSocketTransport(bridge)!;
@@ -174,7 +238,7 @@ public sealed class EngineHostTests
     [Fact]
     public async Task LanGate_rejects_rpc_before_handshake_then_allows_after_ok()
     {
-        var port = 53400 + Random.Shared.Next(0, 1000);
+        var port = FreeLoopbackPort();
         await using var ws = new WebSocketTransport(new WebSocketTransportOptions
         {
             BindAddress = "127.0.0.1",
@@ -240,7 +304,7 @@ public sealed class EngineHostTests
     [Fact]
     public async Task LoopbackTransport_does_not_gate_when_pairing_not_required()
     {
-        var port = 53600 + Random.Shared.Next(0, 1000);
+        var port = FreeLoopbackPort();
         await using var ws = new WebSocketTransport(new WebSocketTransportOptions
         {
             BindAddress = "127.0.0.1",

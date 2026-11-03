@@ -57,6 +57,38 @@ Three items are intentionally out of scope for this closure spec. They're record
 
 For any item above, file under "future M3 hardening" and revisit when telemetry or a security audit shows a concrete need.
 
+## Public bundle hosting (spec 045, local implementation)
+
+`--web` can serve an explicitly configured public `bridge.webRoot` on the existing
+listener. Its manifest excludes hidden/system/reparse entries, `.config`, compressed
+sidecars and known state filenames. Config/token folders cannot overlap that root.
+The path gate rejects traversal, Windows path/stream aliases and repeated escaping;
+there is no directory listing. GET/HEAD use the existing IIS CSP, `no-cache` and
+`nosniff`; file streams have 32 slots and deadlines. WebSocket origin and pairing
+checks remain in place. Loading the public page does not grant a bridge session.
+
+Localhost static requests allow Host `localhost`, `127.0.0.1` or `[::1]`, with
+any port; foreign hosts are refused. Native HTTP.SYS hostname handling can reject
+a request before the application. Public files and machine config/PIN/tokens/certs
+are separate trees. Setup sets the state owner to Administrators and an exact
+Administrators/SYSTEM DACL; custom public install trees require trusted ownership,
+no reparse points and admin/SYSTEM full access with Users/IIS_IUSRS read/execute.
+Repair refuses a non-installed Support location or effective non-admin write ACEs
+before and after elevation. Silent uninstall keeps user and machine data.
+
+Standalone is the default and needs no IIS. IIS is available only when its HTTP
+parts, services and native management probe are ready; files-only still installs
+the engine. `/WEB_HOST=SERVICE|IIS|NONE` selects the host; `/WEB_PORT` and
+`/WEB_HTTPS_PORT` apply to IIS only. Standalone LAN exposes one HTTPS engine/page
+port and one firewall rule. Rules apply to every profile, including Public; use a
+Private or Domain network. Changing host/port/exposure may change browser origin;
+export settings first. See [deployment](deployment.md#web-edition).
+
+An HTTPS page-derived engine record uses only `wss`; saved active engine choices
+still take precedence. Page origin squatting while a localhost service is stopped
+remains the documented R6 limitation. LAN HTTPS/IPv6 and installer ACL/migration
+acceptance require disposable machines and have not been claimed as verified.
+
 ## See also
 
 - Spec 025 spec / plan / contracts: [`specs/025-m3-bridge-closure/`](../specs/025-m3-bridge-closure/)

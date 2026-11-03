@@ -242,6 +242,8 @@
     /// this computer's included. Until then nothing in the address says so.
     /// </summary>
     private bool _pinRequested;
+    private IPageEngine? _pageEngine;
+    private PageEngineInfo? _pageEngineInfo;
 
     /// <summary>
     /// A PIN is needed for any engine that is not on this computer, and for one on this computer that
@@ -266,6 +268,12 @@
         catch (JSException) { _secureStorage = false; }
         catch (JSDisconnectedException) { }
         Bridge.StateChanged += OnBridgeStateChanged;
+        _pageEngine = ServiceProvider.GetService(typeof(IPageEngine)) as IPageEngine;
+        if (_pageEngine != null)
+        {
+            _pageEngineInfo = (await _pageEngine.GetAsync()).Engine;
+            if (_pageEngine.PairingPrefill != null) ShowAddDialog();
+        }
         await ReloadAsync();
     }
 
@@ -284,9 +292,14 @@
     private void ShowAddDialog()
     {
         _form = new AddForm();
+        if ((_pageEngine?.PairingPrefill ?? _pageEngineInfo) is { } info)
+        {
+            _form.Host = info.Host;
+            _form.Port = info.Port;
+        }
         _lastError = null;
         _diagnosis = null;
-        _pinRequested = false;
+        _pinRequested = _pageEngine?.PairingPrefill != null;
         _showAdd = true;
     }
 
@@ -321,6 +334,8 @@
         _form.Port = port;
         try
         {
+            var pageInfo = _pageEngine?.PairingPrefill ?? _pageEngineInfo;
+            var pageAddress = pageInfo != null && pageInfo.Host.Equals(host, StringComparison.OrdinalIgnoreCase) && pageInfo.Port == port;
             var connection = new EngineConnection
             {
                 Id = Guid.NewGuid().ToString(),
@@ -328,6 +343,8 @@
                 Host = host,
                 Port = port,
                 IsLocalhost = isLocalhost,
+                ResolvedScheme = pageAddress ? pageInfo!.Scheme : null,
+                StrictScheme = pageAddress && pageInfo!.Scheme == "wss",
             };
 
             // Attempt the handshake first. On localhost we skip the PIN unless the engine asked for it; on LAN we send it.
@@ -365,6 +382,7 @@
 
             await Connections.AddAsync(connection);
             await Connections.SetActiveIdAsync(connection.Id);
+            if (_pageEngine != null) _pageEngine.PairingPrefill = null;
 
             // Phase 4: SchemaSync is now owned SOLELY by the MainLayout SqlConn.StateChanged
             // subscriber, keyed on the canonical SqlConn.SessionId. This component is engine-PAIRING

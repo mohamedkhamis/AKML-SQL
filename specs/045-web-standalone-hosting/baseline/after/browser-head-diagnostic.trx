@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="c7266573-dedd-4e5a-b12e-92199f5a83fe" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 16:04:06" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T16:04:06.2327430+03:00" queuing="2026-10-26T16:04:06.2327433+03:00" start="2026-10-26T16:04:00.1457227+03:00" finish="2026-10-26T16:04:06.2363259+03:00" />
+  <TestSettings name="default" id="0b064924-56f3-4d82-a0cc-4a920498d7ca">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_16_04_06" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="2d33eacd-0fcd-4775-97dd-dce064ce3fa4" testId="819e4249-6136-9ac0-6692-c80afa9d7c52" testName="AkmlSql.Web.E2E.Tests.EngineServedWebTests.A_browser_HEAD_fetch_finishes_without_the_WASM_runtime" computerName="MOHAMED-KHAMIS" duration="00:00:04.6793404" startTime="2026-10-26T16:04:01.4554436+03:00" endTime="2026-10-26T16:04:06.1460794+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2d33eacd-0fcd-4775-97dd-dce064ce3fa4" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.EngineServedWebTests.A_browser_HEAD_fetch_finishes_without_the_WASM_runtime" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="819e4249-6136-9ac0-6692-c80afa9d7c52">
+      <Execution id="2d33eacd-0fcd-4775-97dd-dce064ce3fa4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.EngineServedWebTests" name="A_browser_HEAD_fetch_finishes_without_the_WASM_runtime" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="819e4249-6136-9ac0-6692-c80afa9d7c52" executionId="2d33eacd-0fcd-4775-97dd-dce064ce3fa4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.18]   Discovering: AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:00.36]   Discovered:  AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:00.41]   Starting:    AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:05.15]   Finished:    AkmlSql.Web.E2E.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

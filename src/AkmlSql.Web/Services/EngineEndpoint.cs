@@ -31,6 +31,13 @@ public static class EngineEndpoint
     /// <summary>Path the bridge listens on.</summary>
     public const string Path = "/akmlsql";
 
+    public static PageEngineInfo FromPage(Uri pageBase)
+    {
+        ArgumentNullException.ThrowIfNull(pageBase);
+        if (pageBase.Scheme is not "http" and not "https") throw new ArgumentException("The page must have an HTTP or HTTPS address.", nameof(pageBase));
+        return new(pageBase.Host.Trim('[', ']'), pageBase.Port, pageBase.Scheme == "https" ? "wss" : "ws");
+    }
+
     /// <summary>True when <paramref name="host"/> is a literal loopback address or name.</summary>
     public static bool IsLoopbackHost(string? host)
     {
@@ -59,7 +66,7 @@ public static class EngineEndpoint
     ///   </description></item>
     /// </list>
     /// </summary>
-    public static IReadOnlyList<string> CandidateUrls(string host, int port, string? rememberedScheme = null)
+    public static IReadOnlyList<string> CandidateUrls(string host, int port, string? rememberedScheme = null, bool strictScheme = false)
     {
         if (string.IsNullOrWhiteSpace(host)) throw new ArgumentException("host is required.", nameof(host));
 
@@ -70,14 +77,14 @@ public static class EngineEndpoint
             schemes.Add(rememberedScheme!.Trim().ToLowerInvariant());
         }
 
-        if (IsLoopbackHost(host))
+        if (!strictScheme && IsLoopbackHost(host))
         {
             // Plaintext first: a loopback bridge is the no-TLS, no-PIN mode, and it is both the
             // commoner install and the cheaper handshake.
             schemes.Add("ws");
             schemes.Add("wss");
         }
-        else
+        else if (!strictScheme)
         {
             schemes.Add("wss");
         }

@@ -1,6 +1,6 @@
 # AKML SQL — IPC API Reference
 
-All communication between the shell extension and the engine uses MessagePack-framed `RpcMessage` envelopes. The named pipe is the **default** transport (used by all SSMS/VS shell extensions today); spec 021 (web edition) introduced an `IRpcTransport` abstraction so the same handlers also serve in-process and (future M3) WebSocket transports. This document describes every message type, its direction, request payload, and response payload.
+All communication between the shell extension and the engine uses MessagePack-framed `RpcMessage` envelopes. The named pipe is the **default** transport (used by all SSMS/VS shell extensions today); spec 021 (web edition) introduced an `IRpcTransport` abstraction so the same handlers also serve in-process and WebSocket transports. This document describes every message type, its direction, request payload, and response payload.
 
 ---
 
@@ -12,7 +12,14 @@ The engine supports three transports, all of which carry the same `RpcMessage` e
 |-----------|-------|------|-----------|
 | **Named pipe** (default) | `Transports/NamedPipeTransport` | `[length][CRC][MessagePack(RpcMessage)]` over `\\.\pipe\akmlsql-engine-{SID}-{PID}` | SSMS 22 (the extension) |
 | **In-process** | `Transports/InProcessTransport` | Method calls; no serialisation | Blazor WASM running engine logic in the browser tab (spec 021 M2+); engine unit tests |
-| **WebSocket** (M3, future) | `Transports/WebSocketTransport` | One WebSocket binary message = one `RpcMessage` MessagePack payload | Browser ↔ engine bridge (spec 021 M3+) |
+| **WebSocket** (M3) | `Transports/WebSocketTransport` | One WebSocket binary message = one `RpcMessage` MessagePack payload | Browser ↔ engine bridge; in web mode the same listener can also serve the public bundle (spec 045) |
+
+Non-upgrade HTTP requests carry no RPC envelope. In `--web` mode with a valid
+`bridge.webRoot`, GET/HEAD serve manifest files or the extensionless `index.html`
+fallback, with validators, the IIS CSP, `nosniff`, `no-cache` and
+`X-AKML-Host: engine`. `/akmlsql` remains the plain trust page. With no valid root,
+the listener keeps its previous plain-page behavior. Desktop mode never serves
+the bundle. Spec 045 adds no message type, MessagePack key or capability.
 
 All three transports raise a `RequestReceived` event carrying the inbound `RpcMessage`; the per-process `RpcRouter` resolves the message-type integer code to an `IRpcRequestHandler<TRequest, TResponse>` and dispatches. **Wire format and message-type integer codes are unchanged** from the original (pre-M0) named-pipe contract, so existing shell extensions need zero updates.
 

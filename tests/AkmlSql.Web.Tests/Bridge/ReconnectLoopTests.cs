@@ -347,6 +347,7 @@ internal sealed class FakePairingTokenVault : IPairingTokenVault
 
 internal sealed class FakeConnectionStore : IConnectionStore
 {
+    public List<string?> ActiveChanges { get; } = new();
     private readonly Dictionary<string, EngineConnection> _conns = new();
     private string? _activeId;
 
@@ -380,5 +381,5 @@ internal sealed class FakeConnectionStore : IConnectionStore
     }
 
     public Task<string?> GetActiveIdAsync() => Task.FromResult(_activeId);
-    public Task SetActiveIdAsync(string? id) { _activeId = id; return Task.CompletedTask; }
+    public Task SetActiveIdAsync(string? id) { ActiveChanges.Add(id); _activeId = id; return Task.CompletedTask; }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using AkmlSql.Core.Ipc.Messages;
@@ -26,9 +27,8 @@ public interface IEngineAutoConnect
     Task RetryNowAsync();
 
     /// <summary>
-    /// The status bar's "Use this computer's engine": pair with the engine on this computer at the default port, the one
-    /// click Settings › Connections › Add › Pair took. Only a localhost-mode engine (no PIN) is paired; false when none
-    /// answers or it asks for a PIN, and the caller then opens Settings.
+    /// Connect to this page's engine when present, otherwise the local engine at the default port.
+    /// Reuses a saved pairing; false when none answers or it needs a PIN, so the caller can open Settings.
     /// </summary>
     Task<bool> PairLocalEngineAsync() => Task.FromResult(false);
 }
@@ -100,6 +100,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
     private readonly IConnectionStore _connections;
     private readonly IPairingTokenVault _vault;
     private readonly IDiagnosticsRingBuffer _diagnostics;
+    private readonly IPageEngine? _pageEngine;
 
     // Released by RetryNowAsync to cut a backoff wait short. A semaphore rather than a
     // CancellationToken because a wake must INTERRUPT the delay, not tear the loop down: an earlier
@@ -118,12 +119,14 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
         IEngineBridge bridge,
         IConnectionStore connections,
         IPairingTokenVault vault,
-        IDiagnosticsRingBuffer diagnostics)
+        IDiagnosticsRingBuffer diagnostics,
+        IPageEngine? pageEngine = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _connections = connections ?? throw new ArgumentNullException(nameof(connections));
         _vault = vault ?? throw new ArgumentNullException(nameof(vault));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
+        _pageEngine = pageEngine;
     }
 
     public EngineConnectFailure? LastFailure { get; private set; }
@@ -239,21 +242,30 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
         try
         {
             var activeId = await _connections.GetActiveIdAsync().ConfigureAwait(false);
-            if (string.IsNullOrEmpty(activeId))
-            {
-                return new EngineConnectFailure(
-                    EngineConnectFailureKind.NotPaired,
-                    "No engine paired yet.",
-                    null);
-            }
-
-            var conn = await _connections.GetAsync(activeId).ConfigureAwait(false);
+            var conn = string.IsNullOrEmpty(activeId) ? null : await _connections.GetAsync(activeId).ConfigureAwait(false);
+            var isNew = false;
+            PageEngineInfo? pageInfo = null;
             if (conn is null)
             {
-                return new EngineConnectFailure(
-                    EngineConnectFailureKind.NotPaired,
-                    "The saved engine connection is gone.",
-                    null);
+                if (!string.IsNullOrEmpty(activeId)) await _connections.SetActiveIdAsync(null).ConfigureAwait(false);
+                var page = _pageEngine == null ? new PageEngineResult(PageEngineKind.Static) : await _pageEngine.GetAsync(ct).ConfigureAwait(false);
+                if (page.Kind == PageEngineKind.Unknown)
+                    return new(EngineConnectFailureKind.Unreachable, "Checking this page's engine…", null);
+                if (page.Kind != PageEngineKind.Engine || page.Engine == null)
+                    return new(EngineConnectFailureKind.NotPaired, "No engine paired yet.", null);
+                pageInfo = page.Engine;
+                conn = (await _connections.ListAsync().ConfigureAwait(false)).FirstOrDefault(c =>
+                    c.Host.Equals(pageInfo.Host, StringComparison.OrdinalIgnoreCase) && c.Port == pageInfo.Port);
+                isNew = conn == null;
+                conn ??= NewPageConnection(pageInfo);
+                conn.ResolvedScheme = pageInfo.Scheme;
+                conn.StrictScheme = pageInfo.Scheme == "wss";
+                if (!isNew)
+                {
+                    // Keep the scheme on disk before making this record active for the next retry.
+                    await _connections.UpdateAsync(conn).ConfigureAwait(false);
+                    await _connections.SetActiveIdAsync(conn.Id).ConfigureAwait(false);
+                }
             }
 
             string? bearer = null;
@@ -270,13 +282,24 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
             if (response.Status == HandshakeStatus.Ok)
             {
                 // Persist whichever scheme answered so the next startup is a single attempt.
-                conn.LastConnectedAt = DateTimeOffset.UtcNow;
-                try { await _connections.UpdateAsync(conn).ConfigureAwait(false); } catch (Exception) { }
+                await ApplyHandshakeAsync(conn, response).ConfigureAwait(false);
+                if (isNew) await _connections.AddAsync(conn).ConfigureAwait(false);
+                else { try { await _connections.UpdateAsync(conn).ConfigureAwait(false); } catch (Exception) { } }
+                if (pageInfo != null)
+                {
+                    await _connections.SetActiveIdAsync(conn.Id).ConfigureAwait(false);
+                    if (_pageEngine != null) _pageEngine.PairingPrefill = null;
+                }
                 _diagnostics.Log(DiagnosticLevel.Info, "bridge",
                     $"Engine connected automatically ({_bridge.ConnectedUrl}).");
                 return null;
             }
 
+            if (pageInfo != null && response.Status is HandshakeStatus.PinRequired or HandshakeStatus.PinInvalid)
+            {
+                if (_pageEngine != null) _pageEngine.PairingPrefill = pageInfo;
+                return new(EngineConnectFailureKind.PairingRequired, "This engine needs its pairing PIN. Pair it in Settings › Connections.", null);
+            }
             return response.Status switch
             {
                 HandshakeStatus.PinRequired or HandshakeStatus.PinInvalid => new EngineConnectFailure(
@@ -315,17 +338,37 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
         };
         try
         {
-            var response = await _bridge.ConnectAsync(connection, bearerToken: null, pairingPin: null, CancellationToken.None).ConfigureAwait(false);
+            var isNew = true;
+            PageEngineInfo? pageInfo = null;
+            if (_pageEngine != null && await _pageEngine.GetAsync().ConfigureAwait(false) is { Kind: PageEngineKind.Engine, Engine: { } info })
+            {
+                pageInfo = info;
+                var existing = (await _connections.ListAsync().ConfigureAwait(false)).FirstOrDefault(c =>
+                    c.Host.Equals(info.Host, StringComparison.OrdinalIgnoreCase) && c.Port == info.Port);
+                isNew = existing == null;
+                connection = existing ?? NewPageConnection(info);
+                connection.ResolvedScheme = info.Scheme;
+                connection.StrictScheme = info.Scheme == "wss";
+            }
+            string? bearer = null;
+            if (!connection.IsLocalhost)
+            {
+                try { bearer = await _vault.RetrieveAsync(connection.Id).ConfigureAwait(false); }
+                catch (Exception) { /* The engine can request a PIN when the saved token is unavailable. */ }
+            }
+            var response = await _bridge.ConnectAsync(connection, bearer, pairingPin: null, CancellationToken.None).ConfigureAwait(false);
             if (response.Status != HandshakeStatus.Ok)
             {
+                if (pageInfo != null && response.Status is HandshakeStatus.PinRequired or HandshakeStatus.PinInvalid)
+                    _pageEngine!.PairingPrefill = pageInfo;
                 _diagnostics.Log(DiagnosticLevel.Info, "connections", $"The local engine answered {response.Status}; pairing is left to Settings.");
                 return false;
             }
-            connection.LastConnectedAt = DateTimeOffset.UtcNow;
-            connection.LastKnownEngineVersion = response.EngineVersion;
-            connection.LastKnownCapabilities = response.EngineCapabilities;
-            await _connections.AddAsync(connection).ConfigureAwait(false);
+            await ApplyHandshakeAsync(connection, response).ConfigureAwait(false);
+            if (isNew) await _connections.AddAsync(connection).ConfigureAwait(false);
+            else await _connections.UpdateAsync(connection).ConfigureAwait(false);
             await _connections.SetActiveIdAsync(connection.Id).ConfigureAwait(false);
+            if (_pageEngine != null) _pageEngine.PairingPrefill = null;
             _diagnostics.Log(DiagnosticLevel.Info, "connections", "Paired with the engine on this computer.");
             SetFailure(null);
             return true;
@@ -335,6 +378,26 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
             _diagnostics.Log(DiagnosticLevel.Info, "connections", $"No local engine answered: {ex.Message}");
             return false;
         }
+    }
+
+    private static EngineConnection NewPageConnection(PageEngineInfo info) => new()
+    {
+        Host = info.Host, Port = info.Port, ResolvedScheme = info.Scheme, StrictScheme = info.Scheme == "wss",
+        IsLocalhost = EngineEndpoint.IsLoopbackHost(info.Host),
+        Name = EngineEndpoint.IsLoopbackHost(info.Host) ? "This computer" : info.Host,
+    };
+
+    private async Task ApplyHandshakeAsync(EngineConnection connection, HandshakeResponse response)
+    {
+        if (!string.IsNullOrEmpty(response.NewBearerToken))
+        {
+            connection.IsLocalhost = false;
+            connection.BearerTokenWrappedRef = await _vault.StoreAsync(connection.Id, response.NewBearerToken,
+                DateTimeOffset.UtcNow.AddDays(60)).ConfigureAwait(false);
+        }
+        connection.LastConnectedAt = DateTimeOffset.UtcNow;
+        connection.LastKnownEngineVersion = response.EngineVersion;
+        connection.LastKnownCapabilities = response.EngineCapabilities;
     }
 
     private void SetFailure(EngineConnectFailure? failure)

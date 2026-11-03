@@ -8,6 +8,59 @@ The configuration file is stored at:
 
 It is created automatically on first run with all defaults. The file is written atomically (temp-file + rename) to prevent corruption.
 
+Spec 045 adds optional `bridge.webRoot` (string, default `""`). With `--web --config`,
+an absolute path to a public Web bundle enables static hosting on the bridge port.
+The path must contain `index.html`, must not be a volume root or reparse point, and
+must not overlap the config or token-state folders. A refused root logs a Warning
+and keeps the plain bridge page. Desktop engine mode ignores this setting.
+Keep public bundle files and private state in separate folders.
+
+## `bridge` section and machine hosting settings
+
+The web service reads `%ProgramData%\AKML SQL Web\config.json` with `--web --config`.
+The desktop engine uses its user config separately. Example standalone configuration:
+
+```json
+{
+  "configVersion": 1,
+  "bridge": {
+    "enabled": true,
+    "bindAddress": "127.0.0.1",
+    "port": 47291,
+    "tlsCertPath": "",
+    "tlsCertPasswordRef": null,
+    "tokenStorePath": "C:\\ProgramData\\AKML SQL Web\\tokens.json",
+    "tokenTtlDays": 90,
+    "webRoot": "C:\\Program Files\\AKML SQL\\Web"
+  }
+}
+```
+
+Standalone sets `webRoot` to the installed public bundle. IIS and files-only hosting
+set it to `""`. LAN uses `0.0.0.0`, the installed certificate and HTTPS; plaintext
+network binding is refused. Private state must never be inside the public root.
+
+Setup stores hosting settings at `HKLM64\Software\AKML SQL\Web`; readers fall back
+to the 32-bit registry view for older installs:
+
+| Value | Meaning |
+| --- | --- |
+| `Host` | `Service`, `IIS` or `None` |
+| `Exposure` | `Localhost` or `Lan` |
+| `BridgePort` | Engine port; also the standalone page port |
+| `WebRoot` | Installed public bundle path, used by repair |
+| `IisPort`, `HttpsPort`, `IisMode` | IIS-only site settings |
+
+Standalone is the new-install default. IIS requires its web parts, non-disabled
+services and a working native management probe; files-only still installs the
+engine service. `/WEB_HOST=SERVICE|IIS|NONE` selects a host. `/WEB_PORT` and
+`/WEB_HTTPS_PORT` apply only to IIS. Omitted flags preserve existing settings.
+Changing the address changes browser storage origin; export settings first.
+Standalone LAN needs one engine firewall rule. Its summary provides the shared
+HTTPS address, certificate trust steps and PIN. On shared Windows sessions,
+localhost does not protect against another local user occupying the origin while
+the service is stopped. See [deployment](deployment.md#web-edition).
+
 ---
 
 ## Full Schema

@@ -13,6 +13,26 @@ namespace AkmlSql.Web.Tests.Bridge;
 /// </summary>
 public sealed class ConnectionStoreTests
 {
+    [Fact]
+    public async Task The_HTTPS_default_port_is_allowed_only_for_a_strict_TLS_record()
+    {
+        var store = Build();
+        await store.AddAsync(new() { Id = "https", Host = "localhost", Port = 443, StrictScheme = true, ResolvedScheme = "wss" });
+        Assert.Equal(443, (await store.GetAsync("https"))!.Port);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => store.AddAsync(new() { Id = "plain", Host = "localhost", Port = 443 }));
+    }
+
+    [Fact]
+    public async Task Strict_scheme_round_trips_and_is_false_for_older_records()
+    {
+        var adapter = new InMemoryIndexedDbAdapter();
+        var store = new ConnectionStore(adapter);
+        await store.AddAsync(new() { Id = "strict", StrictScheme = true });
+        Assert.True((await store.GetAsync("strict"))!.StrictScheme);
+        await adapter.SetAsync(StoreNames.Connections, "old", "{\"Id\":\"old\",\"Host\":\"localhost\",\"Port\":47291}");
+        Assert.False((await store.GetAsync("old"))!.StrictScheme);
+    }
+
     private static IConnectionStore Build() => new ConnectionStore(new InMemoryIndexedDbAdapter());
 
     [Fact]

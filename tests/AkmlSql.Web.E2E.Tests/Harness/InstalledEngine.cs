@@ -68,17 +68,23 @@ internal static class InstalledEngine
         {
             var path = Path.Combine(StateDirectory, "INSTALL-SUMMARY.txt");
             if (!File.Exists(path)) return null;
-            var lines = File.ReadLines(path).ToList();
-            // A LAN install with HTTPS lists https://{computer}:{https port}/ first and the plain local site on the next line
-            // ("(on this computer also http://localhost:{port}/)"); plain HTTP to the HTTPS port is reset, so that one is used.
-            var local = lines.Select(l => l.Trim())
-                .FirstOrDefault(l => l.StartsWith("(on this computer also ", StringComparison.Ordinal));
-            if (local is not null && Uri.TryCreate(local["(on this computer also ".Length..].TrimEnd(')', ' '), UriKind.Absolute, out var plain))
-                return $"http://localhost:{plain.Port}/";
-            var line = lines.FirstOrDefault(l => l.StartsWith("URL:", StringComparison.Ordinal));
-            return line is not null && Uri.TryCreate(line["URL:".Length..].Trim(), UriKind.Absolute, out var uri)
-                ? $"http://localhost:{uri.Port}/"
-                : null;
+            return ParseSiteUrl(File.ReadLines(path));
         }
+    }
+
+    internal static string? ParseSiteUrl(IEnumerable<string> summary)
+    {
+        var lines = summary.ToList();
+        // Existing IIS LAN summaries include a separate local HTTP site; prefer that address.
+        var local = lines.Select(l => l.Trim())
+            .FirstOrDefault(l => l.StartsWith("(on this computer also ", StringComparison.Ordinal));
+        if (local is not null && Uri.TryCreate(local["(on this computer also ".Length..].TrimEnd(')', ' '), UriKind.Absolute, out var plain))
+            return $"http://localhost:{plain.Port}/";
+        var line = lines.FirstOrDefault(l => l.StartsWith("URL:", StringComparison.Ordinal));
+        var token = line?["URL:".Length..].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return token is not null && Uri.TryCreate(token, UriKind.Absolute, out var uri)
+            && uri.Scheme is "http" or "https"
+            ? $"{uri.Scheme}://localhost:{uri.Port}/"
+            : null;
     }
 }

@@ -19,7 +19,7 @@ public sealed class IisProvisioningTests
     [SkippableFact]
     public void AkmlSqlWeb_site_is_bound_on_the_iis_port()
     {
-        Skip.IfNot(InstallerSmokeEnv.CanRun, "Requires admin + IIS");
+        Skip.IfNot(InstallerSmokeEnv.CanRunIis, InstallerSmokeEnv.SkipReason);
         Assert.Null(_fx.MissingInstallerReason);                       // FR-032
         Assert.True(_fx.Installed, $"Silent install failed (exit {_fx.InstallExitCode}).");
 
@@ -35,7 +35,7 @@ public sealed class IisProvisioningTests
     [SkippableFact]
     public void Five_mime_types_are_registered()
     {
-        Skip.IfNot(InstallerSmokeEnv.CanRun, "Requires admin + IIS");
+        Skip.IfNot(InstallerSmokeEnv.CanRunIis, InstallerSmokeEnv.SkipReason);
         Assert.True(_fx.Installed, $"Silent install failed (exit {_fx.InstallExitCode}).");
 
         var (_, output) = InstallerSmokeEnv.RunPowerShell(
@@ -51,7 +51,7 @@ public sealed class IisProvisioningTests
     [SkippableFact]
     public void Csp_header_is_served()
     {
-        Skip.IfNot(InstallerSmokeEnv.CanRun, "Requires admin + IIS");
+        Skip.IfNot(InstallerSmokeEnv.CanRunIis, InstallerSmokeEnv.SkipReason);
         Assert.True(_fx.Installed, $"Silent install failed (exit {_fx.InstallExitCode}).");
 
         var (_, output) = InstallerSmokeEnv.RunPowerShell(

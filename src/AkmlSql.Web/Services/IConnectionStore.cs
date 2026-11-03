@@ -61,6 +61,9 @@ public sealed class EngineConnection
     /// </summary>
     public string? ResolvedScheme { get; set; }
 
+    /// <summary>An HTTPS page's own engine must keep HTTPS on the first dial and every reconnect.</summary>
+    public bool StrictScheme { get; set; }
+
     public DateTimeOffset? LastConnectedAt { get; set; }
     public string? LastKnownEngineVersion { get; set; }
     public string[] LastKnownCapabilities { get; set; } = Array.Empty<string>();
@@ -148,7 +151,8 @@ internal sealed class ConnectionStore : IConnectionStore
     private static void ValidateConnection(EngineConnection c)
     {
         if (string.IsNullOrEmpty(c.Host)) throw new ArgumentException("Host is required.");
-        if (c.Port is < 1024 or > 65535) throw new ArgumentOutOfRangeException(nameof(c.Port), "Port must be 1024..65535.");
+        if (c.Port is < 1024 or > 65535 && !(c.Port == 443 && c.StrictScheme && c.ResolvedScheme == "wss"))
+            throw new ArgumentOutOfRangeException(nameof(c.Port), "Port must be 1024..65535, or 443 for an HTTPS page's engine.");
 
         // Per data-model.md E2 validation: bearerTokenWrappedRef MUST be non-null when !isLocalhost.
         if (!c.IsLocalhost && string.IsNullOrEmpty(c.BearerTokenWrappedRef))

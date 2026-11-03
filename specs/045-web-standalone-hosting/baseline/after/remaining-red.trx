@@ -1,0 +1,1237 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="039ad906-bbdf-46b3-8caf-ffea3700e77c" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 16:32:06" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T16:32:06.3190468+03:00" queuing="2026-10-26T16:32:06.3190474+03:00" start="2026-10-26T16:32:03.6058838+03:00" finish="2026-10-26T16:32:17.9512774+03:00" />
+  <TestSettings name="default" id="9d644b71-a6af-44fc-a834-bdf782b7b12f">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_16_32_06" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="7b82b686-fb54-4f2a-8684-5a0a49bf1af9" testId="976c4a1c-f13e-cc61-f134-1c5ec349236c" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;IIS&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: True, expected: &quot;IIS&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:01.0436371" startTime="2026-10-26T16:32:05.5441412+03:00" endTime="2026-10-26T16:32:06.5854299+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7b82b686-fb54-4f2a-8684-5a0a49bf1af9">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-3ba484d0b61d4bb5ba41cb32eae8d81f\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="192da3b9-823a-48e3-b4f4-a51842ab2fae" testId="ceb39101-c621-9c7e-13da-4bfd482b184c" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.Hosting_is_code_owned_and_helpers_are_permanent" computerName="MOHAMED-KHAMIS" duration="00:00:00.0017824" startTime="2026-10-26T16:32:05.5331501+03:00" endTime="2026-10-26T16:32:05.5332219+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="192da3b9-823a-48e3-b4f4-a51842ab2fae">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+                                ↓ (pos 4828)&#xD;
+String: ···"ags: ignoreversion; Components: web\\iis\r\n"···&#xD;
+Found:  "Components: web\\iis"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.Hosting_is_code_owned_and_helpers_are_permanent() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 14&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a097d800-aaaa-4b19-be6d-f86919b3e700" testId="1666245e-3d34-0820-fedd-de0f9d9a88dd" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;SERVICE&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: True, expected: &quot;Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho&quot;···)" computerName="MOHAMED-KHAMIS" duration="00:00:00.6251665" startTime="2026-10-26T16:32:15.0592852+03:00" endTime="2026-10-26T16:32:15.6834362+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a097d800-aaaa-4b19-be6d-f86919b3e700">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-3a2e3044da8441588ebc114d35a98248\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7ec44bc1-250f-4058-8817-89ddc51ab3f3" testId="376e6670-bff1-53df-9e37-524d9c5316a7" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: True, ports: True, expected: &quot;IIS&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.6186945" startTime="2026-10-26T16:32:14.4423761+03:00" endTime="2026-10-26T16:32:15.0579577+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ec44bc1-250f-4058-8817-89ddc51ab3f3">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-291635dc485848b79e202da91e5ffe3b\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2ce42a8e-74a8-4b1c-a756-2e01aad09fe4" testId="86aeb8df-abfc-36ae-8c83-f22924335093" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: &quot;WebPortsActivate&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0026683" startTime="2026-10-26T16:32:05.5236657+03:00" endTime="2026-10-26T16:32:05.5238214+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2ce42a8e-74a8-4b1c-a756-2e01aad09fe4">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Matches() Failure: Pattern not found in value&#xD;
+Regex: "procedure WebPortsActivate\\([^)]*\\);[\\s\\S]*?be"···&#xD;
+Value: "; Spec 021 (web edition) -- M4 installer additions"···</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(String name) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 34&#xD;
+   at InvokeStub_WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="15a1ae43-3e63-4b6e-988f-3e2d0428efca" testId="4a1180c9-61f3-2f2f-94cd-266985a64892" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.Setup_writes_resolved_settings_and_proves_which_host_answers" computerName="MOHAMED-KHAMIS" duration="00:00:00.0129105" startTime="2026-10-26T16:32:05.5341868+03:00" endTime="2026-10-26T16:32:05.5362923+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="15a1ae43-3e63-4b6e-988f-3e2d0428efca">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Contains() Failure: Sub-string not found&#xD;
+String:    "; Spec 021 (web edition) -- M4 installer "···&#xD;
+Not found: "ResolveSilentHost("</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.Setup_writes_resolved_settings_and_proves_which_host_answers() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 40&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="df9e9a77-7097-4aea-a1f1-086f0e27f69e" testId="c62c3785-a071-10a2-190d-d4526c0238f2" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-32-544&quot;, rights: &quot;FullControl&quot;, propagation: &quot;None&quot;, expected: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0014829" startTime="2026-10-26T16:32:17.8461644+03:00" endTime="2026-10-26T16:32:17.8464711+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="df9e9a77-7097-4aea-a1f1-086f0e27f69e">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ef47e504-6bdf-4731-8632-7804c2bf7034" testId="33332152-5ae5-bff7-1e76-a88eaa35dc27" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Address_changes_name_both_origins_and_preserve_engine_history" computerName="MOHAMED-KHAMIS" duration="00:00:00.7732593" startTime="2026-10-26T16:32:16.3512936+03:00" endTime="2026-10-26T16:32:17.1242168+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ef47e504-6bdf-4731-8632-7804c2bf7034">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-a34f8443ef1f41c5bd175a4dcbd551df\probe.iss: Column 11:&#xD;
+Unknown identifier 'AddressChangeNotice'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Address_changes_name_both_origins_and_preserve_engine_history() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 11&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="01170417-bdd6-4128-b79b-b00fa2d301df" testId="3b24fb5c-8abf-2741-0b52-aa7cebcd5785" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-15-2-1&quot;, rights: &quot;ReadAndExecute&quot;, propagation: &quot;None&quot;, expected: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0002739" startTime="2026-10-26T16:32:17.8568772+03:00" endTime="2026-10-26T16:32:17.8569159+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="01170417-bdd6-4128-b79b-b00fa2d301df">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="f6323455-78ca-41ce-8755-f9a894bbb2ae" testId="0893d057-9cfe-9914-43bd-0900a35f9e14" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-3-0&quot;, rights: &quot;FullControl&quot;, propagation: &quot;InheritOnly&quot;, expected: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0006066" startTime="2026-10-26T16:32:17.8577330+03:00" endTime="2026-10-26T16:32:17.8577664+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f6323455-78ca-41ce-8755-f9a894bbb2ae">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="dd878cfb-f03f-47d0-ae68-97b5ff23be3d" testId="f1d21480-aa32-ebe7-f3a2-dc8a8f45ed4b" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;IIS&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: False, ports: False, expected: &quot;Stop:not ready&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.8433103" startTime="2026-10-26T16:32:10.4881359+03:00" endTime="2026-10-26T16:32:11.3305827+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dd878cfb-f03f-47d0-ae68-97b5ff23be3d">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-217e66485fce4be18af5ce6de11835d7\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="d15649c9-e81a-4186-a076-170781441d65" testId="cfecb71e-bbc3-e990-afdb-339b1017f101" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;NONE&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: True, ports: False, expected: &quot;None&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7387744" startTime="2026-10-26T16:32:12.2037035+03:00" endTime="2026-10-26T16:32:12.9406943+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d15649c9-e81a-4186-a076-170781441d65">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-66ef042791114bb6ad68582e4d53889f\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7e00de5d-5ea7-4e82-9b90-738cb58dbd62" testId="490b3061-33f6-8adc-3766-455a0239c8b5" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.Repair_and_uninstall_do_not_replay_legacy_temp_scripts_or_show_silent_prompts" computerName="MOHAMED-KHAMIS" duration="00:00:00.0193108" startTime="2026-10-26T16:32:05.5305052+03:00" endTime="2026-10-26T16:32:05.5305887+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7e00de5d-5ea7-4e82-9b90-738cb58dbd62">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.DoesNotContain() Failure: Sub-string found&#xD;
+                                    ↓ (pos 11625)&#xD;
+String: ···"ubsequent boots.\r\n\r\n[UninstallRun]\r\n; Rev"···&#xD;
+Found:  "[UninstallRun]"</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.Repair_and_uninstall_do_not_replay_legacy_temp_scripts_or_show_silent_prompts() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 60&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1d5dc8c8-1688-4926-ae00-b670057824d8" testId="54f10067-7620-e5ac-732d-f0ac4c183876" testName="AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: True, appcmd: False, method: &quot;WebAdministration&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0005179" startTime="2026-10-26T16:32:17.8426949+03:00" endTime="2026-10-26T16:32:17.8427566+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1d5dc8c8-1688-4926-ae00-b670057824d8">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Boolean module, Boolean appcmd, String method) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs:line 14&#xD;
+   at InvokeStub_IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="78f50042-b2e9-443e-91eb-031ad896a0ac" testId="4bdbf288-7b75-bea8-b71c-29629af73f9d" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-80-956008885-3418522649-1831038044-185329263&quot;···, rights: &quot;FullControl&quot;, propagation: &quot;None&quot;, expected: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0009790" startTime="2026-10-26T16:32:17.8449093+03:00" endTime="2026-10-26T16:32:17.8449688+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="78f50042-b2e9-443e-91eb-031ad896a0ac">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="9d7bc93a-372d-43a2-a4af-ebcbaa74b193" testId="d3ab2755-715d-9a77-a189-0fa2175aac62" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Only_an_explicit_or_retained_IIS_candidate_needs_the_management_probe" computerName="MOHAMED-KHAMIS" duration="00:00:00.7014585" startTime="2026-10-26T16:32:17.1261217+03:00" endTime="2026-10-26T16:32:17.8260263+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="9d7bc93a-372d-43a2-a4af-ebcbaa74b193">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-e18e5e006f4844e8bebf0ca6a8af395f\probe.iss: Column 13:&#xD;
+Unknown identifier 'SilentNeedsIisProbe'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Only_an_explicit_or_retained_IIS_candidate_needs_the_management_probe() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 40&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5b474f35-135e-4279-9697-171f3e104d72" testId="c2bd5aa2-f0ac-0405-fc7f-efe484aebed7" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;NONE&quot;, exposure: &quot;LAN&quot;, previous: &quot;&quot;, ready: True, ports: False, expected: &quot;Stop:/WEB_HOST=NONE with /WEB_EXPOSURE=LAN is inva&quot;···)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7626823" startTime="2026-10-26T16:32:08.2425547+03:00" endTime="2026-10-26T16:32:09.0029830+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5b474f35-135e-4279-9697-171f3e104d72">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-c1f7943adc7149eeab3e234b45101b26\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="70ea1ecf-9a23-4ce9-90b4-bcc4f32b8ac9" testId="5bbcdadf-502b-c8ca-23ab-5908502c3c06" testName="AkmlSql.Installer.Tests.IisRemovalPlanTests.Other_applications_keep_the_pool_and_only_confirmed_site_removal_allows_web_config_deletion" computerName="MOHAMED-KHAMIS" duration="00:00:00.0006579" startTime="2026-10-26T16:32:17.8435089+03:00" endTime="2026-10-26T16:32:17.8435723+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="70ea1ecf-9a23-4ce9-90b4-bcc4f32b8ac9">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.IisRemovalPlanTests.Other_applications_keep_the_pool_and_only_confirmed_site_removal_allows_web_config_deletion() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs:line 28&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e3fa212e-ee94-409a-a71d-3024776d2787" testId="ef9cb698-73ff-c337-3f69-5881654a45f1" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;OTHER&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: False, expected: &quot;Stop:Unknown /WEB_HOST value: OTHER&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.8706684" startTime="2026-10-26T16:32:11.3321772+03:00" endTime="2026-10-26T16:32:12.2015913+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e3fa212e-ee94-409a-a71d-3024776d2787">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-5d34002e92e848e0aa3c5d2739aaac46\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="3709850e-950b-4217-9c49-b9ed341e6b34" testId="9ec60356-a81f-b721-8fe2-c701ca9ca48b" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.IIS_SQL_and_LAN_summaries_match_the_host_contract" computerName="MOHAMED-KHAMIS" duration="00:00:00.0019487" startTime="2026-10-26T16:32:05.5321844+03:00" endTime="2026-10-26T16:32:05.5322618+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3709850e-950b-4217-9c49-b9ed341e6b34">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Matches() Failure: Pattern not found in value&#xD;
+Regex: "'\\.sql'\\s*=\\s*'text/plain'"&#xD;
+Value: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOPSIS\r"···</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.IIS_SQL_and_LAN_summaries_match_the_host_contract() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 74&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="2b9dbcad-8cf0-457d-ae2b-f9dbdb63cd49" testId="1d7559bf-44e1-a5e0-9128-c60645ab9321" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: False, ports: False, expected: &quot;Service&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7036327" startTime="2026-10-26T16:32:13.7362172+03:00" endTime="2026-10-26T16:32:14.4390732+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2b9dbcad-8cf0-457d-ae2b-f9dbdb63cd49">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-885cfd2c83a0467cbd4acd914e2f4bea\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="e398e033-d1d8-40e5-a0cc-a0509a1f0316" testId="d724846b-cea1-1960-b436-8a533511a3fa" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-18&quot;, rights: &quot;FullControl&quot;, propagation: &quot;None&quot;, expected: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0003551" startTime="2026-10-26T16:32:17.8585292+03:00" endTime="2026-10-26T16:32:17.8585616+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e398e033-d1d8-40e5-a0cc-a0509a1f0316">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="b7870b5f-3b32-4197-a7d4-9cd66f717f44" testId="bc732c68-d351-6eb4-853b-0b5c4af54c97" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: &quot;WebHostClick&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0507335" startTime="2026-10-26T16:32:05.4100319+03:00" endTime="2026-10-26T16:32:05.4931762+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b7870b5f-3b32-4197-a7d4-9cd66f717f44">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Matches() Failure: Pattern not found in value&#xD;
+Regex: "procedure WebHostClick\\([^)]*\\);[\\s\\S]*?begin\"···&#xD;
+Value: "; Spec 021 (web edition) -- M4 installer additions"···</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(String name) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 34&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="20e863fb-8e84-4b25-bbe2-93af77386ee4" testId="130d98f7-011f-9a69-c3ee-9df4b0020d06" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;None&quot;, ready: False, ports: True, expected: &quot;Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho&quot;···)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7940083" startTime="2026-10-26T16:32:12.9418993+03:00" endTime="2026-10-26T16:32:13.7351548+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="20e863fb-8e84-4b25-bbe2-93af77386ee4">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-15bc4368fc38491cba361c2fa3b825d0\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="22ed81fe-722f-4216-8315-28c901d9eeb4" testId="faf121bb-4b15-00fb-b28c-a21933f9c3bb" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;NONE&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: True, expected: &quot;Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho&quot;···)" computerName="MOHAMED-KHAMIS" duration="00:00:00.6667572" startTime="2026-10-26T16:32:15.6843737+03:00" endTime="2026-10-26T16:32:16.3504766+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="22ed81fe-722f-4216-8315-28c901d9eeb4">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-21c2f1bf1b654ed891a9cfbf5ac9bed7\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="98cd50a5-fb5f-4b92-af2f-4f198cab012f" testId="ea477779-bcb3-a53d-84c7-cb5a5cf007d8" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;None&quot;, ready: False, ports: False, expected: &quot;None&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7370830" startTime="2026-10-26T16:32:09.0043745+03:00" endTime="2026-10-26T16:32:09.7405085+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="98cd50a5-fb5f-4b92-af2f-4f198cab012f">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-fd0b6e30e3f24b5f9c8636b4c2f0856e\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a8468fcd-8248-4c0f-9c87-1e71f1c64d3a" testId="5f4c7679-bf6f-af88-e809-99a2b1db0582" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-32-545&quot;, rights: &quot;Write&quot;, propagation: &quot;None&quot;, expected: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0003076" startTime="2026-10-26T16:32:17.8560083+03:00" endTime="2026-10-26T16:32:17.8560471+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a8468fcd-8248-4c0f-9c87-1e71f1c64d3a">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="a0e61cc3-e7a1-4bce-9b31-e0e8e87d1e90" testId="54f46ab4-039b-8036-690d-ec2502e7f739" testName="AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: False, appcmd: False, method: &quot;None&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0019603" startTime="2026-10-26T16:32:17.8274500+03:00" endTime="2026-10-26T16:32:17.8400999+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a0e61cc3-e7a1-4bce-9b31-e0e8e87d1e90">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Boolean module, Boolean appcmd, String method) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs:line 14&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5821534a-9e68-4365-a5b4-4aeb21559afe" testId="13609a4f-c5cf-4449-a7bd-d4aba66af241" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: False, ports: True, expected: &quot;Service&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7459989" startTime="2026-10-26T16:32:09.7417628+03:00" endTime="2026-10-26T16:32:10.4868714+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5821534a-9e68-4365-a5b4-4aeb21559afe">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-05bb4319ec2944e6874927d6827c2d37\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1dace645-21ad-46a6-a602-878a9135c6ea" testId="41664455-edb1-abe6-f0e4-d1ace1252faa" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-11&quot;, rights: &quot;Modify&quot;, propagation: &quot;None&quot;, expected: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0003472" startTime="2026-10-26T16:32:17.8596572+03:00" endTime="2026-10-26T16:32:17.8596911+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1dace645-21ad-46a6-a602-878a9135c6ea">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="157544cb-b1f1-45a1-b211-1027f291be9a" testId="f8f4e3d9-6b43-70d1-98e3-d2d6184048a2" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;Service&quot;, ready: False, ports: False, expected: &quot;Service&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.7661438" startTime="2026-10-26T16:32:07.4767797+03:00" endTime="2026-10-26T16:32:08.2400246+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="157544cb-b1f1-45a1-b211-1027f291be9a">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-51ded9d2c8c94eafa78d184b4b8fe54a\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="21bd6f5a-3e1b-4d40-982a-412cf1028b6c" testId="db53ffff-c1be-f164-d41a-a407f3e2c001" testName="AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: False, appcmd: True, method: &quot;AppCmd&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0012225" startTime="2026-10-26T16:32:17.8415016+03:00" endTime="2026-10-26T16:32:17.8416703+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="21bd6f5a-3e1b-4d40-982a-412cf1028b6c">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Boolean module, Boolean appcmd, String method) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs:line 14&#xD;
+   at InvokeStub_IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="87616400-eda6-4c5e-bf21-1362e821c628" testId="b3f71cc5-e55e-deb0-2740-ee37e0270024" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-1-0&quot;, rights: &quot;Delete&quot;, propagation: &quot;None&quot;, expected: True)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0005471" startTime="2026-10-26T16:32:17.8474253+03:00" endTime="2026-10-26T16:32:17.8474578+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="87616400-eda6-4c5e-bf21-1362e821c628">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7ff944c4-ffe1-49c0-be64-0e9d04fbcbfc" testId="eaba02c5-7363-8936-40a3-0c2054527b39" testName="AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: &quot;WebHostActivate&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0020525" startTime="2026-10-26T16:32:05.5273031+03:00" endTime="2026-10-26T16:32:05.5274134+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7ff944c4-ffe1-49c0-be64-0e9d04fbcbfc">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Matches() Failure: Pattern not found in value&#xD;
+Regex: "procedure WebHostActivate\\([^)]*\\);[\\s\\S]*?beg"···&#xD;
+Value: "; Spec 021 (web edition) -- M4 installer additions"···</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(String name) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs:line 34&#xD;
+   at InvokeStub_WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7c19cc25-96bb-472d-9107-693c175d2124" testId="5bdb845a-3369-1791-92a0-d3250f9261ce" testName="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;SERVICE&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: False, ports: False, expected: &quot;Service&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.8875484" startTime="2026-10-26T16:32:06.5873848+03:00" endTime="2026-10-26T16:32:07.4734953+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7c19cc25-96bb-472d-9107-693c175d2124">
+      <Output>
+        <ErrorInfo>
+          <Message>Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-4ebd598d3afe45bd820a678e0de738f3\probe.iss: Column 11:&#xD;
+Unknown identifier 'ResolveSilentHost'&#xD;
+Compile aborted.&#xD;
+</Message>
+          <StackTrace>   at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs:line 41&#xD;
+   at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs:line 33&#xD;
+   at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="81cf62ff-a6ca-4c60-8dd1-eb3a3717fb99" testId="1a23c5a4-f317-155b-94bf-322b23f1805e" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-32-545&quot;, rights: &quot;ReadAndExecute&quot;, propagation: &quot;None&quot;, expected: False)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0004259" startTime="2026-10-26T16:32:17.8543635+03:00" endTime="2026-10-26T16:32:17.8544172+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="81cf62ff-a6ca-4c60-8dd1-eb3a3717fb99">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 18&#xD;
+   at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+   at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="1ea77674-638e-4d0f-82c8-7aab0a87e07f" testId="c4c9897c-2b40-9aeb-c6ef-c8fc25f58f24" testName="AkmlSql.Installer.Tests.HostingRepairGuardTests.A_deny_ACE_is_not_a_write_grant" computerName="MOHAMED-KHAMIS" duration="00:00:00.0005566" startTime="2026-10-26T16:32:17.8605212+03:00" endTime="2026-10-26T16:32:17.8605633+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="1ea77674-638e-4d0f-82c8-7aab0a87e07f">
+      <Output>
+        <ErrorInfo>
+          <Message>System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.</Message>
+          <StackTrace>   at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+   at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+   at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+   at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+   at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body) in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs:line 62&#xD;
+   at AkmlSql.Installer.Tests.HostingRepairGuardTests.A_deny_ACE_is_not_a_write_grant() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs:line 23&#xD;
+   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: &quot;WebHostClick&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="bc732c68-d351-6eb4-853b-0b5c4af54c97">
+      <Execution id="b7870b5f-3b32-4197-a7d4-9cd66f717f44" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="Page_handlers_cannot_clobber_silent_flags" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-3-0&quot;, rights: &quot;FullControl&quot;, propagation: &quot;InheritOnly&quot;, expected: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="0893d057-9cfe-9914-43bd-0900a35f9e14">
+      <Execution id="f6323455-78ca-41ce-8755-f9a894bbb2ae" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;IIS&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: False, ports: False, expected: &quot;Stop:not ready&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="f1d21480-aa32-ebe7-f3a2-dc8a8f45ed4b">
+      <Execution id="dd878cfb-f03f-47d0-ae68-97b5ff23be3d" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: True, ports: True, expected: &quot;IIS&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="376e6670-bff1-53df-9e37-524d9c5316a7">
+      <Execution id="7ec44bc1-250f-4058-8817-89ddc51ab3f3" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;NONE&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: True, expected: &quot;Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho&quot;···)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="faf121bb-4b15-00fb-b28c-a21933f9c3bb">
+      <Execution id="22ed81fe-722f-4216-8315-28c901d9eeb4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.Repair_and_uninstall_do_not_replay_legacy_temp_scripts_or_show_silent_prompts" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="490b3061-33f6-8adc-3766-455a0239c8b5">
+      <Execution id="7e00de5d-5ea7-4e82-9b90-738cb58dbd62" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="Repair_and_uninstall_do_not_replay_legacy_temp_scripts_or_show_silent_prompts" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;NONE&quot;, exposure: &quot;LAN&quot;, previous: &quot;&quot;, ready: True, ports: False, expected: &quot;Stop:/WEB_HOST=NONE with /WEB_EXPOSURE=LAN is inva&quot;···)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="c2bd5aa2-f0ac-0405-fc7f-efe484aebed7">
+      <Execution id="5b474f35-135e-4279-9697-171f3e104d72" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: False, ports: True, expected: &quot;Service&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="13609a4f-c5cf-4449-a7bd-d4aba66af241">
+      <Execution id="5821534a-9e68-4365-a5b4-4aeb21559afe" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;OTHER&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: False, expected: &quot;Stop:Unknown /WEB_HOST value: OTHER&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="ef9cb698-73ff-c337-3f69-5881654a45f1">
+      <Execution id="e3fa212e-ee94-409a-a71d-3024776d2787" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.IIS_SQL_and_LAN_summaries_match_the_host_contract" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="9ec60356-a81f-b721-8fe2-c701ca9ca48b">
+      <Execution id="3709850e-950b-4217-9c49-b9ed341e6b34" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="IIS_SQL_and_LAN_summaries_match_the_host_contract" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-1-0&quot;, rights: &quot;Delete&quot;, propagation: &quot;None&quot;, expected: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="b3f71cc5-e55e-deb0-2740-ee37e0270024">
+      <Execution id="87616400-eda6-4c5e-bf21-1362e821c628" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.Hosting_is_code_owned_and_helpers_are_permanent" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="ceb39101-c621-9c7e-13da-4bfd482b184c">
+      <Execution id="192da3b9-823a-48e3-b4f4-a51842ab2fae" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="Hosting_is_code_owned_and_helpers_are_permanent" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-15-2-1&quot;, rights: &quot;ReadAndExecute&quot;, propagation: &quot;None&quot;, expected: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="3b24fb5c-8abf-2741-0b52-aa7cebcd5785">
+      <Execution id="01170417-bdd6-4128-b79b-b00fa2d301df" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;Service&quot;, ready: False, ports: False, expected: &quot;Service&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="f8f4e3d9-6b43-70d1-98e3-d2d6184048a2">
+      <Execution id="157544cb-b1f1-45a1-b211-1027f291be9a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-32-545&quot;, rights: &quot;Write&quot;, propagation: &quot;None&quot;, expected: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="5f4c7679-bf6f-af88-e809-99a2b1db0582">
+      <Execution id="a8468fcd-8248-4c0f-9c87-1e71f1c64d3a" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.A_deny_ACE_is_not_a_write_grant" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="c4c9897c-2b40-9aeb-c6ef-c8fc25f58f24">
+      <Execution id="1ea77674-638e-4d0f-82c8-7aab0a87e07f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="A_deny_ACE_is_not_a_write_grant" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-32-545&quot;, rights: &quot;ReadAndExecute&quot;, propagation: &quot;None&quot;, expected: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="1a23c5a4-f317-155b-94bf-322b23f1805e">
+      <Execution id="81cf62ff-a6ca-4c60-8dd1-eb3a3717fb99" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.Setup_writes_resolved_settings_and_proves_which_host_answers" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="4a1180c9-61f3-2f2f-94cd-266985a64892">
+      <Execution id="15a1ae43-3e63-4b6e-988f-3e2d0428efca" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="Setup_writes_resolved_settings_and_proves_which_host_answers" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: &quot;WebPortsActivate&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="86aeb8df-abfc-36ae-8c83-f22924335093">
+      <Execution id="2ce42a8e-74a8-4b1c-a756-2e01aad09fe4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="Page_handlers_cannot_clobber_silent_flags" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-80-956008885-3418522649-1831038044-185329263&quot;···, rights: &quot;FullControl&quot;, propagation: &quot;None&quot;, expected: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="4bdbf288-7b75-bea8-b71c-29629af73f9d">
+      <Execution id="78f50042-b2e9-443e-91eb-031ad896a0ac" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: False, ports: False, expected: &quot;Service&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="1d7559bf-44e1-a5e0-9128-c60645ab9321">
+      <Execution id="2b9dbcad-8cf0-457d-ae2b-f9dbdb63cd49" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Address_changes_name_both_origins_and_preserve_engine_history" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="33332152-5ae5-bff7-1e76-a88eaa35dc27">
+      <Execution id="ef47e504-6bdf-4731-8632-7804c2bf7034" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Address_changes_name_both_origins_and_preserve_engine_history" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: &quot;WebHostActivate&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="eaba02c5-7363-8936-40a3-0c2054527b39">
+      <Execution id="7ff944c4-ffe1-49c0-be64-0e9d04fbcbfc" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.WebInstallerSourceTests" name="Page_handlers_cannot_clobber_silent_flags" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;NONE&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: True, ports: False, expected: &quot;None&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="cfecb71e-bbc3-e990-afdb-339b1017f101">
+      <Execution id="d15649c9-e81a-4186-a076-170781441d65" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: True, appcmd: False, method: &quot;WebAdministration&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="54f10067-7620-e5ac-732d-f0ac4c183876">
+      <Execution id="1d5dc8c8-1688-4926-ae00-b670057824d8" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisRemovalPlanTests" name="Removal_uses_available_tools_and_always_removes_owned_binding_and_markers" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: False, appcmd: False, method: &quot;None&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="54f46ab4-039b-8036-690d-ec2502e7f739">
+      <Execution id="a0e61cc3-e7a1-4bce-9b31-e0e8e87d1e90" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisRemovalPlanTests" name="Removal_uses_available_tools_and_always_removes_owned_binding_and_markers" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-11&quot;, rights: &quot;Modify&quot;, propagation: &quot;None&quot;, expected: True)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="41664455-edb1-abe6-f0e4-d1ace1252faa">
+      <Execution id="1dace645-21ad-46a6-a602-878a9135c6ea" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;SERVICE&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: True, expected: &quot;Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho&quot;···)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="1666245e-3d34-0820-fedd-de0f9d9a88dd">
+      <Execution id="a097d800-aaaa-4b19-be6d-f86919b3e700" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-32-544&quot;, rights: &quot;FullControl&quot;, propagation: &quot;None&quot;, expected: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="c62c3785-a071-10a2-190d-d4526c0238f2">
+      <Execution id="df9e9a77-7097-4aea-a1f1-086f0e27f69e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;None&quot;, ready: False, ports: False, expected: &quot;None&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="ea477779-bcb3-a53d-84c7-cb5a5cf007d8">
+      <Execution id="98cd50a5-fb5f-4b92-af2f-4f198cab012f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;IIS&quot;, exposure: &quot;&quot;, previous: &quot;&quot;, ready: True, ports: True, expected: &quot;IIS&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="976c4a1c-f13e-cc61-f134-1c5ec349236c">
+      <Execution id="7b82b686-fb54-4f2a-8684-5a0a49bf1af9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;&quot;, exposure: &quot;&quot;, previous: &quot;None&quot;, ready: False, ports: True, expected: &quot;Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho&quot;···)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="130d98f7-011f-9a69-c3ee-9df4b0020d06">
+      <Execution id="20e863fb-8e84-4b25-bbe2-93af77386ee4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: False, appcmd: True, method: &quot;AppCmd&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="db53ffff-c1be-f164-d41a-a407f3e2c001">
+      <Execution id="21bd6f5a-3e1b-4d40-982a-412cf1028b6c" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisRemovalPlanTests" name="Removal_uses_available_tools_and_always_removes_owned_binding_and_markers" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: &quot;SERVICE&quot;, exposure: &quot;&quot;, previous: &quot;IIS&quot;, ready: False, ports: False, expected: &quot;Service&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="5bdb845a-3369-1791-92a0-d3250f9261ce">
+      <Execution id="7c19cc25-96bb-472d-9107-693c175d2124" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Silent_resolution_checks_the_contract_rows_in_order" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingResolutionTests.Only_an_explicit_or_retained_IIS_candidate_needs_the_management_probe" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="d3ab2755-715d-9a77-a189-0fa2175aac62">
+      <Execution id="9d7bc93a-372d-43a2-a4af-ebcbaa74b193" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingResolutionTests" name="Only_an_explicit_or_retained_IIS_candidate_needs_the_management_probe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: &quot;S-1-5-18&quot;, rights: &quot;FullControl&quot;, propagation: &quot;None&quot;, expected: False)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="d724846b-cea1-1960-b436-8a533511a3fa">
+      <Execution id="e398e033-d1d8-40e5-a0cc-a0509a1f0316" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.HostingRepairGuardTests" name="Only_effective_non_admin_write_grants_are_unsafe" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Installer.Tests.IisRemovalPlanTests.Other_applications_keep_the_pool_and_only_confirmed_site_removal_allows_web_config_deletion" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.installer.tests\bin\release\net10.0-windows10.0.19041.0\akmlsql.installer.tests.dll" id="5bbcdadf-502b-c8ca-23ab-5908502c3c06">
+      <Execution id="70ea1ecf-9a23-4ce9-90b4-bcc4f32b8ac9" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\bin\Release\net10.0-windows10.0.19041.0\AkmlSql.Installer.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Installer.Tests.IisRemovalPlanTests" name="Other_applications_keep_the_pool_and_only_confirmed_site_removal_allows_web_config_deletion" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="976c4a1c-f13e-cc61-f134-1c5ec349236c" executionId="7b82b686-fb54-4f2a-8684-5a0a49bf1af9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ceb39101-c621-9c7e-13da-4bfd482b184c" executionId="192da3b9-823a-48e3-b4f4-a51842ab2fae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1666245e-3d34-0820-fedd-de0f9d9a88dd" executionId="a097d800-aaaa-4b19-be6d-f86919b3e700" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="376e6670-bff1-53df-9e37-524d9c5316a7" executionId="7ec44bc1-250f-4058-8817-89ddc51ab3f3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="86aeb8df-abfc-36ae-8c83-f22924335093" executionId="2ce42a8e-74a8-4b1c-a756-2e01aad09fe4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4a1180c9-61f3-2f2f-94cd-266985a64892" executionId="15a1ae43-3e63-4b6e-988f-3e2d0428efca" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c62c3785-a071-10a2-190d-d4526c0238f2" executionId="df9e9a77-7097-4aea-a1f1-086f0e27f69e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="33332152-5ae5-bff7-1e76-a88eaa35dc27" executionId="ef47e504-6bdf-4731-8632-7804c2bf7034" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="3b24fb5c-8abf-2741-0b52-aa7cebcd5785" executionId="01170417-bdd6-4128-b79b-b00fa2d301df" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0893d057-9cfe-9914-43bd-0900a35f9e14" executionId="f6323455-78ca-41ce-8755-f9a894bbb2ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f1d21480-aa32-ebe7-f3a2-dc8a8f45ed4b" executionId="dd878cfb-f03f-47d0-ae68-97b5ff23be3d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="cfecb71e-bbc3-e990-afdb-339b1017f101" executionId="d15649c9-e81a-4186-a076-170781441d65" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="490b3061-33f6-8adc-3766-455a0239c8b5" executionId="7e00de5d-5ea7-4e82-9b90-738cb58dbd62" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="54f10067-7620-e5ac-732d-f0ac4c183876" executionId="1d5dc8c8-1688-4926-ae00-b670057824d8" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4bdbf288-7b75-bea8-b71c-29629af73f9d" executionId="78f50042-b2e9-443e-91eb-031ad896a0ac" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d3ab2755-715d-9a77-a189-0fa2175aac62" executionId="9d7bc93a-372d-43a2-a4af-ebcbaa74b193" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c2bd5aa2-f0ac-0405-fc7f-efe484aebed7" executionId="5b474f35-135e-4279-9697-171f3e104d72" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5bbcdadf-502b-c8ca-23ab-5908502c3c06" executionId="70ea1ecf-9a23-4ce9-90b4-bcc4f32b8ac9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ef9cb698-73ff-c337-3f69-5881654a45f1" executionId="e3fa212e-ee94-409a-a71d-3024776d2787" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="9ec60356-a81f-b721-8fe2-c701ca9ca48b" executionId="3709850e-950b-4217-9c49-b9ed341e6b34" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1d7559bf-44e1-a5e0-9128-c60645ab9321" executionId="2b9dbcad-8cf0-457d-ae2b-f9dbdb63cd49" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d724846b-cea1-1960-b436-8a533511a3fa" executionId="e398e033-d1d8-40e5-a0cc-a0509a1f0316" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bc732c68-d351-6eb4-853b-0b5c4af54c97" executionId="b7870b5f-3b32-4197-a7d4-9cd66f717f44" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="130d98f7-011f-9a69-c3ee-9df4b0020d06" executionId="20e863fb-8e84-4b25-bbe2-93af77386ee4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="faf121bb-4b15-00fb-b28c-a21933f9c3bb" executionId="22ed81fe-722f-4216-8315-28c901d9eeb4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ea477779-bcb3-a53d-84c7-cb5a5cf007d8" executionId="98cd50a5-fb5f-4b92-af2f-4f198cab012f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5f4c7679-bf6f-af88-e809-99a2b1db0582" executionId="a8468fcd-8248-4c0f-9c87-1e71f1c64d3a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="54f46ab4-039b-8036-690d-ec2502e7f739" executionId="a0e61cc3-e7a1-4bce-9b31-e0e8e87d1e90" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="13609a4f-c5cf-4449-a7bd-d4aba66af241" executionId="5821534a-9e68-4365-a5b4-4aeb21559afe" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="41664455-edb1-abe6-f0e4-d1ace1252faa" executionId="1dace645-21ad-46a6-a602-878a9135c6ea" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f8f4e3d9-6b43-70d1-98e3-d2d6184048a2" executionId="157544cb-b1f1-45a1-b211-1027f291be9a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="db53ffff-c1be-f164-d41a-a407f3e2c001" executionId="21bd6f5a-3e1b-4d40-982a-412cf1028b6c" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b3f71cc5-e55e-deb0-2740-ee37e0270024" executionId="87616400-eda6-4c5e-bf21-1362e821c628" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="eaba02c5-7363-8936-40a3-0c2054527b39" executionId="7ff944c4-ffe1-49c0-be64-0e9d04fbcbfc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5bdb845a-3369-1791-92a0-d3250f9261ce" executionId="7c19cc25-96bb-472d-9107-693c175d2124" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1a23c5a4-f317-155b-94bf-322b23f1805e" executionId="81cf62ff-a6ca-4c60-8dd1-eb3a3717fb99" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="c4c9897c-2b40-9aeb-c6ef-c8fc25f58f24" executionId="1ea77674-638e-4d0f-82c8-7aab0a87e07f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="37" executed="37" passed="0" failed="37" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.23]   Discovering: AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.39]   Discovered:  AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.47]   Starting:    AkmlSql.Installer.Tests&#xD;
+[xUnit.net 00:00:00.60]       Assert.Matches() Failure: Pattern not found in value&#xD;
+[xUnit.net 00:00:00.61]       Regex: "procedure WebHostClick\\([^)]*\\);[\\s\\S]*?begin\"···&#xD;
+[xUnit.net 00:00:00.61]       Value: "; Spec 021 (web edition) -- M4 installer additions"···&#xD;
+[xUnit.net 00:00:00.61]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.61]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(34,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(String name)&#xD;
+[xUnit.net 00:00:00.61]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.61]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.63]       Assert.Matches() Failure: Pattern not found in value&#xD;
+[xUnit.net 00:00:00.63]       Regex: "procedure WebPortsActivate\\([^)]*\\);[\\s\\S]*?be"···&#xD;
+[xUnit.net 00:00:00.63]       Value: "; Spec 021 (web edition) -- M4 installer additions"···&#xD;
+[xUnit.net 00:00:00.63]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.63]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(34,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(String name)&#xD;
+[xUnit.net 00:00:00.63]            at InvokeStub_WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.63]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.63]       Assert.Matches() Failure: Pattern not found in value&#xD;
+[xUnit.net 00:00:00.63]       Regex: "procedure WebHostActivate\\([^)]*\\);[\\s\\S]*?beg"···&#xD;
+[xUnit.net 00:00:00.63]       Value: "; Spec 021 (web edition) -- M4 installer additions"···&#xD;
+[xUnit.net 00:00:00.63]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.63]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(34,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(String name)&#xD;
+[xUnit.net 00:00:00.63]            at InvokeStub_WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(Object, Span`1)&#xD;
+[xUnit.net 00:00:00.63]            at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:00.64]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:00.64]                                           ↓ (pos 11625)&#xD;
+[xUnit.net 00:00:00.64]       String: ···"ubsequent boots.\r\n\r\n[UninstallRun]\r\n; Rev"···&#xD;
+[xUnit.net 00:00:00.64]       Found:  "[UninstallRun]"&#xD;
+[xUnit.net 00:00:00.64]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.64]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(60,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.Repair_and_uninstall_do_not_replay_legacy_temp_scripts_or_show_silent_prompts()&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.64]       Assert.Matches() Failure: Pattern not found in value&#xD;
+[xUnit.net 00:00:00.64]       Regex: "'\\.sql'\\s*=\\s*'text/plain'"&#xD;
+[xUnit.net 00:00:00.64]       Value: "#Requires -RunAsAdministrator\r\n&lt;#\r\n.SYNOPSIS\r"···&#xD;
+[xUnit.net 00:00:00.64]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.64]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(74,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.IIS_SQL_and_LAN_summaries_match_the_host_contract()&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.64]       Assert.DoesNotContain() Failure: Sub-string found&#xD;
+[xUnit.net 00:00:00.64]                                       ↓ (pos 4828)&#xD;
+[xUnit.net 00:00:00.64]       String: ···"ags: ignoreversion; Components: web\\iis\r\n"···&#xD;
+[xUnit.net 00:00:00.64]       Found:  "Components: web\\iis"&#xD;
+[xUnit.net 00:00:00.64]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.64]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(14,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.Hosting_is_code_owned_and_helpers_are_permanent()&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:00.64]       Assert.Contains() Failure: Sub-string not found&#xD;
+[xUnit.net 00:00:00.64]       String:    "; Spec 021 (web edition) -- M4 installer "···&#xD;
+[xUnit.net 00:00:00.64]       Not found: "ResolveSilentHost("&#xD;
+[xUnit.net 00:00:00.64]       Stack Trace:&#xD;
+[xUnit.net 00:00:00.64]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebInstallerSourceTests.cs(40,0): at AkmlSql.Installer.Tests.WebInstallerSourceTests.Setup_writes_resolved_settings_and_proves_which_host_answers()&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:00.64]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:01.69]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-3ba484d0b61d4bb5ba41cb32eae8d81f\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:01.69]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:01.69]       Compile aborted.&#xD;
+[xUnit.net 00:00:01.69]       &#xD;
+[xUnit.net 00:00:01.69]       Stack Trace:&#xD;
+[xUnit.net 00:00:01.69]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:01.69]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:01.69]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:01.69]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:02.58]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-4ebd598d3afe45bd820a678e0de738f3\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:02.58]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:02.58]       Compile aborted.&#xD;
+[xUnit.net 00:00:02.58]       &#xD;
+[xUnit.net 00:00:02.58]       Stack Trace:&#xD;
+[xUnit.net 00:00:02.58]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:02.58]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:02.58]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:02.58]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:03.35]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-51ded9d2c8c94eafa78d184b4b8fe54a\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:03.35]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:03.35]       Compile aborted.&#xD;
+[xUnit.net 00:00:03.35]       &#xD;
+[xUnit.net 00:00:03.35]       Stack Trace:&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:03.35]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:03.35]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:03.35]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.11]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-c1f7943adc7149eeab3e234b45101b26\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:04.11]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:04.11]       Compile aborted.&#xD;
+[xUnit.net 00:00:04.11]       &#xD;
+[xUnit.net 00:00:04.11]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.11]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:04.11]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:04.11]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.11]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:04.85]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-fd0b6e30e3f24b5f9c8636b4c2f0856e\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:04.85]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:04.85]       Compile aborted.&#xD;
+[xUnit.net 00:00:04.85]       &#xD;
+[xUnit.net 00:00:04.85]       Stack Trace:&#xD;
+[xUnit.net 00:00:04.85]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:04.85]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:04.85]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:04.85]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:05.59]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-05bb4319ec2944e6874927d6827c2d37\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:05.59]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:05.59]       Compile aborted.&#xD;
+[xUnit.net 00:00:05.59]       &#xD;
+[xUnit.net 00:00:05.59]       Stack Trace:&#xD;
+[xUnit.net 00:00:05.59]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:05.59]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:05.59]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:05.59]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:06.44]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-217e66485fce4be18af5ce6de11835d7\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:06.44]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:06.44]       Compile aborted.&#xD;
+[xUnit.net 00:00:06.44]       &#xD;
+[xUnit.net 00:00:06.44]       Stack Trace:&#xD;
+[xUnit.net 00:00:06.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:06.44]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:06.44]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:06.44]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:07.31]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-5d34002e92e848e0aa3c5d2739aaac46\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:07.31]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:07.31]       Compile aborted.&#xD;
+[xUnit.net 00:00:07.31]       &#xD;
+[xUnit.net 00:00:07.31]       Stack Trace:&#xD;
+[xUnit.net 00:00:07.31]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:07.31]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:07.31]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:07.31]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:08.05]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-66ef042791114bb6ad68582e4d53889f\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:08.05]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:08.05]       Compile aborted.&#xD;
+[xUnit.net 00:00:08.05]       &#xD;
+[xUnit.net 00:00:08.05]       Stack Trace:&#xD;
+[xUnit.net 00:00:08.05]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:08.05]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:08.05]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:08.05]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:08.84]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-15bc4368fc38491cba361c2fa3b825d0\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:08.84]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:08.84]       Compile aborted.&#xD;
+[xUnit.net 00:00:08.84]       &#xD;
+[xUnit.net 00:00:08.84]       Stack Trace:&#xD;
+[xUnit.net 00:00:08.84]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:08.84]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:08.84]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:08.84]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:09.55]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-885cfd2c83a0467cbd4acd914e2f4bea\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:09.55]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:09.55]       Compile aborted.&#xD;
+[xUnit.net 00:00:09.55]       &#xD;
+[xUnit.net 00:00:09.55]       Stack Trace:&#xD;
+[xUnit.net 00:00:09.55]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:09.55]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:09.55]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:09.55]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:10.16]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-291635dc485848b79e202da91e5ffe3b\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:10.16]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:10.16]       Compile aborted.&#xD;
+[xUnit.net 00:00:10.16]       &#xD;
+[xUnit.net 00:00:10.16]       Stack Trace:&#xD;
+[xUnit.net 00:00:10.16]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:10.16]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:10.16]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:10.16]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:10.79]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-3a2e3044da8441588ebc114d35a98248\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:10.79]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:10.79]       Compile aborted.&#xD;
+[xUnit.net 00:00:10.79]       &#xD;
+[xUnit.net 00:00:10.79]       Stack Trace:&#xD;
+[xUnit.net 00:00:10.79]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:10.79]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:10.79]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:10.79]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:11.46]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-21c2f1bf1b654ed891a9cfbf5ac9bed7\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:11.46]       Unknown identifier 'ResolveSilentHost'&#xD;
+[xUnit.net 00:00:11.46]       Compile aborted.&#xD;
+[xUnit.net 00:00:11.46]       &#xD;
+[xUnit.net 00:00:11.46]       Stack Trace:&#xD;
+[xUnit.net 00:00:11.46]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:11.46]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(33,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(String flag, String exposure, String previous, Boolean ready, Boolean ports, String expected)&#xD;
+[xUnit.net 00:00:11.46]            at InvokeStub_HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(Object, Span`1)&#xD;
+[xUnit.net 00:00:11.46]            at System.Reflection.MethodBaseInvoker.InvokeWithManyArgs(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.23]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-a34f8443ef1f41c5bd175a4dcbd551df\probe.iss: Column 11:&#xD;
+[xUnit.net 00:00:12.23]       Unknown identifier 'AddressChangeNotice'&#xD;
+[xUnit.net 00:00:12.23]       Compile aborted.&#xD;
+[xUnit.net 00:00:12.23]       &#xD;
+[xUnit.net 00:00:12.23]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.23]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:12.23]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(11,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Address_changes_name_both_origins_and_preserve_engine_history()&#xD;
+[xUnit.net 00:00:12.23]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:12.23]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:12.93]       Error on line 19 in C:\Users\MohamedKhamis\AppData\Local\Temp\akml-hosting-probe-e18e5e006f4844e8bebf0ca6a8af395f\probe.iss: Column 13:&#xD;
+[xUnit.net 00:00:12.93]       Unknown identifier 'SilentNeedsIisProbe'&#xD;
+[xUnit.net 00:00:12.93]       Compile aborted.&#xD;
+[xUnit.net 00:00:12.93]       &#xD;
+[xUnit.net 00:00:12.93]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.93]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\WebHostingProbeTests.cs(41,0): at AkmlSql.Installer.Tests.WebHostingProbeTests.Probe(String[] expressions)&#xD;
+[xUnit.net 00:00:12.93]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingResolutionTests.cs(40,0): at AkmlSql.Installer.Tests.HostingResolutionTests.Only_an_explicit_or_retained_IIS_candidate_needs_the_management_probe()&#xD;
+[xUnit.net 00:00:12.93]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:12.93]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs(14,0): at AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Boolean module, Boolean appcmd, String method)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs(14,0): at AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Boolean module, Boolean appcmd, String method)&#xD;
+[xUnit.net 00:00:12.95]            at InvokeStub_IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs(14,0): at AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Boolean module, Boolean appcmd, String method)&#xD;
+[xUnit.net 00:00:12.95]            at InvokeStub_IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\IisRemovalPlanTests.cs(28,0): at AkmlSql.Installer.Tests.IisRemovalPlanTests.Other_applications_keep_the_pool_and_only_confirmed_site_removal_allows_web_config_deletion()&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.MethodBaseInvoker.InvokeDirectByRefWithFewArgs(Object obj, Span`1 copyOfArgs, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.95]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.95]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.95]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.95]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.95]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.95]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.95]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.95]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.96]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.96]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.96]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.96]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.96]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.96]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.96]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.96]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.96]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.96]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.96]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.96]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.96]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.96]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.96]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.96]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.96]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.96]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.96]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.96]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.96]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.96]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.97]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.97]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.97]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.97]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.97]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(18,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(String sid, String rights, String propagation, Boolean expected)&#xD;
+[xUnit.net 00:00:12.97]            at InvokeStub_HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(Object, Span`1)&#xD;
+[xUnit.net 00:00:12.97]            at System.Reflection.RuntimeMethodInfo.Invoke(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)&#xD;
+[xUnit.net 00:00:12.97]       System.IO.FileNotFoundException : Could not find file 'D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1'.&#xD;
+[xUnit.net 00:00:12.97]       Stack Trace:&#xD;
+[xUnit.net 00:00:12.97]            at Microsoft.Win32.SafeHandles.SafeFileHandle.CreateFile(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options)&#xD;
+[xUnit.net 00:00:12.97]            at Microsoft.Win32.SafeHandles.SafeFileHandle.Open(String fullPath, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.Strategies.OSFileStreamStrategy..ctor(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.Strategies.FileStreamHelpers.ChooseStrategyCore(String path, FileMode mode, FileAccess access, FileShare share, FileOptions options, Int64 preallocationSize, Nullable`1 unixCreateMode)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.StreamReader.ValidateArgsAndOpenPath(String path, Int32 bufferSize)&#xD;
+[xUnit.net 00:00:12.97]            at System.IO.File.ReadAllText(String path, Encoding encoding)&#xD;
+[xUnit.net 00:00:12.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingTestTools.cs(62,0): at AkmlSql.Installer.Tests.HostingTestTools.DotSource(String name, String body)&#xD;
+[xUnit.net 00:00:12.97]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Installer.Tests\HostingRepairGuardTests.cs(23,0): at AkmlSql.Installer.Tests.HostingRepairGuardTests.A_deny_ACE_is_not_a_write_grant()&#xD;
+[xUnit.net 00:00:12.97]            at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)&#xD;
+[xUnit.net 00:00:12.97]            at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)&#xD;
+[xUnit.net 00:00:12.97]   Finished:    AkmlSql.Installer.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.4987887+03:00">
+        <Text>[xUnit.net 00:00:00.60]     AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: "WebHostClick") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.5243878+03:00">
+        <Text>[xUnit.net 00:00:00.63]     AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: "WebPortsActivate") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.5279397+03:00">
+        <Text>[xUnit.net 00:00:00.63]     AkmlSql.Installer.Tests.WebInstallerSourceTests.Page_handlers_cannot_clobber_silent_flags(name: "WebHostActivate") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.5310197+03:00">
+        <Text>[xUnit.net 00:00:00.64]     AkmlSql.Installer.Tests.WebInstallerSourceTests.Repair_and_uninstall_do_not_replay_legacy_temp_scripts_or_show_silent_prompts [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.5325000+03:00">
+        <Text>[xUnit.net 00:00:00.64]     AkmlSql.Installer.Tests.WebInstallerSourceTests.IIS_SQL_and_LAN_summaries_match_the_host_contract [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.5334668+03:00">
+        <Text>[xUnit.net 00:00:00.64]     AkmlSql.Installer.Tests.WebInstallerSourceTests.Hosting_is_code_owned_and_helpers_are_permanent [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:05.5366926+03:00">
+        <Text>[xUnit.net 00:00:00.64]     AkmlSql.Installer.Tests.WebInstallerSourceTests.Setup_writes_resolved_settings_and_proves_which_host_answers [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:06.5864951+03:00">
+        <Text>[xUnit.net 00:00:01.69]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "IIS", exposure: "", previous: "", ready: True, ports: True, expected: "IIS") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:07.4741263+03:00">
+        <Text>[xUnit.net 00:00:02.58]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "SERVICE", exposure: "", previous: "IIS", ready: False, ports: False, expected: "Service") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:08.2405689+03:00">
+        <Text>[xUnit.net 00:00:03.35]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "", exposure: "", previous: "Service", ready: False, ports: False, expected: "Service") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:09.0034765+03:00">
+        <Text>[xUnit.net 00:00:04.11]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "NONE", exposure: "LAN", previous: "", ready: True, ports: False, expected: "Stop:/WEB_HOST=NONE with /WEB_EXPOSURE=LAN is inva"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:09.7409833+03:00">
+        <Text>[xUnit.net 00:00:04.85]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "", exposure: "", previous: "None", ready: False, ports: False, expected: "None") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:10.4872842+03:00">
+        <Text>[xUnit.net 00:00:05.59]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "", exposure: "", previous: "IIS", ready: False, ports: True, expected: "Service") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:11.3310934+03:00">
+        <Text>[xUnit.net 00:00:06.44]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "IIS", exposure: "", previous: "", ready: False, ports: False, expected: "Stop:not ready") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:12.2021059+03:00">
+        <Text>[xUnit.net 00:00:07.31]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "OTHER", exposure: "", previous: "", ready: True, ports: False, expected: "Stop:Unknown /WEB_HOST value: OTHER") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:12.9411504+03:00">
+        <Text>[xUnit.net 00:00:08.05]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "NONE", exposure: "", previous: "IIS", ready: True, ports: False, expected: "None") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:13.7355427+03:00">
+        <Text>[xUnit.net 00:00:08.84]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "", exposure: "", previous: "None", ready: False, ports: True, expected: "Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:14.4394439+03:00">
+        <Text>[xUnit.net 00:00:09.54]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "", exposure: "", previous: "", ready: False, ports: False, expected: "Service") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:15.0586260+03:00">
+        <Text>[xUnit.net 00:00:10.16]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "", exposure: "", previous: "IIS", ready: True, ports: True, expected: "IIS") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:15.6838453+03:00">
+        <Text>[xUnit.net 00:00:10.79]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "SERVICE", exposure: "", previous: "", ready: True, ports: True, expected: "Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:16.3507805+03:00">
+        <Text>[xUnit.net 00:00:11.46]     AkmlSql.Installer.Tests.HostingResolutionTests.Silent_resolution_checks_the_contract_rows_in_order(flag: "NONE", exposure: "", previous: "", ready: True, ports: True, expected: "Stop:/WEB_PORT and /WEB_HTTPS_PORT apply to IIS ho"···) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.1245334+03:00">
+        <Text>[xUnit.net 00:00:12.23]     AkmlSql.Installer.Tests.HostingResolutionTests.Address_changes_name_both_origins_and_preserve_engine_history [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8264044+03:00">
+        <Text>[xUnit.net 00:00:12.93]     AkmlSql.Installer.Tests.HostingResolutionTests.Only_an_explicit_or_retained_IIS_candidate_needs_the_management_probe [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8404843+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: False, appcmd: False, method: "None") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8418779+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: False, appcmd: True, method: "AppCmd") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8429793+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.IisRemovalPlanTests.Removal_uses_available_tools_and_always_removes_owned_binding_and_markers(module: True, appcmd: False, method: "WebAdministration") [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8437411+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.IisRemovalPlanTests.Other_applications_keep_the_pool_and_only_confirmed_site_removal_allows_web_config_deletion [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8452816+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-5-80-956008885-3418522649-1831038044-185329263"···, rights: "FullControl", propagation: "None", expected: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8466681+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-5-32-544", rights: "FullControl", propagation: "None", expected: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8476496+03:00">
+        <Text>[xUnit.net 00:00:12.95]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-1-0", rights: "Delete", propagation: "None", expected: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8593649+03:00">
+        <Text>[xUnit.net 00:00:12.96]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-5-32-545", rights: "ReadAndExecute", propagation: "None", expected: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8594960+03:00">
+        <Text>[xUnit.net 00:00:12.96]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-5-32-545", rights: "Write", propagation: "None", expected: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8595899+03:00">
+        <Text>[xUnit.net 00:00:12.96]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-15-2-1", rights: "ReadAndExecute", propagation: "None", expected: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8596544+03:00">
+        <Text>[xUnit.net 00:00:12.96]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-3-0", rights: "FullControl", propagation: "InheritOnly", expected: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8597138+03:00">
+        <Text>[xUnit.net 00:00:12.96]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-5-18", rights: "FullControl", propagation: "None", expected: False) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8598875+03:00">
+        <Text>[xUnit.net 00:00:12.97]     AkmlSql.Installer.Tests.HostingRepairGuardTests.Only_effective_non_admin_write_grants_are_unsafe(sid: "S-1-5-11", rights: "Modify", propagation: "None", expected: True) [FAIL]</Text>
+      </RunInfo>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:32:17.8607415+03:00">
+        <Text>[xUnit.net 00:00:12.97]     AkmlSql.Installer.Tests.HostingRepairGuardTests.A_deny_ACE_is_not_a_write_grant [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

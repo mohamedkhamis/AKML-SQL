@@ -62,7 +62,7 @@
                 {
                     @* The page is served from this computer, so its engine is most likely here too: one click pairs it. *@
                     <button type="button" class="akml-btn akml-btn--compact" @onclick="UseLocalEngineAsync" disabled="@_pairingLocal"
-                            title="Pair with the engine on this computer (localhost:47291); Settings opens if it does not answer"
+                            title="@LocalEngineTitle"
                             data-testid="engine-use-local">Use this computer's engine</button>
                 }
                 <button type="button" class="akml-btn akml-btn--compact"
@@ -342,6 +342,10 @@
     private System.Threading.Timer? _countdownTimer;
 
     private bool _pairingLocal;
+    private PageEngineInfo? _pageEngineInfo;
+    private string LocalEngineTitle => _pageEngineInfo is { } info
+        ? $"This computer's engine ({info.Host}:{info.Port})"
+        : "Pair with the engine on this computer (localhost:47291); Settings opens if it does not answer";
 
     private bool PageIsLocal =>
         Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && EngineEndpoint.IsLoopbackHost(page.Host);
@@ -379,6 +383,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (Services.GetService<IPageEngine>() is { } pageEngine)
+            _pageEngineInfo = (await pageEngine.GetAsync()).Engine;
         await ProbeCacheAsync();
         Recompute();
         await TryAutoRestoreSqlConnectionAsync(); // spec 032 FR-032

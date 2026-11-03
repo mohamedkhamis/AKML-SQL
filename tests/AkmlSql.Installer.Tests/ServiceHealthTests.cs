@@ -20,7 +20,7 @@ public sealed class ServiceHealthTests
     [SkippableFact]
     public void AkmlSqlWebEngine_service_reaches_running_after_install()
     {
-        Skip.IfNot(InstallerSmokeEnv.CanRun, "Requires admin + IIS");
+        Skip.IfNot(InstallerSmokeEnv.CanRunIis, InstallerSmokeEnv.SkipReason);
         Assert.Null(_fx.MissingInstallerReason);                          // FR-032
         Assert.True(_fx.Installed, $"Silent install failed (exit {_fx.InstallExitCode}).");
         Assert.True(_fx.ServiceRunning,

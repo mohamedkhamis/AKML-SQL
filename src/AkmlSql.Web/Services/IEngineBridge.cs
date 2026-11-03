@@ -245,7 +245,7 @@ internal sealed class EngineBridge : IEngineBridge
         // The scheme is probed rather than inferred from the IsLocalhost checkbox. See
         // EngineEndpoint for why: that checkbox conflated "no PIN needed" with "no TLS", so ticking
         // it against a TLS bridge produced a connection reset and a pill stuck on "Connecting…".
-        var candidates = EngineEndpoint.CandidateUrls(connection.Host, connection.Port, connection.ResolvedScheme);
+        var candidates = EngineEndpoint.CandidateUrls(connection.Host, connection.Port, connection.ResolvedScheme, connection.StrictScheme);
         Exception? lastFailure = null;
         var connected = false;
 

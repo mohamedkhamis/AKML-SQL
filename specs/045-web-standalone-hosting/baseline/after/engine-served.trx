@@ -1,0 +1,166 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="617dbc3e-8ea7-4be9-97e4-627d25c2cb5e" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 16:06:04" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T16:06:04.2834093+03:00" queuing="2026-10-26T16:06:04.2834101+03:00" start="2026-10-26T16:06:01.7620638+03:00" finish="2026-10-26T16:06:44.1521813+03:00" />
+  <TestSettings name="default" id="7d74861e-945f-46ce-9c8d-b5d307f14410">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_16_06_04" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="a2c8a84b-8e15-4bb5-afdd-2009308cc40e" testId="82bf50af-4d0b-9787-47fd-93a8f692e608" testName="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL: https://PC:47291/  (every computer, this one &quot;···, expected: &quot;https://localhost:47291/&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000106" startTime="2026-10-26T16:06:03.4832063+03:00" endTime="2026-10-26T16:06:03.4832873+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a2c8a84b-8e15-4bb5-afdd-2009308cc40e" />
+    <UnitTestResult executionId="044c419f-bdf7-43f4-ba14-e7aa16868f6b" testId="003a46e9-3ff4-3623-4e30-49687bbe5ebd" testName="AkmlSql.Web.E2E.Tests.EngineServedWebTests.Raw_hostile_paths_never_return_private_state_or_directory_contents" computerName="MOHAMED-KHAMIS" duration="00:00:03.4710261" startTime="2026-10-26T16:06:35.7211168+03:00" endTime="2026-10-26T16:06:39.1761768+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="044c419f-bdf7-43f4-ba14-e7aa16868f6b">
+      <Output>
+        <StdOut>/..%2F..%2FProgramData/AKML%20SQL%20Web/pairing-pin.txt: HTTP/1.1 403 Forbidden&#xD;
+/%2e%2e/%2e%2e/Windows/win.ini: HTTP/1.1 403 Forbidden&#xD;
+/%5C..%5Cweb.config: HTTP/1.1 403 Forbidden&#xD;
+/C:/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+/C%3A/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+//localhost/c$/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+/index.html::$DATA: HTTP/1.1 400 Bad Request&#xD;
+/index.html.: HTTP/1.1 400 Bad Request&#xD;
+/index.html%20: HTTP/1.1 400 Bad Request&#xD;
+/WEB~1.CON: HTTP/1.1 400 Bad Request&#xD;
+/web.config: HTTP/1.1 404 Not Found&#xD;
+/CON: HTTP/1.1 200 OK&#xD;
+/con.txt: HTTP/1.1 404 Not Found&#xD;
+/_framework/: HTTP/1.1 400 Bad Request&#xD;
+/_framework/dotnet.js/: HTTP/1.1 400 Bad Request&#xD;
+/certs/bridge.cer: HTTP/1.1 404 Not Found&#xD;
+/pairing-pin.txt: HTTP/1.1 404 Not Found&#xD;
+/tokens.json: HTTP/1.1 404 Not Found&#xD;
+/config.json: HTTP/1.1 404 Not Found&#xD;
+/INSTALL-SUMMARY.txt: HTTP/1.1 404 Not Found&#xD;
+/index.html.br: HTTP/1.1 404 Not Found&#xD;
+/%252e%252e/%252e%252e/Windows/win.ini: HTTP/1.1 400 Bad Request&#xD;
+/a//b: HTTP/1.1 400 Bad Request</StdOut>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="ed7c94bc-5369-4332-9bcc-c6481ec5977f" testId="ecf63346-9892-b268-08aa-180d01d54775" testName="AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing" computerName="MOHAMED-KHAMIS" duration="00:00:32.2220389" startTime="2026-10-26T16:06:03.4881196+03:00" endTime="2026-10-26T16:06:35.7018139+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="ed7c94bc-5369-4332-9bcc-c6481ec5977f">
+      <Output>
+        <StdOut>/: 200, contract headers, Live&#xD;
+/editor: 200, contract headers, Live&#xD;
+/history: 200, contract headers, Live&#xD;
+/settings: 200, contract headers, Live&#xD;
+/settings/connections: 200, contract headers, Live&#xD;
+/settings/ai: 200, contract headers, Live&#xD;
+/snippets: 200, contract headers, Live&#xD;
+/styles: 200, contract headers, Live&#xD;
+/diagnostics: 200, contract headers, Live&#xD;
+/spike: 200, contract headers, Live&#xD;
+.sql text/plain and byte-exact; SQL formatted; all seven corpus rows completed.</StdOut>
+        <ErrorInfo>
+          <Message>Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED</Message>
+          <StackTrace>   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 83&#xD;
+   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 83&#xD;
+   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 83&#xD;
+   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 83&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="7529ae51-b9a8-4564-bfd9-1f89d6aac7bc" testId="bc78e7b2-0183-09b5-a401-a96a48f8983b" testName="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL:\t https://PC/\t (every computer)&quot;, expected: &quot;https://localhost:443/&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0011467" startTime="2026-10-26T16:06:03.4817743+03:00" endTime="2026-10-26T16:06:03.4819322+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="7529ae51-b9a8-4564-bfd9-1f89d6aac7bc" />
+    <UnitTestResult executionId="57946b7f-381e-4287-97dd-2d9a408cc9ce" testId="e16c79b8-b11d-a6a7-c880-5cb6145c0bf8" testName="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL: http://localhost:59417/&quot;, expected: &quot;http://localhost:59417/&quot;)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0000519" startTime="2026-10-26T16:06:03.4829281+03:00" endTime="2026-10-26T16:06:03.4830256+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="57946b7f-381e-4287-97dd-2d9a408cc9ce" />
+    <UnitTestResult executionId="a54da5f2-eb66-46c7-a0d0-1197f546f78e" testId="4a810c4d-a9c1-5e34-73d8-50d540563eff" testName="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL: no-url  (not installed)&quot;, expected: null)" computerName="MOHAMED-KHAMIS" duration="00:00:00.0093823" startTime="2026-10-26T16:06:03.4399791+03:00" endTime="2026-10-26T16:06:03.4621334+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a54da5f2-eb66-46c7-a0d0-1197f546f78e" />
+    <UnitTestResult executionId="f1d26cf5-ee30-459d-ada6-dd043aecedfa" testId="2962ab85-f70c-c059-6788-f9f31f20a2ad" testName="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.Existing_IIS_summaries_prefer_the_separate_local_HTTP_site" computerName="MOHAMED-KHAMIS" duration="00:00:00.0001863" startTime="2026-10-26T16:06:03.4850833+03:00" endTime="2026-10-26T16:06:03.4851622+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f1d26cf5-ee30-459d-ada6-dd043aecedfa" />
+    <UnitTestResult executionId="515d31fd-9a64-4e59-8c2a-f802513b17a4" testId="819e4249-6136-9ac0-6692-c80afa9d7c52" testName="AkmlSql.Web.E2E.Tests.EngineServedWebTests.A_browser_HEAD_fetch_finishes_without_the_WASM_runtime" computerName="MOHAMED-KHAMIS" duration="00:00:04.8865258" startTime="2026-10-26T16:06:39.1770291+03:00" endTime="2026-10-26T16:06:44.0635648+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="515d31fd-9a64-4e59-8c2a-f802513b17a4" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="ecf63346-9892-b268-08aa-180d01d54775">
+      <Execution id="ed7c94bc-5369-4332-9bcc-c6481ec5977f" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.EngineServedWebTests" name="Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL: http://localhost:59417/&quot;, expected: &quot;http://localhost:59417/&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="e16c79b8-b11d-a6a7-c880-5cb6145c0bf8">
+      <Execution id="57946b7f-381e-4287-97dd-2d9a408cc9ce" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests" name="The_first_URL_token_is_used_and_its_scheme_is_preserved" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL:\t https://PC/\t (every computer)&quot;, expected: &quot;https://localhost:443/&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="bc78e7b2-0183-09b5-a401-a96a48f8983b">
+      <Execution id="7529ae51-b9a8-4564-bfd9-1f89d6aac7bc" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests" name="The_first_URL_token_is_used_and_its_scheme_is_preserved" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.Existing_IIS_summaries_prefer_the_separate_local_HTTP_site" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="2962ab85-f70c-c059-6788-f9f31f20a2ad">
+      <Execution id="f1d26cf5-ee30-459d-ada6-dd043aecedfa" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests" name="Existing_IIS_summaries_prefer_the_separate_local_HTTP_site" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.EngineServedWebTests.A_browser_HEAD_fetch_finishes_without_the_WASM_runtime" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="819e4249-6136-9ac0-6692-c80afa9d7c52">
+      <Execution id="515d31fd-9a64-4e59-8c2a-f802513b17a4" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.EngineServedWebTests" name="A_browser_HEAD_fetch_finishes_without_the_WASM_runtime" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL: no-url  (not installed)&quot;, expected: null)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="4a810c4d-a9c1-5e34-73d8-50d540563eff">
+      <Execution id="a54da5f2-eb66-46c7-a0d0-1197f546f78e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests" name="The_first_URL_token_is_used_and_its_scheme_is_preserved" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.EngineServedWebTests.Raw_hostile_paths_never_return_private_state_or_directory_contents" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="003a46e9-3ff4-3623-4e30-49687bbe5ebd">
+      <Execution id="044c419f-bdf7-43f4-ba14-e7aa16868f6b" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.EngineServedWebTests" name="Raw_hostile_paths_never_return_private_state_or_directory_contents" />
+    </UnitTest>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests.The_first_URL_token_is_used_and_its_scheme_is_preserved(summary: &quot;URL: https://PC:47291/  (every computer, this one &quot;···, expected: &quot;https://localhost:47291/&quot;)" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="82bf50af-4d0b-9787-47fd-93a8f692e608">
+      <Execution id="a2c8a84b-8e15-4bb5-afdd-2009308cc40e" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.InstalledEngineSummaryTests" name="The_first_URL_token_is_used_and_its_scheme_is_preserved" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="82bf50af-4d0b-9787-47fd-93a8f692e608" executionId="a2c8a84b-8e15-4bb5-afdd-2009308cc40e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="003a46e9-3ff4-3623-4e30-49687bbe5ebd" executionId="044c419f-bdf7-43f4-ba14-e7aa16868f6b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ecf63346-9892-b268-08aa-180d01d54775" executionId="ed7c94bc-5369-4332-9bcc-c6481ec5977f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="bc78e7b2-0183-09b5-a401-a96a48f8983b" executionId="7529ae51-b9a8-4564-bfd9-1f89d6aac7bc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e16c79b8-b11d-a6a7-c880-5cb6145c0bf8" executionId="57946b7f-381e-4287-97dd-2d9a408cc9ce" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4a810c4d-a9c1-5e34-73d8-50d540563eff" executionId="a54da5f2-eb66-46c7-a0d0-1197f546f78e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2962ab85-f70c-c059-6788-f9f31f20a2ad" executionId="f1d26cf5-ee30-459d-ada6-dd043aecedfa" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="819e4249-6136-9ac0-6692-c80afa9d7c52" executionId="515d31fd-9a64-4e59-8c2a-f802513b17a4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="8" executed="8" passed="7" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.24]   Discovering: AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:00.48]   Discovered:  AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:00.54]   Starting:    AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:32.85]       Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED
+Request: HEAD http://127.0.0.1:61325/: net::ERR_ABORTED&#xD;
+[xUnit.net 00:00:32.85]       Stack Trace:&#xD;
+[xUnit.net 00:00:32.85]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(83,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:32.85]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(83,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:32.85]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(83,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:32.85]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(83,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:32.85]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:32.85]       Output:&#xD;
+[xUnit.net 00:00:32.85]         /: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /editor: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /history: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /settings: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /settings/connections: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /settings/ai: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /snippets: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /styles: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /diagnostics: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         /spike: 200, contract headers, Live&#xD;
+[xUnit.net 00:00:32.85]         .sql text/plain and byte-exact; SQL formatted; all seven corpus rows completed.&#xD;
+[xUnit.net 00:00:41.21]   Finished:    AkmlSql.Web.E2E.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T16:06:35.7068339+03:00">
+        <Text>[xUnit.net 00:00:32.84]     AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

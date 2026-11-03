@@ -1,0 +1,115 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="1e6cef6d-5a07-4a94-ab3a-7e57552890c1" name="MohamedKhamis@MOHAMED-KHAMIS 2026-10-26 15:55:00" runUser="AzureAD\MohamedKhamis" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-10-26T15:55:00.8781834+03:00" queuing="2026-10-26T15:55:00.8781838+03:00" start="2026-10-26T15:54:29.9758561+03:00" finish="2026-10-26T15:55:00.8827386+03:00" />
+  <TestSettings name="default" id="9f44d1e7-ff32-41e8-8fd7-c19341bacda3">
+    <Deployment runDeploymentRoot="MohamedKhamis_MOHAMED-KHAMIS_2026-10-26_15_55_00" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="4484baf6-3d60-4d1d-b391-96653d9d3faa" testId="ecf63346-9892-b268-08aa-180d01d54775" testName="AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing" computerName="MOHAMED-KHAMIS" duration="00:00:29.6817684" startTime="2026-10-26T15:54:31.0690816+03:00" endTime="2026-10-26T15:55:00.7658940+03:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4484baf6-3d60-4d1d-b391-96653d9d3faa">
+      <Output>
+        <ErrorInfo>
+          <Message>Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+TRACE:
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent</Message>
+          <StackTrace>   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 84&#xD;
+   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 84&#xD;
+   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 84&#xD;
+   at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing() in D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs:line 84&#xD;
+--- End of stack trace from previous location ---</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing" storage="d:\repo\01-khamis-projects\akml-sql\tests\akmlsql.web.e2e.tests\bin\debug\net10.0\akmlsql.web.e2e.tests.dll" id="ecf63346-9892-b268-08aa-180d01d54775">
+      <Execution id="4484baf6-3d60-4d1d-b391-96653d9d3faa" />
+      <TestMethod codeBase="D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\bin\Debug\net10.0\AkmlSql.Web.E2E.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcore/" className="AkmlSql.Web.E2E.Tests.EngineServedWebTests" name="Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="ecf63346-9892-b268-08aa-180d01d54775" executionId="4484baf6-3d60-4d1d-b391-96653d9d3faa" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="1" executed="1" passed="0" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v4.0.0+05679a7ab5 (64-bit .NET 10.0.13)&#xD;
+[xUnit.net 00:00:00.17]   Discovering: AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:00.35]   Discovered:  AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:00.39]   Starting:    AkmlSql.Web.E2E.Tests&#xD;
+[xUnit.net 00:00:30.12]       Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+Request: HEAD fetch http://127.0.0.1:56105/: net::ERR_ABORTED
+TRACE:
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent
+045 HEAD options {"headers":{},"signal":{},"method":"HEAD","cache":"no-cache"}
+045 probe content: BrowserHttpContent&#xD;
+[xUnit.net 00:00:30.12]       Stack Trace:&#xD;
+[xUnit.net 00:00:30.12]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(84,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:30.12]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(84,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:30.12]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(84,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:30.12]         D:\Repo\01-Khamis-Projects\AKML-SQL\tests\AkmlSql.Web.E2E.Tests\EngineServedWebTests.cs(84,0): at AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing()&#xD;
+[xUnit.net 00:00:30.12]         --- End of stack trace from previous location ---&#xD;
+[xUnit.net 00:00:30.14]   Finished:    AkmlSql.Web.E2E.Tests&#xD;
+</StdOut>
+    </Output>
+    <RunInfos>
+      <RunInfo computerName="MOHAMED-KHAMIS" outcome="Error" timestamp="2026-10-26T15:55:00.7707071+03:00">
+        <Text>[xUnit.net 00:00:30.12]     AkmlSql.Web.E2E.Tests.EngineServedWebTests.Engine_serves_the_real_app_reloads_routes_and_runs_SQL_without_pairing [FAIL]</Text>
+      </RunInfo>
+    </RunInfos>
+  </ResultSummary>
+</TestRun>

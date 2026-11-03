@@ -83,6 +83,7 @@ builder.Services.AddSingleton<IEngineBridge, EngineBridge>();
 // wake-up when the tab regains focus or the browser comes back online. Singleton because there is
 // exactly one bridge and every page that loads calls StartAsync on it (idempotent by design).
 builder.Services.AddSingleton<IEngineAutoConnect, EngineAutoConnect>();
+builder.Services.AddSingleton<IPageEngine, PageEngine>();
 // Spec 030: browser-side "Connect to SQL Server" — sends ConnectionChanged/DocumentChanged over the
 // bridge using one canonical SessionId, enabling live-schema IntelliSense (Windows or SQL auth).
 builder.Services.AddSingleton<ISqlConnectionService, SqlConnectionService>();

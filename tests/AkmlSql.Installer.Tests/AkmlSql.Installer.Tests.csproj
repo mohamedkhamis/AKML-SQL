@@ -2,8 +2,8 @@
 
   <!--
     Spec 026 (M4 closure) US5 / FR-027. Installer smoke suite. Opt-in plus host-gated:
-    every test carries [Trait("Category","InstallerSmoke")] (skipped on CI / non-admin) and
-    Skip.IfNot(admin and IIS) so it reports Skipped (not Failed) on a host that cannot run it.
+    every test carries [Trait("Category","InstallerSmoke")] and requires AKML_INSTALLER_SMOKE=1
+    on a disposable VM plus admin and IIS. Otherwise it reports Skipped without installing.
     Test-only: no production project references it.
     The smoke suite drives the prebuilt AKMLSQLSetup.exe (FR-032); the spec-036 US5
     UpdateDownloaderTests instead reference AkmlSql.Updater directly to drive the download

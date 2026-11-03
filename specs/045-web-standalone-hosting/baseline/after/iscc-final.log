@@ -1,0 +1,741 @@
+Inno Setup 7 Command-Line Compiler
+Copyright (C) 1997-2026 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2026 Martijn Laan. All rights reserved.
+Portions Copyright (C) 2001-2004 Alex Yackimoff. All rights reserved.
+https://www.innosetup.com
+
+Compiler engine version: Inno Setup 7.0.0-preview-2
+Non-commercial use only
+Do not use this preview to build installers you will use in production
+
+Preprocessing
+   Reading file: C:\Program Files\Inno Setup 7\ISPPBuiltins.iss
+   Line 82: Exec output: Resolved 1 VSIX manifests and pkgdefs @ version 1.26.1026.1609
+   Line 286: Including file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\environment-scanner.iss
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\environment-scanner.iss
+   Line 298: Including file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting.iss
+   Line 300: Including file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Setup] section, line 98
+Parsing [Setup] section, line 99
+Parsing [Setup] section, line 100
+Parsing [Setup] section, line 105
+Parsing [Setup] section, line 106
+Parsing [Setup] section, line 107
+Parsing [Setup] section, line 108
+Parsing [Setup] section, line 109
+Parsing [Setup] section, line 110
+Parsing [Setup] section, line 111
+Parsing [Setup] section, line 115
+Parsing [Setup] section, line 116
+Parsing [Setup] section, line 117
+Parsing [Setup] section, line 118
+Parsing [Setup] section, line 119
+Parsing [Setup] section, line 120
+Parsing [Setup] section, line 123
+Parsing [Setup] section, line 124
+Parsing [Setup] section, line 127
+Parsing [Setup] section, line 131
+Parsing [Setup] section, line 132
+Parsing [Setup] section, line 133
+Parsing [Setup] section, line 134
+Parsing [Setup] section, line 135
+Parsing [Setup] section, line 136
+Parsing [Setup] section, line 137
+Parsing [Setup] section, line 142
+Parsing [Setup] section, line 143
+Parsing [Setup] section, line 144
+Parsing [Setup] section, line 146
+Parsing [Setup] section, line 148
+Parsing [Setup] section, line 150
+Parsing [Setup] section, line 152
+Parsing [Setup] section, line 160
+Parsing [Setup] section, line 161
+Parsing [Setup] section, line 162
+Parsing [Setup] section, line 164
+Parsing [Setup] section, line 165
+Parsing [Setup] section, line 166
+Parsing [Setup] section, line 168
+Parsing [Setup] section, line 169
+Parsing [Setup] section, line 177
+Parsing [Setup] section, line 178
+Parsing [Setup] section, line 179
+Reading file (LicenseFile)
+Reading file (WizardImageFile)
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\sidebar.bmp
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\sidebar-125.bmp
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\sidebar-150.bmp
+   Reading file: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\sidebar-200.bmp
+Reading file (WizardSmallImageFile)
+Reading file (WizardImageFileDynamicDark)
+Reading file (WizardSmallImageFileDynamicDark)
+Preparing Setup program executable
+   Verification successful
+   Updating icons and style (SetupCustomStyle.e64)
+   Updating version info (SetupCustomStyle.e64)
+Determining language code pages
+Parsing [Languages] section, line 199
+   Reading file: C:\Program Files\Inno Setup 7\Default.isl
+   Messages in script file
+Reading default messages from Default.isl
+Parsing [Languages] section, line 199
+   Reading file: C:\Program Files\Inno Setup 7\Default.isl
+Parsing [LangOptions], [Messages], and [CustomMessages] sections
+   Messages in script file
+Reading [Code] section
+Parsing [Components] section, line 4 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Components] section, line 5 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Components] section, line 6 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Tasks] section, line 275
+Parsing [Icons] section, line 234
+Parsing [Icons] section, line 236
+Parsing [Icons] section, line 237
+Parsing [Icons] section, line 238
+Parsing [Icons] section, line 33 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Registry] section, line 244
+Parsing [Registry] section, line 245
+Parsing [Registry] section, line 246
+Parsing [Registry] section, line 247
+Parsing [InstallDelete] section, line 9 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [UninstallDelete] section, line 279
+Parsing [UninstallDelete] section, line 283
+Parsing [UninstallDelete] section, line 284
+Parsing [UninstallDelete] section, line 36 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [UninstallDelete] section, line 37 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 253
+Parsing [Run] section, line 256
+Parsing [Run] section, line 261
+Parsing [Run] section, line 264
+Parsing [Run] section, line 266
+Parsing [Run] section, line 24 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 25 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 26 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 27 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 28 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 29 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Run] section, line 30 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [UninstallRun] section, line 270
+Parsing [Files] section, line 203
+Parsing [Files] section, line 204
+Parsing [Files] section, line 205
+Parsing [Files] section, line 206
+Parsing [Files] section, line 208
+Parsing [Files] section, line 211
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-100.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-125.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-150.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-175.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-200.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-225.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-250.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-100.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-125.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-150.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-175.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-200.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-225.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-250.png
+Parsing [Files] section, line 212
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-100.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-125.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-150.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-175.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-200.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-225.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-250.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-100.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-125.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-150.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-175.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-200.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-225.png
+   Reading version info: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-250.png
+Parsing [Files] section, line 214
+Parsing [Files] section, line 216
+Parsing [Files] section, line 217
+Parsing [Files] section, line 218
+Parsing [Files] section, line 221
+Parsing [Files] section, line 224
+Parsing [Files] section, line 225
+Parsing [Files] section, line 226
+Parsing [Files] section, line 12 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 13 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 14 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 15 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 16 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 17 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 18 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 19 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 20 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Parsing [Files] section, line 21 of D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-installer.iss
+Compiling [Code] section
+Deleting AKMLSQLSetup.exe from output directory
+Creating setup files
+   Verification successful
+   Updating icons (Setup.exe)
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Core.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\Serilog.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\Serilog.Sinks.File.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Updater\bin\Release\net10.0-windows10.0.19041.0\win-x64\publish\AkmlSql.Updater.exe
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\icon.ico
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-100.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-125.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-150.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-175.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-200.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-225.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-dark-250.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-100.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-125.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-150.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-175.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-200.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-225.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\brand-light-250.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-100.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-125.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-150.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-175.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-200.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-225.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-decor-250.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-100.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-125.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-150.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-175.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-200.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-225.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\assets\welcome-lockup-250.png
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\update-task.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.AI.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.AI.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Analysis.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Analysis.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Core.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Core.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.deps.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.exe
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Engine.runtimeconfig.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Formatting.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.Formatting.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.IntelliSense.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.IntelliSense.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.PostgreSql.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\AkmlSql.PostgreSql.pdb
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Anthropic.SDK.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\ClosedXML.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\ClosedXML.Parser.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\clretwrc.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\clrgc.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\clrgcexp.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\clrjit.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\coreclr.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\createdump.exe
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\DocumentFormat.OpenXml.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\DocumentFormat.OpenXml.Framework.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\ExcelNumberFormat.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\e_sqlite3.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Google.Protobuf.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\hostfxr.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\hostpolicy.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Humanizer.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Json.More.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\JsonPointer.Net.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\JsonSchema.Net.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\JsonSchema.Net.Generation.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\libpg_query.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\MessagePack.Annotations.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\MessagePack.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Bcl.AsyncInterfaces.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Bcl.Cryptography.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Bcl.HashCode.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Bcl.Memory.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.CSharp.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Data.SqlClient.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Data.SqlClient.Extensions.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Data.SqlClient.Internal.Logging.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Data.SqlClient.SNI.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Data.Sqlite.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.DiaSymReader.Native.amd64.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.AI.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.AI.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.AI.OpenAI.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Caching.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Caching.Memory.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.Binder.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.CommandLine.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.EnvironmentVariables.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.FileExtensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.Json.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Configuration.UserSecrets.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.DependencyInjection.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.DependencyInjection.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Diagnostics.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Diagnostics.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.FileProviders.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.FileProviders.Physical.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.FileSystemGlobbing.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Hosting.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Hosting.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Hosting.WindowsServices.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Http.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.Configuration.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.Console.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.Debug.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.EventLog.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Logging.EventSource.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Options.ConfigurationExtensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Options.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Extensions.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.IdentityModel.Abstractions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.IdentityModel.JsonWebTokens.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.IdentityModel.Logging.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.IdentityModel.Protocols.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.IdentityModel.Tokens.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.ML.Tokenizers.Data.Cl100kBase.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.ML.Tokenizers.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.NET.StringTools.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.SqlServer.Server.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.SqlServer.TransactSql.ScriptDom.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.VisualBasic.Core.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.VisualBasic.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Win32.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Microsoft.Win32.Registry.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Mscc.GenerativeAI.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\mscordaccore.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\mscordaccore_amd64_amd64_10.0.1326.50504.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\mscordbi.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\mscorlib.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\mscorrc.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\msquic.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\netstandard.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Npgsql.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\OllamaSharp.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\OpenAI.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\pgsqlparser.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\RBush.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Serilog.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\Serilog.Sinks.File.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\SixLabors.Fonts.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\SQLitePCLRaw.batteries_v2.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\SQLitePCLRaw.core.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\SQLitePCLRaw.provider.e_sqlite3.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.AppContext.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Buffers.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ClientModel.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Collections.Concurrent.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Collections.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Collections.Immutable.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Collections.NonGeneric.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Collections.Specialized.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ComponentModel.Annotations.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ComponentModel.DataAnnotations.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ComponentModel.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ComponentModel.EventBasedAsync.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ComponentModel.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ComponentModel.TypeConverter.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Configuration.ConfigurationManager.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Configuration.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Console.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Core.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Data.Common.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Data.DataSetExtensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Data.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.Contracts.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.Debug.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.DiagnosticSource.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.EventLog.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.EventLog.Messages.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.FileVersionInfo.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.Process.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.StackTrace.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.TextWriterTraceListener.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.Tools.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.TraceSource.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Diagnostics.Tracing.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Drawing.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Drawing.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Dynamic.Runtime.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Formats.Asn1.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Formats.Tar.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Globalization.Calendars.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Globalization.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Globalization.Extensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IdentityModel.Tokens.Jwt.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Compression.Brotli.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Compression.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Compression.FileSystem.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Compression.Native.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Compression.ZipFile.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.FileSystem.AccessControl.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.FileSystem.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.FileSystem.DriveInfo.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.FileSystem.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.FileSystem.Watcher.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.IsolatedStorage.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.MemoryMappedFiles.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Packaging.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Pipelines.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Pipes.AccessControl.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.Pipes.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.IO.UnmanagedMemoryStream.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Linq.AsyncEnumerable.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Linq.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Linq.Expressions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Linq.Parallel.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Linq.Queryable.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Memory.Data.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Memory.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Http.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Http.Json.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.HttpListener.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Mail.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.NameResolution.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.NetworkInformation.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Ping.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Quic.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Requests.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Security.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.ServerSentEvents.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.ServicePoint.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.Sockets.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.WebClient.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.WebHeaderCollection.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.WebProxy.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.WebSockets.Client.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Net.WebSockets.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Numerics.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Numerics.Tensors.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Numerics.Vectors.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ObjectModel.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Private.CoreLib.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Private.DataContractSerialization.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Private.Uri.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Private.Xml.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Private.Xml.Linq.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.DispatchProxy.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.Emit.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.Emit.ILGeneration.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.Emit.Lightweight.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.Extensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.Metadata.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Reflection.TypeExtensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Resources.Reader.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Resources.ResourceManager.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Resources.Writer.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.CompilerServices.Unsafe.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.CompilerServices.VisualC.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Extensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Handles.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.InteropServices.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.InteropServices.JavaScript.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.InteropServices.RuntimeInformation.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Intrinsics.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Loader.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Numerics.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Serialization.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Serialization.Formatters.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Serialization.Json.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Serialization.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Runtime.Serialization.Xml.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.AccessControl.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Claims.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.Algorithms.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.Cng.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.Csp.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.Encoding.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.OpenSsl.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.Pkcs.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.Primitives.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.ProtectedData.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Cryptography.X509Certificates.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Principal.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.Principal.Windows.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Security.SecureString.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ServiceModel.Web.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ServiceProcess.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ServiceProcess.ServiceController.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Text.Encoding.CodePages.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Text.Encoding.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Text.Encoding.Extensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Text.Encodings.Web.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Text.Json.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Text.RegularExpressions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.AccessControl.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Channels.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Overlapped.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.RateLimiting.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Tasks.Dataflow.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Tasks.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Tasks.Extensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Tasks.Parallel.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Thread.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.ThreadPool.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Threading.Timer.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Transactions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Transactions.Local.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.ValueTuple.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Web.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Web.HttpUtility.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Windows.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.Linq.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.ReaderWriter.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.Serialization.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.XDocument.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.XmlDocument.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.XmlSerializer.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.XPath.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\System.Xml.XPath.XDocument.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\WindowsBase.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\aligned-left-bracket.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\collapsed.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\compact.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\default.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\indented.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\khamis-style.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\leading-commas.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\profiles\minimalist.akmlstyle
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\bt.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\cdb.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\cfn.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\cix.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\crt.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\csp.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\cte.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\cvi.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\del.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\drp.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\ie.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\ins.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-cfn.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-cix.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-crt.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-cte.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-cvi.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-del.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-ins.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-sel.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-ssf.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-txn.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\pg-upd.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\prt.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\sel.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\ssf.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\st.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\tc.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Engine\bin\Release\net10.0\win-x64\publish\snippets\upd.akmlsnippet
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Analyzer\bin\Release\net10.0\win-x64\publish\AkmlSql.Analyzer.exe
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\LICENSE.txt
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\..\THIRD-PARTY-NOTICES.txt
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Ssms22.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\MessagePack.Annotations.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\MessagePack.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\Microsoft.Bcl.AsyncInterfaces.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\Microsoft.NET.StringTools.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Buffers.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Collections.Immutable.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Diagnostics.DiagnosticSource.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.IO.Pipelines.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Memory.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Numerics.Vectors.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Runtime.CompilerServices.Unsafe.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Security.Cryptography.ProtectedData.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Text.Encodings.Web.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Text.Json.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Threading.Channels.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Ssms22\bin\Release\net472\System.Threading.Tasks.Extensions.dll
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\generated\AkmlSql.Ssms22\AkmlSql.Ssms22.pkgdef
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\generated\AkmlSql.Ssms22\extension.vsixmanifest
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\favicon.svg
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\index.html
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\app.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\components\results-grid.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\components\settings.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\components\shell.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\themes\dark.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\themes\high-contrast.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\css\themes\light.css
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-bridge.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-command-palette.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-connection-manager.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-crypto.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-download.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-editor.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-engine-wake.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-indexeddb.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-results-grid.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-session-leases.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-theme-boot.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-theme.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-ui.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\js\akml-workspace.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\lib\codemirror\akml-cm.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\lib\codemirror\THIRD-PARTY-NOTICES.txt
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\lib\icons\akml-icons.svg
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\lib\icons\THIRD-PARTY-NOTICES.txt
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\00-simple.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\00-simple.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\00-simple.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\01-select.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\01-select.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\01-select.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\02-batch.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\02-batch.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\02-batch.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\03-stored-proc.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\03-stored-proc.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\03-stored-proc.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\04-cte.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\04-cte.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\04-cte.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\05-window.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\05-window.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\05-window.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\06-merge.expected.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\06-merge.expected.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\06-merge.sql
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\spike-corpus\corpus.json
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.AI.yufszsra2c.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.Analysis.pi1m4w6kgv.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.Core.5642tjfm2d.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.Formatting.dnj812wnae.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.IntelliSense.6l3lg73v2h.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.Web.3j3sf6d52p.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\AkmlSql.Web.Shared.jxaf2holkf.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Anthropic.SDK.8hkmi05u1c.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\blazor.webassembly.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\dotnet.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\dotnet.native.3zpaws0drs.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\dotnet.native.q38003gvqi.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\dotnet.runtime.azrfhwb804.js
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Google.Protobuf.7usu7llkwy.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Humanizer.oqup3v7t3k.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Json.More.0rn1w0scwr.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\JsonPointer.Net.qm7459hs0z.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\JsonSchema.Net.Generation.gzqg1huhtr.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\JsonSchema.Net.ue6l3pbix4.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\MessagePack.Annotations.3fw94h7bn4.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\MessagePack.fhyo2i0w27.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.AspNetCore.Components.Web.ltllf0xou6.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.AspNetCore.Components.WebAssembly.xwl06xnn3d.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.AspNetCore.Components.x878sy3oe9.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Bcl.HashCode.fhc460s73x.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.AI.Abstractions.c36ygs7ca8.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.AI.OpenAI.in6yi02tl5.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Configuration.Abstractions.wslsrredsq.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Configuration.Json.dmmcgk01r0.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Configuration.rgjmp347zf.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.DependencyInjection.aafncaj4uf.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.DependencyInjection.Abstractions.ws1t4hhy8p.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Http.7x7e7peblb.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Logging.5w9ia7xlgq.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Logging.Abstractions.yiok0k8bh4.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Options.espvvlqak1.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.Extensions.Primitives.5jtv79dwfq.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.JSInterop.7p32gixkda.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.JSInterop.WebAssembly.5ql0ra5mpq.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.ML.Tokenizers.Data.Cl100kBase.piqusrtrnx.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.ML.Tokenizers.n79l5lcst3.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.NET.StringTools.miux2m5r6l.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Microsoft.SqlServer.TransactSql.ScriptDom.ajd59gru7c.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Mscc.GenerativeAI.xhrz2kkhdm.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\netstandard.yz49sbwrzr.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\OllamaSharp.7wwzt5sw3m.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\OpenAI.086zrhf4vb.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Serilog.e41xdslg8y.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\Serilog.Sinks.File.2xjoy8x0ef.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.ClientModel.9y3io9o53k.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Collections.Concurrent.omzqg8k68z.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Collections.fspz3rr5vj.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Collections.Immutable.grptpk8x6d.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Collections.NonGeneric.6ybc4rkw2i.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Collections.Specialized.zdpt9d3qmd.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.ComponentModel.aonfao9zwt.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.ComponentModel.Primitives.q1pdq3en7r.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.ComponentModel.TypeConverter.7o59k4s4vj.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Console.s1f5hilfad.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Data.Common.mjazs7yt9h.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Diagnostics.DiagnosticSource.j6tq5e71aw.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Diagnostics.Process.uw40uj6bsd.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Diagnostics.TraceSource.nc0mi90d19.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Diagnostics.Tracing.rr0bbdr1e2.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Drawing.Primitives.x3269h4npo.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Drawing.qkz3s53b1l.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.IO.Compression.cj4zcagjrw.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.IO.FileSystem.Watcher.ghimpcfxqz.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.IO.Pipelines.dos7ikibuj.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Linq.4mydlv3tmc.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Linq.Expressions.qri8y2z0xw.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Memory.Data.yvw3hp7cb8.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Memory.ttsz06ve4r.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Net.Http.fnb3k8oqqk.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Net.Http.Json.8ifp6djszu.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Net.Primitives.mp95xu1c18.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Net.Security.t1ebw7djuc.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Net.ServerSentEvents.7a5tqkxkc1.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Net.WebSockets.frtohvcgbw.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Numerics.Vectors.8rg57t8uz6.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.ObjectModel.9jdq6ne5wu.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Private.CoreLib.cema2yl87y.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Private.Uri.6myguayo7x.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Private.Xml.Linq.vsbui2td2t.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Private.Xml.ltba6hz7h5.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.qf9o9thhcz.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Reflection.Emit.eyhjrnmlnu.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Reflection.Emit.ILGeneration.e2qao4aape.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Reflection.Primitives.hmy0kpissv.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Reflection.TypeExtensions.ahgijlz6ut.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.g053mpoc98.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.InteropServices.JavaScript.2h81ftq2dy.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.InteropServices.lfbutueztn.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.Intrinsics.crgvwhvspk.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.Loader.axbn92pc5b.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.Numerics.v3iqck3s1k.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Runtime.Serialization.Primitives.vloppgdgre.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Security.Cryptography.k06k33hzyr.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Security.Cryptography.ProtectedData.y87agj3x9v.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Text.Encoding.Extensions.qizm3e8m2k.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Text.Encodings.Web.bi3tk3kv0n.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Text.Json.ocibq0msy7.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Text.RegularExpressions.s2cgxa6lgu.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Threading.kqjgtziox0.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Threading.Tasks.Parallel.ihact0ankc.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Threading.Thread.hp7xvybchn.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Xml.Linq.mf2xcoy9rz.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Xml.ReaderWriter.n5i1mwfryq.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\_framework\System.Xml.XDocument.xpkxzqia0b.wasm
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-setup.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-https-binding.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-repair.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-tls-setup.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-firewall.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-config-bridge.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-check.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-iis-remove.ps1
+   Compressing: D:\Repo\01-Khamis-Projects\AKML-SQL\src\AkmlSql.Installer\web-hosting-repair.ps1
+   Compressing Setup program executable
+   Updating version info (Setup.exe)
+   Updating manifest (Setup.exe)
+
+
+Successful compile (67.625 sec). Resulting Setup program filename is:
+D:\Repo\01-Khamis-Projects\AKML-SQL\.review-artifacts\045-final-iscc\AKMLSQLSetup.exe

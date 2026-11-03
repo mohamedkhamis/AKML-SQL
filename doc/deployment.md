@@ -265,118 +265,81 @@ The uninstaller removes extension files and MEF caches but leaves user data (con
 
 ## Web edition
 
-The installer can also deploy the **web edition** — the browser-based AKML SQL served from local IIS, talking to the same engine binary over a WebSocket bridge. The web edition installs **independently** of the IDE plugins (pick plugins only, web only, or both) and keeps its own state under `%AppData%\AKML SQL Web\` — it never touches the IDE-plugin state at `%AppData%\AKML SQL\`.
+The web edition installs independently of the SSMS extension. Its default host is
+the **Standalone Windows service** (`AkmlSqlWebEngine`). One address serves both
+the browser app and its engine: `http://localhost:47291/` by default. Open the URL
+in `%ProgramData%\AKML SQL Web\INSTALL-SUMMARY.txt`; the actual chosen port wins.
+The engine-served app connects to that address automatically when no saved engine
+is active. An existing active connection remains the user's choice.
 
-> New in this release. The component is exercised end-to-end by the spec-026 first-interactive-run checklist; the flow below is the operator reference.
+| Hosting choice | Pages | Service startup | Prerequisite |
+| --- | --- | --- | --- |
+| Standalone Windows service (recommended) | Engine port; `bridge.webRoot` points to `{app}\Web` | Automatic, no delay | No IIS requirement |
+| IIS | IIS site port; engine serves the bridge only | Delayed automatic | IIS Ready |
+| Don't host (files only) | Operator supplies a static host | Delayed automatic | None; engine service is still installed |
 
-### Prerequisites
+IIS Ready means IIS 7+ with W3SVC, Static Content, Default Document and HTTP Errors;
+W3SVC and WAS must not be disabled, and the native PowerShell WebAdministration
+probe must work. An unavailable IIS choice shows its reason. Setup never enables
+Windows features. After enabling the named feature, go Back and Next to recheck.
 
-- Administrative rights (the installer already requires elevation).
-- Windows 10 / 11 (or Windows Server with the Web Server role).
-- **IIS** for the recommended "Host on local IIS" path. If IIS is absent, the installer offers to enable it (`dism /online /enable-feature /featurename:IIS-WebServerRole`), or you can choose "Don't host" and serve the files yourself.
+### Exposure and ports
 
-### Component selection
+Localhost limits access to this computer. Standalone uses one engine/web port,
+1024â€“65535. LAN standalone uses `https://COMPUTERNAME:<engine-port>/` on every
+computer, including its own host, and only one inbound **AKML SQL Web Engine**
+firewall rule. The page connects with `wss` and prefills the PIN form when needed.
+Trust the exported `bridge.cer` on the client before pairing. The summary includes
+the current PIN, certificate thumbprint and trust steps; keep those credentials private.
 
-Ticking **Web edition** adds four wizard pages:
-
-| Page | Choices | Default |
-|------|---------|---------|
-| Hosting | Host on local IIS / Don't host | Host on local IIS |
-| Network exposure | Localhost only / LAN exposed | Localhost only |
-| IIS site port | the port you browse to | `80` |
-| Engine bridge port | the WebSocket transport port | `47291` |
-
-The two ports **must differ** — IIS serves the static bundle and the engine's WebSocket bridge is a separate listener; they cannot share a TCP port. The IIS-served bundle is plain **HTTP**; only the **bridge** uses TLS (`wss`) in LAN mode.
-
-### Localhost mode
-
-Browse to `http://localhost/` (or `http://localhost:<IISPort>/` if you changed the port). The engine bridge binds `127.0.0.1` and auto-accepts the loopback connection — no pairing PIN required.
-
-### LAN mode
-
-For pairing a browser on another machine:
-
-1. The installer generates a self-signed TLS cert, binds it to the bridge port (`netsh http add sslcert`), and opens a firewall rule ("AKML SQL Web Engine").
-2. The engine **enforces** a 6-digit pairing PIN at the handshake (wrong PIN → refused; correct PIN → a bearer token is minted and reused on later reconnects).
-3. The install summary at `%CommonAppData%\AKML SQL Web\INSTALL-SUMMARY.txt` shows the browse URL, the bridge port, the **pairing PIN**, and the TLS thumbprint.
-4. On the second machine: open **Settings → Engine connections → Add**, enter the engine computer's name or IP (a pasted `host:port` or `wss://…` URL also works), the **Bridge port** from the install summary — it is often *not* the default `47291` — and the PIN. The PIN field appears by itself for any address that is not this computer.
-5. Trust the certificate, one of two ways:
-   - **Per browser:** open `https://<host>:<bridge port>/akmlsql`, accept the certificate warning, and you should see *"AKML SQL engine: reachable"*. The pairing form links to this address when a connect fails.
-   - **Per machine:** import `%ProgramData%\AKML SQL Web\certs\bridge.cer` into **Local Machine → Trusted Root Certification Authorities**. This needs the address you connect by to be in the certificate. The certificate lists the machine name, FQDN and the machine's own IPs; a public IP or DNS name the machine does not own (a cloud VM, NAT) must be added:
-
-     ```powershell
-     & "C:\Program Files\AKML SQL\Support\web-tls-setup.ps1" -Port <bridge port> `
-         -PfxPath "C:\ProgramData\AKML SQL Web\certs\bridge.pfx" -ExtraNames 203.0.113.10 -RestartEngine
-     ```
-
-     Re-issuing changes the certificate, so browsers already paired will be asked to re-pair.
-
-#### Do I need a remote engine?
-
-Usually not. **To query a SQL Server on another machine, use the engine on your own computer** and add the server in **Connect to database** (kind SQL Server) with its address (`host`, `host\instance` or `host,port`) and **SQL Server authentication**. The SQL Server machine needs nothing from AKML.
-
-Windows authentication is limited to a SQL Server on the engine's own machine, as is any named-pipe/UNC address. The engine runs as a service (LocalSystem), so either would sign in as the service's account rather than as you — and would let a hostile page make the engine authenticate somewhere of its choosing. The web client explains the refusal; the engine enforces it again (`BridgeSqlTargetGuard`) for every request that arrives over the WebSocket bridge. Requests from the SSMS / Visual Studio extension (named pipe, running as the signed-in user) are not restricted.
-
-Add a **remote engine** only when AKML SQL Web is installed in LAN mode on the other computer — for example to use Windows authentication *as that machine* against its local SQL Server.
-
-#### When pairing fails
-
-The browser reports every WebSocket failure the same way, so the pairing form shows ordered checks instead of the raw error:
-
-| Symptom | Cause | Fix |
-|---|---|---|
-| "blocked by this page's Content-Security-Policy" | The page you are pairing *from* is a localhost install older than this release, whose policy only allowed local engines | Update AKML SQL Web on that computer, or run **Repair AKML SQL Web hosting** after updating |
-| `https://<host>:<port>/akmlsql` does not load at all | Wrong port, engine service stopped, or the port is closed in Windows Firewall / a cloud firewall | Check the **Bridge port** in the install summary; `sc query AkmlSqlWebEngine`; open the port |
-| The page loads after a certificate warning | The certificate was not trusted yet | You have just trusted it for this browser — pair again |
-
-In localhost mode the engine also refuses WebSocket connections whose `Origin` is not this computer (localhost, a loopback IP, or the machine name), so an arbitrary website cannot drive the PIN-less local engine.
-
-### Don't host (serve it yourself)
-
-Choosing **Don't host** still lays the bundle down at `%ProgramFiles%\AKML SQL\Web\` and installs the engine service; only the IIS site is skipped. Serve the files with any static host, e.g.:
-
-```
-cd "C:\Program Files\AKML SQL\Web"
-python -m http.server 8080
-```
-
-Then browse to `http://localhost:8080/`.
+IIS keeps separate HTTP site, engine, and (in LAN mode) HTTPS site ports. Site port
+80 and HTTPS port 443 are allowed; otherwise use 1024â€“65535. IIS ports must differ
+from the engine port. LAN IIS has the engine rule and **AKML SQL Web Site (HTTPS)**
+rule. Setup adds no HTTP-site firewall rule; IIS's existing HTTP binding remains
+unchanged. Firewall rules apply to every profile, including Public. Use a Private
+or Domain network. Localhost mode removes both named rules.
 
 ### Silent install
 
-Component selection uses the native `/COMPONENTS` flag; the web sub-options use dedicated flags:
-
-```
-AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA ^
-  /COMPONENTS="web,web\iis,web\service" ^
-  /WEB_HOST=IIS /WEB_EXPOSURE=LOCALHOST /WEB_PORT=80 /BRIDGE_PORT=47291
+```text
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /COMPONENTS=web /WEB_HOST=SERVICE /WEB_EXPOSURE=LOCALHOST /BRIDGE_PORT=47291
+AKMLSQLSetup.exe /VERYSILENT /ACCEPTEULA /COMPONENTS=web /WEB_HOST=IIS /WEB_PORT=8090 /BRIDGE_PORT=47291
 ```
 
-| Flag | Values | Meaning |
-|------|--------|---------|
-| `/WEB_HOST` | `IIS` \| `NONE` | host on IIS, or lay files down only |
-| `/WEB_EXPOSURE` | `LOCALHOST` \| `LAN` | bridge binding + LAN cert/firewall |
-| `/WEB_PORT` | `<int>` | IIS site port |
-| `/BRIDGE_PORT` | `<int>` | engine bridge port |
+`/WEB_HOST=SERVICE|IIS|NONE` selects the host. Without it, a new install selects
+Service and an upgrade preserves its previous choice. If a previous IIS host is
+no longer ready and no host flag is given, setup falls back to Service and logs
+the reason and new address. An explicit `/WEB_HOST=IIS` stops when IIS is not ready.
+`/WEB_EXPOSURE=LOCALHOST|LAN` and `/BRIDGE_PORT` preserve previous values when omitted.
+`/WEB_PORT` and `/WEB_HTTPS_PORT` apply to IIS only. Explicit `NONE` plus `LAN`,
+unknown flag values, conflicting ports and a standalone port held by another
+program stop setup before it replaces application files.
 
-Invalid combinations abort before any state is created: `/WEB_HOST=NONE /WEB_EXPOSURE=LAN` (LAN exposure needs a hosting mode) and `/WEB_PORT == /BRIDGE_PORT` (ports must differ).
+### Upgrades, repair and uninstall
 
-### Uninstall
+Changing host, port or standalone exposure can change the browser origin. Setup
+shows both addresses before installation. Connections, query tabs and other browser
+data at the old origin do not appear at the new one. Query history stays with the
+engine. Use **Settings â€º Exportâ€¦** before switching and import at the new address.
+Upgrades preserve a working host and its ports. Leaving IIS removes only the AKML
+site, its unused pool, owned HTTPS binding and obsolete `web.config`.
 
-The web edition's uninstall stops + deletes the `AkmlSqlWebEngine` service, removes the firewall rule, deletes the `netsh` sslcert binding, removes the `AkmlSqlWeb` IIS site, deletes `%ProgramFiles%\AKML SQL\Web\`, and **prompts** before deleting `%AppData%\AKML SQL Web\` (your wrapped AI keys + connection records). `%AppData%\AKML SQL\` (IDE-plugin state) is never touched.
+Use **Repair AKML SQL Web hosting** from the Start menu to repair the recorded host.
+The installed Support script validates its location and folder permissions before
+and after elevation. An address that answers with another program's page is reported
+as a failure, with the reason and repair steps in the install summary.
 
-### Troubleshooting
+Machine state is `%ProgramData%\AKML SQL Web` (Administrators and SYSTEM only),
+separate from the public `{app}\Web` bundle and desktop `%AppData%\AKML SQL`.
+Custom installation trees must have a trusted owner, contain no reparse points,
+and be protected before elevated Support scripts are used. Uninstall stops and
+deletes the service, removes the named firewall rules, AKML IIS resources, unbound
+AKML certificate and web bundle. Interactive uninstall asks about machine data;
+silent uninstall keeps it and keeps desktop settings without prompts.
 
-| Symptom | Cause / fix |
-|---------|-------------|
-| "Install succeeded" but the URL doesn't load | IIS wasn't installed. Re-run and choose "Enable IIS now", or pick "Don't host" and serve the files yourself. |
-| Install fails / engine won't bind the port | Port collision. The wizard warns if the bridge port is in use — pick another. Check `netstat -ano \| findstr <port>`. |
-| Silent install does nothing for the web component | Missing `/COMPONENTS="web,..."`, or admin rights. The installer requires elevation. |
-| Service not running after install | Check **Event Viewer** + `%CommonAppData%\AKML SQL Web\install.log`; the install summary flags a non-running service. Start it: `sc start AkmlSqlWebEngine`. |
-| Engine service stops on its own | It should not stay stopped: every install configures Windows to restart it (after 5 s, 10 s, then every 60 s, indefinitely) and starts it with *delayed* automatic start. Confirm with `sc qfailure AkmlSqlWebEngine` (expect three `RESTART` actions) and `sc qfailureflag AkmlSqlWebEngine` (expect `TRUE`). If either is missing, re-run the installer — it re-applies both on every run, including upgrades. Before this, recovery was never set by the installer, and even a hand-set recovery could not fire: the engine reported its failures to Windows as clean stops. |
-| Engine service keeps restarting | Windows is doing its job; the engine is failing for a reason it logs. The service runs as LocalSystem, so its log is **not** under your profile: `C:\Windows\System32\config\systemprofile\AppData\Roaming\AKML SQL\logs\akmlsql-<date>.log`. Look for a `[FTL]` line — a disabled bridge section, a port already in use, or a missing TLS certificate are the usual causes. A normal stop logs "stop requested by the service control manager"; its absence before a restart means the process ended without being asked to. |
-
----
+On a multi-session machine in localhost mode, another local user can occupy the
+page origin while the service is stopped. Use a trusted machine/session; localhost
+mode does not provide isolation between local Windows users.
 
 ## Activity Logs and Diagnostics
 

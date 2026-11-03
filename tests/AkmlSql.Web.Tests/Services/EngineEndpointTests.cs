@@ -16,6 +16,31 @@ namespace AkmlSql.Web.Tests.Services;
 public sealed class EngineEndpointTests
 {
     [Theory]
+    [InlineData("http://localhost:47291/", "localhost", 47291, "ws", "ws://localhost:47291/akmlsql")]
+    [InlineData("http://127.0.0.1:59417/", "127.0.0.1", 59417, "ws", "ws://127.0.0.1:59417/akmlsql")]
+    [InlineData("https://sql-box:59417/", "sql-box", 59417, "wss", "wss://sql-box:59417/akmlsql")]
+    [InlineData("https://sql-box/", "sql-box", 443, "wss", "wss://sql-box:443/akmlsql")]
+    [InlineData("http://[::1]:47291/", "::1", 47291, "ws", "ws://[::1]:47291/akmlsql")]
+    public void Page_origin_determines_the_bridge_address(string url, string host, int port, string scheme, string bridge)
+    {
+        var endpoint = EngineEndpoint.FromPage(new Uri(url));
+        Assert.Equal(new PageEngineInfo(host, port, scheme), endpoint);
+        Assert.Equal(bridge, Assert.Single(EngineEndpoint.CandidateUrls(endpoint.Host, endpoint.Port, endpoint.Scheme, strictScheme: true)));
+    }
+
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("127.0.0.1")]
+    [InlineData("::1")]
+    public void Strict_scheme_never_falls_back_from_HTTPS_to_plaintext(string host)
+    {
+        var urls = EngineEndpoint.CandidateUrls(host, 59417, "wss", strictScheme: true);
+        Assert.Single(urls);
+        Assert.All(urls, value => Assert.StartsWith("wss://", value));
+        Assert.Equal(2, EngineEndpoint.CandidateUrls(host, 59417, "wss").Count);
+    }
+
+    [Theory]
     [InlineData("localhost")]
     [InlineData("LOCALHOST")]
     [InlineData("127.0.0.1")]

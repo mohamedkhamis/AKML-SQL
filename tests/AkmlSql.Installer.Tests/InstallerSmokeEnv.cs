@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Win32;
 
 namespace AkmlSql.Installer.Tests;
 
@@ -17,8 +18,16 @@ namespace AkmlSql.Installer.Tests;
 /// </summary>
 internal static class InstallerSmokeEnv
 {
-    /// <summary>True only when the suite can actually drive an install: elevated AND IIS present.</summary>
-    public static bool CanRun => IsAdministrator() && IsIisInstalled();
+    /// <summary>Real installs are allowed only on explicitly opted-in disposable VMs.</summary>
+    public static bool IsOptedIn => Environment.GetEnvironmentVariable("AKML_INSTALLER_SMOKE") == "1";
+
+    public static bool CanRunService => IsOptedIn && IsAdministrator();
+    public static bool CanRunIis => CanRunService && IsIisReady();
+    public static bool CanRun => CanRunIis;
+
+    public static string SkipReason => IsOptedIn
+        ? "Requires administrator rights (and IIS Ready for IIS cases) on a disposable VM"
+        : "installer smoke tests run the real installer; set AKML_INSTALLER_SMOKE=1 on a disposable VM";
 
     public static bool IsAdministrator() => Environment.IsPrivilegedProcess;
 
@@ -29,13 +38,45 @@ internal static class InstallerSmokeEnv
         return File.Exists(appcmd);
     }
 
+    public static bool IsIisReady()
+    {
+        if (!IsIisInstalled()) return false;
+        using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var inet = machine.OpenSubKey(@"SOFTWARE\Microsoft\InetStp");
+        using var parts = machine.OpenSubKey(@"SOFTWARE\Microsoft\InetStp\Components");
+        if (Convert.ToInt32(inet?.GetValue("MajorVersion", 0)) < 7) return false;
+        foreach (var name in new[] { "W3SVC", "StaticContent", "DefaultDocument", "HttpErrors" })
+            if (Convert.ToInt32(parts?.GetValue(name, 0)) != 1) return false;
+        foreach (var name in new[] { "W3SVC", "WAS" })
+        {
+            using var service = machine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + name);
+            if (Convert.ToInt32(service?.GetValue("Start", 4)) == 4) return false;
+        }
+        return RunProcess(Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe"),
+            "-NoProfile -NonInteractive -Command \"Import-Module WebAdministration -ErrorAction Stop; $null=Get-ChildItem IIS:\\Sites -ErrorAction Stop\"", 10).ExitCode == 0;
+    }
+
     /// <summary>The prebuilt installer (FR-032). Located by walking up from the test bin dir.</summary>
     public static string? InstallerExe => FindUp(Path.Combine("src", "AkmlSql.Installer", "Output", "AKMLSQLSetup.exe"));
 
     public static string ProgramFilesApp =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "AKML SQL");
 
-    public static string UninstallerExe => Path.Combine(ProgramFilesApp, "unins000.exe");
+    public static string UninstallerExe
+    {
+        get
+        {
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
+            {
+                using var machine = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+                using var key = machine.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\{F7E8A9B0-C1D2-E3F4-A5B6-C7D8E9F0A1B2}_is1");
+                if (key?.GetValue("UninstallString") is not string value) continue;
+                var end = value.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+                if (end >= 0) return value[..(end + 4)].Trim().Trim('"');
+            }
+            return Path.Combine(ProgramFilesApp, "unins000.exe");
+        }
+    }
 
     public static string CommonAppDataWeb =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "AKML SQL Web");
@@ -47,7 +88,7 @@ internal static class InstallerSmokeEnv
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AKML SQL", "config.json");
 
     /// <summary>Run a process to completion, returning (exitCode, stdout+stderr).</summary>
-    public static (int ExitCode, string Output) RunProcess(string fileName, string arguments)
+    public static (int ExitCode, string Output) RunProcess(string fileName, string arguments, int timeoutSeconds = 600)
     {
         var psi = new ProcessStartInfo
         {
@@ -60,10 +101,15 @@ internal static class InstallerSmokeEnv
         };
         using var p = Process.Start(psi);
         if (p == null) return (-1, string.Empty);
-        var stdout = p.StandardOutput.ReadToEnd();
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        return (p.ExitCode, stdout + stderr);
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        var stderr = p.StandardError.ReadToEndAsync();
+        if (!p.WaitForExit(timeoutSeconds * 1000))
+        {
+            p.Kill(entireProcessTree: true);
+            p.WaitForExit();
+            return (-2, "Process timed out: " + stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult());
+        }
+        return (p.ExitCode, stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult());
     }
 
     /// <summary>Run a PowerShell command and return (exitCode, stdout+stderr).</summary>
@@ -94,11 +140,16 @@ internal static class InstallerSmokeEnv
     /// partially-provisioned machine (install that returned 0 but left a broken service) is not
     /// leaked to the next test run. Safe to call when nothing was installed.
     /// </summary>
-    public static void BestEffortCleanup()
+    public static void BestEffortCleanup(int bridgePort = 0)
     {
+        if (!CanRunService) return;
         RunProcess("sc.exe", "stop AkmlSqlWebEngine");
         RunProcess("sc.exe", "delete AkmlSqlWebEngine");
-        RunPowerShell("Import-Module WebAdministration; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue");
+        foreach (var name in new[] { "AKML SQL Web Engine", "AKML SQL Web Site (HTTPS)" })
+            RunProcess("netsh.exe", "advfirewall firewall delete rule name=\"" + name + "\"");
+        RunPowerShell("Import-Module WebAdministration -ErrorAction SilentlyContinue; Remove-WebSite -Name AkmlSqlWeb -ErrorAction SilentlyContinue; if (!(Get-WebApplication -ErrorAction SilentlyContinue | Where-Object applicationPool -eq 'AkmlSqlWeb')) { Remove-WebAppPool -Name AkmlSqlWeb -ErrorAction SilentlyContinue }");
+        if (bridgePort > 0) RunProcess("netsh.exe", "http delete sslcert ipport=0.0.0.0:" + bridgePort);
+        RunPowerShell("$bindings=netsh http show sslcert | Out-String; if ($LASTEXITCODE -eq 0) { Get-ChildItem Cert:\\LocalMachine\\My | Where-Object Subject -eq 'CN=AKML SQL Web Engine' | ForEach-Object { if ($bindings -notmatch [regex]::Escape($_.Thumbprint)) { Remove-Item -LiteralPath $_.PSPath -Force } } }; Remove-Item 'HKLM:\\Software\\AKML SQL\\Web','HKLM:\\Software\\WOW6432Node\\AKML SQL\\Web' -Recurse -Force -ErrorAction SilentlyContinue");
     }
 
     /// <summary>Pick a free TCP port, optionally avoiding <paramref name="exclude"/>.</summary>
