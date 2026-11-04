@@ -394,6 +394,21 @@ during execution. The baseline distinguishes these automated checks from pending
 - Spec 033: T044/T045 (final gate + deploy/manual verification) pending user availability.
 - Spec 037: Phase-9 polish items T103–T108 open (perf budgets, golden/corpus ratchets, key-leak grep, full quickstart, one-pass build); GUI-only quickstart scenarios 62/69a/70 stay manual.
 
+## AI Chat (spec 046, implementation complete pending owner SSMS checks)
+
+The SSMS chat binds to the ACTIVE DOCUMENT (the query window tab), not the text view that last
+had the keyboard: `Ai/ChatBindingResolver.cs` (pure `Decide` + UI-thread `Resolve`, sticky last
+window) feeds the header, schema poll, Send and Insert from one `ChatBinding`; refusals name the
+window and log `AiChatPanel: refused to send — …` (Information). Editor-context AI commands keep
+`RefactorCommandHelper.TryGetActiveRealSessionId`. Answers render through Core
+`Text/ChatMarkdown.cs` (shared parser) → `Ai/ChatMessageRenderer.cs` (WPF: RichTextBox prose,
+code panels with Copy/Insert) and `Shared/ChatMessageView.razor` (web). `AiAgentLabel.Format`
+("Name · Provider · model") labels the SSMS picker (now in the composer bar), the web
+`AiAgentSelector` (changes the one shared active agent) and answer captions; `AiChatResponse`
+keys 7–8 (`AgentProvider`, `AgentModel`). New chat in both headers; `AiChatWelcomeCard` replaces
+the greeting. Shell tests read answer text through `ChatPanelTestText` (answers are rich text).
+Copy tests can fail with `CLIPBRD_E_CANT_OPEN` while the desktop holds the clipboard — rerun alone.
+
 ## Standalone web hosting (spec 045, merged 2026-11-03 via PR #258)
 
 `EngineHost.RunWebAsync` serves an explicitly configured `bridge.webRoot` through

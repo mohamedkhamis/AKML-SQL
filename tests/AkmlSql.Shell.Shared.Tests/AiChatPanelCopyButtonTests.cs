@@ -68,8 +68,8 @@ namespace AkmlSql.Shell.Shared.Tests
         public void Every_bubble_gets_a_copy_button_that_copies_the_whole_message()
         {
             var panel = new AiChatPanel();
-
-            // The constructor's welcome message is the one guaranteed bubble.
+            // Spec 046: a fresh panel shows the welcome card (no bubble), so add one answer.
+            InvokeAddAssistantMessage(panel, Answer, null);
             var button = Assert.Single(FindCopyButtons(panel, "Copy message"));
 
             WithClipboardRetry(() => { Clipboard.SetText("sentinel-before-copy"); return string.Empty; });
@@ -85,17 +85,28 @@ namespace AkmlSql.Shell.Shared.Tests
         public void Message_text_is_a_selectable_read_only_text_host()
         {
             var panel = new AiChatPanel();
+            ChatPanelTestText.InvokeAddUserMessage(panel, "what tables do I have?");
+            InvokeAddAssistantMessage(panel, "You have **two** tables.", null);
 
-            var host = Assert.Single(FindAll<TextBox>(panel, "Message text"));
-            Assert.True(host.IsReadOnly);
-            Assert.Equal(0.0, host.BorderThickness.Left);
-            Assert.True(host.Focusable); // keyboard selection + Ctrl+C need focus
+            // A user message is a plain read-only text box; an answer is read-only rich text
+            // (spec 046) — both borderless, both focusable for keyboard selection + Ctrl+C.
+            var hosts = ChatPanelTestText.MessageHosts(panel);
+            Assert.Equal(2, hosts.Count);
+            Assert.IsType<TextBox>(hosts[0]);
+            Assert.IsType<RichTextBox>(hosts[1]);
+            foreach (var host in hosts)
+            {
+                Assert.True(host.IsReadOnly);
+                Assert.Equal(0.0, host.BorderThickness.Left);
+                Assert.True(host.Focusable);
+            }
+            Assert.Equal("You have two tables.", ChatPanelTestText.Of(hosts[1]));   // markers rendered, not shown
 
-            // The per-message copy button still copies the full text (FR-016).
-            var copyButton = Assert.Single(FindCopyButtons(panel, "Copy message"));
+            // The per-message copy button copies the RAW text, markers included (FR-016, FR-026).
+            var copyButton = FindCopyButtons(panel, "Copy message")[1];
             WithClipboardRetry(() => { Clipboard.SetText("sentinel"); return string.Empty; });
             copyButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-            Assert.Equal(host.Text, WithClipboardRetry(Clipboard.GetText));
+            Assert.Equal("You have **two** tables.", WithClipboardRetry(Clipboard.GetText));
         }
 
         /// <summary>FR-015: a message with two SQL blocks gets one labelled action per block, and
@@ -104,23 +115,36 @@ namespace AkmlSql.Shell.Shared.Tests
         public void Each_sql_block_gets_its_own_labelled_copy_action()
         {
             var panel = new AiChatPanel();
-            var actions = new List<CodeActionDto>
-            {
-                new() { Label = "Copy Script", ActionType = "copyToClipboard", Code = "SELECT 1;" },
-                new() { Label = "Copy Script 2", ActionType = "copyToClipboard", Code = "SELECT 2;" },
-            };
-            InvokeAddAssistantMessage(panel, "Here are two scripts.", actions);
+            InvokeAddAssistantMessage(panel, TwoBlocks, null);
 
-            var blockButtons = FindAll<Button>(panel, "Copy SQL block 1 of 2");
-            var first = Assert.Single(blockButtons);
+            // Spec 046: each block's Copy sits on the block's own code panel; the accessible name
+            // says which block, the visible label stays short.
+            var first = Assert.Single(FindAll<Button>(panel, "Copy SQL block 1 of 2"));
             var second = Assert.Single(FindAll<Button>(panel, "Copy SQL block 2 of 2"));
 
-            Assert.Equal("Copy SQL block 1 of 2", first.Content);
-            Assert.Equal("Copy SQL block 2 of 2", second.Content);
+            Assert.Equal(ChatMessageRenderer.CopyContent, first.Content);
+            Assert.Equal(ChatMessageRenderer.CopyContent, second.Content);
 
             WithClipboardRetry(() => { Clipboard.SetText("sentinel"); return string.Empty; });
             second.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             Assert.Equal("SELECT 2;", WithClipboardRetry(Clipboard.GetText));
+        }
+
+        /// <summary>Spec 046 (FR-026): the per-message copy of a rendered answer is its RAW text —
+        /// fences and all — so pasting it elsewhere keeps the code blocks.</summary>
+        [StaFact]
+        public void A_rendered_answer_copies_its_raw_text_with_the_fences()
+        {
+            var panel = new AiChatPanel();
+            InvokeAddAssistantMessage(panel, TwoBlocks, null);
+
+            var button = Assert.Single(FindCopyButtons(panel, "Copy message"));
+            WithClipboardRetry(() => { Clipboard.SetText("sentinel"); return string.Empty; });
+            button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+
+            var copied = WithClipboardRetry(Clipboard.GetText).Replace("\r\n", "\n");
+            Assert.Equal(TwoBlocks, copied);
+            Assert.Contains("```sql", copied);
         }
 
         /// <summary>FR-018: the conversation copy attributes every turn to its speaker, in order.</summary>
@@ -210,6 +234,7 @@ namespace AkmlSql.Shell.Shared.Tests
         public void Clipboard_failure_is_surfaced_and_the_message_stays_recopyable()
         {
             var panel = new AiChatPanel();
+            InvokeAddAssistantMessage(panel, Answer, null);
             var button = Assert.Single(FindCopyButtons(panel, "Copy message"));
             var bubblesBefore = CountBubbles(panel);
 
@@ -238,11 +263,7 @@ namespace AkmlSql.Shell.Shared.Tests
         public void Every_copy_control_has_an_accessible_name_and_is_keyboard_reachable()
         {
             var panel = new AiChatPanel();
-            InvokeAddAssistantMessage(panel, "two blocks", new List<CodeActionDto>
-            {
-                new() { Label = "Copy Script", ActionType = "copyToClipboard", Code = "SELECT 1;" },
-                new() { Label = "Copy Script 2", ActionType = "copyToClipboard", Code = "SELECT 2;" },
-            });
+            InvokeAddAssistantMessage(panel, TwoBlocks, null);
 
             var copyControls = new List<Button>();
             Walk<Button>(panel, b =>
@@ -255,9 +276,9 @@ namespace AkmlSql.Shell.Shared.Tests
                 }
             });
 
-            // 2 message-copy buttons (welcome bubble + the added bubble) + 2 SQL block buttons
-            // + 1 conversation button.
-            Assert.Equal(5, copyControls.Count);
+            // 1 message-copy button (the added answer) + 2 SQL block buttons + 1 conversation
+            // button. (Spec 046: the welcome card is not a message and has no copy button.)
+            Assert.Equal(4, copyControls.Count);
             foreach (var control in copyControls)
             {
                 Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(control)));
@@ -279,6 +300,7 @@ namespace AkmlSql.Shell.Shared.Tests
         public void A_second_click_inside_the_flash_window_still_restores_the_true_label()
         {
             var panel = new AiChatPanel();
+            InvokeAddAssistantMessage(panel, Answer, null);
             var button = Assert.Single(FindCopyButtons(panel, "Copy message"));
             var trueLabel = button.Content?.ToString();
             Assert.False(string.IsNullOrEmpty(trueLabel));
@@ -356,7 +378,12 @@ namespace AkmlSql.Shell.Shared.Tests
             }
         }
 
-        private static void InvokeAddAssistantMessage(AiChatPanel panel, string text, List<CodeActionDto> actions)
+        private const string Answer = "I'm your AI SQL assistant.";
+
+        private const string TwoBlocks =
+            "Here are two scripts.\n\n```sql\nSELECT 1;\n```\n\nand\n\n```sql\nSELECT 2;\n```";
+
+        private static void InvokeAddAssistantMessage(AiChatPanel panel, string text, List<CodeActionDto>? actions)
         {
             var method = typeof(AiChatPanel).GetMethod("AddAssistantMessage",
                 BindingFlags.NonPublic | BindingFlags.Instance);
@@ -397,16 +424,7 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         /// <summary>Bubbles are counted by their read-only message text hosts.</summary>
-        private static int CountBubbles(DependencyObject root)
-        {
-            var count = 0;
-            Walk(root, (TextBox tb) =>
-            {
-                if (AutomationProperties.GetName(tb) == "Message text")
-                    count++;
-            });
-            return count;
-        }
+        private static int CountBubbles(DependencyObject root) => ChatPanelTestText.MessageHosts(root).Count;
 
         private static List<Button> FindCopyButtons(DependencyObject root, string automationName)
             => FindAll<Button>(root, automationName);

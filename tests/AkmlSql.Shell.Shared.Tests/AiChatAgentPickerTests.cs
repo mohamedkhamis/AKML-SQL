@@ -48,7 +48,7 @@ namespace AkmlSql.Shell.Shared.Tests
             picker.SetAgents(new[] { usable, disabled, keyless }, usable.Id);
 
             Assert.Equal(
-                new[] { "Claude (work)", AiAgentPicker.AddAgentDisplayText },
+                new[] { L("Claude (work)"), AiAgentPicker.AddAgentDisplayText },
                 ComboItems(picker));
         }
 
@@ -68,13 +68,13 @@ namespace AkmlSql.Shell.Shared.Tests
                 var panel = new AiChatPanel();
 
                 // S3/FR-037: the assignment wins when set.
-                Assert.Equal("Kimi", FindPickerCombo(panel).SelectedItem);
+                Assert.Equal(L("Kimi"), FindPickerCombo(panel).SelectedItem);
 
                 // With no assignment the picker follows the active agent — a user who never
                 // touches the picker still sees who answers.
                 settings.Ai.FeatureAgents.Chat = string.Empty;
                 panel.RefreshConfiguration(forceRefresh: true);
-                Assert.Equal("Claude (work)", FindPickerCombo(panel).SelectedItem);
+                Assert.Equal(L("Claude (work)"), FindPickerCombo(panel).SelectedItem);
             });
         }
 
@@ -92,8 +92,8 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 // FR-044: even with one agent the user must always know who is answering.
                 var combo = FindPickerCombo(panel);
-                Assert.Equal(new[] { "Claude (work)", AiAgentPicker.AddAgentDisplayText }, ComboItems(panel));
-                Assert.Equal("Claude (work)", combo.SelectedItem);
+                Assert.Equal(new[] { L("Claude (work)"), AiAgentPicker.AddAgentDisplayText }, ComboItems(panel));
+                Assert.Equal(L("Claude (work)"), combo.SelectedItem);
             });
         }
 
@@ -138,7 +138,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 Assert.Equal("AI Assistance", seenPage);
                 Assert.Null(seenAgent);
                 // A cancel leaves the previous resolved selection in place.
-                Assert.Equal("Claude (work)", combo.SelectedItem);
+                Assert.Equal(L("Claude (work)"), combo.SelectedItem);
                 Assert.Equal(string.Empty, settings.Ai.FeatureAgents.Chat);
             });
         }
@@ -159,7 +159,7 @@ namespace AkmlSql.Shell.Shared.Tests
             WithSettings(settings, () =>
             {
                 var panel = new AiChatPanel();
-                FindPickerCombo(panel).SelectedItem = "Kimi";
+                FindPickerCombo(panel).SelectedItem = L("Kimi");
 
                 // R7 — the decision most likely to be implemented wrong.
                 Assert.Equal(other.Id, settings.Ai.FeatureAgents.Chat);
@@ -186,10 +186,10 @@ namespace AkmlSql.Shell.Shared.Tests
             WithSettings(settings, () =>
             {
                 var panel = new AiChatPanel();
-                Assert.Equal("Kimi", FindPickerCombo(panel).SelectedItem);
+                Assert.Equal(L("Kimi"), FindPickerCombo(panel).SelectedItem);
 
                 // S3: picking the agent that is already active means "follow the active agent".
-                FindPickerCombo(panel).SelectedItem = "Claude (work)";
+                FindPickerCombo(panel).SelectedItem = L("Claude (work)");
 
                 Assert.Equal(string.Empty, settings.Ai.FeatureAgents.Chat);
                 Assert.Equal(active.Id, settings.Ai.ActiveAgentId);
@@ -212,11 +212,11 @@ namespace AkmlSql.Shell.Shared.Tests
             WithSettings(settings, () =>
             {
                 var first = new AiChatPanel();
-                Assert.Equal("Kimi", FindPickerCombo(first).SelectedItem);
+                Assert.Equal(L("Kimi"), FindPickerCombo(first).SelectedItem);
 
                 // FR-040: close/reopen — a fresh panel resolves the same selection.
                 var reopened = new AiChatPanel();
-                Assert.Equal("Kimi", FindPickerCombo(reopened).SelectedItem);
+                Assert.Equal(L("Kimi"), FindPickerCombo(reopened).SelectedItem);
             });
         }
 
@@ -236,18 +236,16 @@ namespace AkmlSql.Shell.Shared.Tests
                 var panel = new AiChatPanel();
                 InvokeAddAssistantMessage(panel, "first answer", "Claude (work)");
                 SeedHistory(panel, ("user", "question one"), ("assistant", "first answer"));
-                var bubblesBefore = FindAll<TextBox>(panel)
-                    .FindAll(tb => AutomationProperties.GetName(tb) == "Message text").Count;
+                var bubblesBefore = ChatPanelTestText.MessageTexts(panel).Count;
 
-                FindPickerCombo(panel).SelectedItem = "Kimi";
+                FindPickerCombo(panel).SelectedItem = L("Kimi");
 
                 // FR-039: the conversation is NOT cleared — same bubbles, same history.
-                var bubblesAfter = FindAll<TextBox>(panel)
-                    .FindAll(tb => AutomationProperties.GetName(tb) == "Message text").Count;
+                // (Spec 046: answers are rich text, read through the shared reader.)
+                var bubblesAfter = ChatPanelTestText.MessageTexts(panel).Count;
                 Assert.Equal(bubblesBefore, bubblesAfter);
                 Assert.Equal(2, HistoryOf(panel).Count);
-                Assert.Contains(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text" && tb.Text == "first answer");
+                Assert.Contains("first answer", ChatPanelTestText.MessageTexts(panel));
             });
         }
 
@@ -303,6 +301,24 @@ namespace AkmlSql.Shell.Shared.Tests
                 AiChatPanel.AttributionText("Kimi", "Claude (work)"));
         }
 
+        /// <summary>
+        /// Spec 046 (FR-022): an answer is captioned with the answerer's full label when the engine
+        /// names its provider and model; the fallback decision still compares NAMES — an older
+        /// engine sends no provider or model, and its bare name must not read as a fallback.
+        /// </summary>
+        [Fact]
+        public void Attribution_text_shows_the_answerers_label_and_decides_fallback_by_name()
+        {
+            const string label = "Kimi · Kimi (Moonshot) · moonshot-v1-8k";
+            Assert.Equal(label, AiChatPanel.AttributionText("Kimi", "Kimi", label));
+            Assert.Equal(label, AiChatPanel.AttributionText("Kimi", null, label));
+            Assert.Equal("Kimi", AiChatPanel.AttributionText("Kimi", "Kimi", null));
+            Assert.Equal(
+                label + " answered — Claude (work) was unavailable.",
+                AiChatPanel.AttributionText("Kimi", "Claude (work)", label));
+            Assert.Null(AiChatPanel.AttributionText(null, "Claude (work)", label));
+        }
+
         [StaFact]
         public void A_fallback_answer_says_who_answered_and_who_was_unavailable()
         {
@@ -350,7 +366,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 // as every picker selection is — via FeatureAgents.Chat, not ActiveAgentId).
                 Assert.Equal(added.Id, settings.Ai.FeatureAgents.Chat);
                 Assert.Equal(active.Id, settings.Ai.ActiveAgentId);
-                Assert.Equal("Kimi", combo.SelectedItem);
+                Assert.Equal(L("Kimi"), combo.SelectedItem);
             });
         }
 
@@ -385,8 +401,8 @@ namespace AkmlSql.Shell.Shared.Tests
                 Assert.Equal(string.Empty, settings.Ai.FeatureAgents.Chat);
                 Assert.Equal(active.Id, settings.Ai.ActiveAgentId);
                 // The picker re-syncs to the resolved agent and never lists the unusable one.
-                Assert.Equal("Claude (work)", combo.SelectedItem);
-                Assert.Equal(new[] { "Claude (work)", AiAgentPicker.AddAgentDisplayText }, ComboItems(panel));
+                Assert.Equal(L("Claude (work)"), combo.SelectedItem);
+                Assert.Equal(new[] { L("Claude (work)"), AiAgentPicker.AddAgentDisplayText }, ComboItems(panel));
                 Assert.Empty(FindNotices(panel));
             });
         }
@@ -499,7 +515,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 // The user picks the active agent, clearing the assignment themselves (S3/R7) —
                 // a deliberate change, not a silent repair: FR-049 does not fire.
-                FindPickerCombo(panel).SelectedItem = "Claude (work)";
+                FindPickerCombo(panel).SelectedItem = L("Claude (work)");
 
                 Assert.Equal(string.Empty, settings.Ai.FeatureAgents.Chat);
                 Assert.Empty(FindNotices(panel));
@@ -540,10 +556,10 @@ namespace AkmlSql.Shell.Shared.Tests
                 combo.SelectedIndex = combo.Items.Count - 1;   // "Add agent…"
 
                 // The picker must now name the agent that will answer — not the action row.
-                Assert.Equal("Claude (work)", combo.SelectedItem);
+                Assert.Equal(L("Claude (work)"), combo.SelectedItem);
                 Assert.NotEqual(AiAgentPicker.AddAgentDisplayText, combo.SelectedItem as string);
                 Assert.Equal(
-                    new[] { "Claude (work)", AiAgentPicker.AddAgentDisplayText },
+                    new[] { L("Claude (work)"), AiAgentPicker.AddAgentDisplayText },
                     ComboItems(panel));
 
                 // Re-syncing must not invent a write: with the new agent active, chat keeps
@@ -555,6 +571,74 @@ namespace AkmlSql.Shell.Shared.Tests
                 Assert.Empty(FindNotices(panel));
             });
         }
+
+        // ── Spec 046 (US4, FR-030 – FR-034): labels and the switch notice ─────
+
+        [StaFact]
+        public void Entries_name_the_agent_its_provider_and_its_model()
+        {
+            var gemini = UsableAgent("Gemini Flash");
+            gemini.Provider = "gemini";
+            gemini.Model = "gemini-2.5-flash";
+            var claude = UsableAgent("Work");
+
+            var picker = new AiAgentPicker();
+            picker.SetAgents(new[] { gemini, claude }, claude.Id);
+
+            Assert.Equal(new[]
+            {
+                "Gemini Flash · Gemini · gemini-2.5-flash",
+                "Work · Anthropic · claude-sonnet-4-6",
+                AiAgentPicker.AddAgentDisplayText,
+            }, ComboItems(picker));
+        }
+
+        [StaFact]
+        public void Choosing_another_agent_says_so_once_in_the_conversation()
+        {
+            var settings = new AppSettings();
+            var active = UsableAgent("Claude (work)");
+            var other = UsableAgent("Kimi");
+            settings.Ai.Agents.Add(active);
+            settings.Ai.Agents.Add(other);
+            settings.Ai.ActiveAgentId = active.Id;
+
+            using var redirect = new AppDataRedirect();
+            WithSettings(settings, () =>
+            {
+                var panel = new AiChatPanel();
+
+                FindPickerCombo(panel).SelectedItem = L("Kimi");
+
+                Assert.Equal(new[] { "Now answering with " + L("Kimi") + "." }, SwitchNotices(panel));
+            });
+        }
+
+        [StaFact]
+        public void Re_picking_the_same_agent_or_cancelling_add_agent_adds_no_switch_notice()
+        {
+            var settings = new AppSettings();
+            var active = UsableAgent("Claude (work)");
+            settings.Ai.Agents.Add(active);
+            settings.Ai.ActiveAgentId = active.Id;
+
+            using var redirect = new AppDataRedirect();
+            WithSeams(settings, (_, _) => false, () =>   // Options opened and cancelled
+            {
+                var panel = new AiChatPanel();
+                var combo = FindPickerCombo(panel);
+
+                combo.SelectedItem = AiAgentPicker.AddAgentDisplayText;
+                combo.SelectedItem = L("Claude (work)");
+
+                Assert.Empty(SwitchNotices(panel));
+            });
+        }
+
+        private static List<string> SwitchNotices(DependencyObject root)
+            => FindAll<TextBlock>(root)
+                .FindAll(tb => AutomationProperties.GetName(tb) == AiChatPanel.AgentSwitchNoticeAutomationName)
+                .ConvertAll(tb => tb.Text);
 
         // ── helpers ──────────────────────────────────────────────────────────
 
@@ -579,6 +663,13 @@ namespace AkmlSql.Shell.Shared.Tests
                 AiChatPanel.ShowOptionsRoute = priorRoute;
             }
         }
+
+        /// <summary>
+        /// Spec 046 (FR-030): the picker lists every agent as "Name · Provider · model". All agents
+        /// here come from <see cref="UsableAgent"/> (Anthropic, claude-sonnet-4-6), so a name maps
+        /// to exactly one label.
+        /// </summary>
+        private static string L(string name) => AiAgentLabel.Format(name, "anthropic", "claude-sonnet-4-6");
 
         private static AiAgent UsableAgent(string name)
             => new()

@@ -189,6 +189,24 @@ public sealed class AiPipelineServices : IDisposable
         ChatOptions options,
         CancellationToken ct)
     {
+        var answer = await ExecuteWithFallbackDetailedAsync(settings, selectedAgent, messages, options, ct)
+            .ConfigureAwait(false);
+        return (answer.Response, answer.UsedFallback, answer.AgentName);
+    }
+
+    /// <summary>
+    /// <see cref="ExecuteWithFallbackAsync"/> that also returns the provider id and model of the
+    /// agent that answered (spec 046, FR-022, research R4) — for the chat reply's attribution
+    /// "Name · Provider · model". For the offline provider: its id and its configured model.
+    /// </summary>
+    public async Task<(ChatResponse Response, bool UsedFallback, string? AgentName, string? AgentProvider, string? AgentModel)>
+        ExecuteWithFallbackDetailedAsync(
+        AiSettings settings,
+        AiAgent? selectedAgent,
+        List<ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken ct)
+    {
         // The user's chain (FR-050): usable agents named by FallbackOrder, in order, skipping
         // the selected agent — an agent is never its own fallback (contract invariant 5).
         var chain = new List<AiAgent>();
@@ -224,7 +242,7 @@ public sealed class AiPipelineServices : IDisposable
             var response = await ExecuteWithBackoffAsync(
                 () => primaryClient.GetResponseAsync(messages, options, ct),
                 settings.Retries, ct, retryBudget: RetryBudgetFor(settings));
-            return (response, false, selectedAgent?.Name);
+            return (response, false, selectedAgent?.Name, NullIfBlank(settings.Provider), NullIfBlank(settings.Model));
         }
         catch (Exception ex) when (
             ex is not OperationCanceledException &&
@@ -258,7 +276,7 @@ public sealed class AiPipelineServices : IDisposable
                     () => client.GetResponseAsync(messages, options, ct),
                     projected.Retries, ct, retryBudget: RetryBudgetFor(projected));
                 Log.Warning("AI fallback chain: agent {AgentName} answered after the primary failed", candidate.Name);
-                return (response, true, candidate.Name);
+                return (response, true, candidate.Name, NullIfBlank(projected.Provider), NullIfBlank(projected.Model));
             }
             catch (Exception ex) when (
                 ex is not OperationCanceledException &&
@@ -278,7 +296,8 @@ public sealed class AiPipelineServices : IDisposable
             {
                 using var fallbackClient = FallbackClientFactory(settings);
                 var response = await fallbackClient.GetResponseAsync(messages, options, ct);
-                return (response, true, AiProviderIds.DisplayName(settings.OfflineProvider));
+                return (response, true, AiProviderIds.DisplayName(settings.OfflineProvider),
+                    NullIfBlank(settings.OfflineProvider), NullIfBlank(settings.OfflineModel));
             }
             catch (Exception fallbackEx) when (
                 fallbackEx is not OperationCanceledException &&
@@ -303,6 +322,8 @@ public sealed class AiPipelineServices : IDisposable
             : $"All {attemptNames.Count} AI providers failed (tried in order: {string.Join(" → ", attemptNames)}).";
         throw new AggregateException(summary, attemptExceptions);
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     /// <summary>
     /// FR-058: maps one failed attempt to the FR-014 taxonomy (<see cref="AiFailureTaxonomy"/>)

@@ -44,5 +44,22 @@ namespace AkmlSql.Core.Ipc.Messages
         /// </summary>
         [Key(6)]
         public string? AgentName { get; set; }
+
+        /// <summary>
+        /// Provider id of the agent that produced this answer (<c>gemini</c>, <c>anthropic</c>, …) —
+        /// the resolved agent's, a fallback-chain agent's, or the offline provider's (spec 046,
+        /// FR-022, research R4). With <see cref="AgentModel"/> it lets both chat panels attribute an
+        /// answer as "Name · Provider · model". Append-only: <c>null</c> from an older engine, and the
+        /// shell then shows the name only.
+        /// </summary>
+        [Key(7)]
+        public string? AgentProvider { get; set; }
+
+        /// <summary>
+        /// Model of the agent that produced this answer (spec 046, FR-022); the offline provider's
+        /// configured model when it answered. <c>null</c> when unknown or from an older engine.
+        /// </summary>
+        [Key(8)]
+        public string? AgentModel { get; set; }
     }
 }

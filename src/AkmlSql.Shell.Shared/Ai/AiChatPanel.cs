@@ -9,9 +9,9 @@ using System.Windows.Threading;
 using AkmlSql.Core.Config;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
+using AkmlSql.Core.Text;
 using AkmlSql.Shell.Shared.Editor;
 using AkmlSql.Shell.Shared.Ipc;
-using AkmlSql.Shell.Shared.Refactoring;
 using AkmlSql.Shell.Shared.Ui.Theme;
 using Microsoft.VisualStudio.Shell;
 using Serilog;
@@ -26,17 +26,23 @@ namespace AkmlSql.Shell.Shared.Ai
     /// </summary>
     internal sealed class AiChatPanel : ThemeAwareUserControl
     {
-        /// <summary>
-        /// Spec 036 (US1, FR-028): shown when a message cannot be sent because no editor session
-        /// is bound. The chat follows the active SQL editor's connection, so the fix is to connect
-        /// one — never send under a fabricated id (R1).
-        /// </summary>
-        internal const string NoConnectionMessage =
-            "No database connection — this chat answers questions about the database the active " +
-            "SQL editor is connected to. Open a query window and connect it to a database, then ask again.";
-
         /// <summary>Header text when no editor connection is bound (FR-027).</summary>
         internal const string NotConnectedHeaderText = "Not connected";
+
+        /// <summary>Accessible name of the working-state line ("Asking … ").</summary>
+        internal const string WorkingStateAutomationName = "Chat working state";
+
+        /// <summary>The working state when the answering agent is unknown (spec 046 names it otherwise).</summary>
+        internal const string ThinkingText = "Thinking…";
+
+        /// <summary>Accessible name of the header's binding label (spec 046, US1).</summary>
+        internal const string HeaderBindingAutomationName = "Chat binding";
+
+        /// <summary>Accessible name of the "Now answering with …" line (spec 046, FR-034).</summary>
+        internal const string AgentSwitchNoticeAutomationName = "Chat agent switch notice";
+
+        /// <summary>Accessible name of the "Now answering about …" line (spec 046, FR-007).</summary>
+        internal const string BindingNoticeAutomationName = "Chat binding notice";
 
         private const int BindingRefreshIntervalMs = 2000;
         private const int PrivacyModeRefreshSeconds = 30;
@@ -54,6 +60,7 @@ namespace AkmlSql.Shell.Shared.Ai
         private readonly TextBox _inputBox;
         private readonly TextBlock _inputPlaceholder;
         private readonly Button _sendButton;
+        private readonly Button _newChatButton;
         private readonly TextBlock _headerLabel;
         private readonly AiAgentPicker _agentPicker;
         private readonly TextBlock _thinkingIndicator;
@@ -70,16 +77,29 @@ namespace AkmlSql.Shell.Shared.Ai
         /// path tolerates a shorter list (seeded history) by treating the missing name as null.
         /// </summary>
         private readonly List<string?> _historyAgentNames = new();
-        private string _currentDatabase = string.Empty;
-        private string? _boundSessionId;
+
+        /// <summary>
+        /// Spec 046 (US1, FR-002): the ONE binding the panel reads — header, schema poll, send gate,
+        /// refusal text and insert target. Replaced on every <see cref="RefreshBinding"/>.
+        /// </summary>
+        private ChatBinding _binding = ChatBinding.ForNoDocument();
+
+        /// <summary>Spec 046 (FR-007): the last BOUND <c>server.database</c>, so a new window that is
+        /// briefly "not connected" between two databases still gets its notice.</summary>
+        private string _lastBindingKey = string.Empty;
         private bool _schemaReady;
         private string _lastPrivacyMode = string.Empty;
         private DateTime _privacyModeReadAtUtc = DateTime.MinValue;
         private bool _isSending;
 
-        // Spec 037 (US1): the empty-state/greeting render and its cheap change detection.
-        private Border? _greetingBubble;
+        // Spec 037 (US1): the empty-state render and its cheap change detection. Spec 046 (FR-023):
+        // the welcome card (database, agent, starters) replaced the greeting bubble.
+        private AiChatWelcomeCard? _welcomeCard;
         private AiChatEmptyState? _emptyStateCard;
+
+        /// <summary>Spec 046: messages shown in the conversation (user and assistant); the welcome
+        /// card is shown only while there are none.</summary>
+        private int _renderedTurns;
         private bool _agentUsable;
         private string _offendingAgentId = string.Empty;
         private string _configSignature = string.Empty;
@@ -103,6 +123,11 @@ namespace AkmlSql.Shell.Shared.Ai
         /// mid-flight picker switch cannot rewrite who an in-flight answer was expected from.</summary>
         private string? _resolvedChatAgentName;
 
+        /// <summary>Spec 046 (FR-014, FR-022): the resolved chat agent's label,
+        /// "Name · Provider · model" (<see cref="AiAgentLabel"/>), for the working state, the
+        /// welcome card and the fallback wording.</summary>
+        private string? _resolvedChatAgentLabel;
+
         /// <summary>Spec 037 (US5, FR-057): the resolved chat agent's id, kept alongside
         /// <see cref="_resolvedChatAgentName"/> so a configuration-caused live failure can
         /// deep-link Options to the agent that produced it.</summary>
@@ -125,6 +150,13 @@ namespace AkmlSql.Shell.Shared.Ai
         /// config.json. Production code never sets it.
         /// </summary>
         internal static Func<AppSettings>? TestSettingsProvider { get; set; }
+
+        /// <summary>
+        /// Test seam (spec 046): when set, <see cref="RefreshBinding"/> takes the binding from this
+        /// delegate (given the previous one) instead of <see cref="ChatBindingResolver.Resolve"/>, so
+        /// panel tests never need a live SSMS host. Production code never sets it.
+        /// </summary>
+        internal static Func<ChatBinding?, ChatBinding>? TestBindingResolver { get; set; }
 
         /// <summary>
         /// The panel's one route into Options (FR-017, FR-041): defaults to
@@ -182,10 +214,11 @@ namespace AkmlSql.Shell.Shared.Ai
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, Spacing.Sm, 0),
-                // Ellipsize; SetDatabaseContext puts the full name on the tooltip.
+                // Ellipsize; ApplyBindingToHeader puts the window and full name on the tooltip.
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
             _headerLabel.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            System.Windows.Automation.AutomationProperties.SetName(_headerLabel, HeaderBindingAutomationName);
             Grid.SetColumn(_headerLabel, 1);
             headerGrid.Children.Add(_headerLabel);
 
@@ -200,8 +233,31 @@ namespace AkmlSql.Shell.Shared.Ai
             };
             _agentPicker.AgentSelected += (_, agentId) => OnChatAgentSelected(agentId);
             _agentPicker.AddAgentRequested += (_, _) => OnChatAgentAddRequested();
-            Grid.SetColumn(_agentPicker, 2);
-            headerGrid.Children.Add(_agentPicker);
+            // Spec 046 (FR-030): the picker lives in the composer bar (below), beside Send — the
+            // agent that will answer is always in view where the user types, as in Copilot Chat.
+
+            // Spec 046 (US5, FR-040): start a new conversation — one click, in the header, beside
+            // the copy. Keeps the binding and the agent; the welcome card comes back.
+            _newChatButton = new Button
+            {
+                Content = NewChatContent,
+                FontSize = 11,
+                Padding = new Thickness(Spacing.Sm, 0, Spacing.Sm, 2),
+                Margin = new Thickness(Spacing.Sm, 0, 0, 0),
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Cursor = Cursors.Hand,
+                VerticalAlignment = VerticalAlignment.Center,
+                FocusVisualStyle = FocusVisualStyles.HighStakes,
+                IsEnabled = false,
+                ToolTip = NewChatEmptyToolTip
+            };
+            _newChatButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextSecondary);
+            System.Windows.Automation.AutomationProperties.SetName(_newChatButton, NewChatAutomationName);
+            ToolTipService.SetShowOnDisabled(_newChatButton, true);
+            _newChatButton.Click += (_, _) => NewConversation();
+            Grid.SetColumn(_newChatButton, 2);
+            headerGrid.Children.Add(_newChatButton);
 
             // Spec 036 (US3, FR-018): copy the entire conversation, each turn attributed to its
             // speaker, built from _history at click time. Lives in the header so it is reachable
@@ -273,18 +329,18 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 Content = "Send",
                 MinWidth = 64,
-                Padding = new Thickness(Spacing.Md, 6, Spacing.Md, 6),
-                Margin = new Thickness(Spacing.Xs, Spacing.Sm, Spacing.Sm, Spacing.Sm),
+                Padding = new Thickness(Spacing.Md, 4, Spacing.Md, 4),
+                Margin = new Thickness(Spacing.Xs, 0, Spacing.Sm, Spacing.Sm),
                 Cursor = Cursors.Hand,
                 FontSize = 12,
-                // Stretch to the composer's full height so button and growing input read as one
-                // bar (the old bottom-aligned chip floated oddly beside a 2-line box).
-                VerticalAlignment = VerticalAlignment.Stretch,
+                // Spec 046: Send shares the composer's bottom row with the agent picker.
+                VerticalAlignment = VerticalAlignment.Center,
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             ThemedButton.ApplyPrimary(_sendButton);
+            // Spec 046 (FR-011): a disabled Send still says why on hover.
+            ToolTipService.SetShowOnDisabled(_sendButton, true);
             _sendButton.Click += OnSendClick;
-            DockPanel.SetDock(_sendButton, Dock.Right);
 
             _inputBox = new TextBox
             {
@@ -296,7 +352,7 @@ namespace AkmlSql.Shell.Shared.Ai
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 VerticalContentAlignment = VerticalAlignment.Top,
                 Padding = new Thickness(Spacing.Sm, 6, Spacing.Sm, 6),
-                Margin = new Thickness(Spacing.Sm, Spacing.Sm, 0, Spacing.Sm),
+                Margin = new Thickness(Spacing.Sm, Spacing.Sm, Spacing.Sm, Spacing.Xs),
                 FontSize = 12,
                 BorderThickness = new Thickness(1),
                 FocusVisualStyle = FocusVisualStyles.HighStakes
@@ -312,7 +368,7 @@ namespace AkmlSql.Shell.Shared.Ai
             // is empty; IsHitTestVisible=false so clicks fall through to the TextBox.
             _inputPlaceholder = new TextBlock
             {
-                Text = "Ask a question about this database…   (Enter sends · Shift+Enter for a new line)",
+                Text = PlaceholderText,
                 FontSize = 12,
                 FontStyle = FontStyles.Italic,
                 TextWrapping = TextWrapping.Wrap,
@@ -325,20 +381,26 @@ namespace AkmlSql.Shell.Shared.Ai
             // FR-015: the placeholder is a SIBLING of the TextBox, so the composer's IsEnabled
             // does not reach it — both signals must run through one method, or a gated composer
             // keeps inviting a question it cannot answer.
-            _inputBox.TextChanged += (_, _) => UpdatePlaceholderVisibility();
+            _inputBox.TextChanged += (_, _) => { UpdatePlaceholderVisibility(); UpdateSendState(); };
             _inputBox.IsEnabledChanged += (_, _) => UpdatePlaceholderVisibility();
 
             var inputGrid = new Grid();
             inputGrid.Children.Add(_inputBox);
             inputGrid.Children.Add(_inputPlaceholder);
 
-            var inputBar = new DockPanel
-            {
-                Margin = new Thickness(0)
-            };
-            inputBar.SetResourceReference(DockPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
-            inputBar.Children.Add(_sendButton);
+            // Spec 046 (FR-030, Copilot layout): the input on top; below it one row with the
+            // answering agent on the left and Send on the right.
+            _agentPicker.Margin = new Thickness(Spacing.Sm, 0, Spacing.Sm, Spacing.Sm);
+            _agentPicker.HorizontalAlignment = HorizontalAlignment.Left;
+            var composerRow = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(_sendButton, Dock.Right);
+            composerRow.Children.Add(_sendButton);
+            composerRow.Children.Add(_agentPicker);
+
+            var inputBar = new StackPanel { Orientation = Orientation.Vertical };
+            inputBar.SetResourceReference(StackPanel.BackgroundProperty, ThemeTokens.SurfacePanel);
             inputBar.Children.Add(inputGrid);
+            inputBar.Children.Add(composerRow);
 
             var composerFrame = new Border
             {
@@ -359,13 +421,14 @@ namespace AkmlSql.Shell.Shared.Ai
 
             _thinkingIndicator = new TextBlock
             {
-                Text = "Thinking...",
+                Text = ThinkingText,
                 FontStyle = FontStyles.Italic,
                 FontSize = 12,
                 Margin = new Thickness(Spacing.Md, Spacing.Sm, Spacing.Md, Spacing.Sm),
                 Visibility = Visibility.Collapsed
             };
             _thinkingIndicator.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
+            System.Windows.Automation.AutomationProperties.SetName(_thinkingIndicator, WorkingStateAutomationName);
 
             var innerStack = new StackPanel { Orientation = Orientation.Vertical };
             innerStack.Children.Add(_conversationPanel);
@@ -407,6 +470,77 @@ namespace AkmlSql.Shell.Shared.Ai
             UpdatePlaceholderVisibility();   // FR-015: the initial state comes from neither event
         }
 
+        /// <summary>Spec 046 (FR-012): the composer's hint names both send keys and the new-line key.</summary>
+        internal const string PlaceholderText =
+            "Ask about this database…   (Enter or Ctrl+Enter sends · Shift+Enter for a new line)";
+
+        internal const string NewChatContent = "＋ New chat";
+        internal const string NewChatAutomationName = "New chat";
+        internal const string NewChatToolTip = "Start a new conversation — clears this one";
+        internal const string NewChatEmptyToolTip = "The conversation is already empty";
+
+        internal const string SendToolTip = "Send (Ctrl+Enter)";
+        internal const string EmptySendToolTip = "Type a question first";
+        internal const string SendingToolTip = "Wait for the answer to finish";
+        internal const string NoAgentSendToolTip = "No AI agent can answer yet — add one in Options";
+
+        /// <summary>
+        /// Spec 046 (FR-010/FR-011): Send's enabled state and its tooltip, decided together so the
+        /// tooltip always says why Send is disabled — no agent can answer, an answer is in flight,
+        /// or there is nothing to send — and names the shortcut when it can send. Runs on every
+        /// text change, every send-state change and every agent-state render.
+        /// </summary>
+        internal void UpdateSendState()
+        {
+            var hasText = !string.IsNullOrWhiteSpace(_inputBox.Text);
+            _sendButton.IsEnabled = _agentUsable && !_isSending && hasText;
+            _sendButton.ToolTip = !_agentUsable ? NoAgentSendToolTip
+                : _isSending ? SendingToolTip
+                : !hasText ? EmptySendToolTip
+                : SendToolTip;
+
+            // Spec 046 (FR-042): New chat waits for an answer in flight, and has nothing to clear
+            // in an empty conversation — its tooltip says which.
+            _newChatButton.IsEnabled = _renderedTurns > 0 && !_isSending;
+            _newChatButton.ToolTip = _isSending ? SendingToolTip
+                : _renderedTurns == 0 ? NewChatEmptyToolTip
+                : NewChatToolTip;
+        }
+
+        /// <summary>Spec 046 (FR-041): the turns the next request would carry as context.</summary>
+        internal int HistoryCount => _history.Count;
+
+        /// <summary>Spec 046 (FR-040): set when New chat asked for the composer's focus — the STA tests
+        /// build the panel without a shown window, where <c>Focus()</c> cannot succeed.</summary>
+        internal bool ComposerFocusRequested { get; private set; }
+
+        /// <summary>
+        /// Spec 046 (US5, FR-040/FR-041/FR-043): starts a new conversation. Every turn, notice and
+        /// card leaves the panel and the history is emptied, so no earlier turn goes with the next
+        /// message; the binding, the agent and the status notes stay. The welcome card (or the
+        /// no-agent card) returns and the empty composer gets the focus. One conversation at a time:
+        /// the old one is not kept (Copy conversation is the way to keep it).
+        /// </summary>
+        internal void NewConversation()
+        {
+            if (_isSending)
+                return;
+
+            _conversationPanel.Children.Clear();
+            _history.Clear();
+            _historyAgentNames.Clear();
+            _renderedTurns = 0;
+            _welcomeCard = null;
+            _emptyStateCard = null;
+            _inputBox.Text = string.Empty;
+
+            RenderAgentState((_cachedSettings ?? LoadSettings()).Ai);
+            UpdateSendState();
+
+            ComposerFocusRequested = true;
+            _inputBox.Focus();
+        }
+
         /// <summary>
         /// FR-015: the placeholder invites a question, so it may show only while the composer can
         /// take one — empty AND enabled. Both signals (text, enabled) route here so they cannot
@@ -419,45 +553,39 @@ namespace AkmlSql.Shell.Shared.Ai
                     : Visibility.Collapsed;
 
         /// <summary>
-        /// Spec 036 (US1, FR-027/FR-029/FR-030): re-resolves the chat's binding to the active
-        /// editor (header shows the bound <c>server.database</c>), polls the schema-loading signal
-        /// (the same <see cref="MessageTypes.SchemaStatusRequest"/> the editor margin polls — no
-        /// second progress mechanism), and surfaces the privacy-mode consequence.
+        /// Spec 036 (US1, FR-027/FR-029/FR-030), reworked by spec 046 (US1, FR-001 – FR-007):
+        /// re-resolves the chat's binding — the query window behind the ACTIVE DOCUMENT, not the
+        /// text view that last had the keyboard (<see cref="ChatBindingResolver"/>) — and feeds the
+        /// header, the schema-loading poll (the same <see cref="MessageTypes.SchemaStatusRequest"/>
+        /// the editor margin polls) and the privacy note from that one binding.
         /// </summary>
         internal void RefreshBinding()
         {
             try
             {
-                var sessionId = RefactorCommandHelper.TryGetActiveRealSessionId();
-                if (!string.Equals(sessionId, _boundSessionId, StringComparison.Ordinal))
+                var previous = _binding;
+                var binding = (TestBindingResolver ?? ChatBindingResolver.Resolve)(previous)
+                              ?? ChatBinding.ForNoDocument();
+                _binding = binding;
+
+                if (!string.Equals(binding.SessionId, previous.SessionId, StringComparison.Ordinal) ||
+                    binding.State != previous.State)
                 {
-                    _boundSessionId = sessionId;
                     _schemaReady = false; // rebinding restarts the loading-state poll
                 }
 
-                if (sessionId == null)
+                ApplyBindingToHeader(binding);
+                _welcomeCard?.SetBinding(binding);
+                NoteBindingChange(binding);
+
+                if (binding.State == ChatBindingState.Bound)
                 {
-                    SetDatabaseContext(string.Empty);
-                    _schemaStatusLabel.Visibility = Visibility.Collapsed;
+                    if (!_schemaReady)
+                        _ = PollSchemaStatusAsync(binding.SessionId!);
                 }
                 else
                 {
-                    // server.database for the header — the same caption detection the connection
-                    // wiring uses (SsmsConnectionDetector).
-                    var conn = SsmsConnectionDetector.TryDetectConnection(ServiceProvider.GlobalProvider);
-                    if (conn != null && !string.IsNullOrEmpty(conn.Database))
-                    {
-                        SetDatabaseContext($"{conn.Server}.{conn.Database}");
-                    }
-                    else if (string.IsNullOrEmpty(_currentDatabase))
-                    {
-                        SetDatabaseContext(string.Empty);
-                    }
-
-                    if (!_schemaReady)
-                    {
-                        _ = PollSchemaStatusAsync(sessionId);
-                    }
+                    _schemaStatusLabel.Visibility = Visibility.Collapsed;
                 }
 
                 UpdatePrivacyNote();
@@ -467,6 +595,29 @@ namespace AkmlSql.Shell.Shared.Ai
             {
                 Log.Debug(ex, "AiChatPanel: binding refresh failed");
             }
+        }
+
+        /// <summary>
+        /// Spec 046 (FR-007, contracts/chat-binding.md Part 5): one line when the chat starts
+        /// answering about a different <c>server.database</c> in the middle of a conversation —
+        /// compared with the LAST BOUND key, so a new window that is briefly "not connected" on its
+        /// way to another database still gets its line. Nothing before the first question (the
+        /// header says it), nothing when only the window changed. Not history: never sent or copied.
+        /// </summary>
+        private void NoteBindingChange(ChatBinding binding)
+        {
+            if (binding.State != ChatBindingState.Bound)
+                return;
+
+            var previousKey = _lastBindingKey;
+            _lastBindingKey = binding.BindingKey;
+            if (previousKey.Length == 0 || _history.Count == 0 ||
+                string.Equals(previousKey, binding.BindingKey, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            AddConversationNotice(
+                $"Now answering about {binding.Server}.{binding.Database} ({binding.DocumentName}).",
+                BindingNoticeAutomationName);
         }
 
         /// <summary>
@@ -573,6 +724,7 @@ namespace AkmlSql.Shell.Shared.Ai
             var canAnswer = CanAnswerCached(chatAgent);   // memoised — no per-render DPAPI unwrap (R9)
             _agentUsable = canAnswer;
             _resolvedChatAgentName = chatAgent?.Name;
+            _resolvedChatAgentLabel = chatAgent == null ? null : AiAgentLabel.Format(chatAgent.Name, chatAgent.Provider, chatAgent.Model);
             _resolvedChatAgentId = chatAgent?.Id;
             _agentPicker.SetAgents(ai.Agents, chatAgent?.Id);
 
@@ -584,20 +736,13 @@ namespace AkmlSql.Shell.Shared.Ai
                     _conversationPanel.Children.Remove(_emptyStateCard);
                     _emptyStateCard = null;
                 }
-                if (_greetingBubble != null)
-                    _conversationPanel.Children.Remove(_greetingBubble);
-                _greetingBubble = CreateMessageBubble(GreetingText(chatAgent.Name), isUser: false);
-                _conversationPanel.Children.Insert(0, _greetingBubble);
+                ShowWelcomeIfEmpty();
             }
             else
             {
                 var (reasonText, offendingAgentId) = AiChatEmptyState.DetectReason(ai);
                 _offendingAgentId = offendingAgentId;
-                if (_greetingBubble != null)
-                {
-                    _conversationPanel.Children.Remove(_greetingBubble);
-                    _greetingBubble = null;
-                }
+                RemoveWelcomeCard();
                 if (_emptyStateCard != null)
                     _conversationPanel.Children.Remove(_emptyStateCard);
                 _emptyStateCard = new AiChatEmptyState(reasonText);
@@ -612,13 +757,43 @@ namespace AkmlSql.Shell.Shared.Ai
             }
 
             _inputBox.IsEnabled = canAnswer;
-            _sendButton.IsEnabled = canAnswer && !_isSending;
+            UpdateSendState();
         }
 
-        private static string GreetingText(string? agentName)
-            => string.IsNullOrWhiteSpace(agentName)
-                ? "Hello! I'm your AI SQL assistant. Ask me about queries, optimization, schema, or database best practices."
-                : $"Hello! I'm your AI SQL assistant, powered by {agentName}. Ask me about queries, optimization, schema, or database best practices.";
+        /// <summary>
+        /// Spec 046 (FR-023): a fresh welcome card — the bound database, the answering agent and
+        /// the starters — while the conversation is empty and an agent can answer. Rebuilt on every
+        /// agent-state render so a renamed agent shows its new name.
+        /// </summary>
+        private void ShowWelcomeIfEmpty()
+        {
+            RemoveWelcomeCard();
+            if (_renderedTurns > 0)
+                return;
+
+            _welcomeCard = new AiChatWelcomeCard();
+            _welcomeCard.SetBinding(_binding);
+            _welcomeCard.SetAgent(_resolvedChatAgentLabel);
+            _welcomeCard.IsBusy = _isSending;
+            _welcomeCard.StarterRequested += (_, question) => OnStarterRequested(question);
+            _conversationPanel.Children.Insert(0, _welcomeCard);
+        }
+
+        private void RemoveWelcomeCard()
+        {
+            if (_welcomeCard == null) return;
+            _conversationPanel.Children.Remove(_welcomeCard);
+            _welcomeCard = null;
+        }
+
+        /// <summary>A starter question is sent exactly as if typed (FR-023).</summary>
+        private void OnStarterRequested(string question)
+        {
+            if (_isSending || !_agentUsable)
+                return;
+            _inputBox.Text = question;
+            _ = SendMessageAsync();
+        }
 
         /// <summary>
         /// FR-049 / V16: when a refresh finds the chat assignment cleared — normalisation dropped
@@ -663,11 +838,11 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
-        /// A plainly stated system line in the conversation (FR-049). It is NOT part of
-        /// <see cref="_history"/>: the copy-conversation path carries user and assistant turns,
-        /// not configuration notices.
+        /// A plainly stated system line in the conversation (FR-049; spec 046 also uses it for the
+        /// binding and agent-switch lines). It is NOT part of <see cref="_history"/>: the
+        /// copy-conversation path carries user and assistant turns, not notices.
         /// </summary>
-        private void AddConversationNotice(string text)
+        private void AddConversationNotice(string text, string automationName = ClearedAssignmentNoticeAutomationName)
         {
             var notice = new TextBlock
             {
@@ -678,7 +853,7 @@ namespace AkmlSql.Shell.Shared.Ai
                 Margin = new Thickness(Spacing.Md, 2, Spacing.Md, 2)
             };
             notice.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-            System.Windows.Automation.AutomationProperties.SetName(notice, ClearedAssignmentNoticeAutomationName);
+            System.Windows.Automation.AutomationProperties.SetName(notice, automationName);
             _conversationPanel.Children.Add(notice);
             ScrollToBottom();
         }
@@ -710,6 +885,7 @@ namespace AkmlSql.Shell.Shared.Ai
         /// </summary>
         private void OnChatAgentSelected(string agentId)
         {
+            var answeringBefore = _resolvedChatAgentId;
             try
             {
                 var settings = LoadSettings();
@@ -731,18 +907,33 @@ namespace AkmlSql.Shell.Shared.Ai
                     RefreshConfiguration(forceRefresh: true);
                     if (string.Equals(signatureBefore, _configSignature, StringComparison.Ordinal))
                         RenderAgentState(ai);
+                    NoteAgentSwitch(answeringBefore);
                     return;
                 }
 
                 ai.FeatureAgents.Chat = assignment;
                 Commands.OptionsCommand.SaveAndNotify(settings);
                 _lastChatAssignment = assignment;   // user-initiated — not a cleared-assignment notice (FR-049)
-                RefreshConfiguration(forceRefresh: true);   // re-resolve greeting + picker now
+                RefreshConfiguration(forceRefresh: true);   // re-resolve welcome card + picker now
+                NoteAgentSwitch(answeringBefore);
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "AiChatPanel: failed to persist chat agent selection");
             }
+        }
+
+        /// <summary>
+        /// Spec 046 (FR-034): when the pick changed who answers, say so once in the conversation —
+        /// "Now answering with Name · Provider · model." — so the switch is visible where the
+        /// answers appear, not only in the picker. Re-picking the same agent says nothing.
+        /// </summary>
+        private void NoteAgentSwitch(string? answeringBefore)
+        {
+            if (string.IsNullOrEmpty(_resolvedChatAgentId) ||
+                string.Equals(answeringBefore, _resolvedChatAgentId, StringComparison.Ordinal))
+                return;
+            AddConversationNotice($"Now answering with {_resolvedChatAgentLabel}.", AgentSwitchNoticeAutomationName);
         }
 
         /// <summary>
@@ -827,7 +1018,7 @@ namespace AkmlSql.Shell.Shared.Ai
                     MessageTypes.SchemaStatusRequest, new SchemaStatusRequest { SessionId = sessionId },
                     timeoutMs: 3000);
 
-                if (!string.Equals(sessionId, _boundSessionId, StringComparison.Ordinal))
+                if (!string.Equals(sessionId, _binding.SessionId, StringComparison.Ordinal))
                     return; // rebound while the poll was in flight — the next tick owns the strip
 
                 // Phase: 0 = NotLoaded, 1 = PhaseA (objects), 2 = PhaseB (columns+FKs), 3 = Complete.
@@ -838,7 +1029,7 @@ namespace AkmlSql.Shell.Shared.Ai
                 }
                 else
                 {
-                    var dbName = !string.IsNullOrEmpty(resp.DatabaseName) ? resp.DatabaseName : _currentDatabase;
+                    var dbName = !string.IsNullOrEmpty(resp.DatabaseName) ? resp.DatabaseName : _binding.Database;
                     _schemaStatusLabel.Text =
                         $"Schema for {dbName} is still loading — answers will use it as soon as it is ready.";
                     _schemaStatusLabel.Visibility = Visibility.Visible;
@@ -898,18 +1089,14 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
-        /// Updates the header to show the current binding (<c>server.database</c>), or the explicit
-        /// not-connected state when empty. Called by <see cref="RefreshBinding"/> whenever the active
-        /// editor's connection changes (FR-027).
+        /// Shows the binding in the header: <c>server.database</c> when bound, the explicit
+        /// not-connected state otherwise (FR-027). The header ellipsizes long names, so the tooltip
+        /// names the window and its full connection (spec 046).
         /// </summary>
-        public void SetDatabaseContext(string databaseName)
+        private void ApplyBindingToHeader(ChatBinding binding)
         {
-            _currentDatabase = databaseName;
-            _headerLabel.Text = !string.IsNullOrEmpty(databaseName)
-                ? databaseName
-                : NotConnectedHeaderText;
-            // The header ellipsizes long server.database names — the tooltip keeps the full one.
-            _headerLabel.ToolTip = !string.IsNullOrEmpty(databaseName) ? databaseName : null;
+            _headerLabel.Text = binding.HeaderText;
+            _headerLabel.ToolTip = binding.HeaderToolTip;
         }
 
         private void OnInputKeyDown(object sender, KeyEventArgs e)
@@ -948,10 +1135,15 @@ namespace AkmlSql.Shell.Shared.Ai
             // sent to (contract Part 3 — the in-flight answer keeps the agent that produced it).
             var expectedAgentName = _resolvedChatAgentName;
             var expectedAgentId = _resolvedChatAgentId;
+            var expectedAgentLabel = _resolvedChatAgentLabel;
 
             _inputBox.Text = string.Empty;
             _isSending = true;
-            _sendButton.IsEnabled = false;
+            UpdateSendState();
+            // Spec 046 (FR-014): the working state names who is being asked.
+            _thinkingIndicator.Text = string.IsNullOrWhiteSpace(expectedAgentLabel)
+                ? ThinkingText
+                : $"Asking {expectedAgentLabel}…";
             _thinkingIndicator.Visibility = Visibility.Visible;
 
             // Add user message to conversation
@@ -959,16 +1151,19 @@ namespace AkmlSql.Shell.Shared.Ai
 
             try
             {
-                // Spec 036 (US1, FR-021/FR-028): bind to the ACTIVE EDITOR's real session, resolved
-                // at send time on every message (V12). Refuse to send when unbound — a fabricated
-                // id silently produced an empty-schema answer (R1).
+                // Spec 036 (US1, FR-021/FR-028) + spec 046 (US1, FR-001/FR-002/FR-004): re-resolve
+                // the binding at send time and send under ITS session — the same binding the header
+                // shows. Refuse only when there is no bound, connected query window, say what was
+                // found, and log it (FR-005). Never a fabricated id (R1).
                 RefreshBinding();
-                var sessionId = RefactorCommandHelper.TryGetActiveRealSessionId();
-                if (string.IsNullOrEmpty(sessionId))
+                var binding = _binding;
+                if (binding.State != ChatBindingState.Bound || string.IsNullOrEmpty(binding.SessionId))
                 {
-                    AddAssistantMessage(NoConnectionMessage);
+                    LogRefusal(binding);
+                    AddAssistantMessage(binding.RefusalText);
                     return;
                 }
+                var sessionId = binding.SessionId!;
 
                 var manager = EngineLifecycle.Manager;
                 if (manager?.Client == null || !manager.Client.IsConnected)
@@ -998,9 +1193,12 @@ namespace AkmlSql.Shell.Shared.Ai
                     _history.Add(new ChatTurnDto { Role = "assistant", Content = response.Response! });
                     _historyAgentNames.Add(response.AgentName);
 
-                    // Add assistant response to conversation, attributed to whoever answered
-                    AddAssistantMessage(response.Response!, response.CodeActions,
-                        response.AgentName, expectedAgentName);
+                    // Add assistant response to conversation, attributed to whoever answered —
+                    // "Name · Provider · model" when the engine names them (spec 046, FR-022).
+                    var answerLabel = string.IsNullOrWhiteSpace(response.AgentName)
+                        ? null
+                        : AiAgentLabel.Format(response.AgentName, response.AgentProvider, response.AgentModel);
+                    AddAnswer(response.Response!, response.AgentName, answerLabel, expectedAgentName);
 
                     // Show latency info
                     if (response.LatencyMs > 0)
@@ -1026,9 +1224,23 @@ namespace AkmlSql.Shell.Shared.Ai
                 _isSending = false;
                 // Restore the gated state, not a blanket true — while no agent can answer the
                 // button stays disabled (FR-018).
-                _sendButton.IsEnabled = _agentUsable;
+                UpdateSendState();
                 _thinkingIndicator.Visibility = Visibility.Collapsed;
             }
+        }
+
+        /// <summary>
+        /// Spec 046 (FR-005, contracts/chat-binding.md Part 4): one Information line per refusal,
+        /// written before the refusal is shown, so a report like 2026-11-04's can be checked in the
+        /// log. File name and booleans only — never a path, server, login or the question.
+        /// </summary>
+        private static void LogRefusal(ChatBinding binding)
+        {
+            var isQueryWindow = binding.State == ChatBindingState.Bound || binding.State == ChatBindingState.NotConnected;
+            Log.Information(
+                "AiChatPanel: refused to send — {Reason}; document={Document}; queryWindow={IsQueryWindow}; session={HasSession}; connected={Connected}",
+                binding.State, binding.DocumentName ?? "(none)", isQueryWindow,
+                !string.IsNullOrEmpty(binding.SessionId), binding.State == ChatBindingState.Bound);
         }
 
         /// <summary>
@@ -1077,18 +1289,21 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
-        /// Adds a user message bubble to the conversation panel.
+        /// Adds a user message bubble to the conversation panel. Sending is an explicit action, so
+        /// the view always follows it (FR-024).
         /// </summary>
         private void AddUserMessage(string text)
         {
-            var bubble = CreateMessageBubble(text, isUser: true);
+            NoteTurnRendered();
+            var bubble = CreateMessageBubble(text, isUser: true, attribution: UserAttributionText);
             _conversationPanel.Children.Add(bubble);
-            ScrollToBottom();
+            ScrollToBottom(force: true);
         }
 
         /// <summary>
-        /// Adds an assistant message bubble to the conversation panel,
-        /// optionally with code action buttons.
+        /// Adds an assistant message to the conversation, rendered by
+        /// <see cref="ChatMessageRenderer"/>: prose, and every fenced block as a code panel with its
+        /// own Copy and Insert into query (spec 046, FR-020/FR-021).
         /// <para>
         /// Spec 037 (US3, FR-042): <paramref name="agentName"/> is the agent that ACTUALLY
         /// answered (<c>AiChatResponse.AgentName</c>); <paramref name="selectedAgentName"/> is
@@ -1096,84 +1311,38 @@ namespace AkmlSql.Shell.Shared.Ai
         /// nothing when <paramref name="agentName"/> is null (an older engine — no guessed
         /// name), and a plainly stated fallback line when the two differ (FR-052).
         /// </para>
+        /// <para>
+        /// Spec 046: <paramref name="codeActions"/> (the engine's per-block copy list) no longer
+        /// drives the render — the blocks come from the answer's own fences, so the actions sit on
+        /// the panel they act on instead of in a detached row. The parameter stays for callers.
+        /// </para>
         /// </summary>
         private void AddAssistantMessage(string text, List<CodeActionDto>? codeActions = null,
             string? agentName = null, string? selectedAgentName = null)
+            => AddAssistantBubble(text, AttributionText(agentName, selectedAgentName));
+
+        /// <summary>
+        /// Spec 046 (FR-022): an answer attributed with the answering agent's full label,
+        /// "Name · Provider · model". The fallback decision still compares names (an older engine
+        /// sends no provider or model, and its name must not read as a fallback).
+        /// </summary>
+        private void AddAnswer(string text, string? agentName, string? answerLabel, string? selectedAgentName)
+            => AddAssistantBubble(text, AttributionText(agentName, selectedAgentName, answerLabel));
+
+        private void AddAssistantBubble(string text, string? attribution)
         {
-            var bubble = CreateMessageBubble(text, isUser: false,
-                attribution: AttributionText(agentName, selectedAgentName));
+            NoteTurnRendered();
+            var bubble = CreateMessageBubble(text, isUser: false, attribution: attribution);
             _conversationPanel.Children.Add(bubble);
-
-            // Add code-action buttons (e.g., "Copy this SQL"). Border + foreground both use TextLink
-            // so the affordance reads as clickable in either theme; background is SurfaceElevated.
-            if (codeActions != null && codeActions.Count > 0)
-            {
-                // Spec 036 (US3, FR-015): with several SQL blocks in one message each copy action
-                // must say which block it belongs to. Single-block messages keep the engine label.
-                // Each block's copy and insert buttons share one horizontal row (the row owns the
-                // outer margin; the copy button keeps only a trailing gap against the insert one).
-                var blockNumber = 0;
-                foreach (var action in codeActions)
-                {
-                    blockNumber++;
-                    var label = codeActions.Count > 1
-                        ? $"Copy SQL block {blockNumber} of {codeActions.Count}"
-                        : action.Label;
-
-                    var actionButton = new Button
-                    {
-                        Content = label,
-                        Tag = action.Code,
-                        Margin = new Thickness(0, 0, Spacing.Sm, 0),
-                        Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
-                        FontSize = 11,
-                        BorderThickness = new Thickness(1),
-                        Cursor = Cursors.Hand,
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        FocusVisualStyle = FocusVisualStyles.HighStakes
-                    };
-                    // FR-020: every copy control is keyboard-reachable (Button is a tab stop by
-                    // default) and carries an accessible name.
-                    System.Windows.Automation.AutomationProperties.SetName(actionButton, label);
-                    actionButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.SurfaceElevated);
-                    actionButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextLink);
-                    actionButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.TextLink);
-                    actionButton.Click += OnCodeActionClick;
-
-                    // Spec 037: the insert companion drops this block's SQL into the active query
-                    // editor at the caret — same visual idiom as the copy button.
-                    var insertLabel = codeActions.Count > 1
-                        ? $"⇩ Insert SQL block {blockNumber} of {codeActions.Count}"
-                        : "⇩ Insert into query";
-                    var insertButton = new Button
-                    {
-                        Content = insertLabel,
-                        Tag = action.Code,
-                        Padding = new Thickness(Spacing.Sm, Spacing.Xs, Spacing.Sm, Spacing.Xs),
-                        FontSize = 11,
-                        BorderThickness = new Thickness(1),
-                        Cursor = Cursors.Hand,
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        FocusVisualStyle = FocusVisualStyles.HighStakes
-                    };
-                    System.Windows.Automation.AutomationProperties.SetName(insertButton, insertLabel);
-                    insertButton.SetResourceReference(Button.BackgroundProperty, ThemeTokens.SurfaceElevated);
-                    insertButton.SetResourceReference(Button.ForegroundProperty, ThemeTokens.TextLink);
-                    insertButton.SetResourceReference(Button.BorderBrushProperty, ThemeTokens.TextLink);
-                    insertButton.Click += OnInsertSqlClick;
-
-                    var row = new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Margin = new Thickness(Spacing.Md, 2, Spacing.Md, 2)
-                    };
-                    row.Children.Add(actionButton);
-                    row.Children.Add(insertButton);
-                    _conversationPanel.Children.Add(row);
-                }
-            }
-
             ScrollToBottom();
+        }
+
+        /// <summary>The first message replaces the welcome card (FR-023).</summary>
+        private void NoteTurnRendered()
+        {
+            _renderedTurns++;
+            RemoveWelcomeCard();
+            UpdateSendState();   // New chat now has something to clear
         }
 
         /// <summary>
@@ -1187,49 +1356,73 @@ namespace AkmlSql.Shell.Shared.Ai
         /// swapped name.
         /// </summary>
         internal static string? AttributionText(string? agentName, string? selectedAgentName)
-        {
-            if (string.IsNullOrWhiteSpace(agentName)) return null;
-            if (string.IsNullOrWhiteSpace(selectedAgentName) ||
-                string.Equals(agentName, selectedAgentName, StringComparison.Ordinal))
-                return agentName;
-            return $"{agentName} answered — {selectedAgentName} was unavailable.";
-        }
+            => AttributionText(agentName, selectedAgentName, null);
 
         /// <summary>
-        /// Creates a message bubble (Border containing the text plus a per-message copy button)
-        /// for the conversation. User messages right-align with
-        /// <see cref="ThemeTokens.ChatUserBubble"/> background; assistant messages left-align
-        /// with <see cref="ThemeTokens.ChatAssistantBubble"/>.
+        /// Spec 046 (FR-022): as above, shown with the answerer's full label when the engine sent
+        /// one (<paramref name="answerLabel"/>, "Name · Provider · model"). The fallback line names
+        /// the unavailable agent by name only, so it stays one readable sentence.
+        /// </summary>
+        internal static string? AttributionText(string? agentName, string? selectedAgentName, string? answerLabel)
+        {
+            if (string.IsNullOrWhiteSpace(agentName)) return null;
+            var shown = string.IsNullOrWhiteSpace(answerLabel) ? agentName : answerLabel;
+            if (string.IsNullOrWhiteSpace(selectedAgentName) ||
+                string.Equals(agentName, selectedAgentName, StringComparison.Ordinal))
+                return shown;
+            return $"{shown} answered — {selectedAgentName} was unavailable.";
+        }
+
+        /// <summary>The speaker caption on the user's own messages (FR-022).</summary>
+        internal const string UserAttributionText = "You";
+
+        /// <summary>Accessible name of the "You" caption on a user message.</summary>
+        internal const string UserAttributionAutomationName = "Message author";
+
+        /// <summary>
+        /// Creates one turn of the conversation: a caption row (who said it, and the per-message
+        /// ⧉ copy button) above the message body.
         /// <para>
-        /// Spec 036 (US3, FR-017): the text host is a read-only, borderless, transparent
-        /// <see cref="TextBox"/> — the standard WPF way to make static text selectable (pointer
-        /// drag + Ctrl+C copies exactly the selection). A read-only TextBox shows no caret and,
-        /// with <c>AcceptsReturn</c> off, does not swallow the Enter key the input box binds to
-        /// send (research R9). The per-message copy button is preserved (FR-016).
+        /// User turns are bubbles aligned right on <see cref="ThemeTokens.ChatUserBubble"/>; the
+        /// body is a read-only, borderless <see cref="TextBox"/> (spec 036 FR-017: selectable,
+        /// Ctrl+C copies the selection, no caret, does not swallow Enter). Assistant turns span the
+        /// panel's width on <see cref="ThemeTokens.ChatAssistantBubble"/> — answers carry SQL —
+        /// with the body built by <see cref="ChatMessageRenderer"/> (spec 046, FR-020/FR-021).
+        /// The per-message copy button always copies the RAW message text (FR-026).
         /// </para>
         /// <para>
         /// Spec 037 (US3, FR-042): <paramref name="attribution"/> — already rendered by
-        /// <see cref="AttributionText"/> — adds a small caption above the text saying which
-        /// agent produced the answer. Null adds nothing (older-engine answers stay caption-free).
+        /// <see cref="AttributionText(string?, string?)"/> — names who produced an answer; null adds
+        /// no caption (older-engine answers stay caption-free).
         /// </para>
         /// </summary>
-        private static Border CreateMessageBubble(string text, bool isUser, string? attribution = null)
+        private Border CreateMessageBubble(string text, bool isUser, string? attribution = null)
         {
-            var textHost = new TextBox
+            UIElement body;
+            if (isUser)
             {
-                Text = text,
-                IsReadOnly = true,
-                IsReadOnlyCaretVisible = false,
-                AcceptsReturn = false,
-                TextWrapping = TextWrapping.Wrap,
-                FontSize = 12,
-                Padding = new Thickness(0),
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                FocusVisualStyle = FocusVisualStyles.HighStakes
-            };
-            textHost.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
-            System.Windows.Automation.AutomationProperties.SetName(textHost, "Message text");
+                var textHost = new TextBox
+                {
+                    Text = text,
+                    IsReadOnly = true,
+                    IsReadOnlyCaretVisible = false,
+                    AcceptsReturn = false,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    Padding = new Thickness(0),
+                    BorderThickness = new Thickness(0),
+                    Background = Brushes.Transparent,
+                    FocusVisualStyle = FocusVisualStyles.HighStakes
+                };
+                textHost.SetResourceReference(TextBox.ForegroundProperty, ThemeTokens.TextPrimary);
+                System.Windows.Automation.AutomationProperties.SetName(textHost, ChatMessageRenderer.MessageTextAutomationName);
+                ChatMessageRenderer.ForwardMouseWheel(textHost);
+                body = textHost;
+            }
+            else
+            {
+                body = ChatMessageRenderer.Build(ChatMarkdown.Parse(text), TryCopyToClipboard, InsertIntoBoundWindow);
+            }
 
             var copyButton = new Button
             {
@@ -1252,42 +1445,41 @@ namespace AkmlSql.Shell.Shared.Ai
             copyButton.MouseLeave += (s, _) => ((Button)s).Opacity = 0.8;
             copyButton.Click += OnCopyMessageClick;
 
-            var layout = new Grid();
-            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            layout.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(textHost, 0);
-            Grid.SetColumn(copyButton, 1);
-            layout.Children.Add(textHost);
-            layout.Children.Add(copyButton);
-
-            UIElement bubbleContent = layout;
+            var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 2) };
+            DockPanel.SetDock(copyButton, Dock.Right);
+            header.Children.Add(copyButton);
             if (!string.IsNullOrEmpty(attribution))
             {
                 var caption = new TextBlock
                 {
                     Text = attribution,
                     FontSize = 10,
-                    FontStyle = FontStyles.Italic,
+                    FontWeight = FontWeights.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
-                    Margin = new Thickness(0, 0, 0, 2)
+                    VerticalAlignment = VerticalAlignment.Center
                 };
                 caption.SetResourceReference(TextBlock.ForegroundProperty, ThemeTokens.TextSecondary);
-                System.Windows.Automation.AutomationProperties.SetName(caption, AttributionAutomationName);
-
-                var stack = new StackPanel { Orientation = Orientation.Vertical };
-                stack.Children.Add(caption);
-                stack.Children.Add(layout);
-                bubbleContent = stack;
+                System.Windows.Automation.AutomationProperties.SetName(caption,
+                    isUser ? UserAttributionAutomationName : AttributionAutomationName);
+                header.Children.Add(caption);
             }
+            else
+            {
+                header.Children.Add(new Border());   // keeps the copy button right-aligned
+            }
+
+            var stack = new StackPanel { Orientation = Orientation.Vertical };
+            stack.Children.Add(header);
+            stack.Children.Add(body);
 
             var bubble = new Border
             {
-                Child = bubbleContent,
+                Child = stack,
                 Padding = new Thickness(10, Spacing.Sm, 10, Spacing.Sm),
                 Margin = new Thickness(
                     isUser ? 60 : Spacing.Sm,  // Left margin
                     Spacing.Xs,
-                    isUser ? Spacing.Sm : 60,  // Right margin
+                    Spacing.Sm,
                     Spacing.Xs),
                 CornerRadius = new CornerRadius(Spacing.Sm),
                 // Visible edge: on the white light-theme panel a borderless slate bubble is
@@ -1295,8 +1487,8 @@ namespace AkmlSql.Shell.Shared.Ai
                 BorderThickness = new Thickness(1),
                 HorizontalAlignment = isUser
                     ? HorizontalAlignment.Right
-                    : HorizontalAlignment.Left,
-                MaxWidth = 500
+                    : HorizontalAlignment.Stretch,
+                MaxWidth = isUser ? 500 : double.PositiveInfinity
             };
             bubble.SetResourceReference(Border.BackgroundProperty,
                 isUser ? ThemeTokens.ChatUserBubble : ThemeTokens.ChatAssistantBubble);
@@ -1304,6 +1496,10 @@ namespace AkmlSql.Shell.Shared.Ai
 
             return bubble;
         }
+
+        /// <summary>Spec 046 (FR-008): a code panel's Insert goes into the bound query window.</summary>
+        private bool InsertIntoBoundWindow(string code)
+            => AiEditorSqlInserter.TryInsertAtCaret(code, _binding.DocumentPath);
 
         /// <summary>
         /// Copies the whole message text of a bubble to the clipboard and shows a transient
@@ -1370,7 +1566,7 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>FR-019: one clipboard funnel for the panel — success or a logged failure.</summary>
-        private static bool TryCopyToClipboard(string text)
+        internal static bool TryCopyToClipboard(string text)
         {
             try
             {
@@ -1399,7 +1595,7 @@ namespace AkmlSql.Shell.Shared.Ai
             = new System.Runtime.CompilerServices.ConditionalWeakTable<Button, FlashState>();
 
         /// <summary>Shows a transient confirmation/failure on a copy button, reverting after 1.5 s.</summary>
-        private static void FlashButtonContent(Button button, string feedback)
+        internal static void FlashButtonContent(Button button, string feedback)
         {
             // A feedback string must never be captured as the "original": a second click inside
             // the window used to stack a second timer whose original was the first flash's text,
@@ -1428,47 +1624,19 @@ namespace AkmlSql.Shell.Shared.Ai
         }
 
         /// <summary>
-        /// Handles a code action button click by copying the SQL to clipboard.
-        /// FR-019: a failed copy says so and the action stays re-copyable.
+        /// Spec 046 (FR-024): follows a new message only when the reader is already at the bottom;
+        /// a reader who scrolled up to an earlier answer is left where they are. Called right after
+        /// a child is added, before layout, so the offsets are still the pre-append ones.
+        /// <paramref name="force"/>: the user's own message always follows.
         /// </summary>
-        private static void OnCodeActionClick(object sender, RoutedEventArgs e)
+        private void ScrollToBottom(bool force = false)
         {
-            if (sender is Button button && button.Tag is string code)
-            {
-                if (!TryCopyToClipboard(code))
-                {
-                    FlashButtonContent(button, "⚠ Copy failed");
-                    return;
-                }
-                button.Content = "Copied!";
-            }
+            if (force || ShouldFollow(_scrollViewer.VerticalOffset, _scrollViewer.ScrollableHeight))
+                _scrollViewer.ScrollToEnd();
         }
 
-        /// <summary>
-        /// Spec 037: the insert companion to <see cref="OnCodeActionClick"/> — drops the block's
-        /// SQL into the active query editor at the caret. When no query editor is active the
-        /// inserter reports false and the button says so transiently (the flash reverts after
-        /// 1.5 s, so the action stays retryable).
-        /// </summary>
-        private static void OnInsertSqlClick(object sender, RoutedEventArgs e)
-        {
-            if (sender is Button button && button.Tag is string code)
-            {
-                if (AiEditorSqlInserter.TryInsertAtCaret(code))
-                {
-                    FlashButtonContent(button, "✓ Inserted");
-                    return;
-                }
-                FlashButtonContent(button, "⚠ No active query");
-            }
-        }
-
-        /// <summary>
-        /// Scrolls the conversation area to the bottom to show the latest message.
-        /// </summary>
-        private void ScrollToBottom()
-        {
-            _scrollViewer.ScrollToEnd();
-        }
+        /// <summary>At the bottom = within 8 DIU of the end (FR-024).</summary>
+        internal static bool ShouldFollow(double verticalOffset, double scrollableHeight)
+            => verticalOffset >= scrollableHeight - 8;
     }
 }

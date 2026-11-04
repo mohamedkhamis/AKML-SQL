@@ -287,8 +287,8 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 // The error bubble names the agent and states the route…
                 var errorBubble = MessageTexts(panel).Last();
-                Assert.Contains("Kimi K2", errorBubble.Text);
-                Assert.Contains("Options → AI Assistance", errorBubble.Text);
+                Assert.Contains("Kimi K2", errorBubble);
+                Assert.Contains("Options → AI Assistance", errorBubble);
 
                 // …and the route is a real button deep-linking to THAT agent's settings page.
                 var route = Assert.Single(FindAll<Button>(panel),
@@ -316,7 +316,7 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 // The bare provider message stands; no settings button is offered.
                 var errorBubble = MessageTexts(panel).Last();
-                Assert.DoesNotContain("Kimi K2", errorBubble.Text);
+                Assert.DoesNotContain("Kimi K2", errorBubble);
                 Assert.DoesNotContain(FindAll<Button>(panel),
                     b => (AutomationProperties.GetName(b) ?? string.Empty).Contains("settings"));
             });
@@ -363,10 +363,8 @@ namespace AkmlSql.Shell.Shared.Tests
             method!.Invoke(panel, new object?[] { error, agentName, agentId });
         }
 
-        private static List<TextBox> MessageTexts(DependencyObject root)
-            => FindAll<TextBox>(root)
-                .Where(tb => AutomationProperties.GetName(tb) == "Message text")
-                .ToList();
+        // Spec 046: answers render as rich text — read message text through the shared reader.
+        private static List<string> MessageTexts(DependencyObject root) => ChatPanelTestText.MessageTexts(root);
 
         private static void Click(Button button)
             => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));

@@ -93,9 +93,17 @@ existing Debug line (`response received in …`).
 
 ## Part 5 — Rebind notice (FR-007)
 
-In `RefreshBinding`, when both the previous and the new binding are `Bound` and their
-`BindingKey` differ: `AddConversationNotice($"Now answering about {Server}.{Database} ({DocumentName}).")`.
-Not raised on the first binding, not raised when only the document changed, not part of history.
+In `RefreshBinding`, when the new binding is `Bound` and its `BindingKey` differs from the **last
+bound** key (`_lastBindingKey`, ordinal-ignore-case), and the conversation has at least one turn:
+`AddConversationNotice($"Now answering about {Server}.{Database} ({DocumentName}).")` with the
+accessible name `Chat binding notice`. Comparing with the last bound key (not the immediately
+previous binding) matters: a new query window is "not connected" for about a second before SSMS
+adds its connection, so a strict previous-binding rule would swallow exactly the US1-4 case. Not
+raised on the first binding, not raised before the first question (the header says it), not raised
+when only the window changed, not part of history.
+
+*Implementation refinement recorded 2026-11-04 during US1; the data-model's transition note reads
+the same way.*
 
 ## Part 6 — Acceptance mapping
 

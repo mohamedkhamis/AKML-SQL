@@ -955,6 +955,14 @@ AgentName    string?           Key(6)  Spec 037 (US3/US4, FR-042/FR-052): name o
                                      and a peer expecting it from an older engine deserializes
                                      null, so the shell renders no attribution rather than a
                                      guessed one.
+AgentProvider string?          Key(7)  Spec 046 (FR-022, research R4): provider id of the agent that
+                                     produced the answer ("gemini", "anthropic", …) — the resolved
+                                     agent's, a fallback-chain agent's, or the offline provider's.
+                                     The chat panels show "Name · Provider · model". Append-only:
+                                     null from an older engine; the shell then shows the name only.
+AgentModel   string?           Key(8)  Spec 046 (FR-022): that agent's model; the offline provider's
+                                     configured model when it answered. Null when unknown or from
+                                     an older engine.
 ```
 
 ### `AiProviderTest` (77) → `AiProviderTestResult` (177) — spec 036

@@ -1,0 +1,89 @@
+@*
+    Spec 046 (US4, FR-030 – FR-033, contracts/chat-composer-and-agents.md Part 6): the web chat's
+    agent selector, in the composer beside Send. Lists the usable agents as "Name · Provider ·
+    model" (AiAgentLabel), shows the active one, and on a change makes that agent the ONE active
+    agent every web AI action shares (spec Assumptions). "Manage agents…" opens Settings without
+    changing the selection. The key vault is looked up optionally, the way AiChatPanel looks up
+    the dialect context, so a host without one renders no selector.
+*@
+@using AkmlSql.Core.Config
+@using AkmlSql.Web.Services
+@inject IServiceProvider Services
+@inject IAiPreference Preference
+@inject NavigationManager Navigation
+
+@if (_agents != null)
+{
+    <select class="akml-chat-agent-select" data-testid="chat-agent-select" aria-label="Answering agent"
+            title="Choose which agent answers your messages" value="@_selected" @onchange="OnChangeAsync">
+        @foreach (var agent in _agents)
+        {
+            <option value="@agent.Id">@Label(agent)</option>
+        }
+        <option value="@ManageValue">@ManageText</option>
+    </select>
+}
+
+<style>
+    .akml-chat-agent-select {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-input);
+        color: var(--akml-text-primary);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: 2px var(--akml-scalar-spacing-xs);
+        max-width: 100%;
+    }
+    .akml-chat-agent-select:focus-visible { outline: 2px solid var(--akml-border-focus); outline-offset: -1px; }
+</style>
+
+@code {
+    /// <summary>The option value of the trailing "Manage agents…" entry.</summary>
+    internal const string ManageValue = "__manage-agents__";
+
+    internal const string ManageText = "Manage agents…";
+
+    /// <summary>Raised with the newly active agent's id after the user picks another agent.</summary>
+    [Parameter] public EventCallback<string> Changed { get; set; }
+
+    private List<AiProviderConfig>? _agents;
+    private string _selected = string.Empty;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    /// <summary>Re-reads the agents and the active one (after Settings changed them).</summary>
+    public async Task ReloadAsync()
+    {
+        if (Services.GetService(typeof(IAiKeyVault)) is not IAiKeyVault vault)
+        {
+            _agents = null;
+            return;
+        }
+        var all = await vault.ListAsync();
+        _agents = all.Where(IsUsable).ToList();
+        _selected = await Preference.GetActiveAsync();
+    }
+
+    /// <summary>S1 (spec 037): a disabled agent, or one missing the key its provider needs, is not listed.</summary>
+    internal static bool IsUsable(AiProviderConfig config)
+        => config.Enabled && (config.HasKey || !AiAgentResolver.RequiresApiKey(config.ProviderId));
+
+    internal static string Label(AiProviderConfig config)
+        => AiAgentLabel.Format(config.DisplayName, config.ProviderId, config.Model);
+
+    private async Task OnChangeAsync(ChangeEventArgs e)
+    {
+        var id = e.Value?.ToString() ?? string.Empty;
+        if (id == ManageValue)
+        {
+            Navigation.NavigateTo("settings/ai-assistance");
+            return;
+        }
+        if (id.Length == 0 || string.Equals(id, _selected, StringComparison.Ordinal))
+            return;
+
+        _selected = id;
+        await Preference.SetActiveAsync(id);
+        await Changed.InvokeAsync(id);
+    }
+}

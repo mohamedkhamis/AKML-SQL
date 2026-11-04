@@ -45,7 +45,9 @@ active doc not tracked / none ────┬─ prev is Bound and prev.view ope
                                   └─ no active doc    → NoDocument
 ```
 
-A `Bound → Bound` transition with a different binding key raises the rebind notice (FR-007).
+A refresh that yields `Bound` with a binding key different from the **last bound** key raises the
+rebind notice (FR-007) once the conversation has a turn; a `NotConnected` step in between (a new
+window still connecting) does not reset the comparison.
 
 ## ChatBlock (Core, pure)
 
@@ -69,10 +71,14 @@ Inlines: `Text(value)`, `Bold(value)`, `Code(value)`.
 
 **Block actions derived from a `CodeBlock`**
 - Every code block: Copy.
-- Insert (into query / at caret) when `Language` is empty, `sql` or `tsql`.
-- Labels when a message has more than one code block: `Copy SQL block {Index} of {Count}` /
-  `Insert SQL block {Index} of {Count}`; single block: `Copy` / `Insert into query` (SSMS),
-  `Insert at caret` (web).
+- Insert (into query / at caret) when the block is SQL: `Language` empty, `sql`, `tsql`, `t-sql`,
+  `mssql`, `pgsql`, `postgresql` or `plpgsql` (`ChatCodeBlock.IsSql`).
+- Accessible names when a message has more than one code block: `Copy SQL block {Index} of {Count}`
+  (`Copy code block …` for a non-SQL fence) / `Insert SQL block {Index} of {Count}`; single block:
+  `Copy SQL` (`Copy code`) / `Insert into query` (SSMS), `Insert at caret` (web).
+- Visible labels stay short: SSMS `⧉ Copy` and `⇩ Insert into query`; web `Copy` and
+  `Insert at caret`. Tooltips: `Copy this SQL` (`Copy this code` for a non-SQL fence), and the Insert
+  tooltip of contracts/chat-composer-and-agents.md Part 2.
 
 ## Conversation turn (SSMS, in memory)
 
@@ -98,7 +104,7 @@ label when present.
 |-----|-------|------|---------|
 | 6 | `AgentName` | string? | existing |
 | 7 | `AgentProvider` | string? | provider id of the agent that answered (`gemini`, `anthropic`, …); the offline provider's id when it answered |
-| 8 | `AgentModel` | string? | model of the agent that answered; null when unknown (offline provider, older engine) |
+| 8 | `AgentModel` | string? | model of the agent that answered — the offline provider's configured model when it answered; null when unknown (no offline model configured, older engine) |
 
 Compatibility: an older shell ignores 7–8; an older engine leaves them null and the shell shows
 the name only. `AiChatRequest` (75) is unchanged.

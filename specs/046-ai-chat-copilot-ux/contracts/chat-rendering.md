@@ -42,7 +42,10 @@ literal; CRLF input equals LF input; a fence inside a paragraph line is literal.
 - Each `CodeBlock` is a `Border` (`SurfaceCanvas`, `BorderDefault`, `CornerRadius 4`,
   `Margin 0,4`) containing: a header `DockPanel` (left: language label or `SQL`, `TextSecondary`,
   11 px; right: `⧉ Copy` and, when insertable, `⇩ Insert into query` — `TextLink` border/foreground
-  on `SurfaceElevated`, `FocusVisualStyles.HighStakes`, accessible names from data-model labels)
+  on `SurfacePanel`, `FocusVisualStyles.HighStakes`, accessible names from data-model labels;
+  *changed during implementation from `SurfaceElevated`: link text on the elevated surface reads
+  4.07:1 (dark) / 4.19:1 (light), below the 4.5:1 target `ThemeContrastScanTests` enforces; the
+  web buttons use `--akml-surface-panel` for the same reason*)
   and a read-only `TextBox` in the editor font with `TextWrapping NoWrap`, horizontal scroll, the
   block's `Code`.
 - Copy → `TryCopyToClipboard(code)` then `FlashButtonContent(button, "✓ Copied")` / `"⚠ Copy failed"`;

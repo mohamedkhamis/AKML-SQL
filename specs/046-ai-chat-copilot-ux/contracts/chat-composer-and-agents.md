@@ -58,7 +58,7 @@ While an answer is in flight the working state reads `Asking {AgentLabel}…` (S
 `AgentLabel(name, providerId, model)` → `{name} · {AiProviderIds.DisplayName(providerId)} · {model}`,
 omitting blank parts with their separators. Lives in Core beside `AiProviderIds` (static helper
 `AiAgentLabel.Format`) so both editions format identically. Examples:
-`Gemini Flash · Google Gemini · gemini-2.5-flash`; `Local · Ollama · llama3`; name only when the
+`Gemini Flash · Gemini · gemini-2.5-flash`; `Local · Ollama · llama3`; name only when the
 rest is unknown.
 
 ## Part 4 — Attribution and the reply's new fields (FR-022, R4)
@@ -93,7 +93,7 @@ No keyboard shortcut is bound; the control is reachable by Tab. Accessible name 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  [ Ask about this database…                                ] │
-│  [ Gemini Flash · Google Gemini · gemini-2.5-flash  ▾ ]  [Send] │
+│  [ Gemini Flash · Gemini · gemini-2.5-flash  ▾ ]  [Send] │
 └──────────────────────────────────────────────────────────────┘
 ```
 

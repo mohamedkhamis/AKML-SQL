@@ -21,6 +21,14 @@ public sealed class ChatTurn
     /// the provider's words. Kept with the turn so the answer stays marked after a reload, an export or the next message.
     /// </summary>
     public string? IncompleteReason { get; set; }
+
+    /// <summary>
+    /// Spec 046 (FR-022, research R10): the label of the agent an assistant answer was requested
+    /// from — "Name · Provider · model" (<c>AiAgentLabel</c>) — set when the answer starts, so the
+    /// turn keeps saying who answered after a rename, a delete or a reload. Null on user turns and
+    /// on turns saved before the field existed (they read "Assistant").
+    /// </summary>
+    public string? AgentLabel { get; set; }
 }
 
 /// <summary>A locally-persisted AI chat conversation (data-model E8).</summary>
@@ -41,7 +49,7 @@ public sealed class ChatConversation
         sb.Append("_Exported ").Append(UpdatedAt.ToString("u")).AppendLine("_").AppendLine();
         foreach (var turn in Turns)
         {
-            sb.Append("## ").AppendLine(turn.Role == "user" ? "You" : "Assistant");
+            sb.Append("## ").AppendLine(turn.Role == "user" ? "You" : string.IsNullOrWhiteSpace(turn.AgentLabel) ? "Assistant" : turn.AgentLabel);
             sb.AppendLine(turn.Content).AppendLine();
             if (turn.IncompleteReason != null) sb.Append("> _This answer is incomplete: ").Append(turn.IncompleteReason).AppendLine("_").AppendLine();
         }
