@@ -293,7 +293,8 @@
 
         // FR-004 / FR-012: chat honours the fully-local guard too -- refuse a cloud provider
         // under Fully local before anything is sent.
-        var providerId = await Preference.GetActiveAsync();
+        var agentId = await Preference.GetActiveAsync();
+        var providerId = await Preference.GetActiveProviderAsync();
         var mode = await Settings.ResolveModeAsync("chat");
         if (mode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(providerId))
         {
@@ -331,7 +332,7 @@
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            await foreach (var token in Client.StreamAsync(providerId, request, ct))
+            await foreach (var token in Client.StreamAsync(agentId, request, ct))
             {
                 sb.Append(token);   // O(1) amortized — avoids O(n^2) string rebuild per token
                 if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); assistant.Content = sb.ToString(); StateHasChanged(); }

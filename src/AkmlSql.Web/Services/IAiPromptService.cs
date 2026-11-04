@@ -200,7 +200,7 @@ internal sealed class AiPromptService : IAiPromptService
     // ── Provider resolution + fully-local guard + redaction gate + transport ───────────────
 
     /// <summary>The provider a request goes to and what may be sent to it in place of the user's SQL.</summary>
-    private sealed record Call(string ProviderId, AiOutbound Outbound);
+    private sealed record Call(string AgentId, AiOutbound Outbound);
 
     /// <summary>
     /// The provider is resolved (and the fully-local guard applied) before anything else, then the SQL is prepared for it:
@@ -208,17 +208,19 @@ internal sealed class AiPromptService : IAiPromptService
     /// </summary>
     private async Task<Call> PrepareAsync(string featureId, string text, bool isSql, CancellationToken ct)
     {
-        var providerId = await ResolveProviderAsync(featureId).ConfigureAwait(false);
+        var (agentId, providerId) = await ResolveProviderAsync(featureId).ConfigureAwait(false);
         var outbound = isSql
             ? await _gate.PrepareSqlAsync(providerId, text, askUser: true, ct).ConfigureAwait(false)
             : AiOutbound.Unchanged(text);
-        return new Call(providerId, outbound);
+        return new Call(agentId, outbound);
     }
 
-    private async Task<string> ResolveProviderAsync(string featureId)
+    /// <summary>The active agent (what the call goes to) and its provider (what the guards test).</summary>
+    private async Task<(string AgentId, string ProviderId)> ResolveProviderAsync(string featureId)
     {
-        var providerId = await _preference.GetActiveAsync().ConfigureAwait(false);
-        if (string.IsNullOrEmpty(providerId))
+        var agentId = await _preference.GetActiveAsync().ConfigureAwait(false);
+        var providerId = await _preference.GetActiveProviderAsync().ConfigureAwait(false);
+        if (string.IsNullOrEmpty(agentId))
         {
             throw new InvalidOperationException(
                 "No active AI provider. Open Settings -> AI and add a provider with an API key.");
@@ -235,12 +237,12 @@ internal sealed class AiPromptService : IAiPromptService
                 "Switch to Ollama or LM Studio, or change the privacy mode in Settings -> AI.");
         }
 
-        return providerId;
+        return (agentId, providerId);
     }
 
     private async Task<string> SendAsync(Call call, string systemPrompt, string userPrompt, CancellationToken ct)
     {
-        var answer = await _client.SendAsync(call.ProviderId, new AiChatRequest
+        var answer = await _client.SendAsync(call.AgentId, new AiChatRequest
         {
             SystemPrompt = systemPrompt,
             UserPrompt = userPrompt,
@@ -250,7 +252,7 @@ internal sealed class AiPromptService : IAiPromptService
 
     private IAsyncEnumerable<string> StreamAsync(Call call, string systemPrompt, string userPrompt, CancellationToken ct)
     {
-        var stream = _client.StreamAsync(call.ProviderId, new AiChatRequest
+        var stream = _client.StreamAsync(call.AgentId, new AiChatRequest
         {
             SystemPrompt = systemPrompt,
             UserPrompt = userPrompt,

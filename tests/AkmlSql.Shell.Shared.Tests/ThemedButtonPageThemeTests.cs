@@ -141,7 +141,7 @@ namespace AkmlSql.Shell.Shared.Tests
                 .GetField("_pages", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .GetValue(dialog)!;
             var addAgent = Assert.Single(LogicalTree.Descendants<Button>(pages["AI Assistance"]),
-                b => System.Windows.Automation.AutomationProperties.GetName(b) == "Add a new AI agent");
+                b => System.Windows.Automation.AutomationProperties.GetName(b) == "Add an AI agent");
             Assert.Same(TemplateOf(PageTheme.Dark, primary: false), addAgent.Template);
         }
 

@@ -90,8 +90,9 @@ internal sealed class AiGhostTextService : IAiGhostTextService
         var max = Math.Max(1, settings.GhostTextMaxRequestsPer3s);
         if (_recent.Count >= max) return null;
 
-        var providerId = await _preference.GetActiveAsync().ConfigureAwait(false);
-        if (string.IsNullOrEmpty(providerId)) return null;
+        var agentId = await _preference.GetActiveAsync().ConfigureAwait(false);
+        if (string.IsNullOrEmpty(agentId)) return null;
+        var providerId = await _preference.GetActiveProviderAsync().ConfigureAwait(false);
         if (!_client.IsBrowserDirectCapable(providerId)) return null; // OpenAI/Azure: no ghost text
 
         var mode = await _settings.ResolveModeAsync("ghosttext").ConfigureAwait(false);
@@ -111,7 +112,7 @@ internal sealed class AiGhostTextService : IAiGhostTextService
         string raw;
         try
         {
-            raw = await _client.SendAsync(providerId, new AiChatRequest
+            raw = await _client.SendAsync(agentId, new AiChatRequest
             {
                 SystemPrompt = system,
                 UserPrompt = user,

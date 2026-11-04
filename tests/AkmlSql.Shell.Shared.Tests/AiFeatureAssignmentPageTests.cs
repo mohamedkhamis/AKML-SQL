@@ -100,8 +100,8 @@ namespace AkmlSql.Shell.Shared.Tests
 
             // Remove Kimi through the real button path (V16 repair already lives in the page).
             controls.ListView.List.SelectedIndex = 1;
-            controls.RemoveConfirmation = _ => true;
-            Click(controls.ListView.RemoveButton);
+            controls.DeleteConfirmation = _ => true;
+            Click(controls.ListView.DeleteButton);
 
             Assert.Equal("Use active agent",
                 controls.AssignmentComboFor(AiFeature.Optimize).SelectedItem);

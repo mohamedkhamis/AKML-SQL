@@ -124,8 +124,8 @@ public sealed class ShellPolishTests(ITestOutputHelper output)
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Model", Exact = true }).FillAsync("shell-test");
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint", Exact = true }).FillAsync("http://localhost:11434");
         await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Remove", Exact = true }).ClickAsync();
-        await Assertions.Expect(page.GetByTestId("dialog-title")).ToHaveTextAsync("Remove provider");
+        await page.GetByTestId("ai-agent-delete").ClickAsync();
+        await Assertions.Expect(page.GetByTestId("dialog-title")).ToHaveTextAsync("Delete agent");
         await page.GetByTestId("dialog-cancel").ClickAsync();
         await page.GetByTestId("status-connection").ClickAsync();
         await page.GetByTestId("conn-name-input").FillAsync("Shell test connection");

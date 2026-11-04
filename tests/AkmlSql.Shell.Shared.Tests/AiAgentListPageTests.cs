@@ -1,44 +1,88 @@
+#nullable enable
 using System;
-using System.Collections.Generic;
-using System.Reflection;
+using System.Linq;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using AkmlSql.Core.Config;
-using AkmlSql.Shell.Shared.Dialogs;
 using AkmlSql.Shell.Shared.Dialogs.Pages;
 using Xunit;
+using static AkmlSql.Shell.Shared.Tests.AiPageTestKit;
 
 namespace AkmlSql.Shell.Shared.Tests
 {
     /// <summary>
-    /// Spec 037 (US2) T033–T035 — the AI Assistance agent list: CRUD (FR-025 – FR-029), the
-    /// working-copy contract (FR-030/FR-031, Cancel discards), and whole-copy validation
-    /// (FR-032, V3, V12) plus rename stability (FR-005).
-    ///
-    /// The dialog is built through <see cref="SettingsWindow.TestBuildWindowForRenderTest()"/> and
-    /// the page's controls are pulled from the host's page map, the same idiom as
-    /// <c>AiProviderModelAutofillTests</c>; CRUD is driven through the page's internal seams (and
-    /// the real buttons where no modal confirmation is involved).
+    /// Spec 037 (US2) T033–T035, reshaped by the 2026-11 master–detail redesign (SSMS layout B):
+    /// the agent grid's CRUD — Add… and Edit… through the agent dialog (driven here through
+    /// <see cref="AiAssistanceControls.EditorHost"/>), Duplicate, Delete with its confirmation,
+    /// Set as active — the working-copy contract (a cancelled dialog and a cancelled Options
+    /// window both discard), whole-copy validation (FR-032) and rename stability (FR-005).
     /// </summary>
     public class AiAgentListPageTests
     {
-        // ── T033: CRUD ───────────────────────────────────────────────────────
+        // ── Add… ─────────────────────────────────────────────────────────────
 
         [StaFact]
-        public void Add_creates_a_uniquely_named_agent_and_selects_it()
+        public void Add_opens_the_dialog_with_a_unique_name_and_adds_the_accepted_agent()
         {
             var (_, controls) = BuildPage(SettingsWith(MakeAgent("Agent 1")));
+            AiAgentEditor? seen = null;
+            AcceptNextEditor(controls, e => FillUsable(e), e => seen = e);
 
             Click(controls.ListView.AddButton);
 
+            Assert.NotNull(seen);
+            Assert.True(seen!.IsNew);
+            Assert.Equal("Add AI agent", seen.Title);
             Assert.Equal(2, controls.WorkingAgents.Count);
             var added = controls.WorkingAgents[1];
             Assert.Equal("Agent 2", added.Name);
             Assert.Equal(32, added.Id.Length); // Guid "N" — R14
+            Assert.Equal("anthropic", added.Provider);
+            Assert.Equal("sk-new", ApiKeyProtector.Unprotect(added.ApiKey));
             Assert.Equal(added.Id, controls.SelectedAgentId);
-            // The editor is bound to the new agent (FR-026).
-            Assert.Equal("Agent 2", NameBox(controls).Text);
+        }
+
+        [StaFact]
+        public void A_cancelled_add_adds_nothing()
+        {
+            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Agent 1")));
+            CancelNextEditor(controls, e => FillUsable(e));
+
+            Assert.Null(controls.TryAddAgent());
+
+            Assert.Single(controls.WorkingAgents);
+        }
+
+        [StaFact]
+        public void The_dialog_refuses_an_agent_without_a_provider()
+        {
+            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Agent 1")));
+            string? refusal = null;
+            controls.EditorHost = editor =>
+            {
+                refusal = editor.TryAccept();   // nothing filled in
+                return refusal == null;
+            };
+
+            controls.TryAddAgent();
+
+            Assert.Equal("Choose a provider.", refusal);
+            Assert.Single(controls.WorkingAgents);
+        }
+
+        [StaFact]
+        public void The_first_usable_agent_of_an_empty_list_becomes_active()
+        {
+            var (dialog, controls) = BuildPage(new AppSettings());
+            Assert.Empty(controls.WorkingAgents);
+            AcceptNextEditor(controls, e => FillUsable(e, "Claude"));
+
+            Click(controls.ListView.AddButton);
+
+            var added = Assert.Single(controls.WorkingAgents);
+            Assert.Equal(added.Id, controls.ActiveAgentId);
+            var saved = dialog.GetSettings();
+            Assert.Equal(added.Id, saved.Ai.ActiveAgentId);
+            Assert.True(saved.Ai.Enabled);
         }
 
         [StaTheory]
@@ -49,13 +93,136 @@ namespace AkmlSql.Shell.Shared.Tests
             var agents = new AiAgent[AiAgentResolver.MaxAgents];
             for (var i = 0; i < agents.Length; i++) agents[i] = MakeAgent("Agent " + (i + 1));
             var (_, controls) = BuildPage(SettingsWith(agents));
+            var opened = false;
+            controls.EditorHost = _ => { opened = true; return true; };
 
             var refusal = viaDuplicate ? controls.TryDuplicateSelectedAgent() : controls.TryAddAgent();
 
             Assert.NotNull(refusal);
             Assert.Contains("20", refusal);
+            Assert.False(opened);   // refused before the dialog
             Assert.Equal(AiAgentResolver.MaxAgents, controls.WorkingAgents.Count);
         }
+
+        // ── Edit… ────────────────────────────────────────────────────────────
+
+        [StaFact]
+        public void Edit_opens_the_selected_agent_and_applies_the_accepted_changes()
+        {
+            var a = MakeAgent("A");
+            var b = MakeAgent("B", provider: "kimi", model: "kimi-latest");
+            var (dialog, controls) = BuildPage(SettingsWith(a, b));
+            Select(controls, 1);
+            AiAgentEditor? seen = null;
+            AcceptNextEditor(controls, e => e.ModelBox.Text = "kimi-k2-thinking", e => seen = e);
+
+            Click(controls.ListView.EditButton);
+
+            Assert.Equal("Edit AI agent: B", seen!.Title);
+            Assert.Equal("kimi-k2-thinking", controls.WorkingAgents[1].Model);
+            Assert.Equal(b.Id, controls.WorkingAgents[1].Id);
+            var saved = dialog.GetSettings();
+            Assert.Equal("kimi-k2-thinking", saved.Ai.Agents[1].Model);
+            Assert.Equal("claude-sonnet-4-6", saved.Ai.Agents[0].Model);   // A untouched
+        }
+
+        [StaFact]
+        public void The_summary_edit_link_opens_the_same_dialog()
+        {
+            var (_, controls) = BuildPage(SettingsWith(MakeAgent("A")));
+            var opened = 0;
+            controls.EditorHost = _ => { opened++; return false; };
+
+            Click(controls.EditLink);
+
+            Assert.Equal(1, opened);
+        }
+
+        [StaFact]
+        public void A_cancelled_edit_changes_nothing()
+        {
+            var (_, controls) = BuildPage(SettingsWith(MakeAgent("A")));
+            CancelNextEditor(controls, e =>
+            {
+                e.ModelBox.Text = "claude-opus-edited";
+                e.NameBox.Text = "Renamed";
+            });
+
+            controls.TryEditSelectedAgent();
+
+            Assert.Equal("claude-sonnet-4-6", controls.WorkingAgents[0].Model);
+            Assert.Equal("A", controls.WorkingAgents[0].Name);
+        }
+
+        [StaFact]
+        public void Provider_switch_autofill_corrects_a_foreign_model_in_the_dialog()
+        {
+            // FR-034 (T047): the model auto-correction follows the provider switch of the agent
+            // being edited.
+            var (_, controls) = BuildPage(SettingsWith(MakeAgent("A")));
+            AcceptNextEditor(controls, e =>
+            {
+                e.ProviderCombo.SelectedIndex = 4;   // Anthropic → Gemini
+                Assert.Equal("gemini-flash-latest", e.ModelBox.Text);
+                e.KeyBox.Text = "gm-key";            // a key belongs to its provider: the old one is dropped
+            });
+
+            controls.TryEditSelectedAgent();
+
+            Assert.Equal("gemini", controls.WorkingAgents[0].Provider);
+            Assert.Equal("gemini-flash-latest", controls.WorkingAgents[0].Model);
+        }
+
+        [StaFact]
+        public void A_disabled_agent_can_be_re_enabled_and_saved()
+        {
+            var on = MakeAgent("On", provider: "kimi", model: "kimi-latest");
+            var off = MakeAgent("Off", provider: "kimi", model: "kimi-latest");
+            off.Enabled = false;
+            var (dialog, controls) = BuildPage(SettingsWith(on, off));
+
+            Select(controls, 1);
+            AcceptNextEditor(controls, e =>
+            {
+                Assert.True(e.EnabledToggle.IsChecked == false);   // bound from the disabled agent
+                e.EnabledToggle.IsChecked = true;
+            });
+            controls.TryEditSelectedAgent();
+            var saved = dialog.GetSettings();
+
+            Assert.True(saved.Ai.Agents[1].Enabled);
+            Assert.True(saved.Ai.Enabled);   // V19 on the write path
+        }
+
+        [StaFact]
+        public void Disabling_an_agent_commits_through_save()
+        {
+            var (dialog, controls) = BuildPage(SettingsWith(MakeAgent("On", provider: "kimi", model: "kimi-latest")));
+            AcceptNextEditor(controls, e => e.EnabledToggle.IsChecked = false);
+
+            controls.TryEditSelectedAgent();
+            var saved = dialog.GetSettings();
+
+            Assert.False(saved.Ai.Agents[0].Enabled);
+            Assert.False(saved.Ai.Enabled);   // nothing usable left
+            Assert.Contains("Off", RowTexts(controls.ListView.List, 0));
+        }
+
+        [StaFact]
+        public void Toggling_enabled_does_not_reset_health()
+        {
+            var agent = MakeAgent("Ready");
+            agent.Health = new AgentHealth { Status = AgentHealthStatus.Ready, LatencyMs = 812 };
+            var (_, controls) = BuildPage(SettingsWith(agent));
+            AcceptNextEditor(controls, e => e.EnabledToggle.IsChecked = false);
+
+            controls.TryEditSelectedAgent();
+
+            // Only provider/model/key/endpoint edits invalidate a recorded check (T086).
+            Assert.Equal(AgentHealthStatus.Ready, controls.WorkingAgents[0].Health?.Status);
+        }
+
+        // ── Duplicate, Delete, Set as active ─────────────────────────────────
 
         [StaFact]
         public void Duplicate_copies_every_setting_including_the_key_and_renames()
@@ -76,9 +243,6 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal("Claude (work) (copy)", copy.Name);
             Assert.Equal(source.Provider, copy.Provider);
             Assert.Equal(source.Model, copy.Model);
-            // The key is copied: verbatim-equal to the working source's blob, and it unwraps to
-            // the same key. (Blob-for-blob equality with the ORIGINAL settings object is not the
-            // contract — committing re-wraps the displayed plaintext, and DPAPI output varies.)
             Assert.Equal(controls.WorkingAgents[0].ApiKey, copy.ApiKey);
             Assert.Equal("sk-work", ApiKeyProtector.Unprotect(copy.ApiKey));
             Assert.Equal(source.Endpoint, copy.Endpoint);
@@ -91,22 +255,27 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void Remove_asks_for_confirmation_naming_the_agent()
+        public void Delete_asks_for_confirmation_naming_the_agent_and_its_features()
         {
-            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Claude (work)"), MakeAgent("Kimi")));
-            SelectAgentInList(controls, 1);
+            var claude = MakeAgent("Claude (work)");
+            var kimi = MakeAgent("Kimi", provider: "kimi", model: "kimi-latest");
+            var settings = SettingsWith(claude, kimi);
+            settings.Ai.FeatureAgents.Fix = kimi.Id;
+            var (_, controls) = BuildPage(settings);
+            Select(controls, 1);
 
             string? asked = null;
-            controls.RemoveConfirmation = text => { asked = text; return false; };
-            Click(controls.ListView.RemoveButton);
+            controls.DeleteConfirmation = text => { asked = text; return false; };
+            Click(controls.ListView.DeleteButton);
 
             Assert.NotNull(asked);
             Assert.Contains("Kimi", asked);
-            Assert.Equal(2, controls.WorkingAgents.Count); // declined — nothing removed
+            Assert.Contains("Fix errors", asked);
+            Assert.Equal(2, controls.WorkingAgents.Count); // declined — nothing deleted
         }
 
         [StaFact]
-        public void Remove_repairs_the_active_id_assignments_and_fallback_order()
+        public void Delete_repairs_the_active_id_assignments_and_fallback_order()
         {
             var a = MakeAgent("A");
             var b = MakeAgent("B");
@@ -119,38 +288,52 @@ namespace AkmlSql.Shell.Shared.Tests
             settings.Ai.FallbackOrder.Add(c.Id);
             var (dialog, controls) = BuildPage(settings);
 
-            SelectAgentInList(controls, 1);
-            controls.RemoveConfirmation = _ => true;
-            Click(controls.ListView.RemoveButton);
+            Select(controls, 1);
+            controls.DeleteConfirmation = _ => true;
+            Click(controls.ListView.DeleteButton);
 
             Assert.Equal(2, controls.WorkingAgents.Count);
-            // The active id pointed at the removed agent: repaired to the first usable survivor.
-            Assert.Equal(a.Id, controls.ActiveAgentId);
+            Assert.Equal(a.Id, controls.ActiveAgentId);   // repaired to the first usable survivor
 
             var saved = dialog.GetSettings();
             Assert.Equal(string.Empty, saved.Ai.FeatureAgents.Chat);  // V16 — assignment cleared
-            Assert.Equal(c.Id, saved.Ai.FeatureAgents.Fix);           // …but only the removed one
+            Assert.Equal(c.Id, saved.Ai.FeatureAgents.Fix);           // …but only the deleted one
             Assert.DoesNotContain(b.Id, saved.Ai.FallbackOrder);      // V17 — fallback entry dropped
             Assert.Contains(c.Id, saved.Ai.FallbackOrder);
         }
 
         [StaFact]
-        public void Remove_selects_the_nearest_surviving_agent()
+        public void Delete_selects_the_nearest_surviving_agent()
         {
             var a = MakeAgent("A");
             var b = MakeAgent("B");
             var c = MakeAgent("C");
             var (_, controls) = BuildPage(SettingsWith(a, b, c));
-            controls.RemoveConfirmation = _ => true;
+            controls.DeleteConfirmation = _ => true;
 
-            // Middle removal: the agent that slid into the vacated slot is selected.
-            SelectAgentInList(controls, 1);
-            Click(controls.ListView.RemoveButton);
+            Select(controls, 1);
+            Click(controls.ListView.DeleteButton);
             Assert.Equal(c.Id, controls.SelectedAgentId);
 
-            // Tail removal: the previous agent is selected.
-            Click(controls.ListView.RemoveButton);
+            Click(controls.ListView.DeleteButton);
             Assert.Equal(a.Id, controls.SelectedAgentId);
+        }
+
+        [StaFact]
+        public void Deleting_the_last_agent_shows_the_empty_state()
+        {
+            var (dialog, controls) = BuildPage(SettingsWith(MakeAgent("Only")));
+            controls.DeleteConfirmation = _ => true;
+
+            Click(controls.ListView.DeleteButton);
+
+            Assert.Empty(controls.WorkingAgents);
+            Assert.Equal(Visibility.Visible, controls.ListView.EmptyText.Visibility);
+            Assert.False(controls.ListView.EditButton.IsEnabled);
+            Assert.Equal("No AI agent yet", controls.SummaryTitle.Text);
+            var saved = dialog.GetSettings();
+            Assert.Empty(saved.Ai.Agents);
+            Assert.Equal(string.Empty, saved.Ai.Provider);   // the flat mirror cannot resurrect it
         }
 
         [StaFact]
@@ -160,18 +343,17 @@ namespace AkmlSql.Shell.Shared.Tests
             var b = MakeAgent("B", provider: "kimi", model: "kimi-latest");
             var (dialog, controls) = BuildPage(SettingsWith(a, b));
 
-            SelectAgentInList(controls, 1);
+            Select(controls, 1);
             Assert.Null(controls.TrySetActiveSelectedAgent());
 
             Assert.Equal(b.Id, controls.ActiveAgentId);
             var saved = dialog.GetSettings();
             Assert.Equal(b.Id, saved.Ai.ActiveAgentId);
-            // The flat mirror follows the active agent (V18), so older builds read B too.
-            Assert.Equal("kimi", saved.Ai.Provider);
+            Assert.Equal("kimi", saved.Ai.Provider);      // the flat mirror follows the active agent (V18)
             Assert.Equal("kimi-latest", saved.Ai.Model);
-            // The active marker moved to B's row.
             Assert.Contains(RowTexts(controls.ListView.List, 1), t => t == "●");
             Assert.DoesNotContain(RowTexts(controls.ListView.List, 0), t => t == "●");
+            Assert.False(controls.ListView.SetActiveButton.IsEnabled);   // already active
         }
 
         [StaFact]
@@ -181,62 +363,13 @@ namespace AkmlSql.Shell.Shared.Tests
             var bad = MakeAgent("Kimi", provider: "kimi", model: "kimi-latest", apiKey: "");
             var (_, controls) = BuildPage(SettingsWith(a, bad));
 
-            SelectAgentInList(controls, 1);
+            Select(controls, 1);
             var refusal = controls.TrySetActiveSelectedAgent();
 
             Assert.NotNull(refusal);
             Assert.Contains("Kimi", refusal);
             Assert.Contains("API key", refusal);
-            Assert.Equal(a.Id, controls.ActiveAgentId); // unchanged
-        }
-
-        // ── The per-agent Enabled toggle (review finding) ────────────────────
-
-        [StaFact]
-        public void A_disabled_agent_can_be_re_enabled_and_saved()
-        {
-            var on = MakeAgent("On", provider: "kimi", model: "kimi-latest");
-            var off = MakeAgent("Off", provider: "kimi", model: "kimi-latest");
-            off.Enabled = false;
-            var (dialog, controls) = BuildPage(SettingsWith(on, off));
-
-            var toggle = EnabledToggle(controls);
-            Assert.True(toggle.IsChecked == true);    // bound from the active (enabled) agent
-
-            SelectAgentInList(controls, 1);
-            Assert.True(toggle.IsChecked == false);   // bound from the disabled agent
-
-            toggle.IsChecked = true;
-            var saved = dialog.GetSettings();
-
-            Assert.True(saved.Ai.Agents[1].Enabled);
-            Assert.True(saved.Ai.Enabled);   // V19 on the write path — the agent is usable again
-        }
-
-        [StaFact]
-        public void Disabling_an_agent_commits_through_save()
-        {
-            var agent = MakeAgent("On", provider: "kimi", model: "kimi-latest");
-            var (dialog, controls) = BuildPage(SettingsWith(agent));
-
-            EnabledToggle(controls).IsChecked = false;
-            var saved = dialog.GetSettings();
-
-            Assert.False(saved.Ai.Agents[0].Enabled);
-            Assert.False(saved.Ai.Enabled);   // nothing usable left
-        }
-
-        [StaFact]
-        public void Toggling_enabled_does_not_reset_health()
-        {
-            var agent = MakeAgent("Ready");
-            agent.Health = new AgentHealth { Status = AgentHealthStatus.Ready, LatencyMs = 812 };
-            var (_, controls) = BuildPage(SettingsWith(agent));
-
-            EnabledToggle(controls).IsChecked = false;
-
-            // Only provider/model/key/endpoint edits invalidate a recorded check (T086).
-            Assert.Equal(AgentHealthStatus.Ready, controls.WorkingAgents[0].Health?.Status);
+            Assert.Equal(a.Id, controls.ActiveAgentId);
         }
 
         [StaFact]
@@ -247,17 +380,19 @@ namespace AkmlSql.Shell.Shared.Tests
             off.Enabled = false;
             var (_, controls) = BuildPage(SettingsWith(a, off));
 
-            SelectAgentInList(controls, 1);
+            Select(controls, 1);
             var refusal = controls.TrySetActiveSelectedAgent();
 
             Assert.NotNull(refusal);
             Assert.Contains("Off", refusal);
             Assert.Contains("disabled", refusal);
-            Assert.Equal(a.Id, controls.ActiveAgentId); // unchanged
+            Assert.Equal(a.Id, controls.ActiveAgentId);
         }
 
+        // ── The grid and the summary ─────────────────────────────────────────
+
         [StaFact]
-        public void List_rows_show_name_provider_model_health_and_the_active_marker()
+        public void Rows_show_name_provider_model_health_and_the_active_marker()
         {
             var a = MakeAgent("Claude (work)");
             a.Health = new AgentHealth { Status = AgentHealthStatus.Ready, LatencyMs = 812 };
@@ -266,118 +401,143 @@ namespace AkmlSql.Shell.Shared.Tests
 
             var list = controls.ListView.List;
             Assert.Equal(2, list.Items.Count);
+            Assert.Equal("2 of 20 agents", controls.ListView.CountText.Text);
 
             var rowA = RowTexts(list, 0);
             Assert.Contains(rowA, t => t == "●");
             Assert.Contains(rowA, t => t == "Claude (work)");
-            Assert.Contains(rowA, t => t == "anthropic · claude-sonnet-4-6");
+            Assert.Contains(rowA, t => t == "Anthropic");
+            Assert.Contains(rowA, t => t == "claude-sonnet-4-6");
             Assert.Contains(rowA, t => t == "✔ Ready");
 
             var rowB = RowTexts(list, 1);
             Assert.DoesNotContain(rowB, t => t == "●");
             Assert.Contains(rowB, t => t == "Kimi");
-            Assert.Contains(rowB, t => t == "kimi · kimi-latest");
+            Assert.Contains(rowB, t => t == "Kimi (Moonshot)");
+            Assert.Contains(rowB, t => t == "kimi-latest");
             Assert.Contains(rowB, t => t == "– Not tested");
         }
 
-        // ── T034: the working-copy contract (FR-031) ─────────────────────────
+        [StaFact]
+        public void The_summary_describes_the_selected_agent_and_what_it_answers()
+        {
+            var a = MakeAgent("Claude (work)");
+            var b = MakeAgent("Local", provider: "ollama", model: "llama3.1:8b", apiKey: "", endpoint: "http://localhost:11434");
+            var settings = SettingsWith(a, b);
+            settings.Ai.FeatureAgents.GhostText = b.Id;
+            settings.Ai.FallbackOrder.Add(b.Id);
+            var (_, controls) = BuildPage(settings);
+
+            Assert.Equal("Claude (work)", controls.SummaryTitle.Text);
+            Assert.Contains("Anthropic", controls.SummaryDetail.Text);
+            Assert.Contains("API key stored", controls.SummaryDetail.Text);
+            Assert.Contains("Active agent", controls.SummaryUse.Text);
+
+            Select(controls, 1);
+            Assert.Equal("Local", controls.SummaryTitle.Text);
+            Assert.Contains("http://localhost:11434", controls.SummaryDetail.Text);
+            Assert.Contains("no key needed", controls.SummaryDetail.Text);
+            Assert.Contains("Inline ghost text", controls.SummaryUse.Text);
+            Assert.Contains("Fallback #1", controls.SummaryUse.Text);
+        }
 
         [StaFact]
-        public void Switching_selection_retains_unsaved_edits()
+        public void An_empty_config_shows_the_empty_state_and_seeds_no_agent()
+        {
+            var (dialog, controls) = BuildPage(new AppSettings());
+
+            Assert.Empty(controls.WorkingAgents);
+            Assert.Equal(Visibility.Visible, controls.ListView.EmptyText.Visibility);
+            Assert.Equal("0 of 20 agents", controls.ListView.CountText.Text);
+            Assert.True(controls.ListView.AddButton.IsEnabled);
+            Assert.False(controls.ListView.DeleteButton.IsEnabled);
+            Assert.Null(controls.ValidateWorkingCopy());
+            Assert.Empty(dialog.GetSettings().Ai.Agents);
+        }
+
+        // ── The deep link (FR-017) ───────────────────────────────────────────
+
+        [StaFact]
+        public void A_deep_link_to_an_agent_opens_its_editor()
         {
             var a = MakeAgent("A");
-            var b = MakeAgent("B", provider: "kimi", model: "kimi-latest");
+            var b = MakeAgent("B", provider: "kimi", model: "kimi-latest", apiKey: "");
             var (_, controls) = BuildPage(SettingsWith(a, b));
+            AiAgentEditor? seen = null;
+            controls.EditorHost = e => { seen = e; return false; };
 
-            ModelBox(controls).Text = "claude-opus-edited";
-            SelectAgentInList(controls, 1);  // leaving A commits the edit to the working copy
-            SelectAgentInList(controls, 0);  // …and it is still there on return
+            controls.InitialAgentId = b.Id;
+            controls.OpenDeepLinkedEditor();
 
-            Assert.Equal("claude-opus-edited", ModelBox(controls).Text);
-            Assert.Equal("claude-opus-edited", controls.WorkingAgents[0].Model);
-            Assert.Equal("kimi-latest", controls.WorkingAgents[1].Model);
+            Assert.NotNull(seen);
+            Assert.False(seen!.IsNew);
+            Assert.Equal(b.Id, seen.Draft.Id);
+            Assert.Equal(b.Id, controls.SelectedAgentId);
+            Assert.Null(controls.InitialAgentId);   // consumed once
         }
 
         [StaFact]
-        public void Editing_one_agent_does_not_alter_another()
+        public void An_empty_deep_link_with_no_agents_opens_add()
         {
-            var a = MakeAgent("A");
-            var b = MakeAgent("B", provider: "kimi", model: "kimi-latest");
-            var (dialog, controls) = BuildPage(SettingsWith(a, b));
+            var (_, controls) = BuildPage(new AppSettings());
+            AiAgentEditor? seen = null;
+            controls.EditorHost = e => { seen = e; return false; };
 
-            ModelBox(controls).Text = "claude-opus-edited";
-            EndpointBox(controls).Text = "https://edited.example.com";
-            SelectAgentInList(controls, 1);
+            controls.InitialAgentId = string.Empty;
+            controls.OpenDeepLinkedEditor();
 
-            Assert.Equal("kimi-latest", ModelBox(controls).Text);
-            Assert.Equal(string.Empty, EndpointBox(controls).Text);
-
-            var saved = dialog.GetSettings();
-            Assert.Equal("claude-opus-edited", saved.Ai.Agents[0].Model);
-            Assert.Equal("kimi-latest", saved.Ai.Agents[1].Model);
-            Assert.Equal(string.Empty, saved.Ai.Agents[1].Endpoint);
+            Assert.NotNull(seen);
+            Assert.True(seen!.IsNew);
         }
 
-        [StaFact]
-        public void Provider_switch_autofill_applies_to_the_selected_agent_only()
-        {
-            // FR-034 (T047): the model auto-correction follows the provider switch of the agent
-            // being edited and leaves every other agent's model alone.
-            var a = MakeAgent("A");
-            var b = MakeAgent("B", provider: "kimi", model: "kimi-latest");
-            var (_, controls) = BuildPage(SettingsWith(a, b));
-
-            ProviderCombo(controls).SelectedIndex = 4; // A: Anthropic → Gemini
-            Assert.Equal("gemini-flash-latest", ModelBox(controls).Text);
-
-            SelectAgentInList(controls, 1);
-            Assert.Equal("kimi-latest", ModelBox(controls).Text);           // B untouched
-            Assert.Equal("kimi-latest", controls.WorkingAgents[1].Model);
-
-            SelectAgentInList(controls, 0);
-            Assert.Equal("gemini-flash-latest", ModelBox(controls).Text);   // A's correction retained
-        }
+        // ── The working-copy contract (FR-031) ───────────────────────────────
 
         [StaFact]
-        public void Cancel_discards_every_edit()
+        public void Options_cancel_discards_every_accepted_edit()
         {
             var a = MakeAgent("A");
             var b = MakeAgent("B", provider: "kimi", model: "kimi-latest");
             var settings = SettingsWith(a, b);
-            var originalModel = a.Model;
             var (_, controls) = BuildPage(settings);
 
-            ModelBox(controls).Text = "claude-opus-edited";
-            Assert.Null(controls.TryAddAgent());
+            AcceptNextEditor(controls, e => e.ModelBox.Text = "claude-opus-edited");
+            controls.TryEditSelectedAgent();
+            AcceptNextEditor(controls, e => FillUsable(e));
+            controls.TryAddAgent();
             Assert.Equal(3, controls.WorkingAgents.Count);
 
-            // Cancel = the host never calls Save. The ORIGINAL settings object must be untouched:
+            // Cancel = the host never calls Save. The ORIGINAL settings object is untouched:
             // the page edited a deep copy (research R13).
             Assert.Equal(2, settings.Ai.Agents.Count);
-            Assert.Equal(originalModel, settings.Ai.Agents[0].Model);
+            Assert.Equal("claude-sonnet-4-6", settings.Ai.Agents[0].Model);
             Assert.Equal("kimi-latest", settings.Ai.Agents[1].Model);
         }
 
-        // ── T035: validation (FR-032) ────────────────────────────────────────
+        // ── Validation (FR-032) ──────────────────────────────────────────────
 
         [StaTheory]
         [InlineData("Claude (work)")]
         [InlineData("claude (work)")]      // case-insensitive
         [InlineData("  Claude (work)  ")]  // trim-insensitive
-        public void A_duplicate_name_is_refused_naming_the_agent(string duplicate)
+        public void The_dialog_refuses_a_duplicate_name_naming_it(string duplicate)
         {
             var kimi = MakeAgent("Kimi");
             var claude = MakeAgent("Claude (work)");
             var (_, controls) = BuildPage(SettingsWith(kimi, claude));
+            string? refusal = null;
+            controls.EditorHost = e =>
+            {
+                e.NameBox.Text = duplicate;   // renaming Kimi onto Claude
+                refusal = e.TryAccept();
+                return refusal == null;
+            };
 
-            NameBox(controls).Text = duplicate; // renaming Kimi onto Claude
-            var error = controls.ValidateWorkingCopy();
+            controls.TryEditSelectedAgent();
 
-            Assert.NotNull(error);
-            Assert.Contains("Another agent is already named", error);
-            Assert.Contains(duplicate.Trim(), error); // names the name at fault
-            // The offending agent is selected before the message is shown.
-            Assert.Equal(kimi.Id, controls.SelectedAgentId);
+            Assert.NotNull(refusal);
+            Assert.Contains("Another agent is already named", refusal);
+            Assert.Contains(duplicate.Trim(), refusal);
+            Assert.Equal("Kimi", controls.WorkingAgents[0].Name);   // not applied
         }
 
         [StaFact]
@@ -387,7 +547,6 @@ namespace AkmlSql.Shell.Shared.Tests
             var bad = MakeAgent("Bad", provider: "anthropic", model: "");
             var (_, controls) = BuildPage(SettingsWith(good, bad));
 
-            // "Good" is selected and valid; the invalid agent is not the selected one.
             Assert.Equal(good.Id, controls.SelectedAgentId);
             var error = controls.ValidateWorkingCopy();
 
@@ -407,8 +566,9 @@ namespace AkmlSql.Shell.Shared.Tests
             settings.Ai.FallbackOrder.Add(b.Id);
             var (dialog, controls) = BuildPage(settings);
 
-            SelectAgentInList(controls, 1);
-            NameBox(controls).Text = "Kimi K2";
+            Select(controls, 1);
+            AcceptNextEditor(controls, e => e.NameBox.Text = "Kimi K2");
+            controls.TryEditSelectedAgent();
             var saved = dialog.GetSettings();
 
             Assert.Equal("Kimi K2", saved.Ai.Agents[1].Name);
@@ -416,128 +576,35 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(a.Id, saved.Ai.ActiveAgentId);
             Assert.Equal(b.Id, saved.Ai.FeatureAgents.Chat);
             Assert.Contains(b.Id, saved.Ai.FallbackOrder);
+            Assert.Contains("Kimi K2", controls.AssignmentComboFor(AiFeature.Chat).Items.Cast<object>().Select(o => o.ToString()));
         }
 
         [StaFact]
-        public void Name_validation_fires_on_focus_loss()
+        public void Name_validation_fires_on_focus_loss_in_the_dialog()
         {
-            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Kimi"), MakeAgent("Claude (work)")));
+            var kimi = MakeAgent("Kimi");
+            var claude = MakeAgent("Claude (work)");
+            var editor = EditorFor(kimi, claude);
 
-            var nameBox = NameBox(controls);
-            nameBox.Text = "Claude (work)";
-            nameBox.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
+            editor.NameBox.Text = "Claude (work)";
+            editor.NameBox.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
+            Assert.Equal(Visibility.Visible, editor.NameError.Visibility);
+            Assert.Contains("Claude (work)", editor.NameError.Text);
 
-            var nameError = GetField<TextBlock>(controls, "_nameError");
-            Assert.Equal(Visibility.Visible, nameError.Visibility);
-            Assert.Contains("Claude (work)", nameError.Text);
-
-            nameBox.Text = "Kimi K2";
-            nameBox.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
-            Assert.Equal(Visibility.Collapsed, nameError.Visibility);
+            editor.NameBox.Text = "Kimi K2";
+            editor.NameBox.RaiseEvent(new RoutedEventArgs(UIElement.LostFocusEvent));
+            Assert.Equal(Visibility.Collapsed, editor.NameError.Visibility);
         }
 
         [StaFact]
-        public void A_completely_blank_agent_does_not_block_ok()
+        public void An_empty_name_is_refused()
         {
-            // The page seeds one blank agent whenever the list is empty, so an unconfigured user
-            // must still be able to OK the dialog — the connection rules bite only once ANY
-            // connection field is filled.
-            var (_, controls) = BuildPage(new AppSettings());
+            var editor = EditorFor(MakeAgent("Kimi"));
 
-            Assert.Single(controls.WorkingAgents); // the seed
-            Assert.Null(controls.ValidateWorkingCopy());
-        }
+            editor.NameBox.Text = "  ";
 
-        [StaFact]
-        public void A_blank_agent_with_an_empty_name_is_still_refused()
-        {
-            var (_, controls) = BuildPage(new AppSettings());
-
-            NameBox(controls).Text = "  ";
-            var error = controls.ValidateWorkingCopy();
-
-            Assert.NotNull(error);
-            Assert.Contains("Name is required.", error);
-        }
-
-        // ── Helpers ──────────────────────────────────────────────────────────
-
-        private static AiAgent MakeAgent(string name, string provider = "anthropic",
-            string model = "claude-sonnet-4-6", string apiKey = "sk-test", string endpoint = "")
-        {
-            return new AiAgent
-            {
-                Id = Guid.NewGuid().ToString("N"),
-                Name = name,
-                Provider = provider,
-                Model = model,
-                ApiKey = apiKey.Length == 0 ? string.Empty : ApiKeyProtector.Protect(apiKey),
-                Endpoint = endpoint,
-                Enabled = true,
-                CreatedUtc = DateTime.UtcNow.ToString("O"),
-            };
-        }
-
-        private static AppSettings SettingsWith(params AiAgent[] agents)
-        {
-            var settings = new AppSettings();
-            foreach (var agent in agents) settings.Ai.Agents.Add(agent);
-            settings.Ai.ActiveAgentId = agents.Length > 0 ? agents[0].Id : string.Empty;
-            return settings;
-        }
-
-        private static (SettingsWindow Dialog, AiAssistanceControls Controls) BuildPage(AppSettings settings)
-        {
-            var dialog = new SettingsWindow(settings);
-            _ = dialog.TestBuildWindowForRenderTest();
-            return (dialog, GetAiControls(dialog));
-        }
-
-        private static AiAssistanceControls GetAiControls(SettingsWindow dialog)
-        {
-            var f = typeof(SettingsWindow).GetField("_pageControlsByKey",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(f);
-            var pages = (Dictionary<string, IPageControls>)f!.GetValue(dialog)!;
-            Assert.True(pages.TryGetValue("AI Assistance", out var controls), "AI Assistance controls not found.");
-            return (AiAssistanceControls)controls!;
-        }
-
-        private static void SelectAgentInList(AiAssistanceControls controls, int index)
-        {
-            var list = controls.ListView.List;
-            Assert.True(index < list.Items.Count,
-                $"agent list holds {list.Items.Count} rows; cannot select index {index}");
-            list.SelectedIndex = index;
-        }
-
-        private static void Click(Button button)
-            => button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-
-        /// <summary>The visible text runs of one rendered agent row (marker, name, detail, badge).</summary>
-        private static List<string> RowTexts(ListBox list, int index)
-        {
-            var item = (ListBoxItem)list.Items[index];
-            var texts = new List<string>();
-            foreach (var block in LogicalTree.Descendants<TextBlock>((DependencyObject)item.Content))
-                texts.Add(block.Text);
-            return texts;
-        }
-
-        private static TextBox NameBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_name");
-        private static TextBox ModelBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_model");
-        private static TextBox EndpointBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_endpoint");
-        private static ComboBox ProviderCombo(AiAssistanceControls controls) => GetField<ComboBox>(controls, "_provider");
-        private static CheckBox EnabledToggle(AiAssistanceControls controls) => GetField<CheckBox>(controls, "_agentEnabled");
-
-        private static T GetField<T>(object instance, string name) where T : class
-        {
-            var f = instance.GetType().GetField(name,
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.True(f != null, $"field {name} not found on {instance.GetType().Name}");
-            var value = f!.GetValue(instance) as T;
-            Assert.NotNull(value);
-            return value!;
+            Assert.Equal("Name is required.", editor.TryAccept());
+            Assert.Equal(Visibility.Visible, editor.ErrorLine.Visibility);
         }
     }
 }

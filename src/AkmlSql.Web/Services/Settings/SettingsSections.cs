@@ -292,9 +292,9 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
         var lines = new List<string>();
         lines.Add(providers.Count switch
         {
-            0 => "No providers are configured.",
-            1 => "This removes your provider and its key.",
-            _ => $"This removes your {providers.Count.ToString(CultureInfo.InvariantCulture)} providers and their keys.",
+            0 => "No AI agents are configured.",
+            1 => "This removes your AI agent and its key.",
+            _ => $"This removes your {providers.Count.ToString(CultureInfo.InvariantCulture)} AI agents and their keys.",
         });
         lines.Add("Privacy modes and ghost text go back to their defaults.");
         lines.Add("Chat history is kept.");
@@ -303,9 +303,9 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
 
     public async Task ResetAsync()
     {
-        // Through RemoveAsync, one provider at a time, so each key goes through the zeroise path.
+        // Through RemoveAsync, one agent at a time, so each key goes through the zeroise path.
         foreach (var p in await _vault.ListAsync().ConfigureAwait(false))
-            await _vault.RemoveAsync(p.ProviderId).ConfigureAwait(false);
+            await _vault.RemoveAsync(string.IsNullOrEmpty(p.Id) ? p.ProviderId : p.Id).ConfigureAwait(false);
         await _preference.SetActiveAsync(string.Empty).ConfigureAwait(false);
         await _features.ResetAsync().ConfigureAwait(false);
     }
@@ -318,7 +318,15 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
         return new AiAssistanceDto
         {
             // Name, model and endpoint only: the config list never holds key material (R49).
-            Providers = providers.Select(p => new ProviderDto { ProviderId = p.ProviderId, DisplayName = p.DisplayName, Model = p.Model, Endpoint = p.Endpoint }).ToList(),
+            Providers = providers.Select(p => new ProviderDto
+            {
+                AgentId = string.IsNullOrEmpty(p.Id) ? null : p.Id,
+                ProviderId = p.ProviderId,
+                DisplayName = p.DisplayName,
+                Model = p.Model,
+                Endpoint = p.Endpoint,
+                Enabled = p.Enabled ? null : false,
+            }).ToList(),
             ActiveProviderId = string.IsNullOrEmpty(active) ? null : active,
             Privacy = new PrivacyDto { GlobalDefaultMode = f.GlobalDefaultMode, FeatureModeOverrides = new Dictionary<string, AiPrivacyMode>(f.FeatureModeOverrides, StringComparer.Ordinal) },
             GhostText = new GhostTextDto { Enabled = f.GhostTextEnabled, DelayMs = f.GhostTextDelayMs, MaxRequestsPer3s = f.GhostTextMaxRequestsPer3s },
@@ -334,8 +342,17 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
         foreach (var p in dto.Providers ?? new List<ProviderDto>())
         {
             if (string.IsNullOrWhiteSpace(p.ProviderId) || string.IsNullOrWhiteSpace(p.Model)) { skipped++; continue; }
-            // Never a key: an existing one is kept, a new provider "Needs key" (R49).
-            await _vault.UpsertConfigAsync(new AiProviderConfig { ProviderId = p.ProviderId!, DisplayName = p.DisplayName ?? p.ProviderId!, Model = p.Model!, Endpoint = p.Endpoint }).ConfigureAwait(false);
+            // Never a key: an existing one is kept, a new agent "Needs key" (R49). A file from before
+            // agents had ids carries none: the provider id is the agent id, as it was then.
+            await _vault.UpsertConfigAsync(new AiProviderConfig
+            {
+                Id = string.IsNullOrWhiteSpace(p.AgentId) ? p.ProviderId! : p.AgentId!,
+                ProviderId = p.ProviderId!,
+                DisplayName = p.DisplayName ?? p.ProviderId!,
+                Model = p.Model!,
+                Endpoint = p.Endpoint,
+                Enabled = p.Enabled ?? true,
+            }).ConfigureAwait(false);
         }
 
         var f = await _features.GetAsync().ConfigureAwait(false);
@@ -362,7 +379,8 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
 
         // Fully local never leaves a cloud provider active (spec 028 T012).
         var active = await _preference.GetActiveAsync().ConfigureAwait(false);
-        if (next.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(active) && !AiProviders.IsLocal(active))
+        var activeProvider = await _preference.GetActiveProviderAsync().ConfigureAwait(false);
+        if (next.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(active) && !AiProviders.IsLocal(activeProvider))
             await _preference.SetActiveAsync(string.Empty).ConfigureAwait(false);
 
         return skipped;
@@ -371,6 +389,8 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
     public sealed class AiAssistanceDto : SettingsDto
     {
         public List<ProviderDto>? Providers { get; set; }
+
+        /// <summary>The active agent's id (named for the files written before agents had ids, when it was the provider id).</summary>
         public string? ActiveProviderId { get; set; }
         public PrivacyDto? Privacy { get; set; }
         public GhostTextDto? GhostText { get; set; }
@@ -378,10 +398,15 @@ internal sealed class AiAssistanceSettingsSection : ISettingsSection
 
     public sealed class ProviderDto : SettingsDto
     {
+        /// <summary>The agent's id; absent in files written before agents had ids.</summary>
+        public string? AgentId { get; set; }
         public string? ProviderId { get; set; }
         public string? DisplayName { get; set; }
         public string? Model { get; set; }
         public string? Endpoint { get; set; }
+
+        /// <summary>False for a turned-off agent; omitted when on.</summary>
+        public bool? Enabled { get; set; }
     }
 
     public sealed class PrivacyDto : SettingsDto

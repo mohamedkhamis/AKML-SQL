@@ -1,9 +1,11 @@
 @*
     Spec 041 (R44, R49, FR-056) — Settings › AI assistance, extracted from the old /settings/ai page (spec 021
-    T135, spec 028 T011/T012): the providers (active radio, a "Needs key" badge on a provider without its key —
-    one imported from a settings file), the add / edit form with its explicit Save, the privacy modes and ghost
-    text. Status lines are notifications; Remove confirms. The labels and roles the E2E suites select ("Provider",
-    "Model", "Endpoint", "Save", the active radios, "Enable ghost text") are unchanged.
+    T135, spec 028 T011/T012), reshaped by the 2026-11 master–detail redesign (web layout A): the AI agents as a
+    list on the left (+ Add agent, a status pill per agent) and the selected agent on the right — its details with
+    Edit, Duplicate, Test connection, Set as active and Delete; Edit and Add turn the right side into a form with
+    Save / Cancel. One provider can carry several agents. The stored key is never shown: an empty key box keeps it.
+    Then the privacy modes and ghost text. Status lines are notifications; Delete confirms. The form keeps the labels
+    the E2E suites select ("Provider", "Model", "Endpoint", "API key", "Save", "Enable ghost text").
 *@
 @using AkmlSql.Web.Services
 @inject IAiKeyVault Vault
@@ -25,110 +27,64 @@
     {
         <p class="akml-settings-status">Loading…</p>
     }
-    else if (_configs.Count == 0)
-    {
-        <p class="akml-settings-status">No providers configured yet.</p>
-    }
     else
     {
-        <table class="akml-table">
-            <thead><tr><th>Active</th><th>Provider</th><th>Model</th><th>Key</th><th></th></tr></thead>
-            <tbody>
-                @foreach (var c in _configs)
+        <div class="akml-agents" data-testid="ai-agents">
+            <section class="akml-agents__master" aria-label="AI agents">
+                <div class="akml-agents__toolbar">
+                    <button type="button" class="akml-btn akml-btn--primary" data-testid="ai-agent-add"
+                            disabled="@(_configs.Count >= MaxAgents || _mode == EditMode.Edit)" title="@(_configs.Count >= MaxAgents ? $"The list holds the maximum of {MaxAgents} agents" : "Add an AI agent")"
+                            @onclick="StartAdd">+ Add agent</button>
+                    <span class="akml-agents__count" data-testid="ai-agent-count">@_configs.Count of @MaxAgents</span>
+                </div>
+                @if (_configs.Count == 0)
                 {
-                    <tr>
-                        <td>
-                            <input type="radio" name="active" checked="@(_activeId == c.ProviderId)"
-                                   aria-label="@($"Use {c.DisplayName}")" @onchange="@(() => SetActiveAsync(c.ProviderId))" />
-                        </td>
-                        <td>@c.DisplayName (@c.ProviderId)</td>
-                        <td>@c.Model</td>
-                        <td>
-                            @if (NeedsKey(c))
-                            {
-                                <span class="akml-settings-badge" data-testid="@($"provider-needs-key-{c.ProviderId}")"
-                                      title="Imported without its key — Edit and enter the key">Needs key</span>
-                            }
-                            else
-                            {
-                                @(c.HasKey ? "Stored (wrapped)" : "Not needed")
-                            }
-                        </td>
-                        <td>
-                            <button type="button" class="akml-btn" @onclick="@(() => Edit(c))">Edit</button>
-                            <button type="button" class="akml-btn akml-btn--danger" @onclick="@(() => RemoveAsync(c))">Remove</button>
-                        </td>
-                    </tr>
+                    <p class="akml-agents__empty">No AI agents yet. Add one to use Explain, Fix, Optimize, chat and ghost text.</p>
                 }
-            </tbody>
-        </table>
-    }
-
-    <h4 class="akml-settings-subtitle">Add or edit a provider</h4>
-    <form class="akml-ai-form" @onsubmit="SubmitAsync" @onsubmit:preventDefault="true">
-        <label class="akml-field">Provider
-            <select class="akml-select" @bind="_form.ProviderId">
-                @foreach (var (id, label) in ProviderLabels)
+                else
                 {
-                    <option value="@id">@label</option>
+                    <ul class="akml-agents__list" aria-label="AI agents">
+                        @foreach (var c in _configs)
+                        {
+                            var agent = c;
+                            var selected = agent.Id == _selectedId;
+                            <li>
+                                <button type="button" class="@($"akml-agents__item{(agent.Enabled ? "" : " is-off")}")"
+                                        aria-current="@(selected ? "true" : null)" data-testid="@($"ai-agent-item-{agent.Id}")"
+                                        @onclick="@(() => Select(agent.Id))" @ondblclick="@(() => StartEdit(agent.Id))"
+                                        @onkeydown="@(e => OnItemKeyDownAsync(e, agent.Id))">
+                                    <span class="akml-agents__name">@agent.DisplayName</span>
+                                    <span class="akml-agents__meta">@ProviderLabel(agent.ProviderId) · <span class="akml-mono">@agent.Model</span></span>
+                                    <span class="akml-agents__pills">
+                                        @if (agent.Id == _activeId)
+                                        {
+                                            <span class="akml-pill akml-pill--active" data-testid="@($"ai-agent-active-{agent.Id}")">Active</span>
+                                        }
+                                        @StatusPill(agent)
+                                    </span>
+                                </button>
+                            </li>
+                        }
+                    </ul>
                 }
-            </select>
-        </label>
-        <label class="akml-field">Display name <input class="akml-input" @bind="_form.DisplayName" placeholder="@DefaultDisplayName(_form.ProviderId)" /></label>
-        <label class="akml-field">Model <input class="akml-input" @bind="_form.Model" placeholder="@ModelPlaceholder(_form.ProviderId)" /></label>
-        @if (RequiresEndpoint(_form.ProviderId))
-        {
-            <label class="akml-field">Endpoint
-                <input class="akml-input" @bind="_form.Endpoint" placeholder="@EndpointPlaceholder(_form.ProviderId)" />
-            </label>
-        }
-        else
-        {
-            @* Only the providers that need one show the field (FR-056: the hints match what the form allows). *@
-            <label class="akml-field">Endpoint
-                <input class="akml-input" @bind="_form.Endpoint" disabled title="This provider uses its standard endpoint" placeholder="Not used by this provider" />
-            </label>
-        }
-        @if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
-        {
-            <SecureContextNotice What="API keys" />
-        }
-        @if (RequiresApiKey(_form.ProviderId))
-        {
-            <label class="akml-field">API key
-                <input class="akml-input" type="password" @bind="_form.ApiKey" autocomplete="new-password"
-                       placeholder="Enter or paste your key (stored wrapped)" />
-            </label>
-        }
-        else
-        {
-            <p class="akml-hint">@DefaultDisplayName(_form.ProviderId) runs locally and does not use an API key.</p>
-        }
+            </section>
 
-        @if (!Client.IsBrowserDirectCapable(_form.ProviderId))
-        {
-            <p class="akml-hint">
-                @DefaultDisplayName(_form.ProviderId) can't be used directly from the browser — its API doesn't send
-                CORS headers. You can configure it here, but it runs only in the desktop edition or via an
-                OpenAI-compatible endpoint. Claude, Gemini, Ollama and LM Studio work browser-direct.
-            </p>
-        }
-
-        <div class="akml-btn-group">
-            <button type="submit" class="akml-btn akml-btn--primary">Save</button>
-            <button type="button" class="akml-btn" @onclick="ClearForm">Clear</button>
+            <section class="akml-agents__detail" data-testid="ai-agent-detail">
+                @if (_mode != EditMode.None)
+                {
+                    @RenderForm()
+                }
+                else if (Selected is { } a)
+                {
+                    @RenderDetails(a)
+                }
+                else
+                {
+                    <p class="akml-hint">Add an agent to connect an AI provider: Anthropic, Gemini, Ollama and LM Studio work straight from the browser.</p>
+                }
+            </section>
         </div>
-
-        @if (_errors.Count > 0)
-        {
-            <ul class="akml-field-error">
-                @foreach (var err in _errors)
-                {
-                    <li>@err</li>
-                }
-            </ul>
-        }
-    </form>
+    }
 </SettingRow>
 
 <SettingRow Id="ai-privacy" Kind="block">
@@ -185,15 +141,24 @@
     }
 </SettingRow>
 
-<style>
-    .akml-ai-form { display: flex; flex-direction: column; gap: var(--akml-scalar-spacing-s); max-width: 480px; }
-</style>
-
 @code {
+    /// <summary>The most agents one browser keeps (the desktop edition's limit).</summary>
+    internal const int MaxAgents = 20;
+
     private IReadOnlyList<AiProviderConfig>? _configs;
     private string _activeId = string.Empty;
-    private ProviderForm _form = new();
+    private string _selectedId = string.Empty;
+
+    private enum EditMode { None, Add, Edit }
+    private EditMode _mode = EditMode.None;
+    private AgentForm _form = new();
     private List<string> _errors = new();
+
+    // Test connection: the tester is optional (a host without it shows no Test button).
+    private IAiConnectionTester? _tester;
+    private bool _testing;
+    private AiConnectionTestResult? _detailTest;   // the selected agent's, in the details view
+    private AiConnectionTestResult? _formTest;     // the values in the form
 
     private static readonly (string Id, string Label)[] ProviderLabels =
     {
@@ -207,6 +172,9 @@
 
     private static string DefaultDisplayName(string id) =>
         ProviderLabels.FirstOrDefault(p => p.Id == id).Label ?? id;
+
+    /// <summary>The provider's name without the "(local)" note, for agent names and sentences.</summary>
+    private static string ProviderLabel(string id) => DefaultDisplayName(id).Replace(" (local)", string.Empty);
 
     private static string ModelPlaceholder(string id) => id switch
     {
@@ -229,7 +197,7 @@
     // Local providers (Ollama, LM Studio) authenticate by network reachability, not a key.
     private static bool RequiresApiKey(string id) => id is not ("ollama" or "lmstudio");
 
-    /// <summary>R49: a cloud provider with no key stored (imported from a settings file).</summary>
+    /// <summary>R49: a cloud agent with no key stored (one imported from a settings file).</summary>
     private static bool NeedsKey(AiProviderConfig c) => !c.HasKey && !AiProviders.IsLocal(c.ProviderId);
 
     private static string EndpointPlaceholder(string id) => id switch
@@ -240,16 +208,29 @@
         _ => string.Empty,
     };
 
+    private static string StandardEndpoint(string id) => id switch
+    {
+        "openai"    => "Standard (api.openai.com)",
+        "anthropic" => "Standard (api.anthropic.com)",
+        "gemini"    => "Standard (generativelanguage.googleapis.com)",
+        _ => "Not set",
+    };
+
     // Review WEB-03: whether an API key can be stored here (a secure context). Assumed until the browser says otherwise.
     private bool _secureStorage = true;
 
+    private AiProviderConfig? Selected => _configs?.FirstOrDefault(c => c.Id == _selectedId);
+
     protected override async Task OnInitializedAsync()
     {
+        _tester = ServiceProvider.GetService(typeof(IAiConnectionTester)) as IAiConnectionTester;
         try { _secureStorage = ServiceProvider.GetService(typeof(IWebCryptoWrapper)) is not IWebCryptoWrapper crypto || await crypto.IsSecureStorageAvailableAsync(); }
         catch (JSException) { _secureStorage = false; }
         catch (JSDisconnectedException) { }
         await FeatureSettings.ReloadAsync();
         await ReloadAsync();
+        // No agent yet: the form is the way in.
+        if (_configs is { Count: 0 }) StartAdd();
     }
 
     private async Task ReloadAsync()
@@ -257,92 +238,496 @@
         _configs = await Vault.ListAsync();
         _activeId = await Preference.GetActiveAsync();
         _aiSettings = await FeatureSettings.GetAsync();
+        if (_configs.All(c => c.Id != _selectedId))
+            _selectedId = _configs.FirstOrDefault(c => c.Id == _activeId)?.Id ?? _configs.FirstOrDefault()?.Id ?? string.Empty;
         StateHasChanged();
     }
 
-    private async Task SetActiveAsync(string providerId)
+    // ── The list ───────────────────────────────────────────────────────────────────
+
+    private void Select(string id)
     {
-        // Spec 028 T012: fully-local mode forbids a cloud provider as the active one.
-        if (_aiSettings != null && _aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(providerId))
+        if (_mode != EditMode.None) return;   // the form keeps the panel until Save or Cancel
+        if (_selectedId != id) _detailTest = null;
+        _selectedId = id;
+    }
+
+    private async Task OnItemKeyDownAsync(KeyboardEventArgs e, string id)
+    {
+        if (_mode != EditMode.None) return;
+        if (e.Key == "Delete") { _selectedId = id; await DeleteAsync(); }
+        else if (e.Key == "F2") StartEdit(id);
+    }
+
+    /// <param name="inList">The list's pill carries the test id; the details repeat it without one.</param>
+    private RenderFragment StatusPill(AiProviderConfig c, bool inList = true) => __builder =>
+    {
+        if (!c.Enabled)
         {
-            Notifications.Notify($"Fully local is on — {DefaultDisplayName(providerId)} is a cloud provider and can't be active. " +
-                                 "Choose Ollama or LM Studio, or change the global privacy mode.", NotificationKind.Warning);
-            StateHasChanged();
-            return;
+            <span class="akml-pill akml-pill--neutral">Off</span>
         }
-        _activeId = providerId;
-        await Preference.SetActiveAsync(providerId);
-        Notifications.Notify($"Active provider: {DefaultDisplayName(providerId)}.", NotificationKind.Success);
-        StateHasChanged();
+        else if (NeedsKey(c))
+        {
+            <span class="akml-pill akml-pill--warn" data-testid="@(inList ? $"ai-agent-needs-key-{c.Id}" : null)"
+                  title="Imported without its key — Edit and enter the key">Needs key</span>
+        }
+        else if (!Client.IsBrowserDirectCapable(c.ProviderId))
+        {
+            <span class="akml-pill akml-pill--warn" title="This provider's API does not allow calls from a browser">Desktop only</span>
+        }
+        else if (c.LastCheck?.Status == AiAgentCheck.Ready)
+        {
+            <span class="akml-pill akml-pill--ready" title="@CheckTitle(c.LastCheck)">Ready</span>
+        }
+        else if (c.LastCheck?.Status == AiAgentCheck.Failed)
+        {
+            <span class="akml-pill akml-pill--failed" title="@CheckTitle(c.LastCheck)">Failed</span>
+        }
+        else
+        {
+            <span class="akml-pill akml-pill--neutral">Not tested</span>
+        }
+    };
+
+    private static string CheckTitle(AiAgentCheck check)
+    {
+        var when = DateTimeOffset.TryParse(check.CheckedUtc, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out var t)
+            ? t.ToLocalTime().ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture)
+            : string.Empty;
+        return string.IsNullOrEmpty(when) ? check.Message : $"{when}: {check.Message}";
     }
 
-    private void Edit(AiProviderConfig c)
+    // ── The details view ───────────────────────────────────────────────────────────
+
+    private RenderFragment RenderDetails(AiProviderConfig a) => __builder =>
     {
-        _form = new ProviderForm
+        var isActive = a.Id == _activeId;
+        <div class="akml-agents__head">
+            <div>
+                <h4 class="akml-agents__title" data-testid="ai-agent-title">@a.DisplayName</h4>
+                <p class="akml-agents__subtitle">@ProviderLabel(a.ProviderId) · @(AiProviders.IsLocal(a.ProviderId) ? "runs on your machine" : "cloud provider")@(isActive ? " · the active agent" : string.Empty)</p>
+            </div>
+            <div class="akml-btn-group">
+                <button type="button" class="akml-btn akml-btn--primary" data-testid="ai-agent-edit" @onclick="@(() => StartEdit(a.Id))">Edit</button>
+                <button type="button" class="akml-btn" data-testid="ai-agent-duplicate" disabled="@(_configs!.Count >= MaxAgents)" @onclick="DuplicateAsync">Duplicate</button>
+                @if (_tester != null)
+                {
+                    <button type="button" class="akml-btn" data-testid="ai-agent-test" disabled="@_testing" @onclick="TestSelectedAsync">@(_testing ? "Testing…" : "Test connection")</button>
+                }
+                <button type="button" class="akml-btn" data-testid="ai-agent-set-active" disabled="@isActive" @onclick="@(() => SetActiveAsync(a.Id))">Set as active</button>
+                <button type="button" class="akml-btn akml-btn--danger" data-testid="ai-agent-delete" @onclick="DeleteAsync">Delete</button>
+            </div>
+        </div>
+        <dl class="akml-agents__fields">
+            <dt>Provider</dt><dd>@DefaultDisplayName(a.ProviderId)</dd>
+            <dt>Model</dt><dd class="akml-mono">@a.Model</dd>
+            <dt>Endpoint</dt><dd>@(string.IsNullOrEmpty(a.Endpoint) ? StandardEndpoint(a.ProviderId) : a.Endpoint)</dd>
+            <dt>API key</dt>
+            <dd>
+                @if (AiProviders.IsLocal(a.ProviderId)) { <span>Not needed</span> }
+                else if (a.HasKey) { <span>Stored, encrypted in this browser</span> }
+                else { <span class="akml-agents__warn" data-testid="@($"provider-needs-key-{a.Id}")">Needs a key — click Edit and enter it</span> }
+            </dd>
+            <dt>Enabled</dt><dd>@(a.Enabled ? "Yes" : "No — it cannot be the active agent")</dd>
+            <dt>Status</dt>
+            <dd>
+                @StatusPill(a, inList: false)
+                @if (a.LastCheck != null)
+                {
+                    <span class="akml-agents__check">@CheckTitle(a.LastCheck)</span>
+                }
+            </dd>
+        </dl>
+        @if (!Client.IsBrowserDirectCapable(a.ProviderId))
         {
+            <p class="akml-hint">
+                @ProviderLabel(a.ProviderId) can't be used directly from the browser — its API doesn't send CORS headers. It runs
+                only in the desktop edition or through an OpenAI-compatible endpoint.
+            </p>
+        }
+        @if (_detailTest != null)
+        {
+            <p class="@(_detailTest.Success ? "akml-agents__result akml-agents__result--ok" : "akml-agents__result akml-agents__result--fail")"
+               role="status" data-testid="ai-agent-test-result">@_detailTest.Message</p>
+        }
+    };
+
+    // ── The form ───────────────────────────────────────────────────────────────────
+
+    private RenderFragment RenderForm() => __builder =>
+    {
+        var editing = _mode == EditMode.Edit ? Selected : null;
+        var keepsKey = editing != null && editing.HasKey && editing.ProviderId == _form.ProviderId;
+        <form class="akml-ai-form" data-testid="ai-agent-form" @onsubmit="SubmitAsync" @onsubmit:preventDefault="true" @onkeydown="OnFormKeyDown">
+            <h4 class="akml-agents__title">@(_mode == EditMode.Add ? (_configs!.Count == 0 ? "Add your first AI agent" : "New agent") : $"Edit agent: {editing?.DisplayName}")</h4>
+            <div class="akml-agents__row">
+                <label class="akml-field">Name
+                    <input class="akml-input" @bind="_form.Name" maxlength="40" placeholder="@SuggestName(_form.ProviderId, editing?.Id)" />
+                </label>
+                <label class="akml-field">Provider
+                    <select class="akml-select" @bind="_form.ProviderId" @bind:after="OnProviderChanged">
+                        @foreach (var (id, label) in ProviderLabels)
+                        {
+                            <option value="@id">@label</option>
+                        }
+                    </select>
+                </label>
+            </div>
+            <div class="akml-agents__row">
+                <label class="akml-field">Model <input class="akml-input" @bind="_form.Model" placeholder="@ModelPlaceholder(_form.ProviderId)" /></label>
+                @if (RequiresEndpoint(_form.ProviderId))
+                {
+                    <label class="akml-field">Endpoint
+                        <input class="akml-input" @bind="_form.Endpoint" placeholder="@EndpointPlaceholder(_form.ProviderId)" />
+                    </label>
+                }
+                else
+                {
+                    @* Only the providers that need one take an endpoint (FR-056: the hints match what the form allows). *@
+                    <label class="akml-field">Endpoint
+                        <input class="akml-input" @bind="_form.Endpoint" disabled title="This provider uses its standard endpoint" placeholder="Not used by this provider" />
+                    </label>
+                }
+            </div>
+            @if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
+            {
+                <SecureContextNotice What="API keys" />
+            }
+            @if (RequiresApiKey(_form.ProviderId))
+            {
+                <label class="akml-field">API key
+                    <input class="akml-input" type="password" @bind="_form.ApiKey" autocomplete="new-password"
+                           placeholder="@(keepsKey ? "Stored. Leave empty to keep it." : "Enter or paste your key (stored wrapped)")" />
+                </label>
+                @if (editing != null && editing.HasKey && !keepsKey)
+                {
+                    <p class="akml-hint">The stored key belongs to @ProviderLabel(editing.ProviderId) and is removed. Enter a key for @ProviderLabel(_form.ProviderId).</p>
+                }
+            }
+            else
+            {
+                <p class="akml-hint">@ProviderLabel(_form.ProviderId) runs locally and does not use an API key.</p>
+            }
+            <label class="akml-field-inline">
+                <input type="checkbox" @bind="_form.Enabled" />
+                Enabled
+            </label>
+
+            @if (!Client.IsBrowserDirectCapable(_form.ProviderId))
+            {
+                <p class="akml-hint">
+                    @ProviderLabel(_form.ProviderId) can't be used directly from the browser — its API doesn't send
+                    CORS headers. You can configure it here, but it runs only in the desktop edition or via an
+                    OpenAI-compatible endpoint. Claude, Gemini, Ollama and LM Studio work browser-direct.
+                </p>
+            }
+
+            @if (_tester != null)
+            {
+                <div class="akml-agents__test">
+                    <button type="button" class="akml-btn" data-testid="ai-agent-form-test" disabled="@_testing" @onclick="TestFormAsync">@(_testing ? "Testing…" : "Test connection")</button>
+                    @if (_formTest != null)
+                    {
+                        <span class="@(_formTest.Success ? "akml-agents__result--ok" : "akml-agents__result--fail")" role="status" data-testid="ai-agent-form-test-result">@_formTest.Message</span>
+                    }
+                    else
+                    {
+                        <span class="akml-agents__check">Sends one short prompt with the values above. Nothing is saved.</span>
+                    }
+                </div>
+            }
+
+            <div class="akml-btn-group">
+                <button type="submit" class="akml-btn akml-btn--primary">Save</button>
+                <button type="button" class="akml-btn" data-testid="ai-agent-cancel" @onclick="CancelForm">Cancel</button>
+            </div>
+
+            @if (_errors.Count > 0)
+            {
+                <ul class="akml-field-error" role="alert">
+                    @foreach (var err in _errors)
+                    {
+                        <li>@err</li>
+                    }
+                </ul>
+            }
+        </form>
+    };
+
+    private void StartAdd()
+    {
+        if (_configs != null && _configs.Count >= MaxAgents) return;
+        _form = new AgentForm();
+        _errors.Clear();
+        _formTest = null;
+        _mode = EditMode.Add;
+    }
+
+    private void StartEdit(string id)
+    {
+        var c = _configs?.FirstOrDefault(x => x.Id == id);
+        if (c == null) return;
+        _selectedId = id;
+        _form = new AgentForm
+        {
+            Name = c.DisplayName,
             ProviderId = c.ProviderId,
-            DisplayName = c.DisplayName,
             Model = c.Model,
             Endpoint = c.Endpoint ?? string.Empty,
-            ApiKey = string.Empty,   // never read back -- the user re-enters it
+            ApiKey = string.Empty,   // never read back: empty keeps the stored key
+            Enabled = c.Enabled,
         };
         _errors.Clear();
-        Notifications.Notify($"Editing {c.DisplayName}. Enter the API key again to change it.", NotificationKind.Info);
+        _formTest = null;
+        _mode = EditMode.Edit;
     }
 
-    private async Task RemoveAsync(AiProviderConfig c)
+    private void CancelForm()
     {
-        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        _form = new AgentForm();
+        _errors.Clear();
+        _formTest = null;
+        _mode = EditMode.None;
+    }
+
+    private void OnFormKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && (_configs?.Count ?? 0) > 0) CancelForm();
+    }
+
+    private void OnProviderChanged()
+    {
+        // A model typed for another provider is not this one's: an empty box shows the default instead.
+        if (ProviderLabels.Any(p => ModelPlaceholder(p.Id) == _form.Model.Trim())) _form.Model = string.Empty;
+        if (!RequiresEndpoint(_form.ProviderId)) _form.Endpoint = string.Empty;
+        _formTest = null;
+    }
+
+    /// <summary>The provider's name, numbered when it is taken: "OpenAI", "OpenAI 2"…</summary>
+    private string SuggestName(string providerId, string? exceptId)
+    {
+        var taken = new HashSet<string>((_configs ?? Array.Empty<AiProviderConfig>())
+            .Where(c => c.Id != exceptId).Select(c => c.DisplayName.Trim()), StringComparer.OrdinalIgnoreCase);
+        var name = ProviderLabel(providerId);
+        if (!taken.Contains(name)) return name;
+        for (var n = 2; ; n++)
         {
-            Title = "Remove provider",
-            Message = $"Remove {c.DisplayName} and its stored key?",
-            Details = _activeId == c.ProviderId ? new[] { "It is the active provider: AI features stop until you choose another." } : null,
-            ConfirmLabel = "Remove",
-            Destructive = true,
-        });
-        if (!ok) return;
-        await Vault.RemoveAsync(c.ProviderId);
-        if (_activeId == c.ProviderId) await Preference.SetActiveAsync(string.Empty);
-        Notifications.Notify($"Removed {c.DisplayName}.", NotificationKind.Success);
-        await ReloadAsync();
+            var candidate = $"{name} {n}";
+            if (!taken.Contains(candidate)) return candidate;
+        }
+    }
+
+    private string SuggestCopyName(string name)
+    {
+        var taken = new HashSet<string>((_configs ?? Array.Empty<AiProviderConfig>()).Select(c => c.DisplayName.Trim()), StringComparer.OrdinalIgnoreCase);
+        var candidate = $"{name} (copy)";
+        for (var n = 2; taken.Contains(candidate); n++) candidate = $"{name} (copy {n})";
+        return candidate.Length <= 40 ? candidate : candidate.Substring(0, 40);
     }
 
     private async Task SubmitAsync()
     {
         _errors = new List<string>();
+        var editing = _mode == EditMode.Edit ? Selected : null;
         // The model shown in the empty box is the one used: "Model is required" under a box that reads gemini-flash-latest told
         // the user to type what the form already showed. Azure has no default (it is the user's deployment name).
         var model = string.IsNullOrWhiteSpace(_form.Model) ? DefaultModel(_form.ProviderId) : _form.Model.Trim();
+        var name = string.IsNullOrWhiteSpace(_form.Name) ? SuggestName(_form.ProviderId, editing?.Id) : _form.Name.Trim();
+        var keepsKey = editing != null && editing.HasKey && editing.ProviderId == _form.ProviderId;
+        var newKey = !string.IsNullOrEmpty(_form.ApiKey) && RequiresApiKey(_form.ProviderId);
+
         if (string.IsNullOrEmpty(_form.ProviderId)) _errors.Add("Provider is required.");
         if (string.IsNullOrEmpty(model)) _errors.Add("Model is required.");
-        if (RequiresApiKey(_form.ProviderId) && string.IsNullOrEmpty(_form.ApiKey)) _errors.Add("API key is required.");
-        if (RequiresApiKey(_form.ProviderId) && !_secureStorage)
+        if (name.Length > 40) _errors.Add("Name must be 40 characters or fewer.");
+        if (_configs!.Any(c => c.Id != editing?.Id && string.Equals(c.DisplayName.Trim(), name, StringComparison.OrdinalIgnoreCase)))
+            _errors.Add($"Another agent is already named \"{name}\".");
+        if (RequiresApiKey(_form.ProviderId) && !newKey && !keepsKey) _errors.Add("API key is required.");
+        if (newKey && !_secureStorage)
             _errors.Add("This page was opened over plain HTTP from another computer, so the key cannot be stored. Open the site's HTTPS address.");
-        if (RequiresEndpoint(_form.ProviderId) && string.IsNullOrEmpty(_form.Endpoint))
-            _errors.Add($"Endpoint is required for {DefaultDisplayName(_form.ProviderId)}.");
+        if (RequiresEndpoint(_form.ProviderId) && string.IsNullOrWhiteSpace(_form.Endpoint))
+            _errors.Add($"Endpoint is required for {ProviderLabel(_form.ProviderId)}.");
+        if (_mode == EditMode.Add && _configs.Count >= MaxAgents)
+            _errors.Add($"The list already holds the maximum of {MaxAgents} agents. Delete an agent before adding another.");
         if (_errors.Count > 0) return;
 
-        await Vault.SetKeyAsync(_form.ProviderId, new AiProviderConfig
+        var endpoint = RequiresEndpoint(_form.ProviderId) ? _form.Endpoint.Trim() : null;
+        // The last check still describes the agent when nothing it connects with changed — or a test of these very values ran.
+        var connectionChanged = editing == null || newKey || editing.ProviderId != _form.ProviderId
+                                || editing.Model != model || (editing.Endpoint ?? string.Empty) != (endpoint ?? string.Empty);
+        var lastCheck = _formTest != null ? ToCheck(_formTest) : connectionChanged ? null : editing?.LastCheck;
+
+        var config = new AiProviderConfig
         {
+            Id = editing?.Id ?? Guid.NewGuid().ToString("N"),
             ProviderId = _form.ProviderId,
-            DisplayName = string.IsNullOrEmpty(_form.DisplayName) ? DefaultDisplayName(_form.ProviderId) : _form.DisplayName,
+            DisplayName = name,
             Model = model!,
-            Endpoint = string.IsNullOrEmpty(_form.Endpoint) || !RequiresEndpoint(_form.ProviderId) ? null : _form.Endpoint,
-        }, _form.ApiKey);
+            Endpoint = endpoint,
+            Enabled = _form.Enabled,
+            CreatedUtc = editing?.CreatedUtc is { Length: > 0 } created ? created : DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            LastCheck = lastCheck,
+        };
+        await Vault.SaveAgentAsync(config, newKey ? _form.ApiKey : null);
         _form.ApiKey = string.Empty;   // tighten the residual exposure window
-        var saved = _form.ProviderId;
-        Notifications.Notify($"Saved {DefaultDisplayName(saved)}.", NotificationKind.Success);
+        var added = _mode == EditMode.Add;
+        _mode = EditMode.None;
+        _formTest = null;
+        _detailTest = null;
+        _selectedId = config.Id;
+        Notifications.Notify(added ? $"Added {name}." : $"Saved {name}.", NotificationKind.Success);
         await ReloadAsync();
-        // With no active provider the AI panel says none is configured, even right after one was saved: the one saved then
-        // becomes the active one (still refused for a cloud provider in Fully local mode).
-        if (string.IsNullOrEmpty(_activeId)) await SetActiveAsync(saved);
+
+        // With no usable active agent the AI panel says none is configured, even right after one was saved: the one saved
+        // becomes the active one (still refused for a cloud provider in Fully local mode). A turned-off active agent hands over.
+        var active = _configs!.FirstOrDefault(c => c.Id == _activeId);
+        if (config.Enabled && (active == null || !active.Enabled)) await SetActiveAsync(config.Id, quiet: active != null);
+        else if (!config.Enabled && config.Id == _activeId) await HandOverActiveAsync(config.Id);
     }
 
-    private void ClearForm()
+    private async Task DuplicateAsync()
     {
-        _form = new ProviderForm();
-        _errors.Clear();
+        var source = Selected;
+        if (source == null || _configs!.Count >= MaxAgents) return;
+        var copy = new AiProviderConfig
+        {
+            Id = Guid.NewGuid().ToString("N"),
+            ProviderId = source.ProviderId,
+            DisplayName = SuggestCopyName(source.DisplayName),
+            Model = source.Model,
+            Endpoint = source.Endpoint,
+            Enabled = source.Enabled,
+            CreatedUtc = DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+        };
+        await Vault.DuplicateAsync(source.Id, copy);
+        _selectedId = copy.Id;
+        _detailTest = null;
+        Notifications.Notify($"Duplicated {source.DisplayName} as {copy.DisplayName}.", NotificationKind.Success);
+        await ReloadAsync();
     }
+
+    private async Task DeleteAsync()
+    {
+        var c = Selected;
+        if (c == null) return;
+        var isActive = _activeId == c.Id;
+        var next = isActive ? NextActiveCandidate(c.Id) : null;
+        var ok = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Delete agent",
+            Message = $"Delete {c.DisplayName} and its stored key?",
+            Details = isActive
+                ? new[] { next != null ? $"It is the active agent: AI features use {next.DisplayName} instead." : "It is the active agent: AI features stop until you add another." }
+                : null,
+            ConfirmLabel = "Delete",
+            Destructive = true,
+        });
+        if (!ok) return;
+        await Vault.RemoveAsync(c.Id);
+        if (isActive) await Preference.SetActiveAsync(next?.Id ?? string.Empty);
+        _detailTest = null;
+        Notifications.Notify($"Deleted {c.DisplayName}.", NotificationKind.Success);
+        await ReloadAsync();
+    }
+
+    /// <summary>The first other agent that can be active: on, with its key, and local when Fully local is on.</summary>
+    private AiProviderConfig? NextActiveCandidate(string exceptId) =>
+        _configs?.FirstOrDefault(x => x.Id != exceptId && x.Enabled && !NeedsKey(x)
+            && (_aiSettings?.GlobalDefaultMode != AiPrivacyMode.FullyLocal || AiProviders.IsLocal(x.ProviderId)));
+
+    private async Task HandOverActiveAsync(string fromId)
+    {
+        var next = NextActiveCandidate(fromId);
+        await Preference.SetActiveAsync(next?.Id ?? string.Empty);
+        _activeId = next?.Id ?? string.Empty;
+        Notifications.Notify(next != null
+            ? $"The agent is off, so {next.DisplayName} is now the active agent."
+            : "The agent is off and no other agent can take over: AI features stop until you turn one on.", NotificationKind.Info);
+        StateHasChanged();
+    }
+
+    private async Task SetActiveAsync(string agentId, bool quiet = false)
+    {
+        var c = _configs?.FirstOrDefault(x => x.Id == agentId);
+        if (c == null) return;
+        if (!c.Enabled)
+        {
+            Notifications.Notify($"{c.DisplayName} is turned off. Edit it and tick Enabled first.", NotificationKind.Warning);
+            return;
+        }
+        if (NeedsKey(c))
+        {
+            Notifications.Notify($"{c.DisplayName} has no API key. Edit it and enter the key first.", NotificationKind.Warning);
+            return;
+        }
+        // Spec 028 T012: fully-local mode forbids a cloud provider as the active one.
+        if (_aiSettings != null && _aiSettings.GlobalDefaultMode == AiPrivacyMode.FullyLocal && !AiProviders.IsLocal(c.ProviderId))
+        {
+            Notifications.Notify($"Fully local is on — {c.DisplayName} uses a cloud provider and can't be active. " +
+                                 "Choose an Ollama or LM Studio agent, or change the global privacy mode.", NotificationKind.Warning);
+            StateHasChanged();
+            return;
+        }
+        _activeId = agentId;
+        await Preference.SetActiveAsync(agentId);
+        if (!quiet) Notifications.Notify($"Active agent: {c.DisplayName}.", NotificationKind.Success);
+        StateHasChanged();
+    }
+
+    // ── Test connection ────────────────────────────────────────────────────────────
+
+    private async Task TestSelectedAsync()
+    {
+        var c = Selected;
+        if (c == null || _tester == null || _testing) return;
+        _testing = true;
+        _detailTest = null;
+        StateHasChanged();
+        try
+        {
+            _detailTest = await _tester.TestAsync(c, null, CancellationToken.None);
+            c.LastCheck = ToCheck(_detailTest);
+            await Vault.UpsertConfigAsync(c);   // the check is recorded; the key is untouched
+        }
+        finally
+        {
+            _testing = false;
+        }
+        await ReloadAsync();
+    }
+
+    private async Task TestFormAsync()
+    {
+        if (_tester == null || _testing) return;
+        var editing = _mode == EditMode.Edit ? Selected : null;
+        var probe = new AiProviderConfig
+        {
+            Id = editing?.Id ?? string.Empty,   // lets an empty key box use the stored key
+            ProviderId = _form.ProviderId,
+            Model = string.IsNullOrWhiteSpace(_form.Model) ? DefaultModel(_form.ProviderId) ?? string.Empty : _form.Model.Trim(),
+            Endpoint = RequiresEndpoint(_form.ProviderId) ? _form.Endpoint.Trim() : null,
+        };
+        _testing = true;
+        _formTest = null;
+        StateHasChanged();
+        try
+        {
+            _formTest = await _tester.TestAsync(probe, RequiresApiKey(_form.ProviderId) ? _form.ApiKey : null, CancellationToken.None);
+        }
+        finally
+        {
+            _testing = false;
+        }
+        StateHasChanged();
+    }
+
+    private static AiAgentCheck ToCheck(AiConnectionTestResult result) => new()
+    {
+        Status = result.Success ? AiAgentCheck.Ready : AiAgentCheck.Failed,
+        CheckedUtc = DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+        LatencyMs = result.Success ? result.LatencyMs : 0,
+        Message = result.Message.Length <= 300 ? result.Message : result.Message.Substring(0, 300),
+    };
 
     // Spec 028 (M6) T011/T012 -- privacy disclosure modes (global + per-feature) + fully-local gating.
     private AiFeatureSettings? _aiSettings;
@@ -377,12 +762,13 @@
         await FeatureSettings.SetAsync(_aiSettings);
         var message = $"Global privacy mode: {ModeLabel(mode)}.";
 
-        // T012: switching to Fully local must not leave a cloud provider active.
-        if (mode == AiPrivacyMode.FullyLocal && !string.IsNullOrEmpty(_activeId) && !AiProviders.IsLocal(_activeId))
+        // T012: switching to Fully local must not leave a cloud agent active.
+        var active = _configs?.FirstOrDefault(c => c.Id == _activeId);
+        if (mode == AiPrivacyMode.FullyLocal && active != null && !AiProviders.IsLocal(active.ProviderId))
         {
             await Preference.SetActiveAsync(string.Empty);
             _activeId = string.Empty;
-            message = "Fully local is on — the cloud provider is no longer active. Choose Ollama or LM Studio.";
+            message = "Fully local is on — the cloud agent is no longer active. Choose an Ollama or LM Studio agent.";
         }
         Notifications.Notify(message, NotificationKind.Success);
         StateHasChanged();
@@ -424,12 +810,13 @@
         Notifications.Notify($"Ghost text: at most {v} requests per 3 seconds.", NotificationKind.Success);
     }
 
-    private sealed class ProviderForm
+    private sealed class AgentForm
     {
+        public string Name { get; set; } = string.Empty;
         public string ProviderId { get; set; } = "openai";
-        public string DisplayName { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
         public string Endpoint { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;
+        public bool Enabled { get; set; } = true;
     }
 }

@@ -412,13 +412,17 @@ public sealed class PostgresWorkspaceTests
     {
         await page.ClickAsync("nav >> text=Settings");
         await page.ClickAsync("[data-testid='settings-nav-ai-assistance']");
+        // 2026-11 master–detail: the form is open on an empty list; otherwise "+ Add agent" opens it.
+        if (await page.GetByTestId("ai-agent-form").CountAsync() == 0) await page.GetByTestId("ai-agent-add").ClickAsync();
         await page.GetByLabel("Provider").SelectOptionAsync(providerId);
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync(model);
         if (endpoint != null) await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(endpoint);
         if (key != null) await page.GetByLabel("API key").FillAsync(key);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).ClickAsync();
-        await page.GetByRole(AriaRole.Radio).First.CheckAsync();
-        await page.WaitForTimeoutAsync(750);   // the provider and the active choice persist to IndexedDB asynchronously
+        await Assertions.Expect(page.GetByTestId("ai-agent-form")).ToHaveCountAsync(0);
+        var setActive = page.GetByTestId("ai-agent-set-active");   // the saved agent is the selected one
+        if (await setActive.IsEnabledAsync()) await setActive.ClickAsync();
+        await page.WaitForTimeoutAsync(750);   // the agent and the active choice persist to IndexedDB asynchronously
         await page.ClickAsync("nav >> text=Editor");
         await page.WaitForSelectorAsync("[data-testid='sql-editor'] .cm-content", new() { Timeout = 30_000 });
         await page.WaitForTimeoutAsync(1_000);

@@ -432,6 +432,17 @@ namespace AkmlSql.Shell.Shared.Dialogs
             window.KeyDown += OnWindowKeyDown;
             // Spec 040 (T163): the Command Palette's jump to one option, once the page is laid out.
             window.Loaded += (_, _) => ApplyInitialFocus();
+            // Spec 037 (FR-017), 2026-11 master–detail: a deep link to an agent opens its editor
+            // dialog over the shown window (Add… when the link names no agent and none exists).
+            window.Loaded += (_, _) =>
+            {
+                if (InitialAgentId == null) return;
+                if (_pageControlsByKey.TryGetValue("AI Assistance", out var page) && page is AiAssistanceControls ai)
+                {
+                    window.Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ApplicationIdle,
+                        new Action(ai.OpenDeepLinkedEditor));
+                }
+            };
 
             return window;
         }

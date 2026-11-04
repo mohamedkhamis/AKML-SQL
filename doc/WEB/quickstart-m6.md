@@ -10,20 +10,27 @@ storage.
 - A key for one of the supported providers: OpenAI, Anthropic, Gemini, Azure
   OpenAI, Ollama (local), or LM Studio (local).
 
-## Add a provider
+## Add an agent
 
-1. Open the editor, then **Settings → AI providers**.
-2. Pick a provider in the dropdown (e.g. `openai`).
-3. Display name: `OpenAI`. Model: `gpt-4o`. API key: paste your key.
+1. Open **Settings → AI assistance**. With no agent yet the add form is open;
+   otherwise click **+ Add agent** above the list.
+2. Pick a provider (e.g. `Anthropic`). Name: leave empty for `Anthropic` (a
+   second agent on the same provider gets `Anthropic 2`). Model: `claude-sonnet-4-6`.
+   API key: paste your key.
+3. Optional: **Test connection** sends one short prompt with the values in the form.
 4. Click **Save**. The key is wrapped with AES-GCM 256 via Web Crypto and
-   persisted to IndexedDB. The plaintext is dropped from the form.
-5. Toggle the **Active** radio button next to the new provider.
+   persisted to IndexedDB. The plaintext is dropped from the form. The first
+   agent saved becomes the active one.
+5. Select another agent in the list and click **Set as active** to change it.
+   **Edit** keeps the stored key when the key box is left empty; **Duplicate**
+   copies an agent with its key; **Delete** asks first.
 
 ## Verify the key is wrapped
 
 1. Open DevTools → Application → IndexedDB → AkmlSqlWeb → aiKeys.
-2. The record for your providerId has `Ciphertext`, `Iv`, `Aad` fields — all
-   base64. The plaintext key is not present anywhere.
+2. The record for your agent id (a 32-hex id; agents saved before 2026-11 keep
+   their provider id) has `Ciphertext`, `Iv`, `Aad` fields — all base64. The
+   plaintext key is not present anywhere.
 3. The wrapping key itself lives in the `keyMaterial` store as a CryptoKey
    reference. Its bytes never appear in JS.
 
@@ -75,7 +82,7 @@ the unit/bUnit suite.
 | Concern | Path |
 |---------|------|
 | Key vault (Web Crypto) | `src/AkmlSql.Web/Services/IAiKeyVault.cs` |
-| Active provider | `src/AkmlSql.Web/Services/IAiPreference.cs` |
+| Active agent | `src/AkmlSql.Web/Services/IAiPreference.cs` |
 | HTTP client + allow-list | `src/AkmlSql.Web/Services/IAiClientFactory.cs` |
 | Prompt builder bridge | `src/AkmlSql.Web/Services/IAiPromptService.cs` |
 | Settings page | `src/AkmlSql.Web/Pages/SettingsAi.razor` |

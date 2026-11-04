@@ -47,7 +47,15 @@ namespace AkmlSql.Shell.Shared.Tests
             OptionsCommand.TestRpcAccessor = fake;
             try
             {
-                NameBox(controls).Text = "Claude (work)";   // renaming Kimi onto Claude
+                // Renaming Kimi onto Claude through an editor host that skips the dialog's own
+                // validation: the Apply gate is the defence in depth behind it.
+                controls.EditorHost = e =>
+                {
+                    e.NameBox.Text = "Claude (work)";
+                    e.Commit();
+                    return true;
+                };
+                controls.TryEditSelectedAgent();
                 InvokeApply(dialog);
 
                 Assert.NotNull(refusal);
@@ -139,7 +147,6 @@ namespace AkmlSql.Shell.Shared.Tests
             m!.Invoke(dialog, new object?[] { null, null });
         }
 
-        private static TextBox NameBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_name");
 
         private static T GetField<T>(object instance, string name) where T : class
         {

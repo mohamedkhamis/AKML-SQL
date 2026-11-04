@@ -65,7 +65,8 @@ public sealed class UserStory5AiTests
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync("mock");
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(mock.ChatCompletionsUrl);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
-        await page.GetByRole(AriaRole.Radio).First.CheckAsync();
+        // The first agent saved becomes the active one (2026-11 master–detail: no radios).
+        await Assertions.Expect(page.Locator("[data-testid^='ai-agent-active-']")).ToHaveCountAsync(1);
         // Save + active-provider both persist to IndexedDB asynchronously; let them commit before
         // navigating, else the editor's AI dock can load with no active provider (no action buttons).
         await page.WaitForTimeoutAsync(750);
@@ -109,7 +110,8 @@ public sealed class UserStory5AiTests
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync("mock");
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(mock.ChatCompletionsUrl);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
-        await page.GetByRole(AriaRole.Radio).First.CheckAsync();
+        // The first agent saved becomes the active one (2026-11 master–detail: no radios).
+        await Assertions.Expect(page.Locator("[data-testid^='ai-agent-active-']")).ToHaveCountAsync(1);
         await page.GetByRole(AriaRole.Checkbox, new() { Name = "Enable ghost text" }).CheckAsync();
         // The enable toggle persists to IndexedDB asynchronously; let it commit before we navigate,
         // otherwise the editor re-inits with ghost text still off (setGhostTextConfig reads stale).

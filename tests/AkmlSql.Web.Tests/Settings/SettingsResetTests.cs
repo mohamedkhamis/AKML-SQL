@@ -26,7 +26,7 @@ public sealed class SettingsResetTests
         Assert.Contains("1 suppressed rule comes back.", analysis);
         Assert.Contains("1 rule gets its own severity back.", analysis);
         var ai = await host.Section("ai-assistance").DescribeResetAsync();
-        Assert.Contains("This removes your 3 providers and their keys.", ai);
+        Assert.Contains("This removes your 3 AI agents and their keys.", ai);
         Assert.Contains("Chat history is kept.", ai);
     }
 

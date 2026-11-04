@@ -149,11 +149,14 @@ public sealed class SettingsPageTests
 
     private static async Task AddProviderAsync(IPage page, string providerId, string model, string? endpoint, string? key)
     {
+        // 2026-11 master–detail: the form is open on an empty list; otherwise "+ Add agent" opens it.
+        if (await page.GetByTestId("ai-agent-form").CountAsync() == 0) await page.GetByTestId("ai-agent-add").ClickAsync();
         await page.GetByLabel("Provider").SelectOptionAsync(providerId);
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync(model);
         if (endpoint != null) await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(endpoint);
         if (key != null) await page.GetByLabel("API key").FillAsync(key);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.GetByTestId("ai-agent-form")).ToHaveCountAsync(0);
         await page.WaitForTimeoutAsync(500);
     }
 
@@ -169,13 +172,13 @@ public sealed class SettingsPageTests
         await AddProviderAsync(page, "ollama", "llama3", "http://localhost:11434", null);
         await AddProviderAsync(page, "lmstudio", "local-model", "http://localhost:1234/v1", null);
         await AddProviderAsync(page, "openai", "gpt-5", null, "sk-e2e-not-a-real-key");
-        await Assertions.Expect(page.Locator("input[type='radio'][name='active']")).ToHaveCountAsync(3);
+        await Assertions.Expect(page.Locator("[data-testid^='ai-agent-item-']")).ToHaveCountAsync(3);
 
         await Id(page, "settings-restore-ai-assistance").ClickAsync();
-        await Assertions.Expect(Id(page, "dialog-details")).ToContainTextAsync("This removes your 3 providers and their keys.");
+        await Assertions.Expect(Id(page, "dialog-details")).ToContainTextAsync("This removes your 3 AI agents and their keys.");
         await Id(page, "dialog-confirm").ClickAsync();
 
-        await Assertions.Expect(page.Locator("input[type='radio'][name='active']")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("[data-testid^='ai-agent-item-']")).ToHaveCountAsync(0);
         await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("data-akml-theme", "dark");
         await Assertions.Expect(Id(page, "status-pill")).ToContainTextAsync("Live");
         await OpenAsync(page, "connections");
@@ -219,7 +222,7 @@ public sealed class SettingsPageTests
             await Assertions.Expect(page2.Locator("[data-testid='toast']").Last).ToContainTextAsync("1 setting skipped", new() { Timeout = 10_000 });
             await Assertions.Expect(page2.Locator("html")).ToHaveAttributeAsync("data-akml-theme", "dark");
             await Id(page2, "settings-nav-ai-assistance").ClickAsync();
-            await Assertions.Expect(Id(page2, "provider-needs-key-openai")).ToBeVisibleAsync();
+            await Assertions.Expect(page2.Locator("[data-testid^='ai-agent-needs-key-']")).ToBeVisibleAsync();
             await Id(page2, "settings-nav-connections").ClickAsync();
             await Assertions.Expect(page2.Locator(".akml-connections-row")).ToHaveCountAsync(0);   // its engines untouched
             await other.CloseAsync();

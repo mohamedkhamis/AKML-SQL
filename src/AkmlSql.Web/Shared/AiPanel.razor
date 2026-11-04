@@ -146,8 +146,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _activeProvider = await Preference.GetActiveAsync();
-        _hasProvider = !string.IsNullOrEmpty(_activeProvider);
+        _hasProvider = !string.IsNullOrEmpty(await Preference.GetActiveAsync());
+        _activeProvider = await Preference.GetActiveProviderAsync();
         _providerCapable = !_hasProvider || Client.IsBrowserDirectCapable(_activeProvider);
     }
 

@@ -209,8 +209,8 @@ namespace AkmlSql.Shell.Shared.Tests
             var (_, controls) = BuildPage(SettingsWith(keyless, MakeAgent("Claude (work)")));
             Assert.Equal(AgentHealthStatus.NeedsKey, controls.WorkingAgents[0].Health?.Status);
 
-            KeyBox(controls).Text = "sk-fresh";
-            controls.ListView.List.SelectedIndex = 1;   // leaving the agent commits the key
+            AiPageTestKit.AcceptNextEditor(controls, e => e.KeyBox.Text = "sk-fresh");
+            controls.TryEditSelectedAgent();   // the dialog's OK puts the key in the working copy
 
             Assert.Equal(AgentHealthStatus.Unknown, controls.WorkingAgents[0].Health?.Status);
             Assert.Contains(RowTexts(controls.ListView.List, 0), t => t == "– Not tested");
@@ -229,18 +229,33 @@ namespace AkmlSql.Shell.Shared.Tests
         {
             var agent = MakeAgent("Claude (work)");
             agent.Health = new AgentHealth { Status = initialStatus, LatencyMs = 100, Message = "prior" };
-            var (_, controls) = BuildPage(SettingsWith(agent));
+            var editor = AiPageTestKit.EditorFor(agent);
+            Assert.Equal(initialStatus, editor.Draft.Health?.Status);   // opening the dialog is not an edit
 
             switch (field)
             {
-                case "provider": ProviderCombo(controls).SelectedIndex = 4; break;  // Anthropic → Gemini
-                case "model": ModelBox(controls).Text = "claude-opus-4-8"; break;
-                case "key": KeyBox(controls).Text = "sk-replacement"; break;
-                case "endpoint": EndpointBox(controls).Text = "https://edited.example.com"; break;
+                case "provider": editor.ProviderCombo.SelectedIndex = 4; break;  // Anthropic → Gemini
+                case "model": editor.ModelBox.Text = "claude-opus-4-8"; break;
+                case "key": editor.KeyBox.Text = "sk-replacement"; break;
+                case "endpoint": editor.EndpointBox.Text = "https://edited.example.com"; break;
             }
 
             // R10: from ANY state, the recorded health no longer applies.
+            Assert.Equal(AgentHealthStatus.Unknown, editor.Draft.Health?.Status);
+        }
+
+        [StaFact]
+        public void An_edit_accepted_in_the_dialog_carries_the_reset_into_the_list()
+        {
+            var agent = MakeAgent("Claude (work)");
+            agent.Health = new AgentHealth { Status = AgentHealthStatus.Ready, LatencyMs = 100 };
+            var (_, controls) = BuildPage(SettingsWith(agent));
+
+            AiPageTestKit.AcceptNextEditor(controls, e => e.ModelBox.Text = "claude-opus-4-8");
+            controls.TryEditSelectedAgent();
+
             Assert.Equal(AgentHealthStatus.Unknown, controls.WorkingAgents[0].Health?.Status);
+            Assert.Contains(RowTexts(controls.ListView.List, 0), t => t == "– Not tested");
         }
 
         [StaFact]
@@ -314,17 +329,17 @@ namespace AkmlSql.Shell.Shared.Tests
 
             await WithRpcAsync(fake, async () =>
             {
-                var (_, controls) = BuildPage(SettingsWith(agent));
-                ModelBox(controls).Text = "claude-sonnet-5";   // V7 — quickstart scenario 56
+                var editor = AiPageTestKit.EditorFor(agent);
+                editor.ModelBox.Text = "claude-sonnet-5";   // V7 — quickstart scenario 56
 
-                await controls.RunProviderTestAsync();
+                await editor.RunProviderTestAsync();
 
-                var message = TestResult(controls).Text;
+                var message = editor.TestResult.Text;
                 Assert.Contains("claude-sonnet-5", message);
                 Assert.Contains("anthropic", message);
                 Assert.Contains("gemini", message);
-                Assert.Empty(fake.Requests);                        // nothing left the machine
-                Assert.Null(controls.WorkingAgents[0].Health);      // no check ran — no health written
+                Assert.Empty(fake.Requests);              // nothing left the machine
+                Assert.Null(editor.Draft.Health);         // no check ran — no health written
             });
         }
 
@@ -378,17 +393,64 @@ namespace AkmlSql.Shell.Shared.Tests
 
             await WithRpcAsync(fake, async () =>
             {
-                var (_, controls) = BuildPage(SettingsWith(agent));
-                ModelBox(controls).Text = "kimi-k2-thinking";   // typed, never saved (FR-054)
-                KeyBox(controls).Text = "sk-current";
+                var editor = AiPageTestKit.EditorFor(agent);
+                editor.ModelBox.Text = "kimi-k2-thinking";   // typed, never saved (FR-054)
+                editor.KeyBox.Text = "sk-current";
 
-                await controls.RunProviderTestAsync();
+                await editor.RunProviderTestAsync();
 
                 var sent = Assert.Single(fake.Requests);
                 var request = Assert.IsType<AiProviderTestRequest>(sent.Payload);
                 Assert.Equal("kimi-k2-thinking", request.Model);
                 Assert.Equal("sk-current", request.ApiKey);
                 Assert.Equal("kimi", request.Provider);
+                Assert.Equal(AgentHealthStatus.Ready, editor.Draft.Health?.Status);
+            });
+        }
+
+        [StaFact]
+        public async Task The_dialog_test_uses_the_stored_key_when_the_key_box_is_left_empty()
+        {
+            var agent = MakeAgent("Kimi", provider: "kimi", model: "kimi-latest", apiKey: "sk-saved");
+            var fake = new FakeRpcClientAccessor();
+            fake.Respond(MessageTypes.AiProviderTest,
+                new AiProviderTestResponse { Success = true, ModelName = "kimi-latest", LatencyMs = 5 });
+
+            await WithRpcAsync(fake, async () =>
+            {
+                var editor = AiPageTestKit.EditorFor(agent);
+                Assert.Equal(string.Empty, editor.KeyBox.Text);   // the stored key is never shown
+
+                await editor.RunProviderTestAsync();
+
+                var request = Assert.IsType<AiProviderTestRequest>(Assert.Single(fake.Requests).Payload);
+                Assert.Equal("sk-saved", request.ApiKey);
+            });
+        }
+
+        [StaFact]
+        public async Task The_page_test_sends_the_selected_agent_as_stored()
+        {
+            var a = MakeAgent("A");
+            var b = MakeAgent("Kimi", provider: "kimi", model: "kimi-latest", apiKey: "sk-kimi");
+            var fake = new FakeRpcClientAccessor();
+            fake.Respond(MessageTypes.AiProviderTest,
+                new AiProviderTestResponse { Success = true, ModelName = "kimi-latest", LatencyMs = 5 });
+
+            await WithRpcAsync(fake, async () =>
+            {
+                var (_, controls) = BuildPage(SettingsWith(a, b));
+                controls.ListView.List.SelectedIndex = 1;
+
+                await controls.RunProviderTestAsync();
+
+                var request = Assert.IsType<AiProviderTestRequest>(Assert.Single(fake.Requests).Payload);
+                Assert.Equal("kimi", request.Provider);
+                Assert.Equal("kimi-latest", request.Model);
+                Assert.Equal("sk-kimi", request.ApiKey);
+                Assert.Equal(AgentHealthStatus.Ready, controls.WorkingAgents[1].Health?.Status);
+                Assert.Null(controls.WorkingAgents[0].Health);   // only the tested agent
+                Assert.Contains("Connection succeeded", TestResult(controls).Text);
             });
         }
 
@@ -492,26 +554,26 @@ namespace AkmlSql.Shell.Shared.Tests
 
                 await WithRpcAsync(fake, async () =>
                 {
-                    var (_, controls) = BuildPage(SettingsWith(agent));
-                    KeyBox(controls).Text = secret;   // the key under test — typed, never saved
+                    var editor = AiPageTestKit.EditorFor(agent);
+                    editor.KeyBox.Text = secret;   // the key under test — typed, never saved
 
                     // Failure via an engine-mapped message…
-                    await controls.RunProviderTestAsync();
-                    Assert.DoesNotContain(secret, controls.WorkingAgents[0].Health?.Message);
-                    Assert.DoesNotContain(secret, TestResult(controls).Text);
+                    await editor.RunProviderTestAsync();
+                    Assert.DoesNotContain(secret, editor.Draft.Health?.Message);
+                    Assert.DoesNotContain(secret, editor.TestResult.Text);
 
                     // …failure via an IPC exception (the runner's own log path)…
                     fake.Throw(MessageTypes.AiProviderTest, new System.Threading.Tasks.TaskCanceledException("A task was canceled."));
-                    await controls.RunProviderTestAsync();
-                    Assert.DoesNotContain(secret, controls.WorkingAgents[0].Health?.Message);
-                    Assert.DoesNotContain(secret, TestResult(controls).Text);
+                    await editor.RunProviderTestAsync();
+                    Assert.DoesNotContain(secret, editor.Draft.Health?.Message);
+                    Assert.DoesNotContain(secret, editor.TestResult.Text);
 
                     // …and a success (which names provider/model/latency only).
                     fake.Respond(MessageTypes.AiProviderTest,
                         new AiProviderTestResponse { Success = true, ModelName = "kimi-latest", LatencyMs = 3 });
-                    await controls.RunProviderTestAsync();
-                    Assert.DoesNotContain(secret, controls.WorkingAgents[0].Health?.Message);
-                    Assert.DoesNotContain(secret, TestResult(controls).Text);
+                    await editor.RunProviderTestAsync();
+                    Assert.DoesNotContain(secret, editor.Draft.Health?.Message);
+                    Assert.DoesNotContain(secret, editor.TestResult.Text);
                 });
             }
             finally
@@ -555,11 +617,10 @@ namespace AkmlSql.Shell.Shared.Tests
             string statusLine = string.Empty;
             await WithRpcAsync(fake, async () =>
             {
-                var (_, controls) = BuildPage(SettingsWith(
-                    MakeAgent("Gemini", provider: "gemini", model: "gemini-flash-latest")));
-                ModelBox(controls).Text = "claude-sonnet-5";
-                await controls.RunProviderTestAsync();
-                statusLine = TestResult(controls).Text;
+                var editor = AiPageTestKit.EditorFor(MakeAgent("Gemini", provider: "gemini", model: "gemini-flash-latest"));
+                editor.ModelBox.Text = "claude-sonnet-5";
+                await editor.RunProviderTestAsync();
+                statusLine = editor.TestResult.Text;
                 Assert.Empty(fake.Requests);
             });
             return statusLine;
@@ -723,10 +784,6 @@ namespace AkmlSql.Shell.Shared.Tests
             return 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
         }
 
-        private static ComboBox ProviderCombo(AiAssistanceControls controls) => GetField<ComboBox>(controls, "_provider");
-        private static TextBox ModelBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_model");
-        private static TextBox KeyBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_apiKey");
-        private static TextBox EndpointBox(AiAssistanceControls controls) => GetField<TextBox>(controls, "_endpoint");
         private static TextBlock TestResult(AiAssistanceControls controls) => GetField<TextBlock>(controls, "_testResult");
 
         private static T GetField<T>(object instance, string name) where T : class

@@ -1,74 +1,69 @@
+#nullable enable
 using System;
-using System.Collections.Generic;
-using System.Reflection;
 using System.Windows;
-using System.Windows.Controls;
 using AkmlSql.Core.Config;
-using AkmlSql.Shell.Shared.Dialogs;
-using AkmlSql.Shell.Shared.Dialogs.Pages;
 using Xunit;
+using static AkmlSql.Shell.Shared.Tests.AiPageTestKit;
 
 namespace AkmlSql.Shell.Shared.Tests
 {
     /// <summary>
-    /// Spec 037 (US2) T036 — the per-agent decrypt-failure guard (FR-009, V23, research R11).
-    /// The PR #251 contract generalises to every agent: an undecryptable stored key survives any
-    /// save the user did not retype it in, typing clears the guard and the notice together, and
-    /// switching between a decryptable and an undecryptable agent keeps both states correct
-    /// (which is why the flag lives on the working-copy agent, not in one page-level field).
+    /// Spec 037 (US2) T036 — the per-agent key rules, as the 2026-11 agent dialog applies them:
+    /// the stored key is never shown; an empty key box keeps it (even one this machine cannot
+    /// decrypt — PR #251 review finding 2); typing replaces it and clears the decrypt guard and
+    /// its notice together; switching provider drops a key that belonged to the old provider.
     /// </summary>
     public class AiAgentKeyProtectionTests
     {
         /// <summary>A syntactically valid dpapi: blob this user cannot decrypt (bad HMAC).</summary>
-        private static string UndecryptableKey() =>
-            "dpapi:" + Convert.ToBase64String(new byte[64]);
+        private static string UndecryptableKey() => "dpapi:" + Convert.ToBase64String(new byte[64]);
 
         [StaFact]
-        public void An_undecryptable_key_survives_a_save_per_agent()
+        public void An_undecryptable_key_survives_a_save_and_an_edit_that_leaves_the_key_empty()
         {
             var blob = UndecryptableKey();
-            var good = MakeAgent("Good", "sk-good");
-            var bad = MakeAgent("Bad", "sk-bad");
+            var good = MakeAgent("Good", apiKey: "sk-good");
+            var bad = MakeAgent("Bad", apiKey: "sk-bad");
             bad.ApiKey = blob;
             var (dialog, controls) = BuildPage(SettingsWith(good, bad));
 
-            // Bad was never selected: its stored key must come through Save byte-identical.
+            Assert.True(controls.WorkingAgents[1].KeyDecryptFailed);
+            Assert.Equal(blob, dialog.GetSettings().Ai.Agents[1].ApiKey);
+
+            // Open Bad: empty box + the notice; OK without typing a key keeps the stored value.
+            Select(controls, 1);
+            AcceptNextEditor(controls, e =>
+            {
+                Assert.Equal(string.Empty, e.KeyBox.Text);
+                Assert.Equal(Visibility.Visible, e.KeyNotice.Visibility);
+                e.ModelBox.Text = "claude-opus-4-8";
+            });
+            controls.TryEditSelectedAgent();
+
             var saved = dialog.GetSettings();
             Assert.Equal(blob, saved.Ai.Agents[1].ApiKey);
-
-            // Select Bad: empty box + the notice — and a save the user did not retype the key in
-            // must STILL not overwrite the stored value.
-            SelectAgent(controls, 1);
-            var keyBox = GetField<TextBox>(controls, "_apiKey");
-            var notice = GetField<Border>(controls, "_keyNotice");
-            Assert.Equal(string.Empty, keyBox.Text);
-            Assert.Equal(Visibility.Visible, notice.Visibility);
-
-            saved = dialog.GetSettings();
-            Assert.Equal(blob, saved.Ai.Agents[1].ApiKey);
-            // Good's key is unaffected by any of this.
+            Assert.Equal("claude-opus-4-8", saved.Ai.Agents[1].Model);
             Assert.Equal("sk-good", ApiKeyProtector.Unprotect(saved.Ai.Agents[0].ApiKey));
         }
 
         [StaFact]
-        public void Typing_clears_the_guard_and_the_notice_together()
+        public void Typing_a_key_clears_the_guard_and_the_notice_together()
         {
-            var bad = MakeAgent("Bad", "sk-bad");
+            var bad = MakeAgent("Bad", apiKey: "sk-bad");
             bad.ApiKey = UndecryptableKey();
-            var (dialog, controls) = BuildPage(SettingsWith(MakeAgent("Good", "sk-good"), bad));
+            var (dialog, controls) = BuildPage(SettingsWith(MakeAgent("Good", apiKey: "sk-good"), bad));
 
-            SelectAgent(controls, 1);
-            var notice = GetField<Border>(controls, "_keyNotice");
-            Assert.Equal(Visibility.Visible, notice.Visibility);
-            Assert.True(controls.WorkingAgents[1].KeyDecryptFailed);
+            Select(controls, 1);
+            AcceptNextEditor(controls, e =>
+            {
+                Assert.Equal(Visibility.Visible, e.KeyNotice.Visibility);
+                e.KeyBox.Text = "sk-retyped";
+                Assert.Equal(Visibility.Collapsed, e.KeyNotice.Visibility);
+                Assert.False(e.Draft.KeyDecryptFailed);
+            });
+            controls.TryEditSelectedAgent();
 
-            GetField<TextBox>(controls, "_apiKey").Text = "sk-retyped";
-
-            // Both, together (PR #251 follow-up, per agent): the notice's claim stops being true
-            // the moment the user takes control of the field.
-            Assert.Equal(Visibility.Collapsed, notice.Visibility);
             Assert.False(controls.WorkingAgents[1].KeyDecryptFailed);
-
             var saved = dialog.GetSettings();
             Assert.True(ApiKeyProtector.IsProtected(saved.Ai.Agents[1].ApiKey),
                 "the re-entered key must be wrapped, not stored plaintext");
@@ -76,90 +71,82 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void Switching_between_decryptable_and_undecryptable_agents_keeps_both_correct()
+        public void The_stored_key_is_never_shown_and_an_empty_box_keeps_it()
         {
-            var good = MakeAgent("Good", "sk-good");
-            var bad = MakeAgent("Bad", "sk-bad");
-            bad.ApiKey = UndecryptableKey();
-            var (_, controls) = BuildPage(SettingsWith(good, bad));
+            var (dialog, controls) = BuildPage(SettingsWith(MakeAgent("Claude", apiKey: "sk-stored")));
 
-            var keyBox = GetField<TextBox>(controls, "_apiKey");
-            var notice = GetField<Border>(controls, "_keyNotice");
-
-            // Initial selection is the active (good) agent.
-            Assert.Equal("sk-good", keyBox.Text);
-            Assert.Equal(Visibility.Collapsed, notice.Visibility);
-            Assert.False(controls.WorkingAgents[0].KeyDecryptFailed);
-
-            SelectAgent(controls, 1);
-            Assert.Equal(string.Empty, keyBox.Text);
-            Assert.Equal(Visibility.Visible, notice.Visibility);
-            Assert.True(controls.WorkingAgents[1].KeyDecryptFailed);
-            Assert.False(controls.WorkingAgents[0].KeyDecryptFailed); // Good's state untouched
-
-            SelectAgent(controls, 0);
-            Assert.Equal("sk-good", keyBox.Text);
-            Assert.Equal(Visibility.Collapsed, notice.Visibility);
-            Assert.False(controls.WorkingAgents[0].KeyDecryptFailed);
-            Assert.True(controls.WorkingAgents[1].KeyDecryptFailed); // Bad's guard survives the switch
-
-            SelectAgent(controls, 1);
-            Assert.Equal(string.Empty, keyBox.Text);
-            Assert.Equal(Visibility.Visible, notice.Visibility);
-        }
-
-        // ── Helpers ──────────────────────────────────────────────────────────
-
-        private static AiAgent MakeAgent(string name, string plainKey)
-        {
-            return new AiAgent
+            AcceptNextEditor(controls, e =>
             {
-                Id = Guid.NewGuid().ToString("N"),
-                Name = name,
-                Provider = "anthropic",
-                Model = "claude-sonnet-4-6",
-                ApiKey = ApiKeyProtector.Protect(plainKey),
-                Enabled = true,
-                CreatedUtc = DateTime.UtcNow.ToString("O"),
+                Assert.Equal(string.Empty, e.KeyBox.Text);
+                Assert.Equal(string.Empty, e.KeyMask.Password);
+                Assert.Contains("Leave this empty to keep it", e.KeyHint.Text);
+                e.NameBox.Text = "Claude (renamed)";
+            });
+            controls.TryEditSelectedAgent();
+
+            Assert.Equal("sk-stored", ApiKeyProtector.Unprotect(dialog.GetSettings().Ai.Agents[0].ApiKey));
+        }
+
+        [StaFact]
+        public void Switching_provider_drops_the_old_providers_key()
+        {
+            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Claude", apiKey: "sk-anthropic")));
+            string? refusal = null;
+            controls.EditorHost = e =>
+            {
+                e.ProviderCombo.SelectedIndex = 2;   // Anthropic → OpenAI, no key typed
+                Assert.Contains("belongs to the previous provider", e.KeyHint.Text);
+                refusal = e.TryAccept();
+                return refusal == null;
             };
+
+            controls.TryEditSelectedAgent();
+
+            Assert.NotNull(refusal);   // OpenAI needs a key; the Anthropic one does not carry over
+            Assert.Equal("anthropic", controls.WorkingAgents[0].Provider);   // nothing applied
         }
 
-        private static AppSettings SettingsWith(params AiAgent[] agents)
+        [StaFact]
+        public void A_local_provider_hides_the_key_row()
         {
-            var settings = new AppSettings();
-            foreach (var agent in agents) settings.Ai.Agents.Add(agent);
-            settings.Ai.ActiveAgentId = agents[0].Id;
-            return settings;
+            var editor = EditorFor(MakeAgent("Local", provider: "ollama", model: "llama3.1:8b", apiKey: ""));
+
+            Assert.Equal(Visibility.Collapsed, editor.KeyRow.Visibility);
+
+            editor.ProviderCombo.SelectedIndex = 1;   // Anthropic
+            Assert.Equal(Visibility.Visible, editor.KeyRow.Visibility);
         }
 
-        private static (SettingsWindow Dialog, AiAssistanceControls Controls) BuildPage(AppSettings settings)
+        [StaFact]
+        public void The_key_box_is_masked_until_shown_and_mirrors_both_ways()
         {
-            var dialog = new SettingsWindow(settings);
-            _ = dialog.TestBuildWindowForRenderTest();
-            var f = typeof(SettingsWindow).GetField("_pageControlsByKey",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.NotNull(f);
-            var pages = (Dictionary<string, IPageControls>)f!.GetValue(dialog)!;
-            Assert.True(pages.TryGetValue("AI Assistance", out var controls), "AI Assistance controls not found.");
-            return (dialog, (AiAssistanceControls)controls!);
+            var editor = EditorFor(MakeAgent("Claude"));
+
+            Assert.Equal(Visibility.Visible, editor.KeyMask.Visibility);
+            Assert.Equal(Visibility.Collapsed, editor.KeyBox.Visibility);
+            Click(editor.ShowKeyButton);
+            Assert.Equal(Visibility.Collapsed, editor.KeyMask.Visibility);
+            Assert.Equal(Visibility.Visible, editor.KeyBox.Visibility);
+            Click(editor.ShowKeyButton);
+            Assert.Equal(Visibility.Visible, editor.KeyMask.Visibility);
+
+            editor.KeyMask.Password = "sk-typed";
+            Assert.Equal("sk-typed", editor.KeyBox.Text);
+            editor.KeyBox.Text = "sk-bound";
+            Assert.Equal("sk-bound", editor.KeyMask.Password);
         }
 
-        private static void SelectAgent(AiAssistanceControls controls, int index)
+        [StaFact]
+        public void The_key_help_is_collapsed_until_its_link_is_clicked()
         {
-            var list = controls.ListView.List;
-            Assert.True(index < list.Items.Count,
-                $"agent list holds {list.Items.Count} rows; cannot select index {index}");
-            list.SelectedIndex = index;
-        }
+            var editor = EditorFor(MakeAgent("Claude"));
+            Assert.Equal(Visibility.Collapsed, editor.KeyHelp.Visibility);
 
-        private static T GetField<T>(object instance, string name) where T : class
-        {
-            var f = instance.GetType().GetField(name,
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.True(f != null, $"field {name} not found on {instance.GetType().Name}");
-            var value = f!.GetValue(instance) as T;
-            Assert.NotNull(value);
-            return value!;
+            Click(editor.KeyHelpLink);
+            Assert.Equal(Visibility.Visible, editor.KeyHelp.Visibility);
+
+            Click(editor.KeyHelpLink);
+            Assert.Equal(Visibility.Collapsed, editor.KeyHelp.Visibility);
         }
     }
 }

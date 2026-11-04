@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using AkmlSql.Core.Config;
 using AkmlSql.Shell.Shared.Ui.Theme;
@@ -14,11 +15,12 @@ using AkmlSql.Shell.Shared.Ui.Theme;
 namespace AkmlSql.Shell.Shared.Dialogs.Pages
 {
     /// <summary>
-    /// Spec 037 (US2, T038, research R12) — the agent <see cref="ListBox"/> and its
-    /// Add / Duplicate / Remove / Set-active button row for the AI Assistance page, following
-    /// the <c>TabsPage</c> coloring-rules precedent (TabsPage.cs:49-71). Row rendering — name,
-    /// "provider · model", the health badge, the active marker — lives here so
-    /// <c>AiAssistancePage</c> stays reviewable; every CRUD decision is the page's.
+    /// Spec 037 (US2, T038, research R12), reshaped by the 2026-11 master–detail redesign (SSMS
+    /// layout B): the AI assistance page's agent grid — a toolbar (Add…, Edit…, Duplicate,
+    /// Delete, Set as active, Test and the agent count), column captions (Name, Provider, Model,
+    /// Status) and one <see cref="ListBox"/> row per agent: active marker │ name │ provider │
+    /// model │ health badge. Double-click or Enter asks for Edit, the Delete key for Delete; an
+    /// empty list shows how to start. Every CRUD decision stays the page's.
     ///
     /// Theme (FR-036, the spec-036 bug class): the item style pairs every hover/selection
     /// background with a foreground from <see cref="PageTheme"/>, and row text carries NO local
@@ -30,19 +32,36 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     /// </summary>
     internal sealed class AiAgentListView
     {
+        // Column widths shared by the captions and every row, so they line up.
+        private const double MarkerWidth = 18;
+        private const double ProviderWidth = 110;
+        private const double StatusWidth = 150;
+
         internal ListBox List { get; }
         internal Button AddButton { get; }
+        internal Button EditButton { get; }
         internal Button DuplicateButton { get; }
-        internal Button RemoveButton { get; }
+        internal Button DeleteButton { get; }
         internal Button SetActiveButton { get; }
+        internal Button TestButton { get; }
+        internal TextBlock CountText { get; }
+        internal TextBlock EmptyText { get; }
 
-        /// <summary>
-        /// The Add / Duplicate / Remove / Set-active row, for a host that places it itself — the
-        /// 2026-10 page puts it on the "AI agents" group-header line (see <see cref="AddListTo"/>).
-        /// </summary>
-        internal StackPanel ButtonRow => _buttonRow;
+        /// <summary>The toolbar row, for the host to place.</summary>
+        internal FrameworkElement ButtonRow => _buttonRow;
 
-        private readonly StackPanel _buttonRow;
+        /// <summary>The captions, the list and the empty-state line, as one block.</summary>
+        internal FrameworkElement GridBlock => _grid;
+
+        /// <summary>Double-click or Enter on a row.</summary>
+        internal event EventHandler? EditRequested;
+
+        /// <summary>The Delete key on a row.</summary>
+        internal event EventHandler? DeleteRequested;
+
+        private readonly DockPanel _buttonRow;
+        private readonly Grid _header;
+        private readonly Grid _grid;
         private readonly Brush _hoverForeground;
         private readonly Brush _selectedForeground;
         private readonly bool _dark;
@@ -57,8 +76,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
             List = new ListBox
             {
-                Height = 140,
-                Margin = new Thickness(20, 4, 20, 4),
+                Height = 196,   // seven rows without a scrollbar
                 BorderThickness = new Thickness(1),
                 BorderBrush = theme.ComboBorder,
                 Background = theme.Input,
@@ -66,37 +84,134 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
             };
             AutomationProperties.SetName(List, "AI agents");
-            // Rows compress to the list's width (name and detail trim) instead of growing past it
+            // Rows compress to the list's width (name and model trim) instead of growing past it
             // behind a horizontal scrollbar — at the dialog's 720 px minimum the badge was cut off.
             ScrollViewer.SetHorizontalScrollBarVisibility(List, ScrollBarVisibility.Disabled);
             List.ItemContainerStyle = BuildItemStyle(theme);
-
-            AddButton = MakeButton("Add", "Add a new AI agent", theme);
-            DuplicateButton = MakeButton("Duplicate", "Duplicate the selected agent, including its key", theme);
-            RemoveButton = MakeButton("Remove", "Remove the selected agent", theme);
-            SetActiveButton = MakeButton("Set as active", "Make the selected agent the active agent", theme);
-
-            _buttonRow = new StackPanel
+            List.MouseDoubleClick += (_, e) =>
             {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(20, 4, 20, 4),
-                HorizontalAlignment = HorizontalAlignment.Left,
+                if (e.OriginalSource is DependencyObject source && FindRow(source) != null && List.SelectedItem != null)
+                {
+                    EditRequested?.Invoke(this, EventArgs.Empty);
+                    e.Handled = true;
+                }
             };
-            _buttonRow.Children.Add(AddButton);
-            _buttonRow.Children.Add(DuplicateButton);
-            _buttonRow.Children.Add(RemoveButton);
-            _buttonRow.Children.Add(SetActiveButton);
+            List.KeyDown += (_, e) =>
+            {
+                if (List.SelectedItem == null) return;
+                if (e.Key == Key.Enter)
+                {
+                    EditRequested?.Invoke(this, EventArgs.Empty);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Delete)
+                {
+                    DeleteRequested?.Invoke(this, EventArgs.Empty);
+                    e.Handled = true;
+                }
+            };
+
+            AddButton = MakeButton("Add…", "Add an AI agent", theme);
+            EditButton = MakeButton("Edit…", "Edit the selected AI agent", theme);
+            DuplicateButton = MakeButton("Duplicate", "Duplicate the selected agent, including its key", theme);
+            DeleteButton = MakeButton("Delete", "Delete the selected AI agent", theme);
+            SetActiveButton = MakeButton("Set as active", "Make the selected agent the active agent", theme);
+            TestButton = MakeButton("Test", "Test the selected agent's connection", theme);
+
+            CountText = new TextBlock
+            {
+                FontSize = 11.5,
+                Foreground = theme.FgSecondary,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal };
+            actions.Children.Add(AddButton);
+            actions.Children.Add(EditButton);
+            actions.Children.Add(DuplicateButton);
+            actions.Children.Add(DeleteButton);
+            actions.Children.Add(new Border
+            {
+                Width = 1,
+                Margin = new Thickness(2, 3, 10, 3),
+                Background = theme.Sep,
+            });
+            actions.Children.Add(SetActiveButton);
+            actions.Children.Add(TestButton);
+
+            _buttonRow = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 0, 0, 6) };
+            DockPanel.SetDock(actions, Dock.Left);
+            _buttonRow.Children.Add(actions);
+            DockPanel.SetDock(CountText, Dock.Right);
+            _buttonRow.Children.Add(CountText);
+
+            // Column captions over a hairline, padded like a row (border 1 + item padding 8).
+            _header = new Grid { Margin = new Thickness(9, 0, 9, 0) };
+            AddColumns(_header);
+            var captions = new[] { "", "Name", "Provider", "Model", "Status" };
+            for (var i = 0; i < captions.Length; i++)
+            {
+                var caption = new TextBlock { Text = captions[i], FontSize = 11, Foreground = theme.FgSecondary };
+                Grid.SetColumn(caption, i);
+                _header.Children.Add(caption);
+            }
+            var headerBorder = new Border
+            {
+                BorderBrush = theme.Sep,
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(0, 0, 0, 5),
+                Margin = new Thickness(0, 0, 0, 3),
+                Child = _header,
+            };
+            // A vertical scrollbar narrows the rows: the captions follow so the columns stay aligned.
+            List.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) =>
+            {
+                if (e.OriginalSource is ScrollViewer sv)
+                {
+                    var bar = sv.ComputedVerticalScrollBarVisibility == Visibility.Visible ? SystemParameters.VerticalScrollBarWidth : 0;
+                    _header.Margin = new Thickness(9, 0, 9 + bar, 0);
+                }
+            }));
+
+            EmptyText = new TextBlock
+            {
+                Text = "No AI agents yet. Click Add… to connect Anthropic, OpenAI, Gemini, Kimi, Ollama, LM Studio or a custom endpoint.",
+                FontSize = 12,
+                Foreground = theme.FgSecondary,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(12, 10, 12, 10),
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false,
+                Visibility = Visibility.Collapsed,
+            };
+
+            _grid = new Grid();
+            _grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _grid.Children.Add(headerBorder);
+            Grid.SetRow(List, 1);
+            _grid.Children.Add(List);
+            Grid.SetRow(EmptyText, 1);
+            _grid.Children.Add(EmptyText);
         }
 
-        /// <summary>Appends the list and the button row to the page, in tab order (list → buttons).</summary>
-        internal void AddTo(StackPanel panel)
+        private static void AddColumns(Grid grid)
         {
-            panel.Children.Add(List);
-            panel.Children.Add(_buttonRow);
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(MarkerWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ProviderWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(StatusWidth) });
         }
 
-        /// <summary>Appends only the list; the host places <see cref="ButtonRow"/> itself.</summary>
-        internal void AddListTo(StackPanel panel) => panel.Children.Add(List);
+        private static ListBoxItem? FindRow(DependencyObject source)
+        {
+            var node = source;
+            while (node != null && node is not ListBoxItem)
+                node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node);
+            return node as ListBoxItem;
+        }
 
         /// <summary>
         /// Rebuilds the rows from the working copy, marking <paramref name="activeId"/> with ●
@@ -115,12 +230,17 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                     Content = BuildRow(agent, activeId),
                     Tag = agent.Id,
                 };
-                AutomationProperties.SetName(item, "Agent " + (agent.Name ?? string.Empty));
+                AutomationProperties.SetName(item, "Agent " + (agent.Name ?? string.Empty) + (agent.Enabled ? string.Empty : " (off)"));
+                if (!agent.Enabled) item.Opacity = 0.6;
                 List.Items.Add(item);
                 if (string.Equals(agent.Id, selectedId, StringComparison.Ordinal))
                     toSelect = item;
             }
             List.SelectedItem = toSelect;
+            var count = List.Items.Count;
+            CountText.Text = count.ToString(CultureInfo.InvariantCulture) + " of " +
+                             AiAgentResolver.MaxAgents.ToString(CultureInfo.InvariantCulture) + " agents";
+            EmptyText.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         /// <summary>The badge label for one agent — the four FR-053 statuses, glyph + label.</summary>
@@ -177,62 +297,88 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return dark ? WarnDarkBrush : WarnLightBrush;
         }
 
-        // active marker │ name │ provider · model │ health badge — one line per the contract
-        // layout. No local Foreground anywhere EXCEPT the badge: the item container's inherited
-        // foreground must reach every other run so selection stays legible (spec 036); the
-        // badge's style flips its semantic colour on hover/selection to the same effect.
+        // active marker │ name │ provider │ model │ health badge — the caption columns. No local
+        // Foreground anywhere EXCEPT the badge: the item container's inherited foreground must
+        // reach every other run so selection stays legible (spec 036); the badge's style flips
+        // its semantic colour on hover/selection to the same effect.
         private UIElement BuildRow(AiAgent agent, string activeId)
         {
             var grid = new Grid();
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            AddColumns(grid);
+            var isActive = string.Equals(agent.Id, activeId, StringComparison.Ordinal);
 
             var marker = new TextBlock
             {
-                Text = string.Equals(agent.Id, activeId, StringComparison.Ordinal) ? "●" : string.Empty,
+                Text = isActive ? "●" : string.Empty,
                 FontSize = 11,
-                Width = 16,
                 VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = isActive ? "The active agent" : null,
             };
             grid.Children.Add(marker);
 
-            var name = new TextBlock
+            var nameCell = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 8, 0) };
+            nameCell.Children.Add(new TextBlock
             {
                 Text = agent.Name ?? string.Empty,
                 FontWeight = FontWeights.SemiBold,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
-            };
-            Grid.SetColumn(name, 1);
-            grid.Children.Add(name);
-
-            var detail = new TextBlock
+            });
+            if (!agent.Enabled)
             {
-                Text = ProviderModelLabel(agent),
-                FontSize = 11,
-                Opacity = 0.72,
+                nameCell.Children.Add(new TextBlock
+                {
+                    Text = "Off",
+                    FontSize = 10.5,
+                    Margin = new Thickness(6, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    ToolTip = "This agent is turned off",
+                });
+            }
+            Grid.SetColumn(nameCell, 1);
+            grid.Children.Add(nameCell);
+
+            var provider = new TextBlock
+            {
+                Text = ProviderLabel(agent),
+                FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(12, 0, 12, 0),
+                Margin = new Thickness(0, 0, 8, 0),
             };
-            Grid.SetColumn(detail, 2);
-            grid.Children.Add(detail);
+            Grid.SetColumn(provider, 2);
+            grid.Children.Add(provider);
+
+            var model = new TextBlock
+            {
+                Text = string.IsNullOrEmpty(agent.Model) ? "—" : agent.Model,
+                FontSize = 12,
+                FontFamily = MonoFont,
+                Opacity = 0.85,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0),
+                ToolTip = string.IsNullOrEmpty(agent.Model) ? null : agent.Model,
+            };
+            Grid.SetColumn(model, 3);
+            grid.Children.Add(model);
 
             var badge = new TextBlock
             {
                 Text = HealthBadgeTextFor(agent),
                 FontSize = 11,
                 VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Right,
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 Style = BuildBadgeStyle(agent),
+                ToolTip = string.IsNullOrEmpty(agent.Health?.Message) ? null : agent.Health!.Message,
             };
-            Grid.SetColumn(badge, 3);
+            Grid.SetColumn(badge, 4);
             grid.Children.Add(badge);
 
             return grid;
         }
+
+        private static readonly FontFamily MonoFont = new FontFamily("Consolas");
 
         /// <summary>
         /// The badge's foreground is the semantic status colour in the normal state and the
@@ -272,14 +418,16 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListBoxItem), 1),
             };
 
-        private static string ProviderModelLabel(AiAgent agent)
+        /// <summary>The provider's display name ("Anthropic", "Kimi (Moonshot)"), or "Not set".</summary>
+        internal static string ProviderLabel(AiAgent agent)
         {
-            var provider = agent.Provider ?? string.Empty;
-            var model = agent.Model ?? string.Empty;
-            if (provider.Length == 0 && model.Length == 0) return "not configured";
-            if (provider.Length == 0) return model;
-            if (model.Length == 0) return provider;
-            return provider + " · " + model;
+            var id = AiProviderIds.Normalize(agent.Provider);
+            if (id.Length == 0) return string.IsNullOrEmpty(agent.Provider) ? "Not set" : agent.Provider;
+            foreach (var (display, providerId) in AiAssistancePage.Providers)
+            {
+                if (providerId == id) return display;
+            }
+            return agent.Provider ?? id;
         }
 
         /// <summary>

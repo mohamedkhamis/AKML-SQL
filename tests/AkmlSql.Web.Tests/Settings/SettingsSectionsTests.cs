@@ -73,17 +73,18 @@ public sealed class SettingsSectionsTests : IDisposable
     }
 
     [Fact]
-    public async Task AI_shows_Needs_key_for_an_imported_provider_and_Remove_confirms()
+    public async Task AI_shows_Needs_key_for_an_imported_agent_and_Delete_confirms()
     {
         await _host.Stores.Vault.UpsertConfigAsync(new AiProviderConfig { ProviderId = "anthropic", DisplayName = "Claude", Model = "claude-opus-5-5" });
         await _host.Stores.Vault.SetKeyAsync("ollama", new AiProviderConfig { DisplayName = "Ollama", Model = "llama3", Endpoint = "http://localhost:11434" }, string.Empty);
         var cut = _host.Open("settings/ai-assistance");
 
-        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("[data-testid=provider-needs-key-anthropic]")));
-        Assert.Empty(cut.FindAll("[data-testid=provider-needs-key-ollama]"));   // local: no key needed
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("[data-testid=ai-agent-needs-key-anthropic]")));
+        Assert.Empty(cut.FindAll("[data-testid=ai-agent-needs-key-ollama]"));   // local: no key needed
 
         _host.Dialogs.ConfirmAnswer = _ => false;
-        cut.FindAll("button").First(b => b.TextContent.Trim() == "Remove").Click();
+        cut.Find("[data-testid=ai-agent-item-anthropic]").Click();
+        cut.Find("[data-testid=ai-agent-delete]").Click();
 
         var confirm = Assert.Single(_host.Dialogs.Confirms);
         Assert.True(confirm.Destructive);

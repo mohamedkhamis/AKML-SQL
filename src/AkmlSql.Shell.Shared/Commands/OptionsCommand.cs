@@ -129,6 +129,7 @@ namespace AkmlSql.Shell.Shared.Commands
                         settings = window.WorkingCopy;
                         pageKey = window.CurrentPageKey ?? pageKey;
                         focusLabel = null;
+                        agentId = null;   // the agent dialog opened once; a theme reopen must not reopen it
                         continue;
 
                     case OptionsLoopStep.Save:

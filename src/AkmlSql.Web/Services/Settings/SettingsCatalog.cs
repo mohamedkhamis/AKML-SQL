@@ -72,7 +72,7 @@ public static class SettingsCatalog
         new SettingEntry("analysis-suppressed-rules", CodeAnalysis, "Suppressed rules", "Rules turned off everywhere. Undo brings a rule back.", "disabled ignore"),
         new SettingEntry("analysis-rules", CodeAnalysis, "Rules", "Every rule, grouped by database: SQL Server and PostgreSQL. A PostgreSQL rule links to the manual page it rests on.", "catalog list severity category sql server postgres postgresql manual"),
 
-        new SettingEntry("ai-providers", AiAssistance, "Providers", "The AI services you use and which one is active. Keys never leave this browser.", "openai anthropic ollama key model"),
+        new SettingEntry("ai-providers", AiAssistance, "AI agents", "The AI services you use — several per provider if you like — and which one is active. Keys never leave this browser.", "agent provider openai anthropic gemini ollama lm studio key model add edit delete duplicate test connection"),
         new SettingEntry("ai-privacy", AiAssistance, "Privacy", "How much of your schema is sent with an AI request.", "schema disclosure"),
         new SettingEntry("ai-ghost-text", AiAssistance, "Ghost text", "Suggest the rest of a line as you type.", "inline completion suggestion"),
 

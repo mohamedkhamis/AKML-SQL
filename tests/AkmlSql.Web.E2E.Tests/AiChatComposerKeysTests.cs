@@ -57,8 +57,8 @@ public sealed class AiChatComposerKeysTests
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync("mock");
         await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(mock.ChatCompletionsUrl);
         await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
-        await page.GetByRole(AriaRole.Radio).First.CheckAsync();
-        // Save + active-provider both commit to IndexedDB asynchronously (see UserStory5AiTests).
+        // The first agent saved becomes the active one; Save + the active choice commit to IndexedDB asynchronously.
+        await Assertions.Expect(page.Locator("[data-testid^='ai-agent-active-']")).ToHaveCountAsync(1);
         await page.WaitForTimeoutAsync(750);
 
         await page.GotoAsync(web.Url);
@@ -101,6 +101,8 @@ public sealed class AiChatComposerKeysTests
         // back — so this is the assertion that catches a broken suppression.
         await Assertions.Expect(composer).ToHaveValueAsync(string.Empty);
 
+        // The turn shows before the request leaves (the active agent is read from IndexedDB first): wait for it.
+        for (var i = 0; i < 100 && mock.Captures.Count == 0; i++) await page.WaitForTimeoutAsync(100);
         Assert.NotEmpty(mock.Captures);
     }
 

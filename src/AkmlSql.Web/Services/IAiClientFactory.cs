@@ -26,10 +26,13 @@ namespace AkmlSql.Web.Services;
 /// </summary>
 public interface IAiClientFactory
 {
-    /// <summary>Buffered single-shot chat completion. Returns the model's full text.</summary>
+    /// <summary>
+    /// Buffered single-shot chat completion. Returns the model's full text. <paramref name="providerId"/>
+    /// names the saved agent to use — its id, which for agents saved before 2026-11 is the provider id.
+    /// </summary>
     Task<string> SendAsync(string providerId, AiChatRequest request, CancellationToken ct);
 
-    /// <summary>Streamed chat completion. Yields text deltas as they arrive (typewriter).</summary>
+    /// <summary>Streamed chat completion with the saved agent <paramref name="providerId"/>. Yields text deltas as they arrive (typewriter).</summary>
     IAsyncEnumerable<string> StreamAsync(string providerId, AiChatRequest request, CancellationToken ct);
 
     /// <summary>True iff <paramref name="origin"/> is in the per-provider allow-list.</summary>
@@ -58,6 +61,21 @@ public sealed class AiChatMessage
     public string Role { get; set; } = "user";   // "user" | "assistant"
     public string Content { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// 2026-11 master–detail redesign: Settings › AI assistance › Test connection. Sends one short
+/// prompt with an agent's values as they are typed — nothing needs saving first — through the
+/// same gates as a real call (browser-direct, origin allow-list).
+/// </summary>
+public interface IAiConnectionTester
+{
+    /// <param name="config">The agent as it stands in the editor (<see cref="AiProviderConfig.Id"/> may be a saved agent's).</param>
+    /// <param name="apiKeyPlain">The key typed in the editor; empty to use the key stored with <see cref="AiProviderConfig.Id"/>.</param>
+    Task<AiConnectionTestResult> TestAsync(AiProviderConfig config, string? apiKeyPlain, CancellationToken ct);
+}
+
+/// <summary>The outcome of a connection test, in words a user can act on. Never holds the key.</summary>
+public sealed record AiConnectionTestResult(bool Success, string Message, int LatencyMs);
 
 /// <summary>
 /// Thrown when an AI call would target an origin not on the per-provider allow-list.
@@ -94,7 +112,7 @@ public sealed class ProviderNotBrowserDirectException : Exception
     }
 }
 
-internal sealed class AiClientFactory : IAiClientFactory
+internal sealed class AiClientFactory : IAiClientFactory, IAiConnectionTester
 {
     /// <summary>
     /// Hard-coded origin allow-list. Patterns suffixed with <c>*</c> match by prefix (Azure,
@@ -161,17 +179,18 @@ internal sealed class AiClientFactory : IAiClientFactory
         if (request == null) throw new ArgumentNullException(nameof(request));
 
         var (config, endpointUrl) = await GateAsync(providerId).ConfigureAwait(false);
-        using var req = await BuildRequestAsync(providerId, config, endpointUrl, request, stream: false).ConfigureAwait(false);
+        var provider = config.ProviderId;
+        using var req = await BuildRequestAsync(config, endpointUrl, request, stream: false, apiKeyPlain: null).ConfigureAwait(false);
 
         var response = await _http.SendAsync(req, ct).ConfigureAwait(false);
         var respBody = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode)
         {
-            throw ProviderFailure(providerId, response, respBody);
+            throw ProviderFailure(provider, response, respBody);
         }
 
-        return IsAnthropic(providerId) ? AnthropicWire.ExtractText(respBody) : OpenAiWire.ExtractText(respBody);
+        return IsAnthropic(provider) ? AnthropicWire.ExtractText(respBody) : OpenAiWire.ExtractText(respBody);
     }
 
     public async IAsyncEnumerable<string> StreamAsync(
@@ -180,7 +199,8 @@ internal sealed class AiClientFactory : IAiClientFactory
         if (request == null) throw new ArgumentNullException(nameof(request));
 
         var (config, endpointUrl) = await GateAsync(providerId).ConfigureAwait(false);
-        using var req = await BuildRequestAsync(providerId, config, endpointUrl, request, stream: true).ConfigureAwait(false);
+        var provider = config.ProviderId;
+        using var req = await BuildRequestAsync(config, endpointUrl, request, stream: true, apiKeyPlain: null).ConfigureAwait(false);
 
         // ResponseHeadersRead is load-bearing: it lets SendAsync return before the body
         // completes so we can read the stream incrementally. On net10 browser response
@@ -192,13 +212,13 @@ internal sealed class AiClientFactory : IAiClientFactory
         if (!response.IsSuccessStatusCode)
         {
             var errBody = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            throw ProviderFailure(providerId, response, errBody);
+            throw ProviderFailure(provider, response, errBody);
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var reader = new System.IO.StreamReader(stream);
 
-        var tokens = IsAnthropic(providerId)
+        var tokens = IsAnthropic(provider)
             ? AnthropicWire.ParseSse(reader, ct)
             : OpenAiWire.ParseSse(reader, ct);
 
@@ -221,9 +241,15 @@ internal sealed class AiClientFactory : IAiClientFactory
         return new HttpRequestException(message, inner: null, statusCode: response.StatusCode);
     }
 
-    /// <summary>Browser-direct + origin gating shared by both call paths.</summary>
-    private async Task<(AiProviderConfig Config, string EndpointUrl)> GateAsync(string providerId)
+    /// <summary>
+    /// Browser-direct + origin gating shared by both call paths. <paramref name="agentId"/> names
+    /// the saved agent; its provider decides the gates. An id that names no agent is read as a
+    /// provider id, so a provider that is never browser-direct is refused as such either way.
+    /// </summary>
+    private async Task<(AiProviderConfig Config, string EndpointUrl)> GateAsync(string agentId)
     {
+        var config = await _vault.GetConfigAsync(agentId).ConfigureAwait(false);
+        var providerId = config?.ProviderId ?? agentId;
         if (!IsBrowserDirectCapable(providerId))
         {
             _diagnostics.Log(DiagnosticLevel.Error, "ai",
@@ -231,24 +257,31 @@ internal sealed class AiClientFactory : IAiClientFactory
             throw new ProviderNotBrowserDirectException(providerId);
         }
 
-        var config = await _vault.GetConfigAsync(providerId).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"No AI provider config stored for '{providerId}'.");
+        if (config == null)
+            throw new InvalidOperationException($"No AI agent stored as '{agentId}'.");
 
-        var endpointUrl = ResolveEndpoint(config);
-        var origin = ExtractOrigin(endpointUrl);
-        if (!IsOriginAllowed(providerId, origin))
-        {
-            _diagnostics.Log(DiagnosticLevel.Error, "ai",
-                $"Refused AI call: '{providerId}' attempted '{origin}', not on allow-list.");
-            throw new UnauthorizedOriginException(providerId, origin);
-        }
-
-        return (config, endpointUrl);
+        return (config, GateEndpoint(config));
     }
 
-    private async Task<HttpRequestMessage> BuildRequestAsync(
-        string providerId, AiProviderConfig config, string endpointUrl, AiChatRequest request, bool stream)
+    /// <summary>The origin allow-list, for a saved agent or one being tested.</summary>
+    private string GateEndpoint(AiProviderConfig config)
     {
+        var endpointUrl = ResolveEndpoint(config);
+        var origin = ExtractOrigin(endpointUrl);
+        if (!IsOriginAllowed(config.ProviderId, origin))
+        {
+            _diagnostics.Log(DiagnosticLevel.Error, "ai",
+                $"Refused AI call: '{config.ProviderId}' attempted '{origin}', not on allow-list.");
+            throw new UnauthorizedOriginException(config.ProviderId, origin);
+        }
+        return endpointUrl;
+    }
+
+    /// <param name="apiKeyPlain">A key typed for a test; null to use the key stored with the agent.</param>
+    private async Task<HttpRequestMessage> BuildRequestAsync(
+        AiProviderConfig config, string endpointUrl, AiChatRequest request, bool stream, string? apiKeyPlain)
+    {
+        var providerId = config.ProviderId;
         var body = IsAnthropic(providerId)
             ? AnthropicWire.BuildBody(config, request, stream)
             : OpenAiWire.BuildBody(config, request, stream);
@@ -258,22 +291,91 @@ internal sealed class AiClientFactory : IAiClientFactory
             Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json"),
         };
 
-        // Local providers (Ollama / LM Studio) typically have no key (HasKey=false); skip auth
-        // rather than calling UnwrapForCallAsync (which throws when there is no key).
-        if (config.HasKey)
+        if (!string.IsNullOrEmpty(apiKeyPlain))
         {
-            using var unwrapped = await _vault.UnwrapForCallAsync(providerId).ConfigureAwait(false);
-            if (IsAnthropic(providerId))
-            {
-                AnthropicWire.ApplyAuth(req, unwrapped.Value);
-            }
-            else
-            {
-                OpenAiWire.ApplyAuth(req, unwrapped.Value);
-            }
+            ApplyAuth(providerId, req, apiKeyPlain);
+        }
+        else if (config.HasKey && !string.IsNullOrEmpty(config.Id))
+        {
+            // Local providers (Ollama / LM Studio) typically have no key (HasKey=false); skip auth
+            // rather than calling UnwrapForCallAsync (which throws when there is no key).
+            using var unwrapped = await _vault.UnwrapForCallAsync(config.Id).ConfigureAwait(false);
+            ApplyAuth(providerId, req, unwrapped.Value);
         }
 
         return req;
+    }
+
+    private static void ApplyAuth(string providerId, HttpRequestMessage req, string key)
+    {
+        if (IsAnthropic(providerId)) AnthropicWire.ApplyAuth(req, key);
+        else OpenAiWire.ApplyAuth(req, key);
+    }
+
+    /// <summary>
+    /// Test connection: one short prompt with the values in the editor, through the same gates.
+    /// Every failure becomes a sentence; the key never reaches the message or the diagnostics.
+    /// </summary>
+    public async Task<AiConnectionTestResult> TestAsync(AiProviderConfig config, string? apiKeyPlain, CancellationToken ct)
+    {
+        if (config == null) throw new ArgumentNullException(nameof(config));
+        var providerId = config.ProviderId ?? string.Empty;
+        if (providerId.Length == 0) return new AiConnectionTestResult(false, "Choose a provider first.", 0);
+        if (string.IsNullOrWhiteSpace(config.Model)) return new AiConnectionTestResult(false, "Enter a model first.", 0);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            if (!IsBrowserDirectCapable(providerId)) throw new ProviderNotBrowserDirectException(providerId);
+            var endpointUrl = GateEndpoint(config);
+
+            // A stored key is used only while it still belongs to this provider.
+            var stored = string.IsNullOrEmpty(config.Id) ? null : await _vault.GetConfigAsync(config.Id).ConfigureAwait(false);
+            var useStored = string.IsNullOrEmpty(apiKeyPlain) && stored is { HasKey: true }
+                            && string.Equals(stored.ProviderId, providerId, StringComparison.Ordinal);
+            var probe = new AiProviderConfig
+            {
+                Id = useStored ? config.Id : string.Empty,
+                ProviderId = providerId,
+                Model = config.Model.Trim(),
+                Endpoint = config.Endpoint,
+                HasKey = useStored,
+            };
+            var request = new AiChatRequest
+            {
+                SystemPrompt = "You are a connection check. Reply with the single word OK.",
+                UserPrompt = "OK?",
+                MaxTokens = 16,
+            };
+            using var req = await BuildRequestAsync(probe, endpointUrl, request, stream: false, apiKeyPlain).ConfigureAwait(false);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
+            using var response = await _http.SendAsync(req, timeout.Token).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
+            sw.Stop();
+            if (!response.IsSuccessStatusCode)
+                return new AiConnectionTestResult(false, ProviderFailure(providerId, response, body).Message, 0);
+
+            var latency = (int)Math.Max(1, sw.ElapsedMilliseconds);
+            return new AiConnectionTestResult(true,
+                $"Connected — {config.Model.Trim()} answered in {latency.ToString(System.Globalization.CultureInfo.InvariantCulture)} ms.", latency);
+        }
+        catch (ProviderNotBrowserDirectException ex) { return new AiConnectionTestResult(false, ex.Message, 0); }
+        catch (UnauthorizedOriginException) { return new AiConnectionTestResult(false, "The endpoint is not one this provider may use from the browser. Check the Endpoint.", 0); }
+        catch (InvalidOperationException ex) { return new AiConnectionTestResult(false, ex.Message, 0); }
+        catch (UriFormatException) { return new AiConnectionTestResult(false, "The endpoint is not a valid URL.", 0); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return new AiConnectionTestResult(false, "The provider did not answer within 30 seconds.", 0);
+        }
+        catch (HttpRequestException)
+        {
+            // A browser fetch that never reached the server: wrong endpoint, the local server is
+            // not running, or the provider refused the cross-origin call.
+            _diagnostics.Log(DiagnosticLevel.Warn, "ai", $"Test connection to '{providerId}' could not reach the endpoint.");
+            return new AiConnectionTestResult(false,
+                "Could not reach the provider. Check the endpoint and that the service is running (and, for a local server, that it allows this page's origin).", 0);
+        }
     }
 
     private static bool IsAnthropic(string providerId) => string.Equals(providerId, "anthropic", StringComparison.Ordinal);

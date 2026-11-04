@@ -82,275 +82,70 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             tabs.AddTo(panel);
 
             // ── Agents tab ─────────────────────────────────────────────────────────────────
+            // 2026-11 master–detail redesign (SSMS layout B): a full-width grid of agents with a
+            // toolbar, and a summary of the selected agent under it. Add… and Edit… open
+            // AiAgentEditorDialog; the dialog's OK puts the change in the working copy and the
+            // Options window's OK saves it.
             var agentListView = new AiAgentListView(theme);
-            // The list's four actions sit on the group-header line, so the agent row and the
-            // fallback row no longer read as the same four buttons.
-            agentListView.ButtonRow.Margin = new Thickness(8, 0, 0, 0);
-            ctx.Rows.AddGroupHeader(agentsTab, "AI agents", afterLabel: null, trailing: agentListView.ButtonRow);
+            ctx.Rows.AddGroupHeader(agentsTab, "AI agents");
             var indent = ctx.Rows.GroupIndent;
-            agentListView.List.Height = 124;   // four rows without a scrollbar
-            agentListView.List.Margin = new Thickness(indent, 4, 0, 4);
-            agentListView.AddListTo(agentsTab);
-            ctx.RegisterSearch("AI agents", "Add, duplicate, remove, rename and activate AI agents", "List", agentListView.List);
+            agentListView.ButtonRow.Margin = new Thickness(indent, 0, 0, 6);
+            agentsTab.Children.Add(agentListView.ButtonRow);
+            agentListView.GridBlock.Margin = new Thickness(indent, 0, 0, 4);
+            agentsTab.Children.Add(agentListView.GridBlock);
+            ctx.RegisterSearch("AI agents", "Add, edit, duplicate, delete and activate AI agents", "List", agentListView.List);
+            ctx.RegisterSearch("Add AI agent",
+                "Connect an AI provider and model: Anthropic, OpenAI, Azure OpenAI, Gemini, Kimi, Ollama, LM Studio or a custom endpoint",
+                "Button", agentListView.ButtonRow);
+            ctx.RegisterSearch("Edit AI agent",
+                "Change an agent's name, provider, model, API key or endpoint URL, or turn it off",
+                "Button", agentListView.ButtonRow);
+            ctx.RegisterSearch("Test connection", "Verify the selected agent's provider, model, endpoint and key", "Button", agentListView.ButtonRow);
 
             var activeChip = MakeChip(theme, "active agent");
-            ctx.Rows.AddGroupHeader(agentsTab, "Selected agent", afterLabel: activeChip, trailing: null);
+            var editLink = MakeLinkButton(theme, "Edit…");
+            editLink.Margin = new Thickness(8, 0, 0, 0);
+            ctx.Rows.AddGroupHeader(agentsTab, "Selected agent", afterLabel: activeChip, trailing: editLink);
 
-            // Name ─ Enabled on one row; the name box stretches to the column's right edge.
-            const string nameTip = "A friendly name for this agent — shown in the chat picker and feature assignments";
-            const string enabledTip = "Turn this agent on or off — a turned-off agent is hidden from the chat picker and skipped by feature assignments and the fallback order";
-            var nameRow = new Grid();
-            nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            nameRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var nameColumn = new StackPanel();
-            var (_, txtName) = ctx.Rows.AddTextInput(nameColumn, "Name", string.Empty, stretch: true);
-            txtName.ToolTip = nameTip;
-            nameRow.Children.Add(nameColumn);
-            // Spec 037 (review finding): the per-agent on/off switch — the route back from the
-            // "Every AI agent is turned off." empty state without deleting the agent. Committed
-            // through CommitEditorToSelectedAgent like every other editor field, and NOT one of
-            // the T086 health-reset fields, so it carries no change handler at all.
-            var chkAgentEnabled = new CheckBox
+            var summaryTitle = new TextBlock
             {
-                Content = "Enabled",
-                Foreground = theme.FgPrimary,
                 FontSize = 13,
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(12, 0, 0, 18),
-                ToolTip = enabledTip,
-            };
-            chkAgentEnabled.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Agent enabled");
-            Grid.SetColumn(chkAgentEnabled, 1);
-            nameRow.Children.Add(chkAgentEnabled);
-            agentsTab.Children.Add(nameRow);
-            ctx.RegisterSearch("Name", nameTip, "Text", nameRow);
-            ctx.RegisterSearch("Enabled", enabledTip, "Toggle", nameRow);
-
-            // FR-032 (US2 scenario 5): name validation on focus loss, inline beside the field —
-            // a modal here would fire while the user is still tabbing through the dialog. The
-            // controls object recolours this to the semantic failure brush and drives it from
-            // the name box's LostFocus.
-            var nameError = new TextBlock
-            {
-                FontSize = 11,
-                Margin = new Thickness(indent, -6, 0, 10),
-                TextWrapping = TextWrapping.Wrap,
-                Visibility = Visibility.Collapsed,
-            };
-            agentsTab.Children.Add(nameError);
-
-            // Provider ─ Model on one row.
-            var providerNames = new string[Providers.Length];
-            for (var i = 0; i < Providers.Length; i++) providerNames[i] = Providers[i].Display;
-
-            var pairRow = new Grid();
-            pairRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            pairRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var providerColumn = new StackPanel();
-            var (rowProvider, cboProvider) = ctx.Rows.AddDropdown(providerColumn, "Provider", providerNames, string.Empty, width: 180);
-            cboProvider.ToolTip = "Select the AI provider for SQL assistance features";
-            var modelColumn = new StackPanel();
-            var (rowModel, txtModel) = ctx.Rows.AddTextInput(modelColumn, "Model", "e.g. gpt-4o, claude-sonnet-4-6, gemini-flash-latest", stretch: true);
-            Grid.SetColumn(modelColumn, 1);
-            pairRow.Children.Add(providerColumn);
-            pairRow.Children.Add(modelColumn);
-            agentsTab.Children.Add(pairRow);
-            ctx.RegisterSearch("AI Provider", "Select the AI provider for SQL assistance features", "Dropdown", rowProvider);
-            ctx.RegisterSearch("Model", "e.g. gpt-4o, claude-sonnet-4-6, gemini-flash-latest", "Text", rowModel);
-
-            // Provider switch: auto-correct an obviously foreign model. "claude-sonnet-5" left
-            // behind on an Anthropic → Gemini switch reached Google's API verbatim and died with
-            // a raw 404 in the chat panel. Empty or foreign-family text gets the new provider's
-            // default; custom/unrecognised names are the user's business and stay untouched.
-            // (Safe during Load: the provider combo is set BEFORE the stored model overwrites
-            // whatever this writes.)
-            cboProvider.SelectionChanged += (_, _) =>
-            {
-                var suggested = AiModelFamily.DefaultModelFor(cboProvider.SelectedItem as string);
-                if (suggested == null) return;
-                var current = (txtModel.Text ?? string.Empty).Trim();
-                var family = AiModelFamily.Detect(current);
-                if (current.Length == 0 || (family != null && family != AiModelFamily.Detect(suggested)))
-                    txtModel.Text = suggested;
-            };
-
-            // API key: masked by default (a PasswordBox face over the TextBox every flow reads),
-            // a Show/Hide button, and the "where do I get a key" help behind a link instead of an
-            // always-open block between the key and the endpoint.
-            var keyRow = new StackPanel { Margin = new Thickness(indent, 0, 0, 12) };
-            var keyHeader = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 4) };
-            var keyHelpLink = MakeLinkButton(theme, "Where do I get a key?");
-            DockPanel.SetDock(keyHelpLink, Dock.Right);
-            keyHeader.Children.Add(keyHelpLink);
-            var keyLabel = ctx.Rows.MakeFieldLabel("API key");
-            keyLabel.Margin = new Thickness(0);
-            keyLabel.VerticalAlignment = VerticalAlignment.Center;
-            keyHeader.Children.Add(keyLabel);
-            keyRow.Children.Add(keyHeader);
-
-            var keyLine = new Grid();
-            keyLine.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            keyLine.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var txtApiKey = new TextBox
-            {
-                Background = theme.Input,
+                FontWeight = FontWeights.SemiBold,
                 Foreground = theme.FgPrimary,
-                BorderBrush = theme.ComboBorder,
-                BorderThickness = new Thickness(1),
-                CaretBrush = theme.Caret,
-                FontSize = 13,
-                Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
-                Visibility = Visibility.Collapsed,
-                Tag = "password",
-                ToolTip = "Your API key for the selected provider",
+                TextTrimming = TextTrimming.CharacterEllipsis,
             };
-            var keyMask = new PasswordBox
-            {
-                Background = theme.Input,
-                Foreground = theme.FgPrimary,
-                BorderBrush = theme.ComboBorder,
-                BorderThickness = new Thickness(1),
-                CaretBrush = theme.Caret,
-                FontSize = 13,
-                Height = 28,
-                Padding = new Thickness(6, 4, 6, 4),
-                ToolTip = "Your API key for the selected provider",
-            };
-            System.Windows.Automation.AutomationProperties.SetName(txtApiKey, "API key");
-            System.Windows.Automation.AutomationProperties.SetName(keyMask, "API key");
-            keyLine.Children.Add(keyMask);
-            keyLine.Children.Add(txtApiKey);
-            var btnShowKey = AiAgentListView.MakeButton("Show", "Show the API key", theme);
-            btnShowKey.Margin = new Thickness(8, 0, 0, 0);
-            btnShowKey.MinWidth = 60;
-            Grid.SetColumn(btnShowKey, 1);
-            keyLine.Children.Add(btnShowKey);
-            keyRow.Children.Add(keyLine);
-            agentsTab.Children.Add(keyRow);
-            ctx.RegisterSearch("API Key", "Your API key for the selected provider", "Text", keyRow);
-
-            // PR #251 review finding 2: a stored key this Windows user cannot decrypt (roamed
-            // profile, restored backup, different machine) must be VISIBLE, not silently dropped.
-            // Shown by Load on decrypt failure; follows the inline-help idiom (keyHelp below).
-            var keyNotice = new Border
-            {
-                BorderBrush = theme.FgAccent,
-                BorderThickness = new Thickness(2, 0, 0, 0),
-                Padding = new Thickness(10, 8, 10, 8),
-                Margin = new Thickness(indent, 0, 0, 10),
-                Background = theme.Panel,
-                Visibility = Visibility.Collapsed,
-                Child = new TextBlock
-                {
-                    Text = "The stored API key could not be decrypted on this machine (it may come " +
-                           "from a roamed profile or a restored backup). The stored value was left " +
-                           "untouched — re-enter the key to keep using the selected provider.",
-                    Foreground = theme.FgSecondary,
-                    FontSize = 11,
-                    TextWrapping = TextWrapping.Wrap
-                }
-            };
-            agentsTab.Children.Add(keyNotice);
-
-            // The key help (theme-aware), collapsed until its link is clicked.
-            var keyHelp = new Border
-            {
-                BorderBrush = theme.FgAccent,
-                BorderThickness = new Thickness(2, 0, 0, 0),
-                Padding = new Thickness(10, 8, 10, 8),
-                Margin = new Thickness(indent, -6, 0, 12),
-                Background = theme.Panel,
-                Visibility = Visibility.Collapsed,
-                Child = new TextBlock
-                {
-                    Text =
-                        "How to get your API key:\n" +
-                        "  • Anthropic (Claude): console.anthropic.com → API Keys" +
-                        "  —  example model: claude-sonnet-4-6\n" +
-                        "  • Google (Gemini): aistudio.google.com → Get API Key" +
-                        "  —  example model: gemini-flash-latest\n" +
-                        "  • OpenAI: platform.openai.com → API Keys" +
-                        "  —  example model: gpt-4o\n" +
-                        "Keys are stored encrypted with Windows DPAPI and never written in plain text.",
-                    Foreground = theme.FgSecondary,
-                    FontSize = 11,
-                    TextWrapping = TextWrapping.Wrap,
-                    LineHeight = 18
-                }
-            };
-            agentsTab.Children.Add(keyHelp);
-
-            var (rowEndpoint, txtEndpoint) = ctx.Rows.AddTextInput(agentsTab,
-                "Endpoint URL", "Required for Azure OpenAI and custom providers; leave empty for the others.", stretch: true);
-            ctx.RegisterSearch("Endpoint URL", "Custom endpoint (required for Azure OpenAI and custom providers)", "Text", rowEndpoint);
-
-            // Spec 036 (US2, FR-009): in-dialog connection test — directly UNDER the four fields it
-            // tests, outcome on the same line. Sends the CURRENT field values over the existing
-            // AiProviderTest (77/177) IPC pair; nothing is saved until OK.
-            var btnTest = new Button
-            {
-                Content = "Test connection",
-                MinWidth = 130,
-                Height = 28,
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            ThemedButton.ApplySecondary(btnTest, theme);
-            btnTest.SetValue(System.Windows.Automation.AutomationProperties.NameProperty, "Test AI provider connection");
-            var testIdle = new TextBlock
-            {
-                Foreground = theme.FgSecondary,
-                FontSize = 12,
-                TextWrapping = TextWrapping.Wrap,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
+            var summaryDetail = new TextBlock { FontSize = 12, Foreground = theme.FgSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) };
+            var summaryUse = new TextBlock { FontSize = 12, Foreground = theme.FgSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) };
+            var testIdle = new TextBlock { FontSize = 12, Foreground = theme.FgSecondary, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0) };
             var testResult = new TextBlock
             {
-                Foreground = theme.FgSecondary,
                 FontSize = 12,
+                Foreground = theme.FgSecondary,
                 TextWrapping = TextWrapping.Wrap,
-                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 3, 0, 0),
                 Visibility = Visibility.Collapsed,
             };
-            var testLine = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-            testLine.Children.Add(testIdle);
-            testLine.Children.Add(testResult);
-            var testGrid = new Grid();
-            testGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            testGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            testGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            testGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            testGrid.Children.Add(btnTest);
-            Grid.SetColumn(testLine, 1);
-            testGrid.Children.Add(testLine);
-            var testSub = new TextBlock
-            {
-                Text = "Sends one short prompt with the provider, model, key and endpoint above. Nothing is saved until OK.",
-                Foreground = theme.FgSecondary,
-                FontSize = 11,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 6, 0, 0),
-            };
-            Grid.SetRow(testSub, 1);
-            Grid.SetColumnSpan(testSub, 2);
-            testGrid.Children.Add(testSub);
-            var testBox = new Border
+            System.Windows.Automation.AutomationProperties.SetLiveSetting(testResult, System.Windows.Automation.AutomationLiveSetting.Polite);
+            var summaryBody = new StackPanel();
+            summaryBody.Children.Add(summaryTitle);
+            summaryBody.Children.Add(summaryDetail);
+            summaryBody.Children.Add(summaryUse);
+            summaryBody.Children.Add(testIdle);
+            summaryBody.Children.Add(testResult);
+            agentsTab.Children.Add(new Border
             {
                 BorderBrush = theme.ComboBorder,
                 BorderThickness = new Thickness(1),
                 Background = theme.Main,
-                Margin = new Thickness(indent, 2, 0, 14),
+                Margin = new Thickness(indent, 0, 0, 12),
                 Child = new Border
                 {
                     BorderBrush = theme.FgAccent,
                     BorderThickness = new Thickness(3, 0, 0, 0),
-                    Padding = new Thickness(10, 10, 12, 10),
-                    Child = testGrid,
+                    Padding = new Thickness(10, 8, 12, 9),
+                    Child = summaryBody,
                 },
-            };
-            agentsTab.Children.Add(testBox);
-            ctx.RegisterSearch("Test connection", "Verify the configured AI provider, model, endpoint and key", "Button", testBox);
+            });
 
             // ── Features tab ───────────────────────────────────────────────────────────────
             // Spec 037 (US4, T074): which agent serves each feature — "Use active agent" or a
@@ -584,19 +379,20 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var chrome = new AiEditorChrome
             {
                 Tabs = tabs,
-                KeyMask = keyMask,
-                ShowKeyButton = btnShowKey,
-                KeyHelp = keyHelp,
-                KeyHelpLink = keyHelpLink,
+                Theme = theme,
                 ActiveChip = activeChip,
+                EditLink = editLink,
+                SummaryTitle = summaryTitle,
+                SummaryDetail = summaryDetail,
+                SummaryUse = summaryUse,
                 TestIdle = testIdle,
                 Dark = dark,
             };
 
-            return new AiAssistanceControls(cboProvider, txtModel, txtApiKey, txtEndpoint, cboPrivacy,
+            return new AiAssistanceControls(cboPrivacy,
                 numMax, sldTemp, lblTemp, numTimeout, sldRetries, lblRetries,
                 chkTextToSql!, chkExplain!, chkFix!, chkOptimize!, chkIndex!, chkInline!, chkAutoFix!,
-                chkConsent, btnTest, testResult, keyNotice, txtName, nameError, chkAgentEnabled, agentListView, featureRows, chrome);
+                chkConsent, testResult, agentListView, featureRows, chrome);
         }
 
         /// <summary>A small rounded status chip for a group-header line ("active agent"), collapsed until shown.</summary>
@@ -666,19 +462,20 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
     }
 
     /// <summary>
-    /// The 2026-10 page chrome that is not an editor field: the tab strip, the masked key face
-    /// and its Show button, the key help and its link, the "active agent" chip and the idle
-    /// Test-connection line. One bag so the already-wide controls constructor grows by one
-    /// parameter (the <see cref="FeatureAssignmentRows"/> precedent).
+    /// The Agents tab chrome that is not the grid: the tab strip, the "active agent" chip, the
+    /// Edit… link and the selected-agent summary (title, details, "used by", the last check).
+    /// One bag so the controls constructor grows by one parameter (the
+    /// <see cref="FeatureAssignmentRows"/> precedent).
     /// </summary>
     internal sealed class AiEditorChrome
     {
         internal OptionsTabStrip Tabs { get; set; } = null!;
-        internal PasswordBox KeyMask { get; set; } = null!;
-        internal Button ShowKeyButton { get; set; } = null!;
-        internal Border KeyHelp { get; set; } = null!;
-        internal Button KeyHelpLink { get; set; } = null!;
+        internal PageTheme Theme { get; set; } = null!;
         internal Border ActiveChip { get; set; } = null!;
+        internal Button EditLink { get; set; } = null!;
+        internal TextBlock SummaryTitle { get; set; } = null!;
+        internal TextBlock SummaryDetail { get; set; } = null!;
+        internal TextBlock SummaryUse { get; set; } = null!;
         internal TextBlock TestIdle { get; set; } = null!;
         internal bool Dark { get; set; }
     }
@@ -706,10 +503,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
     internal sealed class AiAssistanceControls : IPageControls
     {
-        private readonly ComboBox _provider;
-        private readonly TextBox _model;
-        private readonly TextBox _apiKey;
-        private readonly TextBox _endpoint;
         private readonly ComboBox _privacy;
         private readonly CheckBox _cloudConsent;
         private readonly TextBox _maxTokens;
@@ -725,71 +518,53 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _indexSuggestions;
         private readonly CheckBox _inlineCompletion;
         private readonly CheckBox _autoFixOnError;
-        private readonly Button _testButton;
-        private readonly TextBlock _testResult;
+        private readonly TextBlock _testResult;      // the page Test's outcome, in the summary
         private readonly Brush _testIdleBrush;
-        private readonly Border _keyNotice;
-        private readonly TextBox _name;
-        private readonly TextBlock _nameError;
-        private readonly CheckBox _agentEnabled;
         private readonly AiAgentListView _listView;
         private readonly FeatureAssignmentRows _featureRows;
-        private readonly AiEditorChrome _chrome;   // tabs, masked key, key help, active chip, idle test line
+        private readonly AiEditorChrome _chrome;
         // Semantic colours per theme — the list badges' own brushes (the documented hex exception).
         private readonly SolidColorBrush _successBrush;
         private readonly SolidColorBrush _failureBrush;
         // The request parameters as Load showed them: Save compares against this to tell a
         // still-blank placeholder agent (dropped) from one the user retuned (kept).
         private (int MaxTokens, int Temperature10, int Timeout, int Retries) _loadedParams;
-        private bool _suppressKeySync;
         private readonly List<string> _assignmentIds = new();   // index-aligned with every assignment combo
         // Defect 11 fix: index-aligned with the fallback CANDIDATE combo, which skips agents
         // already in _fallback — the ids must skip them in lockstep or the alignment is wrong.
-        // Resolving the picked candidate by name went to the first agent carrying that name,
-        // which is the wrong agent as soon as two agents share one (and did nothing at all for
-        // an unnamed one).
         private readonly List<string> _fallbackCandidateIds = new();
         private bool _suppressFeatureEvents;
 
         // Spec 037 (US2, research R13): the page edits a WORKING COPY of the agent list (plus the
         // assignments and fallback order), written back wholesale in Save. Cancel is correct for
         // free — the host only calls Save on OK, so an abandoned copy is an abandoned edit.
-        // KeyDecryptFailed lives on each working-copy agent (V23): the user can switch between a
-        // decryptable and an undecryptable agent without saving, so the flag cannot be page-level.
+        // KeyDecryptFailed lives on each working-copy agent (V23).
         private List<AiAgent> _agents = new();
         private string _activeId = string.Empty;
         private string _selectedId = string.Empty;
         private FeatureAgentAssignments _assignments = new();
         private List<string> _fallback = new();
         private bool _suppressListEvents;
-        private bool _suppressHealthReset;
 
         // Defect 9 fix (FR-032 scope): the ids of the agents this dialog session actually
-        // TOUCHED — an editor commit that differs from the bound agent, or an agent the user
-        // added/duplicated here. Pages load eagerly, so the working copy always holds every
-        // stored agent; gating OK on all of them let one long-stale half-configured agent block
-        // a save the user came here to make on an entirely different page, with no way out but
-        // repairing an agent they never opened. FR-032 still refuses the agents being edited.
+        // TOUCHED — accepted from the editor with a change, or added/duplicated here. The
+        // Options window's OK refuses only on those, so one long-stale half-configured agent
+        // cannot block a save made on an entirely different page.
         private readonly HashSet<string> _touchedAgentIds = new HashSet<string>(StringComparer.Ordinal);
 
         /// <summary>
         /// Spec 037 (FR-017): deep-link target handed over by SettingsWindow before Load. An
-        /// agent id binds the editor to that agent; <c>""</c> with an empty list performs the
-        /// implicit Add (a new, empty agent ready to edit); <c>null</c> selects the active agent.
+        /// agent id selects that agent (and <see cref="OpenDeepLinkedEditor"/> opens it for
+        /// editing); <c>""</c> with no agent opens Add…; <c>null</c> selects the active agent.
         /// </summary>
         internal string? InitialAgentId { get; set; }
 
-        // ── US2 seams (T038–T046) ────────────────────────────────────────────
-        // The agent list view and the working copy, exposed to the shell test assembly (which
-        // compiles these sources in) and to SettingsWindow's OK-refusal hook.
+        // ── Seams for the shell test assembly (it compiles these sources in) ─────────────
 
         internal AiAgentListView ListView => _listView;
         internal IReadOnlyList<AiAgent> WorkingAgents => _agents;
         internal string SelectedAgentId => _selectedId;
         internal string ActiveAgentId => _activeId;
-
-        // US4 seams (T074/T075): the feature-assignment dropdowns and the fallback-order
-        // editor, exposed to the shell test assembly.
         internal ComboBox AssignmentComboFor(AiFeature feature) => _featureRows.ComboFor(feature);
         internal ListBox FallbackList => _featureRows.FallbackList;
         internal ComboBox FallbackCandidate => _featureRows.FallbackCandidate;
@@ -797,47 +572,162 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         internal Button FallbackRemoveButton => _featureRows.FallbackRemove;
         internal Button FallbackMoveUpButton => _featureRows.FallbackMoveUp;
         internal Button FallbackMoveDownButton => _featureRows.FallbackMoveDown;
-
-        // 2026-10 layout seams (AiAssistanceTabsLayoutTests): the tab strip, the masked key face
-        // and its Show/Hide button, the key help block and its link.
         internal OptionsTabStrip Tabs => _chrome.Tabs;
-        internal PasswordBox KeyMask => _chrome.KeyMask;
-        internal Button ShowKeyButton => _chrome.ShowKeyButton;
-        internal Border KeyHelp => _chrome.KeyHelp;
-        internal Button KeyHelpLink => _chrome.KeyHelpLink;
+        internal Button EditLink => _chrome.EditLink;
+        internal TextBlock SummaryTitle => _chrome.SummaryTitle;
+        internal TextBlock SummaryDetail => _chrome.SummaryDetail;
+        internal TextBlock SummaryUse => _chrome.SummaryUse;
+        internal TextBlock TestResultLine => _testResult;
 
         /// <summary>
-        /// Test seam for the Remove confirmation (FR-028): receives the confirmation text and
-        /// returns whether the user confirmed. When null, the click handler asks via MessageBox.
+        /// Test seam for the Delete confirmation (FR-028): receives the confirmation text and
+        /// returns whether the user confirmed. When null, the handler asks via MessageBox.
         /// </summary>
-        internal Func<string, bool>? RemoveConfirmation { get; set; }
+        internal Func<string, bool>? DeleteConfirmation { get; set; }
 
         /// <summary>
-        /// Test seam (US5, T084): when set, the Test-connection flow sends through this accessor
-        /// instead of <see cref="EngineRpcClientAccessor.Instance"/>, so the flow is exercisable
-        /// without a pipe or an engine. Production code never sets it.
+        /// Test seam for the agent dialog: receives the bound editor and returns true for OK
+        /// (after driving the editor's controls, and calling <see cref="AiAgentEditor.TryAccept"/>
+        /// when the test wants the dialog's validation). When null, <see cref="AiAgentEditorDialog"/>
+        /// is shown modally.
         /// </summary>
-        internal static IRpcClientAccessor? TestRpcAccessor { get; set; }
+        internal Func<AiAgentEditor, bool>? EditorHost { get; set; }
+
+        /// <summary>The last editor this page opened (test diagnostics).</summary>
+        internal AiAgentEditor? LastEditor { get; private set; }
 
         /// <summary>
-        /// FR-026: append a fresh agent with a unique suggested name and select it for editing.
-        /// V12 refuses the 21st with a message naming the limit; a refusal is returned, not
-        /// shown, so tests never meet a modal — the click handler shows it.
+        /// Test seam (US5, T084): tests send through this accessor instead of the engine's.
+        /// Shared with the agent editor through <see cref="AiAgentTestFlow"/>.
+        /// </summary>
+        internal static IRpcClientAccessor? TestRpcAccessor
+        {
+            get => AiAgentTestFlow.TestRpcAccessor;
+            set => AiAgentTestFlow.TestRpcAccessor = value;
+        }
+
+        public AiAssistanceControls(
+            ComboBox privacy,
+            TextBox maxTokens, Slider sldTemp, TextBlock lblTemp,
+            TextBox timeout, Slider sldRetries, TextBlock lblRetries,
+            CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
+            CheckBox idx, CheckBox inline, CheckBox autoFix,
+            CheckBox cloudConsent, TextBlock testResult,
+            AiAgentListView listView, FeatureAssignmentRows featureRows, AiEditorChrome chrome)
+        {
+            _privacy = privacy;
+            _cloudConsent = cloudConsent;
+            _maxTokens = maxTokens;
+            _temperature = sldTemp;
+            _temperatureLabel = lblTemp;
+            _timeout = timeout;
+            _retries = sldRetries;
+            _retriesLabel = lblRetries;
+            _textToSql = textToSql;
+            _explain = explain;
+            _fix = fix;
+            _optimize = optimize;
+            _indexSuggestions = idx;
+            _inlineCompletion = inline;
+            _autoFixOnError = autoFix;
+            _testResult = testResult;
+            _testIdleBrush = testResult.Foreground;
+            _listView = listView;
+            _featureRows = featureRows;
+            _chrome = chrome;
+            _successBrush = AiAgentListView.BadgeBrushFor(AgentHealthStatus.Ready, chrome.Dark);
+            _failureBrush = AiAgentListView.BadgeBrushFor(AgentHealthStatus.Failed, chrome.Dark);
+
+            _listView.List.SelectionChanged += OnAgentSelectionChanged;
+            _listView.AddButton.Click += (_, _) => ShowRefusal(TryAddAgent());
+            _listView.EditButton.Click += (_, _) => ShowRefusal(TryEditSelectedAgent());
+            _listView.EditRequested += (_, _) => ShowRefusal(TryEditSelectedAgent());
+            _chrome.EditLink.Click += (_, _) => ShowRefusal(TryEditSelectedAgent());
+            _listView.DuplicateButton.Click += (_, _) => ShowRefusal(TryDuplicateSelectedAgent());
+            _listView.SetActiveButton.Click += (_, _) => ShowRefusal(TrySetActiveSelectedAgent());
+            _listView.DeleteButton.Click += (_, _) => OnDeleteRequested();
+            _listView.DeleteRequested += (_, _) => OnDeleteRequested();
+            _listView.TestButton.Click += async (_, _) => await RunProviderTestAsync();
+
+            // US4 (T074/T075): assignments write straight through to the working copy (an id,
+            // never a name); the fallback editor mutates the ordered working-copy list.
+            foreach (var (_, _, feature) in AiAssistancePage.AssignmentFeatures)
+            {
+                var combo = _featureRows.ComboFor(feature);
+                combo.SelectionChanged += (_, _) => OnAssignmentChanged(feature, combo);
+            }
+            _featureRows.FallbackAdd.Click += (_, _) => OnFallbackAdd();
+            _featureRows.FallbackRemove.Click += (_, _) => OnFallbackRemove();
+            _featureRows.FallbackMoveUp.Click += (_, _) => OnFallbackMove(-1);
+            _featureRows.FallbackMoveDown.Click += (_, _) => OnFallbackMove(+1);
+        }
+
+        private static void ShowRefusal(string? message)
+        {
+            if (message != null)
+                MessageBox.Show(message, Constants.ProductName, MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        // ── CRUD ──────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// FR-026: opens "Add AI agent" with a uniquely named fresh agent. On OK the agent joins
+        /// the list and is selected; the first usable agent of an empty or unusable list also
+        /// becomes the active one. V12 refuses the 21st with a message naming the limit — a
+        /// refusal is returned, not shown, so tests never meet a modal.
         /// </summary>
         internal string? TryAddAgent()
         {
-            CommitEditorToSelectedAgent();
             if (!AiAgentResolver.CanAddAgent(_agents.Count))
                 return CeilingRefusal();
-            var agent = new AiAgent
+            var (maxTokens, temperature10, timeout, retries) = ReadSharedParams();
+            var draft = new AiAgent
             {
                 Id = Guid.NewGuid().ToString("N"),
                 Name = AiAgentResolver.SuggestName(_agents),
                 Enabled = true,
                 CreatedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                MaxTokens = maxTokens,
+                Temperature = temperature10 / 10.0,
+                Timeout = timeout,
+                Retries = retries,
             };
-            _agents.Add(agent);
-            _touchedAgentIds.Add(agent.Id);   // defect 9 fix: an agent the user added here is touched
+            var editor = NewEditor(draft, new List<AiAgent>(_agents), isNew: true);
+            if (!ShowEditor(editor)) return null;
+
+            var added = editor.Draft;
+            _agents.Add(added);
+            _touchedAgentIds.Add(added.Id);
+            var active = FindAgent(_activeId);
+            if ((active == null || !AiAgentResolver.IsUsable(active)) && AiAgentResolver.IsUsable(added))
+                _activeId = added.Id;
+            SelectAgent(added);
+            return null;
+        }
+
+        /// <summary>
+        /// Opens "Edit AI agent" on a copy of the selected agent; on OK the copy's values replace
+        /// the agent's (its id — and every reference to it — stays).
+        /// </summary>
+        internal string? TryEditSelectedAgent()
+        {
+            var agent = SelectedAgent();
+            if (agent == null) return null;
+            var siblings = _agents.Where(a => !ReferenceEquals(a, agent)).ToList();
+            var editor = NewEditor(CopyAgent(agent), siblings, isNew: false);
+            if (!ShowEditor(editor)) return null;
+
+            var edited = editor.Draft;
+            if (!SameConfiguration(agent, edited)) _touchedAgentIds.Add(agent.Id);
+            agent.Name = edited.Name;
+            agent.Enabled = edited.Enabled;
+            agent.Provider = edited.Provider;
+            agent.Model = edited.Model;
+            agent.ApiKey = edited.ApiKey;
+            agent.Endpoint = edited.Endpoint;
+            agent.KeyDecryptFailed = edited.KeyDecryptFailed;
+            agent.Health = edited.Health;
+            _testResult.Text = string.Empty;   // an outcome line belongs to the values that were tested
             SelectAgent(agent);
             return null;
         }
@@ -849,7 +739,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         /// </summary>
         internal string? TryDuplicateSelectedAgent()
         {
-            CommitEditorToSelectedAgent();
             if (!AiAgentResolver.CanAddAgent(_agents.Count))
                 return CeilingRefusal();
             var source = SelectedAgent();
@@ -860,22 +749,21 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             copy.Health = null;
             copy.CreatedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             _agents.Insert(_agents.IndexOf(source) + 1, copy);
-            _touchedAgentIds.Add(copy.Id);   // defect 9 fix: a copy made here is touched
+            _touchedAgentIds.Add(copy.Id);
             SelectAgent(copy);
             return null;
         }
 
         /// <summary>
-        /// FR-028: delete the selected agent, repair the active id (V13-shaped: first usable
-        /// survivor, else none), clear assignments naming it (V16) and drop fallback entries
-        /// naming it (V17), then select the nearest survivor. The confirmation itself is the
-        /// click handler's job — see <see cref="BuildRemoveConfirmationText"/>.
+        /// FR-028: delete the selected agent, repair the active id (first usable survivor, else
+        /// none), clear assignments naming it (V16), drop fallback entries naming it (V17), then
+        /// select the nearest survivor. The confirmation is the handler's job — see
+        /// <see cref="BuildDeleteConfirmationText"/>.
         /// </summary>
-        internal string? TryRemoveSelectedAgent()
+        internal string? TryDeleteSelectedAgent()
         {
             var agent = SelectedAgent();
             if (agent == null) return null;
-            CommitEditorToSelectedAgent();
             var index = _agents.IndexOf(agent);
             _agents.RemoveAt(index);
             RepairReferencesToRemovedAgent(agent);
@@ -887,92 +775,45 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             else
             {
                 _selectedId = string.Empty;
-                ClearEditor();
                 RenderList();
             }
             return null;
         }
 
-        /// <summary>
-        /// The reference repair every removal path shares (FR-028's Remove and the Save-time
-        /// blank-agent drop): an active id pointing at the removed agent moves to the first
-        /// usable survivor (V13-shaped), assignments naming it revert to "" (V16), and fallback
-        /// entries naming it drop out (V17).
-        /// </summary>
-        private void RepairReferencesToRemovedAgent(AiAgent agent)
+        private void OnDeleteRequested()
         {
-            if (string.Equals(_activeId, agent.Id, StringComparison.Ordinal))
-                _activeId = FirstUsableAgentId() ?? string.Empty;
-            if (string.Equals(_assignments.Chat, agent.Id, StringComparison.Ordinal)) _assignments.Chat = string.Empty;
-            if (string.Equals(_assignments.TextToSql, agent.Id, StringComparison.Ordinal)) _assignments.TextToSql = string.Empty;
-            if (string.Equals(_assignments.Explain, agent.Id, StringComparison.Ordinal)) _assignments.Explain = string.Empty;
-            if (string.Equals(_assignments.Fix, agent.Id, StringComparison.Ordinal)) _assignments.Fix = string.Empty;
-            if (string.Equals(_assignments.Optimize, agent.Id, StringComparison.Ordinal)) _assignments.Optimize = string.Empty;
-            if (string.Equals(_assignments.IndexSuggestions, agent.Id, StringComparison.Ordinal)) _assignments.IndexSuggestions = string.Empty;
-            if (string.Equals(_assignments.GhostText, agent.Id, StringComparison.Ordinal)) _assignments.GhostText = string.Empty;
-            _fallback.RemoveAll(id => string.Equals(id, agent.Id, StringComparison.Ordinal));
+            if (SelectedAgent() == null) return;
+            var text = BuildDeleteConfirmationText();
+            var confirmed = DeleteConfirmation?.Invoke(text)
+                ?? MessageBox.Show(text, Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+            if (confirmed) TryDeleteSelectedAgent();
         }
 
-        /// <summary>
-        /// The Load-time seed (and any agent the user added but left untouched) is a placeholder
-        /// for the editor, not a configuration: pages load eagerly, so an OK from ANY page would
-        /// otherwise persist the phantom. Drop every agent that is STILL completely blank,
-        /// repairing references exactly as Remove does. The validation exemption
-        /// (<see cref="IsBlankAgent"/>) stays: a blank agent never BLOCKS OK — it just never
-        /// persists.
-        /// </summary>
-        private void DropStillBlankAgents(bool paramsEdited)
+        /// <summary>FR-028: the confirmation wording, naming the agent and what it answers.</summary>
+        internal string BuildDeleteConfirmationText()
         {
-            var droppedAny = false;
-            var selectedDropped = false;
-            // Materialise first: the working copy is mutated inside the loop.
-            foreach (var agent in _agents.Where(a => IsStillBlankAgent(a, paramsEdited)).ToList())
+            var agent = SelectedAgent();
+            var name = (agent?.Name ?? string.Empty).Trim();
+            var text = $"Delete the agent \"{(name.Length > 0 ? name : "(unnamed)")}\"?";
+            if (agent != null)
             {
-                _agents.Remove(agent);
-                RepairReferencesToRemovedAgent(agent);
-                selectedDropped |= string.Equals(_selectedId, agent.Id, StringComparison.Ordinal);
-                droppedAny = true;
+                var features = AssignedFeatureLabels(agent.Id);
+                if (features.Count > 0)
+                    text += " It answers " + string.Join(", ", features) + "; those features will use the active agent instead.";
+                if (string.Equals(agent.Id, _activeId, StringComparison.Ordinal))
+                    text += " It is the active agent: the first usable agent left becomes active.";
             }
-            if (!droppedAny) return;
-
-            // Mirror Remove's selection repair so the editor never stays bound to a phantom.
-            if (selectedDropped)
-            {
-                if (_agents.Count > 0)
-                {
-                    SelectAgent(_agents[0]);
-                }
-                else
-                {
-                    _selectedId = string.Empty;
-                    ClearEditor();
-                    RenderList();
-                }
-            }
-            else
-            {
-                RenderList();   // rows, assignment combos and fallback candidates lost an entry
-            }
-        }
-
-        /// <summary>FR-028: the confirmation wording, naming the selected agent.</summary>
-        internal string BuildRemoveConfirmationText()
-        {
-            var name = (SelectedAgent()?.Name ?? string.Empty).Trim();
-            return $"Remove the agent \"{(name.Length > 0 ? name : "(unnamed)")}\"? " +
-                   "Its settings and stored key are deleted. This cannot be undone.";
+            return text + " Its settings and stored key are removed when you click OK in the Options window.";
         }
 
         /// <summary>
         /// Mark the selected agent active. Refused, with the reason, when the agent cannot
-        /// answer (S1 plus the shell-observable half of V23 — the same usability the chat
-        /// empty state uses), so an unconfigured agent cannot silently become active.
+        /// answer (S1 plus V23 — the same usability the chat empty state uses).
         /// </summary>
         internal string? TrySetActiveSelectedAgent()
         {
             var agent = SelectedAgent();
             if (agent == null) return null;
-            CommitEditorToSelectedAgent(); // usability must see the current boxes, not the last commit
             if (!AiChatEmptyState.CanAnswer(agent))
                 return $"\"{(agent.Name ?? string.Empty).Trim()}\" cannot be made the active agent — {UnusableReason(agent)}";
             _activeId = agent.Id;
@@ -981,56 +822,108 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         }
 
         /// <summary>
-        /// FR-032: validate the WHOLE working copy (V1–V11 per agent via the resolver, V12 at
-        /// list level) and return a message naming the agent and the field, or null when every
-        /// agent is valid. The offending agent is selected BEFORE the caller shows the message,
-        /// so the user lands where the problem is. The leading commit is the Save moment
-        /// arriving early: OK is validate-then-Save, and validation must see the same working
-        /// copy Save would write — including edits still sitting in the boxes.
+        /// Spec 037 (FR-017): the deep link's editor, opened once the Options window has loaded —
+        /// Edit… for the named agent, or Add… when the link carries "" and there is no agent.
+        /// Consumed once, so a reload (Reset all) does not reopen it.
+        /// </summary>
+        internal void OpenDeepLinkedEditor()
+        {
+            var id = InitialAgentId;
+            InitialAgentId = null;
+            if (id == null) return;
+            _chrome.Tabs.Select(0);
+            if (id.Length == 0)
+            {
+                if (_agents.Count == 0) ShowRefusal(TryAddAgent());
+                return;
+            }
+            var agent = FindAgent(id);
+            if (agent == null) return;
+            SelectAgent(agent);
+            ShowRefusal(TryEditSelectedAgent());
+        }
+
+        private AiAgentEditor NewEditor(AiAgent draft, IReadOnlyList<AiAgent> siblings, bool isNew)
+        {
+            var editor = new AiAgentEditor(_chrome.Theme, draft, siblings, isNew, () => RowFactory.GetNumber(_timeout));
+            LastEditor = editor;
+            return editor;
+        }
+
+        private bool ShowEditor(AiAgentEditor editor)
+            => EditorHost?.Invoke(editor) ?? AiAgentEditorDialog.ShowFor(editor, _listView.List);
+
+        private static bool SameConfiguration(AiAgent a, AiAgent b)
+            => string.Equals(a.Name ?? string.Empty, b.Name ?? string.Empty, StringComparison.Ordinal)
+               && a.Enabled == b.Enabled
+               && string.Equals(AiProviderIds.Normalize(a.Provider), AiProviderIds.Normalize(b.Provider), StringComparison.Ordinal)
+               && string.Equals(a.Model ?? string.Empty, b.Model ?? string.Empty, StringComparison.Ordinal)
+               && string.Equals(a.ApiKey ?? string.Empty, b.ApiKey ?? string.Empty, StringComparison.Ordinal)
+               && string.Equals(a.Endpoint ?? string.Empty, b.Endpoint ?? string.Empty, StringComparison.Ordinal);
+
+        /// <summary>
+        /// The reference repair every removal path shares (Delete and the Save-time blank-agent
+        /// drop): an active id pointing at the removed agent moves to the first usable survivor,
+        /// assignments naming it revert to "" (V16), and fallback entries naming it drop out (V17).
+        /// </summary>
+        private void RepairReferencesToRemovedAgent(AiAgent agent)
+        {
+            if (string.Equals(_activeId, agent.Id, StringComparison.Ordinal))
+                _activeId = FirstUsableAgentId() ?? string.Empty;
+            foreach (var (_, _, feature) in AiAssistancePage.AssignmentFeatures)
+            {
+                if (string.Equals(GetAssignment(feature), agent.Id, StringComparison.Ordinal))
+                    SetAssignment(feature, string.Empty);
+            }
+            _fallback.RemoveAll(id => string.Equals(id, agent.Id, StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// An agent that is STILL completely blank (no provider, model, key or endpoint, default
+        /// parameters) is a placeholder, not a configuration: it never persists. Defence in
+        /// depth — the dialog refuses to accept one, but a hand-edited config can carry one.
+        /// </summary>
+        private void DropStillBlankAgents(bool paramsEdited)
+        {
+            var dropped = false;
+            foreach (var agent in _agents.Where(a => IsStillBlankAgent(a, paramsEdited)).ToList())
+            {
+                _agents.Remove(agent);
+                RepairReferencesToRemovedAgent(agent);
+                if (string.Equals(_selectedId, agent.Id, StringComparison.Ordinal))
+                    _selectedId = _agents.Count > 0 ? _agents[0].Id : string.Empty;
+                dropped = true;
+            }
+            if (dropped) RenderList();
+        }
+
+        /// <summary>
+        /// FR-032: validate the WHOLE working copy (V1–V11 per agent, V12 at list level) and
+        /// return a message naming the agent and the field, or null when every agent is valid.
+        /// The offending agent is selected before the caller shows the message.
         /// </summary>
         internal string? ValidateWorkingCopy() => ValidateAgents(touchedOnly: false);
 
         /// <summary>
-        /// Defect 9 fix — the gate the settings dialog's OK and Apply use. Same FR-032 rules and
-        /// wordings as <see cref="ValidateWorkingCopy"/>, but only over the agents this dialog
-        /// session touched (see <see cref="_touchedAgentIds"/>): a stale half-configured agent
-        /// the user never opened must not be able to refuse a save made from another page.
-        /// V12 (the list ceiling) stays list-level — it is about the list, not one agent.
+        /// Defect 9 fix — the gate the settings dialog's OK and Apply use: the same rules, but
+        /// only over the agents this dialog session touched.
         /// </summary>
         internal string? ValidateTouchedAgents() => ValidateAgents(touchedOnly: true);
 
         private string? ValidateAgents(bool touchedOnly)
         {
-            CommitEditorToSelectedAgent();
-
             if (_agents.Count > AiAgentResolver.MaxAgents)
             {
                 return $"The list holds {_agents.Count} agents; the maximum is {AiAgentResolver.MaxAgents}. " +
-                       "Remove agents until the list fits.";
+                       "Delete agents until the list fits.";
             }
 
             foreach (var agent in _agents)
             {
-                // Untouched agents are skipped by the dialog's gate only — the name-uniqueness
-                // rules still compare against the WHOLE list, so a rename onto an untouched
-                // agent's name is still caught.
                 if (touchedOnly && !_touchedAgentIds.Contains(agent.Id)) continue;
-
-                // A completely unconfigured agent is a placeholder, not a validation failure:
-                // the page seeds exactly one on every load when the list is empty, so strict V4
-                // would trap every unconfigured user out of the dialog's OK — from any page,
-                // not just this one. The connection rules (V4, V6–V11) bite the moment ANY
-                // connection field is filled; the name rules (V1–V3) always apply.
-                var blank = IsBlankAgent(agent);
-                string? error;
-                if (blank)
-                {
-                    error = ValidateBlankAgentName(agent);
-                }
-                else
-                {
-                    error = AiAgentResolver.Validate(agent, _agents, agent.KeyDecryptFailed);
-                }
+                var error = IsBlankAgent(agent)
+                    ? ValidateBlankAgentName(agent)
+                    : AiAgentResolver.Validate(agent, _agents, agent.KeyDecryptFailed);
                 if (error == null) continue;
                 SelectAgent(agent);
                 var name = (agent.Name ?? string.Empty).Trim();
@@ -1045,14 +938,6 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                && string.IsNullOrEmpty(agent.ApiKey)
                && string.IsNullOrEmpty(agent.Endpoint);
 
-        /// <summary>
-        /// The Save-time counterpart of <see cref="IsBlankAgent"/>, one notch stricter: the
-        /// request parameters must also sit at the <see cref="AiAgent"/> defaults and the
-        /// shared parameter rows must be untouched this session (<paramref name="paramsEdited"/>).
-        /// That is the shape of the Load-seeded placeholder and of an Add the user never edited —
-        /// a configuration the user only retuned the parameters of is a real (if incomplete)
-        /// configuration and is kept. The name is irrelevant to both predicates.
-        /// </summary>
         private static bool IsStillBlankAgent(AiAgent agent, bool paramsEdited)
         {
             var defaults = new AiAgent();
@@ -1081,7 +966,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         private static string CeilingRefusal()
             => $"The list already holds the maximum of {AiAgentResolver.MaxAgents} agents. " +
-               "Remove an agent before adding another.";
+               "Delete an agent before adding another.";
 
         private string? FirstUsableAgentId()
         {
@@ -1092,8 +977,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return null;
         }
 
-        // The reason an agent cannot be made active, in the FR-021 spirit (key, key-decrypt,
-        // model, endpoint) — ordered so the most actionable cause is named first.
+        // The reason an agent cannot be made active, most actionable cause first.
         private static string UnusableReason(AiAgent agent)
         {
             var provider = agent.Provider ?? string.Empty;
@@ -1103,7 +987,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             if (AiAgentResolver.RequiresApiKey(provider) && string.IsNullOrEmpty(agent.ApiKey))
                 return "it needs an API key.";
             if (AiAgentResolver.RequiresApiKey(provider) && agent.KeyDecryptFailed)
-                return "its stored API key could not be read on this machine — re-enter it.";
+                return "its stored API key could not be read on this machine — edit it and enter the key again.";
             if (string.IsNullOrWhiteSpace(agent.Model))
                 return "it has no model selected.";
             if (AiAgentResolver.RequiresEndpoint(provider) && string.IsNullOrEmpty(agent.Endpoint))
@@ -1111,226 +995,24 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return "it is not fully configured.";
         }
 
-        // The semantic success/failure brushes come from AiAgentListView.BadgeBrushFor, per
-        // theme (the light-theme hex read at ~2.4:1 on the dark panel) — see the constructor.
-
-        public AiAssistanceControls(
-            ComboBox provider, TextBox model, TextBox apiKey, TextBox endpoint, ComboBox privacy,
-            TextBox maxTokens, Slider sldTemp, TextBlock lblTemp,
-            TextBox timeout, Slider sldRetries, TextBlock lblRetries,
-            CheckBox textToSql, CheckBox explain, CheckBox fix, CheckBox optimize,
-            CheckBox idx, CheckBox inline, CheckBox autoFix,
-            CheckBox cloudConsent, Button testButton, TextBlock testResult, Border keyNotice,
-            TextBox name, TextBlock nameError, CheckBox agentEnabled, AiAgentListView listView, FeatureAssignmentRows featureRows,
-            AiEditorChrome chrome)
-        {
-            _provider = provider;
-            _model = model;
-            _apiKey = apiKey;
-            _endpoint = endpoint;
-            _privacy = privacy;
-            _cloudConsent = cloudConsent;
-            _maxTokens = maxTokens;
-            _temperature = sldTemp;
-            _temperatureLabel = lblTemp;
-            _timeout = timeout;
-            _retries = sldRetries;
-            _retriesLabel = lblRetries;
-            _textToSql = textToSql;
-            _explain = explain;
-            _fix = fix;
-            _optimize = optimize;
-            _indexSuggestions = idx;
-            _inlineCompletion = inline;
-            _autoFixOnError = autoFix;
-            _testButton = testButton;
-            _testResult = testResult;
-            _testIdleBrush = testResult.Foreground;
-            _keyNotice = keyNotice;
-            _name = name;
-            _nameError = nameError;
-            _agentEnabled = agentEnabled;
-            _listView = listView;
-            _featureRows = featureRows;
-            _chrome = chrome;
-            _successBrush = AiAgentListView.BadgeBrushFor(AgentHealthStatus.Ready, chrome.Dark);
-            _failureBrush = AiAgentListView.BadgeBrushFor(AgentHealthStatus.Failed, chrome.Dark);
-            _nameError.Foreground = _failureBrush;
-            // Any edit means the user has taken control of the field — the decrypt-failure
-            // guard no longer applies (a deliberate clear must stay possible). The notice goes
-            // with it: once the user types, "the stored value was left untouched" is no longer
-            // true, because Save will now overwrite it. The flag lives on the SELECTED
-            // working-copy agent, which is why BindEditorTo sets _selectedId before assigning
-            // the key text (the assignment fires this handler).
-            _apiKey.TextChanged += (_, _) =>
-            {
-                var agent = SelectedAgent();
-                if (agent != null) agent.KeyDecryptFailed = false;
-                _keyNotice.Visibility = Visibility.Collapsed;
-            };
-            // R10 (US5, T086): any edit to provider, model, key or endpoint invalidates the
-            // health a test recorded — a ready badge next to a key the user just replaced is
-            // worse than no badge. The reset lands on the SELECTED working-copy agent
-            // immediately (the commit moments come later) and is suppressed while
-            // BindEditorTo / ClearEditor replay stored values into the boxes.
-            _provider.SelectionChanged += (_, _) => ResetSelectedAgentHealthOnEdit();
-            _model.TextChanged += (_, _) => ResetSelectedAgentHealthOnEdit();
-            _apiKey.TextChanged += (_, _) => ResetSelectedAgentHealthOnEdit();
-            _endpoint.TextChanged += (_, _) => ResetSelectedAgentHealthOnEdit();
-            _testButton.Click += async (_, _) => await RunProviderTestAsync();
-
-            // The masked face of the key box: the PasswordBox mirrors the TextBox both ways, so
-            // every flow (Load, Save, the test, the key-protection rules) keeps reading and
-            // writing _apiKey.Text. A user typing in the mask IS an edit — the TextChanged
-            // handlers above still run; only the echo back into the mask is suppressed.
-            _chrome.KeyMask.PasswordChanged += (_, _) =>
-            {
-                if (_suppressKeySync) return;
-                _suppressKeySync = true;
-                try
-                {
-                    if (!string.Equals(_apiKey.Text ?? string.Empty, _chrome.KeyMask.Password, StringComparison.Ordinal))
-                        _apiKey.Text = _chrome.KeyMask.Password;
-                }
-                finally { _suppressKeySync = false; }
-            };
-            _apiKey.TextChanged += (_, _) =>
-            {
-                if (_suppressKeySync) return;
-                _suppressKeySync = true;
-                try
-                {
-                    var text = _apiKey.Text ?? string.Empty;
-                    if (!string.Equals(_chrome.KeyMask.Password, text, StringComparison.Ordinal))
-                        _chrome.KeyMask.Password = text;
-                }
-                finally { _suppressKeySync = false; }
-            };
-            _chrome.ShowKeyButton.Click += (_, _) => SetKeyShown(_apiKey.Visibility != Visibility.Visible);
-            _chrome.KeyHelpLink.Click += (_, _) => SetKeyHelpOpen(_chrome.KeyHelp.Visibility != Visibility.Visible);
-
-            // US2: the list drives the editor. Selection change is the FIRST of the
-            // CommitEditorToSelectedAgent moments (research R13; the test flow is the fourth).
-            _listView.List.SelectionChanged += OnAgentSelectionChanged;
-            _listView.AddButton.Click += (_, _) => ShowRefusal(TryAddAgent());
-            _listView.DuplicateButton.Click += (_, _) => ShowRefusal(TryDuplicateSelectedAgent());
-            _listView.SetActiveButton.Click += (_, _) => ShowRefusal(TrySetActiveSelectedAgent());
-            _listView.RemoveButton.Click += OnRemoveClick;
-            _name.LostFocus += (_, _) => ValidateNameOnFocusLoss();
-
-            // US4 (T074/T075): assignments write straight through to the working copy (an id,
-            // never a name); the fallback editor mutates the ordered working-copy list.
-            foreach (var (_, _, feature) in AiAssistancePage.AssignmentFeatures)
-            {
-                var combo = _featureRows.ComboFor(feature);
-                combo.SelectionChanged += (_, _) => OnAssignmentChanged(feature, combo);
-            }
-            _featureRows.FallbackAdd.Click += (_, _) => OnFallbackAdd();
-            _featureRows.FallbackRemove.Click += (_, _) => OnFallbackRemove();
-            _featureRows.FallbackMoveUp.Click += (_, _) => OnFallbackMove(-1);
-            _featureRows.FallbackMoveDown.Click += (_, _) => OnFallbackMove(+1);
-        }
-
-        private static void ShowRefusal(string? message)
-        {
-            if (message != null)
-                MessageBox.Show(message, Constants.ProductName, MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-
-        /// <summary>Swaps the key's masked face for the plain TextBox (and back).</summary>
-        private void SetKeyShown(bool shown)
-        {
-            _apiKey.Visibility = shown ? Visibility.Visible : Visibility.Collapsed;
-            _chrome.KeyMask.Visibility = shown ? Visibility.Collapsed : Visibility.Visible;
-            _chrome.ShowKeyButton.Content = shown ? "Hide" : "Show";
-            System.Windows.Automation.AutomationProperties.SetName(_chrome.ShowKeyButton,
-                shown ? "Hide the API key" : "Show the API key");
-        }
-
-        private void SetKeyHelpOpen(bool open)
-        {
-            _chrome.KeyHelp.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-            _chrome.KeyHelpLink.Content = open ? "Hide help" : "Where do I get a key?";
-        }
-
-        /// <summary>
-        /// The bits of the Agents tab that follow the selected agent but are not editor fields:
-        /// the "active agent" chip and the idle Test-connection line, which shows the agent's
-        /// last recorded check while no outcome from this session is on the line.
-        /// </summary>
-        private void RefreshAgentChrome()
-        {
-            var agent = SelectedAgent();
-            _chrome.ActiveChip.Visibility =
-                agent != null && string.Equals(agent.Id, _activeId, StringComparison.Ordinal)
-                    ? Visibility.Visible : Visibility.Collapsed;
-
-            var hasOutcome = !string.IsNullOrEmpty(_testResult.Text);
-            _testResult.Visibility = hasOutcome ? Visibility.Visible : Visibility.Collapsed;
-            _chrome.TestIdle.Visibility = hasOutcome ? Visibility.Collapsed : Visibility.Visible;
-            if (hasOutcome) return;
-
-            var health = agent?.Health;
-            if (agent == null || health == null || string.IsNullOrEmpty(health.CheckedUtc) ||
-                string.Equals(health.Status, AgentHealthStatus.Unknown, StringComparison.OrdinalIgnoreCase))
-            {
-                _chrome.TestIdle.Text = "Not tested yet.";
-                _chrome.TestIdle.Foreground = _testIdleBrush;
-                return;
-            }
-            var latency = health.LatencyMs > 0 ? $" ({health.LatencyMs.ToString(CultureInfo.InvariantCulture)} ms)" : string.Empty;
-            _chrome.TestIdle.Text = "Last check: " + AiAgentListView.HealthBadgeTextFor(agent) + latency;
-            _chrome.TestIdle.Foreground = AiAgentListView.BadgeBrushFor(health.Status, _chrome.Dark);
-        }
-
-        /// <summary>The shared request parameters as the Privacy &amp; data tab shows them.</summary>
-        private (int MaxTokens, int Temperature10, int Timeout, int Retries) ReadSharedParams()
-            => (RowFactory.GetNumber(_maxTokens), (int)_temperature.Value, RowFactory.GetNumber(_timeout), (int)_retries.Value);
-
-        /// <summary>
-        /// The request parameters are ONE set for every agent (the user's 2026-10-13 decision):
-        /// Save writes them to each working-copy agent, so the per-agent fields in the config
-        /// and the engine's per-agent resolution are untouched.
-        /// </summary>
-        private void ApplySharedParamsToAgents()
-        {
-            var (maxTokens, temperature10, timeout, retries) = ReadSharedParams();
-            foreach (var agent in _agents)
-            {
-                agent.MaxTokens = maxTokens;
-                agent.Temperature = temperature10 / 10.0;
-                agent.Timeout = timeout;
-                agent.Retries = retries;
-            }
-        }
-
-        private void OnRemoveClick(object? sender, RoutedEventArgs e)
-        {
-            if (SelectedAgent() == null) return;
-            var text = BuildRemoveConfirmationText();
-            var confirmed = RemoveConfirmation?.Invoke(text)
-                ?? MessageBox.Show(text, Constants.ProductName, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
-            if (confirmed) TryRemoveSelectedAgent();
-        }
+        // ── Selection, rendering and the summary ───────────────────────────────────
 
         private void OnAgentSelectionChanged(object? sender, SelectionChangedEventArgs e)
         {
             if (_suppressListEvents) return;
             var id = (_listView.List.SelectedItem as ListBoxItem)?.Tag as string;
             if (id == null || id == _selectedId) return;
-            CommitEditorToSelectedAgent(); // FR-031 — unsaved edits survive the switch
-            var agent = FindAgent(id);
-            if (agent == null) return;
             _selectedId = id;
-            BindEditorTo(agent);
-            RenderList(); // the committed agent's row (name, marker, badge) may have changed
+            _testResult.Text = string.Empty;   // an outcome line belongs to the agent that was tested
+            RefreshAgentChrome();
         }
 
-        /// <summary>Selects an agent, binds the editor to it and refreshes the list.</summary>
+        /// <summary>Selects an agent and refreshes the list and the summary.</summary>
         private void SelectAgent(AiAgent agent)
         {
+            if (!string.Equals(_selectedId, agent.Id, StringComparison.Ordinal))
+                _testResult.Text = string.Empty;
             _selectedId = agent.Id;
-            BindEditorTo(agent);
             RenderList();
         }
 
@@ -1345,13 +1027,144 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         }
 
         /// <summary>
+        /// The summary under the grid: the selected agent's name, its provider, model, endpoint
+        /// and key state, what it answers, and its last check (or this session's test outcome).
+        /// Also enables the actions that need a selection.
+        /// </summary>
+        private void RefreshAgentChrome()
+        {
+            var agent = SelectedAgent();
+            var has = agent != null;
+            _listView.EditButton.IsEnabled = has;
+            _listView.DuplicateButton.IsEnabled = has;
+            _listView.DeleteButton.IsEnabled = has;
+            _listView.SetActiveButton.IsEnabled = has && !string.Equals(agent!.Id, _activeId, StringComparison.Ordinal);
+            _listView.TestButton.IsEnabled = has;
+            _chrome.EditLink.IsEnabled = has;
+            _chrome.EditLink.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+            _chrome.ActiveChip.Visibility = has && string.Equals(agent!.Id, _activeId, StringComparison.Ordinal)
+                ? Visibility.Visible : Visibility.Collapsed;
+
+            if (agent == null)
+            {
+                _chrome.SummaryTitle.Text = _agents.Count == 0 ? "No AI agent yet" : "No agent selected";
+                _chrome.SummaryDetail.Text = _agents.Count == 0
+                    ? "Click Add… to connect an AI provider. AI features stay off until an agent can answer."
+                    : "Select an agent in the list to see its details.";
+                _chrome.SummaryUse.Text = string.Empty;
+                _chrome.SummaryUse.Visibility = Visibility.Collapsed;
+                _chrome.TestIdle.Visibility = Visibility.Collapsed;
+                _testResult.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var name = (agent.Name ?? string.Empty).Trim();
+            _chrome.SummaryTitle.Text = (name.Length > 0 ? name : "(unnamed)") + (agent.Enabled ? string.Empty : " · off");
+            _chrome.SummaryDetail.Text = DetailLine(agent);
+            _chrome.SummaryUse.Text = UsedByLine(agent);
+            _chrome.SummaryUse.Visibility = Visibility.Visible;
+
+            var hasOutcome = !string.IsNullOrEmpty(_testResult.Text);
+            _testResult.Visibility = hasOutcome ? Visibility.Visible : Visibility.Collapsed;
+            _chrome.TestIdle.Visibility = hasOutcome ? Visibility.Collapsed : Visibility.Visible;
+            if (hasOutcome) return;
+
+            var health = agent.Health;
+            if (health == null || string.IsNullOrEmpty(health.CheckedUtc) ||
+                string.Equals(health.Status, AgentHealthStatus.Unknown, StringComparison.OrdinalIgnoreCase))
+            {
+                _chrome.TestIdle.Text = string.Equals(health?.Status, AgentHealthStatus.NeedsKey, StringComparison.OrdinalIgnoreCase)
+                    ? "Needs an API key — click Edit… to enter one."
+                    : "Not tested yet — click Test to check the connection.";
+                _chrome.TestIdle.Foreground = _testIdleBrush;
+                return;
+            }
+            var latency = health.LatencyMs > 0 ? $" ({health.LatencyMs.ToString(CultureInfo.InvariantCulture)} ms)" : string.Empty;
+            var message = string.IsNullOrEmpty(health.Message) || health.Status == AgentHealthStatus.Ready
+                ? string.Empty
+                : ": " + health.Message;
+            _chrome.TestIdle.Text = "Last check " + AiAgentListView.HealthBadgeTextFor(agent) + latency + message;
+            _chrome.TestIdle.Foreground = AiAgentListView.BadgeBrushFor(health.Status, _chrome.Dark);
+        }
+
+        private static string DetailLine(AiAgent agent)
+        {
+            var provider = AiProviderIds.Normalize(agent.Provider);
+            var parts = new List<string> { AiAgentListView.ProviderLabel(agent) };
+            parts.Add(string.IsNullOrWhiteSpace(agent.Model) ? "no model" : agent.Model.Trim());
+            parts.Add(string.IsNullOrWhiteSpace(agent.Endpoint) ? "standard endpoint" : "endpoint " + agent.Endpoint.Trim());
+            if (provider == AiProviderIds.Ollama || provider == AiProviderIds.LmStudio)
+                parts.Add("no key needed");
+            else if (agent.KeyDecryptFailed)
+                parts.Add("stored key cannot be read on this machine");
+            else if (string.IsNullOrEmpty(agent.ApiKey))
+                parts.Add(AiAgentResolver.RequiresApiKey(provider) ? "no API key" : "no API key (optional)");
+            else
+                parts.Add("API key stored, encrypted");
+            return string.Join(" · ", parts);
+        }
+
+        private string UsedByLine(AiAgent agent)
+        {
+            var parts = new List<string>();
+            if (string.Equals(agent.Id, _activeId, StringComparison.Ordinal))
+                parts.Add("Active agent: answers every feature set to “Use active agent”");
+            var features = AssignedFeatureLabels(agent.Id);
+            if (features.Count > 0)
+                parts.Add("Answers " + string.Join(", ", features));
+            var position = _fallback.IndexOf(agent.Id);
+            if (position >= 0)
+                parts.Add("Fallback #" + (position + 1).ToString(CultureInfo.InvariantCulture));
+            return parts.Count > 0 ? string.Join(" · ", parts) : "Not assigned to any feature — set it on the Features tab, or make it the active agent.";
+        }
+
+        private List<string> AssignedFeatureLabels(string agentId)
+        {
+            var labels = new List<string>();
+            foreach (var (feature, label) in FeatureShortLabels)
+            {
+                if (string.Equals(GetAssignment(feature), agentId, StringComparison.Ordinal))
+                    labels.Add(label);
+            }
+            return labels;
+        }
+
+        private static readonly (AiFeature Feature, string Label)[] FeatureShortLabels =
+        {
+            (AiFeature.Chat, "Chat panel"),
+            (AiFeature.TextToSql, "Text-to-SQL"),
+            (AiFeature.Explain, "Explain SQL"),
+            (AiFeature.Fix, "Fix errors"),
+            (AiFeature.Optimize, "Optimize queries"),
+            (AiFeature.IndexSuggestions, "Index suggestions"),
+            (AiFeature.GhostText, "Inline ghost text"),
+        };
+
+        /// <summary>The shared request parameters as the Privacy &amp; data tab shows them.</summary>
+        private (int MaxTokens, int Temperature10, int Timeout, int Retries) ReadSharedParams()
+            => (RowFactory.GetNumber(_maxTokens), (int)_temperature.Value, RowFactory.GetNumber(_timeout), (int)_retries.Value);
+
+        /// <summary>
+        /// The request parameters are ONE set for every agent (the user's 2026-10-13 decision):
+        /// Save writes them to each working-copy agent.
+        /// </summary>
+        private void ApplySharedParamsToAgents()
+        {
+            var (maxTokens, temperature10, timeout, retries) = ReadSharedParams();
+            foreach (var agent in _agents)
+            {
+                agent.MaxTokens = maxTokens;
+                agent.Temperature = temperature10 / 10.0;
+                agent.Timeout = timeout;
+                agent.Retries = retries;
+            }
+        }
+
+        /// <summary>
         /// FR-055 (US5, T083): <c>needsKey</c> is computed LOCALLY — the provider requires a key
         /// and the agent has none, or its stored key will not decrypt on this machine (V23) —
-        /// with no request, so the badge is right the moment the list renders, even with 20
-        /// agents. Forced from ANY state while the condition holds (a keyless cloud agent needs
-        /// a key whatever a stale test once said), and cleared back to <c>unknown</c> the moment
-        /// it stops holding (a key was supplied, or the provider switched to a local one). Runs
-        /// at the head of every render so every repaint path re-derives it.
+        /// with no request. Forced from ANY state while the condition holds, cleared back to
+        /// <c>unknown</c> the moment it stops holding. Runs at the head of every render.
         /// </summary>
         private void ApplyLocalHealthState()
         {
@@ -1377,11 +1190,9 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
 
         /// <summary>
         /// Rebuilds the assignment dropdowns and the fallback editor from the working copy.
-        /// Called from <see cref="RenderList"/> so adds, removes and renames propagate; the
-        /// write-through handlers keep <see cref="_assignments"/> and <see cref="_fallback"/>
-        /// the truth, so a rebuild never loses a selection. A dangling assignment or fallback
-        /// entry (a hand-edited config; full V16/V17 repair is US6) is dropped here so the
-        /// working copy never persists what the UI shows as "Use active agent".
+        /// Called from <see cref="RenderList"/> so adds, removes and renames propagate. A
+        /// dangling assignment or fallback entry is dropped here so the working copy never
+        /// persists what the UI shows as "Use active agent".
         /// </summary>
         private void RebuildFeatureRows()
         {
@@ -1425,7 +1236,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 // Defect 11 fix: the candidate ids are filled in lockstep with the items —
                 // including the skip of agents already in _fallback — so the combo's
                 // SelectedIndex identifies the agent exactly (names are neither unique nor
-                // necessarily non-empty), the way _assignmentIds backs the assignment combos.
+                // necessarily non-empty).
                 _fallbackCandidateIds.Clear();
                 foreach (var agent in _agents)
                 {
@@ -1444,15 +1255,12 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var index = combo.SelectedIndex;
             SetAssignment(feature,
                 index > 0 && index < _assignmentIds.Count ? _assignmentIds[index] : string.Empty);
+            RefreshAgentChrome();   // the summary's "Answers …" line follows the assignment
         }
 
         private void OnFallbackAdd()
         {
-            // Defect 11 fix: resolve the pick by INDEX against _fallbackCandidateIds, never by
-            // name — two agents may carry one name within a session (the name box only renders
-            // an inline error, it does not revert or block), which sent the FIRST match into the
-            // order while the UI showed the second; and an agent that has no name yet was not
-            // addable at all because the name guard swallowed the click silently.
+            // Defect 11 fix: resolve the pick by INDEX against _fallbackCandidateIds, never by name.
             var index = _featureRows.FallbackCandidate.SelectedIndex;
             if (index < 0 || index >= _fallbackCandidateIds.Count) return;
             var agent = FindAgent(_fallbackCandidateIds[index]);
@@ -1460,6 +1268,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _fallback.Add(agent.Id);
             RebuildFeatureRows();
             _featureRows.FallbackList.SelectedIndex = _featureRows.FallbackList.Items.Count - 1;
+            RefreshAgentChrome();
         }
 
         private void OnFallbackRemove()
@@ -1471,6 +1280,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             if (_featureRows.FallbackList.Items.Count > 0)
                 _featureRows.FallbackList.SelectedIndex =
                     Math.Min(index, _featureRows.FallbackList.Items.Count - 1);
+            RefreshAgentChrome();
         }
 
         private void OnFallbackMove(int delta)
@@ -1481,6 +1291,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             (_fallback[index], _fallback[target]) = (_fallback[target], _fallback[index]);
             RebuildFeatureRows();
             _featureRows.FallbackList.SelectedIndex = target;
+            RefreshAgentChrome();
         }
 
         private string GetAssignment(AiFeature feature) => feature switch
@@ -1509,130 +1320,64 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             }
         }
 
-        /// <summary>
-        /// FR-032 (US2 scenario 5): the name rules V1–V3 fire on focus loss so the user learns
-        /// immediately rather than at OK. Same rules and wordings as
-        /// <see cref="AiAgentResolver.Validate"/>, scoped to the name so leaving the field does
-        /// not lecture about provider/model the user has not reached yet.
-        /// </summary>
-        private void ValidateNameOnFocusLoss()
-        {
-            var agent = SelectedAgent();
-            if (agent == null) return;
-            var name = (_name.Text ?? string.Empty).Trim();
-            string? error = null;
-            if (name.Length == 0)
-            {
-                error = "Name is required.";
-            }
-            else if (name.Length > 40)
-            {
-                error = "Name must be 40 characters or fewer.";
-            }
-            else
-            {
-                foreach (var other in _agents)
-                {
-                    if (ReferenceEquals(other, agent)) continue;
-                    if (string.Equals((other.Name ?? string.Empty).Trim(), name, StringComparison.OrdinalIgnoreCase))
-                    {
-                        error = $"Another agent is already named \"{name}\".";
-                        break;
-                    }
-                }
-            }
-            _nameError.Text = error ?? string.Empty;
-            _nameError.Visibility = error != null ? Visibility.Visible : Visibility.Collapsed;
-        }
+        // ── Load / Save ───────────────────────────────────────────────────────────
 
         public void Load(AppSettings settings)
         {
             var ai = settings.Ai;
 
-            // R13: deep-copy the agent list into the working copy. Cancel is correct for free —
-            // the host only calls Save on OK, so an abandoned copy is an abandoned edit.
+            // R13: deep-copy the agent list into the working copy. Cancel is correct for free.
             _agents = DeepCopyAgents(ai.Agents);
-            // Defect 9 fix: a fresh working copy is a fresh session — nothing is touched yet
-            // (Reset-all reloads through here too).
             _touchedAgentIds.Clear();
             _activeId = ai.ActiveAgentId ?? string.Empty;
             _assignments = CopyAssignments(ai.FeatureAgents);
             _fallback = new List<string>(ai.FallbackOrder ?? new List<string>());
+            _testResult.Text = string.Empty;
 
-            if (_agents.Count == 0)
+            // No agent list but flat fields that name a provider (a hand-built or pre-migration
+            // config V14 has not turned into an agent yet): keep them as an agent so nothing the
+            // user had is lost. An empty config gets no placeholder — the grid says how to start.
+            if (_agents.Count == 0 && !string.IsNullOrEmpty(AiProviderIds.Normalize(ai.Provider)))
             {
-                // No agent list yet: a fresh install, or a hand-built/pre-migration config whose
-                // flat fields V14 turns into an agent on the next ConfigManager.Load. The editor
-                // needs one agent to bind to. FR-017's implicit Add (InitialAgentId == "") wants
-                // it blank; anything else keeps the flat values so nothing the user had is lost.
                 var seed = new AiAgent
                 {
                     Id = Guid.NewGuid().ToString("N"),
                     Name = AiAgentResolver.SuggestName(_agents),
                     Enabled = true,
                     CreatedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                    Provider = AiProviderIds.Normalize(ai.Provider),
+                    Model = ai.Model ?? string.Empty,
+                    ApiKey = ai.ApiKey ?? string.Empty,
+                    Endpoint = ai.Endpoint ?? string.Empty,
+                    MaxTokens = ai.MaxTokens,
+                    Temperature = ai.Temperature,
+                    Timeout = ai.Timeout,
+                    Retries = ai.Retries,
                 };
-                if (InitialAgentId != string.Empty)
-                {
-                    seed.Provider = AiProviderIds.Normalize(ai.Provider);
-                    seed.Model = ai.Model ?? string.Empty;
-                    seed.ApiKey = ai.ApiKey ?? string.Empty;
-                    seed.Endpoint = ai.Endpoint ?? string.Empty;
-                    seed.MaxTokens = ai.MaxTokens;
-                    seed.Temperature = ai.Temperature;
-                    seed.Timeout = ai.Timeout;
-                    seed.Retries = ai.Retries;
-                }
                 _agents.Add(seed);
                 _activeId = seed.Id;
             }
 
-            // FR-053 (V23, review): derive the decrypt-failure flag for EVERY agent now, not
-            // only for the one BindEditorTo happens to select — ApplyLocalHealthState reads the
-            // flag for the needsKey badge, and an agent the user never selects must not show a
-            // stale badge. A local DPAPI attempt per agent (≤ 20, no RPC), in the same try/catch
-            // idiom the bind path uses. Runs before any bind: the TextChanged ordering contract
-            // (flag set AFTER the key text assignment) belongs to BindEditorTo alone.
+            // FR-053 (V23): derive the decrypt-failure flag for EVERY agent now, so an agent the
+            // user never selects shows the right badge from the first render.
             foreach (var agent in _agents)
             {
-                var (_, decrypted) = UnwrapKeyForDisplay(agent.ApiKey);
+                var (_, decrypted) = AiAgentTestFlow.UnwrapKeyForDisplay(agent.ApiKey);
                 agent.KeyDecryptFailed = !decrypted;
             }
 
-            // Selection: the deep-linked agent when one was named, else the active agent, else
-            // the first. A dangling active id follows the selection (full V13 repair is US6).
+            // Selection: the deep-linked agent, else the active agent, else the first.
             AiAgent? selected = null;
-            if (!string.IsNullOrEmpty(InitialAgentId))
-            {
-                foreach (var agent in _agents)
-                {
-                    if (string.Equals(agent.Id, InitialAgentId, StringComparison.Ordinal))
-                    {
-                        selected = agent;
-                        break;
-                    }
-                }
-            }
-            if (selected == null)
-            {
-                foreach (var agent in _agents)
-                {
-                    if (string.Equals(agent.Id, _activeId, StringComparison.Ordinal))
-                    {
-                        selected = agent;
-                        break;
-                    }
-                }
-            }
-            selected ??= _agents[0];
-            if (_agents.TrueForAll(a => !string.Equals(a.Id, _activeId, StringComparison.Ordinal)))
-                _activeId = selected.Id;
+            if (!string.IsNullOrEmpty(InitialAgentId)) selected = FindAgent(InitialAgentId!);
+            selected ??= FindAgent(_activeId);
+            selected ??= _agents.Count > 0 ? _agents[0] : null;
+            if (FindAgent(_activeId) == null)
+                _activeId = FirstUsableAgentId() ?? selected?.Id ?? string.Empty;
+            _selectedId = selected?.Id ?? string.Empty;
+            RenderList();
 
-            SelectAgent(selected);
-
-            // The request parameters are one set for every agent (2026-10 redesign): shown from
-            // the active agent (the source of the flat mirror), or from the flat fields when the
-            // active id matches no agent.
+            // The request parameters are one set for every agent: shown from the active agent
+            // (the source of the flat mirror), or from the flat fields when there is none.
             var paramSource = FindAgent(_activeId);
             var maxTokens = paramSource?.MaxTokens ?? ai.MaxTokens;
             var temperature10 = (int)((paramSource?.Temperature ?? ai.Temperature) * 10);
@@ -1646,7 +1391,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _retriesLabel.Text = retries.ToString(CultureInfo.InvariantCulture);
             _loadedParams = ReadSharedParams();
 
-            // Global concerns below come from the settings, never from the agent (FR-033).
+            // Global concerns come from the settings, never from an agent (FR-033).
             _privacy.SelectedIndex = (ai.PrivacyMode?.ToLowerInvariant()) switch
             {
                 "full"      => 1,
@@ -1667,119 +1412,66 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _autoFixOnError.IsChecked = ai.AutoFixOnError;
         }
 
-        /// <summary>
-        /// Binds the editor rows to one working-copy agent. Preserves the PR #251 ordering
-        /// contract (R11), per agent: the key text is assigned BEFORE the decrypt-failure flag
-        /// is set, because the assignment fires TextChanged, which clears the flag on the
-        /// selected agent. Callers set <see cref="_selectedId"/> first so that handler lands
-        /// on the agent being bound.
-        /// </summary>
-        private void BindEditorTo(AiAgent agent)
+        public void Save(AppSettings settings)
         {
-            // Replaying the stored values into the boxes fires the edit handlers — a bind is
-            // not an edit, so the health reset (T086) is suppressed for the body.
-            _suppressHealthReset = true;
-            try
+            var paramsEdited = ReadSharedParams() != _loadedParams;
+            DropStillBlankAgents(paramsEdited);
+            ApplySharedParamsToAgents();
+
+            // The working copy is written back wholesale — as fresh lists and fresh agent
+            // objects: the dialog can stay open after an Apply, and an edit made past that point
+            // must not mutate the settings object the host already saved.
+            settings.Ai.Agents = DeepCopyAgents(_agents);
+            settings.Ai.ActiveAgentId = _activeId;
+            settings.Ai.FeatureAgents = CopyAssignments(_assignments);
+            settings.Ai.FallbackOrder = new List<string>(_fallback);
+
+            // The flat fields mirror the ACTIVE agent, so every pre-agents consumer, and an
+            // older build reading this config after a downgrade, sees what the active agent
+            // carries. ConfigManager.Save re-asserts V18's usability-gated mirror on disk.
+            var active = FindAgent(_activeId);
+            if (active != null)
             {
-                _name.Text = agent.Name ?? string.Empty;
-                _nameError.Visibility = Visibility.Collapsed;
-                _agentEnabled.IsChecked = agent.Enabled;
-                // Normalise BEFORE matching (FR-013): configs written by earlier builds ("AzureOpenAI",
-                // "LMStudio") resolve to their canonical ids and select correctly with no migration.
-                var providerId = AiProviderIds.Normalize(agent.Provider);
-                var providerIndex = Array.FindIndex(AiAssistancePage.Providers, p => p.Id == providerId);
-                _provider.SelectedIndex = providerIndex >= 0 ? providerIndex : 0;
-                _model.Text = agent.Model ?? string.Empty;
-                var (keyDisplay, keyDecrypted) = UnwrapKeyForDisplay(agent.ApiKey);
-                _apiKey.Text = keyDisplay;
-                // AFTER the text assignment (which fires TextChanged and clears the flag): an empty
-                // field here means the stored value failed to decrypt, not that the user cleared it.
-                agent.KeyDecryptFailed = !keyDecrypted;
-                _keyNotice.Visibility = agent.KeyDecryptFailed ? Visibility.Visible : Visibility.Collapsed;
-                _endpoint.Text = agent.Endpoint ?? string.Empty;
-                // The request parameters are shared by every agent (Privacy & data tab), not bound here.
-                _testResult.Text = string.Empty;   // an outcome line belongs to the agent that was tested
+                settings.Ai.Provider = active.Provider ?? string.Empty;
+                settings.Ai.Model = active.Model ?? string.Empty;
+                settings.Ai.ApiKey = active.ApiKey ?? string.Empty;
+                settings.Ai.Endpoint = active.Endpoint ?? string.Empty;
             }
-            finally { _suppressHealthReset = false; }
-        }
-
-        /// <summary>Blanks the editor when the list holds no agent at all (the last one was removed).</summary>
-        private void ClearEditor()
-        {
-            _suppressHealthReset = true;
-            try
+            else if (_agents.Count == 0)
             {
-                _name.Text = string.Empty;
-                _nameError.Visibility = Visibility.Collapsed;
-                _agentEnabled.IsChecked = true;   // a fresh agent starts enabled (AiAgent default)
-                _provider.SelectedIndex = 0;
-                _model.Text = string.Empty;
-                _apiKey.Text = string.Empty;
-                _keyNotice.Visibility = Visibility.Collapsed;
-                _endpoint.Text = string.Empty;
-                _testResult.Text = string.Empty;
+                // Every agent was deleted: blank the flat connection fields so the next load's
+                // V14 migration cannot resurrect a deliberately deleted configuration.
+                settings.Ai.Provider = settings.Ai.Model = settings.Ai.ApiKey = settings.Ai.Endpoint = string.Empty;
             }
-            finally { _suppressHealthReset = false; }
-        }
 
-        /// <summary>
-        /// Writes the visible editor fields into the selected working-copy agent. Called at
-        /// exactly four moments: the three of research R13 — on selection change, before any
-        /// CRUD action, and in Save — plus before a Test connection (US5, FR-054: the working
-        /// copy must hold the values being tested). (<see cref="ValidateWorkingCopy"/> commits
-        /// as the Save moment arriving early — OK is validate-then-Save.)
-        /// </summary>
-        private void CommitEditorToSelectedAgent()
-        {
-            var agent = SelectedAgent();
-            if (agent == null) return;
+            var (sharedMaxTokens, sharedTemperature10, sharedTimeout, sharedRetries) = ReadSharedParams();
+            settings.Ai.MaxTokens = sharedMaxTokens;
+            settings.Ai.Temperature = sharedTemperature10 / 10.0;
+            settings.Ai.Timeout = sharedTimeout;
+            settings.Ai.Retries = sharedRetries;
 
-            // Defect 9 fix: a commit that writes something other than what BindEditorTo put in
-            // the boxes is the user having edited THIS agent — the signal the dialog's gate
-            // (ValidateTouchedAgents) scopes itself to. Computed before the write, while the
-            // agent still holds its pre-edit values.
-            if (!EditorMatchesBoundAgent(agent)) _touchedAgentIds.Add(agent.Id);
-
-            agent.Name = _name.Text ?? string.Empty;
-            agent.Enabled = _agentEnabled.IsChecked == true;
-            // Key off the canonical id, never the index (FR-013) — the factory rejects anything else.
-            var index = _provider.SelectedIndex;
-            agent.Provider = index > 0 ? AiAssistancePage.Providers[index].Id : string.Empty;
-            agent.Model = _model.Text ?? string.Empty;
-            // FR-008: keys are DPAPI-wrapped at rest. An already-wrapped value is never re-wrapped.
-            var keyText = _apiKey.Text ?? string.Empty;
-            if (!(agent.KeyDecryptFailed && string.IsNullOrEmpty(keyText)))
+            settings.Ai.PrivacyMode = _privacy.SelectedIndex switch
             {
-                agent.ApiKey = ApiKeyProtector.IsProtected(keyText) ? keyText : ApiKeyProtector.Protect(keyText);
-            }
-            // else (review finding 2): the field is empty because decryption failed — never let a
-            // Save the user never touched the key in overwrite a non-empty stored key with "".
-            agent.Endpoint = _endpoint.Text ?? string.Empty;
-            // The request parameters are shared: Save applies them to every agent at once.
+                1 => "full",
+                2 => "anonymous",
+                3 => "offline",
+                4 => "disabled",
+                _ => "schemaOnly",
+            };
+            // Unchecked → consent withheld → the engine keeps requiring it (privacy-first default).
+            settings.Ai.PrivacyConsentRequired = _cloudConsent.IsChecked != true;
+            // V19: "AI enabled" is a property of the whole list — at least one usable agent.
+            settings.Ai.Enabled = _agents.Any(AiAgentResolver.IsUsable);
+            settings.Ai.TextToSql = _textToSql.IsChecked == true;
+            settings.Ai.Explain = _explain.IsChecked == true;
+            settings.Ai.Fix = _fix.IsChecked == true;
+            settings.Ai.Optimize = _optimize.IsChecked == true;
+            settings.Ai.IndexSuggestions = _indexSuggestions.IsChecked == true;
+            settings.Ai.InlineCompletion = _inlineCompletion.IsChecked == true;
+            settings.Ai.AutoFixOnError = _autoFixOnError.IsChecked == true;
         }
 
-        /// <summary>
-        /// Defect 9 fix: true when every editor row still holds exactly what
-        /// <see cref="BindEditorTo"/> projected from this agent — i.e. nothing has been edited
-        /// since the bind. Deliberately compares the BOUND projection rather than the raw stored
-        /// values: the provider falls back to "(None)" when a stored id does not match, and the
-        /// key is shown unwrapped (DPAPI ciphertext never round-trips byte for byte), so a raw
-        /// comparison would report a phantom edit on an agent the user never opened.
-        /// </summary>
-        private bool EditorMatchesBoundAgent(AiAgent agent)
-        {
-            var providerId = AiProviderIds.Normalize(agent.Provider);
-            var providerIndex = Array.FindIndex(AiAssistancePage.Providers, p => p.Id == providerId);
-            if (providerIndex < 0) providerIndex = 0;
-            var (keyDisplay, _) = UnwrapKeyForDisplay(agent.ApiKey);
-
-            return string.Equals(_name.Text ?? string.Empty, agent.Name ?? string.Empty, StringComparison.Ordinal)
-                && (_agentEnabled.IsChecked == true) == agent.Enabled
-                && _provider.SelectedIndex == providerIndex
-                && string.Equals(_model.Text ?? string.Empty, agent.Model ?? string.Empty, StringComparison.Ordinal)
-                && string.Equals(_apiKey.Text ?? string.Empty, keyDisplay, StringComparison.Ordinal)
-                && string.Equals(_endpoint.Text ?? string.Empty, agent.Endpoint ?? string.Empty, StringComparison.Ordinal);
-        }
+        public void Reset(AppSettings defaults) => Load(defaults);
 
         private AiAgent? SelectedAgent() => FindAgent(_selectedId);
 
@@ -1823,6 +1515,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 Retries = agent.Retries,
                 Enabled = agent.Enabled,
                 CreatedUtc = agent.CreatedUtc,
+                KeyDecryptFailed = agent.KeyDecryptFailed,
                 Health = agent.Health == null
                     ? null
                     : new AgentHealth
@@ -1847,112 +1540,21 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             return copy;
         }
 
-        public void Save(AppSettings settings)
-        {
-            CommitEditorToSelectedAgent(); // the third of the three commit moments (R13)
-            var paramsEdited = ReadSharedParams() != _loadedParams;
-            DropStillBlankAgents(paramsEdited);
-            ApplySharedParamsToAgents();
-
-            // The working copy is written back wholesale — as fresh lists and fresh agent
-            // objects, never the page's own: the dialog can stay open after an Apply, and an
-            // edit made past that point must not mutate the settings object the host already
-            // saved through the aliased reference.
-            settings.Ai.Agents = DeepCopyAgents(_agents);
-            settings.Ai.ActiveAgentId = _activeId;
-            settings.Ai.FeatureAgents = CopyAssignments(_assignments);
-            settings.Ai.FallbackOrder = new List<string>(_fallback);
-
-            // The flat fields mirror the ACTIVE working-copy agent — the editor may be showing a
-            // different (selected) agent — so every pre-agents consumer, and an older build
-            // reading this config after a downgrade, sees the values the active agent carries.
-            // This mirror deliberately ignores usability (the dialog persists what the user
-            // configured); ConfigManager.Save re-asserts V18's usability-gated mirror on disk.
-            var active = FindAgent(_activeId);
-            if (active != null)
-            {
-                settings.Ai.Provider = active.Provider ?? string.Empty;
-                settings.Ai.Model = active.Model ?? string.Empty;
-                settings.Ai.ApiKey = active.ApiKey ?? string.Empty;
-                settings.Ai.Endpoint = active.Endpoint ?? string.Empty;
-            }
-            else if (_agents.Count == 0)
-            {
-                // The user removed every agent: blank the flat connection fields so the next
-                // load's V14 migration cannot resurrect a deliberately deleted configuration.
-                settings.Ai.Provider = settings.Ai.Model = settings.Ai.ApiKey = settings.Ai.Endpoint = string.Empty;
-            }
-
-            // The shared request parameters mirror as shown, with or without an active agent.
-            var (sharedMaxTokens, sharedTemperature10, sharedTimeout, sharedRetries) = ReadSharedParams();
-            settings.Ai.MaxTokens = sharedMaxTokens;
-            settings.Ai.Temperature = sharedTemperature10 / 10.0;
-            settings.Ai.Timeout = sharedTimeout;
-            settings.Ai.Retries = sharedRetries;
-
-            settings.Ai.PrivacyMode = _privacy.SelectedIndex switch
-            {
-                1 => "full",
-                2 => "anonymous",
-                3 => "offline",
-                4 => "disabled",
-                _ => "schemaOnly",
-            };
-            // Unchecked → consent withheld → the engine keeps requiring it (privacy-first default).
-            settings.Ai.PrivacyConsentRequired = _cloudConsent.IsChecked != true;
-            // V19 on the write path: "AI enabled" is a property of the whole list — at least one
-            // usable agent — never of whichever agent happens to be selected in the editor.
-            settings.Ai.Enabled = _agents.Any(AiAgentResolver.IsUsable);
-            settings.Ai.TextToSql = _textToSql.IsChecked == true;
-            settings.Ai.Explain = _explain.IsChecked == true;
-            settings.Ai.Fix = _fix.IsChecked == true;
-            settings.Ai.Optimize = _optimize.IsChecked == true;
-            settings.Ai.IndexSuggestions = _indexSuggestions.IsChecked == true;
-            settings.Ai.InlineCompletion = _inlineCompletion.IsChecked == true;
-            settings.Ai.AutoFixOnError = _autoFixOnError.IsChecked == true;
-        }
+        // ── Test (the toolbar's: the selected agent as it stands) ─────────────────
 
         /// <summary>
-        /// Reads accept legacy plaintext for free (<see cref="ApiKeyProtector.Unprotect"/> passes
-        /// unprefixed values through). A wrapped blob this Windows user cannot decrypt (a roamed
-        /// profile, a restored backup, a different machine) returns <c>Decrypted = false</c> with
-        /// an empty display value — the caller surfaces a notice and never lets a Save blank the
-        /// stored key (review finding 2). Nothing to decrypt (null/empty) is not a failure.
-        /// </summary>
-        private static (string Display, bool Decrypted) UnwrapKeyForDisplay(string? stored)
-        {
-            if (string.IsNullOrEmpty(stored)) return (string.Empty, true);
-            if (!ApiKeyProtector.IsProtected(stored)) return (stored!, true); // legacy plaintext
-            try
-            {
-                return (ApiKeyProtector.Unprotect(stored), true);
-            }
-            catch (Exception ex) when (ex is CryptographicException || ex is FormatException)
-            {
-                Log.Warning(ex, "AiAssistancePage: stored API key could not be decrypted; user must re-enter it");
-                return (string.Empty, false);
-            }
-        }
-
-        /// <summary>
-        /// FR-009/FR-054: sends the CURRENT dialog values to the engine's AiProviderTest handler
-        /// — the user can verify a key before committing it. Busy state, never blocks the UI
-        /// thread, re-enables in a finally; the key is never logged. US5: the outcome is also
-        /// written to the tested working-copy agent's <see cref="AiAgent.Health"/> (T085) and
-        /// the two locally determinable refusals (T087) fire before anything is sent. Internal
-        /// so the shell tests can await the flow directly; the button click awaits it too.
+        /// FR-009/FR-054: tests the SELECTED agent as it stands in the working copy (the editor
+        /// dialog has its own Test for values being typed). The two local refusals fire before
+        /// anything is sent; the outcome is written to the agent's Health (T085) and shown in
+        /// the summary. Internal so the shell tests can await the flow; the button awaits it too.
         /// </summary>
         internal async System.Threading.Tasks.Task RunProviderTestAsync()
         {
-            // What is tested is what is in the boxes (FR-054) — commit first so the working
-            // copy (and the needsKey sweep after the outcome) sees exactly the values tested.
-            CommitEditorToSelectedAgent();
-            var testedAgent = SelectedAgent();
+            var agent = SelectedAgent();
+            if (agent == null) return;
 
-            // T087/FR-056: the two causes the page can determine LOCALLY, before anything
-            // leaves the machine. A refusal is a status-line outcome only: no request, and
-            // Health is untouched because nothing was checked.
-            var refusal = LocalTestRefusal();
+            var providerId = AiProviderIds.Normalize(agent.Provider);
+            var refusal = AiAgentTestFlow.LocalRefusal(providerId, AiAgentListView.ProviderLabel(agent), agent.Model, agent.Endpoint);
             if (refusal != null)
             {
                 _testResult.Foreground = _failureBrush;
@@ -1961,102 +1563,27 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
                 return;
             }
 
-            var request = AiProviderTestRunner.BuildRequest(
-                _provider.SelectedItem as string, _model.Text, _apiKey.Text, _endpoint.Text);
+            var (key, _) = AiAgentTestFlow.UnwrapKeyForDisplay(agent.ApiKey);
+            var request = AiProviderTestRunner.BuildRequest(providerId, agent.Model, key, agent.Endpoint);
 
-            // The wait budget follows the dialog's CURRENT timeout, not the saved config.
-            var waitSettings = new AppSettings();
-            waitSettings.Ai.Timeout = RowFactory.GetNumber(_timeout);
-
-            _testButton.IsEnabled = false;
-            _testButton.Content = "Testing…";
+            _listView.TestButton.IsEnabled = false;
+            _listView.TestButton.Content = "Testing…";
             _testResult.Foreground = _testIdleBrush;
             _testResult.Text = "Testing the connection…";
             RefreshAgentChrome();
             try
             {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                var (success, message) = await AiProviderTestRunner.RunAsync(
-                    TestRpcAccessor ?? EngineRpcClientAccessor.Instance, request, waitSettings);
-                sw.Stop();
+                var (success, message, latencyMs) = await AiAgentTestFlow.RunAsync(request, RowFactory.GetNumber(_timeout));
                 _testResult.Text = message;
                 _testResult.Foreground = success ? _successBrush : _failureBrush;
-                RecordHealth(testedAgent, success, message, (int)sw.ElapsedMilliseconds);
+                AiAgentTestFlow.RecordHealth(agent, success, message, latencyMs);
                 RenderList();   // the tested agent's badge moves with its Health
             }
             finally
             {
-                _testButton.IsEnabled = true;
-                _testButton.Content = "Test connection";
+                _listView.TestButton.Content = "Test";
+                _listView.TestButton.IsEnabled = SelectedAgent() != null;
             }
         }
-
-        /// <summary>
-        /// T087/FR-056: the two failure causes the page can determine without sending anything —
-        /// a missing endpoint for a provider that requires one (V9), and a first-party model
-        /// whose detected family contradicts the provider (V7, in the resolver's own wording).
-        /// Null when nothing locally refuses; the "(None)" selection is left to the runner's
-        /// own refusal.
-        /// </summary>
-        private string? LocalTestRefusal()
-        {
-            var index = _provider.SelectedIndex;
-            if (index <= 0) return null;
-            var providerId = AiAssistancePage.Providers[index].Id;
-
-            var endpoint = (_endpoint.Text ?? string.Empty).Trim();
-            if (AiAgentResolver.RequiresEndpoint(providerId) && endpoint.Length == 0)
-            {
-                return $"Endpoint is required for {AiAssistancePage.Providers[index].Display} — " +
-                       "fill in the Endpoint URL before testing.";
-            }
-
-            if (providerId == AiProviderIds.Anthropic || providerId == AiProviderIds.OpenAI ||
-                providerId == AiProviderIds.Gemini || providerId == AiProviderIds.Kimi)
-            {
-                var model = (_model.Text ?? string.Empty).Trim();
-                var family = AiModelFamily.Detect(model);
-                if (family != null && family != providerId)
-                    return $"Model \"{model}\" is a {family} model, not a {providerId} model.";
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// FR-053 (US5, T085): the test outcome lands on the TESTED working-copy agent — the
-        /// status, the check time, and the user-facing message capped at 500 chars (data-model
-        /// E2; never built from the key — V24). <see cref="AgentHealth.LatencyMs"/> records the
-        /// round trip of the last SUCCESSFUL check: a failed check writes 0 (E2 — "0 when the
-        /// last check did not succeed"), never leaves an earlier success's number standing next
-        /// to a failure.
-        /// </summary>
-        private static void RecordHealth(AiAgent? agent, bool success, string message, int latencyMs)
-        {
-            if (agent == null) return;
-            agent.Health ??= new AgentHealth();
-            agent.Health.Status = success ? AgentHealthStatus.Ready : AgentHealthStatus.Failed;
-            agent.Health.CheckedUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-            agent.Health.LatencyMs = success ? latencyMs : 0;
-            agent.Health.Message = message.Length <= 500 ? message : message.Substring(0, 500);
-        }
-
-        /// <summary>
-        /// R10 (US5, T086): a provider/model/key/endpoint edit returns the selected agent's
-        /// health to <c>unknown</c> from ANY state — only the status resets; the last check
-        /// honestly happened, so its time, latency and message stay recorded against it.
-        /// </summary>
-        private void ResetSelectedAgentHealthOnEdit()
-        {
-            if (_suppressHealthReset) return;
-            var agent = SelectedAgent();
-            if (agent?.Health != null &&
-                !string.Equals(agent.Health.Status, AgentHealthStatus.Unknown, StringComparison.OrdinalIgnoreCase))
-            {
-                agent.Health.Status = AgentHealthStatus.Unknown;
-            }
-        }
-
-        public void Reset(AppSettings defaults) => Load(defaults);
     }
 }

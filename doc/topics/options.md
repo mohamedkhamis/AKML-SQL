@@ -218,8 +218,12 @@ You can also turn a rule off for one line, one script, the current session or ev
 
 Connect AKML SQL to an AI provider. See [AI Assistance](ai-assistance.md) for what the AI features do.
 
-- **AI agents** — your saved AI connections. **Add**, **Duplicate** and **Remove** them, and use **Set as active** to choose the one used by default.
-- **Selected agent** — the settings of the agent selected in the list: **Name**, **Enabled**, **AI Provider**, **Model**, **API Key** and **Endpoint URL** (needed for Azure OpenAI and custom providers). **Test connection** checks them with a short test request without saving anything. API keys are stored encrypted.
+- **AI agents** — your saved AI connections, up to 20, in a list with each agent's **Name**, **Provider**, **Model** and **Status** (Ready, Failed, Not tested or Needs API key, with the time of the last check). The active agent has a ● mark. Use the buttons above the list:
+  - **Add…** and **Edit…** open the agent window: **Name**, **Enabled**, **Provider**, **Model**, **API key** and **Endpoint URL** (needed for Azure OpenAI and custom providers). **Test connection** in that window checks what you typed with a short test request. **OK** puts the change in the list, and the Options window's **OK** saves it. Double-click an agent or press Enter to edit it.
+  - **Duplicate** copies the selected agent, key included. **Delete** removes it after asking, and names the features that use it. You can also press the Delete key.
+  - **Set as active** makes the selected agent the default. **Test** checks the selected agent as it is saved.
+- **Selected agent** — a summary of the agent selected in the list: its provider, model, endpoint and key, which features it answers, and its last check.
+- **API keys** are stored encrypted and are never shown again. When you edit an agent, leave the key box empty to keep the stored key. If you change the provider, enter a key for the new one.
 - **Feature assignments** — which agent each feature uses (chat, text-to-SQL, explain, fix, optimize, index suggestions, inline suggestions). **Use active agent** follows whichever agent is active.
 - **Fallback order** — the agents to try, in order, when the one answering fails.
 - **Privacy mode** — what is sent to the provider: **Full** (your SQL and schema as they are), **Schema Only** (values in your SQL are hidden), **Anonymous** (values hidden and table and column names replaced), or **Offline** / **Disabled** (nothing is sent; AI features are off).

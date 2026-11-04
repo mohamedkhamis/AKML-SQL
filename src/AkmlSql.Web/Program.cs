@@ -152,6 +152,8 @@ builder.Services.AddSingleton(sp => new System.Net.Http.HttpClient
     BaseAddress = new Uri(builder.HostEnvironment.BaseAddress),
 });
 builder.Services.AddSingleton<IAiClientFactory, AiClientFactory>();
+// 2026-11 master–detail: Settings › AI assistance › Test connection, through the same gates as a call.
+builder.Services.AddSingleton<IAiConnectionTester>(sp => (IAiConnectionTester)sp.GetRequiredService<IAiClientFactory>());
 // Spec 042 (FR-080, FR-081): the dialect of the active connection, and the engine call that removes the literals of
 // PostgreSQL text before it goes to a cloud provider. AiPromptService and AiGhostTextService take them as optional.
 builder.Services.AddSingleton<IAiDialectContext, AiDialectContext>();

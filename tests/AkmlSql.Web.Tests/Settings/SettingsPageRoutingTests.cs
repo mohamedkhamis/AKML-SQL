@@ -54,13 +54,13 @@ public sealed class SettingsPageRoutingTests : IDisposable
     }
 
     [Fact]
-    public async Task At_settings_ai_the_active_provider_radios_are_the_first_radios()
+    public async Task At_settings_ai_the_agent_list_is_shown()
     {
         await _host.Stores.Vault.SetKeyAsync("ollama", new AiProviderConfig { DisplayName = "Ollama", Model = "llama3", Endpoint = "http://localhost:11434" }, string.Empty);
 
         var cut = _host.Open("settings/ai");
 
-        cut.WaitForAssertion(() => Assert.Equal("active", cut.FindAll("input[type=radio]").First().GetAttribute("name")));
+        cut.WaitForAssertion(() => Assert.NotNull(cut.Find("[data-testid=ai-agent-item-ollama]")));
         Assert.Equal(new[] { "ai-assistance" }, SectionsShown(cut));
     }
 

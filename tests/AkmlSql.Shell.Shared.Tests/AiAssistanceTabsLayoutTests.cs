@@ -73,7 +73,7 @@ namespace AkmlSql.Shell.Shared.Tests
         // ── The Agents tab ───────────────────────────────────────────────────
 
         [StaFact]
-        public void The_agents_tab_holds_list_fields_and_test_connection_in_reading_order()
+        public void The_agents_tab_holds_the_toolbar_the_grid_and_the_summary_in_reading_order()
         {
             var (_, controls) = BuildPage(SettingsWith(MakeAgent("Claude")));
             var order = LogicalTree.Descendants<FrameworkElement>(controls.Tabs.Panels[0]).ToList();
@@ -84,10 +84,29 @@ namespace AkmlSql.Shell.Shared.Tests
                 return i;
             }
 
-            Assert.True(At(controls.ListView.List) < At(GetField<TextBox>(controls, "_name")));
-            Assert.True(At(GetField<TextBox>(controls, "_apiKey")) < At(GetField<TextBox>(controls, "_endpoint")));
-            // Test connection comes AFTER the endpoint it tests — the point of the redesign.
-            Assert.True(At(GetField<TextBox>(controls, "_endpoint")) < At(GetField<Button>(controls, "_testButton")));
+            Assert.True(At(controls.ListView.AddButton) < At(controls.ListView.List));
+            Assert.True(At(controls.ListView.List) < At(controls.SummaryTitle));
+            // The editor fields are no longer on the page: they live in the agent dialog.
+            Assert.DoesNotContain(order, e => e is PasswordBox);
+        }
+
+        [StaFact]
+        public void The_dialog_form_holds_its_fields_and_test_connection_in_reading_order()
+        {
+            var editor = AiPageTestKit.EditorFor(MakeAgent("Claude"));
+            var order = LogicalTree.Descendants<FrameworkElement>(editor.Root).ToList();
+            int At(FrameworkElement e)
+            {
+                var i = order.IndexOf(e);
+                Assert.True(i >= 0, "element is not on the form");
+                return i;
+            }
+
+            Assert.True(At(editor.NameBox) < At(editor.ProviderCombo));
+            Assert.True(At(editor.ProviderCombo) < At(editor.KeyBox));
+            Assert.True(At(editor.KeyBox) < At(editor.EndpointBox));
+            // Test connection comes AFTER the endpoint it tests.
+            Assert.True(At(editor.EndpointBox) < At(editor.TestButton));
         }
 
         [StaFact]
@@ -100,54 +119,6 @@ namespace AkmlSql.Shell.Shared.Tests
 
             Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetHorizontalScrollBarVisibility(controls.ListView.List));
             Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetHorizontalScrollBarVisibility(controls.FallbackList));
-        }
-
-        [StaFact]
-        public void The_key_help_is_collapsed_until_its_link_is_clicked()
-        {
-            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Claude")));
-            Assert.Equal(Visibility.Collapsed, controls.KeyHelp.Visibility);
-
-            Click(controls.KeyHelpLink);
-            Assert.Equal(Visibility.Visible, controls.KeyHelp.Visibility);
-
-            Click(controls.KeyHelpLink);
-            Assert.Equal(Visibility.Collapsed, controls.KeyHelp.Visibility);
-        }
-
-        [StaFact]
-        public void The_api_key_is_masked_until_shown()
-        {
-            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Claude")));
-            var apiKey = GetField<TextBox>(controls, "_apiKey");
-
-            Assert.Equal(Visibility.Visible, controls.KeyMask.Visibility);
-            Assert.Equal(Visibility.Collapsed, apiKey.Visibility);
-
-            Click(controls.ShowKeyButton);
-            Assert.Equal(Visibility.Collapsed, controls.KeyMask.Visibility);
-            Assert.Equal(Visibility.Visible, apiKey.Visibility);
-
-            Click(controls.ShowKeyButton);
-            Assert.Equal(Visibility.Visible, controls.KeyMask.Visibility);
-            Assert.Equal(Visibility.Collapsed, apiKey.Visibility);
-        }
-
-        [StaFact]
-        public void The_masked_box_and_the_text_box_hold_the_same_key()
-        {
-            // Every existing flow (Load, Save, Test connection, the key-protection rules) reads
-            // and writes the TextBox; the PasswordBox is only its masked face.
-            var (_, controls) = BuildPage(SettingsWith(MakeAgent("Claude", apiKey: "sk-test")));
-            var apiKey = GetField<TextBox>(controls, "_apiKey");
-            Assert.Equal("sk-test", apiKey.Text);
-            Assert.Equal("sk-test", controls.KeyMask.Password);
-
-            controls.KeyMask.Password = "sk-typed";
-            Assert.Equal("sk-typed", apiKey.Text);
-
-            apiKey.Text = "sk-bound";
-            Assert.Equal("sk-bound", controls.KeyMask.Password);
         }
 
         [StaFact]
