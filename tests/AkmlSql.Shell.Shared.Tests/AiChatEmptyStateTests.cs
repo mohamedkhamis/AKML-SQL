@@ -34,10 +34,10 @@ namespace AkmlSql.Shell.Shared.Tests
             {
                 var panel = new AiChatPanel();
 
-                // FR-015: the card is shown and the greeting bubble is absent.
+                // FR-015: the card is shown and neither a message nor the welcome card is.
                 var card = Assert.Single(FindAll<AiChatEmptyState>(panel));
-                Assert.DoesNotContain(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text");
+                Assert.Empty(ChatPanelTestText.MessageHosts(panel));
+                Assert.Empty(FindAll<AiChatWelcomeCard>(panel));
                 Assert.Contains(FindAll<TextBlock>(card), t => t.Text == "No AI agent is set up.");
 
                 // FR-016: exactly one primary action, carrying an accessible name.
@@ -52,7 +52,7 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void A_usable_agent_replaces_the_card_with_a_greeting_naming_it_and_enables_sending()
+        public void A_usable_agent_replaces_the_card_with_a_welcome_naming_it_and_enables_sending()
         {
             var settings = new AppSettings();
             WithSettings(settings, () =>
@@ -67,12 +67,14 @@ namespace AkmlSql.Shell.Shared.Tests
                 settings.Ai.ActiveAgentId = agent.Id;
                 panel.RefreshConfiguration(forceRefresh: true);
 
+                // Spec 046 (FR-023): the welcome card (database, agent, starters) replaced the
+                // spec 037 greeting bubble; it still names the agent that will answer.
                 Assert.Empty(FindAll<AiChatEmptyState>(panel));
-                var greeting = Assert.Single(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text");
-                Assert.Contains("AI SQL assistant", greeting.Text);
-                Assert.Contains("Claude (work)", greeting.Text);
+                var welcome = Assert.Single(FindAll<AiChatWelcomeCard>(panel));
+                Assert.Contains("Claude (work)", welcome.AgentText);
                 Assert.True(FindChatInput(panel).IsEnabled);
+                // Spec 046 (FR-011): Send is enabled once there is a question to send.
+                FindChatInput(panel).Text = "which tables are largest?";
                 Assert.True(FindSendButton(panel).IsEnabled);
             });
         }
@@ -229,7 +231,7 @@ namespace AkmlSql.Shell.Shared.Tests
         }
 
         [StaFact]
-        public void Refresh_with_an_unchanged_signature_keeps_the_same_greeting_bubble()
+        public void Refresh_with_an_unchanged_signature_keeps_the_same_welcome_card()
         {
             var settings = new AppSettings();
             var agent = UsableAgent("Claude (work)");
@@ -239,19 +241,17 @@ namespace AkmlSql.Shell.Shared.Tests
             WithSettings(settings, () =>
             {
                 var panel = new AiChatPanel();
-                var greeting = Assert.Single(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text");
+                var welcome = Assert.Single(FindAll<AiChatWelcomeCard>(panel));
 
                 panel.RefreshConfiguration();
                 panel.RefreshConfiguration();
 
-                Assert.Same(greeting, Assert.Single(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text"));
+                Assert.Same(welcome, Assert.Single(FindAll<AiChatWelcomeCard>(panel)));
             });
         }
 
         [StaFact]
-        public void Renaming_the_chat_agent_re_renders_the_greeting_and_picker_without_a_rebuild()
+        public void Renaming_the_chat_agent_re_renders_the_welcome_and_picker_without_a_rebuild()
         {
             var settings = new AppSettings();
             var agent = UsableAgent("Claude (work)");
@@ -261,9 +261,8 @@ namespace AkmlSql.Shell.Shared.Tests
             WithSettings(settings, () =>
             {
                 var panel = new AiChatPanel();
-                var greeting = Assert.Single(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text");
-                Assert.Contains("Claude (work)", greeting.Text);
+                var welcome = Assert.Single(FindAll<AiChatWelcomeCard>(panel));
+                Assert.Contains("Claude (work)", welcome.AgentText);
 
                 // The user renames the agent in Options and saves; the next refresh must pick
                 // the new name up (FR-037) — the name is part of the signature now, so this is
@@ -271,15 +270,14 @@ namespace AkmlSql.Shell.Shared.Tests
                 agent.Name = "Claude K2";
                 panel.RefreshConfiguration(forceRefresh: true);
 
-                var renamed = Assert.Single(FindAll<TextBox>(panel),
-                    tb => AutomationProperties.GetName(tb) == "Message text");
-                Assert.NotSame(greeting, renamed);
-                Assert.Contains("Claude K2", renamed.Text);
-                Assert.DoesNotContain("Claude (work)", renamed.Text);
+                var renamed = Assert.Single(FindAll<AiChatWelcomeCard>(panel));
+                Assert.NotSame(welcome, renamed);
+                Assert.Contains("Claude K2", renamed.AgentText);
+                Assert.DoesNotContain("Claude (work)", renamed.AgentText);
 
                 var picker = Assert.Single(FindAll<ComboBox>(panel),
                     c => AutomationProperties.GetName(c) == AiAgentPicker.ComboAutomationName);
-                Assert.Equal("Claude K2", picker.SelectedItem);
+                Assert.Equal(AiAgentLabel.Format("Claude K2", agent.Provider, agent.Model), picker.SelectedItem);
             });
         }
 

@@ -10,7 +10,8 @@ namespace AkmlSql.Shell.Shared.Ai
 {
     /// <summary>
     /// Spec 037 (US3, FR-037/FR-038/FR-041/FR-044) — the chat header's agent picker: a
-    /// non-editable ComboBox listing the usable agents by name (S1 — disabled and otherwise
+    /// non-editable ComboBox listing the usable agents as "Name · Provider · model" (spec 046,
+    /// <see cref="AiAgentLabel"/>; S1 — disabled and otherwise
     /// unusable agents are hidden) plus a trailing <see cref="AddAgentDisplayText"/> entry that
     /// routes into Options. The selection is the RESOLVED chat agent (S3): the chat assignment
     /// when set, otherwise the active agent — so a user who never touches the picker still sees
@@ -52,10 +53,10 @@ namespace AkmlSql.Shell.Shared.Ai
             _combo = new ComboBox
             {
                 FontSize = Typography.Small,
-                MinWidth = 170,
+                MinWidth = 200,
                 MinHeight = 28,
                 VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "Choose which agent answers your chat messages",
+                ToolTip = "Choose which agent answers your messages",
                 FocusVisualStyle = FocusVisualStyles.HighStakes
             };
             System.Windows.Automation.AutomationProperties.SetName(_combo, ComboAutomationName);
@@ -92,7 +93,9 @@ namespace AkmlSql.Shell.Shared.Ai
                         // S1: disabled and otherwise unusable agents are hidden from the picker.
                         if (agent == null || !AiAgentResolver.IsUsable(agent)) continue;
                         _agentIds.Add(agent.Id);
-                        _combo.Items.Add(agent.Name);
+                        // Spec 046 (FR-030): name, provider and model, so two agents on one
+                        // provider are told apart and the user sees which model answers.
+                        _combo.Items.Add(AiAgentLabel.Format(agent.Name, agent.Provider, agent.Model));
                     }
                 }
                 _combo.Items.Add(AddAgentDisplayText);

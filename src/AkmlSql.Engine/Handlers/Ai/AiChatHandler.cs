@@ -73,7 +73,7 @@ public sealed class AiChatHandler : AiHandlerBase<AiChatRequest, AiChatResponse>
         chatMessages.Add(new ChatMessage(ChatRole.User, transformedMessage));
 
         var options = new ChatOptions { MaxOutputTokens = settings.MaxTokens, Temperature = (float)settings.Temperature };
-        var (aiResponse, usedFallback, agentName) = await Services.ExecuteWithFallbackAsync(
+        var (aiResponse, usedFallback, agentName, agentProvider, agentModel) = await Services.ExecuteWithFallbackDetailedAsync(
             settings, resolvedAgent, chatMessages, options, ct);
         var responseText = aiResponse.Text ?? string.Empty;
         if (transformation.IdentifierMap.Count > 0 || transformation.LiteralMap.Count > 0)
@@ -95,6 +95,10 @@ public sealed class AiChatHandler : AiHandlerBase<AiChatRequest, AiChatResponse>
             // agent, a fallback-chain agent, or the offline provider's display name (T073).
             // The shell states a fallback plainly from this name and its own selection.
             AgentName = agentName,
+            // Spec 046 (FR-022, R4): and with which provider and model, so the panels can say
+            // "Name · Provider · model" — exact for fallback answers too.
+            AgentProvider = agentProvider,
+            AgentModel = agentModel,
         };
     }
 }

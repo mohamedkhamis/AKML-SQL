@@ -1412,6 +1412,15 @@
 
 **Expected Result:** Multi-turn conversation maintains context. Schema-specific questions receive grounded, accurate answers. Suggested code changes can be applied directly from the chat panel. No SQL is auto-executed without user confirmation.
 
+**Spec 046 (2026-11) — how the chat behaves now (SSMS and web):**
+
+- **Which database it answers about (SSMS)**: the query window that is active in SSMS — the document tab — whatever pane inside it last had the keyboard (editor, Results grid, Messages). Clicking into Object Explorer or another tool window keeps the last query window. The header names `server.database`; its tooltip names the window. Switching to a window on another database mid-conversation adds one line, "Now answering about server.database (SQLQueryN.sql)."
+- **When it refuses (SSMS)**, it says what it found — "SQLQuery1.sql is not connected to a database (or is still connecting)…", "The active window (…) is not a query window…", or "No query window is open…" — and writes one `AiChatPanel: refused to send — …` line to the product log (file name and booleans only).
+- **Answers** render as prose, headings and lists; every fenced block is its own code panel with **Copy** and, for SQL, **Insert into query** (SSMS, into the bound window) or **Insert at caret** (web). The per-message copy and Copy conversation / Export keep the raw text, fences included.
+- **Sending**: Enter or **Ctrl+Enter** sends, Shift+Enter adds a line. Hovering Send shows "Send (Ctrl+Enter)" or why it is disabled. Every control has a tooltip.
+- **Choosing the model**: the selector beside Send lists each agent as "Name · Provider · model". Picking another one adds "Now answering with …" to the conversation; each answer is captioned with the agent that produced it. In the web edition the selector changes the one active agent all web AI actions share.
+- **New chat** (header) clears the conversation, keeps the database and the agent, and brings back the welcome card — the bound database, the answering agent and three starter questions. One conversation at a time; copy or export it first to keep it. SSMS waits for an answer in flight; the web edition stops it.
+
 ---
 
 ## Summary of Use Cases
