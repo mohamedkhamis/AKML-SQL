@@ -39,6 +39,14 @@ public sealed class MockAiProvider : IDisposable
     /// <summary>Buffered (stream:false) content — used by Ghost Text (SendAsync).</summary>
     public const string BufferedContent = "Customers c ON o.CustomerId = c.CustomerId [MOCK]";
 
+    /// <summary>Spec 046: the streamed answer of THIS mock (defaults to <see cref="StreamTokens"/>) — a
+    /// test can stream a fenced SQL block to see the chat's code panels.</summary>
+    public IReadOnlyList<string> Stream { get; set; } = StreamTokens;
+
+    /// <summary>Spec 046: a pause before each streamed token, so a test can act while an answer is
+    /// still streaming (New chat stops it). Zero by default.</summary>
+    public TimeSpan TokenDelay { get; set; } = TimeSpan.Zero;
+
     public int Port { get; }
     public string BaseUrl => $"http://127.0.0.1:{Port}";
     public string ChatCompletionsUrl => $"{BaseUrl}/v1/chat/completions";
@@ -138,13 +146,14 @@ public sealed class MockAiProvider : IDisposable
         res.Close();
     }
 
-    private static async Task WriteSseAsync(HttpListenerResponse res)
+    private async Task WriteSseAsync(HttpListenerResponse res)
     {
         res.StatusCode = 200;
         res.ContentType = "text/event-stream";
         res.SendChunked = true;
-        foreach (var token in StreamTokens)
+        foreach (var token in Stream)
         {
+            if (TokenDelay > TimeSpan.Zero) await Task.Delay(TokenDelay).ConfigureAwait(false);
             var chunk = JsonSerializer.Serialize(new { choices = new[] { new { delta = new { content = token } } } });
             var bytes = Encoding.UTF8.GetBytes($"data: {chunk}\n\n");
             await res.OutputStream.WriteAsync(bytes).ConfigureAwait(false);

@@ -28,30 +28,49 @@
                 No AI provider configured. <a href="settings/ai-assistance">Add one in Settings</a>.
             </span>
         }
-        else if (_conversation.Turns.Count > 0)
+        else
         {
-            <button class="akml-btn" @onclick="ExportAsync" disabled="@_busy" title="@(_busy ? "Wait for the answer to finish" : null)">Export</button>
-            <button class="akml-btn" @onclick="ClearAsync" disabled="@_busy" title="@(_busy ? "Wait for the answer to finish" : null)">Clear</button>
+            @if (_conversation.Turns.Count > 0)
+            {
+                <button class="akml-btn" @onclick="ExportAsync" disabled="@_busy" title="@(_busy ? "Wait for the answer to finish" : "Download the conversation as Markdown")">Export</button>
+            }
+            @* Spec 046 (US5, FR-040/FR-042): New chat replaces Clear and, as Clear did, stays usable
+               while an answer streams — it stops that answer. *@
+            <button class="akml-btn" data-testid="chat-new" @onclick="NewChatAsync" disabled="@(_conversation.Turns.Count == 0)"
+                    title="@(_conversation.Turns.Count == 0 ? "The conversation is already empty" : "Start a new conversation — clears this one")">New chat</button>
         }
     </div>
 
     @if (_hasProvider)
     {
-        <div class="akml-chat-log">
+        <div class="akml-chat-log" @ref="_log">
             @if (_conversation.Turns.Count == 0)
             {
                 <div class="akml-empty akml-chat-empty" data-testid="chat-empty">
                     <p class="akml-empty-title">Type a question below to start</p>
                     <p>The conversation is stored only in this browser and sent only to your chosen provider.</p>
+                    @* Spec 046 (FR-023): three starters that send on a click, as Copilot Chat opens. *@
+                    <div class="akml-chat-starters">
+                        @foreach (var question in StarterQuestions)
+                        {
+                            <button type="button" class="akml-chat-starter" data-testid="chat-starter" title="Send this question"
+                                    disabled="@_busy" @onclick="() => SendStarterAsync(question)">@question</button>
+                        }
+                    </div>
                 </div>
             }
             else
             {
-                @foreach (var turn in _conversation.Turns)
+                @for (var i = 0; i < _conversation.Turns.Count; i++)
                 {
+                    var turn = _conversation.Turns[i];
+                    @foreach (var notice in NoticesBefore(i))
+                    {
+                        <p class="akml-chat-notice" data-testid="chat-notice">@notice</p>
+                    }
                     <div class="akml-chat-turn akml-chat-role-@turn.Role">
                         <div class="akml-chat-role-label">
-                            <span>@(turn.Role == "user" ? "You" : "Assistant")</span>
+                            <span>@SpeakerOf(turn)</span>
                             @if (!string.IsNullOrEmpty(turn.Content))
                             {
                                 <button type="button" class="akml-chat-copy" title="Copy message"
@@ -60,7 +79,15 @@
                                 </button>
                             }
                         </div>
-                        <pre class="akml-chat-turn-text">@turn.Content</pre>
+                        @if (turn.Role == "user")
+                        {
+                            <pre class="akml-chat-turn-text">@turn.Content</pre>
+                        }
+                        else
+                        {
+                            @* Spec 046 (FR-020/FR-021): rendered like the SSMS panel — prose and code panels. *@
+                            <ChatMessageView Text="@turn.Content" OnInsert="OnInsertSql" />
+                        }
                         @if (turn.IncompleteReason != null)
                         {
                             <p class="akml-chat-incomplete" role="note" data-testid="ai-chat-incomplete">This answer is incomplete: @turn.IncompleteReason</p>
@@ -68,9 +95,13 @@
                     </div>
                 }
             }
+            @foreach (var notice in NoticesBefore(_conversation.Turns.Count))
+            {
+                <p class="akml-chat-notice" data-testid="chat-notice">@notice</p>
+            }
             @if (_busy)
             {
-                <p class="akml-chat-thinking">Thinking…</p>
+                <p class="akml-chat-thinking">@WorkingText</p>
             }
             @if (!string.IsNullOrEmpty(_lastError))
             {
@@ -90,15 +121,19 @@
                is the DEFAULT ACTION of Enter's keypress, so it is suppressed there and armed one
                event earlier — see OnKeyDown / _suppressEnterNewline for why it cannot ride on
                keydown. *@
-            <textarea class="akml-chat-input" @bind="_pending" @bind:event="oninput"
-                      placeholder="Ask anything about your SQL…  (Enter sends · Shift+Enter for a new line)" rows="3"
+            <textarea class="akml-chat-input" @ref="_composer" @bind="_pending" @bind:event="oninput"
+                      placeholder="@PlaceholderText" rows="3"
                       @onkeydown="OnKeyDown" @onkeypress="OnKeyPress"
                       @onkeypress:preventDefault="_suppressEnterNewline" disabled="@_busy" aria-label="Question"
                       title="@(_busy ? "Wait for the answer to finish" : null)"></textarea>
             <button class="akml-chat-send" @onclick="SendAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_pending))"
-                    title="@(_busy ? "Wait for the answer to finish" : string.IsNullOrWhiteSpace(_pending) ? "Type a question first" : "Send (Enter)")">
+                    title="@SendTitle">
                 Send
             </button>
+        </div>
+        @* Spec 046 (FR-030/FR-033): the answering agent, in view where the user types. *@
+        <div class="akml-chat-composer-footer">
+            <AiAgentSelector Changed="OnAgentChangedAsync" />
         </div>
     }
 </div>
@@ -133,7 +168,20 @@
     .akml-chat-role-assistant {
         margin-right: auto;
         background-color: var(--akml-chat-assistantbubble);
+        /* Spec 046: answers carry SQL in code panels — they take the log's full width. */
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
+    .akml-chat-starters { display: flex; flex-direction: column; align-items: flex-start; gap: var(--akml-scalar-spacing-xs); margin-top: var(--akml-scalar-spacing-s); }
+    .akml-chat-starter {
+        font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size);
+        background-color: var(--akml-surface-panel); color: var(--akml-text-link);
+        border: 1px solid var(--akml-border-default); border-radius: var(--akml-scalar-radius-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s); cursor: pointer; text-align: left;
+    }
+    .akml-chat-starter:hover:not(:disabled) { background-color: var(--akml-surface-hover); }
+    .akml-chat-starter:disabled { opacity: 0.6; cursor: not-allowed; }
     .akml-chat-role-label {
         display: flex;
         align-items: center;
@@ -172,6 +220,9 @@
         color: var(--akml-text-primary);
     }
     .akml-chat-thinking { color: var(--akml-text-secondary); font-style: italic; }
+    /* Spec 046 (FR-034): a plainly stated line between turns; not a turn, never saved. */
+    .akml-chat-notice { color: var(--akml-text-secondary); font-style: italic; font-size: 11px; margin: 0 0 var(--akml-scalar-spacing-s); }
+    .akml-chat-composer-footer { display: flex; align-items: center; gap: var(--akml-scalar-spacing-s); margin-top: var(--akml-scalar-spacing-xs); }
     .akml-chat-error { color: var(--akml-status-danger); }
     .akml-chat-incomplete { margin: var(--akml-scalar-spacing-xs) 0 0; color: var(--akml-status-warning); font-style: italic; }
     .akml-chat-composer {
@@ -218,7 +269,51 @@
             ? AiChatSystemText.For(dialect.Dialect, dialect.ServerVersion)
             : AiChatSystemText.SqlServer;
 
+    /// <summary>Spec 046 (FR-012): the composer's hint names both send keys and the new-line key.</summary>
+    internal const string PlaceholderText = "Ask anything about your SQL…   (Enter or Ctrl+Enter sends · Shift+Enter for a new line)";
+
+    /// <summary>Spec 046 (FR-011): Send names its shortcut when it can send, and says why when it cannot.</summary>
+    private string SendTitle =>
+        !_hasProvider ? "No AI agent can answer yet — add one in Settings"
+        : _busy ? "Wait for the answer to finish"
+        : string.IsNullOrWhiteSpace(_pending) ? "Type a question first"
+        : "Send (Ctrl+Enter)";
+
+    /// <summary>Spec 046 (US6, FR-021): Insert at caret for a SQL block of an answer — the editor page
+    /// passes its insert; without it the code panels offer Copy only.</summary>
+    [Parameter] public EventCallback<string> OnInsertSql { get; set; }
+
+    /// <summary>Spec 046 (FR-023): the same three starters as the SSMS welcome card.</summary>
+    internal static readonly string[] StarterQuestions =
+    {
+        "What are the largest tables in this database?",
+        "Which tables have no primary key?",
+        "Which stored procedures were modified most recently?",
+    };
+
+    private ElementReference _log;
+    private bool _scrollAfterRender;
+
     private bool _hasProvider;
+
+    /// <summary>Spec 046 (FR-022): "Name · Provider · model" of the active agent, or null when no key
+    /// vault is available to name it (the turn then reads "Assistant").</summary>
+    private string? _agentLabel;
+
+    /// <summary>The label of the agent the answer in flight was requested from (FR-014).</summary>
+    private string? _inFlightLabel;
+
+    /// <summary>Spec 046 (FR-034): notices, each shown before the turn at its index — never saved.</summary>
+    private readonly List<(int BeforeTurn, string Text)> _notices = new();
+
+    private IEnumerable<string> NoticesBefore(int turnIndex)
+        => _notices.Where(n => n.BeforeTurn == turnIndex).Select(n => n.Text);
+
+    private static string SpeakerOf(ChatTurn turn)
+        => turn.Role == "user" ? "You" : string.IsNullOrWhiteSpace(turn.AgentLabel) ? "Assistant" : turn.AgentLabel!;
+
+    private string WorkingText
+        => string.IsNullOrWhiteSpace(_inFlightLabel) ? "Thinking…" : $"Asking {_inFlightLabel}…";
     private bool _busy;
     private string _pending = string.Empty;
     private string? _lastError;
@@ -243,6 +338,7 @@
     {
         var active = await Preference.GetActiveAsync();
         _hasProvider = !string.IsNullOrEmpty(active);
+        _agentLabel = await LabelOfAsync(active);
         _conversation = await History.GetAsync() ?? NewConversation();
     }
 
@@ -309,10 +405,17 @@
 
         // Build the history BEFORE adding the new turns (every prior NON-EMPTY turn, oldest-first).
         var snapshot = BuildHistorySnapshot();
-        var preTurns = _conversation.Turns.Count;
-        _conversation.Turns.Add(new ChatTurn { Role = "user", Content = userMessage, Timestamp = DateTimeOffset.UtcNow });
-        var assistant = new ChatTurn { Role = "assistant", Content = string.Empty, ProviderId = providerId, Timestamp = DateTimeOffset.UtcNow };
-        _conversation.Turns.Add(assistant);
+        var conversation = _conversation;   // spec 046: New chat may replace _conversation mid-answer
+        var preTurns = conversation.Turns.Count;
+        conversation.Turns.Add(new ChatTurn { Role = "user", Content = userMessage, Timestamp = DateTimeOffset.UtcNow });
+        _inFlightLabel = await LabelOfAsync(agentId);
+        var assistant = new ChatTurn
+        {
+            Role = "assistant", Content = string.Empty, ProviderId = providerId, Timestamp = DateTimeOffset.UtcNow,
+            AgentLabel = _inFlightLabel,   // spec 046 (FR-022): who this answer was requested from
+        };
+        conversation.Turns.Add(assistant);
+        await FollowAsync(force: true);   // the user's own message always comes into view (FR-024)
         StateHasChanged();
 
         // One in-flight stream per panel; a new message cancels the previous (FR-010).
@@ -335,7 +438,7 @@
             await foreach (var token in Client.StreamAsync(agentId, request, ct))
             {
                 sb.Append(token);   // O(1) amortized — avoids O(n^2) string rebuild per token
-                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); assistant.Content = sb.ToString(); StateHasChanged(); }
+                if (sw.ElapsedMilliseconds >= RenderThrottleMs) { sw.Restart(); await FollowAsync(force: false); assistant.Content = sb.ToString(); StateHasChanged(); }
             }
             Diagnostics.Log(DiagnosticLevel.Info, "ai-chat", $"Turn {_conversation.Turns.Count / 2} ({sb.Length} chars).");
         }
@@ -372,12 +475,19 @@
         finally
         {
             assistant.Content = sb.ToString();   // flush full / partial text before the empty check
-            if (string.IsNullOrEmpty(assistant.Content))
+            if (!ReferenceEquals(conversation, _conversation))
+            {
+                // Spec 046 (FR-042): New chat replaced the conversation while this answer streamed —
+                // the stopped answer belonged to the old one; nothing to roll back, save or restore.
+                _lastError = null;
+                _retryMessage = null;
+            }
+            else if (string.IsNullOrEmpty(assistant.Content))
             {
                 // Nothing came back (error / cancel before the first token): roll back the
                 // user + assistant turns so an empty turn can't poison history or get persisted,
                 // and restore the typed text so the user can retry.
-                _conversation.Turns.RemoveRange(preTurns, _conversation.Turns.Count - preTurns);
+                conversation.Turns.RemoveRange(preTurns, conversation.Turns.Count - preTurns);
                 _pending = userMessage;
             }
             else if (!_disposed)
@@ -385,12 +495,86 @@
                 await History.SaveAsync(_conversation);   // persist successful/partial turn (FR-030); local-only
             }
             _busy = false;
-            if (!_disposed) StateHasChanged();
+            if (!_disposed)
+            {
+                await FollowAsync(force: false);
+                StateHasChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Spec 046 (FR-034): the selector made another agent the active one — say so once in the
+    /// conversation. The line is not a turn: it is never sent, saved or exported.
+    /// </summary>
+    private async Task OnAgentChangedAsync(string agentId)
+    {
+        _hasProvider = !string.IsNullOrEmpty(agentId);
+        _agentLabel = await LabelOfAsync(agentId);
+        _notices.Add((_conversation.Turns.Count, $"Now answering with {_agentLabel ?? agentId}."));
+        StateHasChanged();
+    }
+
+    /// <summary>"Name · Provider · model" of <paramref name="agentId"/>, read from the key vault when the
+    /// host has one (optional, like the dialect context); null otherwise.</summary>
+    private async Task<string?> LabelOfAsync(string? agentId)
+    {
+        if (string.IsNullOrEmpty(agentId) || Services.GetService(typeof(IAiKeyVault)) is not IAiKeyVault vault)
+            return null;
+        try
+        {
+            var config = (await vault.ListAsync()).FirstOrDefault(c => c.Id == agentId);
+            return config == null ? null : AiAgentSelector.Label(config);
+        }
+        catch (Exception ex)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Agent label unavailable: {ex.GetType().Name}");
+            return null;
         }
     }
 
     internal const string StoppedReason = "it was stopped before it finished.";
     internal const string FailedReason = "the call failed before the answer finished.";
+
+    private async Task SendStarterAsync(string question)
+    {
+        if (_busy) return;
+        _pending = question;
+        await SendAsync();
+    }
+
+    /// <summary>
+    /// Spec 046 (FR-024): a new turn or token follows the log only when the reader is already at the
+    /// bottom (read BEFORE the render that grows the log); <paramref name="force"/> — the user's own
+    /// message — always follows.
+    /// </summary>
+    private async Task FollowAsync(bool force)
+    {
+        if (_disposed || _followUnavailable) return;
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            if (force || await _ui.InvokeAsync<bool>("isAtBottom", _log, 8))
+                _scrollAfterRender = true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Following the log is a convenience: it must never break a send. Say it once and stop
+            // trying (a stream would otherwise retry every 60 ms).
+            _followUnavailable = true;
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Chat log follow unavailable: {ex.GetType().Name}");
+        }
+    }
+
+    private bool _followUnavailable;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollAfterRender || _ui == null) return;
+        _scrollAfterRender = false;
+        try { await _ui.InvokeVoidAsync("scrollToBottom", _log); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { _followUnavailable = true; }
+    }
 
     /// <summary>Review WEB-18: send the failed turn's message again, in place of the failed (or partial) turn.</summary>
     private async Task RetryAsync()
@@ -470,9 +654,34 @@
         await _downloadModule.InvokeVoidAsync("downloadBase64", fileName, "text/markdown", base64);
     }
 
+    private ElementReference _composer;
+
+    /// <summary>
+    /// Spec 046 (US5, FR-040 – FR-043): starts a new conversation — stops an answer in flight,
+    /// removes the stored conversation (one conversation at a time; Export is the way to keep it),
+    /// keeps the active agent, and puts the focus back in the empty composer.
+    /// </summary>
+    private async Task NewChatAsync()
+    {
+        _cts?.Cancel();
+        _pending = string.Empty;
+        _retryMessage = null;
+        await ClearAsync();
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            await _ui.InvokeVoidAsync("focusElement", _composer);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Diagnostics.Log(DiagnosticLevel.Warn, "ai-chat", $"Composer focus failed: {ex.GetType().Name}");
+        }
+    }
+
     private async Task ClearAsync()
     {
         _conversation = NewConversation();
+        _notices.Clear();
         _lastError = null;
         await History.ClearAsync();   // FR-032: removed from storage; independent of schema/keys
         StateHasChanged();

@@ -97,4 +97,19 @@ public sealed class AiChatPanelCopyTests : BunitContext
             Assert.DoesNotContain("Copied", buttons[1].TextContent);
         });
     }
+
+    // Spec 046 (FR-026): an answer is rendered (code panels), but its copy is the RAW text.
+    [Fact]
+    public void Copying_a_rendered_answer_copies_its_raw_text_with_the_fences()
+    {
+        const string answer = "Run:\n\n```sql\nSELECT 1;\n```";
+        _history.Saved!.Turns[1].Content = answer;
+        var ui = CopyAnswers(true);
+        var cut = Render<AiChatPanel>();
+
+        cut.FindAll("button[aria-label='Copy message']")[1].Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(answer, Assert.Single(ui.Invocations["copyText"]).Arguments[0]));
+        Assert.Contains("```sql", _history.Saved!.ToMarkdown());
+    }
 }

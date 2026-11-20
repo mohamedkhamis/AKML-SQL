@@ -300,6 +300,21 @@ function legacyCopy(value) {
     }
 }
 
+/**
+ * Spec 046 (FR-024) — the AI chat log follows a new answer only when the reader is already at the
+ * bottom. True when `el` is scrolled to within `threshold` px of its end (or has nothing to scroll);
+ * a missing element counts as at the bottom.
+ */
+export function isAtBottom(el, threshold = 8) {
+    if (!el) return true;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+}
+
+/** Spec 046 (FR-024) — scroll a log to its end. No-op when the element is gone. */
+export function scrollToBottom(el) {
+    try { if (el) el.scrollTop = el.scrollHeight; } catch { /* detached */ }
+}
+
 /** Scroll an element to the top of its scroll container (the results pane's "jump to set"). */
 export function scrollToElement(el) {
     try { if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch { /* detached */ }

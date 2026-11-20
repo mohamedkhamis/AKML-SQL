@@ -269,6 +269,48 @@ namespace AkmlSql.Shell.Shared.Editor
         }
 
         /// <summary>
+        /// Spec 046 (US1): the open SQL editor whose document is <paramref name="filePath"/> — how the
+        /// AI Chat finds the query window behind the ACTIVE DOCUMENT (DTE) instead of the text view
+        /// that last had the keyboard, which may be the results Messages pane. Compares each view's
+        /// <see cref="ITextDocument.FilePath"/> ordinal-ignore-case, the identity
+        /// <see cref="SsmsConnectionDetector"/> already matches DTE documents by. Closed or collected
+        /// views are dropped on the way.
+        /// </summary>
+        public static bool TryFindTrackedView(string filePath, out string sessionId,
+            out Microsoft.VisualStudio.Text.Editor.IWpfTextView view)
+        {
+            sessionId = null;
+            view = null;
+            if (string.IsNullOrEmpty(filePath))
+                return false;
+
+            foreach (var pair in OpenViews.ToArray())
+            {
+                if (!pair.Value.TryGetTarget(out var candidate) || candidate.IsClosed)
+                {
+                    OpenViews.TryRemove(pair.Key, out _);
+                    continue;
+                }
+
+                string candidatePath = null;
+                try
+                {
+                    if (candidate.TextBuffer.Properties.TryGetProperty<ITextDocument>(typeof(ITextDocument), out var document))
+                        candidatePath = document?.FilePath;
+                }
+                catch { /* a view mid-teardown — skip it */ }
+
+                if (string.Equals(candidatePath, filePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    sessionId = pair.Key;
+                    view = candidate;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// The engine ran again after a crash (or being killed): it starts with no sessions, so the
         /// open editors had no schema, completions or Format SQL actions until reopened. Send each
         /// one's text and connection again.

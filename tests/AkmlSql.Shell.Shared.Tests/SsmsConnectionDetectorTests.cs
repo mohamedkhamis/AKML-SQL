@@ -42,6 +42,35 @@ namespace AkmlSql.Shell.Shared.Tests
             Assert.Equal(expectedDatabase, result.Database);
         }
 
+        /// <summary>
+        /// Spec 046 (US1, FR-004): the chat treats a query window whose caption carries no
+        /// <c>server.database</c> as "not connected". A disconnected window's caption and a
+        /// brand-new window's caption (the second before SSMS adds the connection) must therefore
+        /// parse to null — never to a stale or guessed server. The disconnected wording is the one
+        /// recorded from SSMS 22 in baseline.md (S1-6); update it here if SSMS shows another.
+        /// </summary>
+        [Theory]
+        [InlineData("SQLQuery1.sql - not connected")]
+        [InlineData("SQLQuery1.sql")]
+        [InlineData("SQLQuery1.sql - ")]
+        public void ParseCaption_returns_null_for_a_window_without_a_connection(string caption)
+        {
+            Assert.Null(SsmsConnectionDetector.ParseCaption(caption));
+        }
+
+        [Fact]
+        public void ParseCaption_keeps_a_window_that_is_executing_connected()
+        {
+            // SSMS appends " Executing..." while a query runs (seen in the 2026-11-04 log); the chat
+            // must keep answering about that window during and right after a run (US1-2).
+            var result = SsmsConnectionDetector.ParseCaption(
+                "SQLQuery2.sql - dbdevtestvm.westeurope.cloudapp.azure.com.dbCentralQuota (testuser (129)) Executing...");
+
+            Assert.NotNull(result);
+            Assert.Equal("dbdevtestvm.westeurope.cloudapp.azure.com", result.Server);
+            Assert.Equal("dbCentralQuota", result.Database);
+        }
+
         [Theory]
         [InlineData("1", (int)SsmsConnectionDetector.AuthMode.SqlPassword)]                         // numeric SqlPassword
         [InlineData("SqlPassword", (int)SsmsConnectionDetector.AuthMode.SqlPassword)]               // string form

@@ -136,4 +136,58 @@ public sealed class AiChatComposerKeysTests
         var value = await composer.InputValueAsync();
         Assert.Equal("first line\nsecond line", value.Replace("\r\n", "\n"));
     }
+
+    // ── Spec 046 (US3/US6) ─────────────────────────────────────────────────────────────────────
+
+    /// <summary>FR-011: with a question typed, hovering Send names the shortcut.</summary>
+    [SkippableFact]
+    public async Task Send_names_ctrl_enter_on_hover()
+    {
+        using var mock = MockAiProvider.StartOllama();
+        await using var web = await StartWebOrSkipAsync();
+        using var pw = await Playwright.CreateAsync();
+        await using var browser = await TryLaunchAsync(pw);
+        Skip.If(browser is null, "Playwright Chromium not installed (run playwright.ps1 install chromium).");
+        var page = await browser!.NewPageAsync();
+
+        var composer = await OpenChatAsync(page, web, mock);
+        await composer.FillAsync("what does this query do");
+
+        await Assertions.Expect(page.Locator(".akml-chat-send")).ToHaveAttributeAsync("title", "Send (Ctrl+Enter)");
+    }
+
+    /// <summary>
+    /// FR-020/FR-021 in a real browser: a fenced SQL block in the answer becomes a code panel, and
+    /// its Insert at caret puts exactly that SQL into the editor.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_fenced_answer_renders_a_code_panel_whose_insert_lands_in_the_editor()
+    {
+        using var mock = MockAiProvider.StartOllama();
+        mock.Stream = ["Use this:\n\n", "```sql\nSELECT TOP (10) * FROM dbo.Orders;\n```", "\n\nDone."];
+        await using var web = await StartWebOrSkipAsync();
+        using var pw = await Playwright.CreateAsync();
+        await using var browser = await TryLaunchAsync(pw);
+        Skip.If(browser is null, "Playwright Chromium not installed (run playwright.ps1 install chromium).");
+        var page = await browser!.NewPageAsync();
+
+        var composer = await OpenChatAsync(page, web, mock);
+        await composer.FillAsync("top orders");
+        await composer.PressAsync("Control+Enter");
+
+        var panel = page.Locator("[data-testid='chat-code-block']");
+        await panel.First.WaitForAsync(new() { Timeout = 15_000 });
+        await Assertions.Expect(panel.Locator("pre code")).ToHaveTextAsync("SELECT TOP (10) * FROM dbo.Orders;");
+        Assert.Equal(0, await page.Locator(".akml-chat-message:has-text('```')").CountAsync());
+
+        await panel.GetByRole(AriaRole.Button, new() { Name = "Insert at caret" }).ClickAsync();
+
+        var text = await page.EvaluateAsync<string>(
+            @"async () => {
+                const host = document.querySelector('[data-testid=""sql-editor""]');
+                const mod = await import('/js/akml-editor.js');
+                return mod.getText(host.id);
+              }");
+        Assert.Contains("SELECT TOP (10) * FROM dbo.Orders;", text);
+    }
 }

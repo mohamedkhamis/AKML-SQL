@@ -1,0 +1,180 @@
+@*
+    Spec 046 (US6, FR-020/FR-021, contracts/chat-rendering.md Part 3): one AI chat answer, rendered
+    the way the SSMS panel renders it — from the same parser (ChatMarkdown, in Core): paragraphs that
+    keep their line breaks, headings, lists, bold and inline code, and every fenced block in its own
+    code panel with its own Copy and, for SQL, Insert at caret. Insert is offered only when the host
+    passes an OnInsert delegate (the editor page does; a chat without an editor does not).
+*@
+@using AkmlSql.Core.Text
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="akml-chat-message">
+    @foreach (var block in _blocks)
+    {
+        switch (block)
+        {
+            case ChatHeading heading:
+                @if (heading.Level == 1) { <h4 class="akml-chat-h">@InlinesOf(heading.Inlines)</h4> }
+                else if (heading.Level == 2) { <h5 class="akml-chat-h">@InlinesOf(heading.Inlines)</h5> }
+                else { <h6 class="akml-chat-h">@InlinesOf(heading.Inlines)</h6> }
+                break;
+            case ChatListBlock list when list.Ordered:
+                <ol class="akml-chat-list" start="@list.Start">
+                    @foreach (var item in list.Items) { <li>@InlinesOf(item)</li> }
+                </ol>
+                break;
+            case ChatListBlock list:
+                <ul class="akml-chat-list">
+                    @foreach (var item in list.Items) { <li>@InlinesOf(item)</li> }
+                </ul>
+                break;
+            case ChatCodeBlock fence:
+                <div class="akml-chat-code" data-testid="chat-code-block">
+                    <div class="akml-chat-code-header">
+                        <span class="akml-chat-code-lang">@(fence.Language.Length > 0 ? fence.Language : "sql")</span>
+                        <button type="button" class="akml-chat-code-action" aria-label="@CopyLabel(fence)"
+                                title="@(fence.IsSql ? "Copy this SQL" : "Copy this code")" @onclick="() => CopyAsync(fence)">
+                            @CopyState(fence)
+                        </button>
+                        @if (CanInsert && fence.IsSql)
+                        {
+                            <button type="button" class="akml-chat-code-action" aria-label="@InsertLabel(fence)"
+                                    title="Insert this SQL at the editor caret" @onclick="() => OnInsert.InvokeAsync(fence.Code)">
+                                Insert at caret
+                            </button>
+                        }
+                    </div>
+                    <pre><code>@fence.Code</code></pre>
+                </div>
+                break;
+            case ChatParagraph paragraph:
+                <p class="akml-chat-p">@InlinesOf(paragraph.Inlines)</p>
+                break;
+        }
+    }
+</div>
+
+<style>
+    .akml-chat-message { color: var(--akml-text-primary); font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); line-height: 1.45; }
+    .akml-chat-p { margin: 0 0 var(--akml-scalar-spacing-s); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .akml-chat-h { margin: var(--akml-scalar-spacing-xs) 0; font-weight: 600; }
+    h4.akml-chat-h { font-size: 1.15em; }
+    h5.akml-chat-h { font-size: 1.05em; }
+    h6.akml-chat-h { font-size: 1em; }
+    .akml-chat-list { margin: 0 0 var(--akml-scalar-spacing-s); padding-left: 1.5em; }
+    .akml-chat-list > li { margin-bottom: 2px; }
+    .akml-chat-inline {
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        background-color: var(--akml-surface-inputreadonly);
+        border-radius: var(--akml-scalar-radius-xs);
+        padding: 0 3px;
+    }
+    .akml-chat-code {
+        margin: var(--akml-scalar-spacing-xs) 0 var(--akml-scalar-spacing-s);
+        background-color: var(--akml-surface-canvas);
+        border: 1px solid var(--akml-border-default);
+        border-radius: var(--akml-scalar-radius-xs);
+    }
+    .akml-chat-code-header {
+        display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-s);
+        border-bottom: 1px solid var(--akml-border-default);
+    }
+    .akml-chat-code-lang { flex: 1 1 auto; color: var(--akml-text-secondary); font-size: 11px; }
+    .akml-chat-code-action {
+        font-family: var(--akml-type-chrome-family); font-size: 11px;
+        /* link text on the panel surface: 4.5:1 or better in every theme (elevated reads 4.1:1) */
+        background-color: var(--akml-surface-panel); color: var(--akml-text-link);
+        border: 1px solid var(--akml-text-link); border-radius: var(--akml-scalar-radius-xs);
+        padding: 1px var(--akml-scalar-spacing-s); cursor: pointer;
+    }
+    .akml-chat-code-action:hover { background-color: var(--akml-surface-hover); }
+    .akml-chat-code-action:focus-visible { outline: 2px solid var(--akml-border-focus); outline-offset: 1px; }
+    .akml-chat-code pre {
+        margin: 0; padding: var(--akml-scalar-spacing-s);
+        overflow-x: auto; white-space: pre;
+        font-family: var(--akml-editor-font-family, var(--akml-type-editor-family));
+        font-size: var(--akml-editor-font-size, var(--akml-type-editor-size));
+        line-height: var(--akml-type-editor-line-height);
+    }
+</style>
+
+@code {
+    /// <summary>The answer's raw text (it may still be streaming in).</summary>
+    [Parameter] public string Text { get; set; } = string.Empty;
+
+    /// <summary>Insert at caret for a SQL block; Insert is shown only when this has a delegate.</summary>
+    [Parameter] public EventCallback<string> OnInsert { get; set; }
+
+    private const int CopiedIndicatorMs = 1500;
+    private IReadOnlyList<ChatBlock> _blocks = Array.Empty<ChatBlock>();
+    private int _codeCount;
+    private string? _parsed;
+    private ChatCodeBlock? _flashed;
+    private string _flashText = string.Empty;
+    private int _flashStamp;
+    private IJSObjectReference? _ui;
+
+    private bool CanInsert => OnInsert.HasDelegate;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Text, _parsed)) return;   // a streaming answer re-parses only when it grew
+        _parsed = Text;
+        _blocks = ChatMarkdown.Parse(Text);
+        _codeCount = ChatMarkdown.CountCodeBlocks(_blocks);
+        _flashed = null;
+    }
+
+    private string CopyLabel(ChatCodeBlock code)
+    {
+        var noun = code.IsSql ? "SQL" : "code";
+        return _codeCount > 1 ? $"Copy {noun} block {code.Index} of {_codeCount}" : $"Copy {noun}";
+    }
+
+    private string InsertLabel(ChatCodeBlock code)
+        => _codeCount > 1 ? $"Insert SQL block {code.Index} of {_codeCount}" : "Insert at caret";
+
+    private string CopyState(ChatCodeBlock code) => ReferenceEquals(code, _flashed) ? _flashText : "Copy";
+
+    private async Task CopyAsync(ChatCodeBlock code)
+    {
+        bool copied;
+        try
+        {
+            _ui ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            copied = await _ui.InvokeAsync<bool>("copyText", code.Code);
+        }
+        catch (JSException)
+        {
+            copied = false;
+        }
+
+        _flashed = code;
+        _flashText = copied ? "Copied" : "Copy failed";
+        var stamp = ++_flashStamp;
+        StateHasChanged();
+        await Task.Delay(CopiedIndicatorMs);
+        if (stamp == _flashStamp)
+        {
+            _flashed = null;
+            StateHasChanged();
+        }
+    }
+
+    private static RenderFragment InlinesOf(IReadOnlyList<ChatInline> inlines) => @<text>@foreach (var inline in inlines)
+        {
+            if (inline.Kind == ChatInlineKind.Bold) { <strong>@inline.Text</strong> }
+            else if (inline.Kind == ChatInlineKind.Code) { <code class="akml-chat-inline">@inline.Text</code> }
+            else { @inline.Text }
+        }</text>;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_ui == null) return;
+        try { await _ui.DisposeAsync(); }
+        catch (JSDisconnectedException) { /* the page is gone */ }
+    }
+}

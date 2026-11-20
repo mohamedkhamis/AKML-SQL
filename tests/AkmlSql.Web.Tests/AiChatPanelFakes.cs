@@ -61,3 +61,20 @@ internal sealed class FakeDiagnosticsRingBuffer : IDiagnosticsRingBuffer
     public Task FlushAsync() => Task.CompletedTask;
     public Task RestoreAsync() => Task.CompletedTask;
 }
+
+/// <summary>Spec 046 (US4): a key vault that only lists agents — the chat's agent selector reads
+/// nothing else. Every secret-handling member throws, so a test that reaches one fails loudly.</summary>
+internal sealed class FakeAiKeyVault : IAiKeyVault
+{
+    public List<AiProviderConfig> Configs { get; } = new();
+
+    public Task<IReadOnlyList<AiProviderConfig>> ListAsync() => Task.FromResult<IReadOnlyList<AiProviderConfig>>(Configs);
+    public Task<AiProviderConfig?> GetConfigAsync(string agentId) => Task.FromResult(Configs.FirstOrDefault(c => c.Id == agentId));
+    public Task<bool> HasKeyAsync(string agentId) => Task.FromResult(Configs.Any(c => c.Id == agentId && c.HasKey));
+    public Task SetKeyAsync(string agentId, AiProviderConfig config, string apiKeyPlain) => throw new NotSupportedException();
+    public Task<UnwrappedKey> UnwrapForCallAsync(string agentId) => throw new NotSupportedException();
+    public Task RemoveAsync(string agentId) => throw new NotSupportedException();
+    public Task UpsertConfigAsync(AiProviderConfig config) => throw new NotSupportedException();
+    public Task SaveAgentAsync(AiProviderConfig config, string? apiKeyPlain) => throw new NotSupportedException();
+    public Task DuplicateAsync(string sourceAgentId, AiProviderConfig copy) => throw new NotSupportedException();
+}

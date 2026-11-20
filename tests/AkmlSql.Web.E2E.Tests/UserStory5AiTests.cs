@@ -137,6 +137,55 @@ public sealed class UserStory5AiTests
         Assert.Contains("MOCK", docText); // the suggestion was committed into the document
     }
 
+    /// <summary>
+    /// Spec 046 (US5, FR-040/FR-042, quickstart W5): New chat while an answer streams stops it and
+    /// empties the conversation; a reload shows the empty conversation.
+    /// </summary>
+    [SkippableFact]
+    public async Task NewChat_while_streaming_stops_the_answer_and_starts_empty()
+    {
+        using var mock = MockAiProvider.StartOllama();
+        mock.TokenDelay = TimeSpan.FromMilliseconds(400);   // ~4 s of streaming
+        await using var web = await StartWebOrSkipAsync();
+        using var pw = await Playwright.CreateAsync();
+        await using var browser = await TryLaunchAsync(pw);
+        Skip.If(browser is null, "Playwright Chromium not installed.");
+        var page = await browser!.NewPageAsync();
+
+        await page.GotoAsync(web.Url + "settings/ai");
+        await page.GetByLabel("Provider").SelectOptionAsync("ollama");
+        await page.GetByRole(AriaRole.Textbox, new() { Name = "Model" }).FillAsync("mock");
+        await page.GetByRole(AriaRole.Textbox, new() { Name = "Endpoint" }).FillAsync(mock.ChatCompletionsUrl);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save" }).ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid^='ai-agent-active-']")).ToHaveCountAsync(1);
+        await page.WaitForTimeoutAsync(750);
+
+        await page.GotoAsync(web.Url);
+        await page.WaitForSelectorAsync("[data-testid='ai-button']");
+        await page.WaitForTimeoutAsync(1_000);
+        await page.Locator("[data-testid='ai-button']").ClickAsync();
+        await page.Locator("[data-testid='ai-tab-chat']").ClickAsync();
+        var composer = page.Locator(".akml-chat-input");
+        await composer.FillAsync("a long answer please");
+        await composer.PressAsync("Enter");
+        await page.Locator(".akml-chat-thinking").WaitForAsync(new() { Timeout = 10_000 });
+
+        await page.Locator("[data-testid='chat-new']").ClickAsync();
+
+        await Assertions.Expect(page.Locator(".akml-chat-turn")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator(".akml-chat-thinking")).ToHaveCountAsync(0, new() { Timeout = 10_000 });
+        await Assertions.Expect(page.Locator("[data-testid='chat-empty']")).ToBeVisibleAsync();
+
+        await page.WaitForTimeoutAsync(5_000);   // let the stopped stream's remaining tokens arrive (they must not land)
+        await page.ReloadAsync();
+        await page.WaitForSelectorAsync("[data-testid='ai-button']");
+        await page.WaitForTimeoutAsync(1_000);
+        await page.Locator("[data-testid='ai-button']").ClickAsync();
+        await page.Locator("[data-testid='ai-tab-chat']").ClickAsync();
+        await Assertions.Expect(page.Locator("[data-testid='chat-empty']")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Assertions.Expect(page.Locator(".akml-chat-turn")).ToHaveCountAsync(0);
+    }
+
     // ── editor helpers (drive the CodeMirror module the way EditorComponent does) ──────────────
     private static Task SetEditorTextAsync(IPage page, string sql) =>
         page.EvaluateAsync(

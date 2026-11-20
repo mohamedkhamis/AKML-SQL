@@ -2808,3 +2808,49 @@ hidden. A reload restores both; docs search and keyboard navigation then pass. T
 check did not change the application source or deploy a fix. Reproduction scripts,
 browser reports, screenshots and download evidence are under the ignored
 `.review-artifacts/deployed-site-20261028/` folder. PROJECT_MEMORY.md records details.
+
+## Spec 046 — AI Chat, Copilot-style experience in SSMS and the web edition (2026-11-04)
+
+Owner report: the SSMS chat answered "No database connection …" while its header still named
+`dbdevtestvm….dbCentralQuota` and nothing had changed. Cause: the header read the active
+DOCUMENT's caption, but Send asked SSMS for the text view that last had the keyboard and required
+it to be a tagged SQL editor. After the owner clicked into the results Messages pane to copy an
+error, that pane was the active view, so Send refused. The 2026-11-04 log shows three chat requests,
+none after 17:03:53, while the caption detector kept naming the connected window every 2 s.
+
+Implemented (branch `046-ai-chat-copilot-ux`; plan, research R1–R14, contracts and tasks in
+`specs/046-ai-chat-copilot-ux/`):
+
+- **Binding (US1)**: `Ai/ChatBindingResolver.cs` decides from the active document and the tracked
+  SQL editors (`ConnectionWiringHelper.TryFindTrackedView`), keeps the last bound window while a
+  non-query document is active, and returns Bound / NotConnected / NotQueryWindow / NoDocument.
+  Header, schema poll, Send, refusal text and Insert into query all read that one binding. Each
+  refusal names the window and writes one Information line `AiChatPanel: refused to send — …`.
+  A database change mid-conversation adds "Now answering about server.database (file)."
+- **Copilot-style SSMS conversation (US2)**: Core `Text/ChatMarkdown.cs` parses answers once for
+  both editions; `Ai/ChatMessageRenderer.cs` renders prose in a read-only RichTextBox and each
+  fence as a code panel with its own Copy and Insert into query; answers span the panel; the
+  caption reads "Name · Provider · model"; `Ai/AiChatWelcomeCard.cs` (database, agent, three
+  starters) replaces the greeting; the view follows only a reader at the bottom; text hosts
+  forward the mouse wheel so the conversation scrolls over answers.
+- **Keys and hints (US3)**: Enter and Ctrl+Enter send (unchanged); Send is disabled with the reason
+  in its tooltip when empty, busy or without an agent, and reads "Send (Ctrl+Enter)" otherwise;
+  placeholders name both keys; every control has a tooltip.
+- **Agent selector (US4)**: Core `AiAgentLabel.Format`; the SSMS picker moved into the composer bar
+  and lists labels; `AiChatResponse` gains `AgentProvider` (Key 7) and `AgentModel` (Key 8),
+  filled by `ExecuteWithFallbackDetailedAsync` for the agent that actually answered; a switch adds
+  "Now answering with …". Web: `Shared/AiAgentSelector.razor` in the composer changes the one
+  shared active agent; `ChatTurn.AgentLabel` keeps who answered.
+- **New chat (US5)**: header control in both editions. SSMS waits for an answer in flight; the web
+  edition stops it, and the send path no longer writes into a conversation New chat replaced.
+- **Web parity (US6)**: `Shared/ChatMessageView.razor` (code panels with Copy and Insert at caret
+  via `Editor.razor` `OnAiAcceptResultAsync`), starters, follow-scroll (`akml-ui.js` `isAtBottom`,
+  `scrollToBottom`). The browser-test mock gained per-instance `Stream` and `TokenDelay`.
+
+Gates on 2026-11-04: Release solution build (MSBuild, one pass) succeeded, extension 0 errors; Core 1637 passed (1 skip by design); engine 2716 passed, 132 skipped, 1 known environmental failure (`PerformanceBaselineTests`); shell 1080 of 1083 (3 clipboard-lock failures, two in unchanged copy tests); web 2146 after fixing a contrast-scan failure the new code-panel buttons caused; 309 JavaScript tests; 7 chat browser tests (3 new); theme drift gate OK. Evidence and the scenario table: `specs/046-ai-chat-copilot-ux/baseline.md`.
+
+Open, owner-run in SSMS 22 (tasks T021, T029, T030, T036, T045, T051): quickstart S1–S5, the theme
+and screen-reader pass, and the Ctrl+Enter check inside SSMS (research R14 fallback ready if the
+host claims the chord). Deferred with reasons in tasks.md: streaming answers in SSMS, a browsable
+conversation history, a chat-only web agent, and the one-second "still connecting" refusal of a
+brand-new query window. Nothing was deployed or committed by the implementation.

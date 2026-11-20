@@ -297,7 +297,8 @@
                      aria-labelledby="@TabStrip.TabId("ai", Layout.Current.AiTab)">
                     @if (Layout.Current.AiTab == WorkspaceLayout.AiTabChat)
                     {
-                        <AiChatPanel />
+                        @* Spec 046 (FR-021): a SQL block of an answer goes in at the editor caret. *@
+                        <AiChatPanel OnInsertSql="OnAiAcceptResultAsync" />
                     }
                     else
                     {
