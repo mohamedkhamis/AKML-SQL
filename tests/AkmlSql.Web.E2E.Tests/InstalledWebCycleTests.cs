@@ -652,9 +652,16 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             // Clean up: forget the remembered password on the engine, then delete the connection.
             if (await page.GetByTestId("connection-manager").CountAsync() == 0) await page.ClickAsync("[data-testid='status-connection']");
             await page.Locator("[data-testid='conn-row']", new() { HasTextString = name }).First.ClickAsync(new() { Timeout = 15_000 });
+            // Forget it shows once the dialog has asked the engine whether it keeps a password for this login (asynchronously).
             var forget = page.GetByTestId("conn-sql-forget");
-            if (await IsShownAsync(forget)) { await forget.ClickAsync(); await page.WaitForTimeoutAsync(1_500); }
-            Note($"V5 cleanup: Forget it -> '{await TextOrEmptyAsync(page.GetByTestId("conn-message"))}'");
+            var offered = await WaitUntilAsync(() => IsShownAsync(forget), 15);
+            if (offered)
+            {
+                await forget.ClickAsync();
+                await WaitUntilAsync(async () => (await TextOrEmptyAsync(page.GetByTestId("conn-message"))).Length > 0, 10);
+            }
+            Note($"V5 cleanup: Forget it offered {offered} -> '{await TextOrEmptyAsync(page.GetByTestId("conn-message"))}'");
+            if (!offered) problems.Add("V5: Forget it was not offered for the remembered login");
             await page.ClickAsync("[data-testid='conn-delete-btn']");
             try { await page.GetByTestId("dialog-confirm").ClickAsync(new() { Timeout = 5_000 }); } catch (TimeoutException) { /* answered by the handler */ }
         }

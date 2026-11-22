@@ -188,7 +188,9 @@ public sealed class Check047(ITestOutputHelper output)
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.END);
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.KEY_V);
         WaitFor(() => Analysis().Lines > linesMid, 20);
-        Thread.Sleep(3000);
+        // SSMS's own IntelliSense draws the red mark (AKML leaves syntax errors to it in SSMS) several seconds after a paste:
+        // the installed run's 3 s capture was too early, and a later screenshot showed the mark.
+        Thread.Sleep(10_000);
         var errorShot = EditorShot("v10-3-syntax-error");
         var errors = ErrorList("after the syntax error");
         var hasError = errors.Any(c => c.Contains("syntax", StringComparison.OrdinalIgnoreCase)

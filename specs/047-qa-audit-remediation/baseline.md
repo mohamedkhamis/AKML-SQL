@@ -226,6 +226,56 @@ Findings from this run (none of them is caught by the automated suites, which is
 | F10 | `DiagnosticTagger` re-applies through `ErrorListReporter.ReapplyAll` (Options OK); `AnalysisController.InvalidateSettings` | `AdvisoryOptionReappliesTests` (2) |
 | V3 | `quickstart.md` V3 restated for an install that pairs by itself (amended 2026-11-22) | — |
 
+### Re-run on 1.26.1122.1658 (the fixes installed), 2026-11-22 17:24–17:38
+
+The owner built and installed 1.26.1122.1658 from the fixed tree. Before testing, the installed binaries were checked: the F1, F3, F4, F7 and F8 strings are in the web bundle, engine and SSMS extension. `{ext}\Engine` is gone, and setup deleted every stale `.br`/`.gz` (F5: 0 left). Notes: `baseline/installed-2026-11-22/web-observations-1658.txt` and `ssms-observations-1658.txt`.
+
+| # | Result | Observed on 1.26.1122.1658 |
+| --- | --- | --- |
+| V1 | Pass | Unchanged from the run above (the analyzer was not touched). |
+| V2 | Pass | 10 of 10 new profiles Live with no click. |
+| V3 | Pass | Engine stopped: "The engine is not responding at localhost:59417 — it may be starting up or stopped." with Retry. Live again with no reload after `sc start` (F4). |
+| V5 | **Pass** | Temporary login `akml_qa_v5`, dropped after. Save with Remember said "Saved. The engine machine keeps the password for akml_qa_v5." After the browser (same profile) and AkmlSqlWebEngine restarted, it connected as akml_qa_v5 with an empty password box. **Forget it** said "The remembered password was forgotten." and the engine's store is `[]`. |
+| V6, V7 | Pass | As above. |
+| V8 | Pass | Web: 12 styles × 6 scripts, 72 of 72 match, all stable. SSMS: 8 styles × 6, 48 of 48 match, all stable. |
+| V9 | Pass | The saved file has 13 CRLF and no bare LF; the status bar stays CRLF. |
+| V10 | **Pass** | Web (F1): the advisory ranges compute to `text-decoration-line: none` and the syntax error to `underline wavy rgb(220, 38, 38)`. SSMS: dots, no underline, and ';' removes its dot. The red mark on `SELEC` is drawn by SSMS's IntelliSense a few seconds after the paste; it shows in the V11 screenshots, and Check047 now waits 10 s for it. |
+| V11 | **Pass** | Underline in the text: lines 3–4 are underlined at once. Margin marker only: the underlines are gone at once (F10; screenshots v11-1, v11-2). |
+| V12, V13, V14 | Pass | As above. |
+| V15 | **Pass** | The note's row grows to 118 px, with no overlap (F3). With the owner-approved `GRANT VIEW DEFINITION ON DATABASE::Northwind TO [NT AUTHORITY\SYSTEM]` and Refresh: the note is gone, "Stored Procedures (7)", and CustOrderHist is listed. Revoked after. |
+| V16 | Pass | The list is aligned with no trailing blank (F6): `insert into dbo.Region ⏎( ⏎ RegionID, -- int … ⏎ RegionDescription -- nchar(100) …⏎) values (9,'x')`. |
+| V17, V18 | Pass | As above. |
+| V19 | Pass | "No invalid objects found. All 63 references resolve." |
+| V20 | **Pass** | No schema is sent, and Fix is disabled with its tooltip before a run. **After a failed run (Msg 208), Fix is enabled** (F2). |
+| V21 | Partial | Unchanged: "asks for password again" puts Connecting to SQL Server before Troubleshooting. |
+| V22 | Pass | 0 axe violations, 18 runs. |
+| Cycles | Pass | Web: run, grid, Format, completion, History. SSMS: execute, SQL History, completion. The shell logs `Engine: C:\Program Files (x86)\AKML SQL\Engine\AkmlSql.Engine.exe (1.26.1122.1658)` (F8). |
+| V4 | Not Run | Needs a LAN-mode engine. |
+| Screen reader (V22) | Not Run | No screen reader on this machine. |
+
+The server is back to its state before the run:
+
+- the GRANT is revoked (0 VIEW DEFINITION grants to SYSTEM);
+- the V5 login is dropped;
+- the engine's credential store is empty.
+
+The October engine that SSMS had been running is kept in `%LocalAppData%\AKML SQL\stale-ssms-engine-1.26.1010.2224\`.
+
+Suites after the fixes (Debug, 2026-11-22):
+
+| Suite | Passed / failed / skipped |
+| --- | --- |
+| Web | 2313 / 0 / 0 (8 new) |
+| Engine | 2735 / 1 / 132 (5 new) |
+| Core | 1641 / 0 / 3 |
+| IntelliSense | 25 / 0 / 0 |
+| Shell.Shared | 1117 / 0 / 0 (6 new) |
+| Installer | 149 / 0 / 0 (10 new) |
+| node | 321 / 0 / 0 |
+| `InstalledRunFixesTests` (browser, Debug bundle) | 3 / 0 / 0 |
+
+The Engine failure is `PerformanceBaselineTests.Capture_or_compare_M0_baseline`: "FormatRequest.p50 regressed by 6.4% (baseline 436.502 ms, current 464.248 ms). Allowed: 5%." That is the machine-dependent timing test CLAUDE.md lists as failing here on an untouched HEAD. The run was on a busy machine, and no change touches the formatter it times. A recapture is a separate decision. Every new test failed on the pre-fix code first (see the log of the swap run in the session; counts: web 4, Expand INSERT 4, Core 1, Shell 1, installer 9).
+
 Test harness changes from this run:
 
 - `InstalledWebCycleTests` gained V5, V15 (after the GRANT), V21 and a start-up check, and reads computed `text-decoration-line`.
