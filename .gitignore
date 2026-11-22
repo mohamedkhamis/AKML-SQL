@@ -104,3 +104,7 @@ src/AkmlSql.Site/wwwroot/docs-metadata.json
 .review-artifacts/*
 reports/linkedin-carousel-2026-10-25/*
 AKML SQL screenshots/*
+
+# QA audit 2026-11-20: screenshots/raw evidence and the throwaway test scripts (the report itself stays tracked-able)
+reports/AKML-QA-UX-Documentation-Audit-evidence/*
+reports/qa-scripts/*

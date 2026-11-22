@@ -92,7 +92,9 @@ public interface IWorkspaceStatus
 /// tab's, so a switch shows that tab's outcome and rows (FR-005) and a run finishing in another tab changes nothing on screen.
 /// </summary>
 /// <param name="ElapsedMs">The run's time once it ended (while running, the status counts up from <paramref name="StartedAt"/>).</param>
-public sealed record RunSnapshot(ExecutionPhase Phase, DateTimeOffset? StartedAt, long ElapsedMs, long RowCount, string? ErrorMessage)
+/// <param name="Outcome">Spec 047 (WEB-005): words that replace the phase's ("Parse failed: 1 syntax error."); null for a run.</param>
+public sealed record RunSnapshot(ExecutionPhase Phase, DateTimeOffset? StartedAt, long ElapsedMs, long RowCount, string? ErrorMessage,
+    string? Outcome = null)
 {
     /// <summary>No run yet (or its outcome was cleared).</summary>
     public static RunSnapshot Idle { get; } = new(ExecutionPhase.Idle, null, 0, 0, null);
@@ -131,6 +133,11 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
     /// <summary>SSMS's words for a run the user cancelled; the Messages tab says the same (MessagesView).</summary>
     public const string CancelledText = "Query was cancelled by user.";
 
+    /// <summary>Spec 047 (WEB-005): what Parse found, said in its own words (a run keeps <see cref="FailedText"/>).</summary>
+    public const string ParseFailedOne = "Parse failed: 1 syntax error.";
+    public const string ParseFailedMany = "Parse failed: {0} syntax errors.";
+    public const string ParseSucceeded = "Parse succeeded.";
+
     private readonly Func<DateTimeOffset> _clock;
     private long _elapsedMs;
 
@@ -154,9 +161,11 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
 
     public long RowCount { get; private set; }
 
-    public string? Outcome => Phase switch
+    // Spec 047 (WEB-005): the words of a finished Parse; null for every run.
+    private string? _outcome;
+
+    public string? Outcome => Phase == ExecutionPhase.Running ? RunningText : _outcome ?? Phase switch
     {
-        ExecutionPhase.Running => RunningText,
         ExecutionPhase.Succeeded => SucceededText,
         ExecutionPhase.Failed => FailedText,
         ExecutionPhase.Cancelled => CancelledText,
@@ -180,6 +189,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = 0;
         RowCount = 0;
         ErrorMessage = null;
+        _outcome = null;
         Changed?.Invoke();
     }
 
@@ -190,10 +200,11 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = run.ElapsedMs;
         Phase = run.Phase;
         ErrorMessage = run.ErrorMessage;
+        _outcome = null;
         Changed?.Invoke();
     }
 
-    public RunSnapshot Snapshot() => new(Phase, StartedAt, Phase == ExecutionPhase.Running ? 0 : _elapsedMs, RowCount, ErrorMessage);
+    public RunSnapshot Snapshot() => new(Phase, StartedAt, Phase == ExecutionPhase.Running ? 0 : _elapsedMs, RowCount, ErrorMessage, _outcome);
 
     public void Show(RunSnapshot run)
     {
@@ -203,6 +214,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = run.ElapsedMs;
         RowCount = run.RowCount;
         ErrorMessage = run.ErrorMessage;
+        _outcome = run.Outcome;
         Changed?.Invoke();
     }
 
@@ -211,6 +223,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = ElapsedMs;
         Phase = ExecutionPhase.Failed;
         ErrorMessage = message;
+        _outcome = null;
         Changed?.Invoke();
     }
 
@@ -243,6 +256,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = 0;
         RowCount = 0;
         ErrorMessage = null;
+        _outcome = null;
         Changed?.Invoke();
     }
 }

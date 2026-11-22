@@ -17,6 +17,6 @@ with ordertotals(orderid, customerid, linecount, totalvalue
     )
 select cr.customerid, cr.RANK, ot.totalvalue
 from   customerranks cr
-inner join   ordertotals ot
+inner join ordertotals ot
     on ot.customerid = cr.customerid
 where  cr.RANK <= 10;

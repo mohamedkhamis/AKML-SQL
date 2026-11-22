@@ -27,11 +27,32 @@ public interface IEngineAutoConnect
     Task RetryNowAsync();
 
     /// <summary>
-    /// Connect to this page's engine when present, otherwise the local engine at the default port.
-    /// Reuses a saved pairing; false when none answers or it needs a PIN, so the caller can open Settings.
+    /// Connect to this page's engine when present (the engine that serves the page, or the one its installer declared next to
+    /// it), otherwise the local engine at the default port. Reuses a saved pairing. Spec 047 (WEB-001): the result names the
+    /// address tried and why it failed, so the status bar can offer Add engine… with that address.
     /// </summary>
-    Task<bool> PairLocalEngineAsync() => Task.FromResult(false);
+    Task<LocalPairResult> PairLocalEngineAsync() =>
+        Task.FromResult(new LocalPairResult(false, $"localhost:{EngineEndpoint.DefaultPort}", LocalPairFailure.NotReachable));
 }
+
+/// <summary>Spec 047 (WEB-001): why "Use this computer's engine" did not pair.</summary>
+public enum LocalPairFailure
+{
+    /// <summary>Nothing answered at the address tried.</summary>
+    NotReachable,
+
+    /// <summary>The engine requires its pairing PIN; the page's pairing form is pre-filled.</summary>
+    PinRequired,
+
+    /// <summary>The engine refused the handshake for another reason (protocol, a server busy).</summary>
+    Rejected,
+}
+
+/// <summary>Spec 047 (WEB-001): the outcome of <see cref="IEngineAutoConnect.PairLocalEngineAsync"/>.</summary>
+/// <param name="Ok">The bridge is open on that engine.</param>
+/// <param name="TriedAddress"><c>host:port</c> of the engine tried.</param>
+/// <param name="Failure">Why not, when <paramref name="Ok"/> is false.</param>
+public sealed record LocalPairResult(bool Ok, string TriedAddress, LocalPairFailure? Failure);
 
 /// <summary>
 /// Why the bridge is not up, in terms a person can act on.
@@ -326,7 +347,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
         }
     }
 
-    public async Task<bool> PairLocalEngineAsync()
+    public async Task<LocalPairResult> PairLocalEngineAsync()
     {
         var connection = new EngineConnection
         {
@@ -336,6 +357,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
             Port = EngineEndpoint.DefaultPort,
             IsLocalhost = true,
         };
+        var tried = $"{connection.Host}:{connection.Port}";
         try
         {
             var isNew = true;
@@ -350,6 +372,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
                 connection.ResolvedScheme = info.Scheme;
                 connection.StrictScheme = info.Scheme == "wss";
             }
+            tried = $"{connection.Host}:{connection.Port}";
             string? bearer = null;
             if (!connection.IsLocalhost)
             {
@@ -359,10 +382,11 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
             var response = await _bridge.ConnectAsync(connection, bearer, pairingPin: null, CancellationToken.None).ConfigureAwait(false);
             if (response.Status != HandshakeStatus.Ok)
             {
-                if (pageInfo != null && response.Status is HandshakeStatus.PinRequired or HandshakeStatus.PinInvalid)
+                var pin = response.Status is HandshakeStatus.PinRequired or HandshakeStatus.PinInvalid;
+                if (pageInfo != null && pin)
                     _pageEngine!.PairingPrefill = pageInfo;
-                _diagnostics.Log(DiagnosticLevel.Info, "connections", $"The local engine answered {response.Status}; pairing is left to Settings.");
-                return false;
+                _diagnostics.Log(DiagnosticLevel.Info, "connections", $"The local engine at {tried} answered {response.Status}.");
+                return new LocalPairResult(false, tried, pin ? LocalPairFailure.PinRequired : LocalPairFailure.Rejected);
             }
             await ApplyHandshakeAsync(connection, response).ConfigureAwait(false);
             if (isNew) await _connections.AddAsync(connection).ConfigureAwait(false);
@@ -371,12 +395,12 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
             if (_pageEngine != null) _pageEngine.PairingPrefill = null;
             _diagnostics.Log(DiagnosticLevel.Info, "connections", "Paired with the engine on this computer.");
             SetFailure(null);
-            return true;
+            return new LocalPairResult(true, tried, null);
         }
         catch (Exception ex)
         {
-            _diagnostics.Log(DiagnosticLevel.Info, "connections", $"No local engine answered: {ex.Message}");
-            return false;
+            _diagnostics.Log(DiagnosticLevel.Info, "connections", $"No local engine answered at {tried}: {ex.Message}");
+            return new LocalPairResult(false, tried, LocalPairFailure.NotReachable);
         }
     }
 

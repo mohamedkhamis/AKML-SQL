@@ -3,10 +3,7 @@ select
     o.orderid,
     case
         when o.freight > 500
-    and o.shipcountry not in(
-    'USA',
-    'Canada'
-) then 'international heavy'
+    and o.shipcountry not in('USA', 'Canada') then 'international heavy'
         when o.freight > 100
     then 'heavy shipment overweight'
         when o.freight > 50

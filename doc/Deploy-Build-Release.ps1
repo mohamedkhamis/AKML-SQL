@@ -321,6 +321,25 @@ foreach ($proj in $publishProjects) {
     Start-Sleep -Milliseconds 750
 }
 
+# Spec 047 (CLI-001): the shipped analyzer is the trimmed single-file publish, and trimming once removed every rule, so the
+# exe said "No issues found" for any SQL. Check the published exe on the committed fixtures before anything is packaged; a
+# silent analyzer stops the release here (the installer step below would otherwise still run).
+$analyzerExe = Join-Path $srcDir "AkmlSql.Analyzer\bin\$Configuration\net10.0\win-x64\publish\AkmlSql.Analyzer.exe"
+Write-Host "  Checking the published Analyzer CLI..." -NoNewline
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$smoke = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot 'scripts\test-analyzer-cli.ps1') `
+    -Exe $analyzerExe -Fixtures (Join-Path $testDir 'fixtures\cli') 2>&1
+$smokeExit = $LASTEXITCODE
+$ErrorActionPreference = $prevEap
+if ($smokeExit -ne 0) {
+    Write-Fail " FAILED"
+    $smoke | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+    Write-Fail "The published Analyzer CLI reports no findings; the release stops before it is packaged."
+    exit 1
+}
+Write-Host " OK" -ForegroundColor Green
+
 # Web edition (Blazor WASM) — published SEPARATELY from $publishProjects because it
 # is framework-dependent and must NOT get -r win-x64 (that would wrongly make the
 # WASM app self-contained). The installer's web component sources the published

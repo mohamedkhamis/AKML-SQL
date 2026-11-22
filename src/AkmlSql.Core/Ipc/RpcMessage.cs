@@ -374,5 +374,18 @@ namespace AkmlSql.Core.Ipc
         /// </summary>
         public const int SessionDisconnect = 225;
         public const int SessionDisconnectResult = 226;
+
+        // ------------------------------------------------------------------
+        // Spec 047 (pairing.manage.v1). Served only on the web bridge, to an authenticated connection; see
+        // specs/047-qa-audit-remediation/contracts/engine-pairing.md §5.
+        // ------------------------------------------------------------------
+
+        /// <summary>Web -> Engine: the browsers paired with this engine (labels, dates, which one is the caller).</summary>
+        public const int PairingListRequest = 227;
+        public const int PairingListResponse = 228;
+
+        /// <summary>Web -> Engine: remove one pairing and close the bridge connections that authenticated with it.</summary>
+        public const int PairingRevokeRequest = 229;
+        public const int PairingRevokeResponse = 230;
     }
 }

@@ -19,6 +19,14 @@
     <input id="setting-analysis-reanalyse-after-format-control" type="checkbox" checked="@_settings.AutoAnalyseOnFormat"
            disabled="@(!_settings.Enabled)" title="@(!_settings.Enabled ? "Enable code analysis first" : null)" aria-describedby="setting-analysis-reanalyse-after-format-help" @onchange="OnAutoAnalyseAsync" />
 </SettingRow>
+@* Spec 047 (UX-001): a missing semicolon and the other advisory findings show as a gutter marker unless chosen otherwise. *@
+<SettingRow Id="analysis-advisory-display" Kind="select">
+    <select id="setting-analysis-advisory-display-control" class="akml-select" aria-describedby="setting-analysis-advisory-display-help"
+            disabled="@(!_settings.Enabled)" title="@(!_settings.Enabled ? "Enable code analysis first" : null)" @onchange="OnAdvisoryDisplayAsync">
+        <option value="@WebAnalysisSettings.MarkerOnly" selected="@(_settings.AdvisoryDisplay != WebAnalysisSettings.Underline)">Margin marker only</option>
+        <option value="@WebAnalysisSettings.Underline" selected="@(_settings.AdvisoryDisplay == WebAnalysisSettings.Underline)">Underline in the text</option>
+    </select>
+</SettingRow>
 <SettingRow Id="analysis-problems-filter" Kind="block">
     <span role="group" aria-label="Default Problems filters" aria-describedby="setting-analysis-problems-filter-help" class="akml-setting-control">
         <label><input type="checkbox" checked="@_settings.ProblemsFilter.ShowInfo" @onchange="@(e => OnFilterAsync(e, (f, v) => f.ShowInfo = v))" /> Info</label>
@@ -208,6 +216,16 @@
     {
         _settings.AutoAnalyseOnFormat = e.Value is bool b && b;
         return SaveAsync(_settings.AutoAnalyseOnFormat ? "Format SQL re-analyses." : "Format SQL no longer re-analyses.");
+    }
+
+    private Task OnAdvisoryDisplayAsync(ChangeEventArgs e)
+    {
+        _settings.AdvisoryDisplay = string.Equals(e.Value as string, WebAnalysisSettings.Underline, StringComparison.Ordinal)
+            ? WebAnalysisSettings.Underline
+            : WebAnalysisSettings.MarkerOnly;
+        return SaveAsync(_settings.AdvisoryDisplay == WebAnalysisSettings.Underline
+            ? "Advisory findings are underlined in the text."
+            : "Advisory findings show as a margin marker only.");
     }
 
     private Task OnFilterAsync(ChangeEventArgs e, Action<ProblemsFilter, bool> set)

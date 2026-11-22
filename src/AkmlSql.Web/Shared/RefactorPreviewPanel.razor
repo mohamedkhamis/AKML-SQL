@@ -5,12 +5,20 @@
     parameter, returned over the bridge: a change list + generated-object texts + warnings /
     blocking errors). Apply is disabled when the lightweight op is a no-op, or when the
     heavyweight response is `CanApply == false` (e.g. a rename collision).
+
+    Spec 047 (WEB-012): a keyboard dialog — focus moves to Apply (Cancel when there is nothing to apply), Tab stays inside,
+    Escape cancels, and every way out gives focus back to where it was (the Refactor button). The operation's warnings are
+    listed even when it changes nothing ("Could not resolve columns for: dbo.Regio").
 *@
 @using AkmlSql.Web.Services
 @using AkmlSql.Core.Ipc.Messages
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<div class="akml-scrim" @onclick="OnCancel" data-testid="refactor-preview">
-    <div class="akml-dialog akml-dialog--wide akml-rpv" role="dialog" aria-modal="true" aria-label="@Title" @onclick:stopPropagation="true">
+<div class="akml-scrim" @onclick="CancelAsync" data-testid="refactor-preview">
+    <div class="akml-dialog akml-dialog--wide akml-rpv" role="dialog" aria-modal="true" aria-label="@Title" tabindex="-1"
+         @ref="_panel" @onclick:stopPropagation="true" @onkeydown="OnKeyDownAsync">
         <div class="akml-rpv-header">
             <span class="akml-rpv-title">@Title</span>
             @if (Preview is { Changed: false })
@@ -80,6 +88,15 @@
             <p class="akml-rpv-empty" data-testid="refactor-nochange">
                 This refactoring does not apply to the current document — no change would be made.
             </p>
+            @if (Preview is { Warnings.Length: > 0 })
+            {
+                <ul class="akml-rpv-warnings" data-testid="refactor-warnings">
+                    @foreach (var w in Preview.Warnings)
+                    {
+                        <li><Icon Name="triangle-alert" Size="14" /> @w</li>
+                    }
+                </ul>
+            }
         }
         else
         {
@@ -106,11 +123,11 @@
         }
 
         <div class="akml-rpv-footer">
-            <button class="akml-tool-button" @onclick="OnCancel">Cancel</button>
-            <button class="akml-tool-button akml-rpv-apply"
+            <button type="button" class="akml-tool-button" data-testid="refactor-cancel" @onclick="CancelAsync">Cancel</button>
+            <button type="button" class="akml-tool-button akml-rpv-apply"
                     data-testid="refactor-apply"
                     disabled="@(!CanApply)" title="@(CanApply ? null : Heavy is { CanApply: false } ? "Resolve the preview conflicts before applying changes" : "There are no changes to apply")"
-                    @onclick="OnApply">Apply</button>
+                    @onclick="ApplyAsync">Apply</button>
         </div>
     </div>
 </div>
@@ -187,4 +204,63 @@
     private bool CanApply => Heavy != null
         ? Heavy.CanApply && Heavy.Changes.Length > 0
         : Preview is { Changed: true };
+
+    private ElementReference _panel;
+    private IJSObjectReference? _ui;
+    private bool _closed;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            if (_ui == null) return;
+            await _ui.InvokeVoidAsync("stashFocus", ".akml-dialog");
+            await _ui.InvokeVoidAsync("focusFirst", _panel, CanApply ? "[data-testid=refactor-apply]" : "[data-testid=refactor-cancel]");
+            await _ui.InvokeVoidAsync("trapTab", _panel);
+        }
+        catch (Exception)
+        {
+            // Focus is a convenience: without it Cancel, Apply and a click outside still work.
+            _ui = null;
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CancelAsync();
+    }
+
+    private async Task CancelAsync()
+    {
+        if (_closed) return;
+        _closed = true;
+        await RestoreFocusAsync();
+        await OnCancel.InvokeAsync();
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_closed || !CanApply) return;
+        _closed = true;
+        await RestoreFocusAsync();
+        await OnApply.InvokeAsync();
+    }
+
+    private async Task RestoreFocusAsync()
+    {
+        try { if (_ui != null) await _ui.InvokeVoidAsync("restoreFocus"); }
+        catch (Exception) { /* the page is going away; nothing to give focus back to */ }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_closed) await RestoreFocusAsync();
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (Exception) { }
+        }
+    }
 }

@@ -7,6 +7,5 @@ SELECT
 	THEN 'Medium'
 	WHEN total > 0
 	THEN 'Small'
-	ELSE 'Empty'
-END AS size_bucket
+	ELSE 'Empty' END AS size_bucket
 FROM   orders;

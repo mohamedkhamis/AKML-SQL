@@ -56,6 +56,8 @@
 <NavigationLock OnBeforeInternalNavigation="OnBeforeInternalNavigationAsync" ConfirmExternalNavigation="@AnyPendingEdits" />
 
 <div class="akml-editor-page">
+    @* Spec 047 (WEB-009): every page has an h1 (axe page-has-heading-one); the editor's is for assistive technology only. *@
+    <h1 class="akml-visually-hidden">SQL editor</h1>
     @* Spec 041 (FR-081): SSMS's grouping — database | Execute, Parse | Format, Analyse | Refactor, AI | documents |
        View — each button an icon, a label and a "Name (Keys)" tooltip from WorkspaceKeyMap. The aria-labels are
        load-bearing: tests and assistive technology find "Format" by that exact name. *@
@@ -88,10 +90,10 @@
         }
         else
         {
-            @* Spec 041 (R21, FR-035) — the server's syntax check, without running anything. *@
+            @* Spec 041 (R21, FR-035) — the syntax check, without running anything; spec 047 (WEB-005): in the browser too. *@
             <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
                     @onclick="ParseAsync" disabled="@(!CanParse)"
-                    title="@(!SqlConn.IsConnected ? "Parse needs a database connection" : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it" : "Parse needs a newer engine")">
+                    title="@ParseTitle">
                 <Icon Name="file-check" /><span>Parse</span>
             </button>
         }
@@ -112,7 +114,7 @@
         <button type="button" class="akml-btn" data-testid="refactor-button" aria-label="Refactor" aria-haspopup="menu"
                 disabled="@(!Surfaces.IsEnabled(WorkspaceSurface.Refactor))"
                 data-unavailable="@Surfaces.Unavailable(WorkspaceSurface.Refactor)"
-                @onclick="OpenRefactorMenu" title="@Surfaces.Tooltip(WorkspaceSurface.Refactor, WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor"))">
+                @onclick="OpenRefactorMenuAsync" title="@Surfaces.Tooltip(WorkspaceSurface.Refactor, WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor"))">
             <Icon Name="replace" /><span>Refactor</span><Icon Name="chevron-down" Size="12" />
         </button>
         <button type="button" class="akml-btn @(AiShown ? "is-active" : null)" data-testid="ai-button" aria-label="AI"
@@ -164,6 +166,8 @@
             <span class="akml-editor-status">@_status</span>
         }
     </div>
+    @* Spec 047 (WEB-003): opened at 127.0.0.1 / [::1] with nothing saved here — the data is probably at localhost. *@
+    <OriginBanner />
     @* Spec 041 (R33, FR-040–FR-046) — one CSS grid: Schema left, editor centre, results under the editor, AI
        right. Every size is a CSS variable written from the remembered layout fitted to the window; a hidden or
        folded side panel leaves an edge strip; the results host is always mounted (hidden by class) so its
@@ -214,7 +218,7 @@
             }
             <div class="akml-ws-editor" role="tabpanel" id="@(Tab == null ? null : TabStrip.PanelId("doc", Tab.Id))"
                  aria-labelledby="@(Tab == null ? null : TabStrip.TabId("doc", Tab.Id))">
-                <EditorComponent @ref="_editor" OnTabTextChanged="OnTabTextChangedAsync" OnExecute="ExecuteAsync" Kind="@KindOf(Tab)" />
+                <EditorComponent @ref="_editor" OnTabTextChanged="OnTabTextChangedAsync" OnExecute="ExecuteAsync" Kind="@KindOf(Tab)" DocumentName="@Tab?.Name" />
             </div>
         </div>
 
@@ -362,48 +366,12 @@
         </div>
     }
 
-    @* Spec 027 T017 (US2) — refactoring menu. Lists all ten lightweight (offline) ops;
-       choosing one previews it, then the preview panel commits or cancels. Heavyweight
-       (US3 / T020) entries are appended to this menu, gated by the bridge capability. *@
+    @* Spec 027 T017 (US2) — refactoring menu: the ten lightweight (offline) ops, then the heavyweight (engine) ones.
+       Spec 047 (WEB-011, WEB-012): a keyboard dialog of buttons (Shared/RefactorMenu.razor); an entry that cannot run says
+       why, and the Expand entries run against the connected database's cached schema. *@
     @if (_showRefactorMenu)
     {
-        <div class="akml-scrim" @onclick="CloseRefactorMenu">
-            <div class="akml-dialog akml-picker" role="dialog" aria-modal="true" aria-label="Refactor" @onclick:stopPropagation="true" data-testid="refactor-menu">
-                <div class="akml-dialog-header"><h2 class="akml-dialog-title">Refactor</h2></div>
-                <ul class="akml-picker-list">
-                    @foreach (var op in LightweightOps)
-                    {
-                        <li class="akml-picker-item" @onclick="@(() => PreviewLightweightAsync(op.Kind, op.Label))">
-                            <span class="akml-picker-title">@op.Label</span>
-                        </li>
-                    }
-                    @* Spec 027 T020 (US3) — heavyweight (schema-aware) ops. Enabled only when a
-                       live engine advertises refactoring.heavy; otherwise shown disabled with a
-                       reason (gated, never silently absent — FR-017). *@
-                    <li class="akml-picker-sep">Schema-aware (requires engine)</li>
-                    @foreach (var op in HeavyweightOps)
-                    {
-                        @if (Refactoring.HeavyAvailable)
-                        {
-                            <li class="akml-picker-item" @onclick="@(() => OpenHeavyDialog(op))">
-                                <span class="akml-picker-title">@op.Label</span>
-                            </li>
-                        }
-                        else
-                        {
-                            <li class="akml-picker-item akml-picker-disabled"
-                                title="Requires a paired engine advertising 'refactoring.heavy'.">
-                                <span class="akml-picker-title">@op.Label</span>
-                                <span class="akml-picker-gate">engine</span>
-                            </li>
-                        }
-                    }
-                </ul>
-                <div class="akml-dialog-footer">
-                    <button class="akml-btn" @onclick="CloseRefactorMenu">Cancel</button>
-                </div>
-            </div>
-        </div>
+        <RefactorMenu Items="_refactorItems" OnChoose="OnRefactorChosenAsync" OnClose="CloseRefactorMenu" />
     }
 
     @* Spec 027 T018 (US2) — lightweight refactoring preview. *@
@@ -880,6 +848,12 @@
     private string _refactorTitle = string.Empty;
     private LightweightRefactorKind _pendingRefactorKind;
 
+    // Spec 047 (WEB-011, WEB-012): the menu's entries as last opened, and the schema the Expand entries run against
+    // (the connected database's cached snapshot, captured when the menu opened; the preview's apply uses the same one).
+    private IReadOnlyList<RefactorMenuItem> _refactorItems = Array.Empty<RefactorMenuItem>();
+    private RefactorSchemaSnapshot _refactorSchema = RefactorSchemaSnapshot.None;
+    private AkmlSql.Engine.Schema.DatabaseCache? _refactorPreviewSchema;
+
     // The ten lightweight (parser-only, offline) operations, in menu order.
     private static readonly (LightweightRefactorKind Kind, string Label)[] LightweightOps =
     {
@@ -1292,7 +1266,17 @@
     /// <summary>The engine understands Parse (it advertises execute.v2).</summary>
     private bool SupportsParse => Array.IndexOf(Bridge.EngineCapabilities ?? Array.Empty<string>(), "execute.v2") >= 0;
 
-    private bool CanParse => !Running && SqlConn.IsConnected && SupportsParse;
+    private bool IsPostgresTab => Tab?.Session.Kind == AkmlSql.Core.DatabaseKind.PostgreSql;
+
+    // Spec 047 (WEB-005): a T-SQL tab can always be checked — on the server when connected to an engine that parses, else
+    // in the browser. A PostgreSQL tab still needs its server.
+    private bool CanParse => SyntaxCheck.CanParse(Running, IsPostgresTab, SqlConn.IsConnected, SupportsParse);
+
+    private string ParseTitle => IsPostgresTab
+        ? (!SqlConn.IsConnected ? "Parse needs a database connection"
+            : SupportsParse ? WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax on the server without running it"
+            : "Parse needs a newer engine")
+        : WorkspaceKeyMap.TitleFor("Parse", "editor:parse") + " — checks the syntax without running it; on the server when connected, else in the browser";
 
     private async Task ParseAsync()
     {
@@ -1309,10 +1293,25 @@
             tab.ActiveQueryId = Guid.NewGuid().ToString("N");
             BeginRun(tab);
             StateHasChanged();
-            bool sent = Bridge.State == BridgeState.Open && tab.Session.IsConnected;
-            var result = await QueryExec.ParseAsync(tab.Session, sql, _timeoutSeconds, tab.ActiveQueryId, CancellationToken.None);
-            ShowResult(tab, result, startLine, startColumn, chooseTab: false, engineAnswered: sent);
-            if (ReferenceEquals(tab, Tab)) _resultsTab = ResultsPaneComponent.MessagesTab;
+            bool onServer = SyntaxCheck.OnServer(tab.Session.IsConnected, SupportsParse, Bridge.State == BridgeState.Open);
+            var result = onServer
+                ? await QueryExec.ParseAsync(tab.Session, sql, _timeoutSeconds, tab.ActiveQueryId, CancellationToken.None)
+                : SyntaxCheck.InBrowser(sql, tab.ActiveQueryId);
+            ShowResult(tab, result, startLine, startColumn, chooseTab: false, engineAnswered: onServer);
+
+            // Spec 047 (WEB-005): Parse says what it found in its own words ("Parse failed: 1 syntax error."), and its first
+            // error with a line gets the red mark at once, as a click in Messages would give it.
+            tab.Run = tab.Run with { Outcome = SyntaxCheck.Outcome(result) };
+            if (ReferenceEquals(tab, Tab))
+            {
+                Workspace.Show(tab.Run);
+                _resultsTab = ResultsPaneComponent.MessagesTab;
+            }
+            if (SyntaxCheck.FirstError(result, startLine) is { } first)
+            {
+                tab.ErrorMark = new EditorDiagnostic(first.Line, 3, AkmlSql.Core.Text.SqlMessageText.Format(first.Message), Source: "execute");
+                await ShowDiagnosticsAsync(tab);
+            }
         }
         finally
         {
@@ -1554,7 +1553,7 @@
         };
         yield return new CommandAction
         {
-            Id = "editor:parse", Title = "Parse (check syntax on the server)", Group = CommandGroup.Action,
+            Id = "editor:parse", Title = "Parse (check the syntax without running it)", Group = CommandGroup.Action,
             Icon = "file-check", Shortcut = "Ctrl+F5", Run = ParseAsync,
             IsEnabled = () => CanParse,
         };
@@ -1582,7 +1581,7 @@
         yield return new CommandAction
         {
             Id = "editor:refactor", Title = "Refactor…", Group = CommandGroup.Action,
-            Icon = "replace", Run = () => { OpenRefactorMenu(); StateHasChanged(); return Task.CompletedTask; },
+            Icon = "replace", Run = async () => { await OpenRefactorMenuAsync(); StateHasChanged(); },
             // Spec 042 (FR-092): off on a PostgreSQL connection, with the reason on the palette row.
             IsEnabled = () => Surfaces.IsEnabled(WorkspaceSurface.Refactor),
             DisabledReason = () => UnsupportedSurfaces.Reason(WorkspaceSurface.Refactor, DialectGate.Kind),
@@ -1799,7 +1798,7 @@
     private async Task ShowTabAsync(QueryTab tab)
     {
         if (_editor == null || _disposed) return;
-        await _editor.SwitchTabAsync(tab.Id, tab.Text, KindOf(tab));
+        await _editor.SwitchTabAsync(tab.Id, tab.Text, KindOf(tab), tab.Name);
         // A tab this page has not shown yet (a reload, or back from History) gets its findings and error mark back.
         if (_shownTabs.Add(tab.Id) && (tab.Findings != null || tab.ErrorMark != null)) await ShowDiagnosticsAsync(tab);
         // A tab formatted or refreshed while another was shown is analysed now that it is shown, for its own dialect and session
@@ -2680,7 +2679,53 @@
     }
 
     // ── Spec 027 T017/T018 (US2) — lightweight refactoring menu + preview ────────────────
-    private void OpenRefactorMenu() => _showRefactorMenu = true;
+    /// <summary>
+    /// Spec 047 (WEB-011, WEB-012): open the Refactor menu with each entry's state — the Expand entries need the connected
+    /// database's columns (a cached Phase B snapshot), the schema-aware ones a paired engine that offers them.
+    /// </summary>
+    private async Task OpenRefactorMenuAsync()
+    {
+        if (_showRefactorMenu) return;
+        var schema = RefactorSchemaSnapshot.None;
+        if (Services.GetService(typeof(ISchemaCacheStore)) is ISchemaCacheStore store)
+        {
+            try { schema = await RefactorSchema.LoadAsync(store, SqlConn); }
+            catch (Exception ex) { Diagnostics.Log(DiagnosticLevel.Warn, "refactor", $"The cached schema could not be read: {ex.Message}"); }
+        }
+        _refactorSchema = schema;
+        _refactorItems = BuildRefactorItems(schema.State);
+        _showRefactorMenu = true;
+    }
+
+    private IReadOnlyList<RefactorMenuItem> BuildRefactorItems(RefactorSchemaState schema)
+    {
+        var items = new List<RefactorMenuItem>(LightweightOps.Length + HeavyweightOps.Length);
+        foreach (var op in LightweightOps)
+        {
+            var reason = RefactorSchema.NeedsSchema(op.Kind) ? RefactorSchema.ExpandReason(schema) : null;
+            items.Add(new RefactorMenuItem(op.Kind.ToString(), op.Label, reason == null, reason));
+        }
+        var heavyReason = RefactorSchema.HeavyReason(Refactoring.HeavyAvailable, Bridge.State == BridgeState.Open);
+        for (var i = 0; i < HeavyweightOps.Length; i++)
+        {
+            items.Add(new RefactorMenuItem("heavy-" + i, HeavyweightOps[i].Label, heavyReason == null, heavyReason,
+                i == 0 ? "Schema-aware (requires engine)" : null));
+        }
+        return items;
+    }
+
+    private async Task OnRefactorChosenAsync(RefactorMenuItem item)
+    {
+        if (item.Id.StartsWith("heavy-", StringComparison.Ordinal)
+            && int.TryParse(item.Id.AsSpan(6), out var heavy) && heavy >= 0 && heavy < HeavyweightOps.Length)
+        {
+            OpenHeavyDialog(HeavyweightOps[heavy]);
+            return;
+        }
+        if (Enum.TryParse<LightweightRefactorKind>(item.Id, out var kind))
+            await PreviewLightweightAsync(kind, item.Label);
+    }
+
     private void CloseRefactorMenu() => _showRefactorMenu = false;
     private void CloseRefactorPreview() => _refactorPreview = null;
 
@@ -2691,10 +2736,11 @@
         _showRefactorMenu = false;
         _pendingRefactorKind = kind;
         _refactorTitle = label;
+        _refactorPreviewSchema = RefactorSchema.NeedsSchema(kind) ? _refactorSchema.Cache : null;
         try
         {
             // Whole-document scope (selStart/selLen = 0); the op's Apply mirrors the engine.
-            _refactorPreview = await Refactoring.PreviewLightweightAsync(kind, await LiveTextAsync());
+            _refactorPreview = await Refactoring.PreviewLightweightAsync(kind, await LiveTextAsync(), schema: _refactorPreviewSchema);
         }
         catch (Exception ex)
         {
@@ -2714,7 +2760,7 @@
             _refactorPreview = null;
             return;
         }
-        var after = await Refactoring.ApplyLightweightAsync(_pendingRefactorKind, await LiveTextAsync());
+        var after = await Refactoring.ApplyLightweightAsync(_pendingRefactorKind, await LiveTextAsync(), schema: _refactorPreviewSchema);
         await _editor.SetTextAsync(after);
         if (Tab is { } tab) tab.Text = after;
         _refactorPreview = null;

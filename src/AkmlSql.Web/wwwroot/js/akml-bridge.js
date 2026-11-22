@@ -173,3 +173,52 @@ export function close(id) {
     while (state.waiters.length > 0) state.waiters.shift()(null);
     _sockets.delete(id);
 }
+
+// ── Spec 047 (ENG-001): the label this page sends with its handshake ─────────────────────────────────────────────
+// The engine keeps one pairing per browser and lists them in Settings › Connections; every page used to call itself
+// "Web edition", so 166 identical rows could not be told apart. Display only: the engine never trusts it for anything.
+
+const LABEL_MAX = 80;
+
+function familyFromBrands(brands) {
+    const names = (Array.isArray(brands) ? brands : []).map(b => String(b?.brand ?? ''));
+    if (names.some(n => /Microsoft Edge/i.test(n))) return 'Edge';
+    if (names.some(n => /Opera/i.test(n))) return 'Opera';
+    if (names.some(n => /Google Chrome/i.test(n))) return 'Chrome';
+    if (names.some(n => /Chromium/i.test(n))) return 'Chrome';
+    return null;
+}
+
+function familyFromUserAgent(ua) {
+    if (/\bEdg(e|A|iOS)?\//.test(ua)) return 'Edge';
+    if (/\bOPR\/|\bOpera\b/.test(ua)) return 'Opera';
+    if (/\bFirefox\/|\bFxiOS\//.test(ua)) return 'Firefox';
+    if (/\bChrome\/|\bCriOS\//.test(ua)) return 'Chrome';
+    if (/\bSafari\//.test(ua) && /\bVersion\//.test(ua)) return 'Safari';
+    return 'Browser';
+}
+
+function osFrom(platform, ua) {
+    const text = `${platform ?? ''} ${ua ?? ''}`;
+    if (/iPhone|iPad|iPod|\biOS\b/.test(text)) return 'iOS';
+    if (/Android/i.test(text)) return 'Android';
+    if (/Windows/i.test(text)) return 'Windows';
+    if (/Mac ?OS|Macintosh|macOS/i.test(text)) return 'macOS';
+    if (/Linux|X11|CrOS/i.test(text)) return 'Linux';
+    return 'unknown OS';
+}
+
+/** Pure: "{family} on {os} · {origin}", at most 80 characters (a cut ends with "…"). */
+export function browserLabel(nav, origin) {
+    const ua = String(nav?.userAgent ?? '');
+    const family = familyFromBrands(nav?.userAgentData?.brands) ?? familyFromUserAgent(ua);
+    const os = osFrom(nav?.userAgentData?.platform, ua);
+    let label = `${family} on ${os}`;
+    if (origin) label += ` · ${origin}`;
+    return label.length <= LABEL_MAX ? label : label.slice(0, LABEL_MAX - 1) + '…';
+}
+
+/** The label of the page this module runs in (what the C# bridge sends). */
+export function pageBrowserLabel() {
+    return browserLabel(globalThis.navigator, globalThis.location?.origin ?? '');
+}

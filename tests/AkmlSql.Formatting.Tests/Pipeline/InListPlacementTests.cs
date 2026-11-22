@@ -25,7 +25,8 @@ public class InListPlacementTests
     [Fact]
     public void PlaceItemsOnNewLine_Never_KeepsInListInline()
     {
-        var profile = LoadDefaultStyle();      // inListStyle defaults to "multiLine" → would expand
+        var profile = LoadDefaultStyle();
+        profile.Expression.InListStyle = "multiLine";   // the older control would expand…
         profile.InStatements.PlaceItemsOnNewLine = "never";
         var result = new FormatterPipeline().Format(ShortInList, profile);
         Assert.True(result.ValidationPassed, result.FormattedText);
@@ -51,12 +52,35 @@ public class InListPlacementTests
     }
 
     [Fact]
-    public void PlaceItemsOnNewLine_Default_DefersToInListStyle()
+    public void PlaceItemsOnNewLine_Default_DefersToInListStyle_WhichKeepsAShortListOnOneLine()
     {
-        // Default ifLongerThanWrap + inListStyle multiLine (the built-in-style situation) → expanded,
-        // exactly as before the wiring — so 07/08 goldens are unaffected.
+        // Default ifLongerThanWrap defers to inListStyle, which is "auto" in the built-in styles since spec 047
+        // (FMT-005, FR-015): a short list stays on one line. It was "multiLine", which exploded even ('A', 'B', 'C').
         var profile = LoadDefaultStyle();
         Assert.Equal("ifLongerThanWrap", profile.InStatements.PlaceItemsOnNewLine);
+        Assert.Equal("auto", profile.Expression.InListStyle);
+        var result = new FormatterPipeline().Format(ShortInList, profile);
+        Assert.True(result.ValidationPassed, result.FormattedText);
+        Assert.Matches(@"IN\s*\(\s*'A',\s*'B',\s*'C'\s*\)", result.FormattedText);
+    }
+
+    [Fact]
+    public void PlaceItemsOnNewLine_Default_StillExpandsAListLongerThanTheThreshold()
+    {
+        var profile = LoadDefaultStyle();
+        var longList = "select * from orders where status in ('Awaiting payment', 'Awaiting fulfilment', "
+                       + "'Partially shipped', 'Shipped', 'Delivered') order by orderid;";
+        var result = new FormatterPipeline().Format(longList, profile);
+        Assert.True(result.ValidationPassed, result.FormattedText);
+        var lines = result.FormattedText.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).ToArray();
+        Assert.Contains(lines, l => l.StartsWith("'Shipped'", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void An_explicit_multiLine_still_expands_a_short_list()
+    {
+        var profile = LoadDefaultStyle();
+        profile.Expression.InListStyle = "multiLine";
         var result = new FormatterPipeline().Format(ShortInList, profile);
         var lines = result.FormattedText.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).ToArray();
         Assert.Contains(lines, l => l.StartsWith("'B'", StringComparison.OrdinalIgnoreCase));

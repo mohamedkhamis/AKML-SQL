@@ -431,7 +431,7 @@ Controls expression and predicate formatting.
 |-----|------|---------|-------------|
 | `booleanOperatorNewLine` | `"before"` \| `"after"` \| `"sameLine"` | `"before"` | Break before or after `AND`/`OR` |
 | `betweenOnOneLine` | bool | true | `BETWEEN x AND y` on one line |
-| `inListStyle` | `"multiLine"` \| `"sameLine"` | `"multiLine"` | `IN (a, b, c)` — one line or multiple |
+| `inListStyle` | `"auto"` \| `"multiLine"` \| `"singleLine"` | `"auto"` | `IN (a, b, c)`: `auto` keeps a list of up to `inListThreshold` characters on one line and gives a longer one an item per line; `multiLine` always expands, `singleLine` never |
 | `inListThreshold` | int | 60 | Max characters before `IN` list breaks |
 | `existsSubqueryIndent` | `"indent"` \| `"hanging"` | `"indent"` | Indentation of subquery in `EXISTS(...)` |
 

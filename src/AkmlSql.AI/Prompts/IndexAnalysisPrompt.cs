@@ -83,11 +83,10 @@ public static class IndexAnalysisPrompt
         SqlDialect dialect = SqlDialect.SqlServer,
         string? serverVersion = null)
     {
-        var system = PromptTemplates.BuildSystemPrompt(
-            schemaText,
-            dialect == SqlDialect.PostgreSql ? PostgreSqlTaskInstruction : TaskInstruction,
-            dialect,
-            serverVersion);
+        var instruction = dialect == SqlDialect.PostgreSql ? PostgreSqlTaskInstruction : TaskInstruction;
+        // Spec 047 (AI-001): without a schema the instruction cannot point at the indexes in it.
+        if (string.IsNullOrWhiteSpace(schemaText)) instruction = PromptTemplates.WithoutSchema(instruction);
+        var system = PromptTemplates.BuildSystemPrompt(schemaText, instruction, dialect, serverVersion);
 
         var userMessage = selectedSql;
         if (!string.IsNullOrWhiteSpace(executionPlanXml) && dialect == SqlDialect.PostgreSql)

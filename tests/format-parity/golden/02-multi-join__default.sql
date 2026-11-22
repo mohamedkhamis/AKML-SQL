@@ -3,9 +3,9 @@ SELECT
     c.customername,
     SUM(d.unitprice * d.quantity) AS total
 FROM   orders o
-INNER JOIN   customers c
+INNER JOIN customers c
     ON c.customerid = o.customerid
-LEFT JOIN   orderdetails d
+LEFT JOIN orderdetails d
     ON d.orderid = o.orderid
 WHERE  o.orderdate >= '2025-01-01' AND c.country = 'USA'
 GROUP BY o.orderid, c.customername

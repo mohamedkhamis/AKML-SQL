@@ -267,6 +267,8 @@ a.akml-btn { text-decoration: none; }
     border-bottom: 1px solid var(--akml-border-subtle);
 }
 .akml-tablist { display: flex; align-items: stretch; min-width: 0; overflow-x: auto; }
+/* Spec 047 (WEB-009): a closable strip's tablist owns its tabs through aria-owns; it is in the accessibility tree, not on screen. */
+.akml-tablist-owner { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .akml-tabs-trailing { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs); margin-left: auto; padding: 0 var(--akml-scalar-spacing-xs); }
 .akml-tab {
     display: inline-flex;
@@ -322,10 +324,24 @@ a.akml-btn { text-decoration: none; }
     cursor: pointer;
     opacity: 0;
 }
-.akml-tab--closable:hover .akml-tab-close,
-.akml-tab--closable[aria-selected="true"] .akml-tab-close,
-.akml-tab--closable:focus-visible .akml-tab-close { opacity: 1; }
+/* Spec 047 (WEB-009): the close button is the tab's sibling in a presentational item, which carries the active marker
+   so it runs under the label and the button as before; the item is the strip's 28 px. */
+.akml-tab-item {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding-right: var(--akml-scalar-spacing-xs);
+    border-bottom: 2px solid transparent;
+    color: var(--akml-text-secondary);
+}
+.akml-tab-item[data-active="true"] { border-bottom-color: var(--akml-accent-primary); color: var(--akml-text-primary); }
+.akml-tab-item > .akml-tab,
+.akml-tab-item > .akml-tab[aria-selected="true"] { height: 26px; border-bottom: none; }
+.akml-tab-item:hover .akml-tab-close,
+.akml-tab-item[data-active="true"] .akml-tab-close,
+.akml-tab-item:focus-within .akml-tab-close { opacity: 1; }
 .akml-tab-close:hover { color: var(--akml-text-primary); background-color: var(--akml-surface-hover); }
+.akml-tab-close:focus-visible { opacity: 1; outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
 .akml-tab--closable:focus-visible { outline: 2px solid var(--akml-border-focus); outline-offset: -2px; }
 [data-akml-theme="high-contrast"] .akml-tab-close:hover { color: var(--akml-text-onaccent); }
 

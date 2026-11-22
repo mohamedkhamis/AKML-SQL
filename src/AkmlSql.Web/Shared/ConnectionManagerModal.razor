@@ -112,6 +112,11 @@
                                     <label class="akml-field-label" for="conn-name">Display name</label>
                                     <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
                                            placeholder="e.g. Local master" data-testid="conn-name-input" />
+                                    @if (ShowNotSavedNote)
+                                    {
+                                        @* Spec 047 (WEB-004): the tab's connection has no saved row; the name is the one Save would use. *@
+                                        <span class="akml-connmgr-hint" data-testid="conn-not-saved-note">Not a saved connection yet. Save keeps it.</span>
+                                    }
                                 </div>
                                 <div class="akml-field akml-connmgr-field">
                                     <label class="akml-field-label" for="conn-pg-host">Host</label>
@@ -220,6 +225,11 @@
                                     <label class="akml-field-label" for="conn-name">Display name</label>
                                     <input id="conn-name" class="akml-input" @bind="_name" @bind:event="oninput"
                                            placeholder="e.g. Local master" data-testid="conn-name-input" />
+                                    @if (ShowNotSavedNote)
+                                    {
+                                        @* Spec 047 (WEB-004): the tab's connection has no saved row; the name is the one Save would use. *@
+                                        <span class="akml-connmgr-hint" data-testid="conn-not-saved-note">Not a saved connection yet. Save keeps it.</span>
+                                    }
                                 </div>
                                 <div class="akml-field akml-connmgr-field">
                                     <label class="akml-field-label" for="conn-server">Server</label>
@@ -283,7 +293,7 @@
                                             Remember the password on the engine machine
                                         </label>
                                         <span class="akml-connmgr-hint" id="conn-sql-remember-help" data-testid="conn-sql-remember-help">
-                                            (never in the browser; any client paired with this engine can use it)
+                                            (checked when you save; never in the browser; any client paired with this engine can use it)
                                         </span>
                                         @if (_sqlHasRemembered)
                                         {
@@ -622,6 +632,8 @@
     private string _password = string.Empty;
     private bool _trustServerCertificate;
     private bool _sqlRemember;                    // spec 043 follow-up: keep the SQL login's password on the engine machine
+    private bool _prefilledUnsaved;               // spec 047 (WEB-004): the form holds a tab's connection that has no saved row
+    private bool ShowNotSavedNote => _prefilledUnsaved && _selectedId == null;
     private bool _sqlHasRememberedFlag;           // the engine holds a password for _sqlRememberedFor
     private string? _sqlRememberedFor;            // the server and login that answer was about
 
@@ -824,6 +836,7 @@
     private void NewConnection(DatabaseKind kind)
     {
         _selectedId = null;
+        _prefilledUnsaved = false;
         _kind = kind == DatabaseKind.PostgreSql && !SqlConn.EngineSupportsPostgres ? DatabaseKind.SqlServer : kind;
         _name = string.Empty;
         _server = "localhost";
@@ -953,6 +966,9 @@
         }
         NewConnection(b.Kind);
         if (_kind != b.Kind) return;   // a PostgreSQL connection on an engine that no longer offers PostgreSQL: the empty form
+        // Spec 047 (WEB-004): never a blank name -- the one Save would give this connection, marked as not saved yet.
+        _name = $"{b.Server} / {b.Database}";
+        _prefilledUnsaved = true;
         if (b.Kind == DatabaseKind.PostgreSql)
         {
             _pgHost = b.Server;
@@ -1441,47 +1457,43 @@
     private async Task SaveAsync()
     {
         if (_kind == DatabaseKind.PostgreSql) { await SavePostgresAsync(); return; }
+        if (_busy) return;   // spec 047: a second Save while the login is being checked does nothing
 
         _busy = true;
         _message = null;
+        StateHasChanged();
         try
         {
             // Default the display name to the server/db if the user left it blank.
             var name = string.IsNullOrWhiteSpace(_name) ? $"{_server} / {_database}" : _name.Trim();
+            var previous = _selectedId == null ? null : await Store.GetAsync(_selectedId);
+            var (remember, message, isError) = await DecideSqlRememberOnSaveAsync(previous);
+            var record = new SavedSqlConnection
+            {
+                Name = name,
+                Server = _server.Trim(),
+                Database = _database.Trim(),
+                WindowsAuth = _windowsAuth,
+                Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
+                TrustServerCertificate = _trustServerCertificate,
+                RememberPassword = remember,
+            };
             if (_selectedId == null)
             {
-                var record = new SavedSqlConnection
-                {
-                    Name = name,
-                    Server = _server.Trim(),
-                    Database = _database.Trim(),
-                    WindowsAuth = _windowsAuth,
-                    Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
-                    TrustServerCertificate = _trustServerCertificate,
-                    RememberPassword = !_windowsAuth && _sqlRemember,
-                };
                 await Store.AddAsync(record);
-                _selectedId = record.Id;
             }
             else
             {
-                var record = new SavedSqlConnection
-                {
-                    Id = _selectedId,
-                    Name = name,
-                    Server = _server.Trim(),
-                    Database = _database.Trim(),
-                    WindowsAuth = _windowsAuth,
-                    Login = _windowsAuth ? null : (string.IsNullOrWhiteSpace(_login) ? null : _login.Trim()),
-                    TrustServerCertificate = _trustServerCertificate,
-                    RememberPassword = !_windowsAuth && _sqlRemember,
-                };
+                record.Id = _selectedId;
                 await Store.UpdateAsync(record);
             }
+            _selectedId = record.Id;
+            _prefilledUnsaved = false;
             await Store.SetActiveIdAsync(_selectedId);
             await ReloadAsync();
             _name = name;
-            SetMessage("Saved.", isError: false);
+            _password = string.Empty;   // never kept in the browser: the engine has it now, or the next connect asks for it
+            SetMessage(message, isError);
         }
         catch (Exception ex)
         {
@@ -1489,6 +1501,58 @@
         }
         _busy = false;
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Spec 047 (WEB-002, clarification Q1, contracts/connections-and-storage.md section 1): what Save does with the password of a
+    /// SQL Server login. With Remember and a typed password the login is checked first, and the engine keeps the password only
+    /// when the server accepted it. The row is always saved; the result is its Remember flag and the message.
+    /// </summary>
+    private async Task<(bool Remember, string Message, bool IsError)> DecideSqlRememberOnSaveAsync(SavedSqlConnection? previous)
+    {
+        if (_windowsAuth) return (false, "Saved.", false);
+        var login = string.IsNullOrWhiteSpace(_login) ? "this login" : _login.Trim();
+        bool canRemember = SqlConn.EngineRemembersSqlServerPasswords;
+
+        if (!_sqlRemember)
+        {
+            // Unticked on a row that had it: the engine stops keeping the password (only the engine's answer counts).
+            if (previous is { RememberPassword: true } && canRemember && !string.IsNullOrWhiteSpace(_login))
+            {
+                var forgotten = SqlIdentity();
+                var answer = await SqlConn.ForgetRememberedSqlServerPasswordAsync(forgotten.Server, forgotten.User ?? string.Empty, CancellationToken.None);
+                if (answer == null) return (false, "Saved. " + ForgetUnanswered, true);
+                _sqlHasRemembered = false;
+                return (false, answer == true ? $"Saved. The engine machine no longer keeps the password for {login}." : "Saved.", false);
+            }
+            return (false, "Saved.", false);
+        }
+
+        if (!canRemember)
+        {
+            // Offline, or an engine that does not keep passwords: nothing can be checked, and a temporary outage never erases
+            // the row's choice.
+            var kept = previous?.RememberPassword ?? false;
+            return string.IsNullOrEmpty(_password)
+                ? (kept, "Saved.", false)
+                : (kept, "Saved. No engine that keeps passwords is connected, so the password was not checked or kept.", false);
+        }
+
+        if (string.IsNullOrEmpty(_password))
+        {
+            // Nothing typed: the row asks for a remembered password only if the engine already holds one for this login.
+            return _sqlHasRemembered
+                ? (true, "Saved.", false)
+                : (false, "Saved. Type the password once and Save again to keep it on the engine machine.", false);
+        }
+
+        var result = await SqlConn.TestAndRememberAsync(SqlServerTarget() with { RememberPassword = true }, CancellationToken.None);
+        if (!result.Ok)
+            return (false, $"Saved without the password: the login test failed — {result.Error ?? "the server refused the login."}", true);
+        if (!result.Remembered)
+            return (false, "Saved, but the engine could not keep the password.", true);
+        _sqlHasRemembered = true;
+        return (true, $"Saved. The engine machine keeps the password for {login}.", false);
     }
 
     private async Task DeleteAsync()

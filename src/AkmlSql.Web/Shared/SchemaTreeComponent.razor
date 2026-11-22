@@ -123,6 +123,14 @@
             <p class="akml-schema-tree-empty">Schema not yet loaded — waiting for engine.</p>
         }
     }
+    else if (_filter.Length > 0 && !AnyMatch())
+    {
+        @* Spec 047 (WEB-014): a filter with no match says so, and Clear brings back the folders that were open. *@
+        <div class="akml-schema-filter-empty" data-testid="schema-filter-empty" role="status">
+            <span class="akml-schema-filter-empty-text">No objects match '@_filter'.</span>
+            <button type="button" class="akml-btn" data-testid="schema-filter-clear" @onclick="ClearFilter">Clear filter</button>
+        </div>
+    }
     else
     {
         var filtering = _filter.Length > 0;
@@ -137,6 +145,14 @@
             </li>
             @if (IsOpen(DbPath))
             {
+                @if (_payload.MetadataLimited)
+                {
+                    @* Spec 047 (WEB-013): the engine's login lacks VIEW DEFINITION, so routines can be missing — say why. *@
+                    <li class="akml-schema-tree-node akml-schema-tree-note" data-testid="schema-metadata-limited">
+                        <Icon Name="info" Size="14" Class="akml-schema-icon" />
+                        <span class="akml-schema-tree-note-text">@MetadataLimitedText</span>
+                    </li>
+                }
                 @foreach (var schema in _payload.Schemas ?? Array.Empty<SchemaPhaseSchema>())
                 {
                     if (IsHiddenSchema(schema.Name)) continue;
@@ -176,7 +192,7 @@
                                     }
                                 </span>
                                 <Icon Name="@kind.Icon" Size="14" Class="@("akml-schema-icon akml-schema-icon--" + kind.Badge)" />
-                                <span class="akml-schema-tree-label">@kind.Label (@kind.Objects.Count)</span>
+                                <span class="akml-schema-tree-label">@KindLabel(kind)</span>
                             </li>
                             @if (!empty && IsOpen(kindPath))
                             {
@@ -386,6 +402,23 @@
         padding: 0 var(--akml-scalar-spacing-xs);
     }
     .akml-schema-tree-empty-kind { padding-left: 32px; color: var(--akml-text-secondary); font-style: italic; }
+    /* Spec 047 (WEB-013): the note under the database when the engine's login cannot see every object. */
+    .akml-schema-tree-note {
+        padding-left: 16px;
+        align-items: flex-start;
+        color: var(--akml-text-secondary);
+        white-space: normal;
+    }
+    .akml-schema-tree-note-text { flex: 1 1 auto; min-width: 0; }
+    /* Spec 047 (WEB-014): a filter that matches nothing. */
+    .akml-schema-filter-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
+        color: var(--akml-text-secondary);
+    }
     .akml-schema-system-toggle {
         flex: 0 0 auto;
         gap: var(--akml-scalar-spacing-xs);
@@ -491,6 +524,37 @@
 
     // While filtering, every level that leads to a match is open; the user's own expansion comes back afterwards.
     private bool IsOpen(string path) => _filter.Length > 0 || IsExpanded(path);
+
+    /// <summary>Spec 047 (WEB-014): whether the filter matches any object the tree would show.</summary>
+    private bool AnyMatch() =>
+        (_payload?.Schemas ?? Array.Empty<SchemaPhaseSchema>()).Any(s =>
+            !IsHiddenSchema(s.Name) && !IsInaccessibleSchema(s.Name) && EnumerateKinds(s, _filter, Kind).Any(k => k.Objects.Count > 0));
+
+    /// <summary>Spec 047 (WEB-014): Clear filter. The folders' own open state was never changed, so it shows again as it was.</summary>
+    private void ClearFilter()
+    {
+        _filterCts?.Cancel();
+        _filterInput = string.Empty;
+        _filter = string.Empty;
+    }
+
+    // Spec 047 (WEB-013): a login without VIEW DEFINITION sees only some routines, so their groups carry no count.
+    private string KindLabel(KindGroup kind) =>
+        _payload?.MetadataLimited == true && kind.Badge is "storedproc" or "function"
+            ? kind.Label + " (may be incomplete)"
+            : $"{kind.Label} ({kind.Objects.Count})";
+
+    private string MetadataLimitedText
+    {
+        get
+        {
+            var runsAs = Bridge.EngineRunsAs;
+            const string fix = "Grant it VIEW DEFINITION on the database, or connect with a login that can.";
+            return string.IsNullOrWhiteSpace(runsAs)
+                ? $"The engine's account cannot see every object in {_databaseName}. {fix}"
+                : $"The engine signs in as {runsAs}, which cannot see every object in {_databaseName}. {fix}";
+        }
+    }
 
     private void OnFilterInput(ChangeEventArgs e)
     {

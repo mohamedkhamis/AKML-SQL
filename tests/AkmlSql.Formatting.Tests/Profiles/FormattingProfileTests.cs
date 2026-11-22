@@ -254,7 +254,7 @@ public class FormattingProfileTests
         var o = new ExpressionOptions();
         Assert.Equal("before", o.BooleanOperatorNewLine);
         Assert.True(o.BetweenOnOneLine);
-        Assert.Equal("multiLine", o.InListStyle);
+        Assert.Equal("auto", o.InListStyle);   // spec 047 (FMT-005): a short IN list stays on one line
         Assert.Equal(60, o.InListThreshold);
         Assert.Equal("indent", o.ExistsSubqueryIndent);
     }

@@ -13,5 +13,5 @@ select
     )                                        as firstword,
     COALESCE(o.shipregion, c.region, N'n/a') as region
 from   dbo.orders o
-inner join   dbo.customers c
+inner join dbo.customers c
     on c.customerid = o.customerid;

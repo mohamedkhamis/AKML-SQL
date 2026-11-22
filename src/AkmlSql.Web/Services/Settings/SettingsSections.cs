@@ -206,7 +206,7 @@ internal sealed class CodeAnalysisSettingsSection : ISettingsSection
     public async Task<IReadOnlyList<string>> DescribeResetAsync()
     {
         var s = await _store.GetAsync().ConfigureAwait(false);
-        var lines = new List<string> { "Code analysis is switched on, with Re-analyse after format and every Problems filter." };
+        var lines = new List<string> { "Code analysis is switched on, with Re-analyse after format, every Problems filter, and advisory findings as a margin marker only." };
         int suppressed = s.RuleOverrides.Count(kv => string.Equals(kv.Value, "off", StringComparison.OrdinalIgnoreCase));
         int remapped = s.RuleOverrides.Count - suppressed;
         if (suppressed > 0) lines.Add(suppressed == 1 ? "1 suppressed rule comes back." : $"{suppressed} suppressed rules come back.");
@@ -225,6 +225,7 @@ internal sealed class CodeAnalysisSettingsSection : ISettingsSection
             AutoAnalyseOnFormat = s.AutoAnalyseOnFormat,
             ProblemsFilter = new ProblemsFilterDto { ShowInfo = s.ProblemsFilter.ShowInfo, ShowWarning = s.ProblemsFilter.ShowWarning, ShowError = s.ProblemsFilter.ShowError },
             RuleOverrides = new Dictionary<string, string>(s.RuleOverrides, StringComparer.Ordinal),   // keys verbatim (R48)
+            AdvisoryDisplay = s.AdvisoryDisplay,
         };
     }
 
@@ -248,6 +249,11 @@ internal sealed class CodeAnalysisSettingsSection : ISettingsSection
             RuleOverrides = dto.RuleOverrides != null
                 ? new Dictionary<string, string>(dto.RuleOverrides, StringComparer.Ordinal)
                 : current.RuleOverrides,
+            AdvisoryDisplay = dto.AdvisoryDisplay == null
+                ? current.AdvisoryDisplay
+                : string.Equals(dto.AdvisoryDisplay, WebAnalysisSettings.Underline, StringComparison.Ordinal)
+                    ? WebAnalysisSettings.Underline
+                    : WebAnalysisSettings.MarkerOnly,
         };
         await _store.SetAsync(next).ConfigureAwait(false);
         return SettingsJson.CountUnknown(dto);
@@ -259,6 +265,9 @@ internal sealed class CodeAnalysisSettingsSection : ISettingsSection
         public bool? AutoAnalyseOnFormat { get; set; }
         public ProblemsFilterDto? ProblemsFilter { get; set; }
         public Dictionary<string, string>? RuleOverrides { get; set; }
+
+        /// <summary>Spec 047: "marker" or "underline" (absent in an export from before it).</summary>
+        public string? AdvisoryDisplay { get; set; }
     }
 
     public sealed class ProblemsFilterDto : SettingsDto

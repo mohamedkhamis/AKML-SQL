@@ -70,9 +70,15 @@ namespace AkmlSql.Shell.Shared.Analysis
         {
             var snapshot = _buffer.CurrentSnapshot;
             var issues   = _issues;
+            // Spec 047 (UX-001): read once per call, through the controller's 2 s settings cache.
+            var style    = AnalysisController.CurrentSettings().SquiggleStyle;
 
             foreach (var issue in issues)
             {
+                // "Margin marker only": an Information or Hint finding keeps its warning glyph (WarningGlyph draws
+                // one dot per line from the controller's issues, not from these tags) and its Error List entry.
+                if (!ShouldTag(issue.Severity, style)) continue;
+
                 // Guard against stale offsets after edits
                 var start = Math.Min(issue.StartOffset, snapshot.Length);
                 var end   = Math.Min(issue.EndOffset,   snapshot.Length);
@@ -90,6 +96,14 @@ namespace AkmlSql.Shell.Shared.Analysis
                 yield return new TagSpan<IErrorTag>(issueSpan, new ErrorTag(errorType, issue.Message));
             }
         }
+
+        /// <summary>
+        /// Spec 047 (UX-001, SSMS-001, contracts/analysis-display.md §1) — whether a finding is underlined in the text.
+        /// With "marker" (the default) only warnings (2) and errors (3) are; Information (1) and Hint (0) findings get the
+        /// margin marker only. Every other value, unknown ones included, underlines everything as before.
+        /// </summary>
+        internal static bool ShouldTag(int severity, string? squiggleStyle) =>
+            severity >= 2 || !string.Equals(squiggleStyle, "marker", StringComparison.Ordinal);
 
         private static string SeverityToErrorType(int severity)
         {

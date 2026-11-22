@@ -754,8 +754,21 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("autoFixOnFormat")]
         public bool AutoFixOnFormat { get; set; }
 
+        /// <summary>
+        /// Spec 047 (UX-001, SSMS-001) — how Information and Hint findings, such as a missing semicolon, are shown:
+        /// <c>marker</c> (default) gives them the margin marker only; <c>underline</c> also underlines them in the text.
+        /// Warnings and errors are always underlined. Any other value reads as <c>underline</c>.
+        /// </summary>
         [JsonPropertyName("squiggleStyle")]
-        public string SquiggleStyle { get; set; } = "underline";
+        public string SquiggleStyle { get; set; } = "marker";
+
+        /// <summary>
+        /// Spec 047 — set once by <c>ConfigManager.MigrateSquiggleStyle</c>: a config written before <c>marker</c> existed
+        /// carries the old untouched default <c>underline</c>, which then moves to <c>marker</c>; afterwards every value
+        /// is the user's own.
+        /// </summary>
+        [JsonPropertyName("squiggleStyleVersion")]
+        public int? SquiggleStyleVersion { get; set; }
 
         [JsonPropertyName("showInErrorList")]
         public bool ShowInErrorList { get; set; } = true;
@@ -768,7 +781,8 @@ namespace AkmlSql.Core.Config
 
         /// <summary>
         /// US17 / FR-079 — show blue lightbulbs for advisory-only rules (no auto-fix).
-        /// When false, only auto-fixable rules (orange) get a lightbulb.
+        /// When false, only auto-fixable rules (orange) get a lightbulb. Spec 047 (A1): wired as documented; a finding
+        /// without an automatic fix keeps its margin marker, its Error List entry and the glyph menu's suppress actions.
         /// </summary>
         [JsonPropertyName("showAdvisoryHints")]
         public bool ShowAdvisoryHints { get; set; } = true;

@@ -74,6 +74,8 @@ builder.Services.AddSingleton<IWorkspaceLayoutStore, WorkspaceLayoutStore>();
 // once the underlying WebSocket closes).
 builder.Services.AddSingleton<IWebCryptoWrapper, JsWebCryptoWrapper>();
 builder.Services.AddSingleton<IPairingTokenVault, PairingTokenVault>();
+// Spec 047 (WEB-003): asked once to keep the browser's data, when the first connection or engine is saved.
+builder.Services.AddSingleton<IBrowserStorageState, BrowserStorageState>();
 builder.Services.AddSingleton<IConnectionStore, ConnectionStore>();
 builder.Services.AddTransient<IBridgeWebSocket, JsBridgeWebSocket>();
 builder.Services.AddSingleton<Func<IBridgeWebSocket>>(sp => () => sp.GetRequiredService<IBridgeWebSocket>());
@@ -83,6 +85,8 @@ builder.Services.AddSingleton<IEngineBridge, EngineBridge>();
 // wake-up when the tab regains focus or the browser comes back online. Singleton because there is
 // exactly one bridge and every page that loads calls StartAsync on it (idempotent by design).
 builder.Services.AddSingleton<IEngineAutoConnect, EngineAutoConnect>();
+// Spec 047 (ENG-001): list and revoke the browsers paired with the connected engine (pairing.manage.v1).
+builder.Services.AddSingleton<IPairingService, PairingService>();
 builder.Services.AddSingleton<IPageEngine, PageEngine>();
 // Spec 030: browser-side "Connect to SQL Server" — sends ConnectionChanged/DocumentChanged over the
 // bridge using one canonical SessionId, enabling live-schema IntelliSense (Windows or SQL auth).

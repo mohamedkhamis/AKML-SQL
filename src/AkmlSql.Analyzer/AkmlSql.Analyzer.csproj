@@ -12,7 +12,19 @@
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <PublishTrimmed>true</PublishTrimmed>
+    <!-- Spec 047 (CLI-001): .casettings and the explicit settings file are read with reflection-based System.Text.Json,
+         which a trimmed app turns off by default. -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
+
+  <!-- Spec 047 (CLI-001): RuleRegistry finds the analysis rules by reflection (GetTypes + Activator), and nothing references
+       them statically, so the trimmer removed every rule and the shipped exe reported "No issues found" for any SQL. Root the
+       rules' assembly, and Core for the settings models. scripts/test-analyzer-cli.ps1 checks the published exe on every
+       release build. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="AkmlSql.Analysis" />
+    <TrimmerRootAssembly Include="AkmlSql.Core" />
+  </ItemGroup>
 
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">

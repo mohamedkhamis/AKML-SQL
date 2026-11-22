@@ -67,12 +67,19 @@ public class AnalysisEngine(
     /// path looks this up from <c>SchemaCacheManager</c>; the web edition will source it
     /// from its IndexedDB-backed cache once T107 lands.
     /// </param>
+    /// <param name="reportParseErrors">
+    /// Spec 047 (WEB-005, contracts/analysis-display.md §4): also report every parse error as a <c>SYNTAX</c> Error
+    /// finding, first, whether or not a partial tree exists. The web edition asks for it (its Problems tab said "No
+    /// problems found." for SQL that does not parse); the SSMS engine handler and the CLI keep the default, because SSMS
+    /// underlines syntax errors itself.
+    /// </param>
     public async Task<CodeAnalysisResponse> AnalyzeAsync(
         CodeAnalysisRequest request,
         int serverVersion,
         DatabaseCache? schemaCache,
         CodeAnalysisSettings globalSettings,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool reportParseErrors = false)
     {
         // Spec 030 (T049/T051): resolve the document's directory so per-project .casettings (rule
         // enable/severity + global suppressions) apply in the LIVE editor, matching the CLI. An empty
@@ -99,6 +106,10 @@ public class AnalysisEngine(
 
         // Parse full document once
         var script = parser.Parse(request.DocumentText, out var errors);
+        var tokens = parser.GetTokenStream(request.DocumentText);
+
+        // Spec 047 (WEB-005): never cached per batch, never suppressed — they describe the text as it is now.
+        var syntaxIssues = reportParseErrors ? SyntaxIssues(errors, tokens) : [];
 
         if (script == null)
         {
@@ -106,11 +117,9 @@ public class AnalysisEngine(
             {
                 RequestId       = request.RequestId,
                 AnalyzedVersion = request.DocumentVersion,
-                Issues          = []
+                Issues          = syntaxIssues
             };
         }
-
-        var tokens = parser.GetTokenStream(request.DocumentText);
 
         // Parse suppressions once for the whole document
         var suppressions = SuppressionParser.Parse(tokens, out var metaDiagnostics);
@@ -168,9 +177,40 @@ public class AnalysisEngine(
         {
             RequestId       = request.RequestId,
             AnalyzedVersion = request.DocumentVersion,
-            Issues          = filtered.Select(ToIssueInfo).ToArray()
+            Issues          = syntaxIssues.Concat(filtered.Select(ToIssueInfo)).ToArray()
         };
     }
+
+    /// <summary>
+    /// Spec 047 (WEB-005): one <c>SYNTAX</c> Error finding per parse error, at the parser's line, column and message,
+    /// spanning the token the parser stopped at when there is one (so the editor underlines that token, else the line).
+    /// </summary>
+    private static CodeIssueInfo[] SyntaxIssues(IList<ParseError>? errors, IList<TSqlParserToken>? tokens)
+    {
+        if (errors == null || errors.Count == 0) return [];
+        var issues = new List<CodeIssueInfo>(errors.Count);
+        foreach (var e in errors)
+        {
+            // "GO 3" runs a batch three times in SSMS and sqlcmd; ScriptDom alone calls the count a syntax error.
+            if (tokens != null && TsqlParserService.IsGoRepeatCount(e, tokens)) continue;
+            var token = tokens?.FirstOrDefault(t => t.Offset == e.Offset && t.TokenType != TSqlTokenType.EndOfFile);
+            issues.Add(new CodeIssueInfo
+            {
+                RuleId      = SyntaxRuleId,
+                Severity    = 3,
+                Message     = e.Message,
+                StartOffset = e.Offset,
+                EndOffset   = e.Offset + (token?.Text?.Length ?? 0),
+                Line        = e.Line,
+                Column      = e.Column,
+                Description = "The script does not parse: SQL Server would reject it before running anything.",
+            });
+        }
+        return issues.ToArray();
+    }
+
+    /// <summary>Spec 047 (WEB-005): the rule id of a parse error reported as a finding.</summary>
+    public const string SyntaxRuleId = "SYNTAX";
 
     private async Task<List<AnalysisDiagnostic>> RunRulesAsync(
         AnalysisContext ctx,

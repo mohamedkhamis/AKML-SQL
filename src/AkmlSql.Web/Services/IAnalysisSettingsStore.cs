@@ -41,6 +41,16 @@ public sealed class WebAnalysisSettings
     /// <summary>Spec 041 (R51, FR-055) — the severities the Problems tab shows when it opens. Additive: an older
     /// record reads it as "everything".</summary>
     public ProblemsFilter ProblemsFilter { get; set; } = new();
+
+    /// <summary>
+    /// Spec 047 (UX-001, contracts/analysis-display.md §3) — how Information and Hint findings, such as a missing
+    /// semicolon, show in the editor: <c>marker</c> (default) gives them the gutter marker only, <c>underline</c> also
+    /// underlines them. Warnings and errors are always underlined. Additive: an older record reads <c>marker</c>.
+    /// </summary>
+    public string AdvisoryDisplay { get; set; } = MarkerOnly;
+
+    public const string MarkerOnly = "marker";
+    public const string Underline = "underline";
 }
 
 /// <summary>Spec 041 (R51) — the Problems tab's default severity filters.</summary>
@@ -74,6 +84,9 @@ internal sealed class AnalysisSettingsStore : IAnalysisSettingsStore
                 _cached = JsonSerializer.Deserialize<WebAnalysisSettings>(raw) ?? new WebAnalysisSettings();
                 _cached.ProblemsFilter ??= new ProblemsFilter();   // an explicit null in a hand-edited record
                 _cached.RuleOverrides ??= new Dictionary<string, string>(StringComparer.Ordinal);
+                // Only "underline" turns the marker-only display off; anything else, null included, is the default.
+                if (!string.Equals(_cached.AdvisoryDisplay, WebAnalysisSettings.Underline, StringComparison.Ordinal))
+                    _cached.AdvisoryDisplay = WebAnalysisSettings.MarkerOnly;
                 return _cached;
             }
             catch (JsonException)

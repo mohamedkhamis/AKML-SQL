@@ -1,0 +1,80 @@
+@*
+    Spec 047 (WEB-003, contracts/connections-and-storage.md §5) — browser data is kept per address: connections saved at
+    http://localhost:59416/ are not there at http://127.0.0.1:59416/. Opened at a loopback alias with nothing saved here and
+    an engine this page knows, say where the data probably is (setup gives "localhost") and offer Import. Dismissible; the
+    dismissal is remembered for this address only (a per-viewer convenience in localStorage, read and written defensively).
+*@
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@inject ISavedSqlConnectionStore Saved
+@inject IConnectionStore Engines
+@inject IPageEngine PageEngine
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@if (_canonical != null)
+{
+    <div class="akml-origin-banner" role="status" data-testid="origin-banner">
+        <span class="akml-origin-banner-text">@($"Saved connections and pairings belong to the address you opened. If you used {_canonical} before, open it there, or import your settings here.")</span>
+        <a class="akml-btn akml-btn--compact" href="@_canonical" data-testid="origin-banner-link">Open @_canonical</a>
+        <a class="akml-btn akml-btn--compact" href="settings" data-testid="origin-banner-import">Import settings…</a>
+        <button type="button" class="akml-btn akml-btn--compact akml-btn--ghost" data-testid="origin-banner-dismiss"
+                @onclick="DismissAsync">Dismiss</button>
+    </div>
+}
+
+@code {
+    private const string DismissKey = "akml.originBanner.dismissed";
+
+    /// <summary>The page's base address; tests set it. Defaults to the app's own.</summary>
+    [Parameter] public string? PageBaseUri { get; set; }
+
+    private string? _canonical;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (!Uri.TryCreate(PageBaseUri ?? Nav.BaseUri, UriKind.Absolute, out var page)) return;
+            if (page.Host is not ("127.0.0.1" or "[::1]")) return;   // localhost is setup's own address; others cannot be known
+            if ((await Saved.ListAsync()).Count > 0 || (await Engines.ListAsync()).Count > 0) return;
+            if ((await PageEngine.GetAsync()).Kind != PageEngineKind.Engine) return;
+
+            string? dismissed = null;
+            try { dismissed = await JS.InvokeAsync<string?>("localStorage.getItem", DismissKey); }
+            catch (Exception) { /* storage blocked or unavailable: show the banner, which is harmless */ }
+            if (dismissed == "1") return;
+
+            _canonical = new UriBuilder(page) { Host = "localhost", Path = "/", Query = string.Empty, Fragment = string.Empty }.Uri.AbsoluteUri;
+        }
+        catch (Exception)
+        {
+            _canonical = null;   // a banner is never worth a broken editor page
+        }
+    }
+
+    private async Task DismissAsync()
+    {
+        _canonical = null;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", DismissKey, "1"); }
+        catch (Exception) { /* the banner simply returns on the next visit */ }
+    }
+}
+
+<style>
+    /* Spec 047 (WEB-003): an information line above the workspace; tokens only, so it follows every theme. */
+    .akml-origin-banner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--akml-scalar-spacing-s);
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        background-color: var(--akml-surface-elevated);
+        color: var(--akml-text-primary);
+        border-left: 3px solid var(--akml-status-info);
+        border-bottom: 1px solid var(--akml-border-default);
+        font-family: var(--akml-type-chrome-family);
+        font-size: var(--akml-type-chrome-size);
+    }
+    .akml-origin-banner-text { flex: 1 1 24rem; }
+</style>

@@ -22,6 +22,14 @@ namespace AkmlSql.Shell.Shared.Analysis
     [ContentType("T-SQL")]
     internal sealed class LightbulbProvider : ISuggestedActionsSourceProvider
     {
+        /// <summary>
+        /// Spec 047 (SSMS-001, plan-time amendment A1) — <c>codeAnalysis.showAdvisoryHints</c> as documented: off, a
+        /// finding with no automatic fix offers no lightbulb actions. Its margin marker, Error List entry and the warning
+        /// glyph's suppress actions stay.
+        /// </summary>
+        internal static bool OffersFixActions(bool hasAutomaticFix, bool showAdvisoryHints) =>
+            hasAutomaticFix || showAdvisoryHints;
+
         public ISuggestedActionsSource CreateSuggestedActionsSource(ITextView textView, ITextBuffer textBuffer)
         {
             if (textView == null || textBuffer == null) return null;
@@ -81,6 +89,7 @@ namespace AkmlSql.Shell.Shared.Analysis
             CancellationToken cancellationToken)
         {
             var snapshot = _buffer.CurrentSnapshot;
+            var showAdvisoryHints = AnalysisController.CurrentSettings().ShowAdvisoryHints;
 
             // ── Analysis fix actions ────────────────────────────────────
             foreach (var issue in _issues)
@@ -94,6 +103,9 @@ namespace AkmlSql.Shell.Shared.Analysis
                     if (fix.FixType != (int)FixType.Suppress)
                         actions.Add(new FixAction(_buffer, fix, issue.RuleId, issue.AutoFixable));
                 }
+
+                // Spec 047 (A1): an advisory finding (no automatic fix) offers nothing here while advisory hints are off.
+                if (!LightbulbProvider.OffersFixActions(actions.Count > 0, showAdvisoryHints)) continue;
 
                 if (!string.IsNullOrEmpty(issue.RuleId))
                 {

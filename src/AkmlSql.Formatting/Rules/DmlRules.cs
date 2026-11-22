@@ -470,6 +470,7 @@ public class DmlRules : IRuleSet
         // start and CollapseRange merged the closing ')' + the next CTE's header onto the body
         // line ("… active = 1), b AS (").
         int parenDepth = 0;
+        int openCases = 0;
         for (int i = start; i < nodes.Count; i++)
         {
             var tokenType = nodes[i].TokenType;
@@ -489,6 +490,12 @@ public class DmlRules : IRuleSet
 
             if (tokenType == TSqlTokenType.Semicolon ||
                 tokenType == TSqlTokenType.Go)
+                return i;
+
+            // Spec 047 (FMT-002): the statement also ends where the parse tree starts the next one, and at the END or
+            // ELSE of the block or IF around it. Stopping only at the next SELECT / INSERT / … ran a short statement on
+            // through "END WHILE @a > 0 BEGIN" and collapsed all of it onto one line.
+            if (parenDepth == 0 && StatementBounds.EndsBefore(nodes, i, ref openCases))
                 return i;
 
             // Next statement start — only at top level; a paren-nested SELECT (subquery / CTE

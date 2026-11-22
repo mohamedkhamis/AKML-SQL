@@ -207,6 +207,14 @@
     [Parameter] public AkmlSql.Core.DatabaseKind Kind { get; set; } = AkmlSql.Core.DatabaseKind.SqlServer;
 
     /// <summary>
+    /// Spec 047 (WEB-007): the shown query tab's name. The editor's accessible name says it ("SQL query editor — SQLQuery1"),
+    /// and follows a rename (Save as) and a tab switch.
+    /// </summary>
+    [Parameter] public string? DocumentName { get; set; }
+
+    private string? _appliedName;
+
+    /// <summary>
     /// Spec 043 (research R6): a text change with the query tab it was made in (the tab shown when CodeMirror reported it).
     /// When set it is raised instead of <see cref="OnTextChanged"/>.
     /// </summary>
@@ -266,8 +274,9 @@
         var kindAtCreate = pending?.Kind ?? Kind;
         var tabAtCreate = _currentTabId;
         var appliedTab = tabAtCreate;
-        await module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate, tabAtCreate));
+        await module.InvokeVoidAsync("create", HostId, seed, _selfRef, ToJs(options, kindAtCreate, tabAtCreate, DocumentName));
         _module = module;
+        _appliedName = DocumentName;
         _appliedKind = kindAtCreate;
         if (tabAtCreate != null) _jsTabs.Add(tabAtCreate);
         if (_disposed)
@@ -286,7 +295,7 @@
             var shownTabId = _currentTabId;
             _appliedKind = shown.Kind;
             _jsTabs.Add(shownTabId);
-            await _module.InvokeVoidAsync("switchTab", HostId, shownTabId, shown.Text, AkmlSql.Core.DatabaseKindNames.ToName(shown.Kind));
+            await _module.InvokeVoidAsync("switchTab", HostId, shownTabId, shown.Text, AkmlSql.Core.DatabaseKindNames.ToName(shown.Kind), DocumentName);
             appliedTab = shownTabId;
         }
         else if (later is { } same && pending != null && !string.Equals(same.Text, seed, StringComparison.Ordinal))
@@ -299,7 +308,7 @@
         {
             _pendingDiagnostics = null;
             if (_pendingDiagnosticsTab == _currentTabId)
-                await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics);
+                await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics, null, await DiagnosticOptionsAsync());
         }
         _appliedInitialText = pending == null ? seed : InitialText;
         _lastInitialTextParameter = InitialText;
@@ -360,6 +369,13 @@
             _appliedKind = Kind;
             await _module.InvokeVoidAsync("setDialect", HostId, AkmlSql.Core.DatabaseKindNames.ToName(Kind));
         }
+
+        // Spec 047 (WEB-007): the shown tab was renamed (or another is shown); its name is the editor's accessible name.
+        if (_initialised && _module != null && DocumentName != _appliedName)
+        {
+            _appliedName = DocumentName;
+            await _module.InvokeVoidAsync("setTabName", HostId, DocumentName);
+        }
     }
 
     /// <summary>
@@ -379,7 +395,7 @@
     /// selection, undo history, scroll and diagnostics are kept for it; <paramref name="tabId"/>'s come back, or are made from
     /// <paramref name="seedText"/> the first time it is shown, with <paramref name="kind"/>'s SQL language. Raises no text change.
     /// </summary>
-    public async Task SwitchTabAsync(string tabId, string seedText, AkmlSql.Core.DatabaseKind kind)
+    public async Task SwitchTabAsync(string tabId, string seedText, AkmlSql.Core.DatabaseKind kind, string? tabName = null)
     {
         if (string.IsNullOrEmpty(tabId) || _disposed) return;
         if (_module == null)
@@ -393,7 +409,8 @@
         _appliedKind = kind;
         // A tab the editor already holds comes back from its kept state: its text is not sent again.
         string? seed = _jsTabs.Add(tabId) ? seedText ?? string.Empty : null;
-        await _module.InvokeVoidAsync("switchTab", HostId, tabId, seed, AkmlSql.Core.DatabaseKindNames.ToName(kind));
+        _appliedName = tabName ?? DocumentName;
+        await _module.InvokeVoidAsync("switchTab", HostId, tabId, seed, AkmlSql.Core.DatabaseKindNames.ToName(kind), _appliedName);
         if (!_disposed && tabId == _currentTabId)
         {
             _appliedTabId = tabId;
@@ -939,7 +956,28 @@
     {
         if (IsShown(tabId)) { await SetDiagnosticsAsync(diagnostics); return; }
         if (_module == null || !IsKept(tabId!)) return;
-        await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>(), tabId);
+        await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>(), tabId,
+            await DiagnosticOptionsAsync());
+    }
+
+    /// <summary>
+    /// Spec 047 (UX-001): <c>{ advisoryMarkersOnly }</c> from Settings › Code analysis › Advisory findings, read each time
+    /// findings are shown (the store keeps the record in memory, and the Settings page saves through the same store).
+    /// </summary>
+    private async Task<object> DiagnosticOptionsAsync()
+    {
+        var markersOnly = true;
+        try
+        {
+            var store = Services.GetService<IAnalysisSettingsStore>();
+            if (store != null)
+                markersOnly = (await store.GetAsync()).AdvisoryDisplay != WebAnalysisSettings.Underline;
+        }
+        catch (Exception)
+        {
+            // Storage unavailable: the default display.
+        }
+        return new { advisoryMarkersOnly = markersOnly };
     }
 
     /// <summary>Spec 043: clear query tab <paramref name="tabId"/>'s diagnostics.</summary>
@@ -959,7 +997,8 @@
             _pendingDiagnosticsTab = _currentTabId;
             return;
         }
-        await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>());
+        await _module.InvokeVoidAsync("setDiagnostics", HostId, diagnostics ?? System.Array.Empty<EditorDiagnostic>(), null,
+            await DiagnosticOptionsAsync());
     }
 
     private IReadOnlyList<EditorDiagnostic>? _pendingDiagnostics;
@@ -1035,9 +1074,10 @@
         return await _module.InvokeAsync<string>("getText", HostId);
     }
 
-    private static object ToJs(EditorSettings o, AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer, string? tabId = null) =>
+    private static object ToJs(EditorSettings o, AkmlSql.Core.DatabaseKind kind = AkmlSql.Core.DatabaseKind.SqlServer, string? tabId = null,
+        string? tabName = null) =>
         new { fontSize = o.FontSize, wordWrap = o.WordWrap, tabSize = o.TabSize, fontFamily = AkmlSql.Web.Services.EditorSettings.FontName(o.FontFamily),
-              dialect = AkmlSql.Core.DatabaseKindNames.ToName(kind), tabId };
+              dialect = AkmlSql.Core.DatabaseKindNames.ToName(kind), tabId, tabName };
 
     // Spec 043 (T042): the shown tab's session, read once when a request starts. The shown tab is the active one, whose
     // session is the connection service's active session.

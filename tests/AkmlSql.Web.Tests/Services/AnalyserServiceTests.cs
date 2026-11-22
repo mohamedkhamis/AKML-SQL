@@ -47,6 +47,18 @@ public sealed class AnalyserServiceTests
     }
 
     [Fact]
+    public async Task AnalyseAsync_reports_sql_that_does_not_parse_as_a_syntax_error()
+    {
+        // Spec 047 (WEB-005): it used to come back with no findings, so Problems said "No problems found.".
+        var response = await CreateService().AnalyseAsync("SELEC * FROM dbo.Customers;");
+
+        var issue = Assert.Single(response.Issues, i => i.RuleId == "SYNTAX");
+        Assert.Equal(3, issue.Severity);
+        Assert.Equal(1, issue.Line);
+        Assert.False(string.IsNullOrWhiteSpace(issue.Message));
+    }
+
+    [Fact]
     public async Task AnalyseAsync_handles_empty_input_without_crashing()
     {
         var service = CreateService();

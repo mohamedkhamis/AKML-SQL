@@ -146,7 +146,7 @@
   "expression": {
     "booleanOperatorNewLine": "before",
     "betweenOnOneLine": true,
-    "inListStyle": "multiLine",
+    "inListStyle": "auto",
     "inListThreshold": 60,
     "existsSubqueryIndent": "indent"
   },

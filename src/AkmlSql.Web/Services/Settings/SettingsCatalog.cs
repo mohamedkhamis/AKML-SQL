@@ -68,6 +68,7 @@ public static class SettingsCatalog
 
         new SettingEntry("analysis-enabled", CodeAnalysis, "Enable code analysis", "Check scripts against the analysis rules when you click Analyse.", "rules analyse analyze"),
         new SettingEntry("analysis-reanalyse-after-format", CodeAnalysis, "Re-analyse after format", "Analyse the document again after Format SQL.", "analyze"),
+        new SettingEntry("analysis-advisory-display", CodeAnalysis, "Advisory findings", "Information and hint findings, such as a missing semicolon. Warnings and errors are always underlined.", "semicolon marker underline squiggle information hint"),
         new SettingEntry("analysis-problems-filter", CodeAnalysis, "Default Problems filters", "The severities the Problems tab shows when it opens.", "info warning error severity"),
         new SettingEntry("analysis-suppressed-rules", CodeAnalysis, "Suppressed rules", "Rules turned off everywhere. Undo brings a rule back.", "disabled ignore"),
         new SettingEntry("analysis-rules", CodeAnalysis, "Rules", "Every rule, grouped by database: SQL Server and PostgreSQL. A PostgreSQL rule links to the manual page it rests on.", "catalog list severity category sql server postgres postgresql manual"),
@@ -83,6 +84,7 @@ public static class SettingsCatalog
 
         new SettingEntry("diagnostics-engine", Diagnostics, "Engine", "The paired engine: its version, how it runs and the account it runs as.", "service account version"),
         new SettingEntry("diagnostics-postgresql", Diagnostics, "PostgreSQL support", "Whether the paired engine offers PostgreSQL, and what the active connection is.", "postgres capability kind version connection"),
+        new SettingEntry("diagnostics-storage", Diagnostics, "Browser storage", "Whether this browser keeps your saved connections and pairings, or may clear them when space runs low.", "persistent storage evicted cleared quota"),
         new SettingEntry("diagnostics-levels", Diagnostics, "Levels shown", "Which log entries the table shows.", "log info warn error debug"),
         new SettingEntry("diagnostics-log", Diagnostics, "Log", "Recent events in this browser. Export or clear them.", "export clear"),
     };

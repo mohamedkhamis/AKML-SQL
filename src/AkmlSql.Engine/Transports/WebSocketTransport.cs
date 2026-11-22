@@ -393,6 +393,9 @@ namespace AkmlSql.Engine.Transports
             // sees it applied. Two runs on one session still queue on that session's connection gate.
             var sendLock = new SemaphoreSlim(1, 1);
 
+            // Spec 047 (ENG-001): a revoke of the pairing this connection authenticated with closes it at once.
+            BridgeConnection.SetCloser(() => CloseForRevokedPairingAsync(socket, sendLock));
+
             while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
                 RpcMessage? request;
@@ -527,6 +530,30 @@ namespace AkmlSql.Engine.Transports
             catch (Exception ex)
             {
                 Log.Warning(ex, "WebSocketTransport: could not write the reply to MessageType={Type} RequestId={Id}", request.MessageType, request.RequestId);
+            }
+        }
+
+        /// <summary>
+        /// Spec 047 (ENG-001): sends the close frame (1008, "pairing revoked") under the connection's send lock. It waits a moment
+        /// first so a page that revoked its own pairing still receives the reply; the read loop then sees the peer's close and ends.
+        /// </summary>
+        private static async Task CloseForRevokedPairingAsync(WebSocket socket, SemaphoreSlim sendLock)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
+            await sendLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (socket.State == WebSocketState.Open || socket.State == WebSocketState.CloseReceived)
+                    await socket.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, "pairing revoked", CancellationToken.None)
+                        .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException)
+            {
+                // The browser went away first; nothing is left to close.
+            }
+            finally
+            {
+                sendLock.Release();
             }
         }
 

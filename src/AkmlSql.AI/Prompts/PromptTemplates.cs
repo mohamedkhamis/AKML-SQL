@@ -28,6 +28,24 @@ public static class PromptTemplates
         if (dialect == SqlDialect.PostgreSql)
             return BuildPostgreSqlSystemPrompt(schemaText, taskInstruction, serverVersion);
 
+        // Spec 047 (AI-001): no schema shared (the No schema privacy mode, or none cached yet). The prompt must not announce a
+        // schema it does not carry, nor tell the model to keep to it.
+        if (string.IsNullOrWhiteSpace(schemaText))
+        {
+            return $"""
+                You are an expert SQL Server developer. You work with T-SQL (Microsoft SQL Server dialect).
+
+                {taskInstruction}
+
+                {NoSchemaSentence}
+
+                Important rules:
+                - Use T-SQL syntax (not MySQL, PostgreSQL, or other dialects)
+                - Use schema-qualified names (e.g., dbo.TableName)
+                - Return only what is requested, no extra commentary unless asked
+                """;
+        }
+
         return $"""
             You are an expert SQL Server developer. You work with T-SQL (Microsoft SQL Server dialect).
 
@@ -53,6 +71,23 @@ public static class PromptTemplates
     {
         var version = DescribePostgreSqlServer(serverVersion);
 
+        if (string.IsNullOrWhiteSpace(schemaText))   // spec 047 (AI-001), as for SQL Server
+        {
+            return $"""
+                You are an expert PostgreSQL developer. You work with PostgreSQL SQL and PL/pgSQL.{version}
+
+                {taskInstruction}
+
+                {NoSchemaSentence}
+
+                Important rules:
+                - Use PostgreSQL syntax. Do not use T-SQL: no TOP (use LIMIT), ISNULL (use COALESCE), GETDATE() (use now()), CONVERT (use CAST or ::), square-bracket quoting, @variables or GO
+                - Use schema-qualified names (e.g., public.table_name)
+                - Put an identifier in double quotes only when it needs them (mixed case, spaces or a reserved word)
+                - Return only what is requested, no extra commentary unless asked
+                """;
+        }
+
         return $"""
             You are an expert PostgreSQL developer. You work with PostgreSQL SQL and PL/pgSQL.{version}
 
@@ -70,6 +105,28 @@ public static class PromptTemplates
             - Return only what is requested, no extra commentary unless asked
             """;
     }
+
+    /// <summary>Spec 047 (AI-001, contracts/workspace-ai.md §6): what a prompt says when no schema is shared.</summary>
+    public const string NoSchemaSentence =
+        "No database schema is shared (privacy setting). Use clear placeholder table and column names and say that you did.";
+
+    /// <summary>
+    /// Spec 047 (AI-001): a task instruction that leans on the schema context, made true without one. It drops
+    /// "(provided in the schema context)" and the "Do not suggest indexes that already exist in the schema context" rule, and
+    /// adds that the existing indexes are unknown. Line-based, so the raw string's line endings do not matter.
+    /// </summary>
+    public static string WithoutSchema(string taskInstruction)
+    {
+        var lines = (taskInstruction ?? string.Empty).Replace("\r\n", "\n").Split('\n')
+            .Where(line => !line.Contains("already exist in the schema context", StringComparison.Ordinal))
+            .Select(line => line.Replace(" (provided in the schema context)", string.Empty, StringComparison.Ordinal))
+            .ToList();
+        lines.Add(IndexesUnknownSentence);
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>Spec 047 (AI-001): the index advice without a schema.</summary>
+    public const string IndexesUnknownSentence = "Existing indexes are unknown; say which ones to check first.";
 
     /// <summary>
     /// " The server is PostgreSQL 16.4." for a known version, otherwise nothing: a version is never invented. Only the first

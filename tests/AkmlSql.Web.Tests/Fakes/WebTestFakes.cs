@@ -44,10 +44,16 @@ internal sealed class FakeEngineBridge : IEngineBridge
     /// <summary>The engine's answer to a SQL Server connection test, which every SQL Server connect now starts with.</summary>
     public TestSqlConnectionResponse TestSqlReply { get; set; } = new() { Ok = true };
 
+    /// <summary>Spec 047 — every request sent, in order (type and payload).</summary>
+    public List<(int Type, object Request)> Requests { get; } = new();
+
     public Task<TResponse> SendAsync<TRequest, TResponse>(int requestMessageType, TRequest request, CancellationToken ct)
         where TRequest : class
-        where TResponse : class =>
-        Task.FromResult(requestMessageType == AkmlSql.Core.Ipc.MessageTypes.TestSqlConnection ? (TResponse)(object)TestSqlReply : default!);
+        where TResponse : class
+    {
+        Requests.Add((requestMessageType, request));
+        return Task.FromResult(requestMessageType == AkmlSql.Core.Ipc.MessageTypes.TestSqlConnection ? (TResponse)(object)TestSqlReply : default!);
+    }
 
     /// <summary>Spec 041 (T184) — every notification sent, in order.</summary>
     public List<(int Type, object Payload)> Notifications { get; } = new();

@@ -121,6 +121,8 @@ namespace AkmlSql.Engine.Handlers.Handshake
 
                     var minted = _bearerMinter(request.BrowserLabel ?? string.Empty);
                     BridgeConnection.Adopt(request.ClientInstanceId);
+                    // Spec 047 (ENG-001): the connection is this pairing's, so the list can mark it and a revoke can close it.
+                    if (!string.IsNullOrEmpty(minted)) BridgeConnection.SetTokenHash(BearerTokenStore.HashToken(minted!));
                     return Task.FromResult(new HandshakeResponse
                     {
                         Status = HandshakeStatus.Ok,
@@ -155,6 +157,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                     }
 
                     BridgeConnection.Adopt(request.ClientInstanceId);
+                    BridgeConnection.SetTokenHash(BearerTokenStore.HashToken(request.BearerToken!));   // spec 047 (ENG-001)
                     return Task.FromResult(new HandshakeResponse
                     {
                         Status = HandshakeStatus.Ok,

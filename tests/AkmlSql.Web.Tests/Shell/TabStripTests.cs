@@ -191,19 +191,25 @@ public sealed class TabStripTests : BunitContext
             .Add(t => t.ActiveIdChanged, EventCallback.Factory.Create<string>(this, id => onChanged?.Invoke(id)))
             .Add(t => t.OnClose, EventCallback.Factory.Create<string>(this, id => onClose?.Invoke(id))));
 
+    // Spec 047 (WEB-009): the close button used to sit inside its tab (axe nested-interactive: interactive content inside
+    // interactive content). It is now the tab's sibling in a presentational item, and only the active tab's is a tab stop.
     [Fact]
-    public void A_closable_tab_is_not_a_button_and_holds_a_close_button_that_is_not_a_tab_stop()
+    public void A_closable_tab_is_not_a_button_and_its_close_button_is_beside_it()
     {
         var cut = RenderClosable("q1");
 
         var tabs = cut.FindAll("[role=tab]");
         Assert.Equal(3, tabs.Count);
         Assert.All(tabs, t => Assert.Equal("DIV", t.TagName));   // a button cannot hold a button
-        var close = tabs[1].QuerySelector("[data-testid=doc-tab-close]");
+        Assert.All(tabs, t => Assert.Null(t.QuerySelector("[data-testid=doc-tab-close]")));   // nothing interactive inside a tab
+        var close = tabs[1].NextElementSibling;
         Assert.NotNull(close);
         Assert.Equal("BUTTON", close!.TagName);
-        Assert.Equal("-1", close.GetAttribute("tabindex"));
+        Assert.Equal("doc-tab-close", close.GetAttribute("data-testid"));
         Assert.Equal("Close orders-audit", close.GetAttribute("aria-label"));
+        Assert.Equal("presentation", tabs[1].ParentElement!.GetAttribute("role"));
+        var closes = cut.FindAll("[data-testid=doc-tab-close]");
+        Assert.Equal(new[] { "0", "-1", "-1" }, closes.Select(c => c.GetAttribute("tabindex")));   // the active tab's only
         Assert.Equal(new[] { "q1", "q2", "q3" }, tabs.Select(t => t.GetAttribute("data-tab-id")));
         Assert.Equal(new[] { "true", "false", "false" }, tabs.Select(t => t.GetAttribute("data-active")));
     }

@@ -244,6 +244,14 @@ Invoke-Build "Analyzer CLI (publish)" {
     dotnet publish "$Root\src\AkmlSql.Analyzer\AkmlSql.Analyzer.csproj" -c $Configuration -r win-x64 -p:Version=$Version -v quiet --nologo
 }
 
+# Spec 047 (CLI-001): the shipped analyzer is the trimmed single-file publish, and trimming once removed every rule, so the
+# exe said "No issues found" for any SQL. Run the published exe on the committed fixtures; nothing ships if it is silent.
+Invoke-Build "Analyzer CLI (smoke)" {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$Root\scripts\test-analyzer-cli.ps1" `
+        -Exe "$Root\src\AkmlSql.Analyzer\bin\$Configuration\net10.0\win-x64\publish\AkmlSql.Analyzer.exe" `
+        -Fixtures "$Root\tests\fixtures\cli"
+}
+
 # Web edition (Blazor WASM) — framework-dependent, so NO -r win-x64 (that would
 # wrongly make the WASM app self-contained). The installer's web component
 # (web-installer.iss [Files]) sources the published wwwroot; this MUST run before

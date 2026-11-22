@@ -12,6 +12,6 @@ SELECT
     COUNT(o.orderid) AS order_count,
     SUM(o.total)     AS total_spent
 FROM   active_customers c
-LEFT JOIN   recent_orders o
+LEFT JOIN recent_orders o
     ON o.customerid = c.customerid
 GROUP BY c.customername;

@@ -35,7 +35,8 @@ namespace AkmlSql.Engine;
 internal static class EngineHandlerRegistry
 {
     public static HistoryRetentionService RegisterAllHandlers(
-        RpcRouter router, RpcContext ctx, Handlers.Handshake.HandshakeHandler? handshakeHandler = null)
+        RpcRouter router, RpcContext ctx, Handlers.Handshake.HandshakeHandler? handshakeHandler = null,
+        Pairing.BearerTokenStore? pairingTokens = null)
     {
         // === Services scoped to this method; handlers capture by closure. ===
         var sessions = ctx.Sessions;
@@ -305,6 +306,11 @@ internal static class EngineHandlerRegistry
         // null (loopback / named-pipe / no bridge), fall back to the parameterless auto-accept
         // handler — the spec-021 NO_AUTH localhost semantics stay intact.
         router.Register(handshakeHandler ?? new Handlers.Handshake.HandshakeHandler());
+
+        // Spec 047 (ENG-001, pairing.manage.v1): list and revoke the browsers paired with this engine. Registered on every
+        // transport; they refuse a named-pipe request and report "no pairing in use" when the engine needs none.
+        router.Register(new Handlers.Pairing.PairingListHandler(() => pairingTokens));
+        router.Register(new Handlers.Pairing.PairingRevokeHandler(() => pairingTokens));
 
         // === AI handlers (7 typed via AiHandlerBase subclasses + 1 raw bridge for AiProviderTest) ===
         // Spec 022 P3/US3 complete: all seven user-facing AI messages route through typed

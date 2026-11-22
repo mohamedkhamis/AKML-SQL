@@ -47,6 +47,13 @@ public sealed class SqlPromptStyleDocument
         return new SqlPromptStyleDocument(root);
     }
 
+    /// <summary>
+    /// Spec 047 (UX-002): whether the JSON reads as a SQL Prompt style — it carries SQL Prompt's <c>metadata</c> object or
+    /// sets at least one option the catalog knows. Any JSON object parses, so a snippet export or another tool's settings
+    /// file would otherwise be taken for a style.
+    /// </summary>
+    public bool LooksLikeStyle => Root["metadata"] is JsonObject || SqlPromptOptionCatalog.Options.Any(o => IsSet(o.Path));
+
     public static bool TryParse(string json, out SqlPromptStyleDocument? document, out string? error)
     {
         try

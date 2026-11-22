@@ -234,4 +234,43 @@ public class IndentationTrackerTests
         Assert.Equal(0, tracker.ProcessToken(TSqlTokenType.End, "END")); // pops first → depth=0, returns 0
         Assert.Equal(0, tracker.CurrentDepth);
     }
+
+    // Spec 047 (FMT-002): END also closes a CASE expression, and BEGIN / END also start statements that open or close
+    // no block. Counting them as blocks moved every later line of the block a level out (or in).
+
+    [Fact]
+    public void A_case_expressions_end_does_not_close_the_enclosing_block()
+    {
+        var tracker = new IndentationTracker();
+        tracker.ProcessToken(TSqlTokenType.Begin, "BEGIN", "SELECT");
+        tracker.ProcessToken(TSqlTokenType.Select, "SELECT", "CASE");
+        tracker.ProcessToken(TSqlTokenType.Case, "CASE", "WHEN");
+        tracker.ProcessToken(TSqlTokenType.When, "WHEN", "1");
+        Assert.Equal(1, tracker.ProcessToken(TSqlTokenType.End, "END", "SELECT"));
+        Assert.Equal(1, tracker.ProcessToken(TSqlTokenType.Select, "SELECT", "4"));   // still inside the block
+        Assert.Equal(0, tracker.ProcessToken(TSqlTokenType.End, "END", null));        // the block's own END
+        Assert.Equal(0, tracker.CurrentDepth);
+    }
+
+    [Theory]
+    [InlineData("TRAN")]
+    [InlineData("TRANSACTION")]
+    [InlineData("DISTRIBUTED")]
+    [InlineData("DIALOG")]
+    [InlineData("CONVERSATION")]
+    public void A_begin_that_starts_a_statement_opens_no_block(string next)
+    {
+        var tracker = new IndentationTracker();
+        tracker.ProcessToken(TSqlTokenType.Begin, "BEGIN", next);
+        Assert.Equal(0, tracker.CurrentDepth);
+    }
+
+    [Fact]
+    public void End_conversation_closes_no_block()
+    {
+        var tracker = new IndentationTracker();
+        tracker.ProcessToken(TSqlTokenType.Begin, "BEGIN", "END");
+        Assert.Equal(1, tracker.ProcessToken(TSqlTokenType.End, "END", "CONVERSATION"));
+        Assert.Equal(1, tracker.CurrentDepth);
+    }
 }

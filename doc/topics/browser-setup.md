@@ -28,6 +28,11 @@ and does not enable Windows features for you. **Don't host (files only)** instal
 the files and engine service for a static host managed separately. With IIS or a
 separately hosted app, add the engine under Settings → Connections when needed.
 
+With IIS the page and the engine use two ports: the site's port and the engine's
+**Bridge port** (both are in the setup summary). Setup tells the page the engine's
+port by publishing `akml-engine.json` in the site, so a new browser finds its engine.
+If it does not, see [Troubleshooting › Web edition](troubleshooting.md#web-edition).
+
 For **LAN standalone**, use the summary's `https://COMPUTERNAME:<port>/` address on
 every computer, including the engine host. Follow its recommended `bridge.cer`
 trust steps before pairing. The page uses secure `wss` connections. Standalone LAN

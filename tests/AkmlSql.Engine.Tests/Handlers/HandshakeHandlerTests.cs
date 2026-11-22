@@ -289,4 +289,47 @@ public sealed class HandshakeHandlerTests
             Assert.Equal("socket:socket-1", AkmlSql.Engine.Pairing.BridgeConnection.Current);
         }
     }
+
+    // ── Spec 047 (ENG-001) — the connection remembers which pairing it authenticated with, so the list can mark
+    //    "this browser" and a revoke can close exactly that pairing's connections ──
+
+    /// <summary>The token hash a connection records after <paramref name="handshake"/>.</summary>
+    private static async Task<(string Status, string? TokenHash)> TokenHashAfterAsync(HandshakeHandler handler, HandshakeRequest handshake)
+    {
+        using (AkmlSql.Engine.Pairing.BridgeConnection.Set("socket-1"))
+        {
+            var response = await Task.Run(() => handler.HandleAsync(handshake, CreateContext(), CancellationToken.None));
+            return (response.Status, AkmlSql.Engine.Pairing.BridgeConnection.CurrentTokenHash);
+        }
+    }
+
+    [Fact]
+    public async Task An_accepted_pairing_records_the_hash_of_the_token_it_used()
+    {
+        var lan = new HandshakeHandler(() => true, p => p == "123456", t => t == "good", _ => "minted-token", () => null);
+
+        var pin = await TokenHashAfterAsync(lan, MakeRequest(pin: "123456"));
+        var bearer = await TokenHashAfterAsync(lan, MakeRequest(bearer: "good"));
+
+        Assert.Equal(HandshakeStatus.Ok, pin.Status);
+        Assert.Equal(AkmlSql.Engine.Pairing.BearerTokenStore.HashToken("minted-token"), pin.TokenHash);
+        Assert.Equal(HandshakeStatus.Ok, bearer.Status);
+        Assert.Equal(AkmlSql.Engine.Pairing.BearerTokenStore.HashToken("good"), bearer.TokenHash);
+    }
+
+    [Fact]
+    public async Task A_refused_handshake_or_one_without_pairing_records_no_token()
+    {
+        var lan = new HandshakeHandler(() => true, p => p == "123456", t => t == "good", _ => "minted-token", () => null);
+
+        var results = new[]
+        {
+            await TokenHashAfterAsync(lan, MakeRequest(pin: "wrong")),          // PinInvalid
+            await TokenHashAfterAsync(lan, MakeRequest(bearer: "revoked")),     // PinRequired
+            await TokenHashAfterAsync(lan, MakeRequest(min: 999, max: 999)),    // ProtocolMismatch
+            await TokenHashAfterAsync(new HandshakeHandler(), MakeRequest()),   // loopback: no pairing, no token
+        };
+
+        foreach (var (_, hash) in results) Assert.Null(hash);
+    }
 }

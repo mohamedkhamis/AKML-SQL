@@ -439,8 +439,11 @@ public class ParenthesisRules : IRuleSet
             if (!isProcDef)
                 continue;
 
-            // Look for the opening parenthesis after the procedure name
-            int openParen = FindNextToken(nodes, i + 1, TSqlTokenType.LeftParenthesis);
+            // The parameter list's parenthesis is the one right after the procedure name. Spec 047 (FMT-001): T-SQL lists are
+            // usually written without parentheses ("create procedure dbo.p @a int, @b varchar(10) as"), and the first "("
+            // after PROCEDURE was then varchar's: its size went onto a line of its own ("varchar(" / "10)"). A parameter's
+            // own parentheses are never the list.
+            int openParen = ParameterListParen(nodes, i);
             if (openParen < 0 || !parenPairs.TryGetValue(openParen, out int closeParen))
                 continue;
 
@@ -487,6 +490,38 @@ public class ParenthesisRules : IRuleSet
 
             i = closeParen;
         }
+    }
+
+    /// <summary>
+    /// Spec 047 (FMT-001): the index of the "(" that opens a procedure's parameter list — the first token after the one- to
+    /// three-part procedure name, comments skipped — or -1 when the parameters are written without one.
+    /// </summary>
+    private static int ParameterListParen(List<LayoutNode> nodes, int procedureIndex)
+    {
+        int k = NextNonComment(nodes, procedureIndex + 1);
+        if (k < 0 || !IsName(nodes[k].TokenType)) return -1;
+        while (true)
+        {
+            int dot = NextNonComment(nodes, k + 1);
+            if (dot < 0 || nodes[dot].TokenType != TSqlTokenType.Dot) break;
+            int part = NextNonComment(nodes, dot + 1);
+            if (part < 0 || !IsName(nodes[part].TokenType)) break;
+            k = part;
+        }
+        int after = NextNonComment(nodes, k + 1);
+        return after >= 0 && nodes[after].TokenType == TSqlTokenType.LeftParenthesis ? after : -1;
+
+        static bool IsName(TSqlTokenType type) => type is TSqlTokenType.Identifier or TSqlTokenType.QuotedIdentifier;
+    }
+
+    private static int NextNonComment(List<LayoutNode> nodes, int from)
+    {
+        for (int k = from; k < nodes.Count; k++)
+        {
+            if (nodes[k].TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment) continue;
+            return k;
+        }
+        return -1;
     }
 
     /// <summary>

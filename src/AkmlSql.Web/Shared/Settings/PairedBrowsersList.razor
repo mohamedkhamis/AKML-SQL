@@ -1,0 +1,113 @@
+@*
+    Spec 047 (ENG-001, contracts/engine-pairing.md §6) — the browsers paired with the connected engine: a label each, when it
+    was paired and last used, which one is this browser, and Revoke (asked first). Shown only when the engine keeps pairings
+    (LAN mode) and offers pairing.manage.v1. Nothing is removed automatically (clarification Q5).
+*@
+@using AkmlSql.Core.Ipc.Messages
+@using AkmlSql.Web.Services
+@implements IDisposable
+@using Microsoft.Extensions.DependencyInjection
+@inject IServiceProvider Services
+@inject IDialogService Dialogs
+
+@if (_entries is { } entries)
+{
+    <div class="akml-paired-browsers" data-testid="paired-browsers">
+        <h4 class="akml-settings-subheading">Paired browsers</h4>
+        <p class="akml-hint">Each browser paired with this engine with its PIN. Revoke one to make it enter the PIN again.</p>
+        @if (entries.Length == 0)
+        {
+            <p class="akml-settings-status">No browser is paired yet.</p>
+        }
+        else
+        {
+            <ul class="akml-paired-browsers-list">
+                @foreach (var e in entries)
+                {
+                    var id8 = e.Id.Length >= 8 ? e.Id[..8] : e.Id;
+                    <li class="akml-paired-browser" data-testid="@($"paired-browser-{id8}")">
+                        <span class="akml-paired-browser-label">@e.Label</span>
+                        @if (e.IsCurrent)
+                        {
+                            <span class="akml-badge" data-testid="paired-browser-current">This browser</span>
+                        }
+                        @if (e.ExpiresAt < DateTimeOffset.UtcNow)
+                        {
+                            <span class="akml-badge" data-testid="paired-browser-expired">Expired</span>
+                        }
+                        <span class="akml-paired-browser-dates">
+                            Paired @e.MintedAt.ToLocalTime().ToString("d") · Last used @e.LastUsedAt.ToLocalTime().ToString("g")
+                        </span>
+                        <button type="button" class="akml-btn akml-btn--danger" disabled="@_busy"
+                                data-testid="@($"paired-browser-revoke-{id8}")" @onclick="() => RevokeAsync(e)">Revoke…</button>
+                    </li>
+                }
+            </ul>
+        }
+        @if (_message != null)
+        {
+            <p class="akml-settings-status" role="status">@_message</p>
+        }
+    </div>
+}
+
+@code {
+    // Optional: a host without the service (older tests, a page that never pairs) shows nothing.
+    private IPairingService? Pairing;
+    private PairingEntry[]? _entries;
+    private string? _message;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Pairing = Services.GetService<IPairingService>();
+        if (Pairing == null) return;
+        Pairing.AvailabilityChanged += OnAvailabilityChanged;
+        await LoadAsync();
+    }
+
+    private void OnAvailabilityChanged() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+
+    private async Task LoadAsync()
+    {
+        if (Pairing is not { Available: true }) { _entries = null; return; }
+        var list = await Pairing.ListAsync(CancellationToken.None);
+        _entries = list is { PairingUsed: true } ? list.Entries : null;
+    }
+
+    private async Task RevokeAsync(PairingEntry entry)
+    {
+        var confirmed = await Dialogs.ConfirmAsync(new DialogRequest
+        {
+            Title = "Revoke pairing",
+            Message = entry.IsCurrent
+                ? "This browser will be disconnected and will need the engine's PIN to connect again."
+                : $"{entry.Label} will need the engine's PIN to connect again.",
+            ConfirmLabel = "Revoke",
+            Destructive = true,
+        });
+        if (!confirmed || Pairing == null) return;
+
+        _busy = true;
+        try
+        {
+            var result = await Pairing.RevokeAsync(entry.Id, CancellationToken.None);
+            _message = result switch
+            {
+                null => "The engine did not answer; nothing was revoked.",
+                { Ok: true } => $"Revoked: {entry.Label}.",
+                _ => result.Message ?? "Nothing was revoked.",
+            };
+            if (!entry.IsCurrent) await LoadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (Pairing != null) Pairing.AvailabilityChanged -= OnAvailabilityChanged;
+    }
+}

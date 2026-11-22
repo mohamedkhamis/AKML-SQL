@@ -99,6 +99,8 @@ public sealed class PageEngineTests
                 Assert.Equal("./js/akml-page-engine.js", Assert.Single(args!));
                 return ValueTask.FromResult((TValue)(object)this);
             }
+            // Spec 047 (WEB-001): a static page then looks for the engine its installer published; none here.
+            if (identifier == "readManifest") return ValueTask.FromResult(default(TValue)!);
             Assert.Equal("detect", identifier);
             Calls++;
             return ValueTask.FromResult((TValue)(object)response((string)Assert.Single(args!)!));

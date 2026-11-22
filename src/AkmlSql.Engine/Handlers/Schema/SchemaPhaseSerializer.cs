@@ -87,6 +87,8 @@ namespace AkmlSql.Engine.Handlers.Schema
                 InaccessibleSchemas = cache.InaccessibleSchemas.ToArray(),
                 HiddenSchemas = cache.HiddenSchemas.ToArray(),
                 SearchPath = cache.SearchPath.ToArray(),
+                // Spec 047 (WEB-013): the login cannot see every object (always false for PostgreSQL).
+                MetadataLimited = cache.MetadataLimited,
             };
         }
 

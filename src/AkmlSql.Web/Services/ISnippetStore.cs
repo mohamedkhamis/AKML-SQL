@@ -44,6 +44,12 @@ public interface ISnippetStore
 
     /// <summary>Delete a user snippet. Built-in ids reject deletes.</summary>
     Task DeleteAsync(string id);
+
+    /// <summary>
+    /// Spec 047 (SN-001): raised after a user snippet is saved or deleted (an import saves), so a reader that keeps the
+    /// list (completion) drops it and reads the store again.
+    /// </summary>
+    event Action? Changed;
 }
 
 /// <summary>Snippet shape used by the web edition. Matches the engine's `Snippet` POCO shape (JSON-compatible) so future engine round-trips are byte-for-byte.</summary>
@@ -96,6 +102,9 @@ internal sealed class SnippetStore : ISnippetStore
     private static readonly Dictionary<string, WebSnippet> BuiltIns = BuildBuiltIns();
     private readonly IIndexedDbAdapter _store;
     private readonly IEngineBridge? _bridge;
+
+    /// <inheritdoc />
+    public event Action? Changed;
 
     public SnippetStore(IIndexedDbAdapter store) : this(store, null) { }
 
@@ -169,6 +178,7 @@ internal sealed class SnippetStore : ISnippetStore
         // Always persist locally first so the next ListAsync sees the update even when
         // the bridge is down.
         await _store.SetAsync(StoreNames.Snippets, snippet.Metadata.Id!, json).ConfigureAwait(false);
+        Changed?.Invoke();   // spec 047 (SN-001): completion reads the list again
 
         // T115 -- if the bridge is open AND the engine advertises snippets.write,
         // propagate the save. Bridge failures are silent (the local copy is the
@@ -200,6 +210,7 @@ internal sealed class SnippetStore : ISnippetStore
         }
 
         await _store.DeleteAsync(StoreNames.Snippets, id).ConfigureAwait(false);
+        Changed?.Invoke();   // spec 047 (SN-001)
 
         if (IsBridgeSnippetWriteAvailable())
         {

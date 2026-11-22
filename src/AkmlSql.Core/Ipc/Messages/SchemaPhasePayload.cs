@@ -40,6 +40,14 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Spec 042 (FR-061): the session's search path (<c>current_schemas(false)</c>), used to order and qualify suggestions.</summary>
         [Key(7)] public string[] SearchPath { get; set; } = System.Array.Empty<string>();
+
+        /// <summary>
+        /// Spec 047 (WEB-013, data-model §8): true when the engine's login lacks VIEW DEFINITION on the database
+        /// (<c>HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'VIEW DEFINITION') = 0</c>), so the catalog shows it only the
+        /// objects it may see and procedures and functions can be missing. Read in Phase A. An engine from before
+        /// sends no key 8, which reads as false (no notice). Always false for PostgreSQL.
+        /// </summary>
+        [Key(8)] public bool MetadataLimited { get; set; }
     }
 
     [MessagePackObject]

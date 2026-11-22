@@ -51,11 +51,14 @@
         <button class="akml-btn akml-hist-fav @(_favoritesOnly ? "is-active" : null)" title="Favorites only"
                 aria-pressed="@(_favoritesOnly ? "true" : "false")"
                 @onclick="ToggleFavoritesFilter" data-testid="history-fav-filter" aria-label="Favorites only"><Icon Name="star" /></button>
-        <select class="akml-hist-select" value="@(_server ?? "")" @onchange="OnServerChanged" title="Server">
+        @* Spec 047 (WEB-009): a real label for each filter (a title alone is not one: axe label-title-only). *@
+        <label class="akml-visually-hidden" for="akml-hist-server">Server</label>
+        <select id="akml-hist-server" class="akml-hist-select" value="@(_server ?? "")" @onchange="OnServerChanged" title="Server">
             <option value="">All servers</option>
             @foreach (var s in _servers) { <option value="@s">@s</option> }
         </select>
-        <select class="akml-hist-select" value="@(_database ?? "")" @onchange="OnDatabaseChanged" title="Database">
+        <label class="akml-visually-hidden" for="akml-hist-database">Database</label>
+        <select id="akml-hist-database" class="akml-hist-select" value="@(_database ?? "")" @onchange="OnDatabaseChanged" title="Database">
             <option value="">All databases</option>
             @foreach (var d in _databases) { <option value="@d">@d</option> }
         </select>

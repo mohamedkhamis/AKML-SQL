@@ -246,6 +246,29 @@ public class FormatterPipeline
     public FormatResult Format(string sql, FormattingProfile profile) => Format(sql, profile, null);
 
     /// <summary>
+    /// Spec 047 (SSMS-004, data-model §12): the input's dominant line ending is CRLF when "\r\n" occurs at least as often
+    /// as a lone "\n" (and at least once); otherwise LF. A script without line breaks has none to keep.
+    /// </summary>
+    internal static bool UsesCrLf(string text)
+    {
+        int crlf = 0, lf = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '\n') continue;
+            if (i > 0 && text[i - 1] == '\r') crlf++;
+            else lf++;
+        }
+        return crlf > 0 && crlf >= lf;
+    }
+
+    /// <summary>Every line break of <paramref name="text"/> as "\r\n" or as "\n"; a lone "\r" is left as it is.</summary>
+    internal static string WithLineEndings(string text, bool crlf)
+    {
+        var lf = text.Replace("\r\n", "\n");
+        return crlf ? lf.Replace("\n", "\r\n") : lf;
+    }
+
+    /// <summary>
     /// <see cref="Format(string, FormattingProfile)"/> with per-call choices (spec 040, STY-11):
     /// whether the layout and casing stages run, and Stage 8's semicolons and brackets. Null
     /// <paramref name="options"/> is today's behaviour exactly.
@@ -414,6 +437,12 @@ public class FormatterPipeline
                     });
                 }
             }
+
+            // Stage 9 (spec 047, SSMS-004, data-model §12): the output takes the input's dominant line ending. The stages
+            // write "\n", and SSMS replaced the whole buffer with it, so Format Document turned a CRLF file into LF. The
+            // original text, returned when validation fails, is untouched by definition.
+            if (validationPassed && !string.Equals(formatted, sql, StringComparison.Ordinal))
+                formatted = WithLineEndings(formatted, UsesCrLf(sql));
 
             sw.Stop();
             return new FormatResult

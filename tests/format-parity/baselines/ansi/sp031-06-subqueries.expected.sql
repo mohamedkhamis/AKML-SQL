@@ -9,10 +9,7 @@ select c.companyname, (
     from   dbo.orders o
     where  o.customerid = c.customerid
     and o.orderdate >= '1997-01-01'
-    and o.shipcountry not in(
-    'USA',
-    'Canada'
-)
+    and o.shipcountry not in('USA', 'Canada')
     and o.freight > (
             select AVG(f.freight)
         from   dbo.orders f

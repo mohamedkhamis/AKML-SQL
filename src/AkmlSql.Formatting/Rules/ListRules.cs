@@ -283,8 +283,13 @@ public class ListRules : IRuleSet
         if (!list.AlignItemsAcrossClauses)
             return;
 
-        // Find clause keywords and their first items
-        var clauseItems = new List<(int keywordIndex, int firstItemIndex, int keywordLength)>();
+        // Find clause keywords and their first items, one statement and one parenthesis level at a time. Spec 047
+        // (FMT-005): a column belongs to the clauses that stack in it. Collected over the whole script, a lone
+        // "SET NOCOUNT ON" was padded to an earlier statement's SELECT ("SET    nocount ON"), and a "SET @x = (" to the
+        // SELECT of its own subquery, a level deeper. A join keyword is not in the column: "INNER JOIN" starts its line
+        // with INNER, and padding JOIN's first item to SELECT's width wrote "INNER JOIN   dbo.Orders o".
+        var levels = new Stack<List<(int keywordIndex, int firstItemIndex, int keywordLength)>>();
+        levels.Push(new());
 
         for (int i = 0; i < nodes.Count; i++)
         {
@@ -292,7 +297,24 @@ public class ListRules : IRuleSet
             if (node.IsInNoformatRegion)
                 continue;
 
-            if (IsClauseKeyword(node.TokenType) && i + 1 < nodes.Count)
+            if (node.TokenType == TSqlTokenType.LeftParenthesis)
+            {
+                levels.Push(new());
+                continue;
+            }
+            if (node.TokenType == TSqlTokenType.RightParenthesis)
+            {
+                if (levels.Count > 1) AlignStatement(nodes, levels.Pop());
+                continue;
+            }
+
+            if (node.StartsStatement || node.TokenType is TSqlTokenType.Semicolon or TSqlTokenType.Go)
+            {
+                AlignStatement(nodes, levels.Peek());
+                levels.Peek().Clear();
+            }
+
+            if (IsClauseKeyword(node.TokenType) && node.TokenType != TSqlTokenType.Join && i + 1 < nodes.Count)
             {
                 int firstItem = i + 1;
                 // Skip BY in GROUP BY / ORDER BY
@@ -301,11 +323,18 @@ public class ListRules : IRuleSet
                 if (firstItem < nodes.Count)
                 {
                     int kwLen = GetClauseKeywordLength(nodes, i);
-                    clauseItems.Add((i, firstItem, kwLen));
+                    levels.Peek().Add((i, firstItem, kwLen));
                 }
             }
         }
 
+        while (levels.Count > 0)
+            AlignStatement(nodes, levels.Pop());
+    }
+
+    /// <summary>The first items of one statement's stacked clauses, aligned to its longest clause keyword.</summary>
+    private static void AlignStatement(List<LayoutNode> nodes, List<(int keywordIndex, int firstItemIndex, int keywordLength)> clauseItems)
+    {
         if (clauseItems.Count < 2)
             return;
 
@@ -408,6 +437,10 @@ public class ListRules : IRuleSet
             TSqlTokenType.Set => ClauseContext.Set,
             TSqlTokenType.Values => ClauseContext.Values,
             TSqlTokenType.Semicolon => ClauseContext.None,
+            // Spec 047 (FMT-003): GO and the start of any other statement end the list too. Kept until a semicolon, the
+            // context of "SELECT 1" indented the GO lines after it and the statement after "GO 3" as list items.
+            TSqlTokenType.Go => ClauseContext.None,
+            _ when node.StartsStatement => ClauseContext.None,
             _ when node.FormattedText.Equals("GROUP", StringComparison.OrdinalIgnoreCase) => ClauseContext.GroupBy,
             _ when node.FormattedText.Equals("ORDER", StringComparison.OrdinalIgnoreCase) => ClauseContext.OrderBy,
             _ => current,
@@ -483,6 +516,7 @@ public class ListRules : IRuleSet
         // list. Without this, the CTE body's last clause-list over-runs the CTE's closing ')' and
         // CollapseRange deletes its line break, merging ')' + the main SELECT up (spec 030 T009).
         int parenDepth = 0;
+        int openCases = 0;
         for (int i = start; i < nodes.Count; i++)
         {
             if (nodes[i].IsInNoformatRegion)
@@ -502,6 +536,12 @@ public class ListRules : IRuleSet
                 parenDepth--;
                 continue;
             }
+
+            // Spec 047 (FMT-002): a list ends with its statement — at the next statement of the parse tree, or at the END
+            // or ELSE of the block or IF around it. Running to the next clause keyword collapsed the statements written
+            // after it without semicolons onto the list's line ("END CATCH IF @a > 2", "SELECT 1 DROP TABLE dbo.t").
+            if (parenDepth == 0 && StatementBounds.EndsBefore(nodes, i, ref openCases))
+                return i;
 
             // End of list: next clause keyword or statement terminator (or, for a JOIN-opened
             // list, the ON keyword — see ApplyCollapseShortLists).

@@ -157,6 +157,14 @@ public interface ISqlConnectionService
         return new ConnectResult(ok, error);
     }
 
+    /// <summary>
+    /// Spec 047 (WEB-002, clarification Q1): Save with "Remember the password on the engine machine" checks the SQL Server
+    /// login first, and the engine keeps the typed password only when the server accepted it
+    /// (<c>TestSqlConnectionRequest.RememberPassword</c>; <see cref="ConnectResult.Remembered"/> says whether it is kept).
+    /// Nothing is stored in the browser. The default (an implementation without remembering) is a plain test, never kept.
+    /// </summary>
+    Task<ConnectResult> TestAndRememberAsync(ConnectionTarget target, CancellationToken ct) => TestAsync(target, ct);
+
     /// <summary>Spec 042 (T063): connect to a server of either kind; see <see cref="TestAsync(ConnectionTarget, CancellationToken)"/>.</summary>
     async Task<ConnectResult> ConnectAsync(ConnectionTarget target, CancellationToken ct)
     {
@@ -441,6 +449,16 @@ internal sealed class SqlConnectionService : ISqlConnectionService
             ? TestPostgresAsync(target, ct, CopySourceOf(target, null))
             : TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct,
                 CopySourceOf(target, null));
+
+    /// <summary>
+    /// Spec 047 (WEB-002): the test a Save with Remember runs. The same TestSqlConnection round trip as Test and Connect, asking
+    /// the engine to keep the typed password once the server accepts it. PostgreSQL's test does not remember (follow-up).
+    /// </summary>
+    public Task<ConnectResult> TestAndRememberAsync(ConnectionTarget target, CancellationToken ct) =>
+        target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql
+            ? Task.FromResult(ConnectResult.Failed("Remembering a PostgreSQL password is done by Connect."))
+            : TestSqlServerAsync(target.Server, target.Database, target.WindowsAuth, target.User, target.Password, target.TrustServerCertificate, ct,
+                copyFrom: null, rememberPassword: !target.WindowsAuth && !string.IsNullOrEmpty(target.Password) && EngineRemembersSqlServerPasswords);
 
     public Task<(bool Ok, IReadOnlyList<string> Databases, string? Error)> ListDatabasesAsync(ConnectionTarget target, CancellationToken ct) =>
         target.Kind == AkmlSql.Core.DatabaseKind.PostgreSql

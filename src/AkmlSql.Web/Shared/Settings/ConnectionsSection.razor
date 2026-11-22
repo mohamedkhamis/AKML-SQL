@@ -20,6 +20,8 @@
 
 <SettingRow Id="connections-engines" Kind="block">
     <ConnectionPickerComponent ShowTitle="false" />
+    @* Spec 047 (ENG-001): the browsers paired with the connected engine, each revocable. *@
+    <PairedBrowsersList />
 </SettingRow>
 
 <SettingRow Id="connections-sql" Kind="block">
@@ -50,7 +52,7 @@
     @if (_saved is { Count: > 0 })
     {
         <table class="akml-table">
-            <thead><tr><th>Name</th>@if (ShowKinds) { <th>Kind</th> }<th>Server / database</th><th>Authentication</th><th></th></tr></thead>
+            <thead><tr><th>Name</th>@if (ShowKinds) { <th>Kind</th> }<th>Server / database</th><th>Authentication</th><th><span class="akml-visually-hidden">Actions</span></th></tr></thead>
             <tbody>
                 @foreach (var c in _saved)
                 {

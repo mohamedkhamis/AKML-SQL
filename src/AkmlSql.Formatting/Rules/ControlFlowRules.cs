@@ -27,7 +27,7 @@ public class ControlFlowRules : IRuleSet
         ApplyBeginEndRules(nodes, profile.ControlFlow);
         ApplyCaseRules(nodes, profile.Case);
         ApplyCteRules(nodes, profile.Cte, profile.Whitespace);
-        ApplyExpressionRules(nodes, profile.Expression, profile.InStatements);
+        ApplyExpressionRules(nodes, profile.Expression, profile.InStatements, profile.Whitespace);
         // Spec 020 T083 / T084 — operator alignment + BETWEEN + IN-list alignment
         ApplyOperatorRules(nodes, profile.Operators, profile.Expression);
         ApplyInStatementsAlignment(nodes, profile.InStatements);
@@ -60,9 +60,10 @@ public class ControlFlowRules : IRuleSet
 
                 if (cf.ElseAlignWithIf && node.PrecedingBreak != BreakType.None)
                 {
-                    // Find the matching IF and align indent
-                    int ifLevel = FindMatchingIfIndentLevel(nodes, i);
-                    node.IndentLevel = ifLevel;
+                    // Spec 047 (FMT-002): the line of its own IF, from the parse tree. The token walk is the fallback: it
+                    // took the indent of the IF token itself, which is 0 when the IF follows an ELSE on its line.
+                    int owner = FindOwner(nodes, i);
+                    node.IndentLevel = owner >= 0 ? LineIndentOf(nodes, owner) : FindMatchingIfIndentLevel(nodes, i);
                 }
             }
         }
@@ -117,11 +118,25 @@ public class ControlFlowRules : IRuleSet
             if (nodes[i].TokenType == TSqlTokenType.If)
             {
                 if (depth == 0)
-                    return nodes[i].IndentLevel;
+                    return LineIndentOf(nodes, i);
                 depth--;
             }
         }
         return 0;
+    }
+
+    /// <summary>
+    /// Spec 047 (FMT-002): the index of the node that owns <paramref name="index"/> by the parse tree
+    /// (<see cref="LayoutNode.OwnerTokenIndex"/>), or -1.
+    /// </summary>
+    private static int FindOwner(List<LayoutNode> nodes, int index)
+    {
+        int owner = nodes[index].OwnerTokenIndex;
+        if (owner < 0) return -1;
+        for (int k = index - 1; k >= 0; k--)
+            if (nodes[k].TokenIndex == owner)
+                return k;
+        return -1;
     }
 
     private static int FindIfBlockEnd(List<LayoutNode> nodes, int ifIndex)
@@ -195,7 +210,8 @@ public class ControlFlowRules : IRuleSet
                 }
             }
 
-            // Ensure BEGIN CATCH is on a new line
+            // Ensure BEGIN CATCH is on a new line. Its indent is set with every other block keyword's in PlaceBlocks
+            // (spec 047, FMT-002: it used to be 0, which put END TRY / BEGIN CATCH at column 0 inside a block).
             if (node.TokenType == TSqlTokenType.Begin && i + 1 < nodes.Count)
             {
                 var nextUpper = nodes[i + 1].FormattedText.ToUpperInvariant();
@@ -204,7 +220,6 @@ public class ControlFlowRules : IRuleSet
                     if (node.PrecedingBreak == BreakType.None)
                     {
                         node.PrecedingBreak = BreakType.NewLine;
-                        node.IndentLevel = 0;
                         node.PrecedingSpaces = 0;
                     }
                 }
@@ -219,7 +234,6 @@ public class ControlFlowRules : IRuleSet
                     if (node.PrecedingBreak == BreakType.None)
                     {
                         node.PrecedingBreak = BreakType.NewLine;
-                        node.IndentLevel = 0;
                         node.PrecedingSpaces = 0;
                     }
                 }
@@ -233,107 +247,157 @@ public class ControlFlowRules : IRuleSet
 
     private static void ApplyBeginEndRules(List<LayoutNode> nodes, ControlFlowOptions cf)
     {
+        // Spec 047 (FMT-002): only a block's BEGIN and END are block keywords. A CASE expression's END, BEGIN TRAN and
+        // the other statements that start with BEGIN or END stay where the other rules put them.
+        var keywords = ClassifyBlockKeywords(nodes);
+
         for (int i = 0; i < nodes.Count; i++)
         {
             var node = nodes[i];
-            if (node.IsInNoformatRegion)
+            if (node.IsInNoformatRegion || node.PrecedingBreak != BreakType.None || keywords[i] == BlockKeyword.None)
                 continue;
 
-            // BEGIN on new line
-            if (node.TokenType == TSqlTokenType.Begin)
+            // BEGIN TRY / END TRY / BEGIN CATCH / END CATCH: placed by the TRY/CATCH rules
+            if (NextWordIs(nodes, i, "TRY", "CATCH"))
+                continue;
+
+            bool moves = keywords[i] == BlockKeyword.Begin ? cf.BeginOnNewLine : cf.EndOnNewLine;
+            if (moves)
             {
-                // Skip BEGIN TRY / BEGIN CATCH — handled by TryCatch rules
-                if (i + 1 < nodes.Count)
-                {
-                    var nextUpper = nodes[i + 1].FormattedText.ToUpperInvariant();
-                    if (nextUpper is "TRY" or "CATCH" or "TRANSACTION" or "TRAN")
-                        continue;
-                }
-
-                if (cf.BeginOnNewLine && node.PrecedingBreak == BreakType.None)
-                {
-                    node.PrecedingBreak = BreakType.NewLine;
-                    node.PrecedingSpaces = 0;
-                }
-            }
-
-            // END on new line
-            if (node.TokenType == TSqlTokenType.End)
-            {
-                // Skip END TRY / END CATCH
-                if (i + 1 < nodes.Count)
-                {
-                    var nextUpper = nodes[i + 1].FormattedText.ToUpperInvariant();
-                    if (nextUpper is "TRY" or "CATCH")
-                        continue;
-                }
-
-                if (cf.EndOnNewLine && node.PrecedingBreak == BreakType.None)
-                {
-                    node.PrecedingBreak = BreakType.NewLine;
-                    node.PrecedingSpaces = 0;
-                }
+                node.PrecedingBreak = BreakType.NewLine;
+                node.PrecedingSpaces = 0;
             }
         }
 
-        // Indent between BEGIN...END
-        if (cf.IndentBetweenBeginEnd)
+        PlaceBlocks(nodes, cf, keywords);
+    }
+
+    private enum BlockKeyword { None, Begin, End }
+
+    /// <summary>
+    /// Spec 047 (FMT-002): which BEGIN and END tokens open and close a block (BEGIN…END, TRY, CATCH). A CASE expression's
+    /// END closes the CASE; BEGIN TRAN[SACTION], BEGIN DISTRIBUTED TRAN, BEGIN DIALOG, BEGIN CONVERSATION TIMER and END
+    /// CONVERSATION are statements of their own. Taking any of them for a block keyword shifted every later line.
+    /// </summary>
+    private static BlockKeyword[] ClassifyBlockKeywords(List<LayoutNode> nodes)
+    {
+        var kinds = new BlockKeyword[nodes.Count];
+        var open = new Stack<bool>();   // true: a CASE expression, false: a block
+        for (int i = 0; i < nodes.Count; i++)
         {
-            ApplyIndentBetweenBeginEnd(nodes);
+            switch (nodes[i].TokenType)
+            {
+                case TSqlTokenType.Case:
+                    open.Push(true);
+                    break;
+                case TSqlTokenType.Begin when !NextWordIs(nodes, i, "TRAN", "TRANSACTION", "DISTRIBUTED", "DIALOG", "CONVERSATION"):
+                    open.Push(false);
+                    kinds[i] = BlockKeyword.Begin;
+                    break;
+                case TSqlTokenType.End when !NextWordIs(nodes, i, "CONVERSATION") && open.Count > 0:
+                    kinds[i] = open.Pop() ? BlockKeyword.None : BlockKeyword.End;
+                    break;
+            }
+        }
+        return kinds;
+    }
+
+    private static bool NextWordIs(List<LayoutNode> nodes, int index, params string[] words)
+    {
+        for (int k = index + 1; k < nodes.Count; k++)
+        {
+            if (nodes[k].TokenType is TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
+                continue;
+            var upper = nodes[k].FormattedText.ToUpperInvariant();
+            return Array.IndexOf(words, upper) >= 0;
+        }
+        return false;
+    }
+
+    private readonly record struct BlockFrame(int Level, int Shift);
+
+    /// <summary>
+    /// Spec 047 (FMT-002): BEGIN and END at the indent of the line that owns the block, the body one level deeper.
+    /// <list type="bullet">
+    /// <item>The BEGIN of an IF / ELSE / WHILE body (<see cref="LayoutNode.OwnerTokenIndex"/>) takes the indent of its
+    /// owner's line, one level more when the style indents BEGIN and END keywords (<c>indentBeginEndKeywords</c>). It
+    /// used to keep the indent it had inline: 0, so the moved BEGIN and its END were written at column 0.</item>
+    /// <item>A BEGIN CATCH lines up with its END TRY; every other BEGIN keeps its statement's indent, at least one level
+    /// deeper than the block around it.</item>
+    /// <item>An END lines up with its BEGIN.</item>
+    /// <item>With <c>indentBetweenBeginEnd</c>, a body line is at least one level deeper than its block. The extra level
+    /// of indented BEGIN/END keywords moves the whole body, continuation lines included (<see cref="BlockFrame.Shift"/>),
+    /// so nothing inside is flattened.</item>
+    /// </list>
+    /// </summary>
+    private static void PlaceBlocks(List<LayoutNode> nodes, ControlFlowOptions cf, BlockKeyword[] keywords)
+    {
+        var frames = new Stack<BlockFrame>();
+        BlockFrame? closedTry = null;
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            bool lineStart = i > 0 && node.PrecedingBreak != BreakType.None;
+            bool placeable = lineStart && !node.IsInNoformatRegion;
+            var enclosing = frames.Count > 0 ? frames.Peek() : (BlockFrame?)null;
+
+            switch (keywords[i])
+            {
+                case BlockKeyword.Begin:
+                {
+                    int level, shift = enclosing?.Shift ?? 0;
+                    int owner = FindOwner(nodes, i);
+                    if (owner >= 0)
+                    {
+                        level = LineIndentOf(nodes, owner);
+                        if (lineStart && cf.IndentBeginEndKeywords)
+                        {
+                            level++;
+                            shift++;
+                        }
+                    }
+                    else if (NextWordIs(nodes, i, "CATCH") && closedTry is { } tryFrame)
+                    {
+                        (level, shift) = (tryFrame.Level, tryFrame.Shift);
+                    }
+                    else if (lineStart)
+                    {
+                        level = BodyLevel(node.IndentLevel, enclosing, cf);
+                    }
+                    else
+                    {
+                        level = LineIndentOf(nodes, i);
+                    }
+
+                    if (placeable) node.IndentLevel = level;
+                    frames.Push(new BlockFrame(level, shift));
+                    closedTry = null;
+                    break;
+                }
+
+                case BlockKeyword.End:
+                {
+                    if (frames.Count == 0) break;
+                    var frame = frames.Pop();
+                    if (placeable) node.IndentLevel = frame.Level;
+                    closedTry = NextWordIs(nodes, i, "TRY") ? frame : null;
+                    break;
+                }
+
+                default:
+                    if (placeable && enclosing != null)
+                        node.IndentLevel = BodyLevel(node.IndentLevel, enclosing, cf);
+                    break;
+            }
         }
     }
 
-    private static void ApplyIndentBetweenBeginEnd(List<LayoutNode> nodes)
+    /// <summary>A line inside a block: its own indent moved with the block, and at least one level deeper than it.</summary>
+    private static int BodyLevel(int indentLevel, BlockFrame? enclosing, ControlFlowOptions cf)
     {
-        // Track BEGIN/END nesting and adjust indent levels
-        var beginStack = new Stack<int>(); // stores the indent level of the BEGIN
-
-        for (int i = 0; i < nodes.Count; i++)
-        {
-            var node = nodes[i];
-            if (node.IsInNoformatRegion)
-                continue;
-
-            if (node.TokenType == TSqlTokenType.Begin)
-            {
-                // Skip BEGIN TRANSACTION
-                if (i + 1 < nodes.Count)
-                {
-                    var nextUpper = nodes[i + 1].FormattedText.ToUpperInvariant();
-                    if (nextUpper is "TRANSACTION" or "TRAN")
-                        continue;
-                }
-
-                beginStack.Push(node.IndentLevel);
-            }
-            else if (node.TokenType == TSqlTokenType.End && beginStack.Count > 0)
-            {
-                // Skip END TRY / END CATCH for indent purposes
-                if (i + 1 < nodes.Count)
-                {
-                    var nextUpper = nodes[i + 1].FormattedText.ToUpperInvariant();
-                    if (nextUpper is "TRY" or "CATCH")
-                    {
-                        beginStack.Pop();
-                        continue;
-                    }
-                }
-
-                int beginLevel = beginStack.Pop();
-
-                // END should align with BEGIN
-                if (node.PrecedingBreak != BreakType.None)
-                {
-                    node.IndentLevel = beginLevel;
-                }
-            }
-            else if (beginStack.Count > 0 && node.PrecedingBreak != BreakType.None)
-            {
-                // Content between BEGIN and END: indent relative to BEGIN
-                int beginLevel = beginStack.Peek();
-                node.IndentLevel = Math.Max(node.IndentLevel, beginLevel + 1);
-            }
-        }
+        if (enclosing is not { } frame || !cf.IndentBetweenBeginEnd) return indentLevel;
+        return Math.Max(indentLevel + frame.Shift, frame.Level + 1);
     }
 
     // -----------------------------------------------------------------------
@@ -877,11 +941,11 @@ public class ControlFlowRules : IRuleSet
     // Expression rules
     // -----------------------------------------------------------------------
 
-    private static void ApplyExpressionRules(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt)
+    private static void ApplyExpressionRules(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt, WhitespaceOptions ws)
     {
         ApplyBooleanOperatorNewLine(nodes, expr);
         ApplyBetweenOnOneLine(nodes, expr);
-        ApplyInListStyle(nodes, expr, inStmt);
+        ApplyInListStyle(nodes, expr, inStmt, ws);
         ApplyExistsSubqueryIndent(nodes, expr);
     }
 
@@ -987,7 +1051,7 @@ public class ControlFlowRules : IRuleSet
     /// "multiLine" puts each item on its own line.
     /// "auto" uses threshold to decide.
     /// </summary>
-    private static void ApplyInListStyle(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt)
+    private static void ApplyInListStyle(List<LayoutNode> nodes, ExpressionOptions expr, InStatementsOptions inStmt, WhitespaceOptions ws)
     {
         // Precedence: the canonical SQL Prompt control `inStatements.placeItemsOnNewLine` drives
         // when explicitly set to always/never; its default "ifLongerThanWrap" defers to the older
@@ -1041,7 +1105,7 @@ public class ControlFlowRules : IRuleSet
             switch (effectiveStyle)
             {
                 case "singleLine":
-                    CollapseRange(nodes, openParen + 1, closeParen);
+                    CollapseInList(nodes, openParen, closeParen, ws);
                     break;
 
                 case "multiLine":
@@ -1053,9 +1117,26 @@ public class ControlFlowRules : IRuleSet
                     if (length > expr.InListThreshold)
                         ExpandToMultiLine(nodes, openParen, closeParen);
                     else
-                        CollapseRange(nodes, openParen + 1, closeParen);
+                        CollapseInList(nodes, openParen, closeParen, ws);
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// An IN list on one line, with its IN. Spec 047 (FMT-005): a style that puts a list's bracket on a line of its own
+    /// (AlignedLeftBracket) left "IN" alone at the end of the line above "('A', 'B')". The bracket is joined back the way
+    /// the layout writes "IN(": a space only when the style puts one before parentheses.
+    /// </summary>
+    private static void CollapseInList(List<LayoutNode> nodes, int openParen, int closeParen, WhitespaceOptions ws)
+    {
+        CollapseRange(nodes, openParen + 1, closeParen);
+        var open = nodes[openParen];
+        if (!open.IsInNoformatRegion && open.PrecedingBreak != BreakType.None)
+        {
+            open.PrecedingBreak = BreakType.None;
+            open.PrecedingSpaces = ws.SpaceBeforeParentheses ? 1 : 0;
+            open.IndentLevel = 0;
         }
     }
 

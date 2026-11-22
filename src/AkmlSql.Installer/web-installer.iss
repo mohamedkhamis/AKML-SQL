@@ -19,6 +19,7 @@ Source: "web-config-bridge.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion;
 Source: "web-hosting-check.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 Source: "web-iis-remove.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 Source: "web-hosting-repair.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
+Source: "web-engine-manifest.ps1"; DestDir: "{app}\Support"; Flags: ignoreversion; Components: web
 
 [Run]
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{app}\Support\web-tls-setup.ps1"" -Port {code:GetBridgePort} -PfxPath ""{commonappdata}\AKML SQL Web\certs\bridge.pfx"""; Check: IsLanExposed; Components: web; Flags: runhidden
@@ -547,6 +548,19 @@ begin
       Args := '-Port ' + IntToStr(WebBridgePort) + ' -Mode ' + Exposure + ' -ConfigPath "' + State + '\config.json"';
       if Root <> '' then Args := Args + ' -WebRoot "' + Root + '"';
       if not (Web_Support('web-config-bridge.ps1', Args, Code) and (Code = 0)) then Failure := Failure + #13#10 + 'Bridge configuration failed; see install.log.';
+      { Spec 047 (WEB-001): a page IIS (or another host) serves cannot learn the engine's port, so publish it next to the bundle.
+        Service hosting serves the page from the engine itself; remove a file an earlier host choice left. Non-fatal. }
+      if WebHost = 'Service' then Args := '-WebRoot "' + ExpandConstant('{app}\Web') + '" -Remove'
+      else
+      begin
+        Args := '-WebRoot "' + ExpandConstant('{app}\Web') + '" -Port ' + IntToStr(WebBridgePort) + ' -Scheme ';
+        if Exposure = 'Lan' then Args := Args + 'wss' else Args := Args + 'ws';
+      end;
+      if not (Web_Support('web-engine-manifest.ps1', Args, Code) and (Code = 0)) then
+      begin
+        Log('WARNING: could not write the engine manifest (akml-engine.json); see install.log.');
+        Failure := Failure + #13#10 + 'The engine address for the web page (akml-engine.json) was not written; see install.log.';
+      end;
       Args := '-Apply -WebHost ' + WebHost + ' -Exposure ' + Exposure + ' -EnginePort ' + IntToStr(WebBridgePort) + ' -HttpsPort ' + IntToStr(WebHttpsPort);
       if not (Web_Support('web-firewall.ps1', Args, Code) and (Code = 0)) then Failure := Failure + #13#10 + 'Firewall configuration failed; see install.log.';
       WebStateAclOk := Web_LockState() and WebStateAclOk;

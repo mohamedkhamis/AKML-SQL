@@ -3,7 +3,7 @@ declare @startdate datetime = '1997-01-01', @enddate datetime = '1997-12-31', @c
 
 declare @totalfreight money;
 
-set    @totalfreight = (
+set @totalfreight = (
     select SUM(o.freight) from dbo.orders o
     where  o.orderdate between @startdate and @enddate
     and o.shipcountry = @country

@@ -79,6 +79,31 @@
         </span>
     }
 
+    @* Spec 047 (WEB-001): why "Use this computer's engine" did not pair, with the address it tried and the way on. *@
+    @if (_localFailure is { } local)
+    {
+        <span class="akml-status-issue" role="status" data-testid="local-engine-failure">
+            <span class="akml-status-issue-text">@LocalFailureText(local)</span>
+            @switch (local.Failure)
+            {
+                case LocalPairFailure.NotReachable:
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="() => AddEngineFrom(local)"
+                            data-testid="local-engine-add">Add engine…</button>
+                    break;
+                case LocalPairFailure.PinRequired:
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="@(() => Nav.NavigateTo("settings/connections"))"
+                            data-testid="local-engine-pair">Pair…</button>
+                    break;
+                default:
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="@(() => Nav.NavigateTo("settings/connections"))"
+                            data-testid="local-engine-settings">Settings…</button>
+                    break;
+            }
+            <button type="button" class="akml-btn akml-btn--compact akml-btn--ghost" aria-label="Dismiss"
+                    @onclick="() => _localFailure = null" data-testid="local-engine-dismiss">×</button>
+        </span>
+    }
+
     <span class="akml-status-spacer"></span>
     @if (RowsText is { } rows)
     {
@@ -344,9 +369,40 @@
 
     private bool _pairingLocal;
     private PageEngineInfo? _pageEngineInfo;
+    private LocalPairResult? _localFailure;
     private string LocalEngineTitle => _pageEngineInfo is { } info
         ? $"This computer's engine ({info.Host}:{info.Port})"
-        : "Pair with the engine on this computer (localhost:47291); Settings opens if it does not answer";
+        : $"Pair with the engine on this computer (localhost:{EngineEndpoint.DefaultPort})";
+
+    /// <summary>Spec 047 (WEB-001, contracts/engine-pairing.md §3): the notice for a pairing that did not happen.</summary>
+    private static string LocalFailureText(LocalPairResult result) => result.Failure switch
+    {
+        LocalPairFailure.NotReachable => $"No engine answered on {result.TriedAddress}. This install may use another port.",
+        LocalPairFailure.PinRequired => "This engine needs its pairing PIN.",
+        _ => $"The engine at {result.TriedAddress} refused the connection. Check engine pairing.",
+    };
+
+    /// <summary>Add engine… opens Settings › Connections with the address that did not answer filled in.</summary>
+    private void AddEngineFrom(LocalPairResult result)
+    {
+        if (Services.GetService<IPageEngine>() is { } pageEngine && TrySplitAddress(result.TriedAddress, out var host, out var port))
+        {
+            var secure = Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && page.Scheme == Uri.UriSchemeHttps;
+            pageEngine.PairingPrefill = new PageEngineInfo(host, port, secure ? "wss" : "ws");
+        }
+        _localFailure = null;
+        Nav.NavigateTo("settings/connections");
+    }
+
+    private static bool TrySplitAddress(string address, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        var colon = address.LastIndexOf(':');
+        if (colon <= 0 || !int.TryParse(address[(colon + 1)..], out port)) return false;
+        host = address[..colon].Trim('[', ']');
+        return host.Length > 0;
+    }
 
     private bool PageIsLocal =>
         Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && EngineEndpoint.IsLoopbackHost(page.Host);
@@ -354,9 +410,12 @@
     private async Task UseLocalEngineAsync()
     {
         _pairingLocal = true;
+        _localFailure = null;
         try
         {
-            if (!await AutoConnect.PairLocalEngineAsync()) Nav.NavigateTo("settings/connections");
+            var result = await AutoConnect.PairLocalEngineAsync();
+            // Spec 047 (WEB-001): say what was tried and offer the way on, instead of jumping to Settings.
+            _localFailure = result.Ok ? null : result;
         }
         finally
         {
