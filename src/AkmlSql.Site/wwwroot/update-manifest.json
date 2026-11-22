@@ -1,7 +1,7 @@
 {
-    "version":  "1.26.1122.1400",
-    "downloadUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.1122.1400/AKMLSQLSetup-1.26.1122.1400.exe",
+    "version":  "1.26.1122.1658",
+    "downloadUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases/download/v1.26.1122.1658/AKMLSQLSetup-1.26.1122.1658.exe",
     "releaseNotesUrl":  "https://github.com/mohamedkhamis/AKML-SQL/releases",
     "minimumOsVersion":  "10.0.17763",
-    "sha256Hash":  "3e488441373ef9cfa9c83304812e4bd3a179f1cecff2cded0eea327d7f88e2ed"
+    "sha256Hash":  "0a9612f1a6a9bcda70fac417a26306e4600c7d55a4ea2c8a0877d6e74668d1b5"
 }
