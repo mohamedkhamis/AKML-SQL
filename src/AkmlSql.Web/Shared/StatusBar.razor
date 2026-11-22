@@ -681,8 +681,18 @@
         Availability.Offline => "Offline — keyword-only IntelliSense; formatter / analyser run in-browser.",
         Availability.Connecting => "Handshaking with engine…",
         Availability.Reconnecting => ReconnectingText(),
-        Availability.Failed => "Handshake failed. Check engine pairing.",
+        Availability.Failed => FailedText(),
         _ => "Disconnected.",
+    };
+
+    // Installed-product run F4: a stopped engine is not a failed handshake. The issue next to the pill says what happened
+    // and what to do; this text only follows its kind.
+    private string FailedText() => AutoConnect.LastFailure?.Kind switch
+    {
+        EngineConnectFailureKind.Unreachable => "Engine not reachable.",
+        EngineConnectFailureKind.NotPaired => "No engine paired yet.",
+        EngineConnectFailureKind.PairingRequired => "Engine pairing needed.",
+        _ => "Handshake failed. Check engine pairing.",
     };
 
     private string ReconnectingText()

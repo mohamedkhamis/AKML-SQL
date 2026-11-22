@@ -408,6 +408,10 @@
         align-items: flex-start;
         color: var(--akml-text-secondary);
         white-space: normal;
+        /* Installed-product run F3: a tree row is 24px high; the note wraps to several lines, so its row grows with it
+           instead of drawing the text over the rows below. */
+        height: auto;
+        min-height: 24px;
     }
     .akml-schema-tree-note-text { flex: 1 1 auto; min-width: 0; }
     /* Spec 047 (WEB-014): a filter that matches nothing. */

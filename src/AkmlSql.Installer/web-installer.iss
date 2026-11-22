@@ -7,6 +7,25 @@ Name: "web\service"; Description: "Legacy service selection"; Check: WebLegacyCo
 
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\Web\_framework"; Components: web
+; Spec 047 installed-product run (F5): [Files] excludes *.br/*.gz, but the copies older versions installed stayed behind
+; (IIS and the engine never serve them; they only take disk). [InstallDelete] does not recurse: these are the folders
+; that held them.
+Type: files; Name: "{app}\Web\*.br"; Components: web
+Type: files; Name: "{app}\Web\*.gz"; Components: web
+Type: files; Name: "{app}\Web\css\*.br"; Components: web
+Type: files; Name: "{app}\Web\css\*.gz"; Components: web
+Type: files; Name: "{app}\Web\css\components\*.br"; Components: web
+Type: files; Name: "{app}\Web\css\components\*.gz"; Components: web
+Type: files; Name: "{app}\Web\css\themes\*.br"; Components: web
+Type: files; Name: "{app}\Web\css\themes\*.gz"; Components: web
+Type: files; Name: "{app}\Web\js\*.br"; Components: web
+Type: files; Name: "{app}\Web\js\*.gz"; Components: web
+Type: files; Name: "{app}\Web\lib\codemirror\*.br"; Components: web
+Type: files; Name: "{app}\Web\lib\codemirror\*.gz"; Components: web
+Type: files; Name: "{app}\Web\lib\icons\*.br"; Components: web
+Type: files; Name: "{app}\Web\lib\icons\*.gz"; Components: web
+Type: files; Name: "{app}\Web\spike-corpus\*.br"; Components: web
+Type: files; Name: "{app}\Web\spike-corpus\*.gz"; Components: web
 
 [Files]
 Source: "..\AkmlSql.Web\bin\Release\net10.0\publish\wwwroot\*"; Excludes: "*.br,*.gz"; DestDir: "{app}\Web"; Flags: ignoreversion recursesubdirs createallsubdirs; Components: web

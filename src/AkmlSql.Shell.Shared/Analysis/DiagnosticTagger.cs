@@ -44,7 +44,7 @@ namespace AkmlSql.Shell.Shared.Analysis
         }
     }
 
-    internal sealed class DiagnosticTagger : ITagger<IErrorTag>, IDisposable
+    internal sealed class DiagnosticTagger : ITagger<IErrorTag>, IDisposable, ErrorListReporter.IReapplicable
     {
         private readonly ITextBuffer _buffer;
         private readonly AnalysisController _controller;
@@ -57,6 +57,18 @@ namespace AkmlSql.Shell.Shared.Analysis
             _buffer     = buffer;
             _controller = controller;
             _controller.DiagnosticsUpdated += OnDiagnosticsUpdated;
+            ErrorListReporter.Register(this);
+        }
+
+        /// <summary>
+        /// Spec 047 installed-product run (F10): Options › Code analysis › Advisory findings applies to open documents at
+        /// once. Options OK re-applies every registered reporter; the tagger then asks the editor for its tags again, which
+        /// reads the saved style. Before, the change showed only after the next edit re-analysed the document.
+        /// </summary>
+        void ErrorListReporter.IReapplicable.Reapply()
+        {
+            var snapshot = _buffer.CurrentSnapshot;
+            TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(new SnapshotSpan(snapshot, 0, snapshot.Length)));
         }
 
         private void OnDiagnosticsUpdated(object sender, DiagnosticsUpdatedEventArgs e)
@@ -119,6 +131,7 @@ namespace AkmlSql.Shell.Shared.Analysis
         public void Dispose()
         {
             _controller.DiagnosticsUpdated -= OnDiagnosticsUpdated;
+            ErrorListReporter.Unregister(this);
         }
     }
 }

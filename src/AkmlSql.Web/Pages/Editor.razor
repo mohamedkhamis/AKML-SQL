@@ -2649,12 +2649,9 @@
         _viewMenu = (e.ClientX, e.ClientY + 8, items);
     }
 
-    private AiErrorInfo? GetLastExecuteError()
-    {
-        if (SqlConn.Kind != AkmlSql.Core.DatabaseKind.PostgreSql) return null;
-        var error = Tab?.Result?.MessageDetails?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
-        return error == null ? null : new AiErrorInfo(error.Text, 0, error.SqlState, error.Detail, error.Hint);
-    }
+    // Installed-product run F2: both dialects give their last run's error (it was read only for PostgreSQL, so Fix, which now
+    // needs that error, could never be used on a SQL Server tab).
+    private AiErrorInfo? GetLastExecuteError() => AiErrorInfo.FromMessages(Tab?.Result?.MessageDetails, SqlConn.Kind);
 
     private async Task<string> GetAiInputSqlAsync()
     {

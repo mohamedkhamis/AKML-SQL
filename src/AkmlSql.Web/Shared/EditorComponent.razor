@@ -91,6 +91,13 @@
     .akml-editor .cm-editor .cm-lintRange-warning { text-decoration-color: var(--akml-status-warning); }
     .akml-editor .cm-editor .cm-lintRange-info { text-decoration-color: var(--akml-status-info); }
     .akml-editor .cm-editor .cm-lintRange-hint { text-decoration-color: var(--akml-text-secondary); }
+    /* Spec 047 (UX-001), installed-product run F1: an advisory finding in marker-only mode keeps its gutter marker and its
+       tooltip and draws nothing under the SQL. It must outrank the wavy underline above: the CodeMirror theme rule in
+       akml-editor.js has the same specificity (0,3,0), and this page's style, later in the document, won the tie. */
+    .akml-editor .cm-editor .cm-lintRange.akml-lint-marker-only {
+        text-decoration-line: none;
+        background-image: none;
+    }
     .akml-editor .cm-editor .cm-gutter-lint { width: 1.1em; }
     .akml-editor .cm-editor .cm-lint-marker {
         content: none;

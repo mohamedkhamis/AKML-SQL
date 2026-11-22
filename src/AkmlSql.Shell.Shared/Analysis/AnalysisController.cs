@@ -63,6 +63,9 @@ namespace AkmlSql.Shell.Shared.Analysis
         private static CodeAnalysisSettings _cachedSettings;
         private static DateTime _cachedSettingsUtc;
 
+        /// <summary>Spec 047 installed-product run (F10): Options OK drops the 2 s cache, so what it saved is read at once.</summary>
+        internal static void InvalidateSettings() => _cachedSettings = null;
+
         /// <summary>Settings read at most every 2 s — this runs on every keystroke (and for the tagger and lightbulb).</summary>
         internal static CodeAnalysisSettings CurrentSettings()
         {

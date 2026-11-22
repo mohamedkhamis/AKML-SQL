@@ -260,6 +260,8 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
     /// <summary>One attempt. Returns null on success, or why it failed.</summary>
     private async Task<EngineConnectFailure?> TryOnceAsync(CancellationToken ct)
     {
+        // Installed-product run F4: the address dialled, so a failure to reach it can name it.
+        string? tried = null;
         try
         {
             var activeId = await _connections.GetActiveIdAsync().ConfigureAwait(false);
@@ -298,6 +300,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
                 catch (Exception) { bearer = null; }
             }
 
+            tried = $"{conn.Host}:{conn.Port}";
             var response = await _bridge.ConnectAsync(conn, bearer, pairingPin: null, ct).ConfigureAwait(false);
 
             if (response.Status == HandshakeStatus.Ok)
@@ -342,7 +345,9 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
             _diagnostics.Log(DiagnosticLevel.Trace, "bridge", $"Auto-connect attempt failed: {ex.Message}");
             return new EngineConnectFailure(
                 EngineConnectFailureKind.Unreachable,
-                "The engine is not responding — it may be starting up or stopped.",
+                tried == null
+                    ? "The engine is not responding — it may be starting up or stopped."
+                    : $"The engine is not responding at {tried} — it may be starting up or stopped.",
                 null);
         }
     }

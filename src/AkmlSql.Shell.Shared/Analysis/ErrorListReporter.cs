@@ -49,6 +49,7 @@ namespace AkmlSql.Shell.Shared.Analysis
         internal static void ReapplyAll()
         {
             _cachedSettings = null;
+            AnalysisController.InvalidateSettings();   // F10: the editor taggers re-read the saved Advisory findings style
             var live = new List<IReapplicable>();
             lock (RegistryGate)
             {

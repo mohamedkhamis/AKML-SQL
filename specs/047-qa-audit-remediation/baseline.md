@@ -141,6 +141,96 @@ HEAD worktree runs carry the new `sp047-*` corpus inputs without their web basel
 | V21 | Site search finds the symptoms | audit: no entries | `DocsQualityTests` (summaries, links, the five symptom headings, the connecting text) | Automated: Pass. The search on a local site preview: Not Run (needs an isolated local preview with its own analytics database, CLAUDE.md) | fails-before row (DOC-001…003) |
 | V22 | axe 0 violations; editor name announced | 41 violations before US10 | `AxeAccessibilityTests` (6 routes × 3 themes), `akml-editor.attributes.test.mjs` (the name follows the tab) | see the US10 after row (browser runs). A screen reader on the editor: Not Run (no screen reader on this machine; the name is checked through axe `aria-input-field-name` and the node test) | fails-before rows (WEB-007…009) |
 
+The installed-product results are in the next section; it supersedes the "installed-product run: Not Run" notes above.
+
+## Installed-product run, 1.26.1122.1400 (T140, T141), 2026-11-22
+
+The owner built and installed 1.26.1122.1400. Setup took the existing install over in place:
+
+- install folder: `C:\Program Files (x86)\AKML SQL\`;
+- hosting: IIS, site on 59416, `AkmlSqlWebEngine` as LocalSystem on 59417;
+- `{app}\Web\akml-engine.json`: `{"manifestVersion":1,"bridgePort":59417,"scheme":"ws"}`.
+
+The engine and SSMS assemblies carry SHA `0745268f`, because the build started about two minutes before commit `26b467e1`. The spec 047 code is nonetheless in them; strings from it were found in the installed engine, Core, SSMS extension and web bundle. The installed analyzer carries `26b467e1`.
+
+The checks ran from two places:
+
+- `tests/AkmlSql.Web.E2E.Tests/InstalledWebCycleTests.cs`, with `AKML_INSTALLED_WEB=1`. It drives headless Chromium on a new profile against the IIS site and the installed service.
+- `tests/AkmlSql.UiTests/Check047.cs`, with `AKML_CHECK047=1`. It drives the installed SSMS 22 extension through FlaUI, with a sandboxed AKML profile.
+
+Text output is in `baseline/installed-2026-11-22/`. The first web run had five failures; three were mistakes in the new test, fixed and re-run (the log keeps every run).
+
+| # | Installed result | Observed |
+| --- | --- | --- |
+| V1 | Pass | The installed `AkmlSql.Analyzer.exe`: reports PE002, PE003 and PE004 on multi.sql; `--check` exits 1; reports one information ST004 on sem1.sql; `--settings pe004-off.casettings` drops PE004. `scripts/test-analyzer-cli.ps1 -Exe <installed>`: 4/4. |
+| V2 | Pass | 10 of 10 new profiles went Live with no click, in 2.1–2.6 s ("Live · no SQL"). |
+| V3 | Differs from the scenario (F4) | With the service stopped, a new profile shows: pill "Failed" with the text "Handshake failed. Check engine pairing."; "The engine is not responding — it may be starting up or stopped."; Retry. "Use this computer's engine", and with it the "No engine answered on localhost:59417…" notice and Add engine…, never appear: the page pairs from `akml-engine.json` itself. After `sc start`, the page went Live again with no reload. |
+| V4 | Not Run | Needs a LAN-mode engine. The paired-browser list is shown only when the engine keeps PIN pairings (T037). |
+| V5 | Not Run | Needs a SQL login on `(local)`, which needs the owner's go-ahead. |
+| V6 | Pass | "Saved without the password: the login test failed — Login failed for user 'akml_qa_no_such_login'." Reopened, the password box is empty and Remember is off. Delete removes the row. |
+| V7 | Pass | `http://127.0.0.1:59416/` shows the banner naming `http://localhost:59416/`, with Open, Import settings… and Dismiss. After Dismiss and a reload it is gone. Diagnostics › Browser storage reads "Best effort: the browser may clear it when the disk is low. Saved connections and pairings are kept per address." |
+| V8 (web) | Pass | 12 styles in the editor's Style box × 6 `sp047-*` scripts. Every second Format left the text unchanged, and 72 of 72 outputs equal the committed goldens and web baselines. The styles: the engine's 8 built-ins; the web's AKML Default and ANSI-compact; Collapsed and Khamis Style, built-in. |
+| V10 (web) | **Fail** (F1) | The margin markers work: three of them; one ';' removes one; the syntax error is a red wavy line. But every advisory range is still underlined: computed `text-decoration-line: underline wavy`, although it carries `akml-lint-marker-only`. |
+| V13 | Pass | No SQL connection, page settled. Problems: one Error, "SYNTAX Incorrect syntax near 'SELEC'. L1". One red range in the editor. Ctrl+F5: "Parse failed: 1 syntax error.", "Checked in the browser; the server was not asked.", "Msg 102, Level 15". Text typed the moment the editor appears survives start-up, and Analyse finds its error. |
+| V14 | Pass | `qaz` is offered and Tab expands it to `SELECT * FROM dbo.Region;`, with the caret at `$CURSOR$`. After Delete, `qaz` is not offered and Tab leaves `qaz`. |
+| V15 | Partial (F3) | Through the service (NT AUTHORITY\SYSTEM) on Northwind, the note reads: "The engine signs in as NT AUTHORITY\SYSTEM, which cannot see every object in Northwind. Grant it VIEW DEFINITION on the database, or connect with a login that can." The groups read "Stored Procedures (may be incomplete)" and "Tables (13)". The note is drawn over the next tree rows. The GRANT and the count of 7: Not Run (needs the owner's go-ahead). |
+| V16 | Pass (F6) | Expand INSERT columns is enabled from the cached schema. The preview and Apply give `insert into dbo.Region (RegionID, RegionDescription) values (9,'x')` as a vertical list with type comments. Escape closes the menu with focus on Refactor. |
+| V17 | Pass | "No objects match 'zzzz'." with Clear filter, which empties the filter. |
+| V18 | Pass | Style: "That file is not a SQL Prompt style (.json)." Snippet: "No snippet was found in that file. Existing snippets are unchanged." |
+| V20 | **Half Fail** (F2) | No schema: Optimize's system prompt has no "following schema" or "provided schema" and no column names. It says "No database schema is shared (privacy setting)…" and "Existing indexes are unknown…". Fix is disabled with "Run the query first: Fix needs the error the server returned." **After a failed run (Msg 208, "Query completed with errors."), Fix stays disabled.** |
+| V21 | Partial | Local preview of the published site, with its own analytics database and downloads folder: "remember password": Connecting to SQL Server first; "Handshake failed": Troubleshooting first; "asks for password again": Connecting first, with Troubleshooting ("It asks for my password again") second. The steps were not followed end to end, because that needs V5. |
+| V22 | Pass | axe on the IIS site: 0 violations on 6 routes × 3 themes (18 runs). Screen reader: Not Run. |
+| Cycle (web) | Pass | Connected through the service to `localhost/Northwind`; web and engine both 1.26.1122.1400. `SELECT TOP (5)` returned 5 rows, ALFKI first. Format, then Format again: unchanged. `dbo.Cust` offers Customers. History lists the run. |
+| SSMS, first run (16:11) | Invalid (F8) | V9 (0 CRLF, 11 LF), V19 ("This database has no object references to check.") and V8 failed because SSMS ran a different engine. The extension's own `Engine` folder held a 2026-10-10 engine (1.26.1010.2224, a hand-placed private update), which the shell starts before `{app}\Engine`. The engine was moved to `%LocalAppData%\AKML SQL\stale-ssms-engine-1.26.1010.2224\` and the run repeated. |
+| V8 (SSMS) | Pass | 8 styles from Active Style × 6 `sp047-*` scripts, pasted, Format Document twice, saved. Every second Format left the text unchanged, and 48 of 48 outputs equal the goldens. |
+| V9 | Pass | The CRLF script after Format Document: the saved file has 13 CRLF and no bare LF, and the status bar stays CRLF. |
+| V10 (SSMS) | Pass | Without typing, blue dots on the three lines and no underline; adding ';' takes 3 findings to 2 and removes that line's dot. A pasted `SELEC * FROM dbo.Customers` is underlined red by SSMS's own IntelliSense a few seconds later; the 3 s capture was too early. |
+| V11 | **Half Fail** (F10) | The option saves (`squiggleStyle`: underline, then marker). The open window did not change: no underline appeared until the next edit. |
+| V12 | Pass | SSMS was started on the file and nothing was typed. The log shows "Analysis complete: 3 findings" 7 s after the connection, and the dots are shown. |
+| V19 | Pass | "No invalid objects found. All 63 references resolve.", with no grid. |
+| Cycle (SSMS) | Pass | `SELECT TOP (5)` → "Query executed successfully", 5 rows. SQL History lists the run (query-01, 2 versions, Northwind). Ctrl+Space then Tab after `dbo.Ord` commits `dbo.[Order Details]`. |
+
+Findings from this run (none of them is caught by the automated suites, which is why each names the gap):
+
+- **F1 (UX-001, web): advisory findings are still underlined in the web editor.**
+  - Cause: `Shared/EditorComponent.razor:79` (spec 041) draws every `.cm-lintRange` as `text-decoration: underline wavy` under `.akml-editor .cm-editor .cm-lintRange`, specificity 0,3,0. The marker-only override in `wwwroot/js/akml-editor.js:1264` is a CodeMirror theme rule, also 0,3,0 with its scope class. It ties and loses on document order: CodeMirror's style is in `<head>`, the component's `<style>` comes later.
+  - Why no test caught it: `akml-editor.diagnostics.test.mjs` checks only the class.
+  - Fix: a rule that outranks it, for example `.akml-editor .cm-editor .cm-lintRange.akml-lint-marker-only { text-decoration-line: none; }`, and a browser test on the computed style.
+- **F2 (AI-002, web): Fix can never be enabled on a SQL Server tab.**
+  - Cause: `Pages/Editor.razor:2652` `GetLastExecuteError()` returns null unless the connection is PostgreSQL. That has been unchanged since spec 042. Spec 047 made Fix require that error (`Shared/AiPanel.razor:49`), so after "Query completed with errors." Fix stays disabled. Before 047 it was enabled and sent "(no error)".
+  - Why no test caught it: `AiPanelFixWithoutErrorTests` feeds the panel a fake error provider.
+  - Fix: take the first `ExecuteMessageKind.Error` message, with its `Number`, for SQL Server as well, and add a browser test with a failing query.
+- **F3 (WEB-013, web): the metadata note overlaps the explorer.**
+  - Cause: `.akml-schema-tree-node { height: 24px }` also applies to the note row. The note sets `white-space: normal` but keeps the fixed height, so at the default panel width its wrapped text (114 px) is drawn over `Schema "dbo"` and the rows below.
+  - Fix: `.akml-schema-tree-note { height: auto; min-height: 24px; }`.
+- **F4 (web, status bar with the engine stopped): the pill says "Handshake failed. Check engine pairing."**
+  - Cause: `Shared/StatusBar.razor:684` uses that fixed text for any `Failed` state, although the failure is `Unreachable` and the next line says so correctly. Nothing was handshaken and the pairing is fine.
+  - Effect on V3: its expected notice, and Add engine…, belong to the `NotPaired` path, which an install with `akml-engine.json` never shows. The scenario should describe what this install shows, or the pill should be worded by failure kind.
+- **F5 (installer, low): setup leaves stale compressed files.** `{app}\Web` holds 68 `.br`/`.gz` files (0.4 MB, dated 2026-10-10) from an older install. IIS never serves them: `js/akml-editor.js` came from the current file with IIS's own gzip. Setup could delete them.
+- **F6 (cosmetic, existing behaviour): the Expand INSERT layout is untidy.** Its output has a trailing space after `dbo.Region` and type comments that are not aligned (`RegionID,    --` / `RegionDescription     --`). A CRLF script also got LF lines.
+- **F7 (found while fixing F6, existing behaviour): Expand INSERT writes an IDENTITY column into the list.** It appears as a bare name with no comma (`CategoryID    -- IDENTITY…` before `CategoryName,`). The list is then invalid, and one column longer than the VALUES of an INSERT without a column list. Fix: name it on a comment line only.
+- **F8 (installation): SSMS ran an old engine.** `EngineProcessManager.FindEnginePath` tries `{ext}\Engine` before `{app}\Engine`, and setup never ships or removes that folder. Fix: setup deletes it (`[InstallDelete]`), and the shell prefers the engine of its own FileVersion and logs which it chose.
+- **F10 (SSMS-001): Advisory findings applies only after the next edit.** The tagger re-read the style only when a new analysis arrived. Fix: Options OK re-applies every open document's tags, after dropping the 2 s settings cache.
+
+### Fixes made on 2026-11-22 (owner: "do it, all please"); not committed
+
+| Finding | Change | Test (new unless marked) |
+| --- | --- | --- |
+| F1 | `Shared/EditorComponent.razor`: `.akml-editor .cm-editor .cm-lintRange.akml-lint-marker-only { text-decoration-line: none; background-image: none; }` (0,4,0) | `InstalledRunFixesTests.Advisory_findings_are_margin_markers_only_and_a_syntax_error_stays_underlined` (computed style, Debug bundle) |
+| F2 | `AiErrorInfo.FromMessages(messages, kind)` (Services/AiDialect.cs), used by `Pages/Editor.razor` for both dialects | `AiErrorInfoFromMessagesTests`; `InstalledRunFixesTests.On_SQL_Server_Fix_is_enabled_after_a_failed_run_and_sends_the_servers_error` (mock provider, live SQL) |
+| F3 | `Shared/SchemaTreeComponent.razor`: `.akml-schema-tree-note { height: auto; min-height: 24px; }` | `InstalledRunFixesTests.The_explorer_note_grows_with_its_text_instead_of_covering_the_next_row` (layout in the browser) |
+| F4 | `IEngineAutoConnect.TryOnceAsync` names the address tried; `StatusBar.FailedText()` follows the failure kind ("Engine not reachable.") | `EngineStoppedWordingTests` (3) |
+| F5 | `web-installer.iss` `[InstallDelete]`: `*.br`/`*.gz` in the 8 folders that held them | `InstalledRunCleanupSourceTests` |
+| F6, F7 | `ExpandInsertColumnsOperation`: the list takes the place of the blank after the table name; comments in one column; the script's line ending; identity named on a comment line | `ExpandInsertLayoutTests` (5); `InsertMetadataTests.BuildColumnListWithTypes_IdentityColumn_AnnotatedAsIdentity` *changed* (it pinned the invalid list) |
+| F8 | `AkmlSqlSetup.iss` `[InstallDelete]` `{code:GetSSMS22ExtDir}\Engine`; `EngineProcessManager.ChooseEngine` (the engine of the extension's version wins) | `InstalledRunCleanupSourceTests`; `EngineChoiceTests` (4) |
+| F10 | `DiagnosticTagger` re-applies through `ErrorListReporter.ReapplyAll` (Options OK); `AnalysisController.InvalidateSettings` | `AdvisoryOptionReappliesTests` (2) |
+| V3 | `quickstart.md` V3 restated for an install that pairs by itself (amended 2026-11-22) | — |
+
+Test harness changes from this run:
+
+- `InstalledWebCycleTests` gained V5, V15 (after the GRANT), V21 and a start-up check, and reads computed `text-decoration-line`.
+- `Check047` closes the floating SQL History window with Shift+Esc. The "Close button inside the pane" rule had closed the query window. It also reads completion by committing the first suggestion, since the list has no UIA items.
+
 ## Golden changes accepted (T064, T065)
 
 Reviewed 2026-11-21. Each changed golden was compared with HEAD after `git diff --ignore-space-at-eol`. A script undid the

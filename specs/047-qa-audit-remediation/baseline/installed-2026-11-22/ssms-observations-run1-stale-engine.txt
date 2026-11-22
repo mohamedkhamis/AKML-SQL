@@ -1,0 +1,72 @@
+# Check047 on the installed SSMS 22 extension, first run 16:11 (2026-11-22): INVALID for the engine scenarios.
+# SSMS started the hand-placed 1.26.1010.2224 engine in {ext}\Engine (finding F8), not the installed 1.26.1122.1400 one.
+
+desktop usable at 16:11:23
+extension: AKML SQL deployed, built 2026-11-22 12:01Z (0.1 days ago).
+## start
+connected to (local)/Northwind; the AKML SQL menu is present; nothing typed yet
+windows of ssms [after start-up]: 1
+  | check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (56)) - check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (56)) - Microsoft SQL Server Management Studio (Administrator) [Window]
+modal dialogs [after start-up]: none
+## V12 an opened file is analysed without typing
+'Analysis complete' lines: 1; last: 3 findings; 7 s after the connection
+V12: PASS (analysed with no input: 3 findings; the dots are in v12-dots-without-typing.png)
+## V10 marker only, a semicolon removes it, a syntax error stays red
+findings: 3 -> 2 after ';' on line 2
+error list [after the syntax error]: 7 distinct cells
+  | Header Row
+  | Severity (1 of 6), not sorted
+  | Code (2 of 6), not sorted
+  | Description (3 of 6), not sorted
+  | Project (4 of 6), not sorted
+  | File (5 of 6), not sorted
+  | Line (6 of 6), not sorted
+V10: FAIL (findings 3 -> 2; error listed: False)
+## V11 Options › Code analysis › Advisory findings
+Advisory findings: 'Margin marker only' -> 'Underline in the text'
+Advisory findings: 'Underline in the text' -> 'Margin marker only'
+config codeAnalysis.squiggleStyle: after Underline = underline, after Margin marker = marker
+V11: PASS (saved as underline, then marker; look: v11-1-underline.png, v11-2-margin-marker-again.png)
+## V9 Format Document keeps CRLF
+V9: formatted = True; saved file: 0 CRLF, 11 bare LF; status bar line endings: CRLF -> LF
+V9 formatted text:
+  | -- check047: statements without semicolons
+  | SELECT CustomerID, CompanyName
+  | FROM   dbo.Customers
+  | WHERE  Country = N'Germany'
+  | 
+  | SELECT COUNT ( * ) AS OrderCount
+  | FROM   dbo.Orders
+  | 
+  | SELECT ProductName
+  | FROM   dbo.Products
+  | WHERE  Discontinued = 1
+  | 
+V9: FAIL (formatted True; 0 CRLF, 11 bare LF)
+## V19 Find Invalid Objects
+V19 window texts: This database has no object references to check. | Close | System | Minimize | Maximize
+V19 grid shown: False
+V19: FAIL (finished True; grid shown False; texts: This database has no object references to check. | Close | System | Minimize | Maximize)
+## cycle: execute, results, SQL History, completion
+execute: Query executed successfully; 5 rows
+SQL History: 46 texts; lists the query: False
+completion after 'dbo.Ord': 0 items: 
+cycle: FAIL (executed True, 5 rows; history lists it False; completion offers Orders False)
+## V8 every style in SSMS
+Active Style menu: AlignedLeftBracket | Collapsed | Compact | Default | Indented | Khamis Style | Leading Commas | Minimalist
+STEP FAILED: TimeoutException: Timed out after 30s waiting for SQL editor (WpfTextView).
+V8: FAIL (step failed: TimeoutException: Timed out after 30s waiting for SQL editor (WpfTextView).)
+## windows at the end
+windows of ssms [end]: 1
+  | Solution1 - Microsoft SQL Server Management Studio (Administrator) [Window]
+modal dialogs [end]: none
+## logs
+logs: 1622 lines, 1 distinct warning/error messages
+  | x2  [WRN] [PipeRpc] WriteAsync req## _writeLock acquired in #.#ms (CONTENDED)
+VERDICT V10: FAIL (findings 3 -> 2; error listed: False)
+VERDICT V11: PASS (saved as underline, then marker; look: v11-1-underline.png, v11-2-margin-marker-again.png)
+VERDICT V12: PASS (analysed with no input: 3 findings; the dots are in v12-dots-without-typing.png)
+VERDICT V19: FAIL (finished True; grid shown False; texts: This database has no object references to check. | Close | System | Minimize | Maximize)
+VERDICT V8: FAIL (step failed: TimeoutException: Timed out after 30s waiting for SQL editor (WpfTextView).)
+VERDICT V9: FAIL (formatted True; 0 CRLF, 11 bare LF)
+VERDICT cycle: FAIL (executed True, 5 rows; history lists it False; completion offers Orders False)
