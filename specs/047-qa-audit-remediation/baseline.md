@@ -276,9 +276,28 @@ Suites after the fixes (Debug, 2026-11-22):
 
 The Engine failure is `PerformanceBaselineTests.Capture_or_compare_M0_baseline`: "FormatRequest.p50 regressed by 6.4% (baseline 436.502 ms, current 464.248 ms). Allowed: 5%." That is the machine-dependent timing test CLAUDE.md lists as failing here on an untouched HEAD. The run was on a busy machine, and no change touches the formatter it times. A recapture is a separate decision. Every new test failed on the pre-fix code first (see the log of the swap run in the session; counts: web 4, Expand INSERT 4, Core 1, Shell 1, installer 9).
 
+### Re-run on 1.26.1122.1936, 2026-11-22 20:32–20:59
+
+The owner deployed 1.26.1122.1936, built from 6b0d7f32. There is no product change since 1658, only the site release files. Checked before testing:
+
+- every DLL is stamped 6b0d7f32;
+- the main web assembly (`AkmlSql.Web.vulvqg4wlv.wasm`) carries the F1, F3 and F4 strings, and the engine and the SSMS extension carry F7 and F8;
+- `{ext}\Engine` is absent;
+- 0 stale `.br`/`.gz` files are left.
+
+Notes: `baseline/installed-2026-11-22/web-observations-1936.txt`, `ssms-observations-1936.txt` and `ssms-observations-1936-v8.txt`.
+
+| Area | Result |
+| --- | --- |
+| V1 | Pass: `test-analyzer-cli.ps1` on the installed analyzer, 4/4. |
+| Web | Pass: V2, V3, V5 (Forget it empties the engine's store), V6–V8 (72/72), V10, V13–V18, V15 both halves (GRANT revoked after), V20, V22 (0 violations), the start-up check and the cycle. **V21 partial**, as before. |
+| SSMS | Pass: V9, V10, V11 (applies at once), V12, V19 and the cycle. **V10-syntax pass**: with the 10 s wait the Error List shows "Incorrect syntax near 'SELEC'." on line 5. V8 (48/48) passed on its own run (`AKML_CHECK047_ONLY=V8`) after the full run lost it: focus left SSMS for the VS Code window, and an SSMS menu does not open behind another window. The shell logged `Engine: C:\Program Files (x86)\AKML SQL\Engine\AkmlSql.Engine.exe (1.26.1122.1936)`. |
+| Clean-up | Done: the V5 login is dropped, SYSTEM has 0 VIEW DEFINITION grants, and the engine's credential store is `[]`. |
+
 Test harness changes from this run:
 
 - `InstalledWebCycleTests` gained V5, V15 (after the GRANT), V21 and a start-up check, and reads computed `text-decoration-line`.
+- `Check047` brings SSMS to the front before it opens an AKML menu, and `AKML_CHECK047_ONLY` (for example `V8`) runs single scenarios.
 - `Check047` closes the floating SQL History window with Shift+Esc. The "Close button inside the pane" rule had closed the query window. It also reads completion by committing the first suggestion, since the list has no UIA items.
 
 ## Golden changes accepted (T064, T065)

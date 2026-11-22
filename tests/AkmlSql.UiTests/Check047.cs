@@ -111,14 +111,19 @@ public sealed class Check047(ITestOutputHelper output)
             _pid = app.ProcessId;
             _window = app.MainWindow(timeoutSeconds: 240);
 
+            // AKML_CHECK047_ONLY=V8 (a comma list of V12, V10, V11, V9, V19, cycle, V8) re-runs single scenarios.
+            var only = Environment.GetEnvironmentVariable("AKML_CHECK047_ONLY");
+            bool Want(string key) => string.IsNullOrWhiteSpace(only)
+                || only.Split(',').Any(k => string.Equals(k.Trim(), key, StringComparison.OrdinalIgnoreCase));
+
             Step("start", Start);
-            Step("V12 an opened file is analysed without typing", V12);
-            Step("V10 marker only, a semicolon removes it, a syntax error stays red", V10);
-            Step("V11 Options › Code analysis › Advisory findings", V11);
-            Step("V9 Format Document keeps CRLF", V9);
-            Step("V19 Find Invalid Objects", V19);
-            Step("cycle: execute, results, SQL History, completion", Cycle);
-            Step("V8 every style in SSMS", V8);
+            if (Want("V12")) Step("V12 an opened file is analysed without typing", V12);
+            if (Want("V10")) Step("V10 marker only, a semicolon removes it, a syntax error stays red", V10);
+            if (Want("V11")) Step("V11 Options › Code analysis › Advisory findings", V11);
+            if (Want("V9")) Step("V9 Format Document keeps CRLF", V9);
+            if (Want("V19")) Step("V19 Find Invalid Objects", V19);
+            if (Want("cycle")) Step("cycle: execute, results, SQL History, completion", Cycle);
+            if (Want("V8")) Step("V8 every style in SSMS", V8);
             Step("windows at the end", () => Windows("end"));
         }
         finally
@@ -457,6 +462,8 @@ public sealed class Check047(ITestOutputHelper output)
 
     private List<string> ActiveStyleNames()
     {
+        // A menu of SSMS opens only while SSMS is the active window (the 1936 run lost V8 when focus went elsewhere).
+        EnsureForeground();
         var menu = _window.TopLevelMenu("AKML SQL", 60);
         Activate(menu);
         Thread.Sleep(900);
@@ -480,6 +487,7 @@ public sealed class Check047(ITestOutputHelper output)
 
     private void AkmlMenuPath(string[] path, bool exactLast)
     {
+        EnsureForeground();
         var menu = _window.TopLevelMenu("AKML SQL", 60);
         Activate(menu);
         Thread.Sleep(900);

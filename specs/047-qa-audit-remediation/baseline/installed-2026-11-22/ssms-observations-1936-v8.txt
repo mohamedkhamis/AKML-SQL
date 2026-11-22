@@ -1,0 +1,68 @@
+# Check047 V8 alone (AKML_CHECK047_ONLY=V8) on SSMS 22 with engine 1.26.1122.1936, 2026-11-22 20:46.
+
+desktop usable at 20:46:48
+extension: AKML SQL deployed, built 2026-11-22 17:36Z (0.0 days ago).
+## start
+connected to (local)/Northwind; the AKML SQL menu is present; nothing typed yet
+windows of ssms [after start-up]: 1
+  | check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (52)) - check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (52)) - Microsoft SQL Server Management Studio (Administrator) [Window]
+modal dialogs [after start-up]: none
+## V8 every style in SSMS
+Active Style menu: AlignedLeftBracket | Collapsed | Compact | Default | Indented | Khamis Style | Leading Commas | Minimalist
+V8 AlignedLeftBracket / sp047-01-proc-params: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-02-control-flow: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-03-go-count: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-04-block-comment: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-05-spacing: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-06-statements: idempotent True; matches its golden
+V8 Collapsed / sp047-01-proc-params: idempotent True; matches its golden
+V8 Collapsed / sp047-02-control-flow: idempotent True; matches its golden
+V8 Collapsed / sp047-03-go-count: idempotent True; matches its golden
+V8 Collapsed / sp047-04-block-comment: idempotent True; matches its golden
+V8 Collapsed / sp047-05-spacing: idempotent True; matches its golden
+V8 Collapsed / sp047-06-statements: idempotent True; matches its golden
+V8 Compact / sp047-01-proc-params: idempotent True; matches its golden
+V8 Compact / sp047-02-control-flow: idempotent True; matches its golden
+V8 Compact / sp047-03-go-count: idempotent True; matches its golden
+V8 Compact / sp047-04-block-comment: idempotent True; matches its golden
+V8 Compact / sp047-05-spacing: idempotent True; matches its golden
+V8 Compact / sp047-06-statements: idempotent True; matches its golden
+V8 Default / sp047-01-proc-params: idempotent True; matches its golden
+V8 Default / sp047-02-control-flow: idempotent True; matches its golden
+V8 Default / sp047-03-go-count: idempotent True; matches its golden
+V8 Default / sp047-04-block-comment: idempotent True; matches its golden
+V8 Default / sp047-05-spacing: idempotent True; matches its golden
+V8 Default / sp047-06-statements: idempotent True; matches its golden
+V8 Indented / sp047-01-proc-params: idempotent True; matches its golden
+V8 Indented / sp047-02-control-flow: idempotent True; matches its golden
+V8 Indented / sp047-03-go-count: idempotent True; matches its golden
+V8 Indented / sp047-04-block-comment: idempotent True; matches its golden
+V8 Indented / sp047-05-spacing: idempotent True; matches its golden
+V8 Indented / sp047-06-statements: idempotent True; matches its golden
+V8 Khamis Style / sp047-01-proc-params: idempotent True; matches its golden
+V8 Khamis Style / sp047-02-control-flow: idempotent True; matches its golden
+V8 Khamis Style / sp047-03-go-count: idempotent True; matches its golden
+V8 Khamis Style / sp047-04-block-comment: idempotent True; matches its golden
+V8 Khamis Style / sp047-05-spacing: idempotent True; matches its golden
+V8 Khamis Style / sp047-06-statements: idempotent True; matches its golden
+V8 Leading Commas / sp047-01-proc-params: idempotent True; matches its golden
+V8 Leading Commas / sp047-02-control-flow: idempotent True; matches its golden
+V8 Leading Commas / sp047-03-go-count: idempotent True; matches its golden
+V8 Leading Commas / sp047-04-block-comment: idempotent True; matches its golden
+V8 Leading Commas / sp047-05-spacing: idempotent True; matches its golden
+V8 Leading Commas / sp047-06-statements: idempotent True; matches its golden
+V8 Minimalist / sp047-01-proc-params: idempotent True; matches its golden
+V8 Minimalist / sp047-02-control-flow: idempotent True; matches its golden
+V8 Minimalist / sp047-03-go-count: idempotent True; matches its golden
+V8 Minimalist / sp047-04-block-comment: idempotent True; matches its golden
+V8 Minimalist / sp047-05-spacing: idempotent True; matches its golden
+V8 Minimalist / sp047-06-statements: idempotent True; matches its golden
+V8-ssms: PASS (8 styles x 6 scripts: every second Format unchanged; 48 of 48 compared outputs match their goldens)
+## windows at the end
+windows of ssms [end]: 1
+  | check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (52)) - check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (52)) - Microsoft SQL Server Management Studio (Administrator) [Window]
+modal dialogs [end]: none
+## logs
+logs: 7726 lines, 1 distinct warning/error messages
+  | x2  [WRN] [PipeRpc] WriteAsync req## _writeLock acquired in #.#ms (CONTENDED)
+VERDICT V8-ssms: PASS (8 styles x 6 scripts: every second Format unchanged; 48 of 48 compared outputs match their goldens)
