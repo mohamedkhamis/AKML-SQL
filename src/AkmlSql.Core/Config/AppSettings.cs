@@ -226,6 +226,15 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("webRoot")]
         public string WebRoot { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Windows authentication from a browser on the engine's own computer signs in to SQL Server as the Windows user
+        /// signed in to that browser's session, as SSMS does (default <c>true</c>). <c>false</c> signs in as the engine's own
+        /// account — for the installed service, <c>NT AUTHORITY\SYSTEM</c> — as before. A browser on another computer, or a
+        /// caller the engine cannot place, always uses the engine's account.
+        /// </summary>
+        [JsonPropertyName("windowsSignInAsBrowserUser")]
+        public bool WindowsSignInAsBrowserUser { get; set; } = true;
+
         /// <summary>True if the bind address is a loopback IP.</summary>
         [JsonIgnore]
         public bool IsLoopback =>

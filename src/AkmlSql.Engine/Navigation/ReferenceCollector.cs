@@ -31,7 +31,7 @@ public class ReferenceCollector
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
 
             if (schemaName != null)

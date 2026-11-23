@@ -32,7 +32,7 @@ public partial class ChangeDetector
             }
 
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Compute aggregate checksum of all user objects
             await using var cmd = conn.CreateCommand();

@@ -301,6 +301,7 @@ namespace AkmlSql.Engine
                 RequirePairingToken = !bridge.IsLoopback,
                 WebRoot = serveWebEdition ? bridge.WebRoot : null,
                 ConfigFilePath = serveWebEdition ? configPath : null,
+                WindowsSignInAsBrowserUser = bridge.WindowsSignInAsBrowserUser,
             };
             return new WebSocketTransport(options);
         }

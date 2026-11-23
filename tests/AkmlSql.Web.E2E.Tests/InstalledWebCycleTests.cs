@@ -436,32 +436,51 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             if (!await IsShownAsync(tree)) { await page.Locator(".cm-content").ClickAsync(); await page.Keyboard.PressAsync("F8"); }
             await Assertions.Expect(tree).ToBeVisibleAsync(new() { Timeout = 60_000 });
             var limited = page.GetByTestId("schema-metadata-limited");
-            var limitedShown = await WaitUntilAsync(() => IsShownAsync(limited), 60);
-            var limitedText = limitedShown ? Regex.Replace((await limited.InnerTextAsync()).Trim(), @"\s+", " ") : "(no note)";
-            // Does the note keep to its own space? Compare its text's box with the row that follows it.
-            var overlap = await page.EvaluateAsync<string>(
-                "() => { const n = document.querySelector(\"[data-testid='schema-metadata-limited']\"); if (!n) return 'no note'; " +
-                "const t = n.querySelector('.akml-schema-tree-note-text') || n; const next = n.nextElementSibling; " +
-                "const a = n.getBoundingClientRect(), b = t.getBoundingClientRect(), c = next ? next.getBoundingClientRect() : null; " +
-                "return `row ${Math.round(a.height)}px, text ${Math.round(b.height)}px, text bottom ${Math.round(b.bottom)}, next row top ${c ? Math.round(c.top) : 'none'}, overlaps ${c ? b.bottom > c.top + 1 : false}`; }");
-            Note($"V15 note: {limitedText}");
-            Note($"V15 note geometry: {overlap}");
-            var panel = page.GetByTestId("workspace-schema");
-            try { await panel.ScreenshotAsync(new() { Path = Path.Combine(Out, "v15-0-schema-panel-note.png") }); } catch (Exception) { /* best effort */ }
-            if (overlap.Contains("overlaps true", StringComparison.OrdinalIgnoreCase)) problems.Add("V15: the note is drawn over the next tree row: " + overlap);
+            // Since 2026-11-23 Windows authentication from this computer signs in as the browser's user (an administrator here),
+            // who sees every object: then there is no note and the routines are complete. The engine's account (the switch off,
+            // or a browser it cannot place) still gets the note. The tree's groups appear once the schema has loaded.
+            await WaitUntilAsync(async () => await IsShownAsync(limited) || await tree.Locator("li.akml-schema-tree-schema").CountAsync() > 0, 60);
+            if (!await IsShownAsync(limited))
+            {
+                var schema = tree.Locator("li.akml-schema-tree-schema", new() { HasTextString = "dbo" }).First;
+                await schema.ClickAsync();
+                var routines = tree.Locator("li.akml-schema-tree-kind", new() { HasTextString = "Stored Procedures" }).First;
+                await WaitUntilAsync(async () => await routines.CountAsync() > 0, 15);
+                var routinesText = Regex.Replace((await routines.InnerTextAsync()).Trim(), @"\s+", " ");
+                Note($"V15 (signed in as the browser's user): no note; '{routinesText}'");
+                await ShotAsync(page, "v15-explorer-as-the-browser-user");
+                if (routinesText != "Stored Procedures (7)") problems.Add("V15 as the browser's user: " + routinesText);
+                await schema.ClickAsync();   // folded again, as the rest of the test expects
+            }
+            else
+            {
+                var limitedShown = await WaitUntilAsync(() => IsShownAsync(limited), 60);
+                var limitedText = limitedShown ? Regex.Replace((await limited.InnerTextAsync()).Trim(), @"\s+", " ") : "(no note)";
+                // Does the note keep to its own space? Compare its text's box with the row that follows it.
+                var overlap = await page.EvaluateAsync<string>(
+                    "() => { const n = document.querySelector(\"[data-testid='schema-metadata-limited']\"); if (!n) return 'no note'; " +
+                    "const t = n.querySelector('.akml-schema-tree-note-text') || n; const next = n.nextElementSibling; " +
+                    "const a = n.getBoundingClientRect(), b = t.getBoundingClientRect(), c = next ? next.getBoundingClientRect() : null; " +
+                    "return `row ${Math.round(a.height)}px, text ${Math.round(b.height)}px, text bottom ${Math.round(b.bottom)}, next row top ${c ? Math.round(c.top) : 'none'}, overlaps ${c ? b.bottom > c.top + 1 : false}`; }");
+                Note($"V15 note: {limitedText}");
+                Note($"V15 note geometry: {overlap}");
+                var panel = page.GetByTestId("workspace-schema");
+                try { await panel.ScreenshotAsync(new() { Path = Path.Combine(Out, "v15-0-schema-panel-note.png") }); } catch (Exception) { /* best effort */ }
+                if (overlap.Contains("overlaps true", StringComparison.OrdinalIgnoreCase)) problems.Add("V15: the note is drawn over the next tree row: " + overlap);
 
-            // The routine groups say they may be incomplete (under Schema "dbo").
-            var dbo = tree.Locator("li.akml-schema-tree-schema", new() { HasTextString = "dbo" }).First;
-            if (await dbo.CountAsync() > 0) await dbo.ClickAsync();
-            var procs = tree.Locator("li.akml-schema-tree-kind", new() { HasTextString = "Stored Procedures" }).First;
-            await WaitUntilAsync(async () => await procs.CountAsync() > 0, 15);
-            var procsText = await procs.CountAsync() > 0 ? Regex.Replace((await procs.InnerTextAsync()).Trim(), @"\s+", " ") : "(no Stored Procedures node)";
-            var tables = tree.Locator("li.akml-schema-tree-kind", new() { HasTextString = "Tables" }).First;
-            var tablesText = await tables.CountAsync() > 0 ? Regex.Replace((await tables.InnerTextAsync()).Trim(), @"\s+", " ") : "(no Tables node)";
-            Note($"V15 groups under dbo: '{procsText}', '{tablesText}'");
-            await ShotAsync(page, "v15-explorer-metadata-limited");
-            if (!limitedShown || !limitedText.Contains("VIEW DEFINITION", StringComparison.Ordinal) || !procsText.Contains("may be incomplete", StringComparison.Ordinal))
-                problems.Add($"V15: note '{limitedText}', node '{procsText}'");
+                // The routine groups say they may be incomplete (under Schema "dbo").
+                var dbo = tree.Locator("li.akml-schema-tree-schema", new() { HasTextString = "dbo" }).First;
+                if (await dbo.CountAsync() > 0) await dbo.ClickAsync();
+                var procs = tree.Locator("li.akml-schema-tree-kind", new() { HasTextString = "Stored Procedures" }).First;
+                await WaitUntilAsync(async () => await procs.CountAsync() > 0, 15);
+                var procsText = await procs.CountAsync() > 0 ? Regex.Replace((await procs.InnerTextAsync()).Trim(), @"\s+", " ") : "(no Stored Procedures node)";
+                var tables = tree.Locator("li.akml-schema-tree-kind", new() { HasTextString = "Tables" }).First;
+                var tablesText = await tables.CountAsync() > 0 ? Regex.Replace((await tables.InnerTextAsync()).Trim(), @"\s+", " ") : "(no Tables node)";
+                Note($"V15 groups under dbo: '{procsText}', '{tablesText}'");
+                await ShotAsync(page, "v15-explorer-metadata-limited");
+                if (!limitedShown || !limitedText.Contains("VIEW DEFINITION", StringComparison.Ordinal) || !procsText.Contains("may be incomplete", StringComparison.Ordinal))
+                    problems.Add($"V15: note '{limitedText}', node '{procsText}'");
+            }
 
             // V17: a filter that matches nothing.
             await page.GetByTestId("schema-filter").FillAsync("zzzz");
@@ -667,6 +686,47 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
         }
         try { Directory.Delete(profile, recursive: true); } catch (IOException) { /* the browser may still hold it */ }
         Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    // ── the explorer on any database (owner's report, 2026-11-22: aqmar) ──────────────────────────────────────────────
+
+    /// <summary>What the explorer shows for the database in <c>AKML_EXPLORER_DB</c>, connected with Windows authentication
+    /// through the installed engine (so as the service's login): the note, every group it lists, and whether the note keeps
+    /// to its row. Records only; reads no table data.</summary>
+    [SkippableFact]
+    public async Task Explorer_on_the_named_database_says_what_the_engine_login_can_see()
+    {
+        RequireOptIn();
+        var db = Environment.GetEnvironmentVariable("AKML_EXPLORER_DB");
+        Skip.If(string.IsNullOrWhiteSpace(db), "AKML_EXPLORER_DB is not set.");
+        var (pw, browser) = await LaunchAsync();
+        try
+        {
+            await using var context = await browser.NewContextAsync(Profile());
+            var page = await context.NewPageAsync();
+            await InAppDialogs.AcceptAllAsync(page, "");
+            Assert.True((await OpenLiveAsync(page, Site)).Live, "the page did not reach the engine");
+            await WebAppFixture.ConnectAsync(page, db!);
+            var tree = page.GetByTestId("schema-tree");
+            if (!await IsShownAsync(tree)) { await page.Locator(".cm-content").ClickAsync(); await page.Keyboard.PressAsync("F8"); }
+            await Assertions.Expect(tree).ToBeVisibleAsync(new() { Timeout = 60_000 });
+            await page.WaitForTimeoutAsync(3_000);
+
+            var note = page.GetByTestId("schema-metadata-limited");
+            Note($"explorer [{db}]: note shown {await IsShownAsync(note)}: {await TextOrEmptyAsync(note)}");
+            foreach (var schema in await tree.Locator("li.akml-schema-tree-schema").AllAsync())
+                if (await IsShownAsync(schema)) await schema.ClickAsync();
+            await page.WaitForTimeoutAsync(1_500);
+            var rows = await tree.Locator("li").EvaluateAllAsync<string[]>(
+                "els => els.map(e => (e.className.replace('akml-schema-tree-node', '').trim() || 'li') + ': ' + e.innerText.replace(/\\s+/g, ' ').trim()).filter(t => !t.endsWith(': '))");
+            Note($"explorer [{db}]: {rows.Length} rows");
+            foreach (var row in rows.Take(40)) Note("  | " + row);
+            Note($"explorer [{db}]: schema-inaccessible {await page.GetByTestId("schema-inaccessible").CountAsync()}, " +
+                 $"connection '{await TextOfAsync(page, "status-connection")}'");
+            try { await page.GetByTestId("workspace-schema").ScreenshotAsync(new() { Path = Path.Combine(Out, $"explorer-{Slug(db!)}.png") }); }
+            catch (Exception) { /* best effort */ }
+        }
+        finally { await browser.DisposeAsync(); pw.Dispose(); }
     }
 
     // ── V18 ───────────────────────────────────────────────────────────────────────────────────────────────────────────

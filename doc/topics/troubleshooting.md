@@ -90,9 +90,9 @@ Do the same after installing or upgrading AKML SQL if the menu does not appear.
 
 ### Stored procedures are missing from the explorer
 
-- **Symptom.** The Schema panel shows fewer procedures or functions than the database has, under **Stored Procedures (may be incomplete)**. A note reads like "The engine signs in as NT AUTHORITY\SYSTEM, which cannot see every object in Northwind."
-- **Cause.** With Windows authentication the engine connects as the account it runs as. SQL Server lists for an account only the objects it may see, and without `VIEW DEFINITION` on the database most procedures and functions are hidden from it.
-- **Fix.** A database administrator can grant it, in that database: `GRANT VIEW DEFINITION TO [NT AUTHORITY\SYSTEM];`. Or connect with a login that already has it.
+- **Symptom.** The Schema panel shows fewer objects than the database has, often under **Stored Procedures (may be incomplete)**, or no tables at all. A note reads like "The engine signs in as NT AUTHORITY\SYSTEM, which cannot see every object in Northwind."
+- **Cause.** SQL Server lists for an account only the objects it may see, and the account here lacks `VIEW DEFINITION` on the database. With Windows authentication from a browser on the engine's own computer the engine signs in as you, as SSMS does; it signs in as its own account (for the web engine service, `NT AUTHORITY\SYSTEM`) when the browser is on another computer, when it cannot tell who the browser's user is, or when `bridge.windowsSignInAsBrowserUser` is `false`.
+- **Fix.** Open the page on the engine's computer, so Windows authentication signs in as you. Or connect with a login that can see the database. Or have a database administrator grant the account the note names, in that database: `GRANT VIEW DEFINITION TO [NT AUTHORITY\SYSTEM];` (and `db_datareader` to read its data).
 
 ## Report an issue
 

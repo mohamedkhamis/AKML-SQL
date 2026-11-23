@@ -359,6 +359,7 @@ namespace AkmlSql.Engine.Transports
             }
 
             using var ws = wsContext.WebSocket;
+            var caller = ResolveCaller(context);
 
             // Spec 026 (M4 closure) FR-013a: publish this connection's remote IP as a
             // per-connection ambient so the handshake's pinValidator uses the real source
@@ -368,8 +369,38 @@ namespace AkmlSql.Engine.Transports
             // Spec 043 follow-up: whose sessions a copy may read — this socket, then the page an accepted handshake names
             // (BridgeConnection.Adopt), so the page's tabs keep their passwords across a reconnect.
             using (BridgeConnection.Set(Guid.NewGuid().ToString("N")))
+            // Owner request 2026-11-23: who this browser's Windows authentication signs in to SQL Server as (null: the engine's account).
+            using (BridgeCaller.Set(caller))
             {
                 await ServeAsync(ws, ct).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Owner request of 2026-11-23 ("automatic like SSMS"): the Windows user a browser on this computer signs in to SQL Server
+        /// as (<see cref="LoopbackCaller"/>), or null for the engine's own account — a browser on another computer, a caller that
+        /// cannot be placed, or <c>bridge.windowsSignInAsBrowserUser</c> off. The identity is not disposed with the connection:
+        /// a schema refresh registered for it (<c>SchemaCacheManager</c>) may still use it, and its token closes when it is collected.
+        /// </summary>
+        private System.Security.Principal.WindowsIdentity? ResolveCaller(HttpListenerContext context)
+        {
+            if (!_options.WindowsSignInAsBrowserUser || !OperatingSystem.IsWindows()) return null;
+            try
+            {
+                var resolution = LoopbackCaller.Resolve(context.Request.RemoteEndPoint, context.Request.LocalEndPoint);
+                if (resolution.Identity != null)
+                    Log.Information("WebSocketTransport: browser process {Pid} signs in to SQL Server as {User}",
+                        resolution.ProcessId, resolution.Identity.Name);
+                else
+                    Log.Information("WebSocketTransport: Windows authentication for {Remote} uses the engine's account ({Reason})",
+                        context.Request.RemoteEndPoint, resolution.Reason);
+                return resolution.Identity;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "WebSocketTransport: could not tell who the browser at {Remote} is; using the engine's account",
+                    context.Request.RemoteEndPoint);
+                return null;
             }
         }
 

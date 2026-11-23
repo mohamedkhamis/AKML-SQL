@@ -257,10 +257,7 @@
                                authentication is chosen it has been followed, and the room goes to the remember option. *@
                             @if (_windowsAuth)
                             {
-                                <span class="akml-connmgr-hint" data-testid="conn-auth-hint">
-                                    Windows authentication works for a SQL Server on the engine's own computer.
-                                    For a remote server, use SQL Server authentication.
-                                </span>
+                                <span class="akml-connmgr-hint" data-testid="conn-auth-hint">@WindowsAuthHint</span>
                             }
                             else
                             {
@@ -634,6 +631,17 @@
     private bool _sqlRemember;                    // spec 043 follow-up: keep the SQL login's password on the engine machine
     private bool _prefilledUnsaved;               // spec 047 (WEB-004): the form holds a tab's connection that has no saved row
     private bool ShowNotSavedNote => _prefilledUnsaved && _selectedId == null;
+
+    /// <summary>
+    /// Owner request 2026-11-23 ("automatic like SSMS"): who Windows authentication signs in as. The engine names it in its
+    /// handshake: the Windows user of this browser when the browser is on the engine's computer, else the engine's account.
+    /// </summary>
+    private string WindowsAuthHint => WindowsAuthHintFor((Services.GetService(typeof(IEngineBridge)) as IEngineBridge)?.EngineRunsAs);
+
+    internal static string WindowsAuthHintFor(string? runsAs) =>
+        !string.IsNullOrWhiteSpace(runsAs)
+            ? $"Windows authentication signs in as {runsAs}. It works for a SQL Server on the engine's own computer; for a remote server, use SQL Server authentication."
+            : "Windows authentication works for a SQL Server on the engine's own computer. For a remote server, use SQL Server authentication.";
     private bool _sqlHasRememberedFlag;           // the engine holds a password for _sqlRememberedFor
     private string? _sqlRememberedFor;            // the server and login that answer was about
 

@@ -57,9 +57,10 @@ the localhost page address while the engine is stopped. Use a trusted machine/se
 ## SQL Server
 
 Select **SQL Server**, supply the server and appropriate authentication, and select
-your database. Windows authentication uses the identity under which the engine runs,
-which may differ from your browser's Windows user. Use **Test** to check settings,
-then **Connect**. Start with a sample database and a read-only query.
+your database. Windows authentication from a browser on the engine's computer signs in
+as you, as SSMS does; from another computer it uses the identity under which the engine
+runs. Use **Test** to check settings, then **Connect**. Start with a sample database and
+a read-only query.
 
 For the desktop workflow, install the extension for **SQL Server Management Studio 22**
 and follow [Getting started](getting-started.md).

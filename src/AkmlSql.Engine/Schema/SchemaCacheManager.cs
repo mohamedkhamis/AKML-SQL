@@ -27,6 +27,7 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     private readonly ChangeDetector _changeDetector = new();
     private Timer? _periodicRefreshTimer;
     private readonly ConcurrentDictionary<string, string> _connectionStrings = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, System.Security.Principal.WindowsIdentity> _callers = new(StringComparer.OrdinalIgnoreCase);
 
     // Spec 043 follow-up (review, round 4): a population claim belongs to the cache object being loaded, not to its key. Keyed by
     // the "{session}:{db}" string, a load still running on a cache that RemoveSession had discarded held the key: the new connect's
@@ -129,8 +130,17 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
     /// </summary>
     public void RegisterConnectionString(string serverName, string databaseName, string connectionString)
     {
-        _connectionStrings[BuildCacheKey(serverName, databaseName)] = connectionString;
+        var key = BuildCacheKey(serverName, databaseName);
+        _connectionStrings[key] = connectionString;
+        // Owner request 2026-11-23: the periodic check runs on a timer, outside the browser connection that registered it, so it
+        // keeps the Windows user that connection signs in as (Pairing.BridgeCaller); otherwise it would read as the engine's account.
+        if (Pairing.BridgeCaller.Current is { } caller) _callers[key] = caller;
+        else _callers.TryRemove(key, out _);
     }
+
+    /// <summary>Owner request 2026-11-23: the Windows user a registered connection string's checks sign in as; null for the engine's account.</summary>
+    internal System.Security.Principal.WindowsIdentity? CallerFor(string serverName, string databaseName) =>
+        _callers.TryGetValue(BuildCacheKey(serverName, databaseName), out var caller) ? caller : null;
 
     /// <summary>
     /// Removes the least-recently-used caches until the count is at or below <c>maxDatabases</c>:
@@ -180,6 +190,7 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
             if (_caches.TryRemove(key, out _)) removed++;
         }
         foreach (var key in _connectionStrings.Keys.Where(Owned).ToList()) _connectionStrings.TryRemove(key, out _);
+        foreach (var key in _callers.Keys.Where(Owned).ToList()) _callers.TryRemove(key, out _);
         return removed;
     }
 
@@ -298,9 +309,11 @@ public class SchemaCacheManager(int maxDatabases = 10) : IDisposable
                     continue;
                 }
 
+                _callers.TryGetValue(cache.CacheKey, out var caller);
                 try
                 {
                     using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    using var signIn = Pairing.BridgeCaller.Set(caller);   // as the user the session signs in as
                     var changed = await _changeDetector.CheckForChangesAsync(connectionString, cache, cts.Token);
                     if (changed)
                     {

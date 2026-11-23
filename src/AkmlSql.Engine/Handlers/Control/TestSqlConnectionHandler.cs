@@ -152,7 +152,7 @@ namespace AkmlSql.Engine.Handlers.Control
         private static async Task<string> OpenSqlServerAsync(string connectionString, CancellationToken ct)
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct).ConfigureAwait(false);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct).ConfigureAwait(false);
             return conn.ServerVersion;
         }
 

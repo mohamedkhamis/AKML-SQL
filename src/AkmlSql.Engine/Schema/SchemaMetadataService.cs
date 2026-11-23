@@ -37,7 +37,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Sanity check: verify the actual physical server we connected to.
             // If caption parsing gave us the wrong Data Source, @@SERVERNAME
@@ -117,7 +117,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
 
             // Single round-trip for both HAS_PERMS_BY_NAME checks (was two ExecuteScalarAsync calls)
@@ -203,7 +203,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Sanity-check which physical server we actually reached. If the caption
             // parsing produced the wrong Data Source (aliases, registered-servers
@@ -322,7 +322,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Build a shared index once — used by columns, parameters, and descriptions loaders
             var objectIndex = BuildObjectIndex(cache);
@@ -616,7 +616,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT CAST(SERVERPROPERTY('EngineEdition') AS INT)";
             cmd.CommandTimeout = 5;
@@ -651,7 +651,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Phase A equivalent: load tables, views, routines
             var tableQuery = @"
@@ -770,7 +770,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
 
             // Single query for both SERVERPROPERTY values — was two separate connections/queries.

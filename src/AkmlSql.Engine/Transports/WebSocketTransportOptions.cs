@@ -61,6 +61,12 @@ namespace AkmlSql.Engine.Transports
         /// <summary>Config location, used to refuse a web root that overlaps private state.</summary>
         public string? ConfigFilePath { get; init; }
 
+        /// <summary>
+        /// Windows authentication from a browser on this computer signs in as that browser's Windows user (see
+        /// <c>BridgeOptions.WindowsSignInAsBrowserUser</c>); otherwise as the engine's own account.
+        /// </summary>
+        public bool WindowsSignInAsBrowserUser { get; init; } = true;
+
         /// <summary>True if the bind address is a loopback IP.</summary>
         public bool IsLoopback =>
             BindAddress == "127.0.0.1" || BindAddress == "::1" || BindAddress == "localhost";

@@ -132,7 +132,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         NewBearerToken = minted,
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
                         HostKind = EngineIdentity.HostKind,
-                        RunsAs = EngineIdentity.RunsAs,
+                        RunsAs = BridgeCaller.Current?.Name ?? EngineIdentity.RunsAs,   // owner request 2026-11-23: who Windows authentication signs in as
                         // Spec 025 (M3 bridge closure) FR-006: publish the LAN-mode cert
                         // thumbprint so the browser can pin it on first connect and warn
                         // on drift. Null on localhost transports -- WebSocketTransport
@@ -166,7 +166,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                         EngineCapabilities = Capabilities.For(SafeSettings(ctx)),
                         ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
                         HostKind = EngineIdentity.HostKind,
-                        RunsAs = EngineIdentity.RunsAs,
+                        RunsAs = BridgeCaller.Current?.Name ?? EngineIdentity.RunsAs,   // owner request 2026-11-23: who Windows authentication signs in as
                         // Spec 025 (M3 bridge closure) FR-006: publish the LAN-mode cert
                         // thumbprint so the browser can pin it on first connect and warn
                         // on drift. Null on localhost transports -- WebSocketTransport
@@ -196,7 +196,7 @@ namespace AkmlSql.Engine.Handlers.Handshake
                 ServerCanonicalIdentity = _serverCanonicalIdentityProvider(),
                 // Spec 041 (R29): how the engine runs, so the web names its styles truthfully (FR-063).
                 HostKind = EngineIdentity.HostKind,
-                RunsAs = EngineIdentity.RunsAs,
+                RunsAs = BridgeCaller.Current?.Name ?? EngineIdentity.RunsAs,   // owner request 2026-11-23: who Windows authentication signs in as
             });
         }
 

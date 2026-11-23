@@ -294,6 +294,39 @@ Notes: `baseline/installed-2026-11-22/web-observations-1936.txt`, `ssms-observat
 | SSMS | Pass: V9, V10, V11 (applies at once), V12, V19 and the cycle. **V10-syntax pass**: with the 10 s wait the Error List shows "Incorrect syntax near 'SELEC'." on line 5. V8 (48/48) passed on its own run (`AKML_CHECK047_ONLY=V8`) after the full run lost it: focus left SSMS for the VS Code window, and an SSMS menu does not open behind another window. The shell logged `Engine: C:\Program Files (x86)\AKML SQL\Engine\AkmlSql.Engine.exe (1.26.1122.1936)`. |
 | Clean-up | Done: the V5 login is dropped, SYSTEM has 0 VIEW DEFINITION grants, and the engine's credential store is `[]`. |
 
+### Owner request 2026-11-23: Windows authentication in the browser signs in as you, like SSMS (1.26.1123.0500)
+
+The owner connected the web edition to `localhost/aqmar` with Windows authentication. The explorer showed only `Database "aqmar"` and the note "The engine signs in as NT AUTHORITY\SYSTEM, which cannot see every object in aqmar…". As admin, aqmar has 4 tables. `NT AUTHORITY\SYSTEM` there is only `db_backupoperator` with CONNECT: it could see 0 of the 4 tables and SELECT from 0 of them. The owner asked for it to be "automatic like ssms".
+
+The change (CLAUDE.md › Browser Windows sign-in):
+
+- The engine service finds the Windows user of a browser on its computer, signs in to SQL Server as that user, and names them in the handshake.
+- A browser on another computer, a caller it cannot place, and `bridge.windowsSignInAsBrowserUser: false` sign in as the engine's account.
+
+Tests:
+
+- `BrowserUserSignInTests` (Engine, 15): the TCP-table match, a live trace from a loopback connection to its process, a live impersonated sign-in to SQL Server, the refresh registration and the handshake.
+- `BridgeWindowsSignInTests` (Core, 2): the config switch.
+- `WindowsAuthHintTests` (Web, 4): the Connect dialog names the user.
+
+A first version of `WindowsAuthHintTests` rendered the dialog with a bridge registered. That slowed the timing-based `ReconnectLoopTests.RetrySucceedsRestoresOpen` running beside it, which then failed in every full run and passed alone. The wording is now tested as a pure function.
+
+Suites: Engine 2748/0/132 (without the machine-dependent PerformanceBaselineTests), Web 2317, Core 1643/0/3, Site 925, Shell 1117, node 321.
+
+Installed 1.26.1123.0500 (built with `build.ps1 -SkipTests`; analyzer smoke 4/4; installed silently, keeping the IIS hosting):
+
+| Check | Result |
+| --- | --- |
+| aqmar in the web explorer, Windows authentication | **Pass**: `Database "aqmar"` › `Schema "dbo"` › Tables (4), Views (0), Stored Procedures (0), Functions (0); no note. |
+| The engine log | `browser process 26196 signs in to SQL Server as 1442-MOHAMEDKHA\Administrator` |
+| SQL Server's view of the engine service's sessions | All logged in as `1442-MOHAMEDKHA\Administrator` (aqmar ×2, master ×1), none as SYSTEM. |
+| Northwind, signed in as the user | No note; "Stored Procedures (7)" with no GRANT. |
+| The installed web cycle | All pass: V2, V3, V5, V6–V8 (72/72), V10, V13–V18, V15 after a GRANT (revoked), V20, **V21 (3/3: the updated troubleshooting entry now comes first for "asks for password again")**, V22, start-up and the cycle. |
+| Clean-up | The temporary login is dropped, 0 grants, and the engine's credential store is `[]`. |
+| SSMS (Check047, one full run) | All pass: V8 (48/48), V9, V10 with V10-syntax, V11, V12, V19 and the cycle. The shell ran `C:\Program Files (x86)\AKML SQL\Engine\AkmlSql.Engine.exe (1.26.1123.0500)`, and its named-pipe path is unchanged. |
+
+Notes: `baseline/installed-2026-11-22/web-observations-0500.txt` and `ssms-observations-0500.txt`.
+
 Test harness changes from this run:
 
 - `InstalledWebCycleTests` gained V5, V15 (after the GRANT), V21 and a start-up check, and reads computed `text-decoration-line`.
