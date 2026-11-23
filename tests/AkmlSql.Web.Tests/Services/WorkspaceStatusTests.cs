@@ -189,6 +189,57 @@ public sealed class WorkspaceStatusTests
         Assert.Equal(ExecutionPhase.Running, _status.Phase);
     }
 
+    // ── the last editor action's message (UX pass 2026-11-23) ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Begin_replaces_the_last_message()
+    {
+        _status.SetNotice("Formatted.");
+
+        _status.Begin();
+
+        Assert.Null(_status.Notice);
+        Assert.Null(_status.NoticeAt);
+    }
+
+    // Installed run on 1.26.1123.1213: every query tab's run starts through Show(RunSnapshot.Running(..)) (Editor.BeginRun), not
+    // Begin(), so "Already formatted: nothing to change." stayed beside the new run's outcome for its whole 12 s.
+    [Fact]
+    public void A_tab_run_that_starts_after_the_last_message_replaces_it()
+    {
+        _status.SetNotice("Already formatted: nothing to change.");
+        _now = _now.AddSeconds(2);
+
+        _status.Show(RunSnapshot.Running(_now));
+
+        Assert.Null(_status.Notice);
+        Assert.Null(_status.NoticeAt);
+        Assert.Equal(WorkspaceStatus.RunningText, _status.Outcome);
+    }
+
+    [Fact]
+    public void Showing_a_tab_whose_run_began_before_the_message_keeps_the_message()
+    {
+        var earlier = RunSnapshot.Running(_now);
+        _now = _now.AddSeconds(2);
+        _status.SetNotice("Formatted.");
+
+        _status.Show(earlier);   // that tab is activated again while its run goes on
+
+        Assert.Equal("Formatted.", _status.Notice);
+    }
+
+    [Fact]
+    public void Showing_a_finished_run_keeps_the_message()
+    {
+        _status.SetNotice("Formatted.");
+        _now = _now.AddSeconds(1);
+
+        _status.Show(RunSnapshot.Of(new ExecuteQueryResult { Status = ExecuteStatus.Ok, ResultSets = new[] { Set(4) } }, _now));
+
+        Assert.Equal("Formatted.", _status.Notice);
+    }
+
     // UI scan 2026-11-03 (W2): a run the user cancelled is not "completed with errors" — the status bar says what SSMS says.
     [Fact]
     public void A_cancelled_run_says_it_was_cancelled_by_the_user()

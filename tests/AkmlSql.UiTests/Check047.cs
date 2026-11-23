@@ -18,7 +18,8 @@ namespace AkmlSql.UiTests;
 /// engine: V12 (an opened file is analysed without typing), V10 (a missing semicolon is a margin dot, a syntax error stays
 /// red), V11 (Options › Code analysis › Advisory findings), V9 (Format Document keeps CRLF), V19 (Find Invalid Objects names
 /// the references it checked) and V8 (every style formats the sp047 corpus as its golden says, and a second Format changes
-/// nothing), plus a plain cycle: execute, results, SQL History and completion.
+/// nothing), plus a plain cycle: execute, results, SQL History and completion. The UX pass of 2026-11-23 adds V19-dialog (a
+/// clean result is a fixed dialog that Escape closes), history-count ("1 entry found") and completion-footer ("schema names: on").
 ///
 /// <para>
 /// It does nothing unless <c>AKML_CHECK047=1</c>, because it drives the real desktop with synthetic input. Settings, history and
@@ -271,10 +272,43 @@ public sealed class Check047(ITestOutputHelper output)
             ? $"PASS (\"{expected}\", no grid; {Path.GetFileName(shot)})"
             : $"FAIL (finished {finished}; grid shown {visibleGrid}; texts: {Shorten(texts)})");
 
-        var close = dialog.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
-            .FirstOrDefault(b => Clean(b.Name) is "Close" or "OK" or "Cancel");
-        if (close is not null) Click(close);
-        else { dialog.Focus(); Keyboard.Press(VirtualKeyShort.ESCAPE); }
+        // A clean result is a fixed dialog with no Minimise or Maximise, and Escape closes it as it closes every other dialog
+        // (installed run 2026-11-23: a sizeable window that offered both and that only Enter closed).
+        bool? canMinimize = null, canMaximize = null;
+        try
+        {
+            var pattern = dialog.Patterns.Window.PatternOrDefault;
+            canMinimize = pattern?.CanMinimize.ValueOrDefault;
+            canMaximize = pattern?.CanMaximize.ValueOrDefault;
+        }
+        catch (Exception) { /* reported as unknown */ }
+        var escaped = false;
+        try
+        {
+            dialog.Focus();
+            Thread.Sleep(400);
+            GetWindowThreadProcessId(GetForegroundWindow(), out var owner);
+            if (owner == (uint)_pid)
+            {
+                Keyboard.Press(VirtualKeyShort.ESCAPE);
+                escaped = WaitFor(() => FindWindow("invalid objects", ControlType.Window) is null, 5);
+            }
+            else Note("V19: the dialog is not in front, so Escape was not sent");
+        }
+        catch (Exception ex) { Note("V19 Escape: " + ex.Message.Split('\n')[0]); }
+        string Known(bool? b) => b?.ToString() ?? "unknown";
+        Note($"V19 dialog: can minimise {Known(canMinimize)}, can maximise {Known(canMaximize)}; Escape closed it: {escaped}");
+        Verdict("V19-dialog", canMinimize == false && canMaximize == false && escaped
+            ? "PASS (a fixed dialog with no Minimise or Maximise; Escape closes it)"
+            : $"FAIL (can minimise {Known(canMinimize)}, can maximise {Known(canMaximize)}, Escape closed it {escaped})");
+
+        if (!escaped && FindWindow("invalid objects", ControlType.Window) is { } still)
+        {
+            var close = still.FindAllDescendants(cf => cf.ByControlType(ControlType.Button))
+                .FirstOrDefault(b => Clean(b.Name) is "Close" or "OK" or "Cancel");
+            if (close is not null) Click(close);
+            else { still.Focus(); Keyboard.Press(VirtualKeyShort.ESCAPE); }
+        }
         Thread.Sleep(800);
     }
 
@@ -304,6 +338,12 @@ public sealed class Check047(ITestOutputHelper output)
             historyListsIt = texts.Any(t => Regex.IsMatch(t, @"^[1-9]\d* entr(y|ies) found$", RegexOptions.IgnoreCase))
                           && texts.Any(t => t.Contains("Northwind", StringComparison.OrdinalIgnoreCase));
             Note($"SQL History: {texts.Count} texts; lists the run: {historyListsIt}: {Shorten(string.Join(" | ", texts.Take(20)))}");
+            // "1 entry found", never "1 entries found" (installed run 2026-11-23). The sandbox history holds this run only.
+            var countLine = texts.FirstOrDefault(t => Regex.IsMatch(t, @"^\d[\d,. ]* entr(y|ies) found$", RegexOptions.IgnoreCase)) ?? "(no count line)";
+            var count = Regex.Match(countLine, @"^(\d[\d,. ]*) (entry|entries) found$");
+            Verdict("history-count", count.Success && (count.Groups[1].Value == "1") == (count.Groups[2].Value == "entry")
+                ? $"PASS ('{countLine}')"
+                : $"FAIL ('{countLine}')");
             Shot.Element(_window.Raw, "cycle-2-history");
             // A floating SQL History window covers the document tabs, so a "Close button inside the pane" would be the query
             // tab's: close the active tool window with Shift+Esc instead, and check the query window is still there.
@@ -322,6 +362,24 @@ public sealed class Check047(ITestOutputHelper output)
         Keyboard.TypeSimultaneously(VirtualKeyShort.CONTROL, VirtualKeyShort.SPACE);
         Thread.Sleep(4500);
         var popup = PopupItems();
+        // The footer toggle says what it shows: "schema names: on", not "owner: on" (installed run 2026-11-23).
+        bool IsToggle(string t) => t.StartsWith("schema names:", StringComparison.OrdinalIgnoreCase) || t.StartsWith("owner:", StringComparison.OrdinalIgnoreCase);
+        var popupTexts = PopupTexts();
+        var toggle = popupTexts.FirstOrDefault(IsToggle);
+        if (toggle is null)
+        {
+            try
+            {
+                var hit = _window.Raw.FindFirstDescendant(cf => cf.ByName("schema names: on").Or(cf.ByName("schema names: off"))
+                    .Or(cf.ByName("owner: on")).Or(cf.ByName("owner: off")));
+                toggle = hit is null ? null : Clean(hit.Name);
+            }
+            catch (Exception) { /* not readable */ }
+        }
+        Note($"completion popup: {popupTexts.Count} readable texts; footer toggle '{toggle ?? "(not readable)"}'");
+        Verdict("completion-footer", toggle is null
+            ? "NOT READABLE (the list exposes no texts to UI Automation; see cycle-3-completion.png)"
+            : toggle.StartsWith("schema names:", StringComparison.OrdinalIgnoreCase) ? $"PASS ('{toggle}')" : $"FAIL ('{toggle}')");
         Shot.Element(_window.Raw, "cycle-3-completion");
         // AKML's completion list has no UIA items; commit its first suggestion and read what it wrote.
         Keyboard.Type(VirtualKeyShort.TAB);
@@ -596,6 +654,23 @@ public sealed class Check047(ITestOutputHelper output)
         }
         catch (Exception) { /* best effort */ }
         return items;
+    }
+
+    /// <summary>Every name UI Automation exposes in SSMS's other top-level windows (the completion popup among them).</summary>
+    private List<string> PopupTexts()
+    {
+        var texts = new List<string>();
+        try
+        {
+            var desktop = _window.Raw.Automation.GetDesktop();
+            foreach (var top in desktop.FindAllChildren(cf => cf.ByProcessId(_pid)))
+            {
+                if (top.Properties.NativeWindowHandle.ValueOrDefault == _window.Raw.Properties.NativeWindowHandle.ValueOrDefault) continue;
+                texts.AddRange(top.FindAllDescendants().Select(e => Clean(e.Name)).Where(n => n.Length > 0));
+            }
+        }
+        catch (Exception) { /* best effort */ }
+        return texts.Distinct().ToList();
     }
 
     private void DismissRestorePrompt()

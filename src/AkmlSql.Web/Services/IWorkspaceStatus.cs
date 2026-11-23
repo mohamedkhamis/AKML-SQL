@@ -245,6 +245,14 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         RowCount = run.RowCount;
         ErrorMessage = run.ErrorMessage;
         _outcome = run.Outcome;
+        // Every query tab's run starts here (Editor.BeginRun), not in Begin(): a run that starts after the last action's message
+        // replaces it, as Begin() does. Showing a tab whose run began earlier (on activation), or a finished run, keeps it.
+        // Installed run on 1.26.1123.1213: "Already formatted: nothing to change." stayed beside a new run for its whole 12 s.
+        if (run.Phase == ExecutionPhase.Running && run.StartedAt is { } started && NoticeAt is { } noticed && started >= noticed)
+        {
+            Notice = null;
+            NoticeAt = null;
+        }
         Changed?.Invoke();
     }
 

@@ -359,7 +359,7 @@ UX findings from the screenshots of these runs, and what changed (not deployed; 
 | The History preview pane stood empty, and the Connect dialog's password hint was cut off ("Remembered on the engine mac"). | "Select a query to see its full text here."; "Remembered on the engine" and "Same as the tab it came from". |
 | SSMS: SQL History said "1 entries found"; Find Invalid Objects said "1 invalid object(s)" in a resizable window with Minimise and Maximise that only Enter closed; the completion footer said "owner: on". | "1 entry found"; "1 invalid object — a reference that can no longer be resolved." in a fixed dialog that Escape closes; "schema names: on". |
 
-Not changed: NM005 flags every bracketed name with a space, including references to tables the user did not name. One example is Northwind's `[Order Details]`, which raised a warning in the SSMS run. Narrowing it to definitions would change the rule's tests and the parity baselines, so it is left for its own change.
+Not changed in this pass: NM005 flags every bracketed name with a space, including references to tables the user did not name. One example is Northwind's `[Order Details]`, which raised a warning in the SSMS run. Narrowing it to definitions would change the rule's tests and the parity baselines, so it was left for its own change. It was narrowed after the 1.26.1123.1213 run (below).
 
 Suites:
 
@@ -370,6 +370,63 @@ Suites:
   - The 6 failures: 5 `EngineAutoConnectTests`, environmental and recorded since spec 043 (they pair at the computer name with a PIN and need a LAN-mode install; this one is localhost-only). 1 `StandaloneQueryCycleTests`, whose bundle-freshness guard tripped on a source edit made during the run; it passes on the rebuilt bundle.
   - After the last status-bar changes: ShellPolish, Axe, WorkspaceAccessibility and ConnectDialog 21/21.
 - `DocsWebScreenshotTour` retook `doc/images/web/status-no-engine.png`, `status-engine-not-answering.png` and `connect-remember.png`; the troubleshooting text and alt text follow.
+
+### Re-run on 1.26.1123.1213 (the UX pass installed), 2026-11-23 12:42–13:07
+
+The owner deployed 1.26.1123.1213, built from e17325f5 (the UX pass) and the site release 70ab018f. The engine, the SSMS extension, the analyzer and the web bundle are all 1.26.1123.1213; hosting is IIS. Both harnesses gained checks for the UX pass before the run (below).
+
+| Area | Result |
+| --- | --- |
+| V1 (`scripts/test-analyzer-cli.ps1` on the installed analyzer) | 4/4. |
+| Web (`InstalledWebCycleTests`, 16) | **14 pass, 1 skip, 1 fail.** The skip is V15 after the GRANT, which was not run. The failure is the new UX check, on one point (below). Pass: V2 (10/10, Live in 2.1–3.0 s with no click), V3, V5, V6, V7, V8 (72/72), V10, V13, V14, V16–V18, V20, V21 (3/3, on the local site publish from 1.26.1123.0500), V22 (0 violations), the start-up check, the cycle, and aqmar's explorer (no note). |
+| SSMS (`Check047`, one full run, 15 min 53 s) | **All pass:** V8 (48/48), V9, V10, V10-syntax, V11, V12, V19, the cycle, and the three new checks: V19-dialog, history-count ("1 entry found") and completion-footer ("schema names: on"). The shell ran the installed engine (`Engine: C:\Program Files (x86)\AKML SQL\Engine\AkmlSql.Engine.exe (1.26.1123.1213)`). |
+| Clean-up | The temporary login is dropped, SYSTEM holds 0 VIEW DEFINITION grants on Northwind, and the engine's credential store is `[]`. |
+
+The UX pass on the installed product (the new `UX_…` check, V3 and V5):
+
+- **Toolbar:** 40 px tall at 1920 / 1536 / 1440 / 1366 / 1280 px, idle and while a query runs, with 63–173 px to spare. All button words show at 1920 px; Format, Refactor and AI at 1536 and 1440 px; none at 1366 and 1280 px. Execute says "Execute" ("Running…" while it runs), and no control is without a name.
+- **Status bar:** "Live" alone, then `1442-MOHAMEDKHA\Administrator` with the title "Windows authentication: SQL Server sees this Windows user". Format says "Formatted.", then "Already formatted: nothing to change.", in the bar and not in the toolbar; 13 s later the message is gone. At 1280 px with a message showing, the message, login and versions give way; the outcome, rows, caret, kind and connection stay whole.
+- **Engine stopped (V3):** the pill says **Unreachable**, with no state words beside it, and the issue says "The engine is not responding at localhost:59417 — it may be starting up or stopped." with Retry. Stopped while the page is open, the pill says **Reconnecting** with "Reconnecting · next try in 2s", there is no issue strip, and the page reconnects by itself.
+- **V5:** the password box hint reads "Remembered on the engine" and fits (172 of 185 px).
+- **Results and History:** an editable result says "Double-click a cell to edit. Nothing changes on the server until you click Apply.", with no legend chips. The History preview says "Select a query to see its full text here."
+
+The failure: a run did not replace the message, so "Already formatted: nothing to change." stayed beside "Query executed successfully." Every query tab's run starts through `IWorkspaceStatus.Show(RunSnapshot.Running(…))` (`Editor.BeginRun`). Only `Begin()` cleared the message, the app never calls it, and the unit test called `Begin()`.
+
+Fixed (not deployed):
+
+- `WorkspaceStatus.Show` clears a message that is older than the run it shows. Activating a tab whose run began before the message keeps the message, and so does showing a finished run.
+- Tests: `WorkspaceStatusTests` +4. `StatusBarSegmentsTests.A_run_replaces_the_last_action_message` now starts the run the way the editor does.
+- Verified on the Debug build with a sandbox engine: Format, then run, twice; the bar read "Formatted.", then nothing.
+
+The shell log has 2 warnings, `[PipeRpc] WriteAsync req#0 _writeLock acquired in 300.9569ms (CONTENDED)` and one of 132.8 ms, both for document-change notifications during V8. Nothing failed, and the 0537 run had none. The log shows no other write in flight either time: the previous write had released the lock about 100 ms before. The time was measured from before a log line, so a stall of the SSMS process (a garbage collection, a slow log write) read as contention.
+
+Fixed after the run (owner: "fix issues if found"; not deployed):
+
+- **The pipe warning tells the truth.** `PipeRpcClient.EnterAsync` takes the write lock without waiting when it is free, and times only a wait for another writer. "CONTENDED" now means another write held the lock. Tests: `PipeRpcWriteLockTests` (4).
+- **NM005 reports the names a script gives, once.** It reported every bracketed name with a space or special character: every reference to Northwind's `[Order Details]`, principals such as `[NT AUTHORITY\SYSTEM]` in a GRANT, and, reading the whole document's tokens for every batch, each name once per batch. It now reads the batch's syntax tree and reports a name where the script gives it:
+  - a created object;
+  - a column, constraint or index;
+  - a table made by SELECT … INTO;
+  - a CTE and its columns;
+  - a column or table alias.
+
+  A reference and a principal are never reported, so the rule now reports a subset of what it did before.
+  - Tests: `Nm005Tests` (17 reported, 10 not reported, one for several batches).
+  - The four web parity baselines that held a finding for a reference to `[order details]` lose those 5 findings and keep the rest unchanged: `sp031-04-between-in`, `sp031-10-cte-columns`, `sp031-13-update-delete` and `sp031-20-merge`, all `.expected.json`.
+  - `doc/analysis-rules.md` and `RuleMetadataCatalog` describe the rule as it is. Both said "unquoted identifier", which it never checked.
+  - PGNM005, the PostgreSQL rule, is unchanged. It is Information, a margin marker by default.
+
+Harness changes:
+
+- `InstalledWebCycleTests` gains `UX_the_toolbar_keeps_one_row_and_the_status_bar_says_each_thing_once`. V3 also checks the pill's word and stops the engine with the page open, and V5 checks the password hint.
+- `Check047` gains V19-dialog, history-count and completion-footer.
+
+Suites after the fixes:
+
+- Web 2331 (+4), Shell 1129 (+4).
+- Engine analysis tests 433, with `Nm005Tests` at 29 (was 3), and Core analysis tests 127.
+
+Notes: `baseline/installed-2026-11-22/web-observations-1213.txt` and `ssms-observations-1213.txt`.
 
 ## Golden changes accepted (T064, T065)
 

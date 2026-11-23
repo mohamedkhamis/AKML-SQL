@@ -286,7 +286,8 @@ public sealed class StatusBarSegmentsTests : BunitContext
         cut.InvokeAsync(() => _status.SetNotice("Formatted."));
         cut.WaitForAssertion(() => Assert.Equal("Formatted.", cut.Find("[data-testid=status-notice]").TextContent.Trim()));
 
-        cut.InvokeAsync(_status.Begin);
+        // As the editor starts every query tab's run (Editor.BeginRun); the installed 1.26.1123.1213 kept the message here.
+        cut.InvokeAsync(() => _status.Show(RunSnapshot.Running(_now)));
 
         cut.WaitForAssertion(() => Assert.Equal(string.Empty, cut.Find("[data-testid=status-notice]").TextContent.Trim()));
         Assert.Equal(WorkspaceStatus.RunningText, cut.Find("[data-testid=status-outcome]").TextContent.Trim());

@@ -129,15 +129,13 @@ namespace AkmlSql.Shell.Shared.Ipc
 
         private async Task WriteAsync(RpcMessage msg, CancellationToken ct)
         {
-            var lockTs = DateTime.UtcNow;
             Log.Information("[PipeRpc] WriteAsync req#{Req} type={Type} payload={Bytes}B awaiting _writeLock",
                 msg.RequestId, msg.MessageType, msg.Payload?.Length ?? 0);
-            await _writeLock.WaitAsync(ct).ConfigureAwait(false);
-            var lockMs = (DateTime.UtcNow - lockTs).TotalMilliseconds;
-            if (lockMs > 50)
-                Log.Warning("[PipeRpc] WriteAsync req#{Req} _writeLock acquired in {Ms}ms (CONTENDED)", msg.RequestId, lockMs);
+            var waited = await EnterAsync(_writeLock, ct).ConfigureAwait(false);
+            if (waited is { } wait && wait.TotalMilliseconds > 50)
+                Log.Warning("[PipeRpc] WriteAsync req#{Req} _writeLock acquired in {Ms}ms (CONTENDED)", msg.RequestId, wait.TotalMilliseconds);
             else
-                Log.Debug("[PipeRpc] WriteAsync req#{Req} _writeLock acquired in {Ms}ms", msg.RequestId, lockMs);
+                Log.Debug("[PipeRpc] WriteAsync req#{Req} _writeLock acquired in {Ms}ms", msg.RequestId, waited?.TotalMilliseconds ?? 0);
             try
             {
                 var wrTs = DateTime.UtcNow;
@@ -149,6 +147,21 @@ namespace AkmlSql.Shell.Shared.Ipc
             {
                 _writeLock.Release();
             }
+        }
+
+        /// <summary>
+        /// Takes the write lock and says how long this writer waited for another one; null when the lock was free. Only a writer
+        /// that finds the lock taken waits, and only that wait is timed. Timed from before the log line in front of it, a stall of
+        /// the whole process (a garbage collection, a slow log write) was reported as "CONTENDED" on a lock nobody held: the
+        /// installed run on 1.26.1123.1213 logged 133 and 301 ms with no other write in flight.
+        /// </summary>
+        internal static async Task<TimeSpan?> EnterAsync(SemaphoreSlim gate, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();   // as WaitAsync(ct) does: a cancelled writer never takes the lock
+            if (gate.Wait(0)) return null;
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            await gate.WaitAsync(ct).ConfigureAwait(false);
+            return watch.Elapsed;
         }
 
         private async Task ReadLoopAsync(CancellationToken ct)

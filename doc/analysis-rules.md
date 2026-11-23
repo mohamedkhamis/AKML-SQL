@@ -223,7 +223,7 @@ Rules that enforce naming conventions for database objects.
 | NM002 | Warning | Rename to `usp_` | Procedure name starts with `sp_` — SQL Server searches `master` first |
 | NM003 | Information | — | Hungarian notation on table or view (`tbl_`, `vw_`) |
 | NM004 | Information | — | Inconsistent naming style across objects of the same type |
-| NM005 | Warning | — | Special characters in unquoted identifier |
+| NM005 | Warning | — | A name the script gives (a created object, column, constraint, index, CTE or alias) has spaces or special characters, so it needs brackets wherever it is used. A reference to a name that already exists, such as Northwind's `[Order Details]`, is not reported, and nor is a principal such as `[NT AUTHORITY\SYSTEM]` |
 | NM006 | Information | — | Single-letter table alias (`a`, `b`) — prefer descriptive aliases |
 
 ---

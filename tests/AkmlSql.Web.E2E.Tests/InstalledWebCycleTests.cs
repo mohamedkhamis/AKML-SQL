@@ -15,7 +15,8 @@ namespace AkmlSql.Web.E2E.Tests;
 /// Spec 047 (T141, quickstart.md §3) - the web acceptance scenarios on the INSTALLED product: the IIS site named by
 /// INSTALL-SUMMARY.txt and the AkmlSqlWebEngine service (port from %ProgramData%\AKML SQL Web\config.json), not the Debug
 /// bundle and a sandbox engine. V2, V3, V6, V7, V8 (web), V10 (web), V13, V14, V15 (the note; the GRANT needs the owner),
-/// V16, V17, V18, V20 and V22, plus a connected cycle: run, grid, Format twice, completion and History.
+/// V16, V17, V18, V20 and V22, plus a connected cycle: run, grid, Format twice, completion and History, and the UX pass of
+/// 2026-11-23 (one-row toolbar, status-bar messages, the Windows user, the edit hint, the History preview).
 ///
 /// <para>
 /// Runs only with <c>AKML_INSTALLED_WEB=1</c>, because it changes the installed product's state: V3 stops and restarts the
@@ -76,6 +77,7 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
     {
         RequireOptIn();
         var (pw, browser) = await LaunchAsync();
+        var problems = new List<string>();
         Service("stop");
         try
         {
@@ -91,17 +93,21 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             await WaitUntilAsync(() => IsShownAsync(issue), 45);
             await page.WaitForTimeoutAsync(1_000);
             var pill = await TextOfAsync(page, "status-pill");
-            var pillTitle = await page.GetByTestId("status-pill").First.GetAttributeAsync("title") ?? "";
+            var pillTitle = await AttributeOfAsync(page, "status-pill", "title");
             var issueText = await TextOfAsync(page, "engine-issue");
+            var stateWords = await page.GetByTestId("status-text").CountAsync();
             var footer = Regex.Replace(await page.Locator("footer").First.InnerTextAsync(), @"\s+", " ");
             var offeredIds = new List<string>();
             foreach (var id in new[] { "engine-use-local", "engine-retry", "engine-setup", "local-engine-failure", "local-engine-add" })
                 if (await page.GetByTestId(id).CountAsync() > 0) offeredIds.Add(id);
             var offered = string.Join(", ", offeredIds);
-            Note($"V3 engine stopped, new profile: pill '{pill}' (title '{pillTitle}'); issue '{issueText}'; offered: {offered}");
+            Note($"V3 engine stopped, new profile: pill '{pill}' (title '{pillTitle}'); state words beside it {stateWords}; issue '{issueText}'; offered: {offered}");
             Note("V3 status bar: " + footer);
             await ShotAsync(page, "v3-1-engine-stopped");
-            Assert.Contains("not responding", issueText, StringComparison.OrdinalIgnoreCase);
+            if (!issueText.Contains("not responding", StringComparison.OrdinalIgnoreCase)) problems.Add("V3 issue: " + issueText);
+            // UX pass 2026-11-23: "Failed  Engine not reachable.  The engine is not responding at …" said one thing three times.
+            // The pill names the failure and the issue strip explains it, once.
+            if (pill != "Unreachable" || stateWords != 0) problems.Add($"V3 pill '{pill}', state words beside the issue {stateWords}");
 
             // Back on: the page recovers by itself (its retry), with no reload.
             Service("start");
@@ -110,6 +116,28 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             Note($"V3 after the service started again: pill '{await TextOfAsync(page, "status-pill")}', recovered without a reload: {recovered}");
             await ShotAsync(page, "v3-2-recovered");
             Assert.True(recovered, "the page did not reconnect by itself after the engine came back");
+
+            // Stopped while the page is open and Live: the bar says it is reconnecting and counts down. It never says that no
+            // engine is paired (before the UX pass, a failure from before a pairing came back at this moment).
+            Service("stop");
+            Assert.True(WaitService("STOPPED", 60), "AkmlSqlWebEngine did not stop the second time");
+            var reconnecting = await WaitUntilAsync(async () => (await TextOfAsync(page, "status-pill")).StartsWith("Reconnecting", StringComparison.Ordinal), 30);
+            await page.WaitForTimeoutAsync(1_500);
+            var whileWords = await TextOfAsync(page, "status-text");
+            var whileIssue = await TextOfAsync(page, "engine-issue");
+            var whileBar = Regex.Replace(await page.Locator("footer").First.InnerTextAsync(), @"\s+", " ");
+            Note($"V3 stopped while the page was open: pill '{await TextOfAsync(page, "status-pill")}' (reconnecting {reconnecting}); words '{whileWords}'; issue '{whileIssue}'");
+            Note("V3 status bar while reconnecting: " + whileBar);
+            await ShotAsync(page, "v3-3-stopped-while-open");
+            if (!reconnecting || !whileWords.StartsWith("Reconnecting ·", StringComparison.Ordinal))
+                problems.Add($"V3 stopped while open: reconnecting {reconnecting}, words '{whileWords}'");
+            if (whileBar.Contains("No engine paired", StringComparison.OrdinalIgnoreCase)) problems.Add("V3 stopped while open: the bar says no engine is paired: " + whileBar);
+
+            Service("start");
+            Assert.True(WaitService("RUNNING", 90) && await WaitPortAsync(Port, 90), "AkmlSqlWebEngine did not come back the second time");
+            var again = await WaitUntilAsync(async () => (await TextOfAsync(page, "status-pill")).Contains("Live", StringComparison.OrdinalIgnoreCase), 90);
+            Note($"V3 after the second start: pill '{await TextOfAsync(page, "status-pill")}', recovered without a reload: {again}");
+            if (!again) problems.Add("V3: the page did not reconnect after the second stop");
         }
         finally
         {
@@ -119,6 +147,7 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             await browser.DisposeAsync();
             pw.Dispose();
         }
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
     // ── V6, V7 ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -657,6 +686,16 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             await row.ClickAsync(new() { Timeout = 15_000 });
             await page.WaitForTimeoutAsync(800);
             var typed = await page.InputValueAsync("[data-testid='conn-password-input']");
+            // The password box says the engine keeps the password, in words short enough to read whole (UX pass 2026-11-23: the
+            // longer words were cut to "Remembered on the engine mac"). The dialog learns it from the engine, so it can take a moment.
+            var placeholder = "";
+            await WaitUntilAsync(async () => (placeholder = await page.GetAttributeAsync("[data-testid='conn-password-input']", "placeholder") ?? "").Length > 0, 10);
+            var fits = await page.EvalOnSelectorAsync<string>("[data-testid='conn-password-input']",
+                "el => { const s = getComputedStyle(el); const c = document.createElement('canvas').getContext('2d'); c.font = s.font; " +
+                "const w = c.measureText(el.placeholder).width; const room = el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight); " +
+                "return (w <= room ? 'fits' : 'CUT') + ` (${Math.round(w)} of ${Math.round(room)} px)`; }");
+            Note($"V5 password box hint: '{placeholder}', {fits}");
+            if (placeholder != "Remembered on the engine" || !fits.StartsWith("fits", StringComparison.Ordinal)) problems.Add($"V5 hint: '{placeholder}', {fits}");
             await page.ClickAsync("[data-testid='conn-connect-btn']");
             var connected = await WaitUntilAsync(async () =>
                 (await TextOfAsync(page, "status-connection")).Contains("localhost", StringComparison.OrdinalIgnoreCase), 45);
@@ -685,6 +724,143 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
             try { await page.GetByTestId("dialog-confirm").ClickAsync(new() { Timeout = 5_000 }); } catch (TimeoutException) { /* answered by the handler */ }
         }
         try { Directory.Delete(profile, recursive: true); } catch (IOException) { /* the browser may still hold it */ }
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+    }
+
+    // ── the UX pass of 2026-11-23 ─────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The UX pass after the 1.26.1123.0537 run, on the installed product:
+    /// <list type="bullet">
+    /// <item>the editor toolbar keeps one row from 1280 px, idle and while a query runs, and Execute keeps its word;</item>
+    /// <item>an editor action's message goes to the status bar (a polite status message), leaves after 12 s, and a run replaces it;</item>
+    /// <item>connected with Windows authentication, the bar says Live alone and names the Windows user SQL Server sees;</item>
+    /// <item>with a message showing, the outcome, rows, caret, server kind and connection keep their words at 1440 and 1280 px;</item>
+    /// <item>an editable result says how to edit, and the History preview says what it is for.</item>
+    /// </list>
+    /// Reads Northwind; changes nothing.</summary>
+    [SkippableFact]
+    public async Task UX_the_toolbar_keeps_one_row_and_the_status_bar_says_each_thing_once()
+    {
+        RequireOptIn();
+        var (pw, browser) = await LaunchAsync();
+        var problems = new List<string>();
+        try
+        {
+            await using var context = await browser.NewContextAsync(Profile());
+            var page = await context.NewPageAsync();
+            await InAppDialogs.AcceptAllAsync(page, "");
+            var live = await OpenLiveAsync(page, Site);
+            Assert.True(live.Live, $"the page did not reach the engine: '{live.Pill}'");
+
+            // Before a database, the words say what to do next.
+            var beforeWords = await TextOfAsync(page, "status-text");
+            Note($"UX before a database: pill '{live.Pill}'; words '{beforeWords}'");
+            if (!beforeWords.Contains("connect to a database", StringComparison.OrdinalIgnoreCase)) problems.Add("UX words before a database: " + beforeWords);
+
+            // Connected with Windows authentication: "Live" alone, and the Windows user SQL Server sees.
+            await WebAppFixture.ConnectAsync(page, "Northwind");
+            var user = $@"{Environment.UserDomainName}\{Environment.UserName}";
+            await WaitUntilAsync(async () => (await TextOfAsync(page, "status-login")).Length > 0, 20);
+            var pill = await TextOfAsync(page, "status-pill");
+            var pillTitle = await AttributeOfAsync(page, "status-pill", "title");
+            var stateWords = await page.GetByTestId("status-text").CountAsync();
+            var login = await TextOfAsync(page, "status-login");
+            var loginTitle = await AttributeOfAsync(page, "status-login", "title");
+            Note($"UX connected: pill '{pill}' (title '{pillTitle}'); state words shown {stateWords}; login '{login}' (title '{loginTitle}'); connection '{await TextOfAsync(page, "status-connection")}'");
+            await ShotAsync(page, "ux-1-connected");
+            if (pill != "Live" || stateWords != 0) problems.Add($"UX Live: pill '{pill}', state words shown {stateWords}");
+            if (!pillTitle.StartsWith("Live IntelliSense available.", StringComparison.Ordinal)) problems.Add("UX pill title: " + pillTitle);
+            if (!string.Equals(login, user, StringComparison.OrdinalIgnoreCase) || !loginTitle.StartsWith("Windows authentication", StringComparison.Ordinal))
+                problems.Add($"UX login: '{login}' (title '{loginTitle}'); expected '{user}'");
+
+            // An editor action says what it did in the status bar: a polite status message, never in the toolbar.
+            var role = await AttributeOfAsync(page, "status-notice", "role");
+            var politeness = await AttributeOfAsync(page, "status-notice", "aria-live");
+            if (role != "status" || politeness != "polite") problems.Add($"UX notice region: role '{role}', aria-live '{politeness}'");
+            await SetTextAsync(page, "select customerid,companyname from dbo.customers where country=N'Germany'");
+            foreach (var expected in new[] { "Formatted.", "Already formatted: nothing to change." })
+            {
+                await FormatAsync(page);
+                var said = await WaitUntilAsync(async () => await TextOfAsync(page, "status-notice") == expected, 10);
+                var toolbarText = Regex.Replace(await page.Locator(".akml-editor-toolbar").InnerTextAsync(), @"\s+", " ");
+                Note($"UX Format: notice '{await TextOfAsync(page, "status-notice")}'; in the toolbar too: {toolbarText.Contains(expected, StringComparison.Ordinal)}");
+                if (!said) problems.Add($"UX Format notice: '{await TextOfAsync(page, "status-notice")}', expected '{expected}'");
+                if (toolbarText.Contains(expected, StringComparison.Ordinal)) problems.Add("UX: the toolbar holds the message: " + toolbarText);
+            }
+            await ShotAsync(page, "ux-2-format-notice");
+            await page.WaitForTimeoutAsync(13_000);
+            var afterLifetime = await TextOfAsync(page, "status-notice");
+            Note($"UX notice 13 s later: '{afterLifetime}'");
+            if (afterLifetime.Length != 0) problems.Add($"UX notice still shown after its 12 s: '{afterLifetime}'");
+
+            // A run replaces the message, and an editable result says how to edit until something changes.
+            await FormatAsync(page);
+            await SetTextAsync(page, "SELECT RegionID, RegionDescription FROM dbo.Region ORDER BY RegionID;");
+            await RunAsync(page);
+            var afterRun = await TextOfAsync(page, "status-notice");
+            var pane = page.Locator("[data-testid='results-pane']");
+            var hint = pane.GetByTestId("results-edit-hint");
+            var hintShown = await WaitUntilAsync(() => IsShownAsync(hint), 15);
+            var hintText = hintShown ? await TextOrEmptyAsync(hint) : "(no hint)";
+            var chips = await pane.Locator(".akml-legend-chip").CountAsync();
+            Note($"UX after a run: notice '{afterRun}'; editable result: hint '{hintText}', legend chips {chips}, outcome '{await TextOfAsync(page, "status-outcome")}'");
+            await ShotAsync(page, "ux-3-editable-result");
+            if (afterRun.Length != 0) problems.Add($"UX: the run left the message '{afterRun}'");
+            if (hintText != "Double-click a cell to edit. Nothing changes on the server until you click Apply." || chips != 0)
+                problems.Add($"UX edit hint: '{hintText}', legend chips {chips}");
+
+            // With a message showing, the segments that matter keep their words.
+            foreach (var width in new[] { 1440, 1280 })
+            {
+                await page.SetViewportSizeAsync(width, 900);
+                await FormatAsync(page);
+                await page.WaitForTimeoutAsync(500);
+                var segments = await StatusSegmentsAsync(page);
+                Note($"UX status bar at {width} px (~ = cut short): {segments}");
+                try { await page.Locator(".akml-status").ScreenshotAsync(new() { Path = Path.Combine(Out, $"ux-4-status-{width}.png") }); }
+                catch (Exception) { /* best effort */ }
+                foreach (var id in new[] { "status-outcome", "status-rows", "status-caret", "status-kind", "status-connection" })
+                {
+                    if (segments.Contains("~" + id + ":", StringComparison.Ordinal)) problems.Add($"UX status bar at {width} px: {id} is cut short");
+                    if (!segments.Contains(id + ":", StringComparison.Ordinal)) problems.Add($"UX status bar at {width} px: no {id}");
+                }
+            }
+
+            // The toolbar at the widths people use, idle and while a query runs (Cancel takes Parse's place).
+            foreach (var width in new[] { 1920, 1536, 1440, 1366, 1280 })
+            {
+                await page.SetViewportSizeAsync(width, 900);
+                await page.WaitForTimeoutAsync(500);
+                var idle = await ToolbarAsync(page);
+                await SetTextAsync(page, "WAITFOR DELAY '00:00:03';");
+                await page.GetByTestId("execute-button").ClickAsync();
+                await page.WaitForSelectorAsync("[data-testid='execute-running']", new() { State = WaitForSelectorState.Attached, Timeout = 15_000 });
+                await page.WaitForTimeoutAsync(300);
+                var running = await ToolbarAsync(page);
+                try { await page.Locator(".akml-editor-toolbar").ScreenshotAsync(new() { Path = Path.Combine(Out, $"ux-5-toolbar-running-{width}.png") }); }
+                catch (Exception) { /* best effort */ }
+                await page.WaitForSelectorAsync("[data-testid='execute-running']", new() { State = WaitForSelectorState.Detached, Timeout = 30_000 });
+                Note($"UX toolbar at {width} px: idle {idle}; running {running}");
+                foreach (var (when, m, word) in new[] { ("idle", idle, "Execute"), ("running", running, "Running…") })
+                {
+                    var height = int.Parse(Regex.Match(m, @"height (\d+) px").Groups[1].Value);
+                    if (height > 44) problems.Add($"UX toolbar at {width} px ({when}): {height} px tall, more than one row");
+                    if (!m.Contains($"execute '{word}'", StringComparison.Ordinal)) problems.Add($"UX toolbar at {width} px ({when}): Execute does not say '{word}': {m}");
+                    if (!m.EndsWith("unnamed controls 0", StringComparison.Ordinal)) problems.Add($"UX toolbar at {width} px ({when}): {m}");
+                }
+            }
+            await page.SetViewportSizeAsync(1440, 900);
+
+            // The History preview, before anything is chosen, says what it is for.
+            await ShellPolishTests.NavigateAsync(page, "history");
+            var empty = page.GetByTestId("history-preview-empty");
+            var emptyShown = await WaitUntilAsync(() => IsShownAsync(empty), 20);
+            var emptyText = emptyShown ? await TextOrEmptyAsync(empty) : "(nothing)";
+            Note($"UX History preview before a choice: '{emptyText}'");
+            await ShotAsync(page, "ux-6-history-preview");
+            if (emptyText != "Select a query to see its full text here.") problems.Add("UX History preview: " + emptyText);
+        }
+        finally { await browser.DisposeAsync(); pw.Dispose(); }
         Assert.True(problems.Count == 0, string.Join("\n", problems));
     }
 
@@ -1080,6 +1256,49 @@ public sealed class InstalledWebCycleTests(ITestOutputHelper output)
         try { return await locator.CountAsync() > 0 ? Regex.Replace((await locator.First.InnerTextAsync(new() { Timeout = 2_000 })).Trim(), @"\s+", " ") : ""; }
         catch (Exception) { return ""; }
     }
+
+    private static async Task<string> AttributeOfAsync(IPage page, string testId, string name)
+    {
+        try
+        {
+            var l = page.GetByTestId(testId);
+            return await l.CountAsync() > 0 ? await l.First.GetAttributeAsync(name, new() { Timeout = 2_000 }) ?? "" : "";
+        }
+        catch (Exception) { return ""; }
+    }
+
+    /// <summary>Format, and wait for its completion marker.</summary>
+    private static async Task FormatAsync(IPage page)
+    {
+        var v = await MarkerVersionAsync(page, "format-complete");
+        await page.GetByTestId("format-button").ClickAsync();
+        await WaitUntilAsync(async () => await MarkerVersionAsync(page, "format-complete") > v, 30);
+    }
+
+    /// <summary>Execute, and wait for its completion marker.</summary>
+    private static async Task RunAsync(IPage page)
+    {
+        var v = await MarkerVersionAsync(page, "execute-complete");
+        await page.GetByTestId("execute-button").ClickAsync();
+        await WaitUntilAsync(async () => await MarkerVersionAsync(page, "execute-complete") > v, 60);
+    }
+
+    /// <summary>The editor toolbar: its height (one row is 40 px), the room left at its end, what Execute says, which button words
+    /// are on screen, and how many controls have no name.</summary>
+    private static Task<string> ToolbarAsync(IPage page) => page.EvaluateAsync<string>(
+        "() => { const bar = document.querySelector('.akml-editor-toolbar'); const r = bar.getBoundingClientRect(); " +
+        "const kids = [...bar.children].filter(e => e.getBoundingClientRect().width > 0); " +
+        "const right = Math.max(...kids.map(e => e.getBoundingClientRect().right)); " +
+        "const words = [...bar.querySelectorAll('.akml-tool-label')].filter(s => s.getBoundingClientRect().width > 1).map(s => s.textContent.trim()); " +
+        "const run = bar.querySelector(\"[data-testid='execute-button']\"); " +
+        "const unnamed = [...bar.querySelectorAll('button, a.akml-btn, label.akml-btn')].filter(b => b.getBoundingClientRect().width > 0 && !(b.getAttribute('aria-label') || b.textContent.trim())).length; " +
+        "return `height ${Math.round(r.height)} px, ${Math.round(r.right - right)} px to spare; execute '${run ? run.innerText.trim() : 'none'}'; words shown: ${words.join(', ') || 'none'}; unnamed controls ${unnamed}`; }");
+
+    /// <summary>The status bar's segments in order, each "~id: text" when its text is cut short.</summary>
+    private static Task<string> StatusSegmentsAsync(IPage page) => page.EvaluateAsync<string>(
+        "() => [...document.querySelectorAll('.akml-status > [data-testid]')].filter(e => e.getBoundingClientRect().width > 0 && e.textContent.trim()).map(e => { " +
+        "const cut = [e, ...e.querySelectorAll('*')].some(x => x.scrollWidth > x.clientWidth + 1 && getComputedStyle(x).overflow !== 'visible'); " +
+        "return (cut ? '~' : '') + e.getAttribute('data-testid') + ': ' + e.textContent.replace(/\\s+/g, ' ').trim(); }).join(' | ')");
 
     private static async Task<bool> WaitUntilAsync(Func<Task<bool>> condition, int seconds)
     {
