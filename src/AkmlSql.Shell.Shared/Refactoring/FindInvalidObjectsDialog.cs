@@ -38,7 +38,11 @@ namespace AkmlSql.Shell.Shared.Refactoring
             Size            = showsGrid ? new Size(960, 560) : new Size(560, 150);
             MinimumSize     = showsGrid ? new Size(720, 380) : new Size(420, 150);
             StartPosition   = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.Sizable;
+            // A one-line answer is a fixed dialog; a list can be made larger. A modal window is never minimised (it offered
+            // Minimise and Maximise for the sentence "No invalid objects found. All 63 references resolve.").
+            FormBorderStyle = showsGrid ? FormBorderStyle.Sizable : FormBorderStyle.FixedDialog;
+            MinimizeBox     = false;
+            MaximizeBox     = showsGrid;
             ShowInTaskbar   = false;
             BackColor       = Color.FromArgb(250, 250, 252);
 
@@ -110,6 +114,7 @@ namespace AkmlSql.Shell.Shared.Refactoring
             btnClose.Left = 860;
             footer.Controls.Add(btnClose);
             AcceptButton = btnClose;
+            CancelButton = btnClose;   // Escape closes it too, as it closes every other dialog
 
             if (showsGrid) Controls.Add(grid);
             else grid.Dispose();
@@ -123,7 +128,8 @@ namespace AkmlSql.Shell.Shared.Refactoring
         /// </summary>
         internal static string SummaryText(int records, int totalScanned)
         {
-            if (records > 0) return $"{records} invalid object(s) — references that can no longer be resolved.";
+            if (records == 1) return "1 invalid object — a reference that can no longer be resolved.";
+            if (records > 1) return $"{records} invalid objects — references that can no longer be resolved.";
             if (totalScanned <= 0) return "This database has no object references to check.";
             return totalScanned == 1
                 ? "No invalid objects found. The 1 reference resolves."

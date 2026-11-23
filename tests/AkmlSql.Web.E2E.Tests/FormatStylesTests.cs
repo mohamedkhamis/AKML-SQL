@@ -114,7 +114,7 @@ public sealed class FormatStylesTests
         try { await page.WaitForSelectorAsync("[data-testid='format-complete']", new() { State = WaitForSelectorState.Attached }); }
         catch (TimeoutException ex)
         {
-            throw new InvalidOperationException("Format status: " + string.Join("; ", await page.Locator(".akml-editor-status").AllInnerTextsAsync())
+            throw new InvalidOperationException("Format status: " + string.Join("; ", await page.Locator("[data-testid=status-notice]").AllInnerTextsAsync())
                 + "; editor: " + await GetEditorTextAsync(page), ex);
         }
 

@@ -14,8 +14,10 @@
 
 <div class="akml-profile-picker">
     @* Spec 041 (FR-054): "Style", the word Settings › Format and the Format styles page use. *@
-    <label for="@_selectId" class="akml-profile-label">Style</label>
-    <select id="@_selectId" class="akml-profile-select" data-testid="profile-picker" value="@_activeId" @onchange="OnSelectionChanged">
+    @* The word drops out of sight (it stays the select's label) with the toolbar's first step (Editor.razor, akml-tool-label--s1). *@
+    <label for="@_selectId" class="akml-profile-label akml-tool-label akml-tool-label--s1">Style</label>
+    <select id="@_selectId" class="akml-profile-select" data-testid="profile-picker" value="@_activeId" @onchange="OnSelectionChanged"
+            title="@(_active == null ? "Format style" : $"Format style: {OptionText(_active)}")">
         @if (_profiles != null)
         {
             @if (_profiles.Any(p => p.Location == ProfileLocation.Engine) || _unlistedEngineStyle != null)
@@ -67,7 +69,8 @@
     {
         <button type="button" class="akml-btn akml-btn--destructive" @onclick="DeleteActiveAsync" title="Delete this style">Delete…</button>
     }
-    <a class="akml-btn" href="/styles" title="Edit formatting styles (SQL Prompt style editor)" data-testid="profile-edit-styles">Edit…</a>
+    <a class="akml-btn" href="/styles" title="Edit formatting styles (SQL Prompt style editor)" data-testid="profile-edit-styles"
+       aria-label="Edit styles"><Icon Name="pencil" /><span class="akml-tool-label akml-tool-label--s2">Edit…</span></a>
 </div>
 
 <style>
@@ -88,7 +91,10 @@
         border: 1px solid var(--akml-border-default);
         border-radius: var(--akml-scalar-radius-xs);
         padding: var(--akml-scalar-spacing-xs);
-        min-width: 200px;
+        /* A closed select is as wide as its longest option ("Khamis Style (on this engine)"); capped so the toolbar fits on
+           one row. The whole name is the title. */
+        min-width: 150px;
+        max-width: 190px;
     }
 </style>
 

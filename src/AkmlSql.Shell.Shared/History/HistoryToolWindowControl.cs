@@ -1954,7 +1954,8 @@ namespace AkmlSql.Shell.Shared.History
             _statusCountLabel.SetBinding(TextBlock.TextProperty,
                 new Binding(nameof(HistoryViewModel.TotalCount))
                 {
-                    StringFormat = "{0} entries found"
+                    // "1 entry found", not "1 entries found" (installed run 2026-11-23).
+                    Converter = EntryCountText.Converter,
                 });
             bar.Children.Add(_statusCountLabel);
 
@@ -2959,5 +2960,26 @@ namespace AkmlSql.Shell.Shared.History
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// The SQL History count line: "1 entry found", "12 entries found". A binding's StringFormat cannot choose the word, and the
+    /// window read "1 entries found" (installed run 2026-11-23).
+    /// </summary>
+    internal static class EntryCountText
+    {
+        internal static readonly IValueConverter Converter = new CountConverter();
+
+        internal static string For(int count) =>
+            count == 1 ? "1 entry found" : count.ToString("N0", CultureInfo.CurrentCulture) + " entries found";
+
+        private sealed class CountConverter : IValueConverter
+        {
+            public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+                For(value is int n ? n : 0);
+
+            public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
+                throw new NotSupportedException();
+        }
     }
 }

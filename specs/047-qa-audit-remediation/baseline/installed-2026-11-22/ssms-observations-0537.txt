@@ -1,0 +1,127 @@
+# Check047 on SSMS 22 with engine 1.26.1123.0537, 2026-11-23 06:25.
+
+desktop usable at 06:24:47
+extension: AKML SQL deployed, built 2026-11-23 03:38Z (0.0 days ago).
+## start
+connected to (local)/Northwind; the AKML SQL menu is present; nothing typed yet
+windows of ssms [after start-up]: 1
+  | check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (61)) - check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (61)) - Microsoft SQL Server Management Studio (Administrator) [Window]
+modal dialogs [after start-up]: none
+## V12 an opened file is analysed without typing
+'Analysis complete' lines: 2; last: 3 findings; 6 s after the connection
+V12: PASS (analysed with no input: 3 findings; the dots are in v12-dots-without-typing.png)
+## V10 marker only, a semicolon removes it, a syntax error stays red
+findings: 3 -> 2 after ';' on line 2
+error list [after the syntax error]: 12 distinct cells
+  | Header Row
+  | Severity (1 of 6), not sorted
+  | Code (2 of 6), not sorted
+  | Description (3 of 6), not sorted
+  | Project (4 of 6), not sorted
+  | File (5 of 6), not sorted
+  | Line (6 of 6), not sorted
+  | Incorrect syntax near 'SELEC'.. : Error. Project: Miscellaneous Files. File: check047.sql. Line: 5
+  | Incorrect syntax near 'SELEC'.
+  | Miscellaneous Files
+  | check047.sql
+  | 5
+V10: PASS (findings 3 -> 2 with ';'; dots, no underline: v10-1-marker-only.png, v10-2-semicolon-added.png)
+V10-syntax: PASS (the syntax error is listed; v10-3-syntax-error.png)
+## V11 Options › Code analysis › Advisory findings
+Advisory findings: 'Margin marker only' -> 'Underline in the text'
+Advisory findings: 'Underline in the text' -> 'Margin marker only'
+config codeAnalysis.squiggleStyle: after Underline = underline, after Margin marker = marker
+V11: PASS (saved as underline, then marker; look: v11-1-underline.png, v11-2-margin-marker-again.png)
+## V9 Format Document keeps CRLF
+V9: formatted = True; saved file: 13 CRLF, 0 bare LF; status bar line endings: CRLF -> CRLF
+V9 formatted text:
+  | -- check047: statements without semicolons
+  | SELECT CustomerID, CompanyName
+  | FROM   dbo.Customers
+  | WHERE  Country = N'Germany'
+  | 
+  | 
+  | SELECT COUNT ( * ) AS OrderCount
+  | FROM   dbo.Orders
+  | 
+  | 
+  | SELECT ProductName
+  | FROM   dbo.Products
+  | WHERE  Discontinued = 1
+  | 
+V9: PASS (Format Document changed the text; the saved file has 13 CRLF and no bare LF; status bar CRLF -> CRLF)
+## V19 Find Invalid Objects
+V19 window texts: No invalid objects found. All 63 references resolve. | Close | System | Minimize | Maximize
+V19 grid shown: False
+V19: PASS ("No invalid objects found. All 63 references resolve.", no grid; v19-find-invalid-objects.png)
+## cycle: execute, results, SQL History, completion
+execute: Query executed successfully; 5 rows
+SQL History: 50 texts; lists the run: True: GlowBorder | System | Minimize | Maximize | Close | SQL History | Solution1 | Window Position (Alt+-) | Close (Shift+Esc) | Clear search | Search syntax | ? | Search | Advanced search | Refresh | Show starred queries onl…
+after closing SQL History: query editor present True; title 'check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (61))* - check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (61))* - Microsoft SQL Server Management Studio (Administrator)'
+completion after 'dbo.Ord': 0 readable items; after Tab the line reads [SELECT * FROM dbo.[Order Details]]
+cycle: PASS (executed, 5 rows; SQL History lists it; completion offers Orders; cycle-1-executed.png)
+## V8 every style in SSMS
+Active Style menu: AlignedLeftBracket | Collapsed | Compact | Default | Indented | Khamis Style | Leading Commas | Minimalist
+V8 AlignedLeftBracket / sp047-01-proc-params: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-02-control-flow: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-03-go-count: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-04-block-comment: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-05-spacing: idempotent True; matches its golden
+V8 AlignedLeftBracket / sp047-06-statements: idempotent True; matches its golden
+V8 Collapsed / sp047-01-proc-params: idempotent True; matches its golden
+V8 Collapsed / sp047-02-control-flow: idempotent True; matches its golden
+V8 Collapsed / sp047-03-go-count: idempotent True; matches its golden
+V8 Collapsed / sp047-04-block-comment: idempotent True; matches its golden
+V8 Collapsed / sp047-05-spacing: idempotent True; matches its golden
+V8 Collapsed / sp047-06-statements: idempotent True; matches its golden
+V8 Compact / sp047-01-proc-params: idempotent True; matches its golden
+V8 Compact / sp047-02-control-flow: idempotent True; matches its golden
+V8 Compact / sp047-03-go-count: idempotent True; matches its golden
+V8 Compact / sp047-04-block-comment: idempotent True; matches its golden
+V8 Compact / sp047-05-spacing: idempotent True; matches its golden
+V8 Compact / sp047-06-statements: idempotent True; matches its golden
+V8 Default / sp047-01-proc-params: idempotent True; matches its golden
+V8 Default / sp047-02-control-flow: idempotent True; matches its golden
+V8 Default / sp047-03-go-count: idempotent True; matches its golden
+V8 Default / sp047-04-block-comment: idempotent True; matches its golden
+V8 Default / sp047-05-spacing: idempotent True; matches its golden
+V8 Default / sp047-06-statements: idempotent True; matches its golden
+V8 Indented / sp047-01-proc-params: idempotent True; matches its golden
+V8 Indented / sp047-02-control-flow: idempotent True; matches its golden
+V8 Indented / sp047-03-go-count: idempotent True; matches its golden
+V8 Indented / sp047-04-block-comment: idempotent True; matches its golden
+V8 Indented / sp047-05-spacing: idempotent True; matches its golden
+V8 Indented / sp047-06-statements: idempotent True; matches its golden
+V8 Khamis Style / sp047-01-proc-params: idempotent True; matches its golden
+V8 Khamis Style / sp047-02-control-flow: idempotent True; matches its golden
+V8 Khamis Style / sp047-03-go-count: idempotent True; matches its golden
+V8 Khamis Style / sp047-04-block-comment: idempotent True; matches its golden
+V8 Khamis Style / sp047-05-spacing: idempotent True; matches its golden
+V8 Khamis Style / sp047-06-statements: idempotent True; matches its golden
+V8 Leading Commas / sp047-01-proc-params: idempotent True; matches its golden
+V8 Leading Commas / sp047-02-control-flow: idempotent True; matches its golden
+V8 Leading Commas / sp047-03-go-count: idempotent True; matches its golden
+V8 Leading Commas / sp047-04-block-comment: idempotent True; matches its golden
+V8 Leading Commas / sp047-05-spacing: idempotent True; matches its golden
+V8 Leading Commas / sp047-06-statements: idempotent True; matches its golden
+V8 Minimalist / sp047-01-proc-params: idempotent True; matches its golden
+V8 Minimalist / sp047-02-control-flow: idempotent True; matches its golden
+V8 Minimalist / sp047-03-go-count: idempotent True; matches its golden
+V8 Minimalist / sp047-04-block-comment: idempotent True; matches its golden
+V8 Minimalist / sp047-05-spacing: idempotent True; matches its golden
+V8 Minimalist / sp047-06-statements: idempotent True; matches its golden
+V8-ssms: PASS (8 styles x 6 scripts: every second Format unchanged; 48 of 48 compared outputs match their goldens)
+## windows at the end
+windows of ssms [end]: 1
+  | check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (61)) - check047.sql - (local).Northwind (1442-MOHAMEDKHA\Administrator (61)) - Microsoft SQL Server Management Studio (Administrator) [Window]
+modal dialogs [end]: none
+## logs
+logs: 9103 lines, 0 distinct warning/error messages
+VERDICT V10: PASS (findings 3 -> 2 with ';'; dots, no underline: v10-1-marker-only.png, v10-2-semicolon-added.png)
+VERDICT V10-syntax: PASS (the syntax error is listed; v10-3-syntax-error.png)
+VERDICT V11: PASS (saved as underline, then marker; look: v11-1-underline.png, v11-2-margin-marker-again.png)
+VERDICT V12: PASS (analysed with no input: 3 findings; the dots are in v12-dots-without-typing.png)
+VERDICT V19: PASS ("No invalid objects found. All 63 references resolve.", no grid; v19-find-invalid-objects.png)
+VERDICT V8-ssms: PASS (8 styles x 6 scripts: every second Format unchanged; 48 of 48 compared outputs match their goldens)
+VERDICT V9: PASS (Format Document changed the text; the saved file has 13 CRLF and no bare LF; status bar CRLF -> CRLF)
+VERDICT cycle: PASS (executed, 5 rows; SQL History lists it; completion offers Orders; cycle-1-executed.png)

@@ -67,7 +67,7 @@ public sealed class Pr247_ResultsGridApplyMessageTests
         // The success confirmation must still be visible (it now lives in the footer, not the apply-bar).
         cut.WaitForAssertion(() =>
         {
-            Assert.Contains("Applied 1 change(s)", cut.Markup);
+            Assert.Contains("Applied 1 change.", cut.Markup);
             Assert.NotNull(cut.Find("[data-testid=results-apply-message]"));
         });
     }

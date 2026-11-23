@@ -432,7 +432,7 @@ public sealed class ResultsGridCommitValidationTests : IDisposable
         };
         cut.Find("[data-testid=results-apply]").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Applied 1 change(s)", ApplyMessage(cut)));
+        cut.WaitForAssertion(() => Assert.Contains("Applied 1 change.", ApplyMessage(cut)));
         Assert.Empty(cut.FindAll("[data-testid=results-cell-invalid-0-2]"));
     }
 }

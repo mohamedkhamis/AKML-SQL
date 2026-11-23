@@ -83,9 +83,11 @@
         {
             @* Spec 043 (review of US1): since the engine answers a page's requests side by side (R3), Cancel reaches a statement that
                is running, not only one still queued. *@
+            @* It drops its word with Parse's (the same step), so a run never pushes the toolbar onto a second row; the stop icon
+               is SSMS's Cancel Executing Query. *@
             <button type="button" class="akml-btn" data-testid="execute-cancel" @onclick="CancelExecuteAsync" aria-label="Cancel"
                     title="Cancel: the engine stops the statement that is running, and the batches after it do not run.">
-                <Icon Name="x" /><span>Cancel</span>
+                <Icon Name="octagon-x" /><span class="akml-tool-label akml-tool-label--s2">Cancel</span>
             </button>
         }
         else
@@ -94,19 +96,19 @@
             <button type="button" class="akml-btn" data-testid="parse-button" aria-label="Parse"
                     @onclick="ParseAsync" disabled="@(!CanParse)"
                     title="@ParseTitle">
-                <Icon Name="file-check" /><span>Parse</span>
+                <Icon Name="file-check" /><span class="akml-tool-label akml-tool-label--s2">Parse</span>
             </button>
         }
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
         <button type="button" class="akml-btn" data-testid="format-button" aria-label="Format" @onclick="FormatAsync"
                 title="@WorkspaceKeyMap.TitleFor("Format", "editor:format")">
-            <Icon Name="wand-sparkles" /><span>Format</span>
+            <Icon Name="wand-sparkles" /><span class="akml-tool-label akml-tool-label--s3">Format</span>
         </button>
         <ProfilePickerComponent OnProfileChanged="OnProfileChangedAsync" />
         <button type="button" class="akml-btn" data-testid="analyse-button" aria-label="Analyse" @onclick="AnalyseAsync"
                 title="@WorkspaceKeyMap.TitleFor("Analyse", "editor:analyse")">
-            <Icon Name="search-check" /><span>Analyse</span>
+            <Icon Name="search-check" /><span class="akml-tool-label akml-tool-label--s2">Analyse</span>
         </button>
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
@@ -115,11 +117,11 @@
                 disabled="@(!Surfaces.IsEnabled(WorkspaceSurface.Refactor))"
                 data-unavailable="@Surfaces.Unavailable(WorkspaceSurface.Refactor)"
                 @onclick="OpenRefactorMenuAsync" title="@Surfaces.Tooltip(WorkspaceSurface.Refactor, WorkspaceKeyMap.TitleFor("Refactor", "editor:refactor"))">
-            <Icon Name="replace" /><span>Refactor</span><Icon Name="chevron-down" Size="12" />
+            <Icon Name="replace" /><span class="akml-tool-label akml-tool-label--s3">Refactor</span><Icon Name="chevron-down" Size="12" />
         </button>
         <button type="button" class="akml-btn @(AiShown ? "is-active" : null)" data-testid="ai-button" aria-label="AI"
                 aria-pressed="@(AiShown ? "true" : "false")" @onclick="ToggleAiAsync" title="AI assistance">
-            <Icon Name="bot" /><span>AI</span><Icon Name="chevron-down" Size="12" />
+            <Icon Name="bot" /><span class="akml-tool-label akml-tool-label--s3">AI</span><Icon Name="chevron-down" Size="12" />
         </button>
         @* Spec 041 (R64, FR-072): documents as SSMS has them. Ctrl+N / Ctrl+O are the browser's: the keys gain Alt. *@
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
@@ -127,44 +129,40 @@
         @* Spec 043 (FR-013): at 20 tabs New query is off and says why. *@
         <button type="button" class="akml-btn" data-testid="doc-new" aria-label="New" @onclick="NewDocumentAsync"
                 disabled="@AtTabLimit" title="@(AtTabLimit ? QueryTabs.LimitText : WorkspaceKeyMap.TitleFor("New query", "editor:new"))">
-            <Icon Name="file-plus" /><span>New</span>
+            <Icon Name="file-plus" /><span class="akml-tool-label akml-tool-label--s1">New</span>
         </button>
-        @* The Snippets idiom: the label opens the file picker; the Open command clicks the input (akml-ui.js). *@
+        @* The Snippets idiom: the label opens the file picker; the Open command clicks the input (akml-ui.js). The word stays in
+           the accessibility tree when it is hidden (it names the file input), so it is clipped, never display:none. *@
         <label class="akml-btn" data-testid="doc-open" title="@(WorkspaceKeyMap.TitleFor("Open", "editor:open") + " — a .sql file")">
-            <Icon Name="folder-open" /><span>Open</span>
+            <Icon Name="folder-open" /><span class="akml-tool-label akml-tool-label--s1">Open</span>
             <InputFile id="akml-doc-open-input" class="akml-visually-hidden" accept=".sql,.txt"
                        data-testid="doc-open-input" OnChange="OpenFileAsync" />
         </label>
         <button type="button" class="akml-btn" data-testid="doc-save" aria-label="Save" @onclick="SaveAsync"
                 title="@WorkspaceKeyMap.TitleFor("Save", "editor:save")">
-            <Icon Name="save" /><span>Save</span>
+            <Icon Name="save" /><span class="akml-tool-label akml-tool-label--s1">Save</span>
         </button>
         <button type="button" class="akml-btn" data-testid="doc-saveas" aria-label="Save as" @onclick="SaveAsAsync"
                 title="@WorkspaceKeyMap.TitleFor("Save as", "editor:saveas")">
-            <Icon Name="save-all" /><span>Save as</span>
+            <Icon Name="save-all" /><span class="akml-tool-label akml-tool-label--s1">Save as</span>
         </button>
         <span class="akml-toolbar-sep" aria-hidden="true"></span>
 
         @* Spec 041 (R38, FR-042) — every panel toggle, with its key; the same commands as the palette. *@
         <button type="button" class="akml-btn" data-testid="view-menu" aria-label="View" @onclick="OpenViewMenu" aria-haspopup="menu"
                 title="View — show or hide panels">
-            <Icon Name="panel-bottom" /><span>View</span><Icon Name="chevron-down" Size="12" />
+            <Icon Name="panel-bottom" /><span class="akml-tool-label akml-tool-label--s2">View</span><Icon Name="chevron-down" Size="12" />
         </button>
         <span class="akml-caps">
-            <label title="Maximum rows to fetch (the engine re-clamps to its ceiling)">rows
+            <label title="Most rows to fetch for each result set (the engine may allow fewer)">rows
                 <input type="number" class="akml-caps-input" data-testid="caps-maxrows" min="1" max="100000"
                        value="@_maxRows" @onchange="OnMaxRowsChanged" />
             </label>
-            <label title="Command timeout in seconds (the engine re-clamps to its ceiling)">timeout
+            <label title="Seconds a query may run before it is stopped (the engine may allow less)">timeout
                 <input type="number" class="akml-caps-input" data-testid="caps-timeout" min="1" max="600"
                        value="@_timeoutSeconds" @onchange="OnTimeoutChanged" />
             </label>
         </span>
-        <span class="akml-editor-spacer"></span>
-        @if (!string.IsNullOrEmpty(_status))
-        {
-            <span class="akml-editor-status">@_status</span>
-        }
     </div>
     @* Spec 047 (WEB-003): opened at 127.0.0.1 / [::1] with nothing saved here — the data is probably at localhost. *@
     <OriginBanner />
@@ -421,10 +419,26 @@
         background-color: var(--akml-surface-panel);
         border-bottom: 1px solid var(--akml-border-default);
     }
-    .akml-editor-spacer { flex: 1 1 auto; }
-    .akml-editor-status {
-        color: var(--akml-text-secondary);
-        font-size: var(--akml-type-chrome-size);
+    /* One row on the screens people use (1280 px and up): at 1440 px the labelled toolbar took two rows, and the second held
+       three controls. As the window narrows, the less used commands drop their words in three steps — documents and the
+       Style label first, then Parse, Analyse, View, Edit… and Cancel, then Format, Refactor and AI — and at 1335 px the style
+       and database boxes narrow. Execute always keeps its word. Each
+       button keeps its name (aria-label, or the clipped word for Open, which names the file input) and its "Name (Keys)"
+       tooltip. Below the last step the toolbar wraps, as before. Viewport queries, not container queries: a container
+       would become the containing block of the menus positioned inside the toolbar. */
+    /* The widths are measured connected, with engine styles listed and a query running (Cancel in Parse's place), at
+       1920 / 1536 / 1440 / 1366 / 1280 px; each step leaves at least 30 px to spare. */
+    @@media (max-width: 1780px) { .akml-tool-label--s1 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; } }
+    @@media (max-width: 1580px) {
+        .akml-tool-label--s2 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+        .akml-editor-toolbar .akml-toolbar-sep { margin-left: 0; margin-right: 0; }
+    }
+    @@media (max-width: 1405px) { .akml-tool-label--s3 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; } }
+    /* 1280 px with a connection (engine styles add "(on this engine)" to the list): the style and database boxes narrow; their
+       whole names stay in their titles. */
+    @@media (max-width: 1335px) {
+        .akml-editor-toolbar .akml-profile-select { min-width: 120px; max-width: 150px; }
+        .akml-editor-toolbar .akml-db-selector-name { width: 6.5em; }
     }
     /* Spec 030 — Phase 5: Execute button (accent-bordered) + advisory resource-cap inputs. */
     .akml-tool-button-run { border-color: var(--akml-accent-primary); color: var(--akml-text-primary); }
@@ -439,7 +453,7 @@
     }
     .akml-caps label { display: inline-flex; align-items: center; gap: 4px; }
     .akml-caps-input {
-        width: 64px;
+        width: 60px;
         font-family: var(--akml-type-chrome-family);
         font-size: var(--akml-type-chrome-size);
         background-color: var(--akml-surface-canvas);
@@ -696,7 +710,18 @@
 
     private IJSObjectReference? _uiModule;
     private FormattingProfile? _activeProfile;
-    private string? _status;
+
+    /// <summary>
+    /// What the last editor action did ("Formatted.", "Applied: Expand INSERT columns."), shown in the status bar
+    /// (<see cref="IWorkspaceStatus.Notice"/>). At the end of the toolbar a long message pushed the toolbar onto a second row,
+    /// and the editor down with it.
+    /// </summary>
+    private string? ActionNotice
+    {
+        get => Workspace.Notice;
+        set => Workspace.SetNotice(value);
+    }
+
     private bool _autoAnalyseOnFormat = true;
     // Spec 024 T004: completion markers for the Playwright suite. The `_has*` flags
     // attach the data-testid span; the `_*Version` counters increment per success so
@@ -2227,10 +2252,21 @@
     private async Task OnProfileChangedAsync(ProfileRecord record)
     {
         _activeProfile = record.Profile;
-        _status = $"Profile changed to '{record.Name}'.";
+        // Spec 041 (FR-054): "Style", the word the toolbar, Settings › Format and the Format styles page use.
+        ActionNotice = $"Style changed to {record.Name}.";
         StateHasChanged();
         await Task.CompletedTask;
     }
+
+    /// <summary>"1 change", "3 changes".</summary>
+    private static string Counted(int n, string noun) =>
+        n.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " " + noun + (n == 1 ? string.Empty : "s");
+
+    /// <summary>Format found nothing to change ("Already canonical." before: a word for the formatter, not for the user).</summary>
+    internal const string AlreadyFormattedNotice = "Already formatted: nothing to change.";
+
+    /// <summary>A heavyweight refactoring found no engine to run it.</summary>
+    internal const string RefactorNeedsEngineNotice = "This refactoring needs the engine, which is not reachable.";
 
     // Review WEB-10: each Format takes a ticket; only the latest one's reply, for the same document and dialect, may change it.
     internal const string FormatSupersededStatus =
@@ -2252,9 +2288,9 @@
             if (result.Success && (!gate.Applies(ticket, tab.Document.SessionKey ?? string.Empty, tab.Session.Kind)
                                    || !await _editor.ReplaceTextIfUnchangedAsync(ticket.Text, result.FormattedText, tab.Id)))
             {
-                _status = FormatSupersededStatus;
-                Notifications.Notify(_status, NotificationKind.Info);
-                Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
+                ActionNotice = FormatSupersededStatus;
+                Notifications.Notify(ActionNotice, NotificationKind.Info);
+                Diagnostics.Log(DiagnosticLevel.Info, "formatter", ActionNotice);
                 StateHasChanged();
                 return;
             }
@@ -2268,10 +2304,10 @@
                     tab.Document.OnTextChanged(tab.Text);
                     await QueryTabs.PersistAsync(tab);
                 }
-                _status = result.WasModified ? "Formatted." : "Already canonical.";
+                ActionNotice = result.WasModified ? "Formatted." : AlreadyFormattedNotice;
                 _hasFormatted = true;
                 _formatVersion++;
-                Diagnostics.Log(DiagnosticLevel.Info, "formatter", _status);
+                Diagnostics.Log(DiagnosticLevel.Info, "formatter", ActionNotice);
                 if (_autoAnalyseOnFormat && _analysisEnabled)   // a format never announces that analysis is off
                 {
                     // Quietly: the findings, the squiggles and the Problems badge refresh, but the results tab the user was
@@ -2281,19 +2317,19 @@
             }
             else
             {
-                _status = $"Format failed: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}";
-                Diagnostics.Log(DiagnosticLevel.Warn, "formatter", _status);
+                ActionNotice = $"Format failed: {string.Join("; ", result.Diagnostics.Select(d => d.Message))}";
+                Diagnostics.Log(DiagnosticLevel.Warn, "formatter", ActionNotice);
             }
         }
         catch (DocumentTooLargeException ex)
         {
-            _status = ex.Message;
-            Diagnostics.Log(DiagnosticLevel.Error, "formatter", _status);
+            ActionNotice = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "formatter", ActionNotice);
         }
         catch (Exception ex)
         {
-            _status = $"Format crashed: {ex.Message}";
-            Diagnostics.Log(DiagnosticLevel.Error, "formatter", _status, new { Exception = ex.GetType().Name });
+            ActionNotice = $"Format failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "formatter", ActionNotice, new { Exception = ex.GetType().Name });
         }
         StateHasChanged();
     }
@@ -2375,13 +2411,13 @@
         }
         catch (DocumentTooLargeException ex)
         {
-            _status = ex.Message;
-            Diagnostics.Log(DiagnosticLevel.Error, "analyser", _status);
+            ActionNotice = ex.Message;
+            Diagnostics.Log(DiagnosticLevel.Error, "analyser", ActionNotice);
         }
         catch (Exception ex)
         {
-            _status = $"Analyse crashed: {ex.Message}";
-            Diagnostics.Log(DiagnosticLevel.Error, "analyser", _status, new { Exception = ex.GetType().Name });
+            ActionNotice = $"Analyse failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "analyser", ActionNotice, new { Exception = ex.GetType().Name });
         }
         finally
         {
@@ -2437,8 +2473,8 @@
         var settings = await AnalysisSettings.GetAsync();
         settings.RuleOverrides[loc.RuleId] = "off";
         await AnalysisSettings.SetAsync(settings);
-        _status = $"Disabled rule {loc.RuleId} globally.";
-        Diagnostics.Log(DiagnosticLevel.Info, "suppress", _status);
+        ActionNotice = $"Disabled rule {loc.RuleId} globally.";
+        Diagnostics.Log(DiagnosticLevel.Info, "suppress", ActionNotice);
         await AnalyseAsync();
     }
 
@@ -2670,7 +2706,7 @@
     {
         if (_editor == null || string.IsNullOrEmpty(text)) return;
         await _editor.InsertAtCaretAsync(text);
-        _status = "AI result inserted.";
+        ActionNotice = "AI result inserted.";
         Diagnostics.Log(DiagnosticLevel.Info, "ai", "Inserted AI result at caret.");
         StateHasChanged();
     }
@@ -2741,8 +2777,8 @@
         }
         catch (Exception ex)
         {
-            _status = $"Refactor preview failed: {ex.Message}";
-            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+            ActionNotice = $"Refactor preview failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", ActionNotice);
             _refactorPreview = null;
         }
         StateHasChanged();
@@ -2761,8 +2797,8 @@
         await _editor.SetTextAsync(after);
         if (Tab is { } tab) tab.Text = after;
         _refactorPreview = null;
-        _status = $"Applied: {_refactorTitle}.";
-        Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+        ActionNotice = $"Applied: {_refactorTitle}.";
+        Diagnostics.Log(DiagnosticLevel.Info, "refactor", ActionNotice);
         StateHasChanged();
     }
 
@@ -2804,8 +2840,8 @@
             if (response == null)
             {
                 // HeavyAvailable was true at menu time but the bridge dropped; surface a status.
-                _status = "Heavyweight refactoring is unavailable (engine not reachable).";
-                Diagnostics.Log(DiagnosticLevel.Warn, "refactor", _status);
+                ActionNotice = RefactorNeedsEngineNotice;
+                Diagnostics.Log(DiagnosticLevel.Warn, "refactor", ActionNotice);
             }
             else
             {
@@ -2814,8 +2850,8 @@
         }
         catch (Exception ex)
         {
-            _status = $"Refactor preview failed: {ex.Message}";
-            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+            ActionNotice = $"Refactor preview failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", ActionNotice);
         }
         StateHasChanged();
     }
@@ -2849,20 +2885,20 @@
             {
                 await _editor.SetTextAsync(response.UpdatedDocumentText);
                 if (Tab is { } tab) tab.Text = response.UpdatedDocumentText;
-                _status = $"Applied: {_refactorTitle} ({response.AppliedCount} change(s)).";
+                ActionNotice = $"Applied: {_refactorTitle} ({Counted(response.AppliedCount, "change")}).";
             }
             else
             {
-                _status = response == null
-                    ? "Heavyweight refactoring is unavailable (engine not reachable)."
-                    : $"Refactor apply reported no document change ({_refactorTitle}).";
+                ActionNotice = response == null
+                    ? RefactorNeedsEngineNotice
+                    : $"{_refactorTitle} changed nothing in the document.";
             }
-            Diagnostics.Log(DiagnosticLevel.Info, "refactor", _status);
+            Diagnostics.Log(DiagnosticLevel.Info, "refactor", ActionNotice);
         }
         catch (Exception ex)
         {
-            _status = $"Refactor apply failed: {ex.Message}";
-            Diagnostics.Log(DiagnosticLevel.Error, "refactor", _status);
+            ActionNotice = $"Refactor apply failed: {ex.Message}";
+            Diagnostics.Log(DiagnosticLevel.Error, "refactor", ActionNotice);
         }
         StateHasChanged();
     }

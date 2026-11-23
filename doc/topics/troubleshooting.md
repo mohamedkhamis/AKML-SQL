@@ -57,10 +57,10 @@ Do the same after installing or upgrading AKML SQL if the menu does not appear.
 
 ### Handshake failed
 
-- **Symptom.** The status bar says "Handshake failed. Check engine pairing." or reports that the engine did not answer, and nothing connects.
+- **Symptom.** The engine indicator in the status bar says **Unreachable**, with "The engine is not responding at *address* — it may be starting up or stopped.", or **Failed** with the engine's reason (earlier versions said "Handshake failed. Check engine pairing."), and nothing connects.
 - **Cause.** The page is asking the wrong port, or the engine service is stopped. With IIS the page and the engine use two different ports.
 
-![The status bar after Use this computer's engine found nothing: Handshake failed, No engine answered on localhost, and Add engine](../images/web/status-engine-not-answering.png)
+![The status bar after Use this computer's engine found nothing: Needs pairing, No engine answered on localhost, and Add engine](../images/web/status-engine-not-answering.png)
 
 - **Fix.** Find the **Bridge port:** line in the setup summary (`INSTALL-SUMMARY.txt` in `%ProgramData%\AKML SQL Web\`). Choose **Add engine…** in the status bar. It opens **Settings › Connections** with the address that did not answer filled in, so you can correct the port there. Check that the AKML SQL engine service is running (Services, `AkmlSqlWebEngine`).
 

@@ -223,7 +223,9 @@
 {
     foreach (var seg in _previewSegments)
     {<span class="@SegClass(seg)">@seg.Text</span>}
-}</pre>
+}
+else if (_selected == null)
+{<span class="akml-hist-preview-empty" data-testid="history-preview-empty">Select a query to see its full text here.</span>}</pre>
                 <div class="akml-hist-meta-bar">
                     @if (_selected != null)
                     {
@@ -360,6 +362,8 @@
     .akml-hist-preview .tok-string { color: var(--akml-syntax-string); }
     .akml-hist-preview .tok-comment { color: var(--akml-syntax-comment); font-style: italic; }
     .akml-hist-preview .hit { background-color: var(--akml-history-matchhighlight); }
+    /* Nothing selected: the pane says what it is for, rather than standing empty. */
+    .akml-hist-preview-empty { color: var(--akml-text-secondary); font-family: var(--akml-type-chrome-family); font-size: var(--akml-type-chrome-size); }
     .akml-hist-meta-bar { display: flex; align-items: center; gap: var(--akml-scalar-spacing-xs);
         padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m);
         border-top: 1px solid var(--akml-border-default); background-color: var(--akml-surface-elevated); }

@@ -143,7 +143,7 @@
                                     <label class="akml-field-label" for="conn-pg-password">Password</label>
                                     <input id="conn-pg-password" class="akml-input" type="password" autocomplete="new-password"
                                            @bind="_pgPassword" @bind:event="oninput"
-                                           placeholder="@(UsesRememberedPgPassword ? "Remembered on the engine machine" : null)" data-testid="conn-pg-password" />
+                                           placeholder="@(UsesRememberedPgPassword ? RememberedPasswordPlaceholder : null)" data-testid="conn-pg-password" />
                                 </div>
                             </div>
                             @if (PasswordMissingForForm)
@@ -741,10 +741,13 @@
     private ConnectionBinding? CopySourceBinding =>
         TargetSession?.CopyPasswordFrom is { } sourceId && SqlConn.FindSession(sourceId) is { IsConnected: true } source ? source.Binding : null;
 
+    // Short enough to read whole in the password box (the longer words were cut off at "Remembered on the engine mac").
     private string? SqlPasswordPlaceholder =>
-        UsesRememberedSqlPassword ? "Remembered on the engine machine"
-        : CanCopySqlPassword ? "The same as the query tab this one was opened from"
+        UsesRememberedSqlPassword ? RememberedPasswordPlaceholder
+        : CanCopySqlPassword ? "Same as the tab it came from"
         : null;
+
+    internal const string RememberedPasswordPlaceholder = "Remembered on the engine";
 
     private void OnSqlRememberChanged(ChangeEventArgs e)
     {

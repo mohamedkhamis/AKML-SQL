@@ -210,4 +210,85 @@ public sealed class StatusBarSegmentsTests : BunitContext
         cut.Find("[data-testid=status-connection]").Click();
         Assert.Equal(1, opened);
     }
+
+    // ── UX pass after the installed run on 1.26.1123.0537 ──────────────────────────────────────────────────────────────────────
+
+    // SSMS's status bar names the login of a Windows-authentication connection; the web bar named nobody, so after the change
+    // to sign in as the browser's user nothing on screen said who SQL Server saw.
+    [Fact]
+    public async Task A_windows_authentication_connection_names_the_windows_user_the_engine_signs_in_as()
+    {
+        _bridge.EngineRunsAs = @"HOST\alice";
+        _bridge.SetState(BridgeState.Open);
+        var sql = Services.GetRequiredService<ISqlConnectionService>();
+        await sql.ConnectAsync("localhost", "Northwind", windowsAuth: true, null, null, CancellationToken.None);
+
+        var cut = Render<StatusBar>();
+
+        cut.WaitForAssertion(() => Assert.Equal(@"HOST\alice", cut.Find("[data-testid=status-login]").TextContent.Trim()));
+        Assert.Equal("Windows authentication: SQL Server sees this Windows user", cut.Find("[data-testid=status-login]").GetAttribute("title"));
+    }
+
+    [Fact]
+    public async Task Without_a_name_from_the_engine_a_windows_authentication_connection_shows_no_login()
+    {
+        _bridge.SetState(BridgeState.Open);
+        var sql = Services.GetRequiredService<ISqlConnectionService>();
+        await sql.ConnectAsync("localhost", "Northwind", windowsAuth: true, null, null, CancellationToken.None);
+
+        var cut = Render<StatusBar>();
+
+        cut.WaitForAssertion(() => Assert.Contains("localhost/Northwind", cut.Find("[data-testid=status-connection]").TextContent));
+        Assert.Empty(cut.FindAll("[data-testid=status-login]"));
+    }
+
+    // "Live" beside "Live IntelliSense available." said one thing twice; the words stay for the states the pill cannot explain.
+    [Fact]
+    public async Task Live_needs_no_words_beside_the_pill_but_the_engine_without_a_database_says_what_to_do()
+    {
+        _bridge.SetState(BridgeState.Open);
+        var cut = Render<StatusBar>();
+        cut.WaitForAssertion(() => Assert.Equal("Live · no SQL", cut.Find("[data-testid=status-pill]").TextContent.Trim()));
+        Assert.Contains("connect to a database", cut.Find("[data-testid=status-text]").TextContent);
+
+        var sql = Services.GetRequiredService<ISqlConnectionService>();
+        await cut.InvokeAsync(() => sql.ConnectAsync("localhost", "Northwind", windowsAuth: true, null, null, CancellationToken.None));
+
+        cut.WaitForAssertion(() => Assert.Equal("Live", cut.Find("[data-testid=status-pill]").TextContent.Trim()));
+        Assert.Empty(cut.FindAll("[data-testid=status-text]"));
+        Assert.Contains("Live IntelliSense available.", cut.Find("[data-testid=status-pill]").GetAttribute("title"));
+    }
+
+    // An editor action's message ("Formatted.", "Applied: …") sat at the end of the toolbar, where a long one pushed the
+    // toolbar onto a second row and the editor down with it. It is now a polite status message that leaves after a while.
+    [Fact]
+    public void An_action_message_shows_in_the_status_bar_and_leaves_after_its_lifetime()
+    {
+        var cut = Render<StatusBar>();
+        var notice = cut.Find("[data-testid=status-notice]");
+        Assert.Equal("status", notice.GetAttribute("role"));
+        Assert.Equal("polite", notice.GetAttribute("aria-live"));
+        Assert.Equal(string.Empty, notice.TextContent.Trim());
+
+        cut.InvokeAsync(() => _status.SetNotice("Already formatted: nothing to change."));
+        cut.WaitForAssertion(() => Assert.Equal("Already formatted: nothing to change.", cut.Find("[data-testid=status-notice]").TextContent.Trim()));
+
+        _now = _now + WorkspaceStatus.NoticeLifetime + TimeSpan.FromSeconds(1);
+        cut.Render();
+
+        Assert.Equal(string.Empty, cut.Find("[data-testid=status-notice]").TextContent.Trim());
+    }
+
+    [Fact]
+    public void A_run_replaces_the_last_action_message()
+    {
+        var cut = Render<StatusBar>();
+        cut.InvokeAsync(() => _status.SetNotice("Formatted."));
+        cut.WaitForAssertion(() => Assert.Equal("Formatted.", cut.Find("[data-testid=status-notice]").TextContent.Trim()));
+
+        cut.InvokeAsync(_status.Begin);
+
+        cut.WaitForAssertion(() => Assert.Equal(string.Empty, cut.Find("[data-testid=status-notice]").TextContent.Trim()));
+        Assert.Equal(WorkspaceStatus.RunningText, cut.Find("[data-testid=status-outcome]").TextContent.Trim());
+    }
 }

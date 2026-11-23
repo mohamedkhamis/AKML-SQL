@@ -82,6 +82,23 @@ public sealed class LocalPairFailureTests : BunitContext
         Assert.NotNull(cut.Find("[data-testid=local-engine-settings]"));
     }
 
+    // UX pass 2026-11-23: the answer to "Use this computer's engine" and the general "No engine paired yet." strip shared the
+    // bar and cut each other short. The answer stands alone; Dismiss brings the general strip back.
+    [Fact]
+    public void The_answer_stands_alone_until_it_is_dismissed()
+    {
+        _auto.Next = new LocalPairResult(false, "localhost:59417", LocalPairFailure.NotReachable);
+        var cut = RenderAndClickUseLocal();
+        cut.WaitForElement("[data-testid=local-engine-failure]");
+
+        Assert.Empty(cut.FindAll("[data-testid=engine-issue]"));
+
+        cut.Find("[data-testid=local-engine-dismiss]").Click();
+
+        Assert.NotNull(cut.Find("[data-testid=engine-issue]"));
+        Assert.NotNull(cut.Find("[data-testid=engine-use-local]"));
+    }
+
     [Fact]
     public void Dismiss_hides_the_notice_and_success_shows_none()
     {

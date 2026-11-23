@@ -48,6 +48,14 @@
     font-size: var(--akml-type-chrome-size);
     flex: 0 0 auto;
 }
+/* How to edit, until there is a change to explain (then the legend takes its place). */
+.akml-results-edit-hint {
+    color: var(--akml-text-secondary);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .akml-legend-chip { color: var(--akml-text-secondary); }
 .akml-legend-chip.akml-row-edited { color: var(--akml-statustext-warning); box-shadow: none; }
 .akml-legend-chip.akml-row-new { color: var(--akml-statustext-success); box-shadow: none; }

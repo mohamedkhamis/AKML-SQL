@@ -148,6 +148,17 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
         _vault = vault ?? throw new ArgumentNullException(nameof(vault));
         _diagnostics = diagnostics ?? throw new ArgumentNullException(nameof(diagnostics));
         _pageEngine = pageEngine;
+        _bridge.StateChanged += OnBridgeStateChanged;
+    }
+
+    /// <summary>
+    /// A working connection ends whatever failed before it. Pairing from Settings › Connections opens the bridge without this
+    /// loop (which stopped at "No engine paired yet."), and the stale failure came back the moment that engine stopped: the
+    /// status bar said "No engine paired yet." about an engine that was paired and only restarting (UX pass, 2026-11-23).
+    /// </summary>
+    private void OnBridgeStateChanged(BridgeState state)
+    {
+        if (state == BridgeState.Open) SetFailure(null);
     }
 
     public EngineConnectFailure? LastFailure { get; private set; }
@@ -439,6 +450,7 @@ internal sealed class EngineAutoConnect : IEngineAutoConnect, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _bridge.StateChanged -= OnBridgeStateChanged;
         CancellationTokenSource? shutdown;
         lock (_lifecycle) { _disposed = true; shutdown = _shutdown; _shutdown = null; }
 

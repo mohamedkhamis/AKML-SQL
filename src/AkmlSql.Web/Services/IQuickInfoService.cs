@@ -113,7 +113,7 @@ internal sealed class QuickInfoService : IQuickInfoService
             {
                 ObjectType = "Schema",
                 Header = schemaMatch.Name,
-                Description = $"{schemaMatch.Objects.Length} object(s) cached.",
+                Description = schemaMatch.Objects.Length == 1 ? "1 object cached." : $"{schemaMatch.Objects.Length} objects cached.",
             };
         }
         foreach (var schema in payload.Schemas)

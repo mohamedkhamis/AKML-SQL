@@ -85,6 +85,19 @@ public interface IWorkspaceStatus
 
     /// <summary>Spec 043 (T036): show a query tab's run: the active tab's, on activation and whenever its run changes.</summary>
     void Show(RunSnapshot run);
+
+    /// <summary>
+    /// What the last editor action said ("Formatted.", "Applied: Expand INSERT columns."); null when there is none. The status
+    /// bar shows it for <see cref="WorkspaceStatus.NoticeLifetime"/> after <see cref="NoticeAt"/>. It used to sit at the end of the
+    /// editor toolbar, where a long message pushed the toolbar onto a second row and the editor down with it.
+    /// </summary>
+    string? Notice => null;
+
+    /// <summary>When <see cref="Notice"/> was set; null when there is none.</summary>
+    DateTimeOffset? NoticeAt => null;
+
+    /// <summary>Say what an editor action did; null or blank clears it.</summary>
+    void SetNotice(string? text) { }
 }
 
 /// <summary>
@@ -182,6 +195,20 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
 
     public bool IsModified { get; private set; }
 
+    /// <summary>How long the status bar shows an action's <see cref="Notice"/>.</summary>
+    public static readonly TimeSpan NoticeLifetime = TimeSpan.FromSeconds(12);
+
+    public string? Notice { get; private set; }
+
+    public DateTimeOffset? NoticeAt { get; private set; }
+
+    public void SetNotice(string? text)
+    {
+        Notice = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        NoticeAt = Notice == null ? null : _clock();
+        Changed?.Invoke();
+    }
+
     public void Begin()
     {
         Phase = ExecutionPhase.Running;
@@ -190,6 +217,9 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         RowCount = 0;
         ErrorMessage = null;
         _outcome = null;
+        // A run's outcome takes over the status bar; "Formatted." from before it would describe an older moment.
+        Notice = null;
+        NoticeAt = null;
         Changed?.Invoke();
     }
 

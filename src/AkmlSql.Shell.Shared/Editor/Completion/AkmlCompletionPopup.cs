@@ -144,7 +144,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
                 Padding           = new Thickness(Spacing.Sm, 3, Spacing.Sm, 3),
                 VerticalAlignment = VerticalAlignment.Center,
                 Cursor            = Cursors.Hand,
-                ToolTip           = "Show or hide schema (owner) names in suggestions"
+                ToolTip           = "Click to show or hide the schema name (dbo.) in front of each suggestion"
             };
             _ownerToggle.MouseLeftButtonDown += (s, e) =>
             {
@@ -515,6 +515,12 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
             return grid;
         }
 
+        /// <summary>
+        /// FR-014 — the footer toggle's words. "owner: on" (the old SQL Server word for a schema) did not say what was on; the
+        /// toggle shows or hides the "dbo." in front of each object (installed run 2026-11-23).
+        /// </summary>
+        internal static string OwnerToggleText(bool showSchemaNames) => showSchemaNames ? "schema names: on" : "schema names: off";
+
         /// <summary>FR-014 — the displayed label, with the owner (schema) prefix stripped when hidden.</summary>
         private static string DisplayLabelFor(CompletionItemModel item)
             => _showOwnerNames ? item.DisplayText : StripOwner(item.DisplayText, item.ObjectType);
@@ -541,7 +547,7 @@ namespace AkmlSql.Shell.Shared.Editor.Completion
         private void UpdateOwnerToggleVisual()
         {
             if (_ownerToggle == null) return;
-            _ownerToggle.Text = _showOwnerNames ? "owner: on" : "owner: off";
+            _ownerToggle.Text = OwnerToggleText(_showOwnerNames);
             _ownerToggle.SetResourceReference(TextBlock.ForegroundProperty,
                 _showOwnerNames ? ThemeTokens.TextPrimary : ThemeTokens.TextSecondary);
         }

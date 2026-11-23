@@ -333,6 +333,44 @@ Test harness changes from this run:
 - `Check047` brings SSMS to the front before it opens an AKML menu, and `AKML_CHECK047_ONLY` (for example `V8`) runs single scenarios.
 - `Check047` closes the floating SQL History window with Shift+Esc. The "Close button inside the pane" rule had closed the query window. It also reads completion by committing the first suggestion, since the list has no UIA items.
 
+### Re-run on 1.26.1123.0537 and a UX pass (owner: "test full cycle … and enhance UX"), 2026-11-23
+
+The owner deployed 1.26.1123.0537 (the browser-user sign-in, 72d51be7, and the site release 3f676d87). Engine, SSMS extension and installer are all 1.26.1123.0537; hosting is IIS.
+
+| Area | Result |
+| --- | --- |
+| Web (`InstalledWebCycleTests`, 15) | **14 pass, 1 skip**. The skip is V15 after the GRANT, which was not run: the web signs in as the browser's user and needs no permission change on Northwind. Pass: V2 (10/10), V3, V5, V6–V8 (72/72), V10, V13, V14, V16–V18, V20, V21, V22 (0 violations, 18 pages), the start-up check, the cycle, and aqmar's explorer (Tables (4), no note). |
+| SSMS (`Check047`, one full run) | All pass: V8 (48/48), V9, V10 with V10-syntax, V11, V12, V19 and the cycle. The shell log has 0 warnings or errors. |
+| Clean-up | The temporary login is dropped, SYSTEM holds 0 VIEW DEFINITION grants on Northwind, and the engine's credential store is `[]`. |
+
+Notes: `baseline/installed-2026-11-22/web-observations-0537.txt` and `ssms-observations-0537.txt`.
+
+UX findings from the screenshots of these runs, and what changed (not deployed; verified on Debug builds with a sandbox engine and Northwind):
+
+| Finding | Change |
+| --- | --- |
+| The web toolbar took two rows at 1440 px; the second held three controls. | One row from 1280 px. Button words drop in steps (1780 / 1580 / 1405 px, and narrower style and database boxes at 1335 px). Execute keeps its word; every button keeps its name and tooltip. Measured connected, with engine styles listed, idle and while a query runs, at 1920 / 1536 / 1440 / 1366 / 1280 px: 40 px tall each time, with 55–150 px to spare. It wraps at 1024 px, as before. |
+| Format's message ("Already canonical.") sat at the end of the toolbar, and a long one wrapped it. | Editor action messages go to the status bar (`status-notice`, 12 s, cleared by a run). The wording is plainer: "Already formatted: nothing to change.", "Style changed to …", "Format failed" (not "crashed"), "This refactoring needs the engine, which is not reachable." (not "Heavyweight refactoring is unavailable"), "Applied 1 change." (not "change(s)"). |
+| The status bar said "Live" and "Live IntelliSense available."; a stopped engine read "Failed  Engine not reachable.  The engine is not responding at …". | No words beside Live. A failure the issue strip explains is not repeated, and the pill names it: **Unreachable**, **Needs pairing** or **Failed**. Offline says what still works ("Keywords only; Format and Analyse still work."). The answer to "Use this computer's engine" stands alone until it is dismissed (the two strips had cut each other to "No engine paired y…" and "This inst…"). An issue's text is whole when there is room; the state words and versions give way first. |
+| Nothing on the web said who a Windows-authentication connection signed in as; SSMS's status bar does. | The status bar names the Windows user (`1442-MOHAMEDKHA\Administrator`). |
+| With the login added, every status-bar segment shrank alike at 1440 px ("SQL Servei", "Ln 1, Co…"). | Priorities: the message gives way first, then the versions, then the login. The outcome, rows and time, caret, server kind and connection keep their words. |
+| An engine that stopped with the page open showed "No engine paired yet." It was a failure left from before a pairing made in Settings, and it hid "Reconnecting · next try in 3s". | `EngineAutoConnect` clears its failure whenever the bridge opens. Verified: no engine → Offline; engine stopped → Reconnecting with its countdown; reload with the engine down → Unreachable with the address and Retry. |
+| A red struck-through "deleted" headed every editable result. | Until something changes, the bar says "Double-click a cell to edit. Nothing changes on the server until you click Apply."; the legend appears with the first change. |
+| The History preview pane stood empty, and the Connect dialog's password hint was cut off ("Remembered on the engine mac"). | "Select a query to see its full text here."; "Remembered on the engine" and "Same as the tab it came from". |
+| SSMS: SQL History said "1 entries found"; Find Invalid Objects said "1 invalid object(s)" in a resizable window with Minimise and Maximise that only Enter closed; the completion footer said "owner: on". | "1 entry found"; "1 invalid object — a reference that can no longer be resolved." in a fixed dialog that Escape closes; "schema names: on". |
+
+Not changed: NM005 flags every bracketed name with a space, including references to tables the user did not name. One example is Northwind's `[Order Details]`, which raised a warning in the SSMS run. Narrowing it to definitions would change the rule's tests and the parity baselines, so it is left for its own change.
+
+Suites:
+
+- Unit: Web 2327 (+10), Shell 1125 (+8).
+- Browser, 18 classes, serial, Debug builds:
+  - ShellPolish, WorkspaceAccessibility, Axe, EngineAutoConnect, ResultsGrid, ResultsMessages, FormatStyles, ConnectDialog, WorkspaceLayout, QuickstartAcceptance, StandaloneQueryCycle, SettingsPage, DocumentFlow, QueryTabs, ReviewRegression, ReviewFixBrowser, EditorTypography, TabStripKeyboard.
+  - Result: 138 tests, 125 pass, 7 skip (opt-in), 6 fail.
+  - The 6 failures: 5 `EngineAutoConnectTests`, environmental and recorded since spec 043 (they pair at the computer name with a PIN and need a LAN-mode install; this one is localhost-only). 1 `StandaloneQueryCycleTests`, whose bundle-freshness guard tripped on a source edit made during the run; it passes on the rebuilt bundle.
+  - After the last status-bar changes: ShellPolish, Axe, WorkspaceAccessibility and ConnectDialog 21/21.
+- `DocsWebScreenshotTour` retook `doc/images/web/status-no-engine.png`, `status-engine-not-answering.png` and `connect-remember.png`; the troubleshooting text and alt text follow.
+
 ## Golden changes accepted (T064, T065)
 
 Reviewed 2026-11-21. Each changed golden was compared with HEAD after `git diff --ignore-space-at-eol`. A script undid the
