@@ -80,19 +80,13 @@ internal sealed class FindInvalidObjectsHandler
                 ? req.DatabaseName
                 : sessionDatabase;
 
-            var rows = await ReadDependencyRowsAsync(connectionString, targetDatabase, ct);
-            var records = MapInvalidObjects(rows, DateTime.UtcNow);
+            var (rows, totalChecked) = await ReadDependencyRowsAsync(connectionString, targetDatabase, ct);
+            var response = BuildResponse(totalChecked, rows, DateTime.UtcNow);
 
-            Log.Debug("FindInvalidObjects: scanned {Scanned} dependency rows, {Invalid} invalid in {Db}",
-                rows.Count, records.Length, targetDatabase ?? "(session db)");
+            Log.Debug("FindInvalidObjects: checked {Total} references, {Invalid} invalid in {Db} ({Candidates} unresolved candidates)",
+                totalChecked, response.Records.Length, targetDatabase ?? "(session db)", rows.Count);
 
-            return Response(request.RequestId, new FindInvalidObjectsResponse
-            {
-                Status = 0,
-                Records = records,
-                IsFinalChunk = true,
-                TotalScanned = rows.Count,
-            });
+            return Response(request.RequestId, response);
         }
         catch (SqlException ex) when (IsPermissionDenied(ex))
         {
@@ -112,17 +106,32 @@ internal sealed class FindInvalidObjectsHandler
     }
 
     /// <summary>
-    /// Opens a connection (switching to <paramref name="targetDatabase"/> when supplied) and
-    /// projects the candidate dependency rows. SQL does only the cheap reduction; the
-    /// validity discrimination happens in <see cref="MapInvalidObjects"/>.
+    /// Spec 047 (SSMS-003, data-model §9): the reply for a scan that checked <paramref name="totalChecked"/> references
+    /// (every <c>sys.sql_expression_dependencies</c> row of a user object, resolved or not) and found
+    /// <paramref name="candidates"/> unresolved. <c>TotalScanned</c> is the references checked: it used to be the candidate
+    /// count, so a clean database read "0 dependency rows scanned", like a scan that did not run.
     /// </summary>
-    private static async Task<IReadOnlyList<DependencyRow>> ReadDependencyRowsAsync(
+    internal static FindInvalidObjectsResponse BuildResponse(
+        int totalChecked, IReadOnlyList<DependencyRow> candidates, DateTime scannedAtUtc) => new()
+    {
+        Status = 0,
+        Records = MapInvalidObjects(candidates, scannedAtUtc),
+        IsFinalChunk = true,
+        TotalScanned = totalChecked,
+    };
+
+    /// <summary>
+    /// Opens a connection (switching to <paramref name="targetDatabase"/> when supplied), counts the references it checks and
+    /// projects the candidate dependency rows, in one batch. SQL does only the cheap reduction; the validity discrimination
+    /// happens in <see cref="MapInvalidObjects"/>.
+    /// </summary>
+    private static async Task<(IReadOnlyList<DependencyRow> Rows, int TotalChecked)> ReadDependencyRowsAsync(
         string connectionString, string? targetDatabase, CancellationToken ct)
     {
         var rows = new List<DependencyRow>();
 
         await using var conn = new SqlConnection(connectionString);
-        await conn.OpenAsync(ct);
+        await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
         if (!string.IsNullOrEmpty(targetDatabase) &&
             !string.Equals(conn.Database, targetDatabase, StringComparison.OrdinalIgnoreCase))
@@ -133,6 +142,11 @@ internal sealed class FindInvalidObjectsHandler
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
+            SELECT COUNT(*)
+            FROM sys.sql_expression_dependencies d
+            JOIN sys.objects o ON o.object_id = d.referencing_id
+            WHERE o.is_ms_shipped = 0;
+
             SELECT
                 s.name                       AS schema_name,
                 o.name                       AS object_name,
@@ -150,6 +164,8 @@ internal sealed class FindInvalidObjectsHandler
               AND o.is_ms_shipped = 0";
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var totalChecked = await reader.ReadAsync(ct) && !reader.IsDBNull(0) ? reader.GetInt32(0) : 0;
+        await reader.NextResultAsync(ct);
         while (await reader.ReadAsync(ct))
         {
             rows.Add(new DependencyRow(
@@ -164,7 +180,7 @@ internal sealed class FindInvalidObjectsHandler
                 IsCallerDependent: !reader.IsDBNull(8) && reader.GetBoolean(8)));
         }
 
-        return rows;
+        return (rows, totalChecked);
     }
 
     /// <summary>

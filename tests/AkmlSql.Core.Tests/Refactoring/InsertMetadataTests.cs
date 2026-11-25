@@ -43,10 +43,14 @@ public class InsertMetadataTests
 
         var result = ExpandInsertColumnsOperation.BuildColumnListWithTypes(columns);
 
-        Assert.Contains("ProductID", result);
-        Assert.Contains("-- IDENTITY, auto-generated", result);
-        // ProductName should be a regular column
-        Assert.Contains("ProductName", result);
+        // Spec 047 installed-product run F7: the identity column is named on a comment line, never in the list itself
+        // (it used to be a bare name with no comma, which made the list invalid).
+        Assert.Contains("-- ProductID: IDENTITY, auto-generated", result);
+        var listed = result.Split('\n')
+            .Select(l => l.Split("--")[0].Trim().TrimEnd(','))
+            .Where(l => l.Length > 0 && l != "(" && l != ")")
+            .ToList();
+        Assert.Equal(new[] { "ProductName" }, listed);
         Assert.Contains("-- nvarchar(40), not null", result);
     }
 

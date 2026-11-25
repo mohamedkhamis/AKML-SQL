@@ -67,6 +67,18 @@ public sealed class AnalyserServicePgRoutingTests
     }
 
     [Fact]
+    public async Task A_PostgreSQL_script_that_is_not_TSQL_gets_no_TSQL_syntax_error()
+    {
+        // Spec 047 (WEB-005): the browser's T-SQL syntax check is for SQL Server tabs; a PostgreSQL script keeps exactly
+        // the engine's findings.
+        var engine = new SpyEngine();
+
+        var response = await new AnalyserService(null, Postgres, engine).AnalyseAsync("SELECT 1 ::int; SELEC *;");
+
+        Assert.Equal("PGBP002", Assert.Single(response.Issues).RuleId);
+    }
+
+    [Fact]
     public async Task For_SQL_Server_the_script_is_analysed_in_the_browser_and_the_engine_is_never_asked()
     {
         var engine = new SpyEngine();

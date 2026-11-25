@@ -29,7 +29,11 @@ public sealed class EngineComposition
     /// also starts the history-retention background loop (when history is enabled); the built
     /// <see cref="HistoryRetentionService"/> is exposed on <see cref="HistoryRetention"/> as a handle.
     /// </summary>
-    public static EngineComposition Build(Handlers.Handshake.HandshakeHandler? handshakeHandler = null)
+    /// <param name="handshakeHandler">The bridge's handshake (LAN mode wires it to the PIN and the token store); null auto-accepts.</param>
+    /// <param name="pairingTokens">Spec 047 (ENG-001): the bridge's paired browsers, for the list/revoke handlers; null when the
+    /// engine needs no pairing (loopback, named pipe), which those handlers report as "no pairing in use".</param>
+    public static EngineComposition Build(
+        Handlers.Handshake.HandshakeHandler? handshakeHandler = null, Pairing.BearerTokenStore? pairingTokens = null)
     {
         var sessions = new SessionManager();
         var ctx = new RpcContext
@@ -60,7 +64,7 @@ public sealed class EngineComposition
             // themselves, before any handler runs. Inert for SQL Server sessions.
             DialectGuard = PostgreSql.DialectGuard.Create(),
         };
-        var retention = EngineHandlerRegistry.RegisterAllHandlers(router, ctx, handshakeHandler);
+        var retention = EngineHandlerRegistry.RegisterAllHandlers(router, ctx, handshakeHandler, pairingTokens);
 
         return new EngineComposition
         {

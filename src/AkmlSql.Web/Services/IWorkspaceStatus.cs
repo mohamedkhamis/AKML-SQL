@@ -85,6 +85,19 @@ public interface IWorkspaceStatus
 
     /// <summary>Spec 043 (T036): show a query tab's run: the active tab's, on activation and whenever its run changes.</summary>
     void Show(RunSnapshot run);
+
+    /// <summary>
+    /// What the last editor action said ("Formatted.", "Applied: Expand INSERT columns."); null when there is none. The status
+    /// bar shows it for <see cref="WorkspaceStatus.NoticeLifetime"/> after <see cref="NoticeAt"/>. It used to sit at the end of the
+    /// editor toolbar, where a long message pushed the toolbar onto a second row and the editor down with it.
+    /// </summary>
+    string? Notice => null;
+
+    /// <summary>When <see cref="Notice"/> was set; null when there is none.</summary>
+    DateTimeOffset? NoticeAt => null;
+
+    /// <summary>Say what an editor action did; null or blank clears it.</summary>
+    void SetNotice(string? text) { }
 }
 
 /// <summary>
@@ -92,7 +105,9 @@ public interface IWorkspaceStatus
 /// tab's, so a switch shows that tab's outcome and rows (FR-005) and a run finishing in another tab changes nothing on screen.
 /// </summary>
 /// <param name="ElapsedMs">The run's time once it ended (while running, the status counts up from <paramref name="StartedAt"/>).</param>
-public sealed record RunSnapshot(ExecutionPhase Phase, DateTimeOffset? StartedAt, long ElapsedMs, long RowCount, string? ErrorMessage)
+/// <param name="Outcome">Spec 047 (WEB-005): words that replace the phase's ("Parse failed: 1 syntax error."); null for a run.</param>
+public sealed record RunSnapshot(ExecutionPhase Phase, DateTimeOffset? StartedAt, long ElapsedMs, long RowCount, string? ErrorMessage,
+    string? Outcome = null)
 {
     /// <summary>No run yet (or its outcome was cleared).</summary>
     public static RunSnapshot Idle { get; } = new(ExecutionPhase.Idle, null, 0, 0, null);
@@ -131,6 +146,11 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
     /// <summary>SSMS's words for a run the user cancelled; the Messages tab says the same (MessagesView).</summary>
     public const string CancelledText = "Query was cancelled by user.";
 
+    /// <summary>Spec 047 (WEB-005): what Parse found, said in its own words (a run keeps <see cref="FailedText"/>).</summary>
+    public const string ParseFailedOne = "Parse failed: 1 syntax error.";
+    public const string ParseFailedMany = "Parse failed: {0} syntax errors.";
+    public const string ParseSucceeded = "Parse succeeded.";
+
     private readonly Func<DateTimeOffset> _clock;
     private long _elapsedMs;
 
@@ -154,9 +174,11 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
 
     public long RowCount { get; private set; }
 
-    public string? Outcome => Phase switch
+    // Spec 047 (WEB-005): the words of a finished Parse; null for every run.
+    private string? _outcome;
+
+    public string? Outcome => Phase == ExecutionPhase.Running ? RunningText : _outcome ?? Phase switch
     {
-        ExecutionPhase.Running => RunningText,
         ExecutionPhase.Succeeded => SucceededText,
         ExecutionPhase.Failed => FailedText,
         ExecutionPhase.Cancelled => CancelledText,
@@ -173,6 +195,20 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
 
     public bool IsModified { get; private set; }
 
+    /// <summary>How long the status bar shows an action's <see cref="Notice"/>.</summary>
+    public static readonly TimeSpan NoticeLifetime = TimeSpan.FromSeconds(12);
+
+    public string? Notice { get; private set; }
+
+    public DateTimeOffset? NoticeAt { get; private set; }
+
+    public void SetNotice(string? text)
+    {
+        Notice = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        NoticeAt = Notice == null ? null : _clock();
+        Changed?.Invoke();
+    }
+
     public void Begin()
     {
         Phase = ExecutionPhase.Running;
@@ -180,6 +216,10 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = 0;
         RowCount = 0;
         ErrorMessage = null;
+        _outcome = null;
+        // A run's outcome takes over the status bar; "Formatted." from before it would describe an older moment.
+        Notice = null;
+        NoticeAt = null;
         Changed?.Invoke();
     }
 
@@ -190,10 +230,11 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = run.ElapsedMs;
         Phase = run.Phase;
         ErrorMessage = run.ErrorMessage;
+        _outcome = null;
         Changed?.Invoke();
     }
 
-    public RunSnapshot Snapshot() => new(Phase, StartedAt, Phase == ExecutionPhase.Running ? 0 : _elapsedMs, RowCount, ErrorMessage);
+    public RunSnapshot Snapshot() => new(Phase, StartedAt, Phase == ExecutionPhase.Running ? 0 : _elapsedMs, RowCount, ErrorMessage, _outcome);
 
     public void Show(RunSnapshot run)
     {
@@ -203,6 +244,15 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = run.ElapsedMs;
         RowCount = run.RowCount;
         ErrorMessage = run.ErrorMessage;
+        _outcome = run.Outcome;
+        // Every query tab's run starts here (Editor.BeginRun), not in Begin(): a run that starts after the last action's message
+        // replaces it, as Begin() does. Showing a tab whose run began earlier (on activation), or a finished run, keeps it.
+        // Installed run on 1.26.1123.1213: "Already formatted: nothing to change." stayed beside a new run for its whole 12 s.
+        if (run.Phase == ExecutionPhase.Running && run.StartedAt is { } started && NoticeAt is { } noticed && started >= noticed)
+        {
+            Notice = null;
+            NoticeAt = null;
+        }
         Changed?.Invoke();
     }
 
@@ -211,6 +261,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = ElapsedMs;
         Phase = ExecutionPhase.Failed;
         ErrorMessage = message;
+        _outcome = null;
         Changed?.Invoke();
     }
 
@@ -243,6 +294,7 @@ public sealed class WorkspaceStatus : IWorkspaceStatus
         _elapsedMs = 0;
         RowCount = 0;
         ErrorMessage = null;
+        _outcome = null;
         Changed?.Invoke();
     }
 }

@@ -98,6 +98,8 @@ if ($MyInvocation.InvocationName -ne '.') {
             Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Services\AkmlSqlWebEngine' -Name DelayedAutostart -Value 0 -Type DWord
             Set-PrivateHostingState $state
             Invoke-Support 'web-config-bridge.ps1' @('-Port', "$enginePort", '-Mode', $exposure, '-WebRoot', (Join-Path $app 'Web'), '-ConfigPath', $config)
+            # Spec 047 (WEB-001): the engine serves the page itself; remove an akml-engine.json an earlier IIS choice left.
+            Invoke-Support 'web-engine-manifest.ps1' @('-WebRoot', (Join-Path $app 'Web'), '-Remove')
             if ($exposure -eq 'Lan') { Invoke-Support 'web-tls-setup.ps1' @('-Port', "$enginePort", '-PfxPath', (Join-Path $state 'certs\bridge.pfx')) }
             Invoke-Support 'web-firewall.ps1' @('-Apply', '-WebHost', $hostChoice, '-Exposure', $exposure, '-EnginePort', "$enginePort", '-HttpsPort', "$httpsPort")
         }

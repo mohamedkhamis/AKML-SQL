@@ -1,0 +1,604 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp047-02-control-flow",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "BP008",
+      "severity": "Info",
+      "message": "Stored procedure should end with an explicit RETURN statement",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "PE009",
+      "severity": "Warning",
+      "message": "Stored procedure is missing SET NOCOUNT ON at the beginning",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'procedure' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 32
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 17
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 3,
+      "column": 17
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 26
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 30
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 35
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 41
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 3,
+      "column": 41
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 50
+    },
+    {
+      "ruleId": "BP015",
+      "severity": "Info",
+      "message": "Single-statement IF body should use BEGIN/END for clarity and to prevent errors when adding statements",
+      "line": 4,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 11
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 4,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 20
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 25
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 35
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 41
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 4,
+      "column": 41
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 50
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'while' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 14
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 20
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 37
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 47
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 59
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 63
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'try' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 7
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 17
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 6,
+      "column": 17
+    },
+    {
+      "ruleId": "EX001",
+      "severity": "Warning",
+      "message": "Division by zero literal — this will always throw a runtime error",
+      "line": 6,
+      "column": 24
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 28
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 32
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'try' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 36
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 40
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'catch' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 46
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 52
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 6,
+      "column": 52
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 75
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'catch' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 79
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 8,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 1
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 9,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'case' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'when' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 13
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'then' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 25
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 32
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 39
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 10,
+      "column": 1
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 10,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 11,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 12,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 13,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 14,
+      "column": 1
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 14,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 15,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'while' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 16,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 17,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 18,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 19,
+      "column": 1
+    },
+    {
+      "ruleId": "BP015",
+      "severity": "Info",
+      "message": "Single-statement IF body should use BEGIN/END for clarity and to prevent errors when adding statements",
+      "line": 20,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 11
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 20,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 20
+    },
+    {
+      "ruleId": "BP015",
+      "severity": "Info",
+      "message": "Single-statement IF body should use BEGIN/END for clarity and to prevent errors when adding statements",
+      "line": 20,
+      "column": 25
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 25
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 35
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 20,
+      "column": 35
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'else' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 44
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 20,
+      "column": 49
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 20,
+      "column": 49
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 21,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 22,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'commit' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 23,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 24,
+      "column": 1
+    }
+  ]
+}

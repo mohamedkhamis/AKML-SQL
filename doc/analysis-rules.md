@@ -18,6 +18,10 @@ Each rule has a unique ID of the form `{Category}{Number}`, e.g. `PE001`. Rules 
 
 Severities can be overridden per-project in `.casettings`.
 
+### Syntax errors (`SYNTAX`, web edition)
+
+In the web editor, SQL that does not parse is reported as an Error finding with the rule id `SYNTAX`. It carries the parser's message and the position of the offending token, and is listed first in **Problems**, with the red mark in the editor. `GO 3` (a batch repeat count) is not a syntax error. **Parse** (Ctrl+F5) checks the script without running it: on the server when the tab is connected, otherwise in the browser. The Messages tab then says "Checked in the browser; the server was not asked.". `SYNTAX` is not a rule, so it cannot be turned off or suppressed. In SSMS the editor's own IntelliSense underlines syntax errors, so AKML SQL adds no second mark there.
+
 ---
 
 ## Performance (PE)
@@ -219,7 +223,7 @@ Rules that enforce naming conventions for database objects.
 | NM002 | Warning | Rename to `usp_` | Procedure name starts with `sp_` — SQL Server searches `master` first |
 | NM003 | Information | — | Hungarian notation on table or view (`tbl_`, `vw_`) |
 | NM004 | Information | — | Inconsistent naming style across objects of the same type |
-| NM005 | Warning | — | Special characters in unquoted identifier |
+| NM005 | Warning | — | A name the script gives (a created object, column, constraint, index, CTE or alias) has spaces or special characters, so it needs brackets wherever it is used. A reference to a name that already exists, such as Northwind's `[Order Details]`, is not reported, and nor is a principal such as `[NT AUTHORITY\SYSTEM]` |
 | NM006 | Information | — | Single-letter table alias (`a`, `b`) — prefer descriptive aliases |
 
 ---
@@ -389,5 +393,6 @@ See [configuration.md](configuration.md) for the `codeAnalysis` section of `conf
 | `runOnType` | `true` | Analyze after each keystroke (debounced) |
 | `runOnSave` | `true` | Analyze on file save |
 | `autoFixOnFormat` | `false` | Apply safe auto-fixes when running Format Document |
-| `squiggleStyle` | `"underline"` | Squiggle rendering: `underline`, `dotted`, `solid` |
+| `squiggleStyle` | `"marker"` | Information and Hint findings: `marker` = margin marker only, `underline` = underlined too. Warnings and errors are always underlined |
 | `showInErrorList` | `true` | Show issues in the VS Error List window |
+| `showAdvisoryHints` | `true` | Lightbulb actions for findings without an automatic fix (off: none; marker, Error List and suppress actions stay) |

@@ -1,0 +1,227 @@
+# InstalledWebCycleTests on 1.26.1122.1400 (IIS http://localhost:59416/, AkmlSqlWebEngine 59417), 2026-11-22
+# Raw notes of every run, oldest first. The first run's V3, V8, V10/V13 (timing) and V15/V16 failures were test errors, corrected and re-run below.
+
+[15:03:51] V2 run 1: Live after 2.6 s, no click; pill 'Live · no SQL'
+[15:03:54] V2 run 2: Live after 2.3 s, no click; pill 'Live · no SQL'
+[15:03:56] V2 run 3: Live after 2.3 s, no click; pill 'Live · no SQL'
+[15:03:59] V2 run 4: Live after 2.2 s, no click; pill 'Live · no SQL'
+[15:04:01] V2 run 5: Live after 2.2 s, no click; pill 'Live · no SQL'
+[15:04:03] V2 run 6: Live after 2.1 s, no click; pill 'Live · no SQL'
+[15:04:05] V2 run 7: Live after 2.2 s, no click; pill 'Live · no SQL'
+[15:04:08] V2 run 8: Live after 2.3 s, no click; pill 'Live · no SQL'
+[15:04:10] V2 run 9: Live after 2.3 s, no click; pill 'Live · no SQL'
+[15:04:12] V2 run 10: Live after 2.2 s, no click; pill 'Live · no SQL'
+[15:04:15] V8 web engine: 'Live · no SQL'
+[15:04:16] V8 web styles: AlignedLeftBracket | Collapsed | Compact | Default | Indented | Khamis Style | Leading Commas | Minimalist | AKML Default | ANSI-compact | Collapsed | Khamis Style
+[15:04:17] V8 web AlignedLeftBracket / sp047-01-proc-params: stable True; differs from the committed output: line 2: got [	@a INT,] expected [    @a int,]
+[15:04:18] V8 web AlignedLeftBracket / sp047-02-control-flow: stable True; differs from the committed output: line 1: got [CREATE PROCEDURE dbo.cf @a INT] expected [CREATE PROCEDURE dbo.cf]
+[15:04:18] V8 web AlignedLeftBracket / sp047-03-go-count: stable True; matches the committed output
+[15:04:18] V8 web AlignedLeftBracket / sp047-04-block-comment: stable True; differs from the committed output: line 6: got [] expected [SELECT 2 /* inline]
+[15:04:19] V8 web AlignedLeftBracket / sp047-05-spacing: stable True; differs from the committed output: line 3: got [INNER JOIN dbo.Orders o ON o.CustomerID = c.CustomerID] expected [INNER JOIN dbo.Orders o]
+[15:04:19] V8 web AlignedLeftBracket / sp047-06-statements: stable True; differs from the committed output: line 1: got [CREATE TABLE dbo.t (] expected [CREATE TABLE dbo.t ( a int )]
+[15:04:27] V20 before any run: Fix disabled True; tooltip 'Run the query first: Fix needs the error the server returned.'
+[15:04:29] V20 Optimize reached the mock: True; system prompt cites a schema: False; carries column names: False
+[15:04:29] V20 system prompt: You are an expert SQL Server developer. You work with T-SQL (Microsoft SQL Server dialect). ⏎  ⏎ Analyze the following SQL query for performance improvements. Consider: ⏎ - SARGability (ensure WHERE clause predicates can use indexes efficiently) ⏎ - JOIN ordering (place the most selective/smallest table first when possible) ⏎ - Index utilization (restructure predicates to leverage existing indexes) ⏎ - Unnecessary DISTINCT or subquery elimination ⏎ - Cursor-to-set-based alternatives (replace cursors with set-based operations) ⏎ - Avoid wrapping indexed columns in functions (e.g., use date range instead of YEAR()) ⏎ - Prefer EXISTS over IN for subqueries when appropriate ⏎ - Reduce unnecessary columns in SELECT (especially in subqueries) ⏎  ⏎ Return your response in the following exact format with these section headers: ⏎  ⏎ OPTIMIZED SQL: ⏎ (the improved T-SQL query) ⏎  ⏎ EXPLANATION: ⏎ (what was changed and why, as a concise paragraph) ⏎  ⏎ ANNOTATIONS: ⏎ (list each change as one line in the format below) ⏎ [SAFE] Line N: Description of safe change ⏎ [REVIEW] Line N-M: Description of change that needs manual review ⏎  ⏎ INDEX SUGGESTIONS: ⏎ (CREATE INDEX scripts if applicable, one per line, with estimated improvement as a comment) ⏎ CREATE INDEX [IX_Name] ON [schema].[table]([columns]) INCLUDE ([columns]) -- Improvement: X%, Size: YKB, Write Impact: Low|Medium|High ⏎  ⏎ If no optimizations are needed, return the original SQL under OPTIMIZED SQL and state "No optimizations needed" under EXPLANATION. ⏎ If no index suggestions apply, write "None" under INDEX SUGGESTIONS. ⏎ Existing indexes are unknown; say which ones to check first. ⏎  ⏎ No database schema is shared (privacy setting). Use clear placeholder table and column names and say that you did. ⏎  ⏎ Important rules: ⏎ - Use T-SQL syntax (not MySQL, PostgreSQL, or other dialects) ⏎ - Use schema-qualified names (e.g., dbo.TableName) ⏎ - Return only what is requested, no extra commentary unless asked
+[15:04:44] V20 after a run that errors: Fix enabled False
+[15:04:48] V18 style import: 'That file is not a SQL Prompt style (.json).'
+[15:04:48] V18 snippet import: 'No snippet was found in that file. Existing snippets are unchanged.'
+[15:04:51] V6 Save message: Saved without the password: the login test failed — Login failed for user 'akml_qa_no_such_login'.
+[15:04:53] V6 reopened: password box empty, Remember off
+[15:04:54] V6 cleanup: test connection deleted: False
+[15:04:57] V7 on http://127.0.0.1:59416/: banner shown: Saved connections and pairings belong to the address you opened. If you used http://localhost:59416/ before, open it there, or import your settings here.
+Open http://localhost:59416/
+Import settings…
+Dismiss
+[15:05:04] V7 after Dismiss and a reload: banner not shown
+[15:05:04] V7 Diagnostics › Browser storage: Best effort: the browser may clear it when the disk is low. Saved connections and pairings are kept per address.
+[15:05:05] sc stop AkmlSqlWebEngine: exit 0
+[15:05:53] V3 a way to connect is offered: False; notice already shown: False
+[15:06:38] sc start AkmlSqlWebEngine: exit 0
+[15:06:39] V3 cleanup: AkmlSqlWebEngine running and listening again: True
+[15:06:42] V22 engine: 'Live · no SQL'
+[15:06:45] V22 Light /editor: 0 violation(s), 42 rule(s) passed
+[15:06:47] V22 Light /snippets: 0 violation(s), 43 rule(s) passed
+[15:06:48] V22 Light /styles: 0 violation(s), 42 rule(s) passed
+[15:06:51] V22 Light /history: 0 violation(s), 41 rule(s) passed
+[15:06:52] V22 Light /settings: 0 violation(s), 40 rule(s) passed
+[15:06:54] V22 Light /settings/connections: 0 violation(s), 39 rule(s) passed
+[15:06:55] V22 Dark /editor: 0 violation(s), 42 rule(s) passed
+[15:06:57] V22 Dark /snippets: 0 violation(s), 43 rule(s) passed
+[15:06:59] V22 Dark /styles: 0 violation(s), 42 rule(s) passed
+[15:07:01] V22 Dark /history: 0 violation(s), 41 rule(s) passed
+[15:07:02] V22 Dark /settings: 0 violation(s), 40 rule(s) passed
+[15:07:04] V22 Dark /settings/connections: 0 violation(s), 39 rule(s) passed
+[15:07:05] V22 HighContrast /editor: 0 violation(s), 42 rule(s) passed
+[15:07:07] V22 HighContrast /snippets: 0 violation(s), 43 rule(s) passed
+[15:07:08] V22 HighContrast /styles: 0 violation(s), 42 rule(s) passed
+[15:07:11] V22 HighContrast /history: 0 violation(s), 41 rule(s) passed
+[15:07:12] V22 HighContrast /settings: 0 violation(s), 40 rule(s) passed
+[15:07:13] V22 HighContrast /settings/connections: 0 violation(s), 39 rule(s) passed
+[15:07:19] cycle: connected as 'localhost/Northwind'; versions: web Web 1.26.1122.1400, engine Engine 1.26.1122.1400
+[15:07:20] cycle run: first cell 'ALFKI', row 5 present True, row 6 present False; outcome 'Query executed successfully.'
+[15:07:21] cycle Format:
+SELECT customerid, companyname
+FROM   dbo.customers
+WHERE  country = N'Germany'
+ORDER BY companyname
+
+[15:07:21] cycle second Format unchanged: True
+[15:07:23] cycle completion after 'dbo.Cust' offers Customers: True
+[15:07:23] V15 note: The engine signs in as NT AUTHORITY\SYSTEM, which cannot see every object in Northwind. Grant it VIEW DEFINITION on the database, or connect with a login that can.
+[15:07:23] V15 node: (no Stored Procedures node)
+[15:07:24] V17 'zzzz': No objects match 'zzzz'. Clear filter; Clear filter shown True; filter after Clear ''; empty row left 0
+[15:07:24] V16 Expand INSERT columns enabled: True
+[15:07:24] V16 preview has the columns: False; after Apply: [insert into dbo.Region 
+(
+    RegionID,    -- int, not null
+    RegionDescription     -- nchar(100), not null
+) values (9,'x')]
+[15:07:24] V16 Escape closes the menu; focus on 'refactor-button'
+[15:07:25] cycle History lists the SELECT: True
+[15:07:28] V14 engine: 'Live · no SQL'
+[15:07:29] V14 qaz + Tab, then '*' at the caret: [SELECT * FROM dbo.Region;]
+[15:07:31] V14 after Delete: qaz offered 0 time(s); qaz + Tab gives [qaz]
+[15:17:29] ===== re-run of the corrected checks =====
+[15:17:37] V13 engine: 'Live · no SQL' (no SQL connection)
+[15:17:39] V13 editor text before Analyse: [SELEC * FROM dbo.Customers;]
+[15:17:39] V13 Problems: one Error: SYNTAX Incorrect syntax near 'SELEC'. L1; red marks in the editor: 1
+[15:17:39] V13 Parse messages: Checked in the browser; the server was not asked. Msg 102, Level 15, State 1, Line 1 Incorrect syntax near 'SELEC'. Completion time: 2026-11-22T15:17:39.7740000+02:00
+[15:17:40] V10 without ';': 3 margin markers; info ranges: marker-only/underlined, marker-only/underlined, marker-only/underlined
+[15:17:40] V10 with ';' on line 1: 2 margin markers
+[15:17:40] V10 syntax error ranges: drawn:none
+[15:17:44] V8 web engine: 'Live · no SQL'
+[15:17:44] V8 web styles: AlignedLeftBracket | Collapsed (on this engine) | Compact | Default | Indented | Khamis Style (on this engine) | Leading Commas | Minimalist | AKML Default | ANSI-compact | Collapsed (built-in) | Khamis Style (built-in)
+[15:17:45] V8 web AlignedLeftBracket / sp047-01-proc-params: stable True; matches the committed output
+[15:17:46] V8 web AlignedLeftBracket / sp047-02-control-flow: stable True; matches the committed output
+[15:17:46] V8 web AlignedLeftBracket / sp047-03-go-count: stable True; matches the committed output
+[15:17:46] V8 web AlignedLeftBracket / sp047-04-block-comment: stable True; matches the committed output
+[15:17:46] V8 web AlignedLeftBracket / sp047-05-spacing: stable True; matches the committed output
+[15:17:47] V8 web AlignedLeftBracket / sp047-06-statements: stable True; matches the committed output
+[15:17:48] V8 web Collapsed (on this engine) / sp047-01-proc-params: stable True; matches the committed output
+[15:17:48] V8 web Collapsed (on this engine) / sp047-02-control-flow: stable True; matches the committed output
+[15:17:48] V8 web Collapsed (on this engine) / sp047-03-go-count: stable True; matches the committed output
+[15:17:48] V8 web Collapsed (on this engine) / sp047-04-block-comment: stable True; matches the committed output
+[15:17:49] V8 web Collapsed (on this engine) / sp047-05-spacing: stable True; matches the committed output
+[15:17:49] V8 web Collapsed (on this engine) / sp047-06-statements: stable True; matches the committed output
+[15:17:50] V8 web Compact / sp047-01-proc-params: stable True; matches the committed output
+[15:17:50] V8 web Compact / sp047-02-control-flow: stable True; matches the committed output
+[15:17:51] V8 web Compact / sp047-03-go-count: stable True; matches the committed output
+[15:17:51] V8 web Compact / sp047-04-block-comment: stable True; matches the committed output
+[15:17:51] V8 web Compact / sp047-05-spacing: stable True; matches the committed output
+[15:17:51] V8 web Compact / sp047-06-statements: stable True; matches the committed output
+[15:17:52] V8 web Default / sp047-01-proc-params: stable True; matches the committed output
+[15:17:52] V8 web Default / sp047-02-control-flow: stable True; matches the committed output
+[15:17:53] V8 web Default / sp047-03-go-count: stable True; matches the committed output
+[15:17:53] V8 web Default / sp047-04-block-comment: stable True; matches the committed output
+[15:17:53] V8 web Default / sp047-05-spacing: stable True; matches the committed output
+[15:17:53] V8 web Default / sp047-06-statements: stable True; matches the committed output
+[15:17:54] V8 web Indented / sp047-01-proc-params: stable True; matches the committed output
+[15:17:55] V8 web Indented / sp047-02-control-flow: stable True; matches the committed output
+[15:17:55] V8 web Indented / sp047-03-go-count: stable True; matches the committed output
+[15:17:55] V8 web Indented / sp047-04-block-comment: stable True; matches the committed output
+[15:17:55] V8 web Indented / sp047-05-spacing: stable True; matches the committed output
+[15:17:55] V8 web Indented / sp047-06-statements: stable True; matches the committed output
+[15:17:57] V8 web Khamis Style (on this engine) / sp047-01-proc-params: stable True; matches the committed output
+[15:17:57] V8 web Khamis Style (on this engine) / sp047-02-control-flow: stable True; matches the committed output
+[15:17:57] V8 web Khamis Style (on this engine) / sp047-03-go-count: stable True; matches the committed output
+[15:17:57] V8 web Khamis Style (on this engine) / sp047-04-block-comment: stable True; matches the committed output
+[15:17:57] V8 web Khamis Style (on this engine) / sp047-05-spacing: stable True; matches the committed output
+[15:17:57] V8 web Khamis Style (on this engine) / sp047-06-statements: stable True; matches the committed output
+[15:17:59] V8 web Leading Commas / sp047-01-proc-params: stable True; matches the committed output
+[15:17:59] V8 web Leading Commas / sp047-02-control-flow: stable True; matches the committed output
+[15:17:59] V8 web Leading Commas / sp047-03-go-count: stable True; matches the committed output
+[15:17:59] V8 web Leading Commas / sp047-04-block-comment: stable True; matches the committed output
+[15:17:59] V8 web Leading Commas / sp047-05-spacing: stable True; matches the committed output
+[15:17:59] V8 web Leading Commas / sp047-06-statements: stable True; matches the committed output
+[15:18:01] V8 web Minimalist / sp047-01-proc-params: stable True; matches the committed output
+[15:18:01] V8 web Minimalist / sp047-02-control-flow: stable True; matches the committed output
+[15:18:01] V8 web Minimalist / sp047-03-go-count: stable True; matches the committed output
+[15:18:01] V8 web Minimalist / sp047-04-block-comment: stable True; matches the committed output
+[15:18:01] V8 web Minimalist / sp047-05-spacing: stable True; matches the committed output
+[15:18:02] V8 web Minimalist / sp047-06-statements: stable True; matches the committed output
+[15:18:03] V8 web AKML Default / sp047-01-proc-params: stable True; matches the committed output
+[15:18:03] V8 web AKML Default / sp047-02-control-flow: stable True; matches the committed output
+[15:18:03] V8 web AKML Default / sp047-03-go-count: stable True; matches the committed output
+[15:18:03] V8 web AKML Default / sp047-04-block-comment: stable True; matches the committed output
+[15:18:03] V8 web AKML Default / sp047-05-spacing: stable True; matches the committed output
+[15:18:04] V8 web AKML Default / sp047-06-statements: stable True; matches the committed output
+[15:18:05] V8 web ANSI-compact / sp047-01-proc-params: stable True; matches the committed output
+[15:18:05] V8 web ANSI-compact / sp047-02-control-flow: stable True; matches the committed output
+[15:18:05] V8 web ANSI-compact / sp047-03-go-count: stable True; matches the committed output
+[15:18:05] V8 web ANSI-compact / sp047-04-block-comment: stable True; matches the committed output
+[15:18:06] V8 web ANSI-compact / sp047-05-spacing: stable True; matches the committed output
+[15:18:06] V8 web ANSI-compact / sp047-06-statements: stable True; matches the committed output
+[15:18:07] V8 web Collapsed (built-in) / sp047-01-proc-params: stable True; matches the committed output
+[15:18:07] V8 web Collapsed (built-in) / sp047-02-control-flow: stable True; matches the committed output
+[15:18:07] V8 web Collapsed (built-in) / sp047-03-go-count: stable True; matches the committed output
+[15:18:07] V8 web Collapsed (built-in) / sp047-04-block-comment: stable True; matches the committed output
+[15:18:08] V8 web Collapsed (built-in) / sp047-05-spacing: stable True; matches the committed output
+[15:18:08] V8 web Collapsed (built-in) / sp047-06-statements: stable True; matches the committed output
+[15:18:09] V8 web Khamis Style (built-in) / sp047-01-proc-params: stable True; matches the committed output
+[15:18:09] V8 web Khamis Style (built-in) / sp047-02-control-flow: stable True; matches the committed output
+[15:18:10] V8 web Khamis Style (built-in) / sp047-03-go-count: stable True; matches the committed output
+[15:18:10] V8 web Khamis Style (built-in) / sp047-04-block-comment: stable True; matches the committed output
+[15:18:10] V8 web Khamis Style (built-in) / sp047-05-spacing: stable True; matches the committed output
+[15:18:10] V8 web Khamis Style (built-in) / sp047-06-statements: stable True; matches the committed output
+[15:18:10] V8 web: 72 of 72 compared outputs match
+[15:18:14] V6 Save message: Saved without the password: the login test failed — Login failed for user 'akml_qa_no_such_login'.
+[15:18:15] V6 reopened: password box empty, Remember off
+[15:18:45] sc stop AkmlSqlWebEngine: exit 0
+[15:18:50] V3 engine stopped, new profile: pill 'Failed' (title 'Engine status — open Diagnostics'); issue 'The engine is not responding — it may be starting up or stopped. Retry'; offered: engine-retry
+[15:18:50] V3 status bar: Failed Handshake failed. Check engine pairing. The engine is not responding — it may be starting up or stopped. Retry Ln 1, Col 1 Connect Web 1.26.1122.1400
+[15:18:50] sc start AkmlSqlWebEngine: exit 0
+[15:18:51] V3 after the service started again: pill 'Live · no SQL', recovered without a reload: True
+[15:18:51] sc start AkmlSqlWebEngine: exit 1056 [SC] StartService FAILED 1056: An instance of the service is already running.
+[15:18:51] V3 cleanup: AkmlSqlWebEngine running and listening again: True
+[15:18:56] V21 'remember password': Connecting to SQL Server (/docs/topics/connecting) | Troubleshooting (/docs/topics/troubleshooting) | Set up the AKML browser workspace (/docs/topics/browser-setup)
+[15:18:57] V21 'Handshake failed': Troubleshooting (/docs/topics/troubleshooting) | Connecting to SQL Server (/docs/topics/connecting) | AKML SQL — Formatter Reference (/docs/formatting)
+[15:18:58] V21 'asks for password again': Connecting to SQL Server (/docs/topics/connecting) | Troubleshooting (/docs/topics/troubleshooting) | AKML SQL — Formatter Reference (/docs/formatting)
+[15:19:04] cycle: connected as 'localhost/Northwind'; versions: web Web 1.26.1122.1400, engine Engine 1.26.1122.1400
+[15:19:05] cycle run: first cell 'ALFKI', row 5 present True, row 6 present False; outcome 'Query executed successfully.'
+[15:19:05] cycle Format:
+SELECT customerid, companyname
+FROM   dbo.customers
+WHERE  country = N'Germany'
+ORDER BY companyname
+
+[15:19:05] cycle second Format unchanged: True
+[15:19:07] cycle completion after 'dbo.Cust' offers Customers: True
+[15:19:07] V15 note: The engine signs in as NT AUTHORITY\SYSTEM, which cannot see every object in Northwind. Grant it VIEW DEFINITION on the database, or connect with a login that can.
+[15:19:07] V15 note geometry: row 24px, text 114px, text bottom 335, next row top 243, overlaps true
+[15:19:07] V15 groups under dbo: 'Stored Procedures (may be incomplete)', 'Tables (13)'
+[15:19:09] V17 'zzzz': No objects match 'zzzz'. Clear filter; Clear filter shown True; filter after Clear ''; empty row left 0
+[15:19:37] V16 Expand INSERT columns enabled: True
+[15:19:37] V16 preview lists both columns: True; after Apply: [insert into dbo.Region ⏎(⏎    RegionID,    -- int, not null⏎    RegionDescription     -- nchar(100), not null⏎) values (9,'x')]
+[15:19:37] V16 Escape closes the menu; focus on 'refactor-button'
+[15:19:37] cycle History lists the SELECT: True
+[15:22:10] ===== second re-run (V10/V13, V6/V7, start-up) =====
+[15:22:17] V13 engine: 'Live · no SQL' (no SQL connection)
+[15:22:19] V13 editor text before Analyse: [SELEC * FROM dbo.Customers;]
+[15:22:20] V13 Problems: one Error: SYNTAX Incorrect syntax near 'SELEC'. L1; red marks in the editor: 1
+[15:22:20] V13 Parse messages: Checked in the browser; the server was not asked. Msg 102, Level 15, State 1, Line 1 Incorrect syntax near 'SELEC'. Completion time: 2026-11-22T15:22:20.7810000+02:00
+[15:22:21] V10 without ';': 3 margin markers; info ranges: marker-only/underlined (line=underline wavy, bg=none), marker-only/underlined (line=underline wavy, bg=none), marker-only/underlined (line=underline wavy, bg=none)
+[15:22:21] V10 with ';' on line 1: 2 margin markers
+[15:22:21] V10 syntax error ranges: plain line=underline style=wavy colour=rgb(220, 38, 38)
+[15:22:25] V6 Save message: Saved without the password: the login test failed — Login failed for user 'akml_qa_no_such_login'.
+[15:22:26] V6 reopened: password box empty, Remember off
+[15:22:36] V6 cleanup: test connection deleted: False
+[15:22:39] V7 on http://127.0.0.1:59416/: banner shown: Saved connections and pairings belong to the address you opened. If you used http://localhost:59416/ before, open it there, or import your settings here.
+Open http://localhost:59416/
+Import settings…
+Dismiss
+[15:22:46] V7 after Dismiss and a reload: banner not shown
+[15:22:47] V7 Diagnostics › Browser storage: Best effort: the browser may clear it when the disk is low. Saved connections and pairings are kept per address.
+[15:22:53] start-up: typed while the pill said 'Live · no SQL'; Live True; text after settling: [SELEC 1]
+[15:23:13] start-up: Analyse finds the syntax error: False
+[15:24:10] ===== third re-run (V6/V7 delete, start-up) =====
+[15:24:19] V6 Save message: Saved without the password: the login test failed — Login failed for user 'akml_qa_no_such_login'.
+[15:24:20] V6 reopened: password box empty, Remember off
+[15:24:25] V6 cleanup: test connection deleted: True
+[15:24:28] V7 on http://127.0.0.1:59416/: banner shown: Saved connections and pairings belong to the address you opened. If you used http://localhost:59416/ before, open it there, or import your settings here.
+Open http://localhost:59416/
+Import settings…
+Dismiss
+[15:24:35] V7 after Dismiss and a reload: banner not shown
+[15:24:35] V7 Diagnostics › Browser storage: Best effort: the browser may clear it when the disk is low. Saved connections and pairings are kept per address.
+[15:24:43] start-up: typed while the pill said 'Live · no SQL'; Live True; text after settling: [SELEC * FROM]
+[15:24:43] start-up: Analyse finds the syntax error: True

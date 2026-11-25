@@ -246,6 +246,98 @@ public class FormatterPipeline
     public FormatResult Format(string sql, FormattingProfile profile) => Format(sql, profile, null);
 
     /// <summary>
+    /// Spec 047 (SSMS-004, data-model §12): the input's dominant line ending is CRLF when "\r\n" occurs at least as often
+    /// as a lone "\n" (and at least once); otherwise LF. A script without line breaks has none to keep.
+    /// </summary>
+    internal static bool UsesCrLf(string text)
+    {
+        int crlf = 0, lf = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '\n') continue;
+            if (i > 0 && text[i - 1] == '\r') crlf++;
+            else lf++;
+        }
+        return crlf > 0 && crlf >= lf;
+    }
+
+    /// <summary>
+    /// Every line break of <paramref name="text"/> as "\r\n" or as "\n"; a lone "\r" is left as it is. A line break inside a
+    /// string literal or a quoted identifier is kept exactly as written: it is part of the value, and every stage before this
+    /// one copies those tokens verbatim. Review of PR #261: converting the whole text turned <c>N'a&lt;LF&gt;b'</c> in a CRLF
+    /// script into <c>N'a&lt;CRLF&gt;b'</c>, after validation, so the statement stored or compared other text. When the lexer
+    /// cannot account for every character of <paramref name="text"/>, nothing is converted.
+    /// </summary>
+    internal static string WithLineEndings(string text, bool crlf)
+    {
+        if (string.IsNullOrEmpty(text) || !NeedsLineEndingChange(text, crlf)) return text;
+        var verbatim = VerbatimRanges(text);
+        if (verbatim == null) return text;
+        if (verbatim.Count == 0) return ConvertLineEndings(text, crlf);
+
+        var sb = new System.Text.StringBuilder(text.Length + 64);
+        int at = 0;
+        foreach (var (start, length) in verbatim)
+        {
+            sb.Append(ConvertLineEndings(text.Substring(at, start - at), crlf));
+            sb.Append(text, start, length);
+            at = start + length;
+        }
+        sb.Append(ConvertLineEndings(text.Substring(at), crlf));
+        return sb.ToString();
+    }
+
+    /// <summary>True when <paramref name="text"/> has a lone "\n" to widen (CRLF) or a "\r\n" to narrow (LF).</summary>
+    private static bool NeedsLineEndingChange(string text, bool crlf)
+    {
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\n' && crlf != (i > 0 && text[i - 1] == '\r')) return true;
+        }
+        return false;
+    }
+
+    private static string ConvertLineEndings(string text, bool crlf)
+    {
+        var lf = text.Replace("\r\n", "\n");
+        return crlf ? lf.Replace("\n", "\r\n") : lf;
+    }
+
+    /// <summary>
+    /// The string literals and quoted identifiers of <paramref name="text"/> that hold a line break, in order (start, length).
+    /// Null when the lexer's tokens do not cover the text end to end: a literal it missed could then be anywhere.
+    /// </summary>
+    private static List<(int Start, int Length)>? VerbatimRanges(string text)
+    {
+        IList<TSqlParserToken> tokens;
+        try
+        {
+            using var reader = new StringReader(text);
+            tokens = new TSql170Parser(initialQuotedIdentifiers: true).GetTokenStream(reader, out _);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        var ranges = new List<(int Start, int Length)>();
+        int expected = 0;
+        foreach (var token in tokens)
+        {
+            if (token.TokenType == TSqlTokenType.EndOfFile) continue;
+            var value = token.Text ?? string.Empty;
+            if (token.Offset != expected) return null;   // a gap or an overlap: not every character is accounted for
+            expected += value.Length;
+            if (token.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral or TSqlTokenType.QuotedIdentifier
+                && value.IndexOfAny(LineBreakChars) >= 0)
+                ranges.Add((token.Offset, value.Length));
+        }
+        return expected == text.Length ? ranges : null;
+    }
+
+    private static readonly char[] LineBreakChars = ['\r', '\n'];
+
+    /// <summary>
     /// <see cref="Format(string, FormattingProfile)"/> with per-call choices (spec 040, STY-11):
     /// whether the layout and casing stages run, and Stage 8's semicolons and brackets. Null
     /// <paramref name="options"/> is today's behaviour exactly.
@@ -414,6 +506,12 @@ public class FormatterPipeline
                     });
                 }
             }
+
+            // Stage 9 (spec 047, SSMS-004, data-model §12): the output takes the input's dominant line ending. The stages
+            // write "\n", and SSMS replaced the whole buffer with it, so Format Document turned a CRLF file into LF. The
+            // original text, returned when validation fails, is untouched by definition.
+            if (validationPassed && !string.Equals(formatted, sql, StringComparison.Ordinal))
+                formatted = WithLineEndings(formatted, UsesCrLf(sql));
 
             sw.Stop();
             return new FormatResult

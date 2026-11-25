@@ -77,9 +77,10 @@ public class ParseErrorStatementTests
             $"expected {separator.Length} line breaks, the comment, then the statement as written, in:\n{result.FormattedText.Replace("\n", "<LF>\n")}");
     }
 
-    /// <summary>Review of S2: the run's own line breaks are copied from the document. An SSMS document has CRLF ones and the
-    /// rest of the output is written with LF; the kept text must not bring mixed line endings into it. (The default
-    /// trailing-whitespace pass happens to strip a CR before each LF; the layout must not rely on it.)</summary>
+    /// <summary>Review of S2: the run's own line breaks are copied from the document. An SSMS document has CRLF ones; the kept
+    /// text must not bring mixed line endings into the output. (The default trailing-whitespace pass happens to strip a CR
+    /// before each LF; the layout must not rely on it.) Spec 047 (SSMS-004): the output now takes the document's own
+    /// convention, so a CRLF document comes back CRLF throughout, the kept text included, with no lone LF.</summary>
     [Theory]
     [MemberData(nameof(Profiles))]
     public void A_broken_statements_own_line_breaks_are_written_like_the_rest(string name)
@@ -90,8 +91,9 @@ public class ParseErrorStatementTests
         var result = new FormatterPipeline().Format(Script.Replace("\n", "\r\n"), profile);
 
         Assert.True(result.Success);
-        Assert.DoesNotContain("\r", result.FormattedText);
-        Assert.Contains(Broken, result.FormattedText);
+        Assert.DoesNotMatch(@"(?<!\r)\n", result.FormattedText);
+        Assert.DoesNotContain("\r\r", result.FormattedText);
+        Assert.Contains(Broken.Replace("\n", "\r\n"), result.FormattedText);
     }
 
     [Theory]

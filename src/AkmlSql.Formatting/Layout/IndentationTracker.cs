@@ -51,6 +51,7 @@ public class IndentationTracker
     {
         _depth = 0;
         _contextStack.Clear();
+        _openCases = 0;
     }
 
     /// <summary>
@@ -65,9 +66,10 @@ public class IndentationTracker
     /// Processes a token and updates indentation accordingly.
     /// Returns the indent level to use for this token (before any push/pop for the token itself).
     /// </summary>
-    public int ProcessToken(TSqlTokenType tokenType, string text)
+    public int ProcessToken(TSqlTokenType tokenType, string text, string? nextText = null)
     {
         var upperText = text.ToUpperInvariant();
+        var nextUpper = nextText?.ToUpperInvariant();
 
         // Tokens that decrease indent BEFORE the token is emitted
         switch (tokenType)
@@ -76,8 +78,18 @@ public class IndentationTracker
                 Pop();
                 return _depth;
 
-            case TSqlTokenType.End when upperText == "END":
+            // Spec 047 (FMT-002): END also closes a CASE expression, and END CONVERSATION is a statement; neither closes
+            // a block. Popping for them took a level from every later line of the block.
+            case TSqlTokenType.End when upperText == "END" && _openCases > 0:
+                _openCases--;
+                return _depth;
+
+            case TSqlTokenType.End when upperText == "END" && nextUpper != "CONVERSATION":
                 Pop();
+                return _depth;
+
+            case TSqlTokenType.Case:
+                _openCases++;
                 return _depth;
         }
 
@@ -90,13 +102,20 @@ public class IndentationTracker
                 Push(IndentReason.Parenthesis);
                 break;
 
-            case TSqlTokenType.Begin when upperText == "BEGIN":
+            // BEGIN TRAN[SACTION], BEGIN DISTRIBUTED TRAN, BEGIN DIALOG and BEGIN CONVERSATION TIMER start statements and
+            // open no block (spec 047, FMT-002).
+            case TSqlTokenType.Begin when upperText == "BEGIN" && !StartsStatementNotBlock(nextUpper):
                 Push(IndentReason.BeginEnd);
                 break;
         }
 
         return currentIndent;
     }
+
+    private int _openCases;
+
+    private static bool StartsStatementNotBlock(string? nextUpper) =>
+        nextUpper is "TRAN" or "TRANSACTION" or "DISTRIBUTED" or "DIALOG" or "CONVERSATION";
 }
 
 public enum IndentReason

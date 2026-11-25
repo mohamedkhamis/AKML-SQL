@@ -45,13 +45,22 @@
         <Icon Name="info" Size="12" /> <span>@FrozenReason</span>
     </div>
 }
-@* CRUD legend — only when the set is editable. Each chip pairs a glyph with the colour. *@
+@* CRUD bar — only when the set is editable. Until something is changed it says how to edit (a red struck-through "deleted"
+   on every editable result read like an error); once there are changes, the legend explains their marks, each a glyph with
+   the colour. *@
 @if (set.IsEditable)
 {
     <div class="akml-results-legend" data-testid="results-legend">
-        <span class="akml-legend-chip akml-row-edited"><Icon Name="pencil" Size="12" /> edited</span>
-        <span class="akml-legend-chip akml-row-new"><Icon Name="plus" Size="12" /> new</span>
-        <span class="akml-legend-chip akml-row-deleted"><Icon Name="x" Size="12" /> deleted</span>
+        @if (HasPendingEdits)
+        {
+            <span class="akml-legend-chip akml-row-edited"><Icon Name="pencil" Size="12" /> edited</span>
+            <span class="akml-legend-chip akml-row-new"><Icon Name="plus" Size="12" /> new</span>
+            <span class="akml-legend-chip akml-row-deleted"><Icon Name="x" Size="12" /> deleted</span>
+        }
+        else if (CanMutate)
+        {
+            <span class="akml-results-edit-hint" data-testid="results-edit-hint">Double-click a cell to edit. Nothing changes on the server until you click Apply.</span>
+        }
         <span class="akml-results-spacer"></span>
         <button type="button" class="akml-btn" data-testid="results-add-row"
                 @onclick="AddNewRow" disabled="@(!CanMutate)" title="@(LockReason ?? "Add a new row")"><Icon Name="plus" Size="12" /> Row</button>
@@ -150,7 +159,7 @@
     @if (set.Truncated)
     {
         <span class="akml-results-truncated" data-testid="results-truncated">
-            result capped (~@(set.RowsOmitted)+ rows omitted) — raise Max rows to fetch more
+            result capped (~@(set.RowsOmitted)+ rows omitted) — raise rows in the toolbar to fetch more
         </span>
     }
     @* The apply result message lives HERE, not in the apply-bar: a SUCCESSFUL apply clears the pending
@@ -1938,7 +1947,7 @@
                 // Set the success message AFTER ResetEditState — which clears _applyMessage — so it
                 // actually surfaces (previously it was set then immediately nulled by the reset).
                 _applyOk = true;
-                _applyMessage = $"Applied {req.Edits.Length} change(s).";
+                _applyMessage = $"Applied {Plural(req.Edits.Length, "change")}.";
                 if (notReadBack > 0)
                     _applyMessage += notReadBack == 1
                         ? " 1 new row could not be read back — use a SELECT query to check what was stored."

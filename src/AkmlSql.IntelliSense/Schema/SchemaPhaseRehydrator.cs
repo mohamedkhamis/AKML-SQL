@@ -98,6 +98,10 @@ public static class SchemaPhaseRehydrator
         MaxLength = c.MaxLength,
         Precision = c.Precision,
         Scale = c.Scale,
+        // Spec 047 (review of PR #261): an IDENTITY or computed column is left out of Expand INSERT / UPDATE columns.
+        IsIdentity = c.IsIdentity,
+        IsComputed = c.IsComputed,
+        DefaultValue = c.DefaultValue,
     };
 
     private static Parameter MapParameter(SchemaPhaseParameter p) => new()

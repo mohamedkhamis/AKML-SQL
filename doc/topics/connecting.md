@@ -41,6 +41,22 @@ The credential dialog tests the login and password against the server before sto
 
 For IntelliSense and schema-aware features to work fully, the connecting login needs `VIEW DATABASE STATE` and `VIEW ANY DEFINITION` on the database. Without them, schema loading fails and completion falls back to keywords only.
 
+## Connecting in the browser
+
+In the web edition you connect from **Connect to database** (the connection status in the status bar, or **Connect…** in the Schema panel). The browser is only the editor: the AKML engine opens the connection, from the engine machine.
+
+![The Connect to database dialog with SQL Server authentication, showing the option Remember the password on the engine machine and its hint](../images/web/connect-remember.png)
+
+- **Windows authentication** from a browser on the engine's own computer signs in as you — the Windows user signed in to that computer — as SSMS does, and the dialog names the account. From a browser on another computer it signs in as the account the engine runs as: for the web engine service, `NT AUTHORITY\SYSTEM`. SQL Server shows an account only the objects it may see, so an account without `VIEW DEFINITION` gets a note in the Schema panel and **Stored Procedures** and **Functions** marked *may be incomplete* (see [Troubleshooting](troubleshooting.md#stored-procedures-are-missing-from-the-explorer)). To have the engine sign in as its own account even from this computer, set `bridge.windowsSignInAsBrowserUser` to `false` in the engine's config.
+- **Save** keeps the connection's name, server, database and login in this browser. It never keeps a password there.
+- **Remember the password on the engine machine** (SQL authentication) asks the engine to keep the password. The option reads "(checked when you save; never in the browser; any client paired with this engine can use it)". With it ticked and the password typed, **Save** first checks the login against the server:
+  - if the check succeeds, the dialog says "Saved. The engine machine keeps the password for *login*." The password is kept encrypted for the engine's account. On the web engine service, that means any administrator of the engine machine;
+  - if it fails, the dialog says "Saved without the password: the login test failed —" and the server's reason. Nothing is kept;
+  - with no engine that keeps passwords connected, the dialog says "Saved. No engine that keeps passwords is connected, so the password was not checked or kept.".
+- **Forget it** removes a remembered password from the engine. Unticking Remember and saving does the same.
+- Passwords saved by the SSMS extension are separate. They belong to your Windows account on your machine, the web engine runs as its own account, and it never reuses them.
+- Saved connections and pairings belong to the address you opened. `http://localhost:…` and `http://127.0.0.1:…` are different addresses to the browser, so each has its own list. **Export settings** and **Import settings** (Settings) move your preferences between addresses or browsers. They do not move connections, pairings or passwords.
+
 ## Refresh the schema after changes
 
 AKML SQL detects `CREATE`, `ALTER`, and `DROP` statements you run and refreshes its schema view automatically. To force a refresh, use **AKML SQL** -> **Help** -> **Refresh Schema Cache**.

@@ -37,6 +37,7 @@ namespace AkmlSql.Core.Config
                     var defaults = new AppSettings();
                     MigrateTabEnvironments(defaults);
                     MigrateTriggerDelay(defaults);
+                    MigrateSquiggleStyle(defaults);
                     Save(defaults);
                     return defaults;
                 }
@@ -46,6 +47,7 @@ namespace AkmlSql.Core.Config
                 AiAgentResolver.Normalize(settings.Ai);
                 MigrateTabEnvironments(settings);
                 MigrateTriggerDelay(settings);
+                MigrateSquiggleStyle(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -74,6 +76,7 @@ namespace AkmlSql.Core.Config
                     var defaults = new AppSettings();
                     MigrateTabEnvironments(defaults);
                     MigrateTriggerDelay(defaults);
+                    MigrateSquiggleStyle(defaults);
                     return defaults;
                 }
 
@@ -82,6 +85,7 @@ namespace AkmlSql.Core.Config
                 AiAgentResolver.Normalize(settings.Ai);
                 MigrateTabEnvironments(settings);
                 MigrateTriggerDelay(settings);
+                MigrateSquiggleStyle(settings);
                 return settings;
             }
             catch (Exception ex)
@@ -109,6 +113,28 @@ namespace AkmlSql.Core.Config
             if (intelliSense == null || intelliSense.TriggerDelayVersion != null) return;
             if (intelliSense.TriggerDelayMs == 100) intelliSense.TriggerDelayMs = 0;
             intelliSense.TriggerDelayVersion = 1;
+        }
+
+        /// <summary>
+        /// Spec 047 (UX-001, SSMS-001, contracts/analysis-display.md §2) — "squiggleStyle" did nothing before spec 047 and
+        /// every config carries its old default, "underline". The new default is "marker" (advisory findings get the
+        /// margin marker only), so a config that has not been through this yet moves from that untouched default to
+        /// "marker"; any other value was chosen and is kept. Once only: in memory, persisted by the next save. A failure is
+        /// logged and leaves the settings as read.
+        /// </summary>
+        internal static void MigrateSquiggleStyle(AppSettings settings)
+        {
+            try
+            {
+                var codeAnalysis = settings?.CodeAnalysis;
+                if (codeAnalysis == null || codeAnalysis.SquiggleStyleVersion != null) return;
+                if (codeAnalysis.SquiggleStyle == "underline") codeAnalysis.SquiggleStyle = "marker";
+                codeAnalysis.SquiggleStyleVersion = 1;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Config: squiggle-style migration failed; settings kept as read");
+            }
         }
 
         private static void MigrateTabEnvironments(AppSettings settings)

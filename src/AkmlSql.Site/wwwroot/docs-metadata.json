@@ -1,17 +1,17 @@
 {
-    "generatedAt":  "2026-11-04T13:14:21Z",
+    "generatedAt":  "2026-11-23T10:20:38Z",
     "docs":  {
                  "analysis-rules.md":  {
                                            "added":  "2026-03-24",
-                                           "updated":  "2026-10-24"
+                                           "updated":  "2026-11-22"
                                        },
                  "configuration.md":  {
                                           "added":  "2026-03-24",
-                                          "updated":  "2026-10-26"
+                                          "updated":  "2026-11-22"
                                       },
                  "formatting.md":  {
                                        "added":  "2026-03-24",
-                                       "updated":  "2026-11-03"
+                                       "updated":  "2026-11-22"
                                    },
                  "postgresql-reference.md":  {
                                                  "added":  "2026-10-14",
@@ -23,11 +23,11 @@
                                              },
                  "topics/browser-setup.md":  {
                                                  "added":  "2026-10-22",
-                                                 "updated":  "2026-10-26"
+                                                 "updated":  "2026-11-23"
                                              },
                  "topics/connecting.md":  {
                                               "added":  "2026-08-29",
-                                              "updated":  "2026-10-07"
+                                              "updated":  "2026-11-23"
                                           },
                  "topics/formatting.md":  {
                                               "added":  "2026-08-29",
@@ -43,7 +43,7 @@
                                             },
                  "topics/options.md":  {
                                            "added":  "2026-10-01",
-                                           "updated":  "2026-10-14"
+                                           "updated":  "2026-11-04"
                                        },
                  "topics/refactoring.md":  {
                                                "added":  "2026-08-29",
@@ -63,7 +63,7 @@
                                                },
                  "topics/troubleshooting.md":  {
                                                    "added":  "2026-08-29",
-                                                   "updated":  "2026-10-14"
+                                                   "updated":  "2026-11-23"
                                                }
              }
 }

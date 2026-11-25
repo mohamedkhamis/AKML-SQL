@@ -105,6 +105,13 @@ public class DatabaseCache
     /// shell tell a rejected password apart from a valid-login-but-no-DB-access case. Spec 029 follow-up.</summary>
     public int PermissionDeniedErrorNumber { get; set; }
 
+    /// <summary>
+    /// Spec 047 (WEB-013): the engine's login lacks VIEW DEFINITION on this database, so the catalog views show it only
+    /// the objects it may see (procedures and functions can be missing). Read in Phase A on the open connection; shipped
+    /// to the browser as <c>SchemaPhasePayload.MetadataLimited</c>. Always false for PostgreSQL.
+    /// </summary>
+    public bool MetadataLimited { get; set; }
+
     // Index for O(1) FK lookup keyed by "schema.table" (both parent and referenced sides)
     private Dictionary<string, List<ForeignKey>>? _fkByTable;
 

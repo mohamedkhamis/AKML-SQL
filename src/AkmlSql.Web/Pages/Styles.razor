@@ -56,7 +56,7 @@
 
     @if (!string.IsNullOrEmpty(_status))
     {
-        <p class="akml-styles-status @(_statusIsError ? "error" : "")" data-testid="styles-status" role="status">@_status</p>
+        <p class="akml-styles-status @(_statusIsError ? "error" : "")" data-testid="styles-status" role="status" aria-live="polite">@_status</p>
     }
 
     <div class="akml-styles-body">
@@ -156,12 +156,13 @@
                 <div class="akml-styles-split">
                     <div class="akml-styles-options" data-testid="options-@_sectionId">
                         @{ var current = SqlPromptOptionCatalog.Sections.First(x => x.Id == _sectionId); }
-                        <h3>@current.Label</h3>
+                        @* Spec 047 (WEB-009): the headings follow the page's h1 (they were h3/h4: axe heading-order). *@
+                        <h2>@current.Label</h2>
                         @foreach (var group in current.Options.GroupBy(o => o.Group))
                         {
                             @if (group.Key != null)
                             {
-                                <h4>@group.Key</h4>
+                                <h3>@group.Key</h3>
                             }
                             @foreach (var option in group)
                             {
@@ -237,7 +238,7 @@
                                       data-testid="preview-input" value="@_customSql"
                                       @oninput="e => { _customSql = e.Value?.ToString() ?? string.Empty; SchedulePreview(); }"></textarea>
                         }
-                        <pre class="akml-preview-output" data-testid="preview" aria-live="polite">@foreach (var (line, moved) in _previewLines)
+                        <pre class="akml-preview-output" data-testid="preview" aria-live="polite" tabindex="0" aria-label="Preview">@foreach (var (line, moved) in _previewLines)
 {<span class="@(moved ? "moved" : null)">@(line + NewLine)</span>}</pre>
                         <div class="akml-preview-status" data-testid="preview-status">@_previewStatus</div>
                         </div>
@@ -264,7 +265,11 @@
     .akml-styles-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-styles-badge { font-size: 10px; padding: 0 5px; border-radius: 8px; border: 1px solid var(--akml-border-default); color: var(--akml-text-secondary); }
     .akml-styles-badge.active { color: var(--akml-text-onaccent); background-color: var(--akml-accent-primary); border-color: transparent; }
-    .akml-styles-badge.muted { opacity: 0.8; }
+    /* Spec 047 (WEB-008): no opacity, which took the text under 4.5:1 (most on a selected row); italic keeps it apart. */
+    .akml-styles-badge.muted { color: var(--akml-text-secondary); font-style: italic; }
+    /* On a selected or hovered row the badge takes the row's text colour: the secondary text read 4.0:1 on the dark hover
+       fill, and high contrast inverts the row. */
+    .akml-styles-row:is(.selected, :hover) .akml-styles-badge:not(.active) { color: inherit; }
     .akml-styles-page span:first-child { flex: 1 1 auto; }
     .akml-styles-count { font-size: 10px; min-width: 16px; text-align: center; border-radius: 8px; background-color: var(--akml-accent-primary); color: var(--akml-text-onaccent); }
     .akml-styles-empty { grid-column: 2 / span 2; padding: var(--akml-scalar-spacing-l, 24px); color: var(--akml-text-secondary); }
@@ -275,8 +280,8 @@
     .akml-styles-notice { margin: 0; padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-text-secondary); background-color: var(--akml-surface-panel); border-bottom: 1px solid var(--akml-border-subtle); }
     .akml-styles-split { flex: 1 1 auto; display: grid; grid-template-columns: minmax(300px, 420px) 1fr; min-height: 0; }
     .akml-styles-options { overflow: auto; padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-m); border-right: 1px solid var(--akml-border-default); }
-    .akml-styles-options h3 { margin: var(--akml-scalar-spacing-m) 0 var(--akml-scalar-spacing-s); font-size: 15px; }
-    .akml-styles-options h4 { margin: var(--akml-scalar-spacing-m) 0 var(--akml-scalar-spacing-xs); font-size: 12px; color: var(--akml-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+    .akml-styles-options h2 { margin: var(--akml-scalar-spacing-m) 0 var(--akml-scalar-spacing-s); font-size: 15px; }
+    .akml-styles-options h3 { margin: var(--akml-scalar-spacing-m) 0 var(--akml-scalar-spacing-xs); font-size: 12px; color: var(--akml-text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
     .akml-option { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-bottom: 1px solid var(--akml-border-subtle); }
     .akml-option.changed .akml-option-label { font-weight: 600; }
     .akml-option.disabled { opacity: 0.55; }
@@ -734,14 +739,23 @@
             return;
         }
         string text;
-        await using (var stream = file.OpenReadStream(MaxImportBytes))
-        using (var reader = new StreamReader(stream, Encoding.UTF8))
+        try
         {
+            await using var stream = file.OpenReadStream(MaxImportBytes);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
             text = await reader.ReadToEndAsync();
         }
-        if (!SqlPromptStyleDocument.TryParse(text, out var document, out var error))
+        catch (Exception ex)
         {
-            SetStatus($"“{file.Name}” is not a SQL Prompt style (.json): {error}", error: true);
+            LogImport($"“{file.Name}” could not be read: {ex.Message}");
+            SetStatus("That file could not be read.", error: true);
+            return;
+        }
+        // Spec 047 (UX-002): one plain sentence; the parser's detail goes to Diagnostics, never to the page.
+        if (!SqlPromptStyleDocument.TryParse(text, out var document, out var error) || !document!.LooksLikeStyle)
+        {
+            LogImport($"“{file.Name}” is not a SQL Prompt style: {error ?? "no SQL Prompt metadata or options"}");
+            SetStatus(NotAStyleText, error: true);
             return;
         }
         if (string.IsNullOrWhiteSpace(document!.Name)) document.Name = Path.GetFileNameWithoutExtension(file.Name);
@@ -763,6 +777,12 @@
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>Spec 047 (UX-002): what the page says for a file that is not a style.</summary>
+    internal const string NotAStyleText = "That file is not a SQL Prompt style (.json).";
+
+    private void LogImport(string detail) =>
+        (Services.GetService(typeof(IDiagnosticsRingBuffer)) as IDiagnosticsRingBuffer)?.Log(DiagnosticLevel.Info, "styles", "Import refused: " + detail);
 
     private string UniqueName(string wanted)
     {

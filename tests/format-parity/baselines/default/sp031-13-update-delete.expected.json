@@ -97,13 +97,6 @@
       "column": 86
     },
     {
-      "ruleId": "NM005",
-      "severity": "Warning",
-      "message": "Identifier 'order details' contains special characters — use standard alphanumeric names without spaces or special characters",
-      "line": 2,
-      "column": 95
-    },
-    {
       "ruleId": "ST001",
       "severity": "Hint",
       "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
@@ -137,13 +130,6 @@
       "message": "SQL keyword 'from' is not uppercase — use consistent ALL_CAPS keywords",
       "line": 3,
       "column": 8
-    },
-    {
-      "ruleId": "NM005",
-      "severity": "Warning",
-      "message": "Identifier 'order details' contains special characters — use standard alphanumeric names without spaces or special characters",
-      "line": 3,
-      "column": 17
     },
     {
       "ruleId": "ST001",

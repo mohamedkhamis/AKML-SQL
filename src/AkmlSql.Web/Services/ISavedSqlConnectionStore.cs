@@ -98,6 +98,8 @@ public sealed class SavedSqlConnection
     public static readonly string[] SslModes = ["disable", "prefer", "require", "verify-ca", "verify-full"];
 
     /// <summary>The port a PostgreSQL connection uses: the saved one, or 5432.</summary>
+    /// <remarks>Spec 047 (WEB-010): computed, never stored. Rows written before still carry it; it is ignored on read.</remarks>
+    [System.Text.Json.Serialization.JsonIgnore]
     public int EffectivePort => Port ?? DefaultPostgresPort;
 
     // NOTE: deliberately NO "IsRemoteAllowed" flag. The loopback/SSRF guard
@@ -110,10 +112,13 @@ internal sealed class SavedSqlConnectionStore : ISavedSqlConnectionStore
 {
     private const string ActiveIdKey = "_active";
     private readonly IIndexedDbAdapter _store;
+    private readonly IBrowserStorageState? _storage;
 
-    public SavedSqlConnectionStore(IIndexedDbAdapter store)
+    /// <param name="storage">Spec 047 (WEB-003): asked once to keep the browser's data, after the first saved connection.</param>
+    public SavedSqlConnectionStore(IIndexedDbAdapter store, IBrowserStorageState? storage = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _storage = storage;
     }
 
     public async Task<IReadOnlyList<SavedSqlConnection>> ListAsync()
@@ -149,6 +154,7 @@ internal sealed class SavedSqlConnectionStore : ISavedSqlConnectionStore
         ValidateConnection(connection);
         await _store.SetAsync(StoreNames.SavedSqlConnections, connection.Id, JsonSerializer.Serialize(connection))
             .ConfigureAwait(false);
+        BrowserStorageRequest.Ask(_storage);   // spec 047 (WEB-003): never fails the save
     }
 
     public async Task UpdateAsync(SavedSqlConnection connection)

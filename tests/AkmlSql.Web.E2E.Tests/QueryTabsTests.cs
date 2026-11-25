@@ -25,6 +25,9 @@ public sealed class QueryTabsTests
 
     private static ILocator Tabs(IPage page) => page.GetByTestId("doc-tab");
     private static ILocator ActiveTab(IPage page) => page.Locator("[data-testid='doc-tab'][data-active='true']");
+
+    // Spec 047 (WEB-009): the close button is the tab's sibling, not inside it.
+    private static ILocator ActiveClose(IPage page) => page.Locator("[data-testid='doc-tab'][data-active='true'] + [data-testid='doc-tab-close']");
     private static ILocator Pane(IPage page) => page.GetByTestId("results-pane");
     private static ILocator Cell(IPage page, int row, int column) => Pane(page).GetByTestId($"results-cell-{row}-{column}");
     private static ILocator Editor(IPage page) => page.Locator("[data-testid='sql-editor'] .cm-content");
@@ -215,7 +218,7 @@ public sealed class QueryTabsTests
         var page = s.Page;
         await NewTabAsync(s);
         await s.SetEditorTextAsync("SELECT 'unsaved' AS t;");
-        var close = ActiveTab(page).GetByTestId("doc-tab-close");
+        var close = ActiveClose(page);
 
         await close.ClickAsync();
         await Assertions.Expect(page.Locator("[data-dialog-id='doc-close-dialog']")).ToBeVisibleAsync();
@@ -288,7 +291,7 @@ public sealed class QueryTabsTests
         var page = s.Page;
         await NewTabAsync(s);
         await s.SetEditorTextAsync("SELECT 'save me' AS t;");
-        var close = ActiveTab(page).GetByTestId("doc-tab-close");
+        var close = ActiveClose(page);
 
         await close.ClickAsync();
         await page.GetByTestId("doc-close-save").ClickAsync();
@@ -372,7 +375,7 @@ public sealed class QueryTabsTests
         await page.GetByTestId("execute-button").ClickAsync();
         await Assertions.Expect(page.GetByTestId("execute-running")).ToHaveCountAsync(1);
 
-        await ActiveTab(page).GetByTestId("doc-tab-close").ClickAsync();
+        await ActiveClose(page).ClickAsync();
         await Assertions.Expect(page.Locator("[data-dialog-id='doc-close-running']")).ToBeVisibleAsync();
         await page.GetByTestId("dialog-confirm").ClickAsync();
         await page.GetByTestId("doc-close-discard").ClickAsync();   // its text was never saved
@@ -401,7 +404,7 @@ public sealed class QueryTabsTests
         await s.ExecuteAsync("BEGIN TRAN; UPDATE tempdb.dbo.akml_043_tx SET v = 2; SELECT @@TRANCOUNT AS open_transactions;");
         await Assertions.Expect(Cell(page, 0, 0)).ToHaveTextAsync("1");
 
-        var close = ActiveTab(page).GetByTestId("doc-tab-close");
+        var close = ActiveClose(page);
         await close.ClickAsync();
         await Assertions.Expect(page.Locator("[data-dialog-id='doc-close-transaction']")).ToBeVisibleAsync(new() { Timeout = 15_000 });
         await page.GetByTestId("dialog-cancel").ClickAsync();

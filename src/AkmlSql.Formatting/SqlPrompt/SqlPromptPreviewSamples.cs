@@ -114,11 +114,14 @@ public static class SqlPromptPreviewSamples
 
     private static readonly Dictionary<string, string> Samples = new(StringComparer.OrdinalIgnoreCase)
     {
+        // The comment stands four columns deeper than its code, so the layout moves it and "Align multi-line comments"
+        // shows: on, its second line moves with it; off, the comment changes shape (spec 047: in the code's own column it
+        // never moved, and only a CRLF/LF artifact told the two previews apart).
         ["whitespace"] = """
             IF @Report = 1
             BEGIN
-                /* Customers report
-                         for the regional team */
+                    /* Customers report
+                             for the regional team */
                 SELECT c.CustomerId, CONCAT(c.FirstName, ' ', c.LastName, ' <', c.EmailAddress, '> from ', c.City, ', ', c.Region, ', ', c.Country) AS Label FROM dbo.Customers AS c WHERE c.Country = 'Egypt';
             END;
 

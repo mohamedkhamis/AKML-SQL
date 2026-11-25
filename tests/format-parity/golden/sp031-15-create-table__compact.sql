@@ -5,11 +5,13 @@ CREATE TABLE dbo.orderaudit(
     oldfreight money         NULL,
     newfreight money         NULL,
     changedby  nvarchar(128) NOT NULL
-); CREATE TABLE dbo.regionmap(
+);
+CREATE TABLE dbo.regionmap(
     regionid    int          NOT NULL,
     territoryid nvarchar(20) NOT NULL,
 
     constraint pk_regionmap primary key (regionid, territoryid)
-); CREATE TABLE dbo.tinylookup(
+);
+CREATE TABLE dbo.tinylookup(
     code char(2) NOT NULL primary key
 );

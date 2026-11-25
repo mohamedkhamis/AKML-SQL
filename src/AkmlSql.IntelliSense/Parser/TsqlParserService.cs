@@ -143,6 +143,33 @@ public partial class TsqlParserService
     public const string GoSeparatorError = "Incorrect syntax was encountered while parsing GO.";
 
     /// <summary>
+    /// Spec 047 (WEB-005): true when <paramref name="error"/> is ScriptDom's complaint about the repeat count of
+    /// <c>GO n</c> (46010, "Incorrect syntax near 'n'."): it sits on an integer that follows a GO token on the same line.
+    /// SSMS and sqlcmd accept the count (<see cref="SplitBatches"/> honours it), so it is not a syntax error to report.
+    /// </summary>
+    public static bool IsGoRepeatCount(ParseError error, IList<TSqlParserToken> tokens)
+    {
+        if (error == null || tokens == null) return false;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            if (tokens[i].Offset != error.Offset) continue;
+            if (tokens[i].TokenType != TSqlTokenType.Integer) return false;
+            for (int k = i - 1; k >= 0; k--)
+            {
+                var t = tokens[k];
+                if (t.TokenType == TSqlTokenType.WhiteSpace)
+                {
+                    if (t.Text.IndexOf('\n') >= 0) return false;   // the count is not on the GO line
+                    continue;
+                }
+                return t.TokenType == TSqlTokenType.Go;
+            }
+            return false;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Spec 041 (research R16, N3) — splits a script into the batches SSMS would send, on <c>GO</c>.
     /// ScriptDom's lexer decides what a separator is: a <c>GO</c> token at the start of a line, never
     /// inside a string, a comment or <c>[GO]</c> (a block comment before it on the same line still lets it

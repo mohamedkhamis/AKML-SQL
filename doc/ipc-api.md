@@ -142,6 +142,10 @@ class RpcMessage {
 | Engine→Shell | `ExecuteParseResult` | 220 |
 | Shell→Engine | `SessionDisconnect` | 225 |
 | Engine→Shell | `SessionDisconnectResult` | 226 |
+| Web→Engine | `PairingListRequest` | 227 |
+| Engine→Web | `PairingListResponse` | 228 |
+| Web→Engine | `PairingRevokeRequest` | 229 |
+| Engine→Web | `PairingRevokeResponse` | 230 |
 
 Note: codes 200–203 are part of the spec 021 web-edition bridge. They carry over named-pipe transports unchanged, but their primary purpose is the browser ↔ engine WebSocket bridge introduced in M3.
 
@@ -1091,6 +1095,7 @@ The engine advertises a list of stable capability identifiers in `EngineCapabili
 | `diagnostics.engine-log-tail.v1` (planned) | `Capabilities.DiagnosticsEngineLogTailV1` | Engine log-tail request used by the diagnostics export bundle. |
 | `session.database.v1` | `Capabilities.SessionDatabaseV1` | Spec 041 — the database selector: `ListDatabasesRequest.SessionId` (key 1), `ChangeDatabase` (217 → 218) and `ExecuteQueryResult.CurrentDatabase` (key 12). |
 | `session.disconnect.v1` | `Capabilities.SessionDisconnectV1` | `SessionDisconnect` (225 → 226): the web edition's Disconnect rolls back the session's open transaction and closes its connection before it reports success. |
+| `pairing.manage.v1` | `Capabilities.PairingManageV1` | Spec 047 — the browsers paired with this engine: `PairingListRequest` (227 → 228) and `PairingRevokeRequest` (229 → 230), served on the web bridge only (Settings › Connections › Paired browsers). |
 | `credentials.sqlserver.v1` | `Capabilities.CredentialsSqlServerV1` | Spec 043 follow-up: a SQL Server login's password may be remembered on the engine (`TestSqlConnectionRequest` key 3 `RememberPassword`, saved once the server accepted it) and asked about or forgotten with `CredentialRequest` `Kind` 0. Still advertised next to v2 (older web clients look for it). The engines that advertise only v1 (1.26.1022.0927, 1.26.1022.1042) registered the `CredentialRequest` handler only when `postgreSql.enabled` was true: with PostgreSQL switched off, a SQL Server `Has` or forget sent to one gets **no reply**, so a client must wait with a timeout and treat the answer as unknown (it is answered whatever the switch says only from `credentials.sqlserver.v2`). Those engines also send no `TestSqlConnectionResponse.Remembered`, ignore `CredentialRequest` key 5, and saved every web password under `mssql-web://{data source}` whatever `TrustServerCertificate` said (see `CredentialRequest` below). |
 | `credentials.sqlserver.v2` | `Capabilities.CredentialsSqlServerV2` | Spec 043 follow-up (review): `TestSqlConnectionResponse` key 4 `Remembered` is sent — true only when the password was asked to be remembered and is now in the engine's store (false when the store could not write or encrypt it; an accepted login is never reported as failed because of the store). A client must not read a missing key 4 from an engine without v2 as "not remembered". The remembered password is bound to a plain SQL login on an encrypted connection and to the certificate checking it was given with (`mssql-web://` / `mssql-web-trust://`, see `CredentialRequest` below), and a forget the store could not read or write is answered `Ok = false`. `CredentialRequest` (221) is registered whatever `postgreSql.enabled` says, and a SQL Server `Has` honours key 5 `TrustServerCertificate` (review, round 3): yes only for a password a connection with that choice would be given. |
 | `session.copy.v1` | `Capabilities.SessionCopyV1` | Spec 043 follow-up: `ConnectionInfo` key 7 and `TestSqlConnectionRequest` key 2 `CopyPasswordFromSessionId` — a new query tab sends its connection without a password and names the tab it was opened from; the engine copies that session's password for the same server, login, encryption and certificate checking (`SessionPasswordCopy`), never from an SSMS session or another browser's. Still advertised next to v2 (older web clients look for it). The engines that advertise only v1 take the copy origin from the WebSocket connection (so a copy does not survive a reconnect), ignore `ListDatabasesRequest` key 3 and `HandshakeRequest` key 6, and do not send `postgresql.login-failed`. A web SQL login that still has no password is answered `dialect.password-required` by the engine without contacting the server; a refused SQL Server login carries `sqlserver.login-failed` (18456). |
@@ -1333,6 +1338,53 @@ session connection (credential change, idle eviction, disconnect) rolls back an 
 closed inside a script-begun transaction would otherwise keep it, and its locks, until the pool reuses the connection.
 
 `Release` (spec 043, append-only, default false): the web edition closed the query tab that owned the session. After the steps above the engine also removes the session entry and its document (`SessionManager.RemoveSession`) and drops every schema cache of the session (`SchemaCacheManager.RemoveSession`); this happens even when a running command kept the connection past the wait. The id may be used again by a later `ConnectionChanged`, which starts it afresh. An engine from before the key reads it as a plain disconnect.
+
+### `PairingListRequest` (227) → `PairingListResponse` (228), `PairingRevokeRequest` (229) → `PairingRevokeResponse` (230) — pairing.manage.v1
+
+Spec 047 (ENG-001). The web edition lists the browsers paired with this engine and removes one.
+
+```
+PairingListRequest (Web→Engine, type 227)        (no fields)
+
+PairingListResponse (Engine→Web, type 228)
+    0 PairingUsed         bool             False when the engine does not require pairing (loopback only): the list is empty.
+    1 Entries             PairingEntry[]   Every stored pairing, newest first.
+
+PairingEntry
+    0 Id                  string           SHA-256 (hex) of the pairing's bearer token: the only identifier exposed. The token never travels.
+    1 Label               string           The label the browser sent when it paired ("Edge on Windows · http://localhost:59416"; older pairings "Web edition").
+    2 MintedAt            DateTimeOffset
+    3 LastUsedAt          DateTimeOffset
+    4 ExpiresAt           DateTimeOffset   A past date is shown as expired; the entry is kept until revoked (nothing is removed automatically).
+    5 IsCurrent           bool             The pairing the asking connection authenticated with ("This browser").
+
+PairingRevokeRequest (Web→Engine, type 229)
+    0 Id                  string           PairingEntry.Id of the pairing to remove.
+
+PairingRevokeResponse (Engine→Web, type 230)
+    0 Ok                  bool
+    1 Message             string?          Why nothing was revoked ("That pairing no longer exists."); null on success.
+    2 ClosedConnections   int              Open bridge connections the revoke closed.
+```
+
+- **Bridge only, authenticated.** Both are served only on web bridge connections that passed the handshake (PIN, bearer, or
+  loopback where pairing is not required); a named-pipe (SSMS) request gets the error reply. Any such connection may list and
+  revoke any entry: a paired browser already holds the engine account's full power.
+- **Revoke** removes the entry and closes every open bridge socket that authenticated with it (WebSocket close 1008, reason
+  "pairing revoked"), then replies. The engine logs `Pairing revoked: {label} (by {caller label})` at Information, never a hash or
+  a token. An engine where pairing is not required answers Revoke `Ok = false`.
+
+### Spec 047 — an appended key and a changed meaning
+
+- **`SchemaPhasePayload` key 8 `MetadataLimited`** (bool, append-only). True when the engine's login lacks VIEW DEFINITION on
+  the database (`HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'VIEW DEFINITION') = 0`), read in Phase A on the open connection. The
+  Phase A and Phase B payloads both carry it. An engine from before sends no key 8, which reads as false (no notice). Always
+  false for PostgreSQL. The web Schema panel then marks Stored Procedures and Functions "(may be incomplete)" and says which
+  account cannot see them.
+- **`FindInvalidObjectsResponse.TotalScanned`** (key 3) now means the references checked: every
+  `sys.sql_expression_dependencies` row of a user object, resolved or not, counted in the same batch as the candidates. It used
+  to be the number of unresolved candidates, so a clean database read "0 dependency rows scanned". The shell and the engine ship
+  in one installer, so no older peer reads the new meaning.
 
 ## PostgreSQL Messages (221–224) — spec 042, `dialect.postgresql.v1`
 

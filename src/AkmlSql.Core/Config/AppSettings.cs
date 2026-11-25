@@ -226,6 +226,15 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("webRoot")]
         public string WebRoot { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Windows authentication from a browser on the engine's own computer signs in to SQL Server as the Windows user
+        /// signed in to that browser's session, as SSMS does (default <c>true</c>). <c>false</c> signs in as the engine's own
+        /// account — for the installed service, <c>NT AUTHORITY\SYSTEM</c> — as before. A browser on another computer, or a
+        /// caller the engine cannot place, always uses the engine's account.
+        /// </summary>
+        [JsonPropertyName("windowsSignInAsBrowserUser")]
+        public bool WindowsSignInAsBrowserUser { get; set; } = true;
+
         /// <summary>True if the bind address is a loopback IP.</summary>
         [JsonIgnore]
         public bool IsLoopback =>
@@ -754,8 +763,21 @@ namespace AkmlSql.Core.Config
         [JsonPropertyName("autoFixOnFormat")]
         public bool AutoFixOnFormat { get; set; }
 
+        /// <summary>
+        /// Spec 047 (UX-001, SSMS-001) — how Information and Hint findings, such as a missing semicolon, are shown:
+        /// <c>marker</c> (default) gives them the margin marker only; <c>underline</c> also underlines them in the text.
+        /// Warnings and errors are always underlined. Any other value reads as <c>underline</c>.
+        /// </summary>
         [JsonPropertyName("squiggleStyle")]
-        public string SquiggleStyle { get; set; } = "underline";
+        public string SquiggleStyle { get; set; } = "marker";
+
+        /// <summary>
+        /// Spec 047 — set once by <c>ConfigManager.MigrateSquiggleStyle</c>: a config written before <c>marker</c> existed
+        /// carries the old untouched default <c>underline</c>, which then moves to <c>marker</c>; afterwards every value
+        /// is the user's own.
+        /// </summary>
+        [JsonPropertyName("squiggleStyleVersion")]
+        public int? SquiggleStyleVersion { get; set; }
 
         [JsonPropertyName("showInErrorList")]
         public bool ShowInErrorList { get; set; } = true;
@@ -768,7 +790,8 @@ namespace AkmlSql.Core.Config
 
         /// <summary>
         /// US17 / FR-079 — show blue lightbulbs for advisory-only rules (no auto-fix).
-        /// When false, only auto-fixable rules (orange) get a lightbulb.
+        /// When false, only auto-fixable rules (orange) get a lightbulb. Spec 047 (A1): wired as documented; a finding
+        /// without an automatic fix keeps its margin marker, its Error List entry and the glyph menu's suppress actions.
         /// </summary>
         [JsonPropertyName("showAdvisoryHints")]
         public bool ShowAdvisoryHints { get; set; } = true;

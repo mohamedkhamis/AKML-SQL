@@ -167,7 +167,7 @@ namespace AkmlSql.Engine.Execution
                 : new SqlConnection(connectionString);
             try
             {
-                await fresh.OpenAsync(ct).ConfigureAwait(false);
+                await SqlOpen.OpenAsync(fresh, ct).ConfigureAwait(false);
             }
             catch
             {

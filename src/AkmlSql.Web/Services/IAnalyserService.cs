@@ -111,7 +111,8 @@ internal sealed class AnalyserService : IAnalyserService
             DocumentVersion = 1,
         };
 
-        var response = await _engine.AnalyzeAsync(request, serverVersion: 16, schemaCache, _settings, ct)
+        // Spec 047 (WEB-005): SQL that does not parse is reported (SYNTAX, Error) instead of coming back with no findings.
+        var response = await _engine.AnalyzeAsync(request, serverVersion: 16, schemaCache, _settings, ct, reportParseErrors: true)
             .ConfigureAwait(false);
 
         return await ApplyOverridesAsync(response).ConfigureAwait(false);

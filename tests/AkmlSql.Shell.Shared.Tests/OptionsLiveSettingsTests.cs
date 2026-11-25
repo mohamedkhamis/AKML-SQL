@@ -88,6 +88,7 @@ namespace AkmlSql.Shell.Shared.Tests
             ("Code Analysis", "Enable code analysis"),
             ("Code Analysis", "Analyze while typing"),
             ("Code Analysis", "Show in Error List"),
+            ("Code Analysis", "Advisory findings"),   // spec 047 (UX-001): squiggleStyle, read by DiagnosticTagger
             ("Code Analysis", "Rules"),
             ("Code Analysis", "Per-project config"),
             ("Code Analysis", "Inline suppression"),

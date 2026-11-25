@@ -72,7 +72,7 @@ internal sealed class DatabaseRenameDependencyReader
         CancellationToken ct)
     {
         await using var conn = new SqlConnection(connectionString);
-        await conn.OpenAsync(ct);
+        await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
         if (!string.IsNullOrEmpty(targetDatabase) &&
             !string.Equals(conn.Database, targetDatabase, StringComparison.OrdinalIgnoreCase))

@@ -359,6 +359,7 @@ namespace AkmlSql.Engine.Transports
             }
 
             using var ws = wsContext.WebSocket;
+            var caller = ResolveCaller(context);
 
             // Spec 026 (M4 closure) FR-013a: publish this connection's remote IP as a
             // per-connection ambient so the handshake's pinValidator uses the real source
@@ -368,8 +369,38 @@ namespace AkmlSql.Engine.Transports
             // Spec 043 follow-up: whose sessions a copy may read — this socket, then the page an accepted handshake names
             // (BridgeConnection.Adopt), so the page's tabs keep their passwords across a reconnect.
             using (BridgeConnection.Set(Guid.NewGuid().ToString("N")))
+            // Owner request 2026-11-23: who this browser's Windows authentication signs in to SQL Server as (null: the engine's account).
+            using (BridgeCaller.Set(caller))
             {
                 await ServeAsync(ws, ct).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Owner request of 2026-11-23 ("automatic like SSMS"): the Windows user a browser on this computer signs in to SQL Server
+        /// as (<see cref="LoopbackCaller"/>), or null for the engine's own account — a browser on another computer, a caller that
+        /// cannot be placed, or <c>bridge.windowsSignInAsBrowserUser</c> off. The identity is not disposed with the connection:
+        /// a schema refresh registered for it (<c>SchemaCacheManager</c>) may still use it, and its token closes when it is collected.
+        /// </summary>
+        private System.Security.Principal.WindowsIdentity? ResolveCaller(HttpListenerContext context)
+        {
+            if (!_options.WindowsSignInAsBrowserUser || !OperatingSystem.IsWindows()) return null;
+            try
+            {
+                var resolution = LoopbackCaller.Resolve(context.Request.RemoteEndPoint, context.Request.LocalEndPoint);
+                if (resolution.Identity != null)
+                    Log.Information("WebSocketTransport: browser process {Pid} signs in to SQL Server as {User}",
+                        resolution.ProcessId, resolution.Identity.Name);
+                else
+                    Log.Information("WebSocketTransport: Windows authentication for {Remote} uses the engine's account ({Reason})",
+                        context.Request.RemoteEndPoint, resolution.Reason);
+                return resolution.Identity;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "WebSocketTransport: could not tell who the browser at {Remote} is; using the engine's account",
+                    context.Request.RemoteEndPoint);
+                return null;
             }
         }
 
@@ -392,6 +423,9 @@ namespace AkmlSql.Engine.Transports
             // ConnectionChanged) and the handshake stay on the loop, in arrival order, so anything read after a notification
             // sees it applied. Two runs on one session still queue on that session's connection gate.
             var sendLock = new SemaphoreSlim(1, 1);
+
+            // Spec 047 (ENG-001): a revoke of the pairing this connection authenticated with closes it at once.
+            BridgeConnection.SetCloser(() => CloseForRevokedPairingAsync(socket, sendLock));
 
             while (socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
@@ -527,6 +561,30 @@ namespace AkmlSql.Engine.Transports
             catch (Exception ex)
             {
                 Log.Warning(ex, "WebSocketTransport: could not write the reply to MessageType={Type} RequestId={Id}", request.MessageType, request.RequestId);
+            }
+        }
+
+        /// <summary>
+        /// Spec 047 (ENG-001): sends the close frame (1008, "pairing revoked") under the connection's send lock. It waits a moment
+        /// first so a page that revoked its own pairing still receives the reply; the read loop then sees the peer's close and ends.
+        /// </summary>
+        private static async Task CloseForRevokedPairingAsync(WebSocket socket, SemaphoreSlim sendLock)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250)).ConfigureAwait(false);
+            await sendLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                if (socket.State == WebSocketState.Open || socket.State == WebSocketState.CloseReceived)
+                    await socket.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, "pairing revoked", CancellationToken.None)
+                        .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is WebSocketException or ObjectDisposedException)
+            {
+                // The browser went away first; nothing is left to close.
+            }
+            finally
+            {
+                sendLock.Release();
             }
         }
 

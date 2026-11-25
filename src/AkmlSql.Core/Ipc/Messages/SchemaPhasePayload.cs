@@ -40,6 +40,14 @@ namespace AkmlSql.Core.Ipc.Messages
 
         /// <summary>Spec 042 (FR-061): the session's search path (<c>current_schemas(false)</c>), used to order and qualify suggestions.</summary>
         [Key(7)] public string[] SearchPath { get; set; } = System.Array.Empty<string>();
+
+        /// <summary>
+        /// Spec 047 (WEB-013, data-model §8): true when the engine's login lacks VIEW DEFINITION on the database
+        /// (<c>HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'VIEW DEFINITION') = 0</c>), so the catalog shows it only the
+        /// objects it may see and procedures and functions can be missing. Read in Phase A. An engine from before
+        /// sends no key 8, which reads as false (no notice). Always false for PostgreSQL.
+        /// </summary>
+        [Key(8)] public bool MetadataLimited { get; set; }
     }
 
     [MessagePackObject]
@@ -83,6 +91,14 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(5)] public int MaxLength { get; set; }
         [Key(6)] public int Precision { get; set; }
         [Key(7)] public int Scale { get; set; }
+
+        // Spec 047 (review of PR #261): the facts the browser's Expand refactorings need to leave a column out. The server
+        // fills an IDENTITY or computed column, so Expand INSERT columns must not list it and Expand UPDATE columns must not
+        // set it; a default is shown as a comment. Without them a rehydrated column looked like an ordinary one, and the
+        // browser wrote an INSERT one column longer than its VALUES. Additive keys: an older payload reads false / null.
+        [Key(8)] public bool IsIdentity { get; set; }
+        [Key(9)] public bool IsComputed { get; set; }
+        [Key(10)] public string? DefaultValue { get; set; }
     }
 
     [MessagePackObject]

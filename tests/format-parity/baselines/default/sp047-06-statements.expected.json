@@ -1,0 +1,170 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp047-06-statements",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "DE001",
+      "severity": "Warning",
+      "message": "Table 't' has no primary key — every table should have a primary key",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'table' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 2,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'drop' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'table' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 6
+    },
+    {
+      "ruleId": "BP022",
+      "severity": "Hint",
+      "message": "PRINT statement should be removed from production code — use application logging instead",
+      "line": 4,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'print' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 4,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'declare' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "BP015",
+      "severity": "Info",
+      "message": "Single-statement IF body should use BEGIN/END for clarity and to prevent errors when adding statements",
+      "line": 6,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'if' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 1
+    },
+    {
+      "ruleId": "BP022",
+      "severity": "Hint",
+      "message": "PRINT statement should be removed from production code — use application logging instead",
+      "line": 6,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'print' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 6,
+      "column": 11
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 1
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'a' is not descriptive — use a meaningful alias",
+      "line": 7,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 10
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 16
+    },
+    {
+      "ruleId": "NM006",
+      "severity": "Info",
+      "message": "Single-letter alias 'b' is not descriptive — use a meaningful alias",
+      "line": 7,
+      "column": 23
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 7,
+      "column": 25
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'exec' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 8,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 9,
+      "column": 13
+    }
+  ]
+}

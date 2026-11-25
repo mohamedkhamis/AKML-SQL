@@ -1,0 +1,191 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp047-01-proc-params",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "BP008",
+      "severity": "Info",
+      "message": "Stored procedure should end with an explicit RETURN statement",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "PE009",
+      "severity": "Warning",
+      "message": "Stored procedure is missing SET NOCOUNT ON at the beginning",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'procedure' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 51
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'begin' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 54
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 60
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'on' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 72
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 76
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 1,
+      "column": 76
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'end' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 90
+    },
+    {
+      "ruleId": "BP008",
+      "severity": "Info",
+      "message": "Stored procedure should end with an explicit RETURN statement",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "PE009",
+      "severity": "Warning",
+      "message": "Stored procedure is missing SET NOCOUNT ON at the beginning",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'procedure' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 77
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 80
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 3,
+      "column": 80
+    },
+    {
+      "ruleId": "BP008",
+      "severity": "Info",
+      "message": "Stored procedure should end with an explicit RETURN statement",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "PE009",
+      "severity": "Warning",
+      "message": "Stored procedure is missing SET NOCOUNT ON at the beginning",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'create' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'procedure' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 8
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'null' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 39
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'output' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 52
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'as' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 59
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'set' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 5,
+      "column": 62
+    }
+  ]
+}

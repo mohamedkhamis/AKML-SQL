@@ -45,7 +45,9 @@
                 <AiPrivacyModeBadge FeatureId="explain" />
             </div>
             <div class="akml-ai-action">
-                <button class="akml-btn" @onclick="RunFixAsync" disabled="@_busy" title="@(_busy ? "Waiting for the AI provider…" : null)">Fix</button>
+                @* Spec 047 (AI-002): Fix needs the error the server returned; without one it is off and says why. *@
+                <button class="akml-btn" @onclick="RunFixAsync" disabled="@(_busy || !HasError)" data-testid="ai-fix"
+                        title="@(_busy ? "Waiting for the AI provider…" : HasError ? null : FixNeedsErrorText)">Fix</button>
                 <AiPrivacyModeBadge FeatureId="fix" />
             </div>
             <div class="akml-ai-action">
@@ -152,7 +154,18 @@
     }
 
     private Task RunExplainAsync() => RunStreamAsync((sql, ct) => Prompts.ExplainStreamAsync(sql, ct), "Explain");
-    private Task RunFixAsync() => RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, LastErrorProvider?.Invoke() ?? AiErrorInfo.None, ct), "Fix");
+    /// <summary>Spec 047 (AI-002): why Fix is off.</summary>
+    internal const string FixNeedsErrorText = "Run the query first: Fix needs the error the server returned.";
+
+    // Read on every render: the tab's last run decides (the page re-renders this panel when a run finishes).
+    private bool HasError => LastErrorProvider?.Invoke() != null;
+
+    private Task RunFixAsync()
+    {
+        // Never "(no error)": a Fix without the server's error is a guess (AI-002).
+        if (LastErrorProvider?.Invoke() is not { } error) return Task.CompletedTask;
+        return RunStreamAsync((sql, ct) => Prompts.FixStreamAsync(sql, error, ct), "Fix");
+    }
     private Task RunOptimizeAsync() => RunStreamAsync((sql, ct) => Prompts.OptimizeStreamAsync(sql, ct), "Optimize");
     private Task RunTextToSqlAsync() => RunStreamAsync((sql, ct) => Prompts.TextToSqlStreamAsync(sql, ct), "Text to SQL");
     private Task RunIndexAnalysisAsync() => RunStreamAsync((sql, ct) => Prompts.IndexAnalysisStreamAsync(sql, ct), "Index Analysis");

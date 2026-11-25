@@ -177,6 +177,29 @@ export async function estimate() {
     return { usage: usage ?? null, quota: quota ?? null };
 }
 
+/**
+ * Spec 047 (WEB-003): ask the browser to keep this site's data (saved connections, pairings, settings) until the user
+ * clears it, instead of evicting it when space runs low. True/false is the browser's answer; null when the API is missing.
+ */
+export async function persist() {
+    try {
+        if (typeof navigator === 'undefined' || typeof navigator.storage?.persist !== 'function') return null;
+        return await navigator.storage.persist();
+    } catch {
+        return null;
+    }
+}
+
+/** Spec 047 (WEB-003): whether the data is kept until cleared; null when the browser does not say. */
+export async function persisted() {
+    try {
+        if (typeof navigator === 'undefined' || typeof navigator.storage?.persisted !== 'function') return null;
+        return await navigator.storage.persisted();
+    } catch {
+        return null;
+    }
+}
+
 /** Node tests only: forget the open connection and the reopen state. */
 export function _resetForTests() {
     _dbPromise = null;

@@ -224,7 +224,7 @@ public sealed class ResultsGridEditingTests : IDisposable
         var key = Assert.Single(edit.KeyCells);
         Assert.Equal("id", key.BaseColumnName);
         Assert.Equal("1", key.Value);
-        cut.WaitForAssertion(() => Assert.Contains("Applied 1 change(s)", cut.Find("[data-testid=results-apply-message]").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("Applied 1 change.", cut.Find("[data-testid=results-apply-message]").TextContent));
     }
 
     [Fact]

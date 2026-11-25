@@ -36,6 +36,11 @@ public class TextEmitter
         // token is break-suppressed). Comments between statements already get a break and are fine.
         bool prevWasLineComment = false;
 
+        // Where a string literal or quoted identifier that spans lines was written: its line breaks, and the spaces
+        // before them, are its value. The trailing-whitespace pass below leaves them exactly as written (it used to drop
+        // the CR of a CRLF and the spaces at a line's end inside them, so validation refused the whole format).
+        var verbatim = new List<(int Start, int End)>();
+
         foreach (var node in nodes)
         {
             if (node.LeadingWhitespace is { } leading)
@@ -46,7 +51,7 @@ public class TextEmitter
                 if (prevWasLineComment && !leading.Contains('\n'))
                     sb.Append('\n');
                 sb.Append(leading);
-                sb.Append(node.OriginalText);
+                AppendToken(sb, node, node.OriginalText, verbatim);
                 // A comment on the run's last line was attached to its last token like any other (review of S2): write it as
                 // the formatted path does, or the user loses text the validator never sees.
                 if (node.TrailingComment != null)
@@ -62,7 +67,7 @@ public class TextEmitter
 
             if (node.IsInNoformatRegion)
             {
-                sb.Append(node.OriginalText);
+                AppendToken(sb, node, node.OriginalText, verbatim);
                 prevWasLineComment = false;
                 continue;
             }
@@ -105,7 +110,8 @@ public class TextEmitter
             {
                 var formatted = FormatBlockComment(
                     node.FormattedText,
-                    node.IndentLevel,
+                    node.OriginalColumn,
+                    CurrentColumn(sb, tabSize),
                     useTabs,
                     tabSize,
                     profile.Comments);
@@ -113,7 +119,7 @@ public class TextEmitter
             }
             else
             {
-                sb.Append(node.FormattedText);
+                AppendToken(sb, node, node.FormattedText, verbatim);
             }
 
             // Emit trailing comment on same line
@@ -134,7 +140,7 @@ public class TextEmitter
         // Trailing whitespace removal
         if (ws.TrailingWhitespace == "remove")
         {
-            result = RemoveTrailingWhitespace(result);
+            result = RemoveTrailingWhitespace(result, verbatim);
         }
 
         // Final newline handling
@@ -179,15 +185,45 @@ public class TextEmitter
         }
     }
 
-    private static string RemoveTrailingWhitespace(string text)
+    /// <summary>
+    /// Appends a token's text, noting where a string literal or quoted identifier that spans lines went
+    /// (<paramref name="verbatim"/>, positions in <paramref name="sb"/>).
+    /// </summary>
+    private static void AppendToken(StringBuilder sb, LayoutNode node, string text, List<(int Start, int End)> verbatim)
+    {
+        int start = sb.Length;
+        sb.Append(text);
+        if (node.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral or TSqlTokenType.QuotedIdentifier
+            && text.IndexOfAny(LineBreakChars) >= 0)
+            verbatim.Add((start, sb.Length));
+    }
+
+    private static readonly char[] LineBreakChars = ['\r', '\n'];
+
+    /// <summary>
+    /// Every line's trailing spaces and tabs removed, and every line break written as "\n" — except a line break inside a
+    /// <paramref name="verbatim"/> range (a string literal or quoted identifier written there, in order), which keeps its
+    /// own CR and the spaces before it: they are the value.
+    /// </summary>
+    private static string RemoveTrailingWhitespace(string text, List<(int Start, int End)> verbatim)
     {
         var sb = new StringBuilder(text.Length);
         int start = 0;
+        int range = 0;
 
         for (int i = 0; i < text.Length; i++)
         {
             if (text[i] == '\n')
             {
+                // A line break inside a literal: the line goes as it is, up to and including the break.
+                while (range < verbatim.Count && verbatim[range].End <= i) range++;
+                if (range < verbatim.Count && verbatim[range].Start < i)
+                {
+                    sb.Append(text, start, i + 1 - start);
+                    start = i + 1;
+                    continue;
+                }
+
                 // Find the end of content (excluding trailing spaces/tabs before this newline)
                 int end = i;
                 if (end > start && text[end - 1] == '\r')
@@ -218,11 +254,11 @@ public class TextEmitter
     // ── Comment formatting helpers (opt-in: only called when MultilineFormatting != "preserve") ──
 
     /// <summary>
-    /// Re-indents the body lines of a <c>/* … */</c> block comment to the surrounding context
-    /// indentation level. The first line (the <c>/*</c> line) and the last line (the <c>*/</c>
-    /// closing delimiter) keep their leading whitespace stripped (the caller's
-    /// <see cref="AppendLineStart"/> already positioned the cursor). Body lines (lines 2..n-1)
-    /// have their leading whitespace replaced with the context indent string.
+    /// Moves a <c>/* … */</c> block comment as one block: its other lines shift by exactly as many columns as its
+    /// <c>/*</c> moved (<paramref name="newColumn"/> − <paramref name="originalColumn"/>), so the comment's own layout is
+    /// kept. Spec 047 (FMT-004, FR-014): this used to replace every line's indentation with the code's, which flattened
+    /// the comment's inner indentation (Khamis Style). A comment that did not move, or whose original column is unknown,
+    /// is written exactly as it was.
     ///
     /// <para>Banner / header comments — whose body lines are dominated by a repeated decoration
     /// character (<c>*</c>, <c>=</c>, <c>-</c>, <c>#</c>) — are skipped when
@@ -230,7 +266,8 @@ public class TextEmitter
     /// </summary>
     private static string FormatBlockComment(
         string commentText,
-        int indentLevel,
+        int originalColumn,
+        int newColumn,
         bool useTabs,
         int tabSize,
         CommentsOptions options)
@@ -250,32 +287,49 @@ public class TextEmitter
         if (options.RecognizeCommonPatterns && IsBannerComment(lines))
             return commentText;
 
-        // Build the indent string for body lines (lines 1..n-2) and the closing delimiter (line n-1).
-        string indent = BuildIndentString(indentLevel, useTabs, tabSize);
+        int shift = newColumn - originalColumn;
+        if (originalColumn < 0 || shift == 0)
+            return commentText;
 
-        var sb = new StringBuilder();
-        for (int i = 0; i < lines.Length; i++)
+        var sb = new StringBuilder(lines[0]);
+        for (int i = 1; i < lines.Length; i++)
         {
-            if (i == 0)
-            {
-                // First line: the /* opener. AppendLineStart already emitted the line-start indent
-                // before node.FormattedText; the opener's own text starts with "/*" and may have
-                // trailing content. Trim leading whitespace (the emitter provides the prefix).
-                sb.Append(lines[i].TrimStart());
-            }
-            else
-            {
-                sb.Append('\n');
-                // Body lines and the closing delimiter: strip their original leading whitespace
-                // and re-apply the context indent.
-                string trimmed = lines[i].TrimStart();
-                if (trimmed.Length > 0)
-                    sb.Append(indent).Append(trimmed);
-                // else: a blank line inside the comment — emit as a bare newline (no trailing spaces).
-            }
+            sb.Append('\n');
+            string trimmed = lines[i].TrimStart(' ', '\t');
+            if (trimmed.Length == 0)
+                continue;   // a blank line inside the comment: a bare newline, no trailing spaces
+            int width = VisualWidth(lines[i][..(lines[i].Length - trimmed.Length)], tabSize) + shift;
+            sb.Append(Indentation(Math.Max(0, width), useTabs, tabSize)).Append(trimmed);
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>The width of <paramref name="text"/> in columns, a tab moving to the next multiple of <paramref name="tabSize"/>.</summary>
+    internal static int VisualWidth(string text, int tabSize)
+    {
+        int size = Math.Max(1, tabSize);
+        int width = 0;
+        foreach (char c in text)
+            width = c == '\t' ? (width / size + 1) * size : width + 1;
+        return width;
+    }
+
+    /// <summary>The column the next character of <paramref name="sb"/> lands in.</summary>
+    private static int CurrentColumn(StringBuilder sb, int tabSize)
+    {
+        int start = sb.Length;
+        while (start > 0 && sb[start - 1] != '\n')
+            start--;
+        return VisualWidth(sb.ToString(start, sb.Length - start), tabSize);
+    }
+
+    /// <summary>Leading whitespace <paramref name="width"/> columns wide: tabs then spaces in a tab style, else spaces.</summary>
+    private static string Indentation(int width, bool useTabs, int tabSize)
+    {
+        if (width <= 0) return string.Empty;
+        if (!useTabs || tabSize <= 0) return new string(' ', width);
+        return new string('\t', width / tabSize) + new string(' ', width % tabSize);
     }
 
     /// <summary>
@@ -310,14 +364,5 @@ public class TextEmitter
 
         // Banner if > 50% of non-blank body lines start with a decoration char.
         return decoratedCount * 2 > bodyCount;
-    }
-
-    private static string BuildIndentString(int level, bool useTabs, int tabSize)
-    {
-        if (level <= 0)
-            return string.Empty;
-        if (useTabs)
-            return new string('\t', level);
-        return new string(' ', level * tabSize);
     }
 }

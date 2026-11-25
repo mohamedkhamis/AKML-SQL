@@ -63,8 +63,11 @@ namespace AkmlSql.Shell.Shared.Analysis
         private static CodeAnalysisSettings _cachedSettings;
         private static DateTime _cachedSettingsUtc;
 
-        /// <summary>Settings read at most every 2 s — this runs on every keystroke.</summary>
-        private static CodeAnalysisSettings CurrentSettings()
+        /// <summary>Spec 047 installed-product run (F10): Options OK drops the 2 s cache, so what it saved is read at once.</summary>
+        internal static void InvalidateSettings() => _cachedSettings = null;
+
+        /// <summary>Settings read at most every 2 s — this runs on every keystroke (and for the tagger and lightbulb).</summary>
+        internal static CodeAnalysisSettings CurrentSettings()
         {
             var cached = _cachedSettings;
             if (cached == null || (DateTime.UtcNow - _cachedSettingsUtc).TotalSeconds > 2)
@@ -107,6 +110,19 @@ namespace AkmlSql.Shell.Shared.Analysis
                 TaskScheduler.Default);
         }
 
+        /// <summary>Spec 047 (SSMS-002): the engine client, resolved at call time. A test replaces it.</summary>
+        internal static Func<IRpcClientAccessor> RpcAccessor { get; set; } = () => EngineRpcClientAccessor.Instance;
+
+        /// <summary>
+        /// Spec 047 (SSMS-002): runs a callback once the engine is connected (true), or gives up after the 10 s the
+        /// other "when ready" waits use (false). A test replaces it.
+        /// </summary>
+        internal static Func<Func<Task>, Task<bool>> WhenEngineReady { get; set; } =
+            send => Editor.ConnectionWiringHelper.WhenEngineReadyAsync(Editor.ConnectionWiringHelper.EngineReady, send);
+
+        // 1 while a pass waits for the engine: however many passes run meanwhile, the controller waits once.
+        private int _waitingForEngine;
+
         private async Task RunAnalysisAsync(int documentVersion, CancellationToken ct)
         {
             if (_disposed) return;
@@ -114,8 +130,15 @@ namespace AkmlSql.Shell.Shared.Analysis
             Log.Debug("Analysis triggered for session {Session}", _sessionId);
             try
             {
-                var client = EngineLifecycle.Manager?.Client;
-                if (client == null || !client.IsConnected) return;
+                var client = RpcAccessor();
+                if (client == null || !client.IsConnected)
+                {
+                    // Spec 047 (SSMS-002): a document opened before the engine connected was never analysed until the
+                    // user typed. Analyse it as soon as the engine is up.
+                    Log.Debug("Analysis deferred for session {Session}: engine not connected", _sessionId);
+                    WaitForEngine();
+                    return;
+                }
 
                 var request = new CodeAnalysisRequest
                 {
@@ -147,6 +170,38 @@ namespace AkmlSql.Shell.Shared.Analysis
             catch (Exception ex)
             {
                 Log.Warning(ex, "AnalysisController: analysis RPC failed for session {Session}", _sessionId);
+            }
+        }
+
+        /// <summary>Spec 047 (SSMS-002): one wait for the engine, after which the pass runs again (debounced).</summary>
+        private void WaitForEngine()
+        {
+            if (Interlocked.CompareExchange(ref _waitingForEngine, 1, 0) != 0) return;
+            _ = WaitForEngineAsync();
+        }
+
+        private async Task WaitForEngineAsync()
+        {
+            try
+            {
+                var connected = await WhenEngineReady(() =>
+                {
+                    Interlocked.Exchange(ref _waitingForEngine, 0);
+                    if (!_disposed) ScheduleAnalysis();
+                    return Task.CompletedTask;
+                }).ConfigureAwait(false);
+
+                if (!connected)
+                {
+                    Interlocked.Exchange(ref _waitingForEngine, 0);
+                    Log.Warning("Analysis for session {Session}: the engine did not connect within 10s; the next edit or connection analyses",
+                        _sessionId);
+                }
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Exchange(ref _waitingForEngine, 0);
+                Log.Warning(ex, "AnalysisController: waiting for the engine failed for session {Session}", _sessionId);
             }
         }
 

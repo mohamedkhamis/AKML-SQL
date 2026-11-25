@@ -6,4 +6,5 @@ SELECT o.orderdate, SUM(o.freight) AS freight FROM dbo.orders o GROUP BY o.order
  *******************************/
 /* multi
    line
-   note */SELECT 1;
+   note */
+SELECT 1;

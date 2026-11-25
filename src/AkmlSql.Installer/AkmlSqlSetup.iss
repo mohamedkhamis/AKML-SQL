@@ -198,6 +198,12 @@ SignedUninstaller=yes
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[InstallDelete]
+; Spec 047 installed-product run (F8): the SSMS extension starts {ext}\Engine\AkmlSql.Engine.exe before the installed
+; {app}\Engine (EngineProcessManager.FindEnginePath), and setup never ships that folder, so an engine put there by hand
+; (a private engine update of 2026-10-10) ran instead of every later install's engine. Setup owns the extension folder.
+Type: filesandordirs; Name: "{code:GetSSMS22ExtDir}\Engine"; Check: CheckSSMS22
+
 [Files]
 ; Core binaries to base install directory (sourced from shell build output which includes all dependencies)
 Source: "..\AkmlSql.Ssms22\bin\Release\net472\AkmlSql.Core.dll"; DestDir: "{app}"; Flags: ignoreversion

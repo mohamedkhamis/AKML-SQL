@@ -20,6 +20,9 @@
 @inject IEditorSettingsStore EditorPrefs
 
 <div class="akml-app">
+    @* Spec 047 (WEB-009): the chrome is in landmarks (header / nav / main / footer), so nothing on screen is outside one
+       (axe region). Each wrapper is one row of the app's three-row grid, as its content was. *@
+    <header class="akml-app-header">
     @* Spec 041 (R42): the editor page may hide the navigation bar; a strip brings it back. *@
     <WorkspaceNav />
     @* Spec 024 T004: error-banner contract — see
@@ -34,12 +37,15 @@
        absent from the DOM when no drift has been seen, identical absence semantics to
        the spec 024 error-banner contract. *@
     <TlsFingerprintMismatchBanner />
+    </header>
     <main class="@WorkspaceRoutes.MainClass(Nav.ToBaseRelativePath(Nav.Uri))">
         @Body
     </main>
     @* Spec 041 — the one notification area (transient status messages). position:fixed, like DialogHost. *@
     <NotificationHost />
-    <StatusBar />
+    <footer class="akml-app-footer">
+        <StatusBar />
+    </footer>
     @* Spec 030 — ⌘P command palette. Hosted at the layout level so it overlays every page and its
        global Ctrl/Cmd+P capture-phase listener is alive regardless of which route is mounted. *@
     <CommandPalette />
@@ -67,6 +73,7 @@
         font-size: var(--akml-type-chrome-size);
         font-weight: var(--akml-type-chrome-weight);
     }
+    .akml-app-header, .akml-app-footer { min-width: 0; }
     .akml-main {
         overflow: auto;
         padding: var(--akml-scalar-spacing-m);

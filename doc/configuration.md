@@ -1,6 +1,8 @@
 # AKML SQL — Configuration Guide
 
-The configuration file is stored at:
+Every `config.json` setting of AKML SQL and the per-project `.casettings` file, with defaults and examples.
+
+The file is stored at:
 
 ```
 %AppData%\AKML SQL\config.json
@@ -59,7 +61,7 @@ Changing the address changes browser storage origin; export settings first.
 Standalone LAN needs one engine firewall rule. Its summary provides the shared
 HTTPS address, certificate trust steps and PIN. On shared Windows sessions,
 localhost does not protect against another local user occupying the origin while
-the service is stopped. See [deployment](deployment.md#web-edition).
+the service is stopped. See [Set up the AKML browser workspace](topics/browser-setup.md).
 
 ---
 
@@ -135,8 +137,10 @@ the service is stopped. See [deployment](deployment.md#web-edition).
     "runOnType": true,
     "runOnSave": true,
     "autoFixOnFormat": false,
-    "squiggleStyle": "underline",
-    "showInErrorList": true
+    "squiggleStyle": "marker",
+    "squiggleStyleVersion": 1,
+    "showInErrorList": true,
+    "showAdvisoryHints": true
   },
 
   "refactoring": {
@@ -278,8 +282,10 @@ Tab colouring by environment (Options › Queries › Color). Only the environme
 | `runOnType` | bool | true | Analyze after each keystroke (debounced) |
 | `runOnSave` | bool | true | Analyze when saving a file |
 | `autoFixOnFormat` | bool | false | Apply auto-fix actions when running Format Document |
-| `squiggleStyle` | string | "underline" | Squiggle rendering style (`underline`, `dotted`, `solid`) |
+| `squiggleStyle` | string | "marker" | How Information and Hint findings, such as a missing semicolon, are shown: `marker` gives them the margin marker only (no underline in the text); `underline` also underlines them. Warnings and errors are always underlined. Any other value reads as `underline`. Options › Code analysis › Advisory findings |
+| `squiggleStyleVersion` | int | (set once) | Written by the one-time move to `marker`: a config from before it that still had the old default `underline` gets `marker`; any value chosen after that is kept |
 | `showInErrorList` | bool | true | Show analysis issues in the VS Error List window |
+| `showAdvisoryHints` | bool | true | Offer lightbulb actions for findings that have no automatic fix. Off: such a finding offers no lightbulb actions; its margin marker, its Error List entry and the warning-glyph menu's suppress actions stay |
 
 ---
 

@@ -107,7 +107,7 @@ namespace AkmlSql.Shell.Shared.Editor
             }
         }
 
-        private static bool EngineReady() => EngineLifecycle.Manager?.Client is { IsConnected: true };
+        internal static bool EngineReady() => EngineLifecycle.Manager?.Client is { IsConnected: true };
 
         /// <summary>
         /// Runs <paramref name="send"/> once the engine is connected, checking every
@@ -421,6 +421,10 @@ namespace AkmlSql.Shell.Shared.Editor
                 Log.Information("Sent ConnectionChanged: {Server}.{Database} auth={Auth} for session {Session}",
                     conn.Server, conn.Database, conn.AuthMode, sessionId);
 
+                // Spec 047 (SSMS-002): analyse the document against the connection just sent (and at all, when it was
+                // opened before the engine connected), without waiting for an edit.
+                ReanalyzeTrackedView(sessionId);
+
                 // Wait for schema to load (poll Engine), then update status bar
                 await Task.Delay(2000); // Give Phase A time
                 SetStatusBar($"AKML SQL: {conn.Database} ready");
@@ -431,6 +435,21 @@ namespace AkmlSql.Shell.Shared.Editor
             {
                 Log.Error(ex, "Failed to send ConnectionChanged");
                 SetStatusBar("");
+            }
+        }
+
+        /// <summary>Spec 047 (SSMS-002): a new analysis pass for the open editor of <paramref name="sessionId"/>, if any.</summary>
+        private static void ReanalyzeTrackedView(string sessionId)
+        {
+            try
+            {
+                if (OpenViews.TryGetValue(sessionId, out var weak) && weak.TryGetTarget(out var view) && !view.IsClosed
+                    && view.TextBuffer.Properties.TryGetProperty(typeof(Analysis.AnalysisController), out Analysis.AnalysisController controller))
+                    controller.TriggerReanalysis();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Re-analysis after ConnectionChanged failed for session {Session}", sessionId);
             }
         }
 

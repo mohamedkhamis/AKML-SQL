@@ -118,13 +118,6 @@
       "column": 19
     },
     {
-      "ruleId": "NM005",
-      "severity": "Warning",
-      "message": "Identifier 'order details' contains special characters — use standard alphanumeric names without spaces or special characters",
-      "line": 2,
-      "column": 28
-    },
-    {
       "ruleId": "ST001",
       "severity": "Hint",
       "message": "SQL keyword 'where' is not uppercase — use consistent ALL_CAPS keywords",

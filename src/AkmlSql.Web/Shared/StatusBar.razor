@@ -23,8 +23,13 @@
 <div class="akml-status">
     @* Spec 041 (T160): the engine indicator opens Settings › Diagnostics, where the engine's log is. *@
     <a class="akml-status-pill @PillClass" href="settings/diagnostics" data-testid="status-pill"
-       title="Engine status — open Diagnostics">@PillLabel</a>
-    <span class="akml-status-text" title="@StatusText">@StatusText</span>
+       title="@PillTitle">@PillLabel</a>
+    @* The state in words, only when the pill alone does not say it: "Live" needs no "Live IntelliSense available." beside it,
+       and a failure the issue strip below describes is not described twice. *@
+    @if (ShowStatusText)
+    {
+        <span class="akml-status-text akml-status-state" data-testid="status-text" title="@StatusText">@StatusText</span>
+    }
 
     @* Spec 041 (R41, FR-027) — how the last execute went, as SSMS's status bar says it. Always rendered so a
        screen reader announces each change of the live region. *@
@@ -48,10 +53,17 @@
         }
     </span>
 
+    @* What the last editor action did ("Formatted.", "Applied: …"), for a few seconds. Always rendered, like the outcome, so a
+       screen reader announces each message. *@
+    <span class="akml-status-text akml-status-notice" role="status" aria-live="polite" data-testid="status-notice"
+          title="@CurrentNotice">@CurrentNotice</span>
+
     @* A stalled bridge used to be a dead end: the pill said "Offline" and nothing said why or what
        to do, so the only way forward was knowing to open Settings. The reason and the way out now
        sit next to the pill, and only appear when there is actually something wrong. *@
-    @if (_bridgeState != BridgeState.Open && AutoConnect.LastFailure is { } failure)
+    @* While the answer to "Use this computer's engine" is on screen (below), it is the one message: the general strip came back
+       beside it, and the two crowded each other into "No engine paired y…" and "This inst…". Dismiss brings this one back. *@
+    @if (IssueShown && _localFailure == null && AutoConnect.LastFailure is { } failure)
     {
         <span class="akml-status-issue" data-testid="engine-issue">
             <span class="akml-status-issue-text">@failure.Message</span>
@@ -79,6 +91,31 @@
         </span>
     }
 
+    @* Spec 047 (WEB-001): why "Use this computer's engine" did not pair, with the address it tried and the way on. *@
+    @if (_localFailure is { } local)
+    {
+        <span class="akml-status-issue" role="status" data-testid="local-engine-failure">
+            <span class="akml-status-issue-text">@LocalFailureText(local)</span>
+            @switch (local.Failure)
+            {
+                case LocalPairFailure.NotReachable:
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="() => AddEngineFrom(local)"
+                            data-testid="local-engine-add">Add engine…</button>
+                    break;
+                case LocalPairFailure.PinRequired:
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="@(() => Nav.NavigateTo("settings/connections"))"
+                            data-testid="local-engine-pair">Pair…</button>
+                    break;
+                default:
+                    <button type="button" class="akml-btn akml-btn--compact" @onclick="@(() => Nav.NavigateTo("settings/connections"))"
+                            data-testid="local-engine-settings">Settings…</button>
+                    break;
+            }
+            <button type="button" class="akml-btn akml-btn--compact akml-btn--ghost" aria-label="Dismiss"
+                    @onclick="() => _localFailure = null" data-testid="local-engine-dismiss">×</button>
+        </span>
+    }
+
     <span class="akml-status-spacer"></span>
     @if (RowsText is { } rows)
     {
@@ -87,7 +124,7 @@
     @* Spec 041 (R65, FR-083): the caret, as SSMS's status bar shows it. *@
     @if (Workspace != null)
     {
-        <span class="akml-status-text" data-testid="status-caret">Ln @Workspace.CaretLine, Col @Workspace.CaretColumn</span>
+        <span class="akml-status-text akml-status-caret" data-testid="status-caret">Ln @Workspace.CaretLine, Col @Workspace.CaretColumn</span>
     }
     @* Spec 042 (FR-005): which kind of server this is, in words and an icon, never by colour alone. *@
     @if (SqlConn.IsConnected)
@@ -102,9 +139,11 @@
         <span class="akml-status-conn-icon"><Icon Name="plug" Size="12" /></span>
         <span>@ConnLabel</span>
     </button>
-    @if (SqlConn.IsConnected && !string.IsNullOrEmpty(SqlConn.Login))
+    @* Who the connection signs in as, as SSMS's status bar shows it: the login, or for Windows authentication the Windows user
+       the engine signs in as (the browser's own user on the engine's computer; owner request 2026-11-23). *@
+    @if (SqlConn.IsConnected && LoginText is { } login)
     {
-        <span class="akml-status-text" data-testid="status-login" title="@(SqlConn.Kind == DatabaseKind.PostgreSql ? "Login" : "SQL Server login")">@SqlConn.Login</span>
+        <span class="akml-status-text akml-status-login" data-testid="status-login" title="@LoginTitle">@login</span>
     }
     @* Spec 042 (FR-016): an open transaction, or one an error has aborted, with a one-click rollback. *@
     @if (SqlConn.IsConnected && SqlConn.TransactionState != TransactionState.None)
@@ -126,7 +165,7 @@
     @* Short versions; the full build string on hover; a marker when the web app and the engine are different builds. *@
     @if (!string.IsNullOrEmpty(Bridge.EngineVersion))
     {
-        <span class="akml-status-text" data-testid="status-version-engine" title="@Bridge.EngineVersion">Engine @AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion)</span>
+        <span class="akml-status-text akml-status-version" data-testid="status-version-engine" title="@Bridge.EngineVersion">Engine @AkmlSql.Core.AppVersion.StripBuildMetadata(Bridge.EngineVersion)</span>
         @if (VersionsDiffer)
         {
             <span class="akml-status-mismatch" data-testid="status-version-mismatch" role="img" aria-label="The web app and the engine are different builds"
@@ -135,7 +174,7 @@
             </span>
         }
     }
-    <span class="akml-status-text" data-testid="status-version-web" title="@AkmlSql.Core.AppVersion.Informational">Web @AkmlSql.Core.AppVersion.Current</span>
+    <span class="akml-status-text akml-status-version" data-testid="status-version-web" title="@AkmlSql.Core.AppVersion.Informational">Web @AkmlSql.Core.AppVersion.Current</span>
 </div>
 
 <style>
@@ -164,7 +203,9 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 42ch;
+        /* Whole when there is room ("No engine answered on localhost:47291. This install may use another port." was cut at
+           42ch beside an empty bar); when there is not, the state words and the versions give way first. */
+        max-width: 90ch;
     }
 
     .akml-status-outcome { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
@@ -195,6 +236,18 @@
        line used to make every page wider than the screen. The full text is its tooltip. */
     .akml-status-text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .akml-status-spacer { flex: 1 1 auto; }
+    /* When the bar runs out of room, what gives way first is what matters least: the passing action message, then the
+       versions, then the login. The outcome, rows and time, caret, server kind and connection keep their words — at 1440 px
+       every segment used to shrink alike and the bar read "SQL Servei" and "Ln 1, Co…". */
+    .akml-status .akml-status-notice { flex-shrink: 10; }
+    /* The state's words give way before an issue's: the issue is what the user has to act on ("No engine paired yet."). */
+    .akml-status .akml-status-state { flex-shrink: 8; }
+    .akml-status .akml-status-version { flex-shrink: 5; }
+    .akml-status .akml-status-login { flex-shrink: 3; max-width: 32ch; }
+    .akml-status .akml-status-outcome,
+    .akml-status .akml-status-rows,
+    .akml-status .akml-status-caret,
+    .akml-status .akml-status-kind { flex-shrink: 0; }
 
     /* Clickable connection indicator — the third entry point into the connection manager
        (alongside the command palette + Settings). Token-styled button reset. */
@@ -272,8 +325,39 @@
         // The elapsed clock ticks on its own timer, only while a query runs.
         bool running = Workspace?.Phase == ExecutionPhase.Running;
         _elapsedTimer?.Change(running ? TimeSpan.FromSeconds(1) : System.Threading.Timeout.InfiniteTimeSpan, TimeSpan.FromSeconds(1));
+        ScheduleNoticeExpiry();
         StateHasChanged();
     });
+
+    // ── The last editor action's message, shown for WorkspaceStatus.NoticeLifetime ─────────────────────────────────────────
+    private System.Threading.Timer? _noticeTimer;
+
+    /// <summary>The action message while it is fresh; null once <see cref="WorkspaceStatus.NoticeLifetime"/> has passed.</summary>
+    private string? CurrentNotice => Workspace is { Notice: { } notice, NoticeAt: { } at } w && w.Now - at < WorkspaceStatus.NoticeLifetime
+        ? notice
+        : null;
+
+    /// <summary>One render when the message expires, so it leaves the bar without waiting for something else to change.</summary>
+    private void ScheduleNoticeExpiry()
+    {
+        if (Workspace is not { Notice: not null, NoticeAt: { } at } w) return;
+        var left = WorkspaceStatus.NoticeLifetime - (w.Now - at);
+        if (left <= TimeSpan.Zero) return;
+        _noticeTimer ??= new System.Threading.Timer(_ => _ = InvokeAsync(StateHasChanged));
+        _noticeTimer.Change(left + TimeSpan.FromMilliseconds(50), System.Threading.Timeout.InfiniteTimeSpan);
+    }
+
+    // ── Who the connection signs in as ─────────────────────────────────────────────────────────────────────────────────────
+    private bool UsesWindowsIdentity => SqlConn.Kind == DatabaseKind.SqlServer && SqlConn.WindowsAuth && string.IsNullOrEmpty(SqlConn.Login);
+
+    /// <summary>The login; for Windows authentication the Windows user the engine named in its handshake; null when unknown.</summary>
+    private string? LoginText => !string.IsNullOrEmpty(SqlConn.Login) ? SqlConn.Login
+        : UsesWindowsIdentity && !string.IsNullOrWhiteSpace(Bridge.EngineRunsAs) ? Bridge.EngineRunsAs
+        : null;
+
+    private string LoginTitle => SqlConn.Kind == DatabaseKind.PostgreSql ? "Login"
+        : UsesWindowsIdentity ? "Windows authentication: SQL Server sees this Windows user"
+        : "SQL Server login";
 
     private BridgeState _bridgeState = BridgeState.Disconnected;
     private bool _cachePresent;
@@ -344,9 +428,40 @@
 
     private bool _pairingLocal;
     private PageEngineInfo? _pageEngineInfo;
+    private LocalPairResult? _localFailure;
     private string LocalEngineTitle => _pageEngineInfo is { } info
         ? $"This computer's engine ({info.Host}:{info.Port})"
-        : "Pair with the engine on this computer (localhost:47291); Settings opens if it does not answer";
+        : $"Pair with the engine on this computer (localhost:{EngineEndpoint.DefaultPort})";
+
+    /// <summary>Spec 047 (WEB-001, contracts/engine-pairing.md §3): the notice for a pairing that did not happen.</summary>
+    private static string LocalFailureText(LocalPairResult result) => result.Failure switch
+    {
+        LocalPairFailure.NotReachable => $"No engine answered on {result.TriedAddress}. This install may use another port.",
+        LocalPairFailure.PinRequired => "This engine needs its pairing PIN.",
+        _ => $"The engine at {result.TriedAddress} refused the connection. Check engine pairing.",
+    };
+
+    /// <summary>Add engine… opens Settings › Connections with the address that did not answer filled in.</summary>
+    private void AddEngineFrom(LocalPairResult result)
+    {
+        if (Services.GetService<IPageEngine>() is { } pageEngine && TrySplitAddress(result.TriedAddress, out var host, out var port))
+        {
+            var secure = Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && page.Scheme == Uri.UriSchemeHttps;
+            pageEngine.PairingPrefill = new PageEngineInfo(host, port, secure ? "wss" : "ws");
+        }
+        _localFailure = null;
+        Nav.NavigateTo("settings/connections");
+    }
+
+    private static bool TrySplitAddress(string address, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        var colon = address.LastIndexOf(':');
+        if (colon <= 0 || !int.TryParse(address[(colon + 1)..], out port)) return false;
+        host = address[..colon].Trim('[', ']');
+        return host.Length > 0;
+    }
 
     private bool PageIsLocal =>
         Uri.TryCreate(Nav.BaseUri, UriKind.Absolute, out var page) && EngineEndpoint.IsLoopbackHost(page.Host);
@@ -354,9 +469,12 @@
     private async Task UseLocalEngineAsync()
     {
         _pairingLocal = true;
+        _localFailure = null;
         try
         {
-            if (!await AutoConnect.PairLocalEngineAsync()) Nav.NavigateTo("settings/connections");
+            var result = await AutoConnect.PairLocalEngineAsync();
+            // Spec 047 (WEB-001): say what was tried and offer the way on, instead of jumping to Settings.
+            _localFailure = result.Ok ? null : result;
         }
         finally
         {
@@ -608,9 +726,35 @@
         Availability.Offline => "Offline",
         Availability.Connecting => "Connecting",
         Availability.Reconnecting => "Reconnecting",
-        Availability.Failed => "Failed",
+        // "Failed" said nothing about what failed: the pill names the kind of failure the issue strip beside it explains.
+        Availability.Failed => AutoConnect.LastFailure?.Kind switch
+        {
+            EngineConnectFailureKind.Unreachable => "Unreachable",
+            EngineConnectFailureKind.NotPaired or EngineConnectFailureKind.PairingRequired => "Needs pairing",
+            _ => "Failed",
+        },
         _ => "Disconnected",
     };
+
+    /// <summary>The pill's tooltip: the state in words (the only place Live's are), then where the engine's log is.</summary>
+    private string PillTitle
+    {
+        get
+        {
+            var words = StatusText;
+            var end = words.EndsWith(".", StringComparison.Ordinal) || words.EndsWith("…", StringComparison.Ordinal) ? " " : ". ";
+            return words + end + "Open Diagnostics for the engine's log.";
+        }
+    }
+
+    /// <summary>The issue strip (the failure in words, with its way out) is on screen.</summary>
+    private bool IssueShown => _bridgeState != BridgeState.Open && AutoConnect.LastFailure != null;
+
+    /// <summary>
+    /// The state in words beside the pill: not for Live (the pill says it), and not for a failure the issue strip explains. Other
+    /// states keep their words beside an issue ("Reconnecting · next try in 3s" says something the issue does not).
+    /// </summary>
+    private bool ShowStatusText => _state != Availability.Live && !(_state == Availability.Failed && IssueShown);
 
     private string PillClass => "akml-status-pill-" + _state.ToString().ToLowerInvariant();
 
@@ -619,11 +763,22 @@
         Availability.Live => "Live IntelliSense available.",
         Availability.BridgeOnly => "Engine connected — connect to a database for schema-aware IntelliSense.",
         Availability.Cached => "Engine offline — IntelliSense served from the local schema cache.",
-        Availability.Offline => "Offline — keyword-only IntelliSense; formatter / analyser run in-browser.",
+        // The pill already says "Offline"; the words say what still works, briefly enough to leave the issue beside them whole.
+        Availability.Offline => "Keywords only; Format and Analyse still work.",
         Availability.Connecting => "Handshaking with engine…",
         Availability.Reconnecting => ReconnectingText(),
-        Availability.Failed => "Handshake failed. Check engine pairing.",
+        Availability.Failed => FailedText(),
         _ => "Disconnected.",
+    };
+
+    // Installed-product run F4: a stopped engine is not a failed handshake. The issue next to the pill says what happened
+    // and what to do; this text only follows its kind.
+    private string FailedText() => AutoConnect.LastFailure?.Kind switch
+    {
+        EngineConnectFailureKind.Unreachable => "Engine not reachable.",
+        EngineConnectFailureKind.NotPaired => "No engine paired yet.",
+        EngineConnectFailureKind.PairingRequired => "Engine pairing needed.",
+        _ => "Handshake failed. Check engine pairing.",
     };
 
     private string ReconnectingText()
@@ -645,5 +800,6 @@
         _countdownTimer?.Dispose();
         if (_workspace != null) _workspace.Changed -= OnWorkspaceChanged;
         _elapsedTimer?.Dispose();
+        _noticeTimer?.Dispose();
     }
 }

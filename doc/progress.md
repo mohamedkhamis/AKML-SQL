@@ -2854,3 +2854,47 @@ and screen-reader pass, and the Ctrl+Enter check inside SSMS (research R14 fallb
 host claims the chord). Deferred with reasons in tasks.md: streaming answers in SSMS, a browsable
 conversation history, a chat-only web agent, and the one-second "still connecting" refusal of a
 brand-new query window. Nothing was deployed or committed by the implementation.
+
+## Spec 047 — QA audit remediation (2026-11-21 to 2026-11-22)
+
+The 32 in-scope issues of `reports/AKML-QA-UX-Documentation-Audit.md`, ten stories, tests first (FR-038: every test was seen
+failing before its fix; the log is in `specs/047-qa-audit-remediation/baseline.md`). Branch `047-qa-audit-remediation`;
+nothing committed by the implementation.
+
+| Story | Issues | Tasks | Result |
+| --- | --- | --- | --- |
+| Setup and baseline | — | T001–T006 | Baseline suites recorded; the axe package and the CLI fixtures added. |
+| US1 Analyzer CLI reports what it finds | CLI-001 | T007–T011 | The trimmer had removed every rule: `TrimmerRootAssembly` for Analysis and Core, reflection JSON back on; `scripts/test-analyzer-cli.ps1` gates the published exe in `build.ps1` and `Deploy-Build-Release.ps1`. |
+| US2 First-run engine pairing | WEB-001, WEB-010, ENG-001 and the pairing UI | T012–T037 | The page finds its engine (`HEAD /` for Service, `akml-engine.json` written by setup for IIS and Don't host); the status bar names a failure and offers Add engine…; Settings › Connections lists and revokes paired browsers (`pairing.manage.v1`, IPC 227–230). T037 (a LAN-mode browser run) stays open. |
+| US3 Saved connections are remembered | WEB-002, WEB-003, WEB-004 | T038–T054 | Save with Remember checks the login and only then keeps the password on the engine machine; the 127.0.0.1 origin banner; Diagnostics › Browser storage; the reconnect dialog is prefilled. |
+| US4 Formatter layout | FMT-001…005, SSMS-004 | T055–T066 | Every statement on its own line, procedure parameters kept, block bodies aligned (CASE-aware), block comments shifted as a whole, IN lists `auto` by default, line endings written as given (stage 9). 48 new and 102 changed goldens, each justified in baseline.md. |
+| US5 Advisory findings as markers | UX-001, SSMS-001, SSMS-002 | T067–T082 | `squiggleStyle` `marker` (default, migrated once) or `underline`; `showAdvisoryHints` drives the lightbulb; analysis waits for the engine instead of skipping an opened file; the web Advisory findings setting. |
+| US6 Syntax errors in the web editor | WEB-005 | T083–T092 | `SYNTAX` Error findings (GO n is not one), listed first; Parse works offline in the browser and says "Parse failed: 1 syntax error.". |
+| US7 Workspace features | SN-001, WEB-011…014, UX-002, SSMS-003 | T093–T111 | User snippets complete; the explorer explains missing routines (`SchemaPhasePayload` key 8) and empty filters; Expand refactorings use the cached schema; the Refactor menu and preview are keyboard dialogs; plain import messages; Find Invalid Objects counts the references checked. |
+| US8 AI prompts in every privacy mode | AI-001, AI-002 | T112–T116 | No schema section or schema rule without a schema; web Fix needs the server's error. |
+| US9 Documentation | DOC-001…003 | T117–T124 | Connecting in the browser, five web troubleshooting entries, the IIS note, summaries and links checked by `DocsQualityTests`. |
+| US10 Web accessibility | WEB-007…009 | T125–T133 | The editor is named; badge contrast; the close button beside its tab with the tablist owning only tabs (`aria-owns`); labels, headings and landmarks; `AxeAccessibilityTests` at zero violations in three themes. |
+| Polish | — | T134–T143 | ipc-api.md, this section, CLAUDE.md, the gates and the acceptance run. |
+
+Amendments, recorded in spec.md:
+
+- **A1** (plan): the SSMS advisory-hints setting keeps its documented lightbulb meaning.
+- **A2** (plan): WEB-013's cause is SQL Server metadata visibility for the engine's sign-in, so the explorer explains the
+  gap instead of always showing every procedure.
+- **A3–A5** (implementation, formatter): statements written without semicolons also start their own line; a statement
+  after a leading block comment keeps its line break; `auto` is the IN-list default.
+- **A6**: user snippets are also offered online at a statement start, because the engine filters its list by the typed
+  word.
+- **A7**: the in-browser schema for refactorings is the existing `SchemaPhaseRehydrator`; no second converter.
+
+Deferred (quickstart.md §4):
+
+- WEB-006 (SSMS-to-browser credential reuse) and an engine-held saved-connection list: a later spec with a security
+  review.
+- PostgreSQL "Save with Remember tests the login": its engine test path does not remember; a follow-up.
+- The CLI JSON report's `settings` field (CLI-001, minor): a follow-up.
+- The 24 SSMS menu commands, the toolbar, the Options pages and the SQL History window the audit could not run: the next
+  QA pass.
+- Found during the work, not fixed here: the casing of non-reserved keywords (`nocount`, `output`, `try`, `catch`,
+  `tran`); the indentation of a single-statement IF body; the web ANSI profile's "uppercase" against "UPPERCASE" casing
+  names; `EngineAutoConnectTests` has no skip for a localhost-only install.

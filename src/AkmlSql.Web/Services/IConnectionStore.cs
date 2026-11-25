@@ -73,10 +73,13 @@ internal sealed class ConnectionStore : IConnectionStore
 {
     private const string ActiveIdKey = "_active";
     private readonly IIndexedDbAdapter _store;
+    private readonly IBrowserStorageState? _storage;
 
-    public ConnectionStore(IIndexedDbAdapter store)
+    /// <param name="storage">Spec 047 (WEB-003): asked once to keep the browser's data, after the first saved engine.</param>
+    public ConnectionStore(IIndexedDbAdapter store, IBrowserStorageState? storage = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _storage = storage;
     }
 
     public async Task<IReadOnlyList<EngineConnection>> ListAsync()
@@ -112,6 +115,7 @@ internal sealed class ConnectionStore : IConnectionStore
         ValidateConnection(connection);
         await _store.SetAsync(StoreNames.Connections, connection.Id, JsonSerializer.Serialize(connection))
             .ConfigureAwait(false);
+        BrowserStorageRequest.Ask(_storage);   // spec 047 (WEB-003): never fails the save
     }
 
     public async Task UpdateAsync(EngineConnection connection)

@@ -484,7 +484,7 @@ public class DdlRules : IRuleSet
 
             if (IsDdlStart(nodes[i].TokenType))
             {
-                int stmtEnd = FindDdlEnd(nodes, i + 1);
+                int stmtEnd = FindDdlEnd(nodes, i);
                 int totalLength = MeasureLength(nodes, i, stmtEnd);
 
                 // Never collapse across a block boundary: a short proc/function/trigger body's
@@ -802,6 +802,10 @@ public class DdlRules : IRuleSet
                 return true;
             if (tt is TSqlTokenType.Semicolon or TSqlTokenType.Go)
                 return false;
+            // Spec 047 (FMT-002): an AS after the start of another statement belongs to that statement, such as the alias
+            // in "SELECT 1 AS a" after a CREATE TABLE, or in a procedure's body. It was moved onto a line of its own.
+            if (nodes[i].StartsStatement)
+                return false;
         }
         return false;
     }
@@ -815,12 +819,29 @@ public class DdlRules : IRuleSet
         };
     }
 
-    private static int FindDdlEnd(List<LayoutNode> nodes, int start)
+    /// <summary>
+    /// The exclusive end of the DDL statement whose keyword is at <paramref name="ddlIndex"/>: the first semicolon or GO,
+    /// and, spec 047 (FMT-002), never past the statement itself. Running on to the next semicolon collapsed the statements
+    /// written after a CREATE TABLE without one onto its line ("… ) SELECT 1 DROP TABLE dbo.t PRINT 1 …"). The statement's
+    /// extent comes from the parse tree; a DDL keyword inside another statement (ALTER TABLE … DROP COLUMN) ends where the
+    /// next statement, or the END / ELSE around it, begins.
+    /// </summary>
+    private static int FindDdlEnd(List<LayoutNode> nodes, int ddlIndex)
     {
-        for (int i = start; i < nodes.Count; i++)
+        int last = nodes[ddlIndex].StatementLastTokenIndex;
+        int openCases = 0;
+        for (int i = ddlIndex + 1; i < nodes.Count; i++)
         {
             if (nodes[i].TokenType == TSqlTokenType.Semicolon || nodes[i].TokenType == TSqlTokenType.Go)
                 return i;
+            if (last >= 0)
+            {
+                if (nodes[i].TokenIndex > last) return i;
+            }
+            else if (StatementBounds.EndsBefore(nodes, i, ref openCases))
+            {
+                return i;
+            }
         }
         return nodes.Count;
     }

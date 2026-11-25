@@ -9,6 +9,6 @@ GROUP BY o.orderdate;
  * kept for reference          *
  *******************************/
 /* multi
-line
-note */
+   line
+   note */
 SELECT 1;

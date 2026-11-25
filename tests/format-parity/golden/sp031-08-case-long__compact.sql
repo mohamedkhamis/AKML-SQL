@@ -1,10 +1,7 @@
 SELECT o.orderid,
     CASE
         WHEN o.freight > 500
-    AND o.shipcountry NOT IN(
-    'USA',
-    'Canada'
-) THEN 'international heavy'
+    AND o.shipcountry NOT IN('USA', 'Canada') THEN 'international heavy'
         WHEN o.freight > 100                                          THEN 'heavy shipment overweight'
         WHEN o.freight > 50
     AND o.shipvia = 3                          THEN 'medium express shipment'

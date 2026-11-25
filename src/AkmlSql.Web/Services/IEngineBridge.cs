@@ -281,6 +281,11 @@ internal sealed class EngineBridge : IEngineBridge
 
         _receiveLoop = Task.Run(() => ReceiveLoopAsync(_socket));
 
+        // Spec 047 (ENG-001): name this browser and page, so the engine's paired-browser list can tell them apart.
+        string? label = null;
+        try { label = await _socket.GetBrowserLabelAsync().ConfigureAwait(false); }
+        catch (Exception) { /* a label is display only; the handshake goes on without it */ }
+
         // Send the handshake request as the first frame.
         var handshakeRequest = new HandshakeRequest
         {
@@ -289,7 +294,7 @@ internal sealed class EngineBridge : IEngineBridge
             WebVersion = AkmlSql.Core.AppVersion.Current,
             ProtocolVersionMin = 1,
             ProtocolVersionMax = 1,
-            BrowserLabel = "Web edition",
+            BrowserLabel = string.IsNullOrWhiteSpace(label) ? "Web edition" : label,
             ClientInstanceId = _clientInstanceId,
         };
         var response = await SendAsync<HandshakeRequest, HandshakeResponse>(

@@ -108,6 +108,21 @@ if (-not (Get-Module -ListAvailable -Name WebAdministration)) {
 Write-Host '  Creating the AkmlSqlWeb IIS site...' -ForegroundColor Gray
 & $setup -Port ([int]$port) -PhysicalPath $root -Mode $mode -HttpsPort ([int]$httpsPort)
 
+# --- Engine address for the page (spec 047, WEB-001) ---------------------------------------
+# A page IIS serves is static, so it reads the engine's bridge port from akml-engine.json next to the bundle.
+$enginePort = Read-RegString 'BridgePort' '47291'
+$exposure = Read-RegString 'Exposure' 'Localhost'
+$scheme = 'ws'
+if ($exposure -eq 'Lan') { $scheme = 'wss' }
+$manifestScript = Join-Path $PSScriptRoot 'web-engine-manifest.ps1'
+if (Test-Path $manifestScript) {
+    & (Join-Path $env:windir 'System32\WindowsPowerShell\v1.0\powershell.exe') -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+        -File $manifestScript -WebRoot $root -Port ([int]$enginePort) -Scheme $scheme
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  WARNING: the engine address for the web page (akml-engine.json) was not written; see install.log." -ForegroundColor Yellow
+    }
+}
+
 # --- Report (web-iis-setup.ps1 writes the ok-marker only on success) ------------------------
 $marker = Join-Path $env:ProgramData 'AKML SQL Web\iis-site.ok'
 $log    = Join-Path $env:ProgramData 'AKML SQL Web\install.log'

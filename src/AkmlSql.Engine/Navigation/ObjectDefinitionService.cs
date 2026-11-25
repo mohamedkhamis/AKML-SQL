@@ -76,7 +76,7 @@ public class ObjectDefinitionService
         string objectName, string? schemaName, string connectionString, CancellationToken ct)
     {
         await using var conn = new SqlConnection(connectionString);
-        await conn.OpenAsync(ct);
+        await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
         await using var cmd = conn.CreateCommand();
 
         if (schemaName != null)
@@ -247,7 +247,7 @@ public class ObjectDefinitionService
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
 
             if (schemaName != null)

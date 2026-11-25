@@ -7,6 +7,6 @@ INSERT INTO dbo.customerarchive(customerid, companyname, contactname, country, a
 FROM        dbo.customers c
 WHERE       NOT EXISTS(
     SELECT 1
-    FROM        dbo.orders o
-    WHERE       o.customerid = c.customerid AND o.orderdate >= '1997-01-01'
+    FROM   dbo.orders o
+    WHERE  o.customerid = c.customerid AND o.orderdate >= '1997-01-01'
 );

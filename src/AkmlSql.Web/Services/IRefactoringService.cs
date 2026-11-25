@@ -43,8 +43,11 @@ public interface IRefactoringService
     /// The result's <see cref="LightweightPreview.Changed"/> is false when the operation
     /// is a no-op / not applicable to the input.
     /// </summary>
+    /// <param name="schema">Spec 047 (WEB-011): the connected database's cached schema, for the Expand refactorings that
+    /// read columns or parameters (<see cref="RefactorSchema.NeedsSchema"/>); null runs them without one (they warn).</param>
     Task<LightweightPreview> PreviewLightweightAsync(
-        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0);
+        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0,
+        AkmlSql.Engine.Schema.DatabaseCache? schema = null);
 
     /// <summary>
     /// Spec 027 T016: apply one of the ten lightweight refactoring operations and return
@@ -52,7 +55,8 @@ public interface IRefactoringService
     /// the same input because both surfaces execute the same operation code.
     /// </summary>
     Task<string> ApplyLightweightAsync(
-        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0);
+        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0,
+        AkmlSql.Engine.Schema.DatabaseCache? schema = null);
 }
 
 /// <summary>
@@ -135,20 +139,22 @@ internal sealed class RefactoringService : IRefactoringService
     }
 
     public Task<LightweightPreview> PreviewLightweightAsync(
-        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0)
+        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0,
+        AkmlSql.Engine.Schema.DatabaseCache? schema = null)
     {
         var text = sql ?? string.Empty;
         if (Unavailable) return Task.FromResult(new LightweightPreview(text, text, [DialectMessages.NotAvailable], false));
-        var (modified, warnings) = RunLightweight(kind, text, selectionStart, selectionLength);
+        var (modified, warnings) = RunLightweight(kind, text, selectionStart, selectionLength, schema);
         var changed = !string.Equals(modified, text, StringComparison.Ordinal);
         return Task.FromResult(new LightweightPreview(text, modified, warnings, changed));
     }
 
     public Task<string> ApplyLightweightAsync(
-        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0)
+        LightweightRefactorKind kind, string sql, int selectionStart = 0, int selectionLength = 0,
+        AkmlSql.Engine.Schema.DatabaseCache? schema = null)
     {
         if (Unavailable) return Task.FromResult(sql ?? string.Empty);
-        var (modified, _) = RunLightweight(kind, sql ?? string.Empty, selectionStart, selectionLength);
+        var (modified, _) = RunLightweight(kind, sql ?? string.Empty, selectionStart, selectionLength, schema);
         return Task.FromResult(modified);
     }
 
@@ -157,9 +163,11 @@ internal sealed class RefactoringService : IRefactoringService
     /// browser ALWAYS supplies <c>IntelliSense</c> so the two ops that would otherwise call
     /// <c>ConfigManager.Load()</c> (ExpandInsertColumns / ExpandExecParameters) never touch
     /// disk under WASM (the relocation's WASM-safety invariant — spec 027 Decision 2).
+    /// Spec 047 (WEB-011): <paramref name="schema"/> is the connected database's cached schema, which the three Expand
+    /// operations read their columns and parameters from.
     /// </summary>
     private (string modified, string[] warnings) RunLightweight(
-        LightweightRefactorKind kind, string text, int selectionStart, int selectionLength)
+        LightweightRefactorKind kind, string text, int selectionStart, int selectionLength, AkmlSql.Engine.Schema.DatabaseCache? schema)
     {
         var ctx = new RefactoringContext
         {
@@ -169,6 +177,7 @@ internal sealed class RefactoringService : IRefactoringService
             SelectionStart = selectionStart,
             SelectionLength = selectionLength,
             IntelliSense = new IntelliSenseSettings(),
+            SchemaCache = schema,
         };
         var (modified, warnings) = CreateOperation(kind).Apply(ctx);
         return (modified, warnings ?? Array.Empty<string>());

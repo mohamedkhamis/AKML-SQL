@@ -9,6 +9,6 @@ insert into dbo.customerarchive(customerid, companyname, contactname, country, a
 from        dbo.customers c
 where       not exists(
     select 1
-    from        dbo.orders o
-    where       o.customerid = c.customerid and o.orderdate >= '1997-01-01'
+    from   dbo.orders o
+    where  o.customerid = c.customerid and o.orderdate >= '1997-01-01'
 );

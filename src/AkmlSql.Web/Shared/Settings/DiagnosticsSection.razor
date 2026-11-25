@@ -17,6 +17,7 @@
 @inject IDialogService Dialogs
 @inject INotificationService Notifications
 @inject ISqlConnectionService SqlConn
+@inject IServiceProvider Services
 
 @* Spec 041 (R29): how the paired engine runs, and as whom (also on hover in the status bar). *@
 <SettingRow Id="diagnostics-engine" Kind="block">
@@ -36,6 +37,15 @@
 <SettingRow Id="diagnostics-postgresql" Kind="block">
     <p class="akml-settings-status" data-testid="diag-postgresql" data-state="@PostgresState">@PostgresText</p>
     <p class="akml-settings-status" data-testid="diag-active-connection">@ActiveConnectionText</p>
+</SettingRow>
+
+@* Spec 047 (WEB-003): whether this browser keeps the saved connections and pairings, or may clear them. *@
+<SettingRow Id="diagnostics-storage" Kind="block">
+    <p class="akml-settings-status" data-testid="diag-storage">@StorageText</p>
+    @if (_storagePersisted == false)
+    {
+        <button type="button" class="akml-btn" data-testid="diag-storage-ask" @onclick="AskPersistenceAgainAsync">Ask again</button>
+    }
 </SettingRow>
 
 <SettingRow Id="diagnostics-levels" Kind="block">
@@ -154,6 +164,26 @@
     {
         await Ring.RestoreAsync();   // idempotent (N20): the editor restores too
         RefreshSnapshot();
+        _storage = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService<IBrowserStorageState>(Services);
+        if (_storage != null) _storagePersisted = await _storage.IsPersistedAsync();
+    }
+
+    // Spec 047 (WEB-003, contracts/connections-and-storage.md section 4): the browser's answer about keeping this site's data.
+    private IBrowserStorageState? _storage;
+    private bool? _storagePersisted;
+
+    private string StorageText => _storagePersisted switch
+    {
+        true => "Kept until you clear it (persistent).",
+        false => "Best effort: the browser may clear it when the disk is low. Saved connections and pairings are kept per address.",
+        null => "This browser does not report it.",
+    };
+
+    private async Task AskPersistenceAgainAsync()
+    {
+        if (_storage == null) return;
+        var answer = await _storage.RequestPersistenceAsync(force: true);
+        _storagePersisted = answer ?? await _storage.IsPersistedAsync();
     }
 
     /// <summary>Restore defaults for this section: the level filters.</summary>

@@ -886,10 +886,12 @@ public class ExpressionOptions
     [SettingMeta(Description = "Keeps BETWEEN x AND y on a single line.")]
     public bool BetweenOnOneLine { get; set; } = true;
 
+    // Spec 047 (FMT-005, FR-015): "auto" by default, so a short list such as IN (10, 11) stays on one line and a long one
+    // still gets one item per line. "multiLine" exploded every list, two items included, in every style that never chose it.
     [JsonPropertyName("inListStyle")]
     [SettingMeta(Description = "Controls whether IN (...) lists stay on one line, expand to one item per line, or decide by threshold.",
         AllowedValues = new[] { "multiLine", "singleLine", "auto" })]
-    public string InListStyle { get; set; } = "multiLine";
+    public string InListStyle { get; set; } = "auto";
 
     [JsonPropertyName("inListThreshold")]
     [SettingMeta(Description = "Maximum rendered length in characters for an IN list to stay on one line in auto mode.", Min = 0, Max = 500)]

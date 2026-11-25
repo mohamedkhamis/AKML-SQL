@@ -105,7 +105,7 @@ namespace AkmlSql.Engine
                 // RequestReceived event. Spec 026 FR-013a: the LAN-mode handshake handler (wired
                 // to a live PairingService + BearerTokenStore) is supplied here; loopback / no-bridge
                 // passes null and the registry falls back to the parameterless auto-accept handler.
-                var composition = EngineComposition.Build(bridgeAuth.Handshake);
+                var composition = EngineComposition.Build(bridgeAuth.Handshake, bridgeAuth.Tokens);
 
                 // Spec 026 (M4 closure) FR-008: in LAN mode, persist the minted PIN to
                 // %CommonAppData%/AKML SQL Web/pairing-pin.txt so the installer's Web_PostInstall
@@ -216,7 +216,7 @@ namespace AkmlSql.Engine
                 }
 
                 var bridgeAuth = BuildBridgeAuth(settings.Bridge);
-                var composition = EngineComposition.Build(bridgeAuth.Handshake);
+                var composition = EngineComposition.Build(bridgeAuth.Handshake, bridgeAuth.Tokens);
 
                 // FR-008: persist the minted PIN so the installer's Web_PostInstall can surface it
                 // (identical wiring to RunAsync's LAN path).
@@ -301,6 +301,7 @@ namespace AkmlSql.Engine
                 RequirePairingToken = !bridge.IsLoopback,
                 WebRoot = serveWebEdition ? bridge.WebRoot : null,
                 ConfigFilePath = serveWebEdition ? configPath : null,
+                WindowsSignInAsBrowserUser = bridge.WindowsSignInAsBrowserUser,
             };
             return new WebSocketTransport(options);
         }

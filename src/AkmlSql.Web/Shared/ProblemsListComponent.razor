@@ -94,7 +94,8 @@
                     <span class="akml-problems-location">L@(issue.Line)</span>
                     @* Spec 027 T025/T026 (US4) — suppression actions. stopPropagation keeps
                        the row's click-to-jump from firing when a suppress button is clicked. *@
-                    @if (!string.IsNullOrEmpty(issue.RuleId))
+                    @* Spec 047 (WEB-005): a syntax error is fixed, not suppressed — no rule to switch off. *@
+                    @if (!string.IsNullOrEmpty(issue.RuleId) && !IsSyntaxError(issue))
                     {
                         <span class="akml-problems-actions">
                             @* Spec 042 (FR-150): a finding that carries a documentation page (every PostgreSQL rule does) links to it. *@
@@ -252,6 +253,10 @@
     private int _lastVisibleCount = -1;
 
     // Only an http(s) address becomes a link: the engine supplies it, and a link is something a person will click.
+    /// <summary>Spec 047 (WEB-005): a parse error reported by the analysis (rule id <c>SYNTAX</c>).</summary>
+    private static bool IsSyntaxError(CodeIssueInfo issue) =>
+        string.Equals(issue.RuleId, AkmlSql.Engine.Analysis.AnalysisEngine.SyntaxRuleId, StringComparison.Ordinal);
+
     private static string? DocumentationUrl(CodeIssueInfo issue) =>
         Uri.TryCreate(issue.ReferenceUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri.AbsoluteUri : null;
 
@@ -306,7 +311,9 @@
             ? null
             : Findings.Issues
                 .Where(i => MatchesFilter(i.Severity))
-                .OrderBy(i => i.Line)
+                // Spec 047 (WEB-005): a script that does not parse shows why first.
+                .OrderBy(i => IsSyntaxError(i) ? 0 : 1)
+                .ThenBy(i => i.Line)
                 .ThenBy(i => i.Column)
                 .ToList();
 

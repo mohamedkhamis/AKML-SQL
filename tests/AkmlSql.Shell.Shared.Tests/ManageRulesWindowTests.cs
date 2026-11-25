@@ -275,7 +275,8 @@ namespace AkmlSql.Shell.Shared.Tests
             {
                 ["PE001"] = new RuleOverride { Enabled = false, Severity = "warning" },
             };
-            var controls = new CodeAnalysisControls(new CheckBox(), new CheckBox(), new CheckBox());
+            var controls = new CodeAnalysisControls(new CheckBox(), new CheckBox(), new CheckBox(),
+                new ComboBox { Items = { "Margin marker only", "Underline in the text" } });
             controls.Load(working);
 
             // Until the window has been used, the page leaves the overrides alone.

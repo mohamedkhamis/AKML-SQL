@@ -23,7 +23,10 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(2)]
         public bool IsFinalChunk { get; set; }
 
-        /// <summary>Total number of objects scanned so far (across all chunks).</summary>
+        /// <summary>
+        /// Spec 047 (SSMS-003, data-model §9): the references checked — every <c>sys.sql_expression_dependencies</c> row of a
+        /// user object, resolved or not. It used to count only the unresolved candidates, so a clean database read "0".
+        /// </summary>
         [Key(3)]
         public int TotalScanned { get; set; }
 

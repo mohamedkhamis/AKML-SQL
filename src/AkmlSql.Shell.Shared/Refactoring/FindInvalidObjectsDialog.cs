@@ -33,10 +33,16 @@ namespace AkmlSql.Shell.Shared.Refactoring
         {
             Text            = WindowTitles.For("Find invalid objects");
             WindowIcon.Apply(this);
-            Size            = new Size(960, 560);
-            MinimumSize     = new Size(720, 380);
+            var showsGrid   = ShowsGrid(_records.Count);
+            // Spec 047 (SSMS-003): with nothing to list, the window is the summary, not an empty grey grid.
+            Size            = showsGrid ? new Size(960, 560) : new Size(560, 150);
+            MinimumSize     = showsGrid ? new Size(720, 380) : new Size(420, 150);
             StartPosition   = FormStartPosition.CenterParent;
-            FormBorderStyle = FormBorderStyle.Sizable;
+            // A one-line answer is a fixed dialog; a list can be made larger. A modal window is never minimised (it offered
+            // Minimise and Maximise for the sentence "No invalid objects found. All 63 references resolve.").
+            FormBorderStyle = showsGrid ? FormBorderStyle.Sizable : FormBorderStyle.FixedDialog;
+            MinimizeBox     = false;
+            MaximizeBox     = showsGrid;
             ShowInTaskbar   = false;
             BackColor       = Color.FromArgb(250, 250, 252);
 
@@ -51,10 +57,10 @@ namespace AkmlSql.Shell.Shared.Refactoring
             summary.Controls.Add(new Label
             {
                 Dock      = DockStyle.Fill,
-                Text      = _records.Count == 0
-                                ? $"No invalid objects found ({_totalScanned} dependency rows scanned)."
-                                : $"{_records.Count} invalid object(s) — references that can no longer be resolved.",
-                ForeColor = _records.Count == 0 ? Color.FromArgb(0, 110, 50) : Color.FromArgb(160, 60, 0),
+                Text      = SummaryText(_records.Count, _totalScanned),
+                ForeColor = _records.Count > 0 ? Color.FromArgb(160, 60, 0)
+                          : _totalScanned > 0  ? Color.FromArgb(0, 110, 50)
+                          : Color.FromArgb(60, 60, 60),
                 Font      = new Font(DefaultFont, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleLeft
             });
@@ -108,11 +114,30 @@ namespace AkmlSql.Shell.Shared.Refactoring
             btnClose.Left = 860;
             footer.Controls.Add(btnClose);
             AcceptButton = btnClose;
+            CancelButton = btnClose;   // Escape closes it too, as it closes every other dialog
 
-            Controls.Add(grid);
+            if (showsGrid) Controls.Add(grid);
+            else grid.Dispose();
             Controls.Add(summary);
             Controls.Add(footer);
         }
+
+        /// <summary>
+        /// Spec 047 (SSMS-003, data-model §9): what the scan found, given the records and the references it checked
+        /// (<see cref="FindInvalidObjectsResponse.TotalScanned"/>, every reference of a user object).
+        /// </summary>
+        internal static string SummaryText(int records, int totalScanned)
+        {
+            if (records == 1) return "1 invalid object — a reference that can no longer be resolved.";
+            if (records > 1) return $"{records} invalid objects — references that can no longer be resolved.";
+            if (totalScanned <= 0) return "This database has no object references to check.";
+            return totalScanned == 1
+                ? "No invalid objects found. The 1 reference resolves."
+                : $"No invalid objects found. All {totalScanned} references resolve.";
+        }
+
+        /// <summary>Spec 047 (SSMS-003): the grid is shown only when it has something to list.</summary>
+        internal static bool ShowsGrid(int records) => records > 0;
 
         private static string TypeLabel(int type) =>
             type >= 0 && type < TypeLabels.Length ? TypeLabels[type] : "Object";

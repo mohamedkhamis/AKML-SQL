@@ -5,4 +5,4 @@ SELECT
 	, UPPER ( SUBSTRING ( c.companyname, 1, CHARINDEX ( ' ', c.companyname + ' ' ) - 1 ) ) AS firstword
 	, COALESCE ( o.shipregion, c.region, N'n/a' ) AS region
 FROM   dbo.orders o
-INNER JOIN   dbo.customers c ON c.customerid = o.customerid;
+INNER JOIN dbo.customers c ON c.customerid = o.customerid;

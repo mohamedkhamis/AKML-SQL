@@ -78,7 +78,7 @@ namespace AkmlSql.Engine.Handlers.Control
             try
             {
                 await using var conn = new SqlConnection(request.ConnectionString);
-                await conn.OpenAsync(ct);
+                await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
                 // Shared projection with USE-completion — single home for the query in
                 // SchemaMetadataService: online + accessible only, user DBs before the system four.

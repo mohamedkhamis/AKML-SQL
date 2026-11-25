@@ -148,7 +148,7 @@ public sealed class EngineAutoConnectPrecedenceTests
         await store.AddAsync(new() { Id = "paired", Host = "sql-box", Port = 59417, IsLocalhost = false });
         await vault.StoreAsync("paired", "saved-bearer", DateTimeOffset.UtcNow.AddDays(1));
         await using var auto = new EngineAutoConnect(bridge, store, vault, new FakeDiagnosticsRingBuffer(), Page("sql-box", "wss"));
-        Assert.True(await auto.PairLocalEngineAsync());
+        Assert.True((await auto.PairLocalEngineAsync()).Ok);
         Assert.Equal("saved-bearer", Assert.Single(bridge.Handshakes).BearerToken);
         Assert.Equal("paired", Assert.Single(await store.ListAsync()).Id);
     }
@@ -159,7 +159,7 @@ public sealed class EngineAutoConnectPrecedenceTests
         var bridge = new FakeEngineBridge();
         var store = new FakeConnectionStore();
         await using var auto = Auto(bridge, store, Page(scheme: "wss"));
-        Assert.True(await auto.PairLocalEngineAsync());
+        Assert.True((await auto.PairLocalEngineAsync()).Ok);
         Assert.Equal(59417, Assert.Single(bridge.Handshakes).Port);
         Assert.True(Assert.Single(await store.ListAsync()).StrictScheme);
     }

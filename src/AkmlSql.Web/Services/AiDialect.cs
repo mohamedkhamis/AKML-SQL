@@ -50,6 +50,19 @@ public sealed record AiErrorInfo(string Message, int Number = 0, string? SqlStat
 {
     /// <summary>What Fix sent when no error was at hand: the text it always sent.</summary>
     public static AiErrorInfo None { get; } = new("(no error)", 0);
+
+    /// <summary>
+    /// Spec 047 (AI-002), installed-product run F2: the error Fix is asked about — the first server error of a run, in its
+    /// dialect's shape, or null when the run raised none.
+    /// </summary>
+    public static AiErrorInfo? FromMessages(IEnumerable<ExecuteMessageDto>? messages, DatabaseKind kind)
+    {
+        var error = messages?.FirstOrDefault(m => m.Kind == ExecuteMessageKind.Error);
+        if (error == null) return null;
+        return kind == DatabaseKind.PostgreSql
+            ? new AiErrorInfo(error.Text, 0, error.SqlState, error.Detail, error.Hint)
+            : new AiErrorInfo(error.Text, error.Number);
+    }
 }
 
 /// <summary>

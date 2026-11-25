@@ -105,14 +105,26 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
                     ? BuildColumnListWithTypes(dbObj.Columns, includeDefaults)
                     : BuildColumnListSimple(dbObj.Columns);
 
+                // Spec 047 installed-product run F6: the script's own line ending (an SSMS script is CRLF).
+                if (text.Contains("\r\n")) insertionText = insertionText.Replace("\n", "\r\n");
+
                 // Insertion point: just after the table reference (including alias if any)
                 var insertOffset = tableRef.Alias != null
                     ? tableRef.Alias.StartOffset + tableRef.Alias.FragmentLength
                     : tableRef.StartOffset + tableRef.FragmentLength;
+                var tableEnd = insertOffset;
 
                 // Skip any trailing whitespace before VALUES
                 while (insertOffset < text.Length && char.IsWhiteSpace(text[insertOffset]))
                     insertOffset++;
+
+                // F6: a list that starts on its own line takes the place of the blank after the table name, which was
+                // otherwise left at the end of that line.
+                if (insertionText.StartsWith("\n", StringComparison.Ordinal) || insertionText.StartsWith("\r\n", StringComparison.Ordinal))
+                {
+                    text = text.Remove(tableEnd, insertOffset - tableEnd);
+                    insertOffset = tableEnd;
+                }
 
                 text = text.Insert(insertOffset, insertionText);
             }
@@ -138,19 +150,27 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
 
     /// <summary>
     /// Builds a multi-line column list with inline type-metadata comments.
-    /// Identity columns are included but annotated as IDENTITY; computed columns are skipped.
+    /// Identity columns are named in a comment (not listed); computed columns are skipped.
     /// </summary>
     public static string BuildColumnListWithTypes(List<Column> columns)
         => BuildColumnListWithTypes(columns, includeDefaults: true);
 
     /// <summary>
-    /// Builds a multi-line column list with inline type-metadata comments.
+    /// Builds a multi-line column list with inline type-metadata comments, the comments lined up in one column.
     /// When <paramref name="includeDefaults"/> is false, the trailing
     /// <c>default (...)</c> segment is omitted (per <c>InsertOptions.IncludeDefaultsAsComments</c>).
+    /// <para>
+    /// Spec 047 installed-product run F7: an IDENTITY column is not part of an INSERT without a column list (the server fills
+    /// it and the VALUES carry nothing for it), so it is named on a comment line and never listed. It used to be written as a
+    /// bare name with no comma, which made the list invalid and one column longer than the VALUES. F6: the comments line up.
+    /// </para>
     /// </summary>
     public static string BuildColumnListWithTypes(List<Column> columns, bool includeDefaults)
     {
+        var listed = columns.Where(c => !c.IsComputed && !c.IsIdentity).ToList();
+        var width = listed.Count == 0 ? 0 : listed.Max(c => c.ColumnName.Length) + 1;   // room for the comma
         var lines = new List<string>();
+        var position = 0;
 
         foreach (var col in columns)
         {
@@ -158,7 +178,7 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
 
             if (col.IsIdentity)
             {
-                lines.Add($"    {col.ColumnName}    -- IDENTITY, auto-generated");
+                lines.Add($"    -- {col.ColumnName}: IDENTITY, auto-generated (not listed: the server fills it)");
                 continue;
             }
 
@@ -168,23 +188,9 @@ public class ExpandInsertColumnsOperation : ILightweightOperation
             if (includeDefaults && !string.IsNullOrEmpty(col.DefaultValue))
                 comment += $", default ({col.DefaultValue})";
 
-            lines.Add($"    {col.ColumnName},    {comment}");
-        }
-
-        // Remove the trailing comma from the last line (if it has one)
-        if (lines.Count > 0)
-        {
-            var last = lines[^1];
-            var commaIdx = last.IndexOf(',');
-            var commentIdx = last.IndexOf("--");
-            // Only strip the column-separator comma (the one before the comment), not commas inside comments
-            if (commaIdx >= 0 && commentIdx >= 0 && commaIdx < commentIdx)
-            {
-                last = last.Remove(commaIdx, 1);
-                // Pad with a space to keep alignment
-                last = last.Insert(commaIdx, " ");
-                lines[^1] = last;
-            }
+            position++;
+            var head = position < listed.Count ? col.ColumnName + "," : col.ColumnName;
+            lines.Add($"    {head.PadRight(width)}    {comment}");
         }
 
         return "\n(\n" + string.Join("\n", lines) + "\n) ";

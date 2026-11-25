@@ -37,7 +37,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Sanity check: verify the actual physical server we connected to.
             // If caption parsing gave us the wrong Data Source, @@SERVERNAME
@@ -117,7 +117,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
 
             // Single round-trip for both HAS_PERMS_BY_NAME checks (was two ExecuteScalarAsync calls)
@@ -172,6 +172,27 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         }
     }
 
+    /// <summary>
+    /// Spec 047 (WEB-013, data-model §8): true when the connection's login lacks VIEW DEFINITION on its database, so the
+    /// catalog shows it only the objects it may see.
+    /// </summary>
+    internal static async Task<bool> ReadMetadataLimitedAsync(SqlConnection conn, CancellationToken ct)
+    {
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'VIEW DEFINITION')";
+            cmd.CommandTimeout = 3;
+            var value = await cmd.ExecuteScalarAsync(ct);
+            return value is int held && held == 0;   // NULL (cannot tell) reads as not limited
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Debug(ex, "VIEW DEFINITION probe failed; the schema is not marked as limited");
+            return false;
+        }
+    }
+
     /// Phase A: Load object names (tables, views, procs, functions) — target <500ms
     public async Task PopulatePhaseAAsync(DatabaseCache cache, string connectionString, CancellationToken ct)
     {
@@ -182,7 +203,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Sanity-check which physical server we actually reached. If the caption
             // parsing produced the wrong Data Source (aliases, registered-servers
@@ -241,6 +262,10 @@ public class SchemaMetadataService : ISchemaMetadataProvider
                 }
             }
 
+            // Spec 047 (WEB-013): a login without VIEW DEFINITION sees only some of the routines; say so, so the explorer
+            // does not present a short list as complete. Same connection, the objects reader is closed.
+            cache.MetadataLimited = await ReadMetadataLimitedAsync(conn, ct);
+
             // Enumerate linked servers (FR-016). Best-effort — failure here must not fail Phase A.
             await LoadLinkedServersAsync(conn, cache, ct);
 
@@ -248,8 +273,8 @@ public class SchemaMetadataService : ISchemaMetadataProvider
             cache.LastFullRefresh = DateTime.UtcNow;
             var elapsedMs = (DateTime.UtcNow - started).TotalMilliseconds;
             Log.Information(
-                "Phase A complete for {Key}: {Count} objects ({Elapsed:F0} ms, {ConnDesc}, @@SERVERNAME='{Server}')",
-                cache.CacheKey, cache.GetAllObjects().Count(), elapsedMs, connDesc, actualServer);
+                "Phase A complete for {Key}: {Count} objects ({Elapsed:F0} ms, {ConnDesc}, @@SERVERNAME='{Server}', metadataLimited={Limited})",
+                cache.CacheKey, cache.GetAllObjects().Count(), elapsedMs, connDesc, actualServer, cache.MetadataLimited);
         }
         catch (SqlException sqlEx) when (sqlEx.Number is 4060 or 18456 or 18452 or 916)
         {
@@ -297,7 +322,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Build a shared index once — used by columns, parameters, and descriptions loaders
             var objectIndex = BuildObjectIndex(cache);
@@ -591,7 +616,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT CAST(SERVERPROPERTY('EngineEdition') AS INT)";
             cmd.CommandTimeout = 5;
@@ -626,7 +651,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
 
             // Phase A equivalent: load tables, views, routines
             var tableQuery = @"
@@ -745,7 +770,7 @@ public class SchemaMetadataService : ISchemaMetadataProvider
         try
         {
             await using var conn = new SqlConnection(connectionString);
-            await conn.OpenAsync(ct);
+            await AkmlSql.Engine.Execution.SqlOpen.OpenAsync(conn, ct);
             await using var cmd = conn.CreateCommand();
 
             // Single query for both SERVERPROPERTY values — was two separate connections/queries.

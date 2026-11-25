@@ -53,6 +53,18 @@ internal sealed class JsBridgeWebSocket : IBridgeWebSocket
         return await mod.InvokeAsync<byte[]?>("receive", ct, _socketId).ConfigureAwait(false);
     }
 
+    /// <summary>Spec 047 (ENG-001): akml-bridge.js <c>pageBrowserLabel</c> — browser family, OS and this page's origin.</summary>
+    public async Task<string?> GetBrowserLabelAsync()
+    {
+        try
+        {
+            var mod = await _moduleLoader.Value.ConfigureAwait(false);
+            return await mod.InvokeAsync<string?>("pageBrowserLabel").ConfigureAwait(false);
+        }
+        catch (JSException) { return null; }
+        catch (JSDisconnectedException) { return null; }
+    }
+
     public async ValueTask DisposeAsync()
     {
         State = BridgeWebSocketState.Closing;

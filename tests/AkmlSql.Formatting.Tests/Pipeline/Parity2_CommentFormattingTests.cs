@@ -11,9 +11,10 @@ namespace AkmlSql.Formatting.Tests.Pipeline;
 ///
 /// Guards:
 /// 1. DEFAULT profile (MultilineFormatting = "preserve") is a byte-exact no-op for block comments.
-/// 2. OPT-IN profile (MultilineFormatting = "normaliseIndent") re-indents block comment body lines
-///    to the surrounding context indent (IndentLevel × tabSize), stripping each body line's leading
-///    whitespace and re-applying the target indent.
+/// 2. OPT-IN profile (MultilineFormatting = "normaliseIndent") moves a block comment as one block:
+///    its other lines shift by as many columns as its /* moved, so the comment's inner layout is
+///    kept (spec 047, FMT-004 / FR-014 — it used to strip every body line's indentation and apply
+///    the code's, which flattened the comment).
 /// 3. Header/banner comments (body lines dominated by repeated decoration chars: *, =, -, #)
 ///    are skipped by RecognizeCommonPatterns=true (default) even when normaliseIndent is active.
 /// 4. DEFAULT profile: single-line trailing comments and leading -- comments are also untouched.
@@ -22,8 +23,9 @@ public class Parity2_CommentFormattingTests
 {
     private readonly TextEmitter _emitter = new();
 
-    // Helper: emit a single multiline-comment LayoutNode and return the result.
-    private string EmitBlockComment(string commentText, int indentLevel, FormattingProfile profile)
+    // Helper: emit a single multiline-comment LayoutNode and return the result. originalColumn is where the comment's
+    // /* stood in the input (the layout engine records it); the emitter places the /* at indentLevel × 4.
+    private string EmitBlockComment(string commentText, int indentLevel, FormattingProfile profile, int originalColumn = 0)
     {
         var node = new LayoutNode
         {
@@ -32,7 +34,8 @@ public class Parity2_CommentFormattingTests
             FormattedText = commentText,
             IndentLevel = indentLevel,
             PrecedingBreak = BreakType.NewLine,
-            PrecedingSpaces = 0
+            PrecedingSpaces = 0,
+            OriginalColumn = originalColumn,
         };
         // Suppress final-newline and trailing-whitespace changes so we can assert exact text.
         var testProfile = new FormattingProfile
@@ -97,43 +100,66 @@ public class Parity2_CommentFormattingTests
         Assert.Contains("-- keep me", result);
     }
 
-    // ── normaliseIndent: re-indent block comment body ─────────────────────────
+    // ── normaliseIndent: the block moves as one ───────────────────────────────
 
     [Fact]
-    public void NormaliseIndent_BlockComment_BodyLinesReindentedToContextIndent()
+    public void NormaliseIndent_BlockComment_MovesWithItsOpener()
     {
-        // Block comment body lines currently have 2 leading spaces, but the node is at IndentLevel=1
-        // (4 spaces with tabSize=4). After normaliseIndent the body lines should be re-indented to
-        // 4 spaces (level 1), the opening /* inherits normal line-start indent.
-        const string raw = "/*\n  This is a comment\n  with two spaces\n*/";
+        // The comment stood at column 0; its /* now lands at column 4 (IndentLevel 1 × tabSize 4).
+        // Every other line moves the same 4 columns, so the comment's own layout is kept.
+        const string raw = "/*\n  This is a comment\n    with varied indentation\n*/";
         var profile = new FormattingProfile
         {
             Comments = { MultilineFormatting = "normaliseIndent" }
         };
 
-        var result = EmitBlockComment(raw, indentLevel: 1, profile);
+        var result = EmitBlockComment(raw, indentLevel: 1, profile, originalColumn: 0);
 
-        // Body lines (after /*) should now be indented with 4 spaces (indent level 1 × tabSize 4).
-        // The opening /* line already gets 4-space indent from AppendLineStart; the body lines
-        // (lines 2..n-1 inside the comment) should also carry 4-space leading indent.
-        Assert.Contains("\n    This is a comment", result);
-        Assert.Contains("\n    with two spaces", result);
+        Assert.Contains("    /*\n      This is a comment\n        with varied indentation\n    */", result);
     }
 
     [Fact]
-    public void NormaliseIndent_BodyLinesWithExcessIndent_AreNormalized()
+    public void NormaliseIndent_BodyLines_KeepTheirIndentRelativeToTheOpener()
     {
-        // Body has more leading whitespace than the target indent — excess is stripped.
-        const string raw = "/*\n        Over-indented body line\n*/";
+        // The /* stood at column 4 and lands at column 0: every line moves 4 columns left, no further
+        // (spec 047, FMT-004: the old pass stripped the body's indentation altogether).
+        const string raw = "/*\n        Over-indented body line\n    */";
         var profile = new FormattingProfile
         {
             Comments = { MultilineFormatting = "normaliseIndent" }
         };
 
-        var result = EmitBlockComment(raw, indentLevel: 0, profile);
+        var result = EmitBlockComment(raw, indentLevel: 0, profile, originalColumn: 4);
 
-        // At indentLevel=0 the body lines should have 0 leading spaces.
-        Assert.Contains("\nOver-indented body line", result);
+        Assert.Contains("/*\n    Over-indented body line\n*/", result);
+    }
+
+    [Fact]
+    public void NormaliseIndent_UnmovedComment_IsWrittenExactlyAsItWas()
+    {
+        const string raw = "/* first line\n   second line indented three\n     third indented five */";
+        var profile = new FormattingProfile
+        {
+            Comments = { MultilineFormatting = "normaliseIndent" }
+        };
+
+        var result = EmitBlockComment(raw, indentLevel: 1, profile, originalColumn: 4);
+
+        Assert.Contains(raw, result);
+    }
+
+    [Fact]
+    public void NormaliseIndent_UnknownOriginalColumn_IsWrittenExactlyAsItWas()
+    {
+        const string raw = "/*\n  body\n*/";
+        var profile = new FormattingProfile
+        {
+            Comments = { MultilineFormatting = "normaliseIndent" }
+        };
+
+        var result = EmitBlockComment(raw, indentLevel: 2, profile, originalColumn: -1);
+
+        Assert.Contains(raw, result);
     }
 
     [Fact]
@@ -177,9 +203,10 @@ public class Parity2_CommentFormattingTests
     }
 
     [Fact]
-    public void NormaliseIndent_BannerComment_ReindentedWhenRecognizeCommonPatternsOff()
+    public void NormaliseIndent_BannerComment_MovedWhenRecognizeCommonPatternsOff()
     {
-        // Same banner but with RecognizeCommonPatterns=false — the re-indent SHOULD fire.
+        // Same banner but with RecognizeCommonPatterns=false — the comment moves with its /* (column 0 → 4),
+        // its " * " pattern intact.
         const string banner = "/*\n * Section header\n*/";
         var profile = new FormattingProfile
         {
@@ -190,12 +217,9 @@ public class Parity2_CommentFormattingTests
             }
         };
 
-        var result = EmitBlockComment(banner, indentLevel: 1, profile);
+        var result = EmitBlockComment(banner, indentLevel: 1, profile, originalColumn: 0);
 
-        // With RecognizeCommonPatterns off, the " * Section header" line should be reindented
-        // to 4 spaces (level 1), trimming the leading space+* prefix to nothing and re-prefixing.
-        // The body text after trim-leading-whitespace is "* Section header", re-indented to 4 spaces.
-        Assert.Contains("\n    * Section header", result);
+        Assert.Contains("\n     * Section header\n    */", result);
     }
 
     // ── Idempotency at the emitter level ─────────────────────────────────────
@@ -203,19 +227,20 @@ public class Parity2_CommentFormattingTests
     [Fact]
     public void NormaliseIndent_AlreadyNormalized_IsIdempotent()
     {
-        // After re-indenting a comment, applying normaliseIndent a second time must produce
-        // identical output (a fixed point — no oscillation that would fire Stage 7).
+        // After moving a comment, applying normaliseIndent a second time must produce identical
+        // output (a fixed point — no oscillation that would fire Stage 7). On the second pass the
+        // comment's /* already stands where the first pass put it (column 4).
         const string raw = "/*\n  Body line\n*/";
         var profile = new FormattingProfile
         {
             Comments = { MultilineFormatting = "normaliseIndent" }
         };
 
-        var pass1 = EmitBlockComment(raw, indentLevel: 1, profile);
+        var pass1 = EmitBlockComment(raw, indentLevel: 1, profile, originalColumn: 0);
         // Extract just the comment text from pass1 so we can run pass2
         int commentStart = pass1.IndexOf("/*");
         string commentAfterPass1 = pass1[commentStart..];
-        var pass2 = EmitBlockComment(commentAfterPass1, indentLevel: 1, profile);
+        var pass2 = EmitBlockComment(commentAfterPass1, indentLevel: 1, profile, originalColumn: 4);
         int commentStart2 = pass2.IndexOf("/*");
         string commentAfterPass2 = pass2[commentStart2..];
 

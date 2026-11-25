@@ -41,6 +41,20 @@ public class FormatRequestHandlerTests : IDisposable
     }
 
     [Fact]
+    public void HandleFormat_CrLfDocument_ComesBackCrLf()
+    {
+        // Spec 047 (SSMS-004): Format Document replaces the whole buffer with FormattedText, so a CRLF document must get
+        // CRLF back, with no lone LF, or SSMS turns the file into LF.
+        var request = new FormatRequest { Text = "select a,b from dbo.t where a=1\r\nselect 2\r\n", ProfileName = null };
+
+        var response = _handler.HandleFormat(request);
+
+        Assert.True(response.Success);
+        Assert.Contains("\r\n", response.FormattedText);
+        Assert.DoesNotMatch(@"(?<!\r)\n", response.FormattedText);
+    }
+
+    [Fact]
     public void HandleFormat_ValidSql_FormattedTextNotEmpty()
     {
         var request = new FormatRequest { Text = "select 1", ProfileName = null };

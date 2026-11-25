@@ -1,0 +1,37 @@
+{
+  "akmlParityBaseline": {
+    "revision": "1.26.0526.0000",
+    "corpusItem": "sp047-03-go-count",
+    "profile": "default"
+  },
+  "findings": [
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 1,
+      "column": 1
+    },
+    {
+      "ruleId": "ST001",
+      "severity": "Hint",
+      "message": "SQL keyword 'select' is not uppercase — use consistent ALL_CAPS keywords",
+      "line": 3,
+      "column": 1
+    },
+    {
+      "ruleId": "ST004",
+      "severity": "Info",
+      "message": "Statement is not terminated with a semicolon — add ';' for clarity and future compatibility",
+      "line": 3,
+      "column": 1
+    }
+  ]
+}

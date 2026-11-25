@@ -40,6 +40,8 @@ public class LayoutEngine
         var statementStarts = BuildStatementStartSet(script);
         var batchStarts = BuildBatchStartSet(script);
         var nestedStatementStarts = BuildNestedStatementStartSet(script);
+        // Spec 047 (FMT-002): every statement start of the tree, and the owners of IF / ELSE / WHILE bodies and of ELSE.
+        var shape = StatementShape.Of(script, tokens);
         TSqlTokenType? prevSemanticTokenType = null;
         string? prevSemanticTokenText = null;
         // Set by GO and kept over its repeat count (GO 3): the next token starts a new line. Token-based because ScriptDom
@@ -103,7 +105,8 @@ public class LayoutEngine
                             (attachment.AttachmentType == CommentAttachmentType.Standalone
                                 ? BreakType.EmptyLine
                                 : BreakType.NewLine),
-                        PrecedingSpaces = 0
+                        PrecedingSpaces = 0,
+                        OriginalColumn = OriginalColumnOf(tokens, i, profile.Whitespace.TabSize),
                     };
                     nodes.Add(commentNode);
                     continue;
@@ -118,7 +121,8 @@ public class LayoutEngine
                     FormattedText = t.Text,
                     IndentLevel = baseIndent + indentTracker.CurrentDepth,
                     PrecedingBreak = isFirstSemanticToken ? BreakType.None : BreakType.NewLine,
-                    PrecedingSpaces = 0
+                    PrecedingSpaces = 0,
+                    OriginalColumn = OriginalColumnOf(tokens, i, profile.Whitespace.TabSize),
                 });
                 continue;
             }
@@ -130,17 +134,32 @@ public class LayoutEngine
             bool isBatchStart = batchStarts.Contains(t.Offset) && !isFirstSemanticToken;
             // The statement after text kept as written starts a statement too — the tree may hold it as its first.
             bool startsAfterUnparsed = afterUnparsed && t.TokenType != TSqlTokenType.Go;
-            if ((statementStarts.Contains(t.Offset) || isBatchStart || startsAfterUnparsed) && !isFirstSemanticToken)
+            // Spec 047 (FMT-003): the first token after GO or GO n starts a batch even when the tree has none for it.
+            // ScriptDom leaves the batch after "GO n" out of the tree, so only the token stream knows. Without the reset
+            // below, that batch kept the clause context and indent of the one before ("GO 3" then "    PRINT 'x'"). Like
+            // a batch start, it keeps the single line break after GO.
+            bool startsAfterGo = afterGo && t.TokenType != TSqlTokenType.Go
+                && !(prevSemanticTokenType == TSqlTokenType.Go && t.TokenType == TSqlTokenType.Integer);
+            if ((statementStarts.Contains(t.Offset) || isBatchStart || startsAfterUnparsed || startsAfterGo) && !isFirstSemanticToken)
             {
-                isFirstInStatement = !isBatchStart;
+                isFirstInStatement = !isBatchStart && !startsAfterGo;
                 statementIndex++;
                 tracker.Reset();
                 baseIndent = 0;
                 indentTracker.Reset();
             }
+            else if (!isFirstSemanticToken && nestedStatementStarts.Contains(t.Offset))
+            {
+                // Spec 047 (FMT-002): a statement of a block starts with no clause context of the statement before it. The
+                // last clause of that one ("SELECT 8") gave BEGIN TRAN or COMMIT a continuation indent, one level deeper
+                // than the statements around it. The block depth (indentTracker) is kept.
+                tracker.Reset();
+            }
 
             // --- Handle parentheses indentation ---
-            int parenIndent = indentTracker.ProcessToken(t.TokenType, t.Text);
+            // The word after BEGIN / END tells a block from a statement (BEGIN TRAN, END CONVERSATION), spec 047 FMT-002.
+            int parenIndent = indentTracker.ProcessToken(t.TokenType, t.Text,
+                t.TokenType is TSqlTokenType.Begin or TSqlTokenType.End ? NextSemanticText(tokens, i) : null);
 
             // --- Get clause context and decide formatting ---
             var clauseContext = tracker.CurrentClause;
@@ -161,6 +180,24 @@ public class LayoutEngine
             // place them at block depth (it indents any block content that already carries a break).
             if (!isFirstSemanticToken && decision.Break == BreakType.None
                 && nestedStatementStarts.Contains(t.Offset))
+            {
+                decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
+            }
+
+            // Spec 047 (FMT-004 sample): the script's first statement after its leading comments keeps the line break
+            // written after them, or one space when it was on their line. It was decided as the script's first word, with
+            // no break at all, which glued it to a block comment's end ("… five */SELECT 1;").
+            if (isFirstSemanticToken && nodes.Count > 0 && decision.Break == BreakType.None)
+            {
+                decision = LineBreakBefore(tokens, i)
+                    ? decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 }
+                    : decision with { PrecedingSpaces = 1 };
+            }
+
+            // Spec 047 (FMT-002): a top-level statement starts its own line too. In a style with no empty line between
+            // statements (Compact), its first token was decided like any other word of a line, so a statement joined the
+            // one before it: "SELECT 1 AS a;SELECT 2 AS b;", "…)SELECT 1 DROP TABLE dbo.t PRINT 1".
+            if (isFirstInStatement && decision.Break == BreakType.None)
             {
                 decision = decision with { Break = BreakType.NewLine, PrecedingSpaces = 0 };
             }
@@ -256,7 +293,10 @@ public class LayoutEngine
                 IndentLevel = Math.Clamp(indentLevel, 0, 50),
                 PrecedingBreak = decision.Break,
                 PrecedingSpaces = decision.PrecedingSpaces,
-                IsInNoformatRegion = noformatRegions != null && NoformatScanner.IsInNoformatRegion(noformatRegions, t.Offset)
+                IsInNoformatRegion = noformatRegions != null && NoformatScanner.IsInNoformatRegion(noformatRegions, t.Offset),
+                StartsStatement = shape.Starts.Contains(t.Offset),
+                StatementLastTokenIndex = shape.Ends.TryGetValue(i, out var last) ? last : -1,
+                OwnerTokenIndex = shape.Owners.TryGetValue(i, out var owner) ? owner : -1,
             };
             if (isFirstInStatement && decision.Break == BreakType.EmptyLine)
             {
@@ -435,6 +475,118 @@ public class LayoutEngine
         {
             starts.Add(s.StartOffset);
             CollectNestedStatementStarts(s, starts);
+        }
+    }
+
+    /// <summary>
+    /// Spec 047 (FMT-004): the column a block comment started at in the input: the width of the text before it on its
+    /// line, tabs counted at <paramref name="tabSize"/>. -1 for any other token.
+    /// </summary>
+    private static int OriginalColumnOf(IList<TSqlParserToken> tokens, int index, int tabSize)
+    {
+        if (tokens[index].TokenType != TSqlTokenType.MultilineComment) return -1;
+        var before = new System.Text.StringBuilder();
+        for (int k = index - 1; k >= 0; k--)
+        {
+            var text = tokens[k].Text ?? string.Empty;
+            int lineBreak = text.LastIndexOf('\n');
+            if (lineBreak >= 0)
+            {
+                before.Insert(0, text[(lineBreak + 1)..]);
+                break;
+            }
+            before.Insert(0, text);
+        }
+        return TextEmitter.VisualWidth(before.ToString(), tabSize);
+    }
+
+    /// <summary>True when the input has a line break between the token at <paramref name="index"/> and the token before it.</summary>
+    private static bool LineBreakBefore(IList<TSqlParserToken> tokens, int index)
+    {
+        for (int k = index - 1; k >= 0 && tokens[k].TokenType == TSqlTokenType.WhiteSpace; k--)
+        {
+            if (tokens[k].Text?.Contains('\n') == true) return true;
+        }
+        // A line comment ends its line: whatever follows it starts the next one.
+        return index > 0 && tokens[index - 1].TokenType == TSqlTokenType.SingleLineComment;
+    }
+
+    /// <summary>The text of the next token that is not whitespace or a comment, or null at the end.</summary>
+    private static string? NextSemanticText(IList<TSqlParserToken> tokens, int index)
+    {
+        for (int k = index + 1; k < tokens.Count; k++)
+        {
+            var type = tokens[k].TokenType;
+            if (type is TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment)
+                continue;
+            return type == TSqlTokenType.EndOfFile ? null : tokens[k].Text;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Spec 047 (FMT-002): the facts about a script's statements that its tokens alone do not give. <see cref="Starts"/>
+    /// holds the start offset of every statement at any depth, <see cref="Ends"/> the last token index of the outermost
+    /// statement starting at a token index. <see cref="Owners"/> maps a token index to the token
+    /// index of its owner keyword: the first token of the BEGIN…END or TRY…CATCH body of an IF, ELSE or WHILE to that
+    /// keyword, and an ELSE to its IF. <paramref name="tokens"/> is the script's own token stream, which the tree's
+    /// token indices refer to.
+    /// </summary>
+    private sealed class StatementShape : TSqlFragmentVisitor
+    {
+        private readonly IList<TSqlParserToken> _tokens;
+
+        private StatementShape(IList<TSqlParserToken> tokens) => _tokens = tokens;
+
+        public HashSet<int> Starts { get; } = new();
+
+        public Dictionary<int, int> Owners { get; } = new();
+
+        public Dictionary<int, int> Ends { get; } = new();
+
+        public static StatementShape Of(TSqlScript script, IList<TSqlParserToken> tokens)
+        {
+            var shape = new StatementShape(tokens);
+            script.Accept(shape);
+            return shape;
+        }
+
+        public override void Visit(TSqlStatement node)
+        {
+            if (node.StartOffset >= 0) Starts.Add(node.StartOffset);
+            if (node.FirstTokenIndex >= 0 && node.LastTokenIndex >= node.FirstTokenIndex)
+                Ends[node.FirstTokenIndex] = Ends.TryGetValue(node.FirstTokenIndex, out var known)
+                    ? Math.Max(known, node.LastTokenIndex)
+                    : node.LastTokenIndex;
+        }
+
+        public override void Visit(IfStatement node)
+        {
+            Own(node.ThenStatement, node.FirstTokenIndex);
+            if (node.ElseStatement == null) return;
+            int elseToken = PreviousSemantic(node.ElseStatement.FirstTokenIndex);
+            if (elseToken < 0 || _tokens[elseToken].TokenType != TSqlTokenType.Else) return;
+            if (node.FirstTokenIndex >= 0) Owners[elseToken] = node.FirstTokenIndex;
+            Own(node.ElseStatement, elseToken);
+        }
+
+        public override void Visit(WhileStatement node) => Own(node.Statement, node.FirstTokenIndex);
+
+        private void Own(TSqlStatement? body, int owner)
+        {
+            if (owner >= 0 && body is BeginEndBlockStatement or TryCatchStatement && body.FirstTokenIndex >= 0)
+                Owners[body.FirstTokenIndex] = owner;
+        }
+
+        private int PreviousSemantic(int index)
+        {
+            for (int k = Math.Min(index, _tokens.Count) - 1; k >= 0; k--)
+            {
+                if (_tokens[k].TokenType is not (TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment
+                    or TSqlTokenType.MultilineComment))
+                    return k;
+            }
+            return -1;
         }
     }
 

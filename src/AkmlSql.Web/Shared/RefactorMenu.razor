@@ -1,0 +1,175 @@
+@*
+    Spec 047 (WEB-011, WEB-012; contracts/workspace-ai.md §3) — the Refactor menu as a keyboard dialog. Every entry is a
+    button in its list item; one that cannot run is disabled and described by its reason, shown beside it (readable without
+    hovering). Opening moves focus to the first entry that can run and keeps Tab inside; Arrow keys, Home and End move
+    between the entries that can run; Escape, Cancel or a click outside closes it, and focus goes back to where it was (the
+    Refactor button). The page decides what each entry does (OnChoose).
+*@
+@using AkmlSql.Web.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="akml-scrim" @onclick="CloseAsync">
+    <div class="akml-dialog akml-picker" role="dialog" aria-modal="true" aria-label="Refactor" tabindex="-1"
+         @ref="_panel" @onclick:stopPropagation="true" @onkeydown="OnKeyDownAsync" data-testid="refactor-menu">
+        <div class="akml-dialog-header"><h2 class="akml-dialog-title">Refactor</h2></div>
+        <ul class="akml-picker-list" @ref="_list">
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var index = i;
+                var item = Items[i];
+                @if (!string.IsNullOrEmpty(item.Section))
+                {
+                    <li class="akml-picker-sep">@item.Section</li>
+                }
+                <li class="akml-refactor-row">
+                    <button type="button" id="@ItemId(item)" class="akml-refactor-item" data-testid="refactor-item"
+                            disabled="@(!item.Enabled)" aria-describedby="@(item.Enabled || string.IsNullOrEmpty(item.Reason) ? null : ReasonId(item))"
+                            @onclick="() => ChooseAsync(item)" @onfocus="() => _focused = index">@item.Label</button>
+                    @if (!item.Enabled && !string.IsNullOrEmpty(item.Reason))
+                    {
+                        <span id="@ReasonId(item)" class="akml-refactor-reason" data-testid="refactor-reason">@item.Reason</span>
+                    }
+                </li>
+            }
+        </ul>
+        <div class="akml-dialog-footer">
+            <button type="button" class="akml-btn" data-testid="refactor-menu-cancel" @onclick="CloseAsync">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .akml-refactor-row {
+        display: flex; flex-direction: column; align-items: stretch;
+        border-bottom: 1px solid var(--akml-border-subtle);
+    }
+    .akml-refactor-item {
+        display: block; width: 100%; text-align: left;
+        padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m);
+        border: none; background: none; font: inherit; color: var(--akml-text-primary);
+        cursor: pointer;
+    }
+    .akml-refactor-item:hover:not(:disabled),
+    .akml-refactor-item:focus-visible { background-color: var(--akml-surface-hover); outline: 2px solid var(--akml-accent-primary); outline-offset: -2px; }
+    .akml-refactor-item:disabled { cursor: default; color: var(--akml-text-secondary); }
+    .akml-refactor-reason {
+        padding: 0 var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-xs);
+        font-size: 12px; color: var(--akml-text-secondary);
+    }
+</style>
+
+@code {
+    /// <summary>The entries, in menu order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<RefactorMenuItem> Items { get; set; } = Array.Empty<RefactorMenuItem>();
+
+    /// <summary>An entry that can run was chosen; focus has already gone back to where it was.</summary>
+    [Parameter] public EventCallback<RefactorMenuItem> OnChoose { get; set; }
+
+    /// <summary>The menu was dismissed (Escape, Cancel, a click outside).</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference _panel;
+    private ElementReference _list;
+    private IJSObjectReference? _ui;
+    private int _focused = -1;
+    private bool _closed;
+
+    private static string ItemId(RefactorMenuItem item) => "refactor-item-" + item.Id;
+    private static string ReasonId(RefactorMenuItem item) => "refactor-reason-" + item.Id;
+
+    protected override void OnInitialized()
+    {
+        // Focus starts on the first entry that can run (focusFirst below), so the keys know where they are before any focus event.
+        _focused = Enumerable.Range(0, Items.Count).FirstOrDefault(i => Items[i].Enabled, -1);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _ui = await JS.InvokeAsync<IJSObjectReference>("import", "./js/akml-ui.js");
+            if (_ui == null) return;
+            await _ui.InvokeVoidAsync("stashFocus", ".akml-dialog");
+            await _ui.InvokeVoidAsync("focusFirst", _panel, "button:not([disabled])");
+            await _ui.InvokeVoidAsync("trapTab", _panel);
+            await _ui.InvokeVoidAsync("trapListKeys", _list);
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+        catch (InvalidOperationException) { /* no JS (prerender) */ }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape": await CloseAsync(); break;
+            case "ArrowDown": await MoveAsync(+1); break;
+            case "ArrowUp": await MoveAsync(-1); break;
+            case "Home": await FocusEnabledAsync(first: true); break;
+            case "End": await FocusEnabledAsync(first: false); break;
+        }
+    }
+
+    private List<int> EnabledIndexes() => Enumerable.Range(0, Items.Count).Where(i => Items[i].Enabled).ToList();
+
+    private async Task MoveAsync(int step)
+    {
+        var enabled = EnabledIndexes();
+        if (enabled.Count == 0) return;
+        var at = enabled.IndexOf(_focused);
+        var next = at < 0 ? (step > 0 ? 0 : enabled.Count - 1) : (at + step + enabled.Count) % enabled.Count;
+        await FocusAsync(enabled[next]);
+    }
+
+    private async Task FocusEnabledAsync(bool first)
+    {
+        var enabled = EnabledIndexes();
+        if (enabled.Count > 0) await FocusAsync(first ? enabled[0] : enabled[^1]);
+    }
+
+    private async Task FocusAsync(int index)
+    {
+        _focused = index;
+        try { if (_ui != null) await _ui.InvokeVoidAsync("focusById", ItemId(Items[index])); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    private async Task ChooseAsync(RefactorMenuItem item)
+    {
+        if (!item.Enabled || _closed) return;
+        _closed = true;
+        await RestoreFocusAsync();   // back on the Refactor button before the preview opens and remembers it
+        await OnChoose.InvokeAsync(item);
+    }
+
+    private async Task CloseAsync()
+    {
+        if (_closed) return;
+        _closed = true;
+        await RestoreFocusAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task RestoreFocusAsync()
+    {
+        try { if (_ui != null) await _ui.InvokeVoidAsync("restoreFocus"); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!_closed) await RestoreFocusAsync();
+        if (_ui != null)
+        {
+            try { await _ui.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+            catch (JSException) { }
+        }
+    }
+}

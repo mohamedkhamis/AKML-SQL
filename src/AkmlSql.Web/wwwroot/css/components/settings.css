@@ -39,7 +39,8 @@
     border-radius: var(--akml-scalar-radius-xs);
 }
 
-.akml-settings-nav-link:hover { background-color: var(--akml-surface-hover); text-decoration: none; }
+/* Spec 047 (WEB-008): the link keeps its own colour on hover; the page-wide a:hover blue read 4.2:1 on the dark selection. */
+.akml-settings-nav-link:hover { background-color: var(--akml-surface-hover); color: var(--akml-text-primary); text-decoration: none; }
 
 .akml-settings-nav-link[aria-current="page"] {
     background-color: var(--akml-surface-selection);

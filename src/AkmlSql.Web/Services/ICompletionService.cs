@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AkmlSql.Core;
 using AkmlSql.Core.Ipc;
 using AkmlSql.Core.Ipc.Messages;
 using AkmlSql.Engine.Completion;
@@ -41,15 +42,34 @@ internal sealed class CompletionService : ICompletionService
     private readonly ISchemaCacheStore? _cache;
     private readonly IDialectGate? _gate;
 
-    public CompletionService(IEngineBridge bridge, ISchemaCacheStore? cache = null, IDialectGate? gate = null, ISqlConnectionService? connection = null)
+    public CompletionService(IEngineBridge bridge, ISchemaCacheStore? cache = null, IDialectGate? gate = null, ISqlConnectionService? connection = null,
+        ISnippetStore? snippets = null)
     {
         _bridge = bridge ?? throw new ArgumentNullException(nameof(bridge));
         _cache = cache;   // null in tests that only exercise the online path
         _gate = gate;
         _connection = connection;
+        _snippets = snippets;
+        if (_snippets != null) _snippets.Changed += OnSnippetsChanged;
     }
 
     private readonly ISqlConnectionService? _connection;
+
+    // Spec 047 (SN-001): the user's own snippets, offered beside the built-ins. The list is kept per kind until the
+    // store says it changed (a save, delete or import), so typing does not read IndexedDB on every keystroke.
+    private readonly ISnippetStore? _snippets;
+    private readonly object _snippetLock = new();
+    private readonly Dictionary<DatabaseKind, CompletionItem[]> _userSnippetItems = new();
+    private int _snippetVersion;
+
+    private void OnSnippetsChanged()
+    {
+        lock (_snippetLock)
+        {
+            _snippetVersion++;
+            _userSnippetItems.Clear();
+        }
+    }
 
     public async Task<CompletionResponse> CompleteAsync(
         CompletionRequest request, CancellationToken ct, string? liveDocumentText = null)
@@ -66,8 +86,9 @@ internal sealed class CompletionService : ICompletionService
         }
         try
         {
-            return await _bridge.SendAsync<CompletionRequest, CompletionResponse>(
+            var response = await _bridge.SendAsync<CompletionRequest, CompletionResponse>(
                 MessageTypes.RequestCompletion, request, ct).ConfigureAwait(false);
+            return await WithUserSnippetsAsync(response, liveDocumentText, request.CursorOffset, engineReplied: true).ConfigureAwait(false);
         }
         catch (InvalidOperationException)
         {
@@ -126,11 +147,132 @@ internal sealed class CompletionService : ICompletionService
             }
         }
 
-        return new CompletionResponse
+        return await WithUserSnippetsAsync(new CompletionResponse
         {
             Items = items.ToArray(),
             IsIncomplete = false,
-        };
+        }, liveDocumentText, cursorOffset, engineReplied: false).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Spec 047 (SN-001, contracts/workspace-ai.md §1): add the user's own snippets of the tab's dialect where a snippet
+    /// belongs — where the engine offered its built-ins, or at a statement start. The engine filters its list by the typed
+    /// word, so for a shortcode no built-in matches it returns no snippet at all; the statement-start rule covers that too.
+    /// A user snippet with a built-in's shortcode replaces the built-in, as the expansion lookup does.
+    /// </summary>
+    private async Task<CompletionResponse> WithUserSnippetsAsync(CompletionResponse response, string? text, int caret, bool engineReplied)
+    {
+        if (_snippets == null || response == null) return response!;
+        // The list is kept per kind, so this is cheap; most people have no snippet of their own, and then nothing below runs.
+        // Review of PR #261: AtStatementStart tokenizes the whole text before the caret, and ran first on every request the
+        // engine answered without a snippet.
+        var mine = await UserSnippetItemsAsync(_gate?.IsPostgres == true ? DatabaseKind.PostgreSql : DatabaseKind.SqlServer).ConfigureAwait(false);
+        if (mine.Length == 0) return response;
+
+        var items = response.Items ?? Array.Empty<CompletionItem>();
+        var engineOffersSnippets = engineReplied && items.Any(i => i.ObjectType == (int)CompletionObjectType.Snippet);
+        if (!engineOffersSnippets && !AtStatementStart(text, caret)) return response;
+
+        var shortcodes = new HashSet<string>(mine.Select(m => m.DisplayText), StringComparer.OrdinalIgnoreCase);
+        response.Items = items
+            .Where(i => !(i.ObjectType == (int)CompletionObjectType.Snippet && shortcodes.Contains(i.DisplayText)))
+            .Concat(mine)
+            .ToArray();
+        return response;
+    }
+
+    private async Task<CompletionItem[]> UserSnippetItemsAsync(DatabaseKind kind)
+    {
+        int version;
+        lock (_snippetLock)
+        {
+            if (_userSnippetItems.TryGetValue(kind, out var kept)) return kept;
+            version = _snippetVersion;
+        }
+
+        CompletionItem[] items;
+        try
+        {
+            var list = await _snippets!.ListAsync(kind).ConfigureAwait(false);
+            items = list.Where(s => !s.IsBuiltIn && !string.IsNullOrWhiteSpace(s.Metadata.Shortcode)).Select(ToCompletionItem).ToArray();
+        }
+        catch
+        {
+            return Array.Empty<CompletionItem>();   // a store that cannot be read must never break the popup
+        }
+
+        lock (_snippetLock)
+        {
+            if (version == _snippetVersion) _userSnippetItems[kind] = items;   // not a list read before a change
+        }
+        return items;
+    }
+
+    /// <summary>Data-model §10: a user snippet as a completion item; the editor expands its body on accept.</summary>
+    private static CompletionItem ToCompletionItem(WebSnippet snippet) => new()
+    {
+        DisplayText = snippet.Metadata.Shortcode,
+        InsertText = string.Join("\n", snippet.Body ?? Array.Empty<string>()),
+        ObjectType = (int)CompletionObjectType.Snippet,
+        SecondaryText = snippet.Metadata.Title,
+        SortPriority = 500,
+        SourceObject = string.Empty,
+    };
+
+    /// <summary>
+    /// Spec 047 (SN-001): whether the word being typed at <paramref name="caret"/> starts a statement: nothing but comments
+    /// before it, or a <c>;</c>, a <c>GO</c> (with or without a count) or a blank line between it and the code before. A
+    /// null text is unknown, so no.
+    /// </summary>
+    internal static bool AtStatementStart(string? text, int caret)
+    {
+        if (text == null) return false;
+        caret = Math.Max(0, Math.Min(caret, text.Length));
+        var start = caret;
+        while (start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_')) start--;
+        if (start == 0) return true;
+
+        IList<Microsoft.SqlServer.TransactSql.ScriptDom.TSqlParserToken> tokens;
+        try { tokens = _offlineParser.GetTokenStream(text.Substring(0, start)); }
+        catch { return false; }
+
+        var newlines = 0;
+        for (var i = tokens.Count - 1; i >= 0; i--)
+        {
+            var token = tokens[i];
+            switch (token.TokenType)
+            {
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.EndOfFile:
+                    continue;
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.WhiteSpace:
+                    newlines += (token.Text ?? string.Empty).Count(c => c == '\n');
+                    if (newlines >= 2) return true;   // a blank line
+                    continue;
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.SingleLineComment:
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.MultilineComment:
+                    newlines = 0;   // a comment line is not a blank one
+                    continue;
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Semicolon:
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Go:
+                    return true;
+                case Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Integer:
+                    return IsGoCount(tokens, i);   // GO 3
+                default:
+                    return false;
+            }
+        }
+        return true;   // only comments and space before it: the start of the document
+    }
+
+    private static bool IsGoCount(IList<Microsoft.SqlServer.TransactSql.ScriptDom.TSqlParserToken> tokens, int integerIndex)
+    {
+        for (var i = integerIndex - 1; i >= 0; i--)
+        {
+            var type = tokens[i].TokenType;
+            if (type == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.WhiteSpace && !(tokens[i].Text ?? string.Empty).Contains('\n')) continue;
+            return type == Microsoft.SqlServer.TransactSql.ScriptDom.TSqlTokenType.Go;
+        }
+        return false;
     }
 
     /// <summary>

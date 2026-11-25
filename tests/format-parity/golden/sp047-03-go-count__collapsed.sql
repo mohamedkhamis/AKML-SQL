@@ -1,0 +1,12 @@
+SELECT 1
+
+GO
+SELECT 2
+
+GO 3
+PRINT 'x'
+
+GO 2 -- twice
+SELECT 3
+
+GO

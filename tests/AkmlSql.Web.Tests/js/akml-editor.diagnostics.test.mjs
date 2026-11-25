@@ -111,3 +111,24 @@ test('no selection, or only whitespace, runs the whole document: line 1', () => 
     assert.equal(selectionStartLine(doc('SELECT 1\n   \nSELECT 2'), { from: 9, to: 13 }), 1);
     assert.equal(selectionStartLine(doc(text), null), 1);
 });
+
+// Spec 047 (UX-001, contracts/analysis-display.md §3): with "Advisory findings: Margin marker only" (the default) a hint
+// or information finding, such as a missing semicolon, keeps its gutter marker and tooltip but draws nothing under the
+// SQL. CodeMirror styles a diagnostic's range through its markClass; the editor theme gives this class no underline.
+test('marker-only mode marks hint and info diagnostics for no underline', () => {
+    const d = toLintDiagnostics(doc(text), [
+        { line: 1, severity: 0, message: 'h' },
+        { line: 1, severity: 1, message: 'i' },
+        { line: 1, severity: 2, message: 'w' },
+        { line: 1, severity: 3, message: 'e' },
+    ], { advisoryMarkersOnly: true });
+    assert.deepEqual(d.map(x => x.markClass), ['akml-lint-marker-only', 'akml-lint-marker-only', undefined, undefined]);
+});
+
+test('without marker-only mode no diagnostic gets the marker-only class', () => {
+    const diags = [{ line: 1, severity: 0, message: 'h' }, { line: 2, severity: 1, message: 'i' }];
+    for (const options of [undefined, {}, { advisoryMarkersOnly: false }]) {
+        const d = toLintDiagnostics(doc(text), diags, options);
+        assert.ok(d.every(x => x.markClass === undefined), JSON.stringify(options));
+    }
+});

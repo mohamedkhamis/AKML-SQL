@@ -28,6 +28,11 @@ and does not enable Windows features for you. **Don't host (files only)** instal
 the files and engine service for a static host managed separately. With IIS or a
 separately hosted app, add the engine under Settings → Connections when needed.
 
+With IIS the page and the engine use two ports: the site's port and the engine's
+**Bridge port** (both are in the setup summary). Setup tells the page the engine's
+port by publishing `akml-engine.json` in the site, so a new browser finds its engine.
+If it does not, see [Troubleshooting › Web edition](troubleshooting.md#web-edition).
+
 For **LAN standalone**, use the summary's `https://COMPUTERNAME:<port>/` address on
 every computer, including the engine host. Follow its recommended `bridge.cer`
 trust steps before pairing. The page uses secure `wss` connections. Standalone LAN
@@ -52,9 +57,10 @@ the localhost page address while the engine is stopped. Use a trusted machine/se
 ## SQL Server
 
 Select **SQL Server**, supply the server and appropriate authentication, and select
-your database. Windows authentication uses the identity under which the engine runs,
-which may differ from your browser's Windows user. Use **Test** to check settings,
-then **Connect**. Start with a sample database and a read-only query.
+your database. Windows authentication from a browser on the engine's computer signs in
+as you, as SSMS does; from another computer it uses the identity under which the engine
+runs. Use **Test** to check settings, then **Connect**. Start with a sample database and
+a read-only query.
 
 For the desktop workflow, install the extension for **SQL Server Management Studio 22**
 and follow [Getting started](getting-started.md).

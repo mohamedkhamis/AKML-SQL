@@ -87,9 +87,10 @@ public class ExpandUpdateColumnsOperation : ILightweightOperation
                     }
                 }
 
-                // Find missing columns (skip computed and identity)
+                // Find missing columns (skip computed and identity). Spec 047 (review of PR #261): an IDENTITY column was
+                // added as "Id = NULL", which the server refuses ("Cannot update identity column").
                 var missingCols = dbObj.Columns
-                    .Where(c => !c.IsComputed && !existingCols.Contains(c.ColumnName))
+                    .Where(c => !c.IsComputed && !c.IsIdentity && !existingCols.Contains(c.ColumnName))
                     .ToList();
 
                 if (missingCols.Count == 0) continue;

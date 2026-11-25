@@ -44,7 +44,7 @@ namespace AkmlSql.Shell.Shared.Analysis
         }
     }
 
-    internal sealed class DiagnosticTagger : ITagger<IErrorTag>, IDisposable
+    internal sealed class DiagnosticTagger : ITagger<IErrorTag>, IDisposable, ErrorListReporter.IReapplicable
     {
         private readonly ITextBuffer _buffer;
         private readonly AnalysisController _controller;
@@ -57,6 +57,18 @@ namespace AkmlSql.Shell.Shared.Analysis
             _buffer     = buffer;
             _controller = controller;
             _controller.DiagnosticsUpdated += OnDiagnosticsUpdated;
+            ErrorListReporter.Register(this);
+        }
+
+        /// <summary>
+        /// Spec 047 installed-product run (F10): Options › Code analysis › Advisory findings applies to open documents at
+        /// once. Options OK re-applies every registered reporter; the tagger then asks the editor for its tags again, which
+        /// reads the saved style. Before, the change showed only after the next edit re-analysed the document.
+        /// </summary>
+        void ErrorListReporter.IReapplicable.Reapply()
+        {
+            var snapshot = _buffer.CurrentSnapshot;
+            TagsChanged?.Invoke(this, new SnapshotSpanEventArgs(new SnapshotSpan(snapshot, 0, snapshot.Length)));
         }
 
         private void OnDiagnosticsUpdated(object sender, DiagnosticsUpdatedEventArgs e)
@@ -70,9 +82,15 @@ namespace AkmlSql.Shell.Shared.Analysis
         {
             var snapshot = _buffer.CurrentSnapshot;
             var issues   = _issues;
+            // Spec 047 (UX-001): read once per call, through the controller's 2 s settings cache.
+            var style    = AnalysisController.CurrentSettings().SquiggleStyle;
 
             foreach (var issue in issues)
             {
+                // "Margin marker only": an Information or Hint finding keeps its warning glyph (WarningGlyph draws
+                // one dot per line from the controller's issues, not from these tags) and its Error List entry.
+                if (!ShouldTag(issue.Severity, style)) continue;
+
                 // Guard against stale offsets after edits
                 var start = Math.Min(issue.StartOffset, snapshot.Length);
                 var end   = Math.Min(issue.EndOffset,   snapshot.Length);
@@ -91,6 +109,14 @@ namespace AkmlSql.Shell.Shared.Analysis
             }
         }
 
+        /// <summary>
+        /// Spec 047 (UX-001, SSMS-001, contracts/analysis-display.md §1) — whether a finding is underlined in the text.
+        /// With "marker" (the default) only warnings (2) and errors (3) are; Information (1) and Hint (0) findings get the
+        /// margin marker only. Every other value, unknown ones included, underlines everything as before.
+        /// </summary>
+        internal static bool ShouldTag(int severity, string? squiggleStyle) =>
+            severity >= 2 || !string.Equals(squiggleStyle, "marker", StringComparison.Ordinal);
+
         private static string SeverityToErrorType(int severity)
         {
             return severity switch
@@ -105,6 +131,7 @@ namespace AkmlSql.Shell.Shared.Analysis
         public void Dispose()
         {
             _controller.DiagnosticsUpdated -= OnDiagnosticsUpdated;
+            ErrorListReporter.Unregister(this);
         }
     }
 }

@@ -121,48 +121,64 @@ namespace AkmlSql.Shell.Shared.Ipc
 
         private static string FindEnginePath()
         {
-            var extensionDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            var shell = Assembly.GetExecutingAssembly().Location;
+            var extensionDir = Path.GetDirectoryName(shell);
             if (extensionDir == null)
             {
                 return null;
             }
 
-            // Check Engine subfolder first
-            var enginePath = Path.Combine(extensionDir, "Engine", "AkmlSql.Engine.exe");
-            if (File.Exists(enginePath))
+            // The places an engine can be, in the order they were always tried: the extension's Engine subfolder and the
+            // extension folder (developer deployments), then the installed {app}\Engine (setup deploys it there).
+            var places = new System.Collections.Generic.List<string>
             {
-                return enginePath;
+                Path.Combine(extensionDir, "Engine", "AkmlSql.Engine.exe"),
+                Path.Combine(extensionDir, "AkmlSql.Engine.exe"),
+            };
+            foreach (var folder in new[] { Environment.SpecialFolder.ProgramFilesX86, Environment.SpecialFolder.ProgramFiles })
+            {
+                var root = Environment.GetFolderPath(folder);
+                if (!string.IsNullOrEmpty(root)) places.Add(Path.Combine(root, "AKML SQL", "Engine", "AkmlSql.Engine.exe"));
             }
 
-            // Check same directory
-            enginePath = Path.Combine(extensionDir, "AkmlSql.Engine.exe");
-            if (File.Exists(enginePath))
-            {
-                return enginePath;
-            }
+            var found = new System.Collections.Generic.List<(string Path, string Version)>();
+            foreach (var place in places)
+                if (File.Exists(place)) found.Add((place, FileVersionOf(place)));
 
-            // Check base install directory (installer deploys Engine to {app}\Engine\)
-            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            if (!string.IsNullOrEmpty(programFiles))
+            var shellVersion = FileVersionOf(shell);
+            var chosen = ChooseEngine(found, shellVersion);
+            if (chosen is { } engine)
             {
-                enginePath = Path.Combine(programFiles, "AKML SQL", "Engine", "AkmlSql.Engine.exe");
-                if (File.Exists(enginePath))
-                {
-                    return enginePath;
-                }
+                if (string.Equals(engine.Version, shellVersion, StringComparison.Ordinal))
+                    Log.Information("Engine: {Path} ({Version})", engine.Path, engine.Version);
+                else
+                    Log.Warning("Engine: {Path} is version {EngineVersion} and this extension {ShellVersion}; no engine of the extension's version was found",
+                        engine.Path, engine.Version ?? "unknown", shellVersion ?? "unknown");
             }
+            return chosen?.Path;
+        }
 
-            programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            if (!string.IsNullOrEmpty(programFiles))
+        /// <summary>
+        /// Spec 047 installed-product run (F8): the engine whose version is the extension's own, wherever it is; else the first
+        /// one found, in the order above. An engine left by hand in the extension's Engine folder (a private update of
+        /// 2026-10-10) used to win over every later install's engine, so SSMS ran an engine weeks older than its extension.
+        /// </summary>
+        internal static (string Path, string Version)? ChooseEngine(
+            System.Collections.Generic.IReadOnlyList<(string Path, string Version)> found, string shellVersion)
+        {
+            if (found == null || found.Count == 0) return null;
+            if (!string.IsNullOrEmpty(shellVersion))
             {
-                enginePath = Path.Combine(programFiles, "AKML SQL", "Engine", "AkmlSql.Engine.exe");
-                if (File.Exists(enginePath))
-                {
-                    return enginePath;
-                }
+                foreach (var candidate in found)
+                    if (string.Equals(candidate.Version, shellVersion, StringComparison.Ordinal)) return candidate;
             }
+            return found[0];
+        }
 
-            return null;
+        private static string FileVersionOf(string path)
+        {
+            try { return FileVersionInfo.GetVersionInfo(path).FileVersion; }
+            catch (Exception) { return null; }
         }
 
         public void Dispose()

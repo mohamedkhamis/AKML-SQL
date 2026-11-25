@@ -70,4 +70,54 @@ public sealed class TabStripKeyboardTests
         Assert.Equal(resultsMarker, aiMarker);
         Assert.Equal(resultsMarker, previewMarker);
     }
+
+    /// <summary>
+    /// Spec 047 (WEB-009, contracts/cli-docs-a11y.md §4) — a query tab's close button is beside its tab, not inside it (a tab
+    /// that holds a button is interactive content inside interactive content), Tab reaches it, and every way of closing a tab
+    /// still works: the button, Delete, a middle click and Ctrl+Alt+W. No engine is needed.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_query_tabs_close_button_is_beside_it_and_every_way_of_closing_works()
+    {
+        WebAppFixture web;
+        try { web = await WebAppFixture.StartAsync(); }
+        catch (Exception ex) { throw new SkipException($"Web app could not start (build it first): {ex.Message}"); }
+        await using var _ = web;
+        using var playwright = await Playwright.CreateAsync();
+        IBrowser? browser;
+        try { browser = await playwright.Chromium.LaunchForTestsAsync(); }
+        catch (PlaywrightException) { browser = null; }
+        Skip.If(browser == null, "Playwright browsers are not installed.");
+        await using var __ = browser;
+        var page = await (await browser!.NewContextAsync()).NewPageAsync();
+        await page.GotoAsync(web.Url);
+        await page.WaitForSelectorAsync(".cm-editor", new() { Timeout = 60_000 });
+
+        var tabs = Id(page, "doc-tab");
+        for (int i = 0; i < 4; i++) await Id(page, "doc-new").ClickAsync();
+        await Assertions.Expect(tabs).ToHaveCountAsync(5);
+
+        // Beside, not inside: no close button is a descendant of a tab, and each tab has one.
+        Assert.Equal(0, await page.Locator("[data-testid='doc-tab'] [data-testid='doc-tab-close']").CountAsync());
+        Assert.Equal(5, await Id(page, "doc-tab-close").CountAsync());
+        var label = await tabs.Last.Locator(".akml-tab-label").InnerTextAsync();
+        Assert.Equal($"Close {label}", await Id(page, "doc-tab-close").Last.GetAttributeAsync("aria-label"));
+
+        // Tab from the active tab reaches its close button.
+        await tabs.Last.FocusAsync();
+        await page.Keyboard.PressAsync("Tab");
+        Assert.Equal("doc-tab-close", await page.EvaluateAsync<string?>("() => document.activeElement && document.activeElement.getAttribute('data-testid')"));
+
+        // The close button, Delete, a middle click and Ctrl+Alt+W each close one tab.
+        await page.Keyboard.PressAsync("Enter");
+        await Assertions.Expect(tabs).ToHaveCountAsync(4);
+        await tabs.First.FocusAsync();
+        await page.Keyboard.PressAsync("Delete");
+        await Assertions.Expect(tabs).ToHaveCountAsync(3);
+        await tabs.Nth(1).ClickAsync(new() { Button = MouseButton.Middle });
+        await Assertions.Expect(tabs).ToHaveCountAsync(2);
+        await page.Locator(".cm-content").ClickAsync();
+        await page.Keyboard.PressAsync("Control+Alt+w");
+        await Assertions.Expect(tabs).ToHaveCountAsync(1);
+    }
 }

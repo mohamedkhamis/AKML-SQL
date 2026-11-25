@@ -206,7 +206,7 @@ public static class RuleMetadataCatalog
         ["NM002"] = new("Procedure name starts with sp_", "Procedure name starts with `sp_` — SQL Server searches `master` first", true),
         ["NM003"] = new("Hungarian notation on object", "Hungarian notation on table or view (`tbl_`, `vw_`)", false),
         ["NM004"] = new("Inconsistent naming style", "Inconsistent naming style across objects of the same type", false),
-        ["NM005"] = new("Special characters in identifier", "Special characters in unquoted identifier", false),
+        ["NM005"] = new("Special characters in a name", "A name the script gives (a created object, column, constraint, index, CTE or alias) has spaces or special characters; references to existing names are not reported", false),
         ["NM006"] = new("Single-letter table alias", "Single-letter table alias (`a`, `b`) — prefer descriptive aliases", false),
     };
 }

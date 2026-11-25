@@ -35,6 +35,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             ctx.Rows.Tip(rowShowInErrorList, "Report analysis issues in the VS/SSMS Error List window");
             ctx.RegisterSearch("Show in Error List", "Report analysis issues in the VS/SSMS Error List window", "Toggle", rowShowInErrorList);
 
+            // Spec 047 (UX-001, SSMS-001): codeAnalysis.squiggleStyle, which no control set before and nothing read.
+            const string advisoryHelp =
+                "Information and hint findings, such as a missing semicolon. Warnings and errors are always underlined.";
+            var (rowAdvisory, cboAdvisory) = ctx.Rows.AddDropdown(panel, "Advisory findings",
+                new[] { "Margin marker only", "Underline in the text" }, advisoryHelp, chkEnabled);
+            ctx.Rows.Tip(rowAdvisory, advisoryHelp);
+            ctx.RegisterSearch("Advisory findings", "Margin marker or underline for information and hint findings (semicolon, squiggle)", "Dropdown", rowAdvisory);
+
             // Spec 040 (T168, OPT-09) — the "Rules" row opens the Code analysis rules window. The
             // window saves the overrides itself; the page then takes them from disk (see
             // CodeAnalysisControls.RefreshRuleOverridesFromDisk) so OK here can't write stale ones.
@@ -58,7 +66,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             var scopeRow = ctx.Rows.AddInfoRow(panel, "Disable a rule", scopeHint);
             ctx.RegisterSearch("Disable a rule", scopeHint, "Info", scopeRow);
 
-            var controls = new CodeAnalysisControls(chkEnabled, chkRunOnType, chkShowInErrorList);
+            var controls = new CodeAnalysisControls(chkEnabled, chkRunOnType, chkShowInErrorList, cboAdvisory);
             btnManageRules.Click += (_, _) =>
             {
                 Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
@@ -74,12 +82,14 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
         private readonly CheckBox _enabled;
         private readonly CheckBox _runOnType;
         private readonly CheckBox _showInErrorList;
+        private readonly ComboBox _advisory;   // 0 = "marker", 1 = "underline"
 
-        public CodeAnalysisControls(CheckBox enabled, CheckBox runOnType, CheckBox showInErrorList)
+        public CodeAnalysisControls(CheckBox enabled, CheckBox runOnType, CheckBox showInErrorList, ComboBox advisory)
         {
             _enabled = enabled;
             _runOnType = runOnType;
             _showInErrorList = showInErrorList;
+            _advisory = advisory;
         }
 
         // Spec 040 (T168) — the rule overrides "Manage rules…" left on disk. Options' working copy
@@ -94,6 +104,8 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             _enabled.IsChecked = ca.Enabled;
             _runOnType.IsChecked = ca.RunOnType;
             _showInErrorList.IsChecked = ca.ShowInErrorList;
+            // Any value but "marker" underlines advisory findings (DiagnosticTagger.ShouldTag), so it shows as "Underline".
+            _advisory.SelectedIndex = string.Equals(ca.SquiggleStyle, "marker", System.StringComparison.Ordinal) ? 0 : 1;
             _ruleOverridesFromDisk = null;
         }
 
@@ -102,6 +114,7 @@ namespace AkmlSql.Shell.Shared.Dialogs.Pages
             settings.CodeAnalysis.Enabled = _enabled.IsChecked == true;
             settings.CodeAnalysis.RunOnType = _runOnType.IsChecked == true;
             settings.CodeAnalysis.ShowInErrorList = _showInErrorList.IsChecked == true;
+            settings.CodeAnalysis.SquiggleStyle = _advisory.SelectedIndex == 1 ? "underline" : "marker";
             if (_ruleOverridesFromDisk != null)
                 settings.CodeAnalysis.RuleOverrides = _ruleOverridesFromDisk; // the setter copies
         }

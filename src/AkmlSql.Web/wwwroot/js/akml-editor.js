@@ -110,6 +110,25 @@ export function writingAssistantOptOut(cm) {
     return cm.view.EditorView.contentAttributes.of({ ...WRITING_ASSISTANT_OPT_OUT });
 }
 
+// ── Spec 047 (WEB-007) — the editor has an accessible name ─────────────────────────────────────────────────────────
+// axe found the content element unnamed (aria-input-field-name): a screen reader announced an anonymous text box. The name
+// says it is the SQL editor and which query tab it shows; it follows a tab switch and a rename (setTabName).
+
+/** The editor's accessible name for the query tab shown ("SQL query editor — SQLQuery1"). */
+export function editorAccessibleName(tabName) {
+    const name = typeof tabName === 'string' ? tabName.trim() : '';
+    return name ? `SQL query editor — ${name}` : 'SQL query editor';
+}
+
+/** The content attributes that name the editor for assistive technology (pure; `cm` is the bundle). */
+export function editorNameAttributes(cm, tabName) {
+    return cm.view.EditorView.contentAttributes.of({
+        'aria-label': editorAccessibleName(tabName),
+        'aria-multiline': 'true',
+        role: 'textbox',
+    });
+}
+
 /** The CodeMirror extensions for the options, one per compartment (pure; `cm` is the bundle). */
 export function optionExtensions(cm, opts) {
     const o = normaliseEditorOptions(opts);
@@ -1200,12 +1219,14 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
     const wrapCompartment = new cm.state.Compartment();
     const tabCompartment = new cm.state.Compartment();
     const dialectCompartment = new cm.state.Compartment();   // Spec 042: SQL Server (default) or PostgreSQL language
+    const nameCompartment = new cm.state.Compartment();      // Spec 047 (WEB-007): the accessible name, per query tab
     const optionExt = optionExtensions(cm, options);
     applyEditorAppearance(host, options);
 
     // Spec 043 (R6): kept on the instance, so every query tab's state is built with the same extensions (switchTab).
     const extensions = [
         writingAssistantOptOut(cm),   // Spec 043 (FR-036): Grammarly and LanguageTool stay out of the SQL
+        nameCompartment.of(editorNameAttributes(cm, options && options.tabName)),
         wrapCompartment.of(optionExt.wrap),
         tabCompartment.of(optionExt.tab),
         // The undo history. historyKeymap below binds Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, but without this extension
@@ -1237,6 +1258,11 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
             maxRenderedOptions: 50,
         }),
         cm.lint.lintGutter(),
+        // Spec 047 (UX-001): an advisory finding in marker-only mode draws nothing under the SQL; its gutter marker and
+        // tooltip stay. The theme's scoped selector outranks CodeMirror's own lint-range rule.
+        cm.view.EditorView.theme({
+            '.cm-lintRange.akml-lint-marker-only': { backgroundImage: 'none', background: 'none', textDecoration: 'none' },
+        }),
         ghostField,
         ghostListener,
         // Spec 030 (web Phase 1) — IntelliSense parity: hover quick-info, signature help, F12 goto.
@@ -1255,7 +1281,7 @@ export async function create(hostElementId, initialText, dotNetRef, options) {
 
     const disposeLintKeyboard = installLintKeyboard(view, hostElementId);
     _instances.set(hostElementId, {
-        hostElementId, view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, disposeLintKeyboard, kind: options && options.dialect,
+        hostElementId, view, cm, dotNetRef, ghost, wrapCompartment, tabCompartment, dialectCompartment, nameCompartment, disposeLintKeyboard, kind: options && options.dialect,
         // UI scan 2026-11-03 (W4): a tab shown by showTab reports its own caret; setState raises no update.
         reportCaret,
         // Spec 043 (R6): the query tabs. The view shows `currentTab`; every other tab's state waits in `tabs`.
@@ -1336,9 +1362,9 @@ export function replaceDocIfUnchanged(state, expected, text) {
 }
 
 /** Pure: `state` showing `diags` (see toLintDiagnostics) instead of what it showed. */
-export function withDiagnostics(cm, state, diags) {
+export function withDiagnostics(cm, state, diags, options) {
     if (!cm.lint || typeof cm.lint.setDiagnostics !== 'function') return state;
-    return state.update(cm.lint.setDiagnostics(state, toLintDiagnostics(state.doc, diags))).state;
+    return state.update(cm.lint.setDiagnostics(state, toLintDiagnostics(state.doc, diags, options))).state;
 }
 
 /**
@@ -1361,10 +1387,17 @@ function storedTab(inst, tabId, create = false) {
  * Show query tab `tabId`: the shown tab's state is stored, `tabId`'s comes back (or is made from `seedText` the first
  * time), with the current editor options and `kind`'s SQL language.
  */
-export function switchTab(hostElementId, tabId, seedText, kind) {
+export function switchTab(hostElementId, tabId, seedText, kind, tabName) {
     const inst = _instances.get(hostElementId);
     if (!inst) return;
-    showTab(inst, tabId, seedText, kind);
+    showTab(inst, tabId, seedText, kind, tabName);
+}
+
+/** Spec 047 (WEB-007): the shown query tab was renamed (Save as); the editor's accessible name follows. */
+export function setTabName(hostElementId, tabName) {
+    const inst = _instances.get(hostElementId);
+    if (!inst || !inst.nameCompartment) return;
+    inst.view.dispatch({ effects: inst.nameCompartment.reconfigure(editorNameAttributes(inst.cm, tabName)) });
 }
 
 /**
@@ -1372,7 +1405,7 @@ export function switchTab(hostElementId, tabId, seedText, kind) {
  * `view.setState` raises no update, so the status bar is told the shown tab's caret here: without that it kept the
  * previous tab's "Ln 9, Col 26" over a one-line tab until the next keystroke (UI scan 2026-11-03, W4).
  */
-export function showTab(inst, tabId, seedText, kind) {
+export function showTab(inst, tabId, seedText, kind, tabName) {
     if (!inst || !tabId || inst.currentTab === tabId) return;
     const view = inst.view;
     const shown = inst.currentTab
@@ -1389,6 +1422,8 @@ export function showTab(inst, tabId, seedText, kind) {
         inst.dialectCompartment.reconfigure(dialectExtension(inst.cm, kind)),
         inst.wrapCompartment.reconfigure(inst.optionExt.wrap),
         inst.tabCompartment.reconfigure(inst.optionExt.tab),
+        // Spec 047 (WEB-007): the name of the tab now shown (an instance built by hand in a test may have no compartment).
+        ...(inst.nameCompartment ? [inst.nameCompartment.reconfigure(editorNameAttributes(inst.cm, tabName))] : []),
     ] });
     view.scrollDOM.scrollTop = next.scrollTop;
     view.scrollDOM.scrollLeft = next.scrollLeft;
@@ -1774,8 +1809,11 @@ const LINT_SEVERITY = ['hint', 'info', 'warning', 'error'];
  *        1-based line and columns; severity 0..3 = hint/info/warning/error.
  * @returns {Array<{from:number, to:number, severity:string, message:string, source:string}>}
  */
-export function toLintDiagnostics(doc, diags) {
+export function toLintDiagnostics(doc, diags, options) {
     if (!Array.isArray(diags) || !doc) return [];
+    // Spec 047 (UX-001): "Advisory findings: Margin marker only" — a hint or info finding keeps its gutter marker and
+    // tooltip; its range gets a class the editor theme draws nothing for (no wavy underline under the SQL).
+    const markersOnly = options?.advisoryMarkersOnly === true;
     const out = [];
     for (const d of diags) {
         if (!d || typeof d.line !== 'number' || d.line < 1 || d.line > doc.lines) continue;
@@ -1793,28 +1831,37 @@ export function toLintDiagnostics(doc, diags) {
             from = line.from;
             to = line.to;
         }
-        out.push({
+        const severity = LINT_SEVERITY[d.severity] ?? 'info';
+        const diagnostic = {
             from,
             to,
-            severity: LINT_SEVERITY[d.severity] ?? 'info',
+            severity,
             message: String(d.message ?? ''),
             source: d.source || 'AKML SQL',
-        });
+        };
+        if (markersOnly && (severity === 'hint' || severity === 'info')) diagnostic.markClass = MARKER_ONLY_CLASS;
+        out.push(diagnostic);
     }
     return out;
 }
 
-/** Show `diags` (see toLintDiagnostics) as underlines + gutter markers, replacing any shown before. */
-export function setDiagnostics(hostElementId, diags, tabId) {
+/** Spec 047 (UX-001): the class of an advisory finding's range in marker-only mode; the editor theme hides its underline. */
+const MARKER_ONLY_CLASS = 'akml-lint-marker-only';
+
+/**
+ * Show `diags` (see toLintDiagnostics) as underlines + gutter markers, replacing any shown before. `options` is
+ * passed to toLintDiagnostics (spec 047: `{ advisoryMarkersOnly }`).
+ */
+export function setDiagnostics(hostElementId, diags, tabId, options) {
     const inst = _instances.get(hostElementId);
     if (!inst || !inst.cm.lint || typeof inst.cm.lint.setDiagnostics !== 'function') return;
     const stored = storedTab(inst, tabId);
     if (stored === undefined) return;   // never shown here: the page puts its findings back when it is first shown
     if (stored) {
-        stored.state = withDiagnostics(inst.cm, stored.state, diags);   // spec 043: findings for a tab not shown
+        stored.state = withDiagnostics(inst.cm, stored.state, diags, options);   // spec 043: findings for a tab not shown
         return;
     }
-    const mapped = toLintDiagnostics(inst.view.state.doc, diags);
+    const mapped = toLintDiagnostics(inst.view.state.doc, diags, options);
     inst.view.dispatch(inst.cm.lint.setDiagnostics(inst.view.state, mapped));
 }
 

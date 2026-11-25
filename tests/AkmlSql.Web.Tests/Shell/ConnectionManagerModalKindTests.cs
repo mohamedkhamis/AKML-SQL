@@ -341,10 +341,10 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         Type(cut, "conn-pg-host", "db2");
         cut.Find("[data-testid=conn-pg-host]").Change("db2");   // asked about db2: remembered
 
-        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder")));
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder")));
         await cut.InvokeAsync(() => earlier.SetResult(false));   // db1's answer arrives last
 
-        Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
+        Assert.Equal("Remembered on the engine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
     }
 
     [Fact]
@@ -628,7 +628,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         Assert.Equal("verify-ca", cut.Find("[data-testid=conn-pg-sslmode]").GetAttribute("value"));
         Assert.Equal(@"C:\certs\root.crt", cut.Find("[data-testid=conn-pg-rootcert]").GetAttribute("value"));
         Assert.True(string.IsNullOrEmpty(cut.Find("[data-testid=conn-pg-password]").GetAttribute("value")));
-        Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
+        Assert.Equal("Remembered on the engine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
     }
 
     // ── Forget (FR-106) ─────────────────────────────────────────────────────────────────────────
@@ -757,7 +757,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
     public async Task Connecting_with_a_remembered_password_sends_none_and_asks_for_none()
     {
         var cut = await OpenWithRememberedAsync();
-        Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
+        Assert.Equal("Remembered on the engine", cut.Find("[data-testid=conn-pg-password]").GetAttribute("placeholder"));
 
         cut.Find("[data-testid=conn-connect-btn]").Click();
 
@@ -858,7 +858,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         var cut = await OpenSqlLoginAsync(remembered: true);
 
         cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
-        Assert.Equal("Remembered on the engine machine", cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
+        Assert.Equal("Remembered on the engine", cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
         Assert.NotEmpty(cut.FindAll("[data-testid=conn-sql-forget]"));
     }
 
@@ -1048,7 +1048,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         var listed = _sql.Listed.Last();
         Assert.Equal("source-tab", listed.CopyPasswordFrom);
         Assert.True(string.IsNullOrEmpty(listed.Password));
-        Assert.Equal("The same as the query tab this one was opened from", cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
+        Assert.Equal("Same as the tab it came from", cut.Find("[data-testid=conn-password-input]").GetAttribute("placeholder"));
 
         cut.Find("[data-testid=conn-connect-btn]").Click();
 
@@ -1161,7 +1161,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         cut.Find("[data-testid=conn-login-input]").Input("reporting");
         cut.Find("[data-testid=conn-login-input]").Change("reporting");
 
-        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine", Placeholder(cut)));
         Assert.Empty(cut.FindAll("[data-testid=conn-sql-refused-hint]"));
         cut.WaitForAssertion(() => Assert.NotEmpty(_sql.Listed));
         Assert.Equal("reporting", _sql.Listed.Last().User);
@@ -1206,7 +1206,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         _sql.EngineCopiesSessionPasswords = true;
         _sql.ActiveSession = NewQueryTab();
         var cut = await OpenAsync();
-        cut.WaitForAssertion(() => Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Same as the tab it came from", Placeholder(cut)));
 
         Type(cut, "conn-server-input", "sql02");
         cut.Find("[data-testid=conn-server-input]").Change("sql02");
@@ -1218,7 +1218,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
 
         Type(cut, "conn-server-input", " SQL01 ");   // the other tab's server again, written another way
         cut.Find("[data-testid=conn-server-input]").Change(" SQL01 ");
-        Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut));
+        Assert.Equal("Same as the tab it came from", Placeholder(cut));
 
         cut.Find("[data-testid=conn-login-input]").Input("reporting");
         Assert.Null(Placeholder(cut));
@@ -1317,7 +1317,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
     {
         _sql.SqlRememberedForTrust = trust => !trust;   // a password remembered for a validated connection only
         var cut = await OpenSqlLoginAsync(remembered: false);
-        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine", Placeholder(cut)));
         Assert.Equal(("sql01", "app", false), _sql.SqlAsked.Last());
 
         cut.Find("[data-testid=conn-trust-cert]").Change(true);
@@ -1330,7 +1330,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         Assert.Empty(_sql.Connected);
 
         cut.Find("[data-testid=conn-trust-cert]").Change(false);
-        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine", Placeholder(cut)));
     }
 
     // [2] A tab with no binding that is missing its password: the Status bar's restore of a remembered login on a fresh page.
@@ -1425,7 +1425,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         cut.Find("[data-testid=conn-login-input]").Input("reporting");
         cut.Find("[data-testid=conn-login-input]").Change("reporting");
 
-        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine", Placeholder(cut)));
         Assert.Empty(cut.FindAll("[data-testid=conn-sql-refused-hint]"));
         cut.WaitForAssertion(() => Assert.NotEmpty(_sql.Listed));
         Assert.Equal("reporting", _sql.Listed.Last().User);
@@ -1550,7 +1550,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         _sql.EngineCopiesSessionPasswords = true;
         _sql.ActiveSession = NewQueryTab();   // sql01, certificate validated
         var cut = await OpenAsync();
-        cut.WaitForAssertion(() => Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Same as the tab it came from", Placeholder(cut)));
 
         cut.Find("[data-testid=conn-trust-cert]").Change(true);
 
@@ -1560,7 +1560,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         Assert.Empty(_sql.Connected);
 
         cut.Find("[data-testid=conn-trust-cert]").Change(false);
-        Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut));
+        Assert.Equal("Same as the tab it came from", Placeholder(cut));
     }
 
     [Fact]
@@ -1575,7 +1575,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         var cut = await OpenAsync();
 
         Assert.True(cut.Find("[data-testid=conn-trust-cert]").HasAttribute("checked"));
-        cut.WaitForAssertion(() => Assert.Equal("The same as the query tab this one was opened from", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Same as the tab it came from", Placeholder(cut)));
     }
 
     [Fact]
@@ -1650,7 +1650,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         cut.Find("[data-testid=conn-row-pick]").Click();   // a load: the choice was about the form before it
 
         cut.WaitForAssertion(() => Assert.True(RememberTicked(cut)));
-        Assert.Equal("Remembered on the engine machine", Placeholder(cut));
+        Assert.Equal("Remembered on the engine", Placeholder(cut));
     }
 
     // [2] The saved row says the password is remembered when the engine kept it, and only the row's own login changes the flag.
@@ -1792,7 +1792,7 @@ public sealed class ConnectionManagerModalKindTests : BunitContext
         _sql.ActiveSession = tab;
         _sql.ConnectReply = new ConnectResult(false, "Login failed for user 'app'.", ErrorCode: AkmlSql.Core.Ipc.Messages.DialectErrors.LoginFailed);
         var cut = await OpenSqlLoginAsync(remembered: true);
-        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine machine", Placeholder(cut)));
+        cut.WaitForAssertion(() => Assert.Equal("Remembered on the engine", Placeholder(cut)));
 
         cut.Find("[data-testid=conn-connect-btn]").Click();
 

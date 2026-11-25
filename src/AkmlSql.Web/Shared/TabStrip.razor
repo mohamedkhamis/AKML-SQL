@@ -17,13 +17,23 @@
     Review of US1: closable tabs are keyed, so closing one never hands its element (and the focus on it) to the next tab;
     the keys act on the tab that has focus, a held Delete closes one tab, and when the closed tab had focus the strip's new
     active tab takes it (WAI-ARIA tabs pattern).
+
+    Spec 047 (WEB-009): the close button is beside its tab, in a presentational item that carries the active marker, not
+    inside it: a tab holding a button is interactive content inside interactive content (axe nested-interactive). A tablist
+    may own nothing but tabs (axe aria-required-children), so a closable strip's tablist is an element of its own that owns
+    the tabs through aria-owns, and the row the tabs and their close buttons sit in is a plain container (keys, focus and
+    reveal still work on it). The active tab's close button is a tab stop, so Tab reaches it; the others are not.
 *@
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
 <div class="akml-tabs @Class" data-testid="@(Name == null ? null : "tabstrip-" + Name)">
-    <div class="akml-tablist" role="tablist" aria-label="@AriaLabel" @ref="_list" @onkeydown="OnKeyDownAsync">
+    @if (Closable)
+    {
+        <div class="akml-tablist-owner" role="tablist" aria-label="@AriaLabel" aria-owns="@OwnedTabIds"></div>
+    }
+    <div class="akml-tablist" role="@(Closable ? null : "tablist")" aria-label="@(Closable ? null : AriaLabel)" @ref="_list" @onkeydown="OnKeyDownAsync">
         @for (int i = 0; i < Tabs.Count; i++)
         {
             var index = i;
@@ -31,7 +41,8 @@
             var active = tab.Id == _current;
             if (Closable)
             {
-                <div role="tab" class="akml-tab akml-tab--closable" @key="tab.Id"
+                <div class="akml-tab-item" role="presentation" @key="tab.Id" data-active="@(active ? "true" : "false")">
+                <div role="tab" class="akml-tab akml-tab--closable"
                      id="@TabId(IdPrefix, tab.Id)"
                      aria-selected="@(active ? "true" : "false")"
                      aria-controls="@PanelId(IdPrefix, tab.Id)"
@@ -50,9 +61,10 @@
                     {
                         <span class="akml-tab-modified" aria-label="modified" data-testid="@tab.ModifiedTestId">*</span>
                     }
-                    <button type="button" class="akml-tab-close" tabindex="-1" aria-label="@($"Close {tab.Label}")"
-                            title="@($"Close {tab.Label}")" data-testid="doc-tab-close"
-                            @onclick="@(() => OnClose.InvokeAsync(tab.Id))" @onclick:stopPropagation="true"><Icon Name="x" Size="12" /></button>
+                </div>
+                <button type="button" class="akml-tab-close" tabindex="@(active ? 0 : -1)" aria-label="@($"Close {tab.Label}")"
+                        title="@($"Close {tab.Label}")" data-testid="doc-tab-close"
+                        @onclick="@(() => OnClose.InvokeAsync(tab.Id))"><Icon Name="x" Size="12" /></button>
                 </div>
                 continue;
             }
@@ -114,6 +126,9 @@
 
     /// <summary>The id of a tab's element.</summary>
     public static string TabId(string prefix, string tabId) => $"{prefix}-tab-{tabId}";
+
+    // Spec 047 (WEB-009): the tabs a closable strip's tablist owns, in order.
+    private string OwnedTabIds => string.Join(" ", Tabs.Select(t => TabId(IdPrefix, t.Id)));
 
     /// <summary>The id the consumer gives the matching role="tabpanel" element.</summary>
     public static string PanelId(string prefix, string tabId) => $"{prefix}-panel-{tabId}";

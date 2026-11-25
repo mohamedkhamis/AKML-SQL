@@ -41,10 +41,8 @@
         </div>
     </div>
 
-    @if (!string.IsNullOrEmpty(_status))
-    {
-        <p class="akml-snippets-status" role="status" data-testid="snippet-status">@_status</p>
-    }
+    @* Spec 047 (UX-002): always in the page, so a screen reader announces the first message too; empty, it takes no room. *@
+    <p class="akml-snippets-status" role="status" aria-live="polite" data-testid="snippet-status">@_status</p>
 
     <div class="akml-snippets-body">
         @* Review WEB-13: one tab stop; Arrow keys, Home and End move the active option, Enter or Space selects it (asking
@@ -142,6 +140,7 @@
     .akml-snippets { height: 100%; }
     .akml-snippets-header { padding: var(--akml-scalar-spacing-s) var(--akml-scalar-spacing-m) var(--akml-scalar-spacing-xs); }
     .akml-snippets-status { padding: var(--akml-scalar-spacing-xs) var(--akml-scalar-spacing-m); color: var(--akml-status-info); font-style: italic; margin: 0; }
+    .akml-snippets-status:empty { padding: 0; }
     /* UI scan 2026-11-03 (W10): the list takes a share of the page instead of a fixed 280px, so titles such as
        "Common Table Expression" are read in full on a desktop window; the editor keeps the rest. */
     .akml-snippets-body { flex: 1 1 auto; display: grid; grid-template-columns: minmax(280px, 32%) 1fr; min-height: 0; }
@@ -440,11 +439,15 @@
         }
     }
 
+    /// <summary>Spec 047 (UX-002): what the page says for a file with no snippet in it.</summary>
+    internal const string NothingFoundText = "No snippet was found in that file. Existing snippets are unchanged.";
+
     private async Task OnImportAsync(InputFileChangeEventArgs e)
     {
+        var name = e.File?.Name ?? "the file";
         try
         {
-            var file = e.File;
+            var file = e.File!;
             if (file.Size > MaxImportBytes)
             {
                 _status = "Import rejected: file exceeds 1 MB.";
@@ -455,26 +458,34 @@
             var json = await reader.ReadToEndAsync();
             var snippet = JsonSerializer.Deserialize<WebSnippet>(json,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (snippet == null || string.IsNullOrWhiteSpace(snippet.Metadata.Shortcode))
+            if (snippet?.Metadata == null || string.IsNullOrWhiteSpace(snippet.Metadata.Shortcode))
             {
-                _status = "Import rejected: not a valid snippet (missing shortcode).";
+                Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Import of '{name}' refused: no shortcode, so not a snippet.");
+                _status = NothingFoundText;
                 return;
             }
             // Never overwrite a built-in; imports always become a personal snippet.
             snippet.Metadata.Id = null;
-            if (snippet.IsBuiltIn) snippet.Metadata.Id = null;   // defensive: strip a builtin.* id
+            snippet.Body ??= Array.Empty<string>();
+            snippet.Variables ??= Array.Empty<WebSnippetVariable>();
             await SnippetStore.SaveAsync(snippet);
             _status = $"Imported '{snippet.Metadata.Shortcode}'.";
             Diagnostics.Log(DiagnosticLevel.Info, "snippets", _status);
             await RefreshAsync();
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            _status = "Import rejected: malformed .akmlsnippet JSON. Existing snippets are unchanged.";
+            // Spec 047 (UX-002): the parser's detail goes to Diagnostics; the page says it in one sentence.
+            Diagnostics.Log(DiagnosticLevel.Info, "snippets", $"Import of '{name}' refused: {ex.Message}");
+            _status = NothingFoundText;
         }
         catch (Exception ex)
         {
             _status = $"Import failed: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 

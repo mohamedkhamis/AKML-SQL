@@ -123,6 +123,12 @@ namespace AkmlSql.Engine
         public const string DialectPostgreSqlV1 = "dialect.postgresql.v1";
 
         /// <summary>
+        /// Spec 047 (ENG-001): <c>PairingList</c> (227 → 228) and <c>PairingRevoke</c> (229 → 230) list and revoke the browsers
+        /// paired with this engine, one by one. Served on the web bridge only. Nothing removes a pairing automatically.
+        /// </summary>
+        public const string PairingManageV1 = "pairing.manage.v1";
+
+        /// <summary>
         /// The set of capabilities the current engine build advertises. M3 baseline includes
         /// the always-available capabilities; <see cref="SchemaCacheV1"/> joined the list when
         /// T104 (SchemaIdentify) shipped. Future tasks add to this list:
@@ -148,6 +154,7 @@ namespace AkmlSql.Engine
             CredentialsSqlServerV2,
             SessionCopyV1,
             SessionCopyV2,
+            PairingManageV1,
         };
 
         /// <summary>
