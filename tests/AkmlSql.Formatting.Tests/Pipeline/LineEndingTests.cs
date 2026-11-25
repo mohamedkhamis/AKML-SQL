@@ -65,8 +65,7 @@ public sealed class LineEndingTests
         Assert.DoesNotMatch(@"(?<!\r)\n", outside);
     }
 
-    // The step itself, both ways. (Through the whole pipeline a CRLF inside a literal never reaches it: the emitter's
-    // trailing-whitespace pass drops that CR, validation sees the literal change and the script comes back unformatted.)
+    // The step itself, both ways.
 
     [Fact]
     public void Narrowing_to_LF_keeps_the_CRLF_of_a_literal()

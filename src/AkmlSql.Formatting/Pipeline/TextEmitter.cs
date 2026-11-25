@@ -36,6 +36,11 @@ public class TextEmitter
         // token is break-suppressed). Comments between statements already get a break and are fine.
         bool prevWasLineComment = false;
 
+        // Where a string literal or quoted identifier that spans lines was written: its line breaks, and the spaces
+        // before them, are its value. The trailing-whitespace pass below leaves them exactly as written (it used to drop
+        // the CR of a CRLF and the spaces at a line's end inside them, so validation refused the whole format).
+        var verbatim = new List<(int Start, int End)>();
+
         foreach (var node in nodes)
         {
             if (node.LeadingWhitespace is { } leading)
@@ -46,7 +51,7 @@ public class TextEmitter
                 if (prevWasLineComment && !leading.Contains('\n'))
                     sb.Append('\n');
                 sb.Append(leading);
-                sb.Append(node.OriginalText);
+                AppendToken(sb, node, node.OriginalText, verbatim);
                 // A comment on the run's last line was attached to its last token like any other (review of S2): write it as
                 // the formatted path does, or the user loses text the validator never sees.
                 if (node.TrailingComment != null)
@@ -62,7 +67,7 @@ public class TextEmitter
 
             if (node.IsInNoformatRegion)
             {
-                sb.Append(node.OriginalText);
+                AppendToken(sb, node, node.OriginalText, verbatim);
                 prevWasLineComment = false;
                 continue;
             }
@@ -114,7 +119,7 @@ public class TextEmitter
             }
             else
             {
-                sb.Append(node.FormattedText);
+                AppendToken(sb, node, node.FormattedText, verbatim);
             }
 
             // Emit trailing comment on same line
@@ -135,7 +140,7 @@ public class TextEmitter
         // Trailing whitespace removal
         if (ws.TrailingWhitespace == "remove")
         {
-            result = RemoveTrailingWhitespace(result);
+            result = RemoveTrailingWhitespace(result, verbatim);
         }
 
         // Final newline handling
@@ -180,15 +185,45 @@ public class TextEmitter
         }
     }
 
-    private static string RemoveTrailingWhitespace(string text)
+    /// <summary>
+    /// Appends a token's text, noting where a string literal or quoted identifier that spans lines went
+    /// (<paramref name="verbatim"/>, positions in <paramref name="sb"/>).
+    /// </summary>
+    private static void AppendToken(StringBuilder sb, LayoutNode node, string text, List<(int Start, int End)> verbatim)
+    {
+        int start = sb.Length;
+        sb.Append(text);
+        if (node.TokenType is TSqlTokenType.AsciiStringLiteral or TSqlTokenType.UnicodeStringLiteral or TSqlTokenType.QuotedIdentifier
+            && text.IndexOfAny(LineBreakChars) >= 0)
+            verbatim.Add((start, sb.Length));
+    }
+
+    private static readonly char[] LineBreakChars = ['\r', '\n'];
+
+    /// <summary>
+    /// Every line's trailing spaces and tabs removed, and every line break written as "\n" — except a line break inside a
+    /// <paramref name="verbatim"/> range (a string literal or quoted identifier written there, in order), which keeps its
+    /// own CR and the spaces before it: they are the value.
+    /// </summary>
+    private static string RemoveTrailingWhitespace(string text, List<(int Start, int End)> verbatim)
     {
         var sb = new StringBuilder(text.Length);
         int start = 0;
+        int range = 0;
 
         for (int i = 0; i < text.Length; i++)
         {
             if (text[i] == '\n')
             {
+                // A line break inside a literal: the line goes as it is, up to and including the break.
+                while (range < verbatim.Count && verbatim[range].End <= i) range++;
+                if (range < verbatim.Count && verbatim[range].Start < i)
+                {
+                    sb.Append(text, start, i + 1 - start);
+                    start = i + 1;
+                    continue;
+                }
+
                 // Find the end of content (excluding trailing spaces/tabs before this newline)
                 int end = i;
                 if (end > start && text[end - 1] == '\r')
