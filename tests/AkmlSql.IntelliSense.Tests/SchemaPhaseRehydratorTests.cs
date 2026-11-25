@@ -162,6 +162,47 @@ public class SchemaPhaseRehydratorTests
         Assert.Single(cache.ForeignKeys);
     }
 
+    /// <summary>
+    /// Spec 047 (review of PR #261): a rehydrated column knows the server fills it (IDENTITY, computed) and its default, so
+    /// the browser's Expand INSERT / UPDATE columns leave it out. A payload from an engine before these keys reads false/null.
+    /// </summary>
+    [Fact]
+    public void Rehydrate_keeps_identity_computed_and_default()
+    {
+        var payload = new SchemaPhasePayload
+        {
+            Phase = (int)PopulationPhase.PhaseB,
+            Schemas =
+            [
+                new SchemaPhaseSchema
+                {
+                    Name = "dbo",
+                    Objects =
+                    [
+                        new SchemaPhaseObject
+                        {
+                            SchemaName = "dbo", ObjectName = "Categories", ObjectType = (int)DbObjectType.Table,
+                            Columns =
+                            [
+                                new SchemaPhaseColumn { Name = "CategoryID", TypeName = "int", IsPrimaryKey = true, IsIdentity = true },
+                                new SchemaPhaseColumn { Name = "CategoryName", TypeName = "nvarchar", MaxLength = 15, DefaultValue = "(N'New')" },
+                                new SchemaPhaseColumn { Name = "NameLength", TypeName = "int", IsComputed = true },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+
+        var columns = SchemaPhaseRehydrator.Rehydrate("srv:Northwind", phaseA: null, phaseB: payload)
+            .FindObject("dbo", "Categories")!.Columns;
+
+        Assert.True(columns[0].IsIdentity);
+        Assert.Equal("(N'New')", columns[1].DefaultValue);
+        Assert.False(columns[1].IsIdentity || columns[1].IsComputed);
+        Assert.True(columns[2].IsComputed);
+    }
+
     [Fact]
     public void Rehydrate_BothNull_ReturnsEmptyNotLoadedCache()
     {

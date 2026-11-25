@@ -195,4 +195,6 @@ picks the state from it: Phase B gives Ready, Phase A only gives StillLoading, n
 ## 12. Line-ending preservation (new pipeline step, SSMS-004)
 
 The input's **dominant line ending** is CRLF when `\r\n` occurs at least as often as lone `\n`; otherwise it is LF.
-The output is emitted in that convention after validation. A lone `\r` is left untouched.
+The output is emitted in that convention after validation. A lone `\r` is left untouched. A line break inside a string
+literal or a quoted identifier keeps its own ending: it is part of the value (review of PR #261 — converting it changed what
+an INSERT stored). When the lexer cannot account for every character of the output, no line break is converted.

@@ -428,6 +428,28 @@ Suites after the fixes:
 
 Notes: `baseline/installed-2026-11-22/web-observations-1213.txt` and `ssms-observations-1213.txt`.
 
+### Code review of PR #261 (owner: `/code-review #261 --fix`), 2026-11-25
+
+The review read the PR's source diff against master (about 4,500 inserted lines). It covered the engine (loopback caller, `SqlOpen`, pairing list and revoke, schema), Core, the web edition, the formatter, the SSMS shell, the installer scripts and the analyzer gate. Fixed in the working tree, not committed and not deployed:
+
+| Finding | Fix | Tests (each fails before the fix) |
+| --- | --- | --- |
+| Stage 9 rewrote every line break after validation, those inside string literals and quoted identifiers included. In a CRLF script, `N'line one<LF>line two'` came back with a CR, so the INSERT stored other text. | `FormatterPipeline.WithLineEndings` converts outside the literals and quoted identifiers that hold a line break, using the lexer's tokens. When the tokens do not cover the text end to end, it converts nothing. | `LineEndingTests`: a literal and a quoted identifier keep their own line breaks in a CRLF script; the step narrows and widens around a literal; a comment's line breaks follow the script. |
+| The browser's Expand refactorings (WEB-011) ran on a rehydrated schema with no identity, computed or default facts. Expand INSERT columns listed an IDENTITY and a computed column, so the INSERT was one column longer than its VALUES (the F7 bug, in the browser), and Expand UPDATE columns set a computed column. | `SchemaPhaseColumn` keys 8–10 (`IsIdentity`, `IsComputed`, `DefaultValue`, additive). `SchemaPhaseSerializer` sends them and `SchemaPhaseRehydrator` reads them. | `RefactorExpandWithSnapshotTests` +2, `SchemaPhaseBHandlerTests` +1, `SchemaPhaseRehydratorTests` +1. |
+| Expand UPDATE columns added an IDENTITY column as `Id = NULL`, which the server refuses. Its comment said identity was skipped. This predates the PR, but WEB-011 made it reachable from the browser. | `ExpandUpdateColumnsOperation` skips identity columns. | `Expand_UPDATE_columns_never_sets_an_identity_or_computed_column`. |
+| Completion tokenized the whole text before the caret (`AtStatementStart`) on every request the engine answered without a snippet, also for someone with no snippet of their own. | `CompletionService` reads its kept list of user snippets first and returns when it is empty. | Behaviour unchanged: `CompletionUserSnippetTests` pass. |
+
+Found, not changed (to decide separately):
+
+- **Pre-existing, outside the PR's diff.** `TextEmitter.RemoveTrailingWhitespace` drops the CR, and trailing spaces, inside a multi-line string literal. Validation then refuses the whole format. A CRLF script, which is what SSMS buffers are, is returned unformatted when it has a string literal over several lines.
+- **Pre-existing.** Expand INSERT / UPDATE columns write column names unquoted, so a column named with a space or a reserved word gives invalid SQL.
+- **As designed.** A caller the engine can place, but that runs as another user than its session's (or in session 0), still uses the engine's account (LocalSystem) for Windows authentication. Loopback pairing needs no PIN.
+
+Suites after the fixes:
+
+- Formatting 1934, IntelliSense 26, Core 1643 (3 skipped), Web 2333.
+- Engine 2775 with 132 skipped, run without `PerformanceBaselineTests`. That class passes alone (`Capture_or_compare_M0_baseline` in 19 min 35 s). Its baseline was the one failure in the full parallel run, the known timing-sensitive test.
+
 ## Golden changes accepted (T064, T065)
 
 Reviewed 2026-11-21. Each changed golden was compared with HEAD after `git diff --ignore-space-at-eol`. A script undid the

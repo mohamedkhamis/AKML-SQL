@@ -163,12 +163,15 @@ internal sealed class CompletionService : ICompletionService
     private async Task<CompletionResponse> WithUserSnippetsAsync(CompletionResponse response, string? text, int caret, bool engineReplied)
     {
         if (_snippets == null || response == null) return response!;
+        // The list is kept per kind, so this is cheap; most people have no snippet of their own, and then nothing below runs.
+        // Review of PR #261: AtStatementStart tokenizes the whole text before the caret, and ran first on every request the
+        // engine answered without a snippet.
+        var mine = await UserSnippetItemsAsync(_gate?.IsPostgres == true ? DatabaseKind.PostgreSql : DatabaseKind.SqlServer).ConfigureAwait(false);
+        if (mine.Length == 0) return response;
+
         var items = response.Items ?? Array.Empty<CompletionItem>();
         var engineOffersSnippets = engineReplied && items.Any(i => i.ObjectType == (int)CompletionObjectType.Snippet);
         if (!engineOffersSnippets && !AtStatementStart(text, caret)) return response;
-
-        var mine = await UserSnippetItemsAsync(_gate?.IsPostgres == true ? DatabaseKind.PostgreSql : DatabaseKind.SqlServer).ConfigureAwait(false);
-        if (mine.Length == 0) return response;
 
         var shortcodes = new HashSet<string>(mine.Select(m => m.DisplayText), StringComparer.OrdinalIgnoreCase);
         response.Items = items

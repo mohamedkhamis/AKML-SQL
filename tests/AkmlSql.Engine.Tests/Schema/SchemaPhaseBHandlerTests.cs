@@ -107,4 +107,34 @@ public sealed class SchemaPhaseBHandlerTests
         Assert.Equal("FK_Orders_Customers", decoded.ForeignKeys[0].Name);
         Assert.Equal(new[] { "CustomerId" }, decoded.ForeignKeys[0].ParentColumns);
     }
+
+    /// <summary>
+    /// Spec 047 (review of PR #261): Phase B says which columns the server fills (IDENTITY, computed) and their defaults, so
+    /// the browser's Expand INSERT / UPDATE columns leave them out as SSMS does. They were not in the payload, and the browser
+    /// listed an identity column in the INSERT it wrote.
+    /// </summary>
+    [Fact]
+    public void Phase_B_carries_identity_computed_and_default()
+    {
+        var cache = new DatabaseCache { CacheKey = "s1:Northwind", Phase = PopulationPhase.PhaseB };
+        var dbo = cache.Schemas.GetOrAdd("dbo", _ => new SchemaEntry { SchemaName = "dbo" });
+        var categories = new DatabaseObject
+        {
+            ObjectId = 1, SchemaName = "dbo", ObjectName = "Categories", ObjectType = DbObjectType.Table, ColumnsLoaded = true,
+        };
+        categories.Columns.Add(new Column { ColumnName = "CategoryID", TypeName = "int", IsPrimaryKey = true, IsIdentity = true });
+        categories.Columns.Add(new Column { ColumnName = "CategoryName", TypeName = "nvarchar", MaxLength = 15, DefaultValue = "(N'New')" });
+        categories.Columns.Add(new Column { ColumnName = "NameLength", TypeName = "int", IsComputed = true });
+        dbo.Objects.Add(categories);
+
+        var decoded = MessagePackSerializer.Deserialize<SchemaPhasePayload>(SchemaPhaseSerializer.SerializePhaseB(cache, "Northwind"));
+        var columns = decoded.Schemas[0].Objects[0].Columns;
+
+        Assert.True(columns[0].IsIdentity);
+        Assert.False(columns[0].IsComputed);
+        Assert.Equal("(N'New')", columns[1].DefaultValue);
+        Assert.False(columns[1].IsIdentity);
+        Assert.True(columns[2].IsComputed);
+        Assert.Null(columns[2].DefaultValue);
+    }
 }

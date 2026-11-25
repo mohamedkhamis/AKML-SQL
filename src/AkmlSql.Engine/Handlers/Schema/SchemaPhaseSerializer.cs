@@ -102,6 +102,10 @@ namespace AkmlSql.Engine.Handlers.Schema
             MaxLength = c.MaxLength,
             Precision = c.Precision,
             Scale = c.Scale,
+            // Spec 047 (review of PR #261): what the browser's Expand refactorings leave out (identity, computed) or comment.
+            IsIdentity = c.IsIdentity,
+            IsComputed = c.IsComputed,
+            DefaultValue = c.DefaultValue,
         };
 
         private static SchemaPhaseParameter MapParameter(Parameter p) => new()

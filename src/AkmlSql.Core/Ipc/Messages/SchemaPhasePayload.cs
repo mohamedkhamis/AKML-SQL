@@ -91,6 +91,14 @@ namespace AkmlSql.Core.Ipc.Messages
         [Key(5)] public int MaxLength { get; set; }
         [Key(6)] public int Precision { get; set; }
         [Key(7)] public int Scale { get; set; }
+
+        // Spec 047 (review of PR #261): the facts the browser's Expand refactorings need to leave a column out. The server
+        // fills an IDENTITY or computed column, so Expand INSERT columns must not list it and Expand UPDATE columns must not
+        // set it; a default is shown as a comment. Without them a rehydrated column looked like an ordinary one, and the
+        // browser wrote an INSERT one column longer than its VALUES. Additive keys: an older payload reads false / null.
+        [Key(8)] public bool IsIdentity { get; set; }
+        [Key(9)] public bool IsComputed { get; set; }
+        [Key(10)] public string? DefaultValue { get; set; }
     }
 
     [MessagePackObject]
